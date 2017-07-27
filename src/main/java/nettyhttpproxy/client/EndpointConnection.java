@@ -19,7 +19,7 @@
  */
 package nettyhttpproxy.client;
 
-import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
 import nettyhttpproxy.ProxiedConnectionHandler;
@@ -31,7 +31,7 @@ import nettyhttpproxy.ProxiedConnectionHandler;
  */
 public interface EndpointConnection {
 
-    public void sendRequest(HttpRequest request, ProxiedConnectionHandler handler, Channel peerChannel);
+    public void sendRequest(HttpRequest request, ProxiedConnectionHandler handler, ChannelHandlerContext peerChannel);
 
     public void release(boolean error);
 

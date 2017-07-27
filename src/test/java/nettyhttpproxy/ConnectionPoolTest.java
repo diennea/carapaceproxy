@@ -41,7 +41,7 @@ public class ConnectionPoolTest {
     public WireMockRule wireMockRule = new WireMockRule(18081);
 
     @Test
-    @Ignore
+//    @Ignore
     public void test() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
@@ -65,6 +65,7 @@ public class ConnectionPoolTest {
             TestUtils.waitForCondition(TestUtils.NO_ACTIVE_CONNECTION(stats), 100);
 
             EndpointStats epstats = stats.getEndpointStats(key);
+            System.out.println("STATS: " + epstats);
             assertNotNull(epstats);
             assertEquals(1, epstats.getTotalConnections().intValue());
             assertEquals(0, epstats.getActiveConnections().intValue());
@@ -73,13 +74,19 @@ public class ConnectionPoolTest {
 
             assertEquals("ok", IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8"));
             TestUtils.waitForCondition(TestUtils.NO_ACTIVE_CONNECTION(stats), 100);
+            System.out.println("STATS: " + epstats);
+            assertEquals(1, epstats.getTotalConnections().intValue());
+            assertEquals(0, epstats.getActiveConnections().intValue());
+            assertEquals(1, epstats.getOpenConnections().intValue());
+            assertEquals(2, epstats.getTotalRequests().intValue());
 
             for (int i = 0; i < 10; i++) {
                 assertEquals("ok", IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8"));
                 TestUtils.waitForCondition(TestUtils.NO_ACTIVE_CONNECTION(stats), 100);
-//                assertEquals(2, epstats.getTotalConnections().intValue());
-//                assertEquals(0, epstats.getActiveConnections().intValue());
-//                assertEquals(2, epstats.getOpenConnections().intValue());
+                System.out.println("STATS: " + epstats);
+                assertEquals(1, epstats.getTotalConnections().intValue());
+                assertEquals(0, epstats.getActiveConnections().intValue());
+                assertEquals(1, epstats.getOpenConnections().intValue());
                 assertEquals(i + 3, epstats.getTotalRequests().intValue());
             }
 

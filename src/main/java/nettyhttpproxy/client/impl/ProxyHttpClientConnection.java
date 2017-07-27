@@ -52,9 +52,10 @@ public class ProxyHttpClientConnection implements EndpointConnection {
     private final AtomicBoolean active = new AtomicBoolean();
 
     private volatile Channel channelToEndpoint;
+    private volatile ChannelHandlerContext contextToEndpoint;
     private volatile boolean valid;
     private volatile ProxiedConnectionHandler clientSidePeerHandler;
-    private volatile Channel currentPeerChannel;
+    private volatile ChannelHandlerContext currentPeerChannel;
 
     public ProxyHttpClientConnection(EndpointKey key, ConnectionsManagerImpl parent, EndpointStats endpointstats) {
         this.key = key;
@@ -66,7 +67,8 @@ public class ProxyHttpClientConnection implements EndpointConnection {
     private ChannelFuture ensureConnected() {
         if (channelToEndpoint != null) {
             LOG.log(Level.INFO, "Already connected to {0}, channel {1}, pipeline {2}", new Object[]{key, channelToEndpoint, channelToEndpoint.pipeline()});
-            restartHttpCodec(channelToEndpoint);
+            channelToEndpoint.pipeline().remove(HttpClientCodec.class);
+            channelToEndpoint.pipeline().addFirst("client-codec", new HttpClientCodec());
             return channelToEndpoint.newSucceededFuture();
         }
         Bootstrap b = new Bootstrap();
@@ -75,43 +77,48 @@ public class ProxyHttpClientConnection implements EndpointConnection {
             .handler(new ChannelInitializer<SocketChannel>() {
                 @Override
                 public void initChannel(SocketChannel ch) throws Exception {
-                    ch.pipeline().addLast("httpcodec", new HttpClientCodec());
+                    ch.pipeline().addLast("client-codec", new HttpClientCodec());
                     ch.pipeline().addLast(new ReadEndpointResponseHandler());
                 }
             });
 
-        final ChannelFuture cfuture = b.connect(key.getHost(), key.getPort());
+        final ChannelFuture connectFuture = b.connect(key.getHost(), key.getPort());
 
-        cfuture.addListener((Future<Void> future) -> {
+        connectFuture.addListener((Future<Void> future) -> {
             endpointstats.getTotalConnections().incrementAndGet();
             endpointstats.getOpenConnections().incrementAndGet();
         });
-        channelToEndpoint = cfuture.channel();
-        return cfuture;
-
-    }
-
-    private void restartHttpCodec(Channel ch) {
-        ch.pipeline().remove("httpcodec");
-        ch.pipeline().addLast("httpcodec", new HttpClientCodec());
+        channelToEndpoint = connectFuture.channel();
+        return connectFuture;
 
     }
 
     @Override
-    public void sendRequest(HttpRequest request, ProxiedConnectionHandler handler, Channel peerChannel) {
+    public void sendRequest(HttpRequest request, ProxiedConnectionHandler clientSidePeerHandler, ChannelHandlerContext peerChannel) {
 
-        activateConnection(handler, peerChannel);
+        activateConnection(clientSidePeerHandler, peerChannel);
         ChannelFuture afterConnect = ensureConnected();
         afterConnect.addListener((Future<Void> future) -> {
             endpointstats.getTotalRequests().incrementAndGet();
-            LOG.info("sendRequest " + request + " to channelToEndpoint " + channelToEndpoint);
+            LOG.info("sendRequest " + request.getClass() + " to channelToEndpoint " + channelToEndpoint);
             channelToEndpoint.writeAndFlush(request).addListener(new GenericFutureListener<Future<? super Void>>() {
                 @Override
                 public void operationComplete(Future<? super Void> future) throws Exception {
-                    LOG.info("sendRequest " + request + " completed");
+                    if (!future.isSuccess()) {
+                        LOG.log(Level.SEVERE, "sendRequest " + request.getClass() + " failed", future.cause());
+                        clientSidePeerHandler.errorSendingRequest(ProxyHttpClientConnection.this, peerChannel);
+                    } else {
+                        LOG.log(Level.SEVERE, "sendRequest " + request.getClass() + " completed");
+                    }
                 }
             });
         });
+        try {
+            afterConnect.sync();
+        } catch (InterruptedException err) {
+            LOG.log(Level.SEVERE, "sendRequest interrupted during connection", err);
+            clientSidePeerHandler.errorSendingRequest(ProxyHttpClientConnection.this, peerChannel);
+        }
 
     }
 
@@ -134,7 +141,19 @@ public class ProxyHttpClientConnection implements EndpointConnection {
 
     @Override
     public void sendLastHttpContent(LastHttpContent msg) {
-        channelToEndpoint.writeAndFlush(msg);
+        System.out.println("sendLastHttpContent to " + contextToEndpoint);
+        System.out.println("sendLastHttpContent to " + contextToEndpoint.pipeline());
+        contextToEndpoint.writeAndFlush(msg).addListener(new GenericFutureListener<Future<? super Void>>() {
+            @Override
+            public void operationComplete(Future<? super Void> future) throws Exception {
+                if (!future.isSuccess()) {
+                    LOG.log(Level.INFO, "sendLastHttpContent failed " + msg, future.cause());
+                } else {
+                    LOG.log(Level.INFO, "sendLastHttpContent success");
+                }
+            }
+
+        });
     }
 
     private void detachFromSourceConnection() {
@@ -165,7 +184,7 @@ public class ProxyHttpClientConnection implements EndpointConnection {
         return valid;
     }
 
-    private void activateConnection(ProxiedConnectionHandler handler, Channel peerChannel) {
+    private void activateConnection(ProxiedConnectionHandler handler, ChannelHandlerContext peerChannel) {
         if (!active.compareAndSet(false, true)) {
             throw new IllegalStateException("this connection is already active!");
         }
@@ -187,6 +206,13 @@ public class ProxyHttpClientConnection implements EndpointConnection {
     private class ReadEndpointResponseHandler extends SimpleChannelInboundHandler<HttpObject> {
 
         @Override
+        public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+            LOG.log(Level.INFO, "handlerAdded " + ctx);
+            super.handlerAdded(ctx);
+            contextToEndpoint = ctx;
+        }
+
+        @Override
         public void channelRead0(ChannelHandlerContext ctx, HttpObject msg) {
             LOG.log(Level.INFO, "channelRead0 {0} {1}", new Object[]{msg.getClass(), msg});
             if (msg instanceof HttpContent) {
@@ -195,7 +221,10 @@ public class ProxyHttpClientConnection implements EndpointConnection {
                 clientSidePeerHandler.receivedFromRemote(f.copy(), currentPeerChannel);
             } else if (msg instanceof DefaultHttpResponse) {
                 DefaultHttpResponse f = (DefaultHttpResponse) msg;
-                LOG.log(Level.INFO, "proxying DefaultHttpResponse {0}: {1}", new Object[]{msg.getClass(), msg});
+                LOG.log(Level.INFO, "proxying DefaultHttpResponse {0}: headers: {1}", new Object[]{msg.getClass(), msg});
+                f.headers().forEach((entry) -> {
+                    LOG.log(Level.INFO, "proxying header " + entry.getKey() + ": " + entry.getValue());
+                });
                 clientSidePeerHandler.receivedFromRemote(new DefaultHttpResponse(f.protocolVersion(),
                     f.status(), f.headers()), currentPeerChannel);
             } else {
@@ -206,9 +235,23 @@ public class ProxyHttpClientConnection implements EndpointConnection {
         }
 
         @Override
+        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+            super.channelRead(ctx, msg); //To change body of generated methods, choose Tools | Templates.
+            LOG.log(Level.INFO, "channelRead " + msg + ", clientSidePeerHandler:" + clientSidePeerHandler);
+        }
+
+        @Override
+        public boolean acceptInboundMessage(Object msg) throws Exception {
+            LOG.log(Level.INFO, "acceptInboundMessage " + msg);
+            return super.acceptInboundMessage(msg); //To change body of generated methods, choose Tools | Templates.
+        }
+
+        @Override
         public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
             LOG.log(Level.INFO, "channelReadComplete {0}", ctx);
-            clientSidePeerHandler.readCompletedFromRemote(currentPeerChannel);
+            if (clientSidePeerHandler != null) {
+                clientSidePeerHandler.readCompletedFromRemote(currentPeerChannel);
+            }
         }
 
         @Override

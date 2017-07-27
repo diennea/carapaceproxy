@@ -25,6 +25,7 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelOutboundInvoker;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.DecoderResult;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
@@ -52,6 +53,7 @@ import java.util.logging.Logger;
 import nettyhttpproxy.client.EndpointConnection;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.client.EndpointNotAvailableException;
+import nettyhttpproxy.client.impl.ProxyHttpClientConnection;
 
 public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object> {
 
@@ -61,10 +63,17 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
     private EndpointConnection connection;
     private final StringBuilder output = new StringBuilder();
     private final ConnectionsManager connectionsManager;
+    private Channel channel;
 
     public ProxiedConnectionHandler(EndpointMapper mapper, ConnectionsManager connectionsManager) {
         this.mapper = mapper;
         this.connectionsManager = connectionsManager;
+    }
+
+    @Override
+    public void channelRegistered(ChannelHandlerContext ctx) throws Exception {
+        super.channelRegistered(ctx);
+        channel = ctx.channel();
     }
 
     @Override
@@ -95,7 +104,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
                 case CACHE:
                     try {
                         connection = connectionsManager.getConnection(new EndpointKey(action.host, action.port, false));
-                        connection.sendRequest(request, this, ctx.channel());
+                        connection.sendRequest(request, this, ctx);
                     } catch (EndpointNotAvailableException err) {
                         sendServiceNotAvailable(ctx);
                     }
@@ -103,7 +112,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
                 case PIPE:
                     try {
                         connection = connectionsManager.getConnection(new EndpointKey(action.host, action.port, true));
-                        connection.sendRequest(request, this, ctx.channel());
+                        connection.sendRequest(request, this, ctx);
                     } catch (EndpointNotAvailableException err) {
                         sendServiceNotAvailable(ctx);
                     }
@@ -247,14 +256,23 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
         releaseConnection(true);
     }
 
-    public void receivedFromRemote(HttpObject msg, Channel channelToClient) {
+    public void receivedFromRemote(HttpObject msg, ChannelHandlerContext channelToClient) {
         LOG.log(Level.INFO, "received from remote server:{0}", msg);
         channelToClient.writeAndFlush(msg).addListener(new GenericFutureListener<Future<? super Void>>() {
             @Override
             public void operationComplete(Future<? super Void> future) throws Exception {
-                if (msg instanceof LastHttpContent) {
-                    releaseConnection(false);
+                if (future.isSuccess()) {
+                    LOG.log(Level.SEVERE, "receivedFromRemote success!");
+                    if (msg instanceof LastHttpContent) {
+                        releaseConnection(false);
+                    }
+                } else {
+                    LOG.log(Level.SEVERE, "bad error", future.cause());
+                    releaseConnection(true);
+                    sendServiceNotAvailable(channelToClient);
+                    ensureChannelClosed();
                 }
+
             }
         });
     }
@@ -267,8 +285,20 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
         }
     }
 
-    public void readCompletedFromRemote(Channel channel) {
+    public void readCompletedFromRemote(ChannelHandlerContext channel) {
         LOG.log(Level.INFO, "readCompletedFromRemote");
         channel.flush();
+    }
+
+    public void errorSendingRequest(ProxyHttpClientConnection aThis, ChannelHandlerContext peerChannel) {
+        releaseConnection(true);
+        sendServiceNotAvailable(peerChannel);
+        ensureChannelClosed();
+    }
+
+    private void ensureChannelClosed() {
+        if (channel != null) {
+            channel.close();
+        }
     }
 }

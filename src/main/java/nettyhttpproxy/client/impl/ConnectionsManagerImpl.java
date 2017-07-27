@@ -61,6 +61,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
         @Override
         public PooledObject<ProxyHttpClientConnection> makeObject(EndpointKey k) throws Exception {
+            LOG.log(Level.INFO, "makeObject {0}", new Object[]{k});
             EndpointStats endpointstats = endpointsStats.computeIfAbsent(k, EndpointStats::new);
             ProxyHttpClientConnection con = new ProxyHttpClientConnection(k, ConnectionsManagerImpl.this, endpointstats);
             return new DefaultPooledObject<>(con);
