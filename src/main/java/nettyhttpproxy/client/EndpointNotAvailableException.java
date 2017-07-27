@@ -17,16 +17,17 @@
  under the License.
 
  */
-package nettyhttpproxy;
-
-import io.netty.handler.codec.http.HttpRequest;
+package nettyhttpproxy.client;
 
 /**
- * Maps requests to a remote HTTP server
+ * The request endpoint is currently not available
  *
  * @author enrico.olivelli
  */
-public abstract class EndpointMapper {
+public class EndpointNotAvailableException extends Exception {
 
-    public abstract MapResult map(HttpRequest request);
+    public EndpointNotAvailableException(Throwable cause) {
+        super(cause);
+    }
+
 }

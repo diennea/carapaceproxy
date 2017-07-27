@@ -17,16 +17,24 @@
  under the License.
 
  */
-package nettyhttpproxy;
+package nettyhttpproxy.client;
 
+import io.netty.channel.Channel;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.LastHttpContent;
+import nettyhttpproxy.ProxiedConnectionHandler;
 
 /**
- * Maps requests to a remote HTTP server
+ * A Connection to a specific endpoint. Connections are pooled and so they have to be returned to the pool
  *
  * @author enrico.olivelli
  */
-public abstract class EndpointMapper {
+public interface EndpointConnection {
 
-    public abstract MapResult map(HttpRequest request);
+    public void sendRequest(HttpRequest request, ProxiedConnectionHandler handler, Channel peerChannel);
+
+    public void release(boolean error);
+
+    public void sendLastHttpContent(LastHttpContent msg);
+
 }

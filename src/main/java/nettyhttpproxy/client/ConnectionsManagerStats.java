@@ -17,16 +17,21 @@
  under the License.
 
  */
-package nettyhttpproxy;
+package nettyhttpproxy.client;
 
-import io.netty.handler.codec.http.HttpRequest;
+import java.util.Map;
+import nettyhttpproxy.EndpointStats;
 
 /**
- * Maps requests to a remote HTTP server
+ * Stats
  *
  * @author enrico.olivelli
  */
-public abstract class EndpointMapper {
+public interface ConnectionsManagerStats {
 
-    public abstract MapResult map(HttpRequest request);
+    public Map<EndpointKey, EndpointStats> getEndpoints();
+
+    public default EndpointStats getEndpointStats(EndpointKey key) {
+        return getEndpoints().get(key);
+    }
 }

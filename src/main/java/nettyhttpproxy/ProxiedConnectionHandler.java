@@ -1,5 +1,25 @@
+/*
+ Licensed to Diennea S.r.l. under one
+ or more contributor license agreements. See the NOTICE file
+ distributed with this work for additional information
+ regarding copyright ownership. Diennea S.r.l. licenses this file
+ to you under the Apache License, Version 2.0 (the
+ "License"); you may not use this file except in compliance
+ with the License.  You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing,
+ software distributed under the License is distributed on an
+ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ KIND, either express or implied.  See the License for the
+ specific language governing permissions and limitations
+ under the License.
+
+ */
 package nettyhttpproxy;
 
+import nettyhttpproxy.client.ConnectionsManager;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
@@ -15,6 +35,7 @@ import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
 import static io.netty.handler.codec.http.HttpResponseStatus.CONTINUE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
@@ -23,21 +44,27 @@ import io.netty.handler.codec.http.HttpUtil;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.CharsetUtil;
+import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.GenericFutureListener;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import nettyhttpproxy.client.ProxyHttpClientConnection;
+import nettyhttpproxy.client.EndpointConnection;
+import nettyhttpproxy.client.EndpointKey;
+import nettyhttpproxy.client.EndpointNotAvailableException;
 
 public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object> {
 
     private final EndpointMapper mapper;
     private HttpRequest request;
     private MapResult action;
-    private ProxyHttpClientConnection pipe;
+    private EndpointConnection connection;
     private final StringBuilder output = new StringBuilder();
+    private final ConnectionsManager connectionsManager;
 
-    public ProxiedConnectionHandler(EndpointMapper mapper) {
+    public ProxiedConnectionHandler(EndpointMapper mapper, ConnectionsManager connectionsManager) {
         this.mapper = mapper;
+        this.connectionsManager = connectionsManager;
     }
 
     @Override
@@ -64,10 +91,22 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
                     }
                     startDebugMessage(request);
                     return;
-                case PIPE:
+                case PROXY:
                 case CACHE:
-                    pipe = new ProxyHttpClientConnection(action.host, action.port);
-                    pipe.sendRequest(request, this, ctx.channel());
+                    try {
+                        connection = connectionsManager.getConnection(new EndpointKey(action.host, action.port, false));
+                        connection.sendRequest(request, this, ctx.channel());
+                    } catch (EndpointNotAvailableException err) {
+                        sendServiceNotAvailable(ctx);
+                    }
+                    return;
+                case PIPE:
+                    try {
+                        connection = connectionsManager.getConnection(new EndpointKey(action.host, action.port, true));
+                        connection.sendRequest(request, this, ctx.channel());
+                    } catch (EndpointNotAvailableException err) {
+                        sendServiceNotAvailable(ctx);
+                    }
                     return;
                 default:
                     throw new IllegalStateException("not yet implemented");
@@ -99,11 +138,10 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
                     break;
                 }
                 case CACHE:
-                case PIPE: {
-                    pipe.sendHttpObject(msg);
+                case PROXY: {
+                    connection.sendLastHttpContent(trailer);
                     break;
                 }
-
                 default:
                     throw new IllegalStateException("not yet implemented");
             }
@@ -162,7 +200,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
         appendDecoderResult(output, request1);
     }
 
-    private void appendDecoderResult(StringBuilder buf, HttpObject o) {
+    private static void appendDecoderResult(StringBuilder buf, HttpObject o) {
         DecoderResult result = o.decoderResult();
         if (result.isSuccess()) {
             return;
@@ -197,21 +235,35 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
         ctx.write(response);
     }
 
-    @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        cause.printStackTrace();
-        ctx.close();
+    private void sendServiceNotAvailable(ChannelHandlerContext ctx) {
+        FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, HttpResponseStatus.INTERNAL_SERVER_ERROR);
+        ctx.write(response);
     }
 
-    public void receivedFromRemote(HttpObject msg, Channel channel) {
-        LOG.log(Level.INFO, "received from remote server:" + msg);
-        channel.writeAndFlush(msg);
-        if (msg instanceof LastHttpContent) {
-            if (pipe != null) {
-                LOG.log(Level.INFO, "closing pipe " + pipe);
-                pipe.close();
-                pipe = null;
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        LOG.log(Level.SEVERE, "bad error", cause);
+        ctx.close();
+        releaseConnection(true);
+    }
+
+    public void receivedFromRemote(HttpObject msg, Channel channelToClient) {
+        LOG.log(Level.INFO, "received from remote server:{0}", msg);
+        channelToClient.writeAndFlush(msg).addListener(new GenericFutureListener<Future<? super Void>>() {
+            @Override
+            public void operationComplete(Future<? super Void> future) throws Exception {
+                if (msg instanceof LastHttpContent) {
+                    releaseConnection(false);
+                }
             }
+        });
+    }
+
+    private void releaseConnection(boolean error) {
+        if (connection != null) {
+            LOG.log(Level.INFO, "release connection {0}", connection);
+            connection.release(error);
+            connection = null;
         }
     }
 

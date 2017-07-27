@@ -17,16 +17,31 @@
  under the License.
 
  */
-package nettyhttpproxy;
+package nettyhttpproxy.client;
 
-import io.netty.handler.codec.http.HttpRequest;
+import java.util.Map;
+import nettyhttpproxy.EndpointStats;
 
 /**
- * Maps requests to a remote HTTP server
+ * Handles connection to all the endpoints
  *
  * @author enrico.olivelli
  */
-public abstract class EndpointMapper {
+public interface ConnectionsManager extends AutoCloseable {
 
-    public abstract MapResult map(HttpRequest request);
+    /**
+     * Obtain a connection to the requested endpoint. Connections are pooled, so the returned object MUST be returned to
+     * the pool
+     *
+     * @param key
+     * @return
+     * @throws nettyhttpproxy.client.EndpointNotAvailableException
+     */
+    EndpointConnection getConnection(EndpointKey key) throws EndpointNotAvailableException;
+
+    @Override
+    public void close();
+
+    public ConnectionsManagerStats getStats();
+
 }
