@@ -17,27 +17,15 @@
  under the License.
 
  */
-package nettyhttpproxy.server.network;
+package nettyhttpproxy.server.config;
 
 /**
- * Listens for connections on the network
+ * Configuration is not valid
  */
-public class NetworkListenerConfiguration {
+public class ConfigurationNotValidException extends Exception {
 
-    private final String host;
-    private final int port;
-
-    public NetworkListenerConfiguration(String host, int port) {
-        this.host = host;
-        this.port = port;
-    }
-
-    public String getHost() {
-        return host;
-    }
-
-    public int getPort() {
-        return port;
+    public ConfigurationNotValidException(String message) {
+        super(message);
     }
 
 }

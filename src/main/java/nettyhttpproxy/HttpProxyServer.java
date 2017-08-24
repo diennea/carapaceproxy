@@ -33,7 +33,7 @@ import java.util.ArrayList;
 import java.util.List;
 import nettyhttpproxy.client.ConnectionsManager;
 import nettyhttpproxy.client.impl.ConnectionsManagerImpl;
-import nettyhttpproxy.server.network.NetworkListenerConfiguration;
+import nettyhttpproxy.server.config.NetworkListenerConfiguration;
 
 public class HttpProxyServer implements AutoCloseable {
 

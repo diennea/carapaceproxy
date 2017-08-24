@@ -28,7 +28,7 @@ import java.io.FileNotFoundException;
 import java.net.URL;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
-import nettyhttpproxy.server.network.NetworkListenerConfiguration;
+import nettyhttpproxy.server.config.NetworkListenerConfiguration;
 import org.apache.commons.io.IOUtils;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
