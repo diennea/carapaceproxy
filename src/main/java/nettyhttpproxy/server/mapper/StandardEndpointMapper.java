@@ -29,6 +29,7 @@ import nettyhttpproxy.MapResult;
 import nettyhttpproxy.server.config.ActionConfiguration;
 import nettyhttpproxy.server.config.BackendConfiguration;
 import nettyhttpproxy.server.config.ConfigurationNotValidException;
+import nettyhttpproxy.server.config.MatchResult;
 import nettyhttpproxy.server.config.RouteConfiguration;
 
 /**
@@ -62,19 +63,21 @@ public class StandardEndpointMapper extends EndpointMapper {
     @Override
     public MapResult map(HttpRequest request) {
         for (RouteConfiguration route : routes) {
-            if (route.matches(request)) {
+            MatchResult matchResult = route.matches(request);
+            if (matchResult != null) {
+                String backendId = 
                 ActionConfiguration action = actions.get(route.getAction());
                 if (action != null) {
                     switch (action.getType()) {
                         case ActionConfiguration.TYPE_PROXY: {
-                            BackendConfiguration backend = backends.get(action.getBackend());
+                            BackendConfiguration backend = backends.get(backendId);
                             if (backend != null) {
                                 return new MapResult(backend.getHost(), backend.getPort(), MapResult.Action.PROXY);
                             }
                             break;
                         }
                         case ActionConfiguration.TYPE_CACHE:
-                            BackendConfiguration backend = backends.get(action.getBackend());
+                            BackendConfiguration backend = backends.get(backendId);
                             if (backend != null) {
                                 return new MapResult(backend.getHost(), backend.getPort(), MapResult.Action.CACHE);
                             }

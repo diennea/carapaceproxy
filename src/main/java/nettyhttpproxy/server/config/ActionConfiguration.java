@@ -29,12 +29,10 @@ public class ActionConfiguration {
 
     private final String id;
     private final String type;
-    private final String backend;
 
-    public ActionConfiguration(String id, String type, String backend) {
+    public ActionConfiguration(String id, String type) {
         this.id = id;
         this.type = type;
-        this.backend = backend;
     }
 
     public String getId() {
@@ -43,10 +41,6 @@ public class ActionConfiguration {
 
     public String getType() {
         return type;
-    }
-
-    public String getBackend() {
-        return backend;
     }
 
 }

@@ -54,8 +54,11 @@ public class RouteConfiguration {
         return matcher;
     }
 
-    public boolean matches(HttpRequest request) {
-        return enabled && matcher.matches(request);
+    public MatchResult matches(HttpRequest request) {
+        if (!enabled) {
+            return null;
+        }
+        return matcher.matches(request);
     }
 
 }

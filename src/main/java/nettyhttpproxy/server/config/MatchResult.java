@@ -19,12 +19,6 @@
  */
 package nettyhttpproxy.server.config;
 
-import io.netty.handler.codec.http.HttpRequest;
+public interface MatchResult {
 
-/**
- * Generic criteria to apply a route to a request
- */
-public interface RequestMatcher {
-
-    MatchResult matches(HttpRequest request);
 }
