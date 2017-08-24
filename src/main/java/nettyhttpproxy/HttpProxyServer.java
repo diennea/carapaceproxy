@@ -20,6 +20,7 @@
 package nettyhttpproxy;
 
 import io.netty.bootstrap.ServerBootstrap;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
@@ -28,8 +29,11 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.HttpRequestDecoder;
 import io.netty.handler.codec.http.HttpResponseEncoder;
+import java.util.ArrayList;
+import java.util.List;
 import nettyhttpproxy.client.ConnectionsManager;
 import nettyhttpproxy.client.impl.ConnectionsManagerImpl;
+import nettyhttpproxy.server.network.NetworkListenerConfiguration;
 
 public class HttpProxyServer implements AutoCloseable {
 
@@ -37,41 +41,59 @@ public class HttpProxyServer implements AutoCloseable {
     private EventLoopGroup workerGroup;
     private final EndpointMapper mapper;
     private final ConnectionsManager connectionsManager;
-    private final String host;
-    private final int port;
 
-    public HttpProxyServer(String host, int port, EndpointMapper mapper) {
-        this.port = port;
-        this.host = host;
+    private final List<NetworkListenerConfiguration> listeners = new ArrayList<>();
+    private final List<Channel> listeningChannels = new ArrayList<>();
+
+    public HttpProxyServer(EndpointMapper mapper) {
         this.mapper = mapper;
         this.connectionsManager = new ConnectionsManagerImpl();
     }
 
+    public HttpProxyServer(String host, int port, EndpointMapper mapper) {
+        this(mapper);
+        listeners.add(new NetworkListenerConfiguration(host, port));
+    }
+
+    public void addListener(NetworkListenerConfiguration listener) {
+        listeners.add(listener);
+    }
+
     public void start() throws InterruptedException {
-        bossGroup = new NioEventLoopGroup(10);
-        workerGroup = new NioEventLoopGroup(10);
-        ServerBootstrap b = new ServerBootstrap();
-        b.group(bossGroup, workerGroup)
-            .channel(NioServerSocketChannel.class)
-            .childHandler(new ChannelInitializer<SocketChannel>() {
-                @Override
-                public void initChannel(SocketChannel ch) throws Exception {
+        try {
+            bossGroup = new NioEventLoopGroup(10);
+            workerGroup = new NioEventLoopGroup(10);
+            ServerBootstrap b = new ServerBootstrap();
+            b.group(bossGroup, workerGroup)
+                .channel(NioServerSocketChannel.class)
+                .childHandler(new ChannelInitializer<SocketChannel>() {
+                    @Override
+                    public void initChannel(SocketChannel ch) throws Exception {
 
-                    ch.pipeline().addLast(new HttpRequestDecoder());
-                    ch.pipeline().addLast(new HttpResponseEncoder());
-                    ch.pipeline().addLast(new ProxiedConnectionHandler(mapper, connectionsManager));
+                        ch.pipeline().addLast(new HttpRequestDecoder());
+                        ch.pipeline().addLast(new HttpResponseEncoder());
+                        ch.pipeline().addLast(new ProxiedConnectionHandler(mapper, connectionsManager));
 
-                }
-            })
-            .option(ChannelOption.SO_BACKLOG, 128)
-            .childOption(ChannelOption.SO_KEEPALIVE, true);
+                    }
+                })
+                .option(ChannelOption.SO_BACKLOG, 128)
+                .childOption(ChannelOption.SO_KEEPALIVE, true);
 
-        b.bind(host, port).sync();
+            for (NetworkListenerConfiguration listener : listeners) {
+                listeningChannels.add(b.bind(listener.getHost(), listener.getPort()).sync().channel());
+            }
+        } catch (RuntimeException err) {
+            close();
+            throw err;
+        }
 
     }
 
     @Override
     public void close() {
+        for (Channel channel : listeningChannels) {
+            channel.close().syncUninterruptibly();
+        }
         if (bossGroup != null) {
             bossGroup.shutdownGracefully();
         }
@@ -81,14 +103,6 @@ public class HttpProxyServer implements AutoCloseable {
         if (connectionsManager != null) {
             connectionsManager.close();
         }
-    }
-
-    public String getHost() {
-        return host;
-    }
-
-    public int getPort() {
-        return port;
     }
 
     public ConnectionsManager getConnectionsManager() {
