@@ -19,11 +19,13 @@
  */
 package nettyhttpproxy.server.config;
 
-import java.util.Map;
+import io.netty.handler.codec.http.HttpRequest;
 
-public interface RoutingKey {
+public class MatchAllRequestMatcher implements RequestMatcher {
 
-    public String getAttribute(String key);
+    @Override
+    public RoutingKey matches(HttpRequest request) {
+        return AttributesRoutingKey.EMPTY;
+    }
 
-    public Map<String, String> getAttributes();
 }

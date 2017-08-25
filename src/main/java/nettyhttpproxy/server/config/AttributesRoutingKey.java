@@ -19,11 +19,32 @@
  */
 package nettyhttpproxy.server.config;
 
+import java.util.Collections;
 import java.util.Map;
 
-public interface RoutingKey {
+public class AttributesRoutingKey implements RoutingKey {
 
-    public String getAttribute(String key);
+    private final Map<String, String> attributes;
 
-    public Map<String, String> getAttributes();
+    public static final AttributesRoutingKey EMPTY = new AttributesRoutingKey(Collections.emptyMap());
+
+    public AttributesRoutingKey(Map<String, String> attributes) {
+        this.attributes = Collections.unmodifiableMap(attributes);
+    }
+
+    @Override
+    public String getAttribute(String key) {
+        return attributes.get(key);
+    }
+
+    @Override
+    public Map<String, String> getAttributes() {
+        return attributes;
+    }
+
+    @Override
+    public String toString() {
+        return "{" + attributes + '}';
+    }
+
 }
