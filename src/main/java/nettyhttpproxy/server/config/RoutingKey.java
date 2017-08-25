@@ -19,6 +19,6 @@
  */
 package nettyhttpproxy.server.config;
 
-public interface MatchResult {
+public interface RoutingKey {
 
 }

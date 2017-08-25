@@ -21,6 +21,7 @@ package nettyhttpproxy.server.mapper;
 
 import io.netty.handler.codec.http.HttpRequest;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,9 +29,10 @@ import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.MapResult;
 import nettyhttpproxy.server.config.ActionConfiguration;
 import nettyhttpproxy.server.config.BackendConfiguration;
+import nettyhttpproxy.server.config.BackendSelector;
 import nettyhttpproxy.server.config.ConfigurationNotValidException;
-import nettyhttpproxy.server.config.MatchResult;
 import nettyhttpproxy.server.config.RouteConfiguration;
+import nettyhttpproxy.server.config.RoutingKey;
 
 /**
  * Standard Endpoint mapping
@@ -38,13 +40,35 @@ import nettyhttpproxy.server.config.RouteConfiguration;
 public class StandardEndpointMapper extends EndpointMapper {
 
     private final Map<String, BackendConfiguration> backends = new HashMap<>();
+    private final List<String> allbackendids = new ArrayList<>();
     private final List<RouteConfiguration> routes = new ArrayList<>();
     private final Map<String, ActionConfiguration> actions = new HashMap<>();
+    private final BackendSelector backendSelector;
+
+    public StandardEndpointMapper(BackendSelector backendSelector) {
+        this.backendSelector = backendSelector;
+    }
+
+    private final class RandomBackendSelector implements BackendSelector {
+
+        @Override
+        public List<String> selectBackends(HttpRequest request, RoutingKey key) {
+            ArrayList<String> result = new ArrayList<>(allbackendids);
+            Collections.shuffle(result);
+            return result;
+        }
+
+    }
+
+    public StandardEndpointMapper() {
+        this.backendSelector = new RandomBackendSelector();
+    }
 
     public void addBackend(BackendConfiguration backend) throws ConfigurationNotValidException {
         if (backends.put(backend.getId(), backend) != null) {
             throw new ConfigurationNotValidException("backend " + backend.getId() + " is already configured");
         }
+        allbackendids.add(backend.getId());
     }
 
     public void addAction(ActionConfiguration action) throws ConfigurationNotValidException {
@@ -63,22 +87,25 @@ public class StandardEndpointMapper extends EndpointMapper {
     @Override
     public MapResult map(HttpRequest request) {
         for (RouteConfiguration route : routes) {
-            MatchResult matchResult = route.matches(request);
+            RoutingKey matchResult = route.matches(request);
             if (matchResult != null) {
-                String backendId = 
                 ActionConfiguration action = actions.get(route.getAction());
-                if (action != null) {
+                if (action == null) {
+                    return MapResult.NOT_FOUND;
+                }
+                List<String> selectedBackends = backendSelector.selectBackends(request, matchResult);
+                for (String backendId : selectedBackends) {
                     switch (action.getType()) {
                         case ActionConfiguration.TYPE_PROXY: {
-                            BackendConfiguration backend = backends.get(backendId);
-                            if (backend != null) {
+                            BackendConfiguration backend = this.backends.get(backendId);
+                            if (backend != null && isAvailable(backend)) {
                                 return new MapResult(backend.getHost(), backend.getPort(), MapResult.Action.PROXY);
                             }
                             break;
                         }
                         case ActionConfiguration.TYPE_CACHE:
-                            BackendConfiguration backend = backends.get(backendId);
-                            if (backend != null) {
+                            BackendConfiguration backend = this.backends.get(backendId);
+                            if (backend != null && isAvailable(backend)) {
                                 return new MapResult(backend.getHost(), backend.getPort(), MapResult.Action.CACHE);
                             }
                             break;
@@ -89,6 +116,10 @@ public class StandardEndpointMapper extends EndpointMapper {
             }
         }
         return MapResult.NOT_FOUND;
+    }
+
+    private boolean isAvailable(BackendConfiguration backend) {
+        return true;
     }
 
 }

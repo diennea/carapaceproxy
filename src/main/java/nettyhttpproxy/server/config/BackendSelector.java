@@ -20,11 +20,12 @@
 package nettyhttpproxy.server.config;
 
 import io.netty.handler.codec.http.HttpRequest;
+import java.util.List;
 
 /**
- * Generic criteria to apply a route to a request
+ * Chooses the backend which can serve the request
  */
-public interface RequestMatcher {
+public interface BackendSelector {
 
-    RoutingKey matches(HttpRequest request);
+    public List<String> selectBackends(HttpRequest request, RoutingKey result);
 }
