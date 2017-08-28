@@ -19,6 +19,7 @@ package nettyhttpproxy;
  under the License.
 
  */
+import nettyhttpproxy.server.HttpProxyServer;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;

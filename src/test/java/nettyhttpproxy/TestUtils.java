@@ -19,10 +19,19 @@ package nettyhttpproxy;
  under the License.
 
  */
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.util.function.Predicate;
-import nettyhttpproxy.EndpointStats;
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSession;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
 import org.junit.Assert;
@@ -97,4 +106,13 @@ public class TestUtils {
         }
         Assert.fail("condition not met in time!");
     }
+
+    public static String deployResource(String resource, File tmpDir) throws IOException {
+        try (InputStream in = Thread.currentThread().getContextClassLoader().getResourceAsStream(resource);) {
+            Path path = new File(tmpDir, resource).toPath();
+            Files.copy(in, path);
+            return path.toAbsolutePath().toString();
+        }
+    }
+
 }

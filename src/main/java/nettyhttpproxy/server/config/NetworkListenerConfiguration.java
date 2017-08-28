@@ -26,10 +26,30 @@ public class NetworkListenerConfiguration {
 
     private final String host;
     private final int port;
+    private final boolean ssl;
+    private final String sslCertificateFile;
+    private final String sslCertificatePassword;
+    private final String sslCiphers;
 
     public NetworkListenerConfiguration(String host, int port) {
         this.host = host;
         this.port = port;
+        this.sslCertificateFile = null;
+        this.sslCertificatePassword = null;
+        this.ssl = false;
+        this.sslCiphers = null;
+    }
+
+    public NetworkListenerConfiguration(String host, int port, boolean ssl,
+        String sslCertificateFile,
+        String sslCertificatePassword,
+        String sslCiphers) {
+        this.host = host;
+        this.port = port;
+        this.ssl = ssl;
+        this.sslCertificateFile = sslCertificateFile;
+        this.sslCertificatePassword = sslCertificatePassword;
+        this.sslCiphers = sslCiphers;
     }
 
     public String getHost() {
@@ -38,6 +58,22 @@ public class NetworkListenerConfiguration {
 
     public int getPort() {
         return port;
+    }
+
+    public boolean isSsl() {
+        return ssl;
+    }
+
+    public String getSslCertificateFile() {
+        return sslCertificateFile;
+    }
+
+    public String getSslCertificatePassword() {
+        return sslCertificatePassword;
+    }
+
+    public String getSslCiphers() {
+        return sslCiphers;
     }
 
 }

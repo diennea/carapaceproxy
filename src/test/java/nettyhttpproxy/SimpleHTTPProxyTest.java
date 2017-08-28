@@ -19,6 +19,7 @@ package nettyhttpproxy;
  under the License.
 
  */
+import nettyhttpproxy.server.HttpProxyServer;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
@@ -28,12 +29,14 @@ import java.io.FileNotFoundException;
 import java.net.URL;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
+import nettyhttpproxy.server.config.NetworkListenerConfiguration;
 import org.apache.commons.io.IOUtils;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 /**
  *
@@ -43,6 +46,9 @@ public class SimpleHTTPProxyTest {
 
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(18081);
+
+    @Rule
+    public TemporaryFolder tmpDir = new TemporaryFolder();
 
     @Test
     public void test() throws Exception {
@@ -78,6 +84,75 @@ public class SimpleHTTPProxyTest {
             // proxy
             {
                 String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html?redir").toURI(), "utf-8");
+                System.out.println("s:" + s);
+                assertEquals("it <b>works</b> !!", s);
+            }
+
+            stats = server.getConnectionsManager().getStats();
+            assertNotNull(stats.getEndpoints().get(key));
+            TestUtils.waitForCondition(() -> {
+                stats.getEndpoints().values().forEach((EndpointStats st) -> {
+                    System.out.println("st2:" + st);
+                });
+                EndpointStats epstats = stats.getEndpointStats(key);
+                return epstats.getTotalConnections().intValue() == 1
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 1;
+            }, 100);
+        }
+
+        TestUtils.waitForCondition(() -> {
+            EndpointStats epstats = stats.getEndpointStats(key);
+            return epstats.getTotalConnections().intValue() == 1
+                && epstats.getActiveConnections().intValue() == 0
+                && epstats.getOpenConnections().intValue() == 0;
+        }, 100);
+
+        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+
+    }
+
+    @Test
+    public void testSsl() throws Exception {
+
+        HttpUtils.overideJvmWideHttpsVerifier();
+
+        String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+
+        stubFor(get(urlEqualTo("/index.html?redir"))
+            .willReturn(aResponse()
+                .withStatus(200)
+                .withHeader("Content-Type", "text/html")
+                .withBody("it <b>works</b> !!")));
+
+        int port = 1234;
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port(), false);
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = new HttpProxyServer(mapper);) {
+            server.addListener(new NetworkListenerConfiguration("localhost", port, true,
+                certificate, "testproxy",
+                null));
+            server.start();
+
+            // debug
+            {
+                String s = IOUtils.toString(new URL("https://localhost:" + port + "/index.html?debug").toURI(), "utf-8");
+                System.out.println("s:" + s);
+            }
+
+            // not found
+            try {
+                String s = IOUtils.toString(new URL("https://localhost:" + port + "/index.html?not-found").toURI(), "utf-8");
+                System.out.println("s:" + s);
+                fail();
+            } catch (FileNotFoundException ok) {
+            }
+
+            // proxy
+            {
+                String s = IOUtils.toString(new URL("https://localhost:" + port + "/index.html?redir").toURI(), "utf-8");
                 System.out.println("s:" + s);
                 assertEquals("it <b>works</b> !!", s);
             }
