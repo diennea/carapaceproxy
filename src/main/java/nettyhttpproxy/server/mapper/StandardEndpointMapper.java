@@ -25,12 +25,16 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
+import java.util.logging.Logger;
 import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.MapResult;
 import nettyhttpproxy.server.config.ActionConfiguration;
 import nettyhttpproxy.server.config.BackendConfiguration;
 import nettyhttpproxy.server.config.BackendSelector;
 import nettyhttpproxy.server.config.ConfigurationNotValidException;
+import nettyhttpproxy.server.config.MatchAllRequestMatcher;
+import nettyhttpproxy.server.config.RequestMatcher;
 import nettyhttpproxy.server.config.RouteConfiguration;
 import nettyhttpproxy.server.config.RoutingKey;
 
@@ -48,6 +52,49 @@ public class StandardEndpointMapper extends EndpointMapper {
     public StandardEndpointMapper(BackendSelector backendSelector) {
         this.backendSelector = backendSelector;
     }
+
+    public void configure(Properties properties) throws ConfigurationNotValidException {
+
+        LOG.info("configured build-in action id=proxy-all");
+        addAction(new ActionConfiguration("proxy-all", ActionConfiguration.TYPE_PROXY));
+
+        for (int i = 0; i < 100; i++) {
+            String prefix = "backend." + i + ".";
+            String id = properties.getProperty(prefix + "id", "");
+            if (!id.isEmpty()) {
+                boolean enabled = Boolean.parseBoolean(properties.getProperty(prefix + "enabled", "false"));
+                String host = properties.getProperty(prefix + "host", "localhost");
+                int port = Integer.parseInt(properties.getProperty(prefix + "port", "8086"));
+                LOG.info("configured backend " + id + " " + host + ":" + port + " enabled:" + enabled);
+                if (enabled) {
+                    BackendConfiguration config = new BackendConfiguration(id, host, port, "/test.html");
+                    addBackend(config);
+                }
+            }
+        }
+        for (int i = 0; i < 100; i++) {
+            String prefix = "route." + i + ".";
+            String id = properties.getProperty(prefix + "id", "");
+            if (!id.isEmpty()) {
+                String action = properties.getProperty(prefix + "action", "");
+                boolean enabled = Boolean.parseBoolean(properties.getProperty(prefix + "enabled", "false"));
+                String match = properties.getProperty(prefix + "match", "all");
+                RequestMatcher matcher;
+                switch (match) {
+                    case "all":
+                        matcher = new MatchAllRequestMatcher();
+                        break;
+                    default:
+                        throw new ConfigurationNotValidException(prefix + "match can be only 'all' at the moment");
+
+                }
+                LOG.info("configured route" + id + " action: " + action + " enabled: " + enabled + " matcher: " + matcher);
+                RouteConfiguration config = new RouteConfiguration(id, action, enabled, matcher);
+                addRoute(config);
+            }
+        }
+    }
+    private static final Logger LOG = Logger.getLogger(StandardEndpointMapper.class.getName());
 
     private final class RandomBackendSelector implements BackendSelector {
 
@@ -87,13 +134,18 @@ public class StandardEndpointMapper extends EndpointMapper {
     @Override
     public MapResult map(HttpRequest request) {
         for (RouteConfiguration route : routes) {
+            if (!route.isEnabled()) {
+                continue;
+            }
             RoutingKey matchResult = route.matches(request);
             if (matchResult != null) {
                 ActionConfiguration action = actions.get(route.getAction());
                 if (action == null) {
+                    LOG.info("no action " + route.getAction() + " -> not-found for " + request.uri());
                     return MapResult.NOT_FOUND;
                 }
                 List<String> selectedBackends = backendSelector.selectBackends(request, matchResult);
+                LOG.info("selected " + selectedBackends + " backends for " + request.uri());
                 for (String backendId : selectedBackends) {
                     switch (action.getType()) {
                         case ActionConfiguration.TYPE_PROXY: {

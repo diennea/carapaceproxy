@@ -33,6 +33,7 @@ import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
+import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -85,8 +86,10 @@ public class ProxyHttpClientConnection implements EndpointConnection {
         final ChannelFuture connectFuture = b.connect(key.getHost(), key.getPort());
 
         connectFuture.addListener((Future<Void> future) -> {
-            endpointstats.getTotalConnections().incrementAndGet();
-            endpointstats.getOpenConnections().incrementAndGet();
+            if (future.isSuccess()) {
+                endpointstats.getTotalConnections().incrementAndGet();
+                endpointstats.getOpenConnections().incrementAndGet();
+            }
         });
         channelToEndpoint = connectFuture.channel();
         return connectFuture;
@@ -95,20 +98,22 @@ public class ProxyHttpClientConnection implements EndpointConnection {
 
     @Override
     public void sendRequest(HttpRequest request, ProxiedConnectionHandler clientSidePeerHandler, ChannelHandlerContext peerChannel) {
-
-        activateConnection(clientSidePeerHandler, peerChannel);
         ChannelFuture afterConnect = ensureConnected();
         afterConnect.addListener((Future<Void> future) -> {
+            if (!future.isSuccess()) {
+                valid = false;
+                LOG.log(Level.INFO, "connect failed to " + key, future.cause());
+                clientSidePeerHandler.errorSendingRequest(ProxyHttpClientConnection.this, peerChannel, future.cause());
+                return;
+            }
+            activateConnection(clientSidePeerHandler, peerChannel);
             endpointstats.getTotalRequests().incrementAndGet();
-            LOG.info("sendRequest " + request.getClass() + " to channelToEndpoint " + channelToEndpoint);
             channelToEndpoint.writeAndFlush(request).addListener(new GenericFutureListener<Future<? super Void>>() {
                 @Override
                 public void operationComplete(Future<? super Void> future) throws Exception {
                     if (!future.isSuccess()) {
                         LOG.log(Level.SEVERE, "sendRequest " + request.getClass() + " failed", future.cause());
-                        clientSidePeerHandler.errorSendingRequest(ProxyHttpClientConnection.this, peerChannel);
-                    } else {
-                        LOG.log(Level.SEVERE, "sendRequest " + request.getClass() + " completed");
+                        clientSidePeerHandler.errorSendingRequest(ProxyHttpClientConnection.this, peerChannel, future.cause());
                     }
                 }
             });
@@ -117,7 +122,7 @@ public class ProxyHttpClientConnection implements EndpointConnection {
             afterConnect.sync();
         } catch (InterruptedException err) {
             LOG.log(Level.SEVERE, "sendRequest interrupted during connection", err);
-            clientSidePeerHandler.errorSendingRequest(ProxyHttpClientConnection.this, peerChannel);
+            clientSidePeerHandler.errorSendingRequest(ProxyHttpClientConnection.this, peerChannel, err);
         }
 
     }
@@ -141,18 +146,15 @@ public class ProxyHttpClientConnection implements EndpointConnection {
 
     @Override
     public void sendLastHttpContent(LastHttpContent msg) {
-        System.out.println("sendLastHttpContent to " + contextToEndpoint);
-        System.out.println("sendLastHttpContent to " + contextToEndpoint.pipeline());
-        contextToEndpoint.writeAndFlush(msg).addListener(new GenericFutureListener<Future<? super Void>>() {
-            @Override
-            public void operationComplete(Future<? super Void> future) throws Exception {
-                if (!future.isSuccess()) {
-                    LOG.log(Level.INFO, "sendLastHttpContent failed " + msg, future.cause());
-                } else {
-                    LOG.log(Level.INFO, "sendLastHttpContent success");
-                }
-            }
 
+        if (!valid) {
+            LOG.severe("sendLastHttpContent " + msg + " to " + contextToEndpoint + " . skip to invalid connection");
+            return;
+        }
+        contextToEndpoint.writeAndFlush(msg).addListener((Future<? super Void> future) -> {
+            if (!future.isSuccess()) {
+                LOG.log(Level.INFO, "sendLastHttpContent failed " + msg, future.cause());
+            }
         });
     }
 
@@ -207,24 +209,23 @@ public class ProxyHttpClientConnection implements EndpointConnection {
 
         @Override
         public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
-            LOG.log(Level.INFO, "handlerAdded " + ctx);
-            super.handlerAdded(ctx);
             contextToEndpoint = ctx;
+            super.handlerAdded(ctx);
         }
 
         @Override
         public void channelRead0(ChannelHandlerContext ctx, HttpObject msg) {
-            LOG.log(Level.INFO, "channelRead0 {0} {1}", new Object[]{msg.getClass(), msg});
+            //LOG.log(Level.INFO, "channelRead0 {0} {1}", new Object[]{msg.getClass(), msg});
             if (msg instanceof HttpContent) {
                 HttpContent f = (HttpContent) msg;
-                LOG.log(Level.INFO, "proxying HttpContent {0}: {1}", new Object[]{msg.getClass(), msg});
+                //LOG.log(Level.INFO, "proxying HttpContent {0}: {1}", new Object[]{msg.getClass(), msg});
                 clientSidePeerHandler.receivedFromRemote(f.copy(), currentPeerChannel);
             } else if (msg instanceof DefaultHttpResponse) {
                 DefaultHttpResponse f = (DefaultHttpResponse) msg;
-                LOG.log(Level.INFO, "proxying DefaultHttpResponse {0}: headers: {1}", new Object[]{msg.getClass(), msg});
-                f.headers().forEach((entry) -> {
-                    LOG.log(Level.INFO, "proxying header " + entry.getKey() + ": " + entry.getValue());
-                });
+//                LOG.log(Level.INFO, "proxying DefaultHttpResponse {0}: headers: {1}", new Object[]{msg.getClass(), msg});
+//                f.headers().forEach((entry) -> {
+//                    LOG.log(Level.INFO, "proxying header " + entry.getKey() + ": " + entry.getValue());
+//                });
                 clientSidePeerHandler.receivedFromRemote(new DefaultHttpResponse(f.protocolVersion(),
                     f.status(), f.headers()), currentPeerChannel);
             } else {
@@ -237,18 +238,18 @@ public class ProxyHttpClientConnection implements EndpointConnection {
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
             super.channelRead(ctx, msg); //To change body of generated methods, choose Tools | Templates.
-            LOG.log(Level.INFO, "channelRead " + msg + ", clientSidePeerHandler:" + clientSidePeerHandler);
+//            LOG.log(Level.INFO, "channelRead " + msg + ", clientSidePeerHandler:" + clientSidePeerHandler);
         }
 
         @Override
         public boolean acceptInboundMessage(Object msg) throws Exception {
-            LOG.log(Level.INFO, "acceptInboundMessage " + msg);
+//            LOG.log(Level.INFO, "acceptInboundMessage " + msg);
             return super.acceptInboundMessage(msg); //To change body of generated methods, choose Tools | Templates.
         }
 
         @Override
         public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
-            LOG.log(Level.INFO, "channelReadComplete {0}", ctx);
+//            LOG.log(Level.INFO, "channelReadComplete {0}", ctx);
             if (clientSidePeerHandler != null) {
                 clientSidePeerHandler.readCompletedFromRemote(currentPeerChannel);
             }

@@ -22,19 +22,15 @@ package nettyhttpproxy;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSession;
-import javax.net.ssl.SSLSocketFactory;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
 import org.junit.Assert;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Utility for tests
@@ -112,6 +108,14 @@ public class TestUtils {
             Path path = new File(tmpDir, resource).toPath();
             Files.copy(in, path);
             return path.toAbsolutePath().toString();
+        }
+    }
+
+    static int getFreePort() throws IOException {
+        try (ServerSocket s = new ServerSocket(0);) {
+            System.out.println("Got free ephemeral port " + s.getLocalPort());
+            assertTrue(s.getLocalPort() > 0);
+            return s.getLocalPort();
         }
     }
 

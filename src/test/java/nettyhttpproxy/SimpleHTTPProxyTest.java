@@ -25,8 +25,10 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.net.URL;
+import java.util.Collections;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
@@ -173,6 +175,48 @@ public class SimpleHTTPProxyTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
+                && epstats.getActiveConnections().intValue() == 0
+                && epstats.getOpenConnections().intValue() == 0;
+        }, 100);
+
+        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+
+    }
+
+    @Test
+    public void testEndpointDown() throws Exception {
+
+        int badPort = TestUtils.getFreePort();
+        int port = 1234;
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", badPort);
+        EndpointKey key = new EndpointKey("localhost", badPort, false);
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = new HttpProxyServer("localhost", port, mapper);) {
+            server.start();
+
+            HttpUtils.ResourceInfos result = HttpUtils.downloadFromUrl(new URL("http://localhost:" + port + "/index.html"),
+                new ByteArrayOutputStream(), Collections.singletonMap("return_errors", "true"));
+            assertEquals(500, result.responseCode);
+//            String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8");
+//            System.out.println("s:" + s);
+
+            stats = server.getConnectionsManager().getStats();
+            assertNotNull(stats.getEndpoints().get(key));
+            TestUtils.waitForCondition(() -> {
+                stats.getEndpoints().values().forEach((EndpointStats st) -> {
+                    System.out.println("st2:" + st);
+                });
+                EndpointStats epstats = stats.getEndpointStats(key);
+                return epstats.getTotalConnections().intValue() == 0
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
+            }, 100);
+        }
+
+        TestUtils.waitForCondition(() -> {
+            EndpointStats epstats = stats.getEndpointStats(key);
+            return epstats.getTotalConnections().intValue() == 0
                 && epstats.getActiveConnections().intValue() == 0
                 && epstats.getOpenConnections().intValue() == 0;
         }, 100);

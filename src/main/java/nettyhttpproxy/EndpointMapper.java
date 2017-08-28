@@ -20,6 +20,7 @@
 package nettyhttpproxy;
 
 import io.netty.handler.codec.http.HttpRequest;
+import nettyhttpproxy.client.EndpointKey;
 
 /**
  * Maps requests to a remote HTTP server
@@ -29,4 +30,8 @@ import io.netty.handler.codec.http.HttpRequest;
 public abstract class EndpointMapper {
 
     public abstract MapResult map(HttpRequest request);
+
+    public void endpointFailed(EndpointKey key, Throwable error) {
+    }
+
 }

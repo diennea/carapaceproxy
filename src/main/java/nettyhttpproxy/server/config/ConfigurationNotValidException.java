@@ -28,4 +28,8 @@ public class ConfigurationNotValidException extends Exception {
         super(message);
     }
 
+    public ConfigurationNotValidException(Throwable cause) {
+        super(cause);
+    }
+
 }

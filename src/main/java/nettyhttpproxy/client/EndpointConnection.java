@@ -31,7 +31,7 @@ import nettyhttpproxy.ProxiedConnectionHandler;
  */
 public interface EndpointConnection {
 
-    public void sendRequest(HttpRequest request, ProxiedConnectionHandler handler, ChannelHandlerContext peerChannel);
+    public void sendRequest(HttpRequest request, ProxiedConnectionHandler handler, ChannelHandlerContext channelToClient);
 
     public void release(boolean error);
 

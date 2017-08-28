@@ -19,11 +19,7 @@ package nettyhttpproxy;
  under the License.
 
  */
-
-
 import io.netty.handler.codec.http.HttpRequest;
-import nettyhttpproxy.EndpointMapper;
-import nettyhttpproxy.MapResult;
 
 public class TestEndpointMapper extends EndpointMapper {
 

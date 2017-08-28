@@ -43,15 +43,16 @@ import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLException;
 import javax.net.ssl.TrustManagerFactory;
 import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.ProxiedConnectionHandler;
 import nettyhttpproxy.client.ConnectionsManager;
 import nettyhttpproxy.client.impl.ConnectionsManagerImpl;
+import nettyhttpproxy.server.config.ConfigurationNotValidException;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
 
 public class HttpProxyServer implements AutoCloseable {
@@ -86,6 +87,7 @@ public class HttpProxyServer implements AutoCloseable {
             workerGroup = new EpollEventLoopGroup();
 
             for (NetworkListenerConfiguration listener : listeners) {
+                LOG.info("Starting listened at " + listener.getHost() + ":" + listener.getPort()+" ssl:"+listener.isSsl());
                 final SslContext sslCtx;
                 if (listener.isSsl()) {
                     String sslCertFilePassword = listener.getSslCertificatePassword();
@@ -188,6 +190,22 @@ public class HttpProxyServer implements AutoCloseable {
             ks.load(in, keyStorePassword.trim().toCharArray());
         }
         return ks;
+    }
+
+    public void configure(Properties properties) {
+        for (int i = 0; i < 100; i++) {
+            String prefix = "listener." + i + ".";
+            String host = properties.getProperty(prefix + "host", "0.0.0.0");
+            int port = Integer.parseInt(properties.getProperty(prefix + "port", "0"));
+            if (port > 0) {
+                boolean ssl = Boolean.parseBoolean(properties.getProperty(prefix + "ssl", "false"));
+                String certificateFile = properties.getProperty(prefix + "sslcertfile", "");
+                String certificatePassword = properties.getProperty(prefix + "sslcertfilepassword", "");
+                String sslciphers = properties.getProperty(prefix + "sslciphers", "");
+                NetworkListenerConfiguration config = new NetworkListenerConfiguration(host, port, ssl, certificateFile, certificatePassword, sslciphers);
+                addListener(config);
+            }
+        }
     }
 
 }

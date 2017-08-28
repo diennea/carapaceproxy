@@ -82,7 +82,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
     }
 
     @Override
-    protected void channelRead0(ChannelHandlerContext ctx, Object msg) {
+    protected synchronized void channelRead0(ChannelHandlerContext ctx, Object msg) {
         if (msg instanceof HttpRequest) {
             HttpRequest request = this.request = (HttpRequest) msg;
 
@@ -104,6 +104,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
                 case CACHE:
                     try {
                         connection = connectionsManager.getConnection(new EndpointKey(action.host, action.port, false));
+                        LOG.info("sending http request to " + action.host + ":" + action.port);
                         connection.sendRequest(request, this, ctx);
                     } catch (EndpointNotAvailableException err) {
                         sendServiceNotAvailable(ctx);
@@ -123,6 +124,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
 
         } else if (msg instanceof LastHttpContent) {
             LastHttpContent trailer = (LastHttpContent) msg;
+            LOG.info("got LastHttpContent " + trailer + " connection: " + connection);
             HttpContent httpContent = (HttpContent) msg;
             switch (action.action) {
                 case DEBUG: {
@@ -148,7 +150,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
                 }
                 case CACHE:
                 case PROXY: {
-                    connection.sendLastHttpContent(trailer);
+                    connection.sendLastHttpContent(trailer.copy());
                     break;
                 }
                 default:
@@ -234,50 +236,50 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
         }
 
         // Write the response.
-        ctx.write(response);
+        ctx.writeAndFlush(response, ctx.voidPromise());
 
         return keepAlive;
     }
 
     private void send100Continue(ChannelHandlerContext ctx) {
         FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, CONTINUE);
-        ctx.write(response);
+        ctx.writeAndFlush(response, ctx.voidPromise());
     }
 
     private void sendServiceNotAvailable(ChannelHandlerContext ctx) {
+        LOG.info("sendServiceNotAvailable to " + ctx);
         FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, HttpResponseStatus.INTERNAL_SERVER_ERROR);
-        ctx.write(response);
-    }
-
-    @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        LOG.log(Level.SEVERE, "bad error", cause);
-        ctx.close();
-        releaseConnection(true);
+        ctx.writeAndFlush(response).addListener(new GenericFutureListener<Future<? super Void>>() {
+            @Override
+            public void operationComplete(Future<? super Void> future) throws Exception {
+                LOG.info("sendServiceNotAvailable result: " + future.isSuccess() + ", cause " + future.cause());
+                if (future.isSuccess()) {
+                    ctx.close();
+                }
+            }
+        });
     }
 
     public void receivedFromRemote(HttpObject msg, ChannelHandlerContext channelToClient) {
-        LOG.log(Level.INFO, "received from remote server:{0}", msg);
+//        LOG.log(Level.INFO, "received from remote server:{0}", msg);
         channelToClient.writeAndFlush(msg).addListener(new GenericFutureListener<Future<? super Void>>() {
             @Override
             public void operationComplete(Future<? super Void> future) throws Exception {
                 if (future.isSuccess()) {
-                    LOG.log(Level.SEVERE, "receivedFromRemote success!");
+//                    LOG.log(Level.SEVERE, "receivedFromRemote success!");
                     if (msg instanceof LastHttpContent) {
                         releaseConnection(false);
                     }
                 } else {
-                    LOG.log(Level.SEVERE, "bad error", future.cause());
-                    releaseConnection(true);
+                    LOG.log(Level.SEVERE, "bad error from remote", future.cause());
                     sendServiceNotAvailable(channelToClient);
-                    ensureChannelClosed();
                 }
 
             }
         });
     }
 
-    private void releaseConnection(boolean error) {
+    private synchronized void releaseConnection(boolean error) {
         if (connection != null) {
             LOG.log(Level.INFO, "release connection {0}", connection);
             connection.release(error);
@@ -290,15 +292,10 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
         channel.flush();
     }
 
-    public void errorSendingRequest(ProxyHttpClientConnection aThis, ChannelHandlerContext peerChannel) {
-        releaseConnection(true);
+    public void errorSendingRequest(ProxyHttpClientConnection aThis, ChannelHandlerContext peerChannel, Throwable error) {
+        mapper.endpointFailed(aThis.getKey(), error);
+        LOG.info("errorSendingRequest " + aThis);
         sendServiceNotAvailable(peerChannel);
-        ensureChannelClosed();
     }
 
-    private void ensureChannelClosed() {
-        if (channel != null) {
-            channel.close();
-        }
-    }
 }
