@@ -154,7 +154,7 @@ public class ProxyHttpClientConnection implements EndpointConnection {
     private static final Logger LOG = Logger.getLogger(ProxyHttpClientConnection.class.getName());
 
     @Override
-    public void sendLastHttpContent(LastHttpContent msg) {
+    public void sendLastHttpContent(LastHttpContent msg, ProxiedConnectionHandler clientSidePeerHandler, ChannelHandlerContext peerChannel) {
 
         if (!valid) {
             LOG.severe("sendLastHttpContent " + msg + " to " + contextToEndpoint + " . skip to invalid connection");
@@ -163,6 +163,8 @@ public class ProxyHttpClientConnection implements EndpointConnection {
         contextToEndpoint.writeAndFlush(msg).addListener((Future<? super Void> future) -> {
             if (!future.isSuccess()) {
                 LOG.log(Level.INFO, "sendLastHttpContent failed " + msg, future.cause());
+            } else {
+                clientSidePeerHandler.lastHttpContentSent(peerChannel);
             }
         });
     }
@@ -224,7 +226,6 @@ public class ProxyHttpClientConnection implements EndpointConnection {
 
         @Override
         public void channelRead0(ChannelHandlerContext ctx, HttpObject msg) {
-            //LOG.log(Level.INFO, "channelRead0 {0} {1}", new Object[]{msg.getClass(), msg});
             if (msg instanceof HttpContent) {
                 HttpContent f = (HttpContent) msg;
                 //LOG.log(Level.INFO, "proxying HttpContent {0}: {1}", new Object[]{msg.getClass(), msg});

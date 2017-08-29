@@ -63,17 +63,10 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
     private EndpointConnection connection;
     private final StringBuilder output = new StringBuilder();
     private final ConnectionsManager connectionsManager;
-    private Channel channel;
 
     public ProxiedConnectionHandler(EndpointMapper mapper, ConnectionsManager connectionsManager) {
         this.mapper = mapper;
         this.connectionsManager = connectionsManager;
-    }
-
-    @Override
-    public void channelRegistered(ChannelHandlerContext ctx) throws Exception {
-        super.channelRegistered(ctx);
-        channel = ctx.channel();
     }
 
     @Override
@@ -140,7 +133,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
                 }
                 case CACHE:
                 case PROXY: {
-                    connection.sendLastHttpContent(trailer.copy());
+                    connection.sendLastHttpContent(trailer.copy(), this, ctx);
                     break;
                 }
                 default:
@@ -292,10 +285,10 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
         });
     }
 
-    private synchronized void releaseConnection(boolean error) {
+    private synchronized void releaseConnection(boolean forceClose) {
         if (connection != null) {
             LOG.log(Level.INFO, "release connection {0}", connection);
-            connection.release(error);
+            connection.release(forceClose);
             connection = null;
         }
     }
@@ -308,6 +301,14 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
         mapper.endpointFailed(aThis.getKey(), error);
         LOG.info("errorSendingRequest " + aThis);
         sendServiceNotAvailable(peerChannel);
+    }
+
+    public void lastHttpContentSent(ChannelHandlerContext peerChannel) {
+        if (!HttpUtil.isKeepAlive(request)) {
+            LOG.info("connection is to be closed");
+            releaseConnection(true);
+            peerChannel.close();
+        }
     }
 
 }

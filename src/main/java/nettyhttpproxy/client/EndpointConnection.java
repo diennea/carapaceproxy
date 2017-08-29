@@ -35,6 +35,6 @@ public interface EndpointConnection {
 
     public void release(boolean error);
 
-    public void sendLastHttpContent(LastHttpContent msg);
+    public void sendLastHttpContent(LastHttpContent msg, ProxiedConnectionHandler handler, ChannelHandlerContext channelToClient);
 
 }
