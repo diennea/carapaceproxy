@@ -104,19 +104,22 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
                 case CACHE:
                     try {
                         connection = connectionsManager.getConnection(new EndpointKey(action.host, action.port, false));
-                        LOG.info("sending http request to " + action.host + ":" + action.port);
-                        connection.sendRequest(request, this, ctx);
                     } catch (EndpointNotAvailableException err) {
                         sendServiceNotAvailable(ctx);
+                        return;
                     }
+//                        LOG.info("sending http request to " + action.host + ":" + action.port);
+                    connection.sendRequest(request, this, ctx);
+
                     return;
                 case PIPE:
                     try {
                         connection = connectionsManager.getConnection(new EndpointKey(action.host, action.port, true));
-                        connection.sendRequest(request, this, ctx);
                     } catch (EndpointNotAvailableException err) {
                         sendServiceNotAvailable(ctx);
+                        return;
                     }
+                    connection.sendRequest(request, this, ctx);
                     return;
                 default:
                     throw new IllegalStateException("not yet implemented");
@@ -128,24 +131,11 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
             HttpContent httpContent = (HttpContent) msg;
             switch (action.action) {
                 case DEBUG: {
-                    continueDebugMessage(httpContent, msg);
-                    FullHttpResponse response = new DefaultFullHttpResponse(
-                        HTTP_1_1, trailer.decoderResult().isSuccess() ? OK : BAD_REQUEST,
-                        Unpooled.copiedBuffer(output.toString(), CharsetUtil.UTF_8));
-                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8");
-                    if (!writeResponse(response, ctx)) {
-                        // If keep-alive is off, close the connection once the content is fully written.
-                        ctx.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
-                    }
+                    serveDebugMessage(httpContent, msg, trailer, ctx);
                     break;
                 }
                 case NOTFOUND: {
-                    FullHttpResponse response = new DefaultFullHttpResponse(
-                        HTTP_1_1, NOT_FOUND);
-                    if (!writeResponse(response, ctx)) {
-                        // If keep-alive is off, close the connection once the content is fully written.
-                        ctx.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
-                    }
+                    serveNotFoundMessage(ctx);
                     break;
                 }
                 case CACHE:
@@ -165,6 +155,27 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
             }
         }
 
+    }
+
+    private void serveNotFoundMessage(ChannelHandlerContext ctx) {
+        FullHttpResponse response = new DefaultFullHttpResponse(
+            HTTP_1_1, NOT_FOUND);
+        if (!writeResponse(response, ctx)) {
+            // If keep-alive is off, close the connection once the content is fully written.
+            ctx.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+        }
+    }
+
+    private void serveDebugMessage(HttpContent httpContent, Object msg, LastHttpContent trailer, ChannelHandlerContext ctx) {
+        continueDebugMessage(httpContent, msg);
+        FullHttpResponse response = new DefaultFullHttpResponse(
+            HTTP_1_1, trailer.decoderResult().isSuccess() ? OK : BAD_REQUEST,
+            Unpooled.copiedBuffer(output.toString(), CharsetUtil.UTF_8));
+        response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8");
+        if (!writeResponse(response, ctx)) {
+            // If keep-alive is off, close the connection once the content is fully written.
+            ctx.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+        }
     }
     private static final Logger LOG = Logger.getLogger(ProxiedConnectionHandler.class.getName());
 
@@ -266,13 +277,15 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
             @Override
             public void operationComplete(Future<? super Void> future) throws Exception {
                 if (future.isSuccess()) {
-//                    LOG.log(Level.SEVERE, "receivedFromRemote success!");
                     if (msg instanceof LastHttpContent) {
+                        LOG.log(Level.SEVERE, "sent to client last " + msg);
                         releaseConnection(false);
+                    } else {
+                        LOG.log(Level.SEVERE, "sent to client " + msg);
                     }
                 } else {
-                    LOG.log(Level.SEVERE, "bad error from remote", future.cause());
-                    sendServiceNotAvailable(channelToClient);
+                    LOG.log(Level.SEVERE, "bad error writing to client", future.cause());
+                    releaseConnection(true);
                 }
 
             }
@@ -288,7 +301,6 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
     }
 
     public void readCompletedFromRemote(ChannelHandlerContext channel) {
-        LOG.log(Level.INFO, "readCompletedFromRemote");
         channel.flush();
     }
 

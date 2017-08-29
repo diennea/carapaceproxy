@@ -54,6 +54,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     private final EventLoopGroup group;
 
     void returnConnection(ProxyHttpClientConnection con) {
+        LOG.info("returnConnection:" + con);
         connections.returnObject(con.getKey(), con);
     }
 
@@ -61,7 +62,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
         @Override
         public PooledObject<ProxyHttpClientConnection> makeObject(EndpointKey k) throws Exception {
-            LOG.log(Level.INFO, "makeObject {0}", new Object[]{k});
+//            LOG.log(Level.INFO, "makeObject {0}", new Object[]{k});
             EndpointStats endpointstats = endpointsStats.computeIfAbsent(k, EndpointStats::new);
             ProxyHttpClientConnection con = new ProxyHttpClientConnection(k, ConnectionsManagerImpl.this, endpointstats);
             return new DefaultPooledObject<>(con);
@@ -69,14 +70,16 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
         @Override
         public void destroyObject(EndpointKey k, PooledObject<ProxyHttpClientConnection> po) throws Exception {
-            LOG.log(Level.INFO, "destroyObject {0} {1}", new Object[]{k, po.getObject()});
+//            LOG.log(Level.INFO, "destroyObject {0} {1}", new Object[]{k, po.getObject()});
             po.getObject().destroy();
         }
 
         @Override
         public boolean validateObject(EndpointKey k, PooledObject<ProxyHttpClientConnection> po) {
             boolean valid = po.getObject().isValid();
-            LOG.log(Level.INFO, "validateObject {0} {1}-> {2}", new Object[]{k, po.getObject(), valid});
+            if (!valid) {
+                LOG.log(Level.INFO, "validateObject {0} {1}-> {2}", new Object[]{k, po.getObject(), valid});
+            }
             return valid;
         }
 
@@ -115,7 +118,8 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
             throw new EndpointNotAvailableException(ex);
         }
     }
-    private static final Logger LOG = Logger.getLogger(ConnectionsManagerImpl.class.getName());
+    private static final Logger LOG = Logger.getLogger(ConnectionsManagerImpl.class
+        .getName());
 
     @Override
     public void close() {

@@ -36,7 +36,9 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
+import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.EndpointStats;
@@ -46,6 +48,8 @@ import nettyhttpproxy.client.EndpointKey;
 
 public class ProxyHttpClientConnection implements EndpointConnection {
 
+    private static final AtomicLong IDGENERATOR = new AtomicLong();
+    private final long id = IDGENERATOR.incrementAndGet();
     private final ConnectionsManagerImpl parent;
     private final EndpointKey key;
     private final EndpointStats endpointstats;
@@ -67,10 +71,15 @@ public class ProxyHttpClientConnection implements EndpointConnection {
 
     private ChannelFuture ensureConnected() {
         if (channelToEndpoint != null) {
-            LOG.log(Level.INFO, "Already connected to {0}, channel {1}, pipeline {2}", new Object[]{key, channelToEndpoint, channelToEndpoint.pipeline()});
-            channelToEndpoint.pipeline().remove(HttpClientCodec.class);
-            channelToEndpoint.pipeline().addFirst("client-codec", new HttpClientCodec());
-            return channelToEndpoint.newSucceededFuture();
+            LOG.log(Level.INFO, "Connection {3} Already connected to {0}, channel {1}, pipeline {2}", new Object[]{key, channelToEndpoint, channelToEndpoint.pipeline(), id});
+            try {
+                channelToEndpoint.pipeline().remove(HttpClientCodec.class);
+                channelToEndpoint.pipeline().addFirst("client-codec", new HttpClientCodec());
+                return channelToEndpoint.newSucceededFuture();
+            } catch (NoSuchElementException err) {
+                LOG.log(Level.INFO, "Attempt of concurrent access to connection " + this);
+                return channelToEndpoint.newFailedFuture(err);
+            }
         }
         Bootstrap b = new Bootstrap();
         b.group(parent.getGroup())
@@ -229,7 +238,7 @@ public class ProxyHttpClientConnection implements EndpointConnection {
                 clientSidePeerHandler.receivedFromRemote(new DefaultHttpResponse(f.protocolVersion(),
                     f.status(), f.headers()), currentPeerChannel);
             } else {
-                LOG.log(Level.SEVERE, "unknown mesasge type " + msg.getClass(), new Exception("unknown mesasge type " + msg.getClass())
+                LOG.log(Level.SEVERE, "unknown message type " + msg.getClass(), new Exception("unknown mesasge type " + msg.getClass())
                     .fillInStackTrace());
             }
 
@@ -266,7 +275,7 @@ public class ProxyHttpClientConnection implements EndpointConnection {
 
     @Override
     public String toString() {
-        return "ProxyHttpClientConnection{" + "channel=" + channelToEndpoint + ", key=" + key + ", valid=" + valid + ", closed=" + closed + '}';
+        return "ProxyHttpClientConnection{id=" + id + ", channel=" + channelToEndpoint + ", key=" + key + ", valid=" + valid + ", closed=" + closed + '}';
     }
 
 }
