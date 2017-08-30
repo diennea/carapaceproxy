@@ -47,35 +47,35 @@ import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
  */
 public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable {
 
-    private final GenericKeyedObjectPool<EndpointKey, ProxyHttpClientConnection> connections;
+    private final GenericKeyedObjectPool<EndpointKey, EndpointConnectionImpl> connections;
     private final int maxConnectionsPerEndpoint = 10;
     private final int borrowTimeout = 5000;
     private final ConcurrentHashMap<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
     private final EventLoopGroup group;
 
-    void returnConnection(ProxyHttpClientConnection con) {
+    void returnConnection(EndpointConnectionImpl con) {
         LOG.info("returnConnection:" + con);
         connections.returnObject(con.getKey(), con);
     }
 
-    private final class ConnectionsFactory implements KeyedPooledObjectFactory<EndpointKey, ProxyHttpClientConnection> {
+    private final class ConnectionsFactory implements KeyedPooledObjectFactory<EndpointKey, EndpointConnectionImpl> {
 
         @Override
-        public PooledObject<ProxyHttpClientConnection> makeObject(EndpointKey k) throws Exception {
+        public PooledObject<EndpointConnectionImpl> makeObject(EndpointKey k) throws Exception {
 //            LOG.log(Level.INFO, "makeObject {0}", new Object[]{k});
             EndpointStats endpointstats = endpointsStats.computeIfAbsent(k, EndpointStats::new);
-            ProxyHttpClientConnection con = new ProxyHttpClientConnection(k, ConnectionsManagerImpl.this, endpointstats);
+            EndpointConnectionImpl con = new EndpointConnectionImpl(k, ConnectionsManagerImpl.this, endpointstats);
             return new DefaultPooledObject<>(con);
         }
 
         @Override
-        public void destroyObject(EndpointKey k, PooledObject<ProxyHttpClientConnection> po) throws Exception {
+        public void destroyObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) throws Exception {
 //            LOG.log(Level.INFO, "destroyObject {0} {1}", new Object[]{k, po.getObject()});
             po.getObject().destroy();
         }
 
         @Override
-        public boolean validateObject(EndpointKey k, PooledObject<ProxyHttpClientConnection> po) {
+        public boolean validateObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) {
             boolean valid = po.getObject().isValid();
             if (!valid) {
                 LOG.log(Level.INFO, "validateObject {0} {1}-> {2}", new Object[]{k, po.getObject(), valid});
@@ -84,12 +84,12 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         }
 
         @Override
-        public void activateObject(EndpointKey k, PooledObject<ProxyHttpClientConnection> po) throws Exception {
+        public void activateObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) throws Exception {
             LOG.log(Level.INFO, "activateObject {0} {1}", new Object[]{k, po.getObject()});
         }
 
         @Override
-        public void passivateObject(EndpointKey k, PooledObject<ProxyHttpClientConnection> po) throws Exception {
+        public void passivateObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) throws Exception {
             LOG.log(Level.INFO, "passivateObject {0} {1}", new Object[]{k, po.getObject()});
         }
 

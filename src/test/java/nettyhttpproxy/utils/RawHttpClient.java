@@ -39,9 +39,20 @@ public final class RawHttpClient {
             oo.flush();
             int b = in.read();
             while (b != -1) {
+                char c = (char) b;
+//                System.out.println("Received: " + c);
                 responseReceived.write(b);
                 b = in.read();
             }
+        }
+    }
+
+    public static void sendOnlyHttpRequestAndClose(String host, int port, byte[] request) throws IOException {
+        try (Socket socket = new Socket(host, port);
+            OutputStream oo = socket.getOutputStream();
+            InputStream in = socket.getInputStream()) {
+            oo.write(request);
+            oo.flush();
         }
     }
 

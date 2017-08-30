@@ -53,7 +53,7 @@ import java.util.logging.Logger;
 import nettyhttpproxy.client.EndpointConnection;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.client.EndpointNotAvailableException;
-import nettyhttpproxy.client.impl.ProxyHttpClientConnection;
+import nettyhttpproxy.client.impl.EndpointConnectionImpl;
 
 public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object> {
 
@@ -63,6 +63,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
     private EndpointConnection connection;
     private final StringBuilder output = new StringBuilder();
     private final ConnectionsManager connectionsManager;
+    private volatile boolean connectionToBeClosed;
 
     public ProxiedConnectionHandler(EndpointMapper mapper, ConnectionsManager connectionsManager) {
         this.mapper = mapper;
@@ -98,7 +99,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
                     try {
                         connection = connectionsManager.getConnection(new EndpointKey(action.host, action.port, false));
                     } catch (EndpointNotAvailableException err) {
-                        sendServiceNotAvailable(ctx);
+                        sendServiceNotAvailable(ctx, err + "");
                         return;
                     }
 //                        LOG.info("sending http request to " + action.host + ":" + action.port);
@@ -109,7 +110,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
                     try {
                         connection = connectionsManager.getConnection(new EndpointKey(action.host, action.port, true));
                     } catch (EndpointNotAvailableException err) {
-                        sendServiceNotAvailable(ctx);
+                        sendServiceNotAvailable(ctx, err + "");
                         return;
                     }
                     connection.sendRequest(request, this, ctx);
@@ -250,8 +251,8 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
         ctx.writeAndFlush(response, ctx.voidPromise());
     }
 
-    private void sendServiceNotAvailable(ChannelHandlerContext ctx) {
-        LOG.info("sendServiceNotAvailable to " + ctx);
+    private void sendServiceNotAvailable(ChannelHandlerContext ctx, String cause) {
+        LOG.info("sendServiceNotAvailable due to " + cause + " to " + ctx);
         FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, HttpResponseStatus.INTERNAL_SERVER_ERROR);
         ctx.writeAndFlush(response).addListener(new GenericFutureListener<Future<? super Void>>() {
             @Override
@@ -264,28 +265,35 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
         });
     }
 
+//    LOG.info("connection is to be closed");
+//            releaseConnection(true);
+//            peerChannel.close();
     public void receivedFromRemote(HttpObject msg, ChannelHandlerContext channelToClient) {
-//        LOG.log(Level.INFO, "received from remote server:{0}", msg);
+        LOG.log(Level.INFO, "received from remote server:{0} connectionToBeClosed {1}", new Object[]{msg, connectionToBeClosed});
         channelToClient.writeAndFlush(msg).addListener(new GenericFutureListener<Future<? super Void>>() {
             @Override
             public void operationComplete(Future<? super Void> future) throws Exception {
                 if (future.isSuccess()) {
                     if (msg instanceof LastHttpContent) {
                         LOG.log(Level.SEVERE, "sent to client last " + msg);
-                        releaseConnection(false);
+                        releaseConnectionToEndpoint(false);
                     } else {
                         LOG.log(Level.SEVERE, "sent to client " + msg);
                     }
                 } else {
-                    LOG.log(Level.SEVERE, "bad error writing to client", future.cause());
-                    releaseConnection(true);
+                    boolean isOpen = channelToClient.channel().isOpen();
+                    LOG.log(Level.SEVERE, "bad error writing to client, isOpen " + isOpen, future.cause());
+                    releaseConnectionToEndpoint(false);
+                }
+                if (connectionToBeClosed && msg instanceof LastHttpContent) {
+                    channelToClient.close();
                 }
 
             }
         });
     }
 
-    private synchronized void releaseConnection(boolean forceClose) {
+    private synchronized void releaseConnectionToEndpoint(boolean forceClose) {
         if (connection != null) {
             LOG.log(Level.INFO, "release connection {0}", connection);
             connection.release(forceClose);
@@ -297,17 +305,15 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
         channel.flush();
     }
 
-    public void errorSendingRequest(ProxyHttpClientConnection aThis, ChannelHandlerContext peerChannel, Throwable error) {
+    public void errorSendingRequest(EndpointConnectionImpl aThis, ChannelHandlerContext peerChannel, Throwable error) {
         mapper.endpointFailed(aThis.getKey(), error);
         LOG.info("errorSendingRequest " + aThis);
-        sendServiceNotAvailable(peerChannel);
+        sendServiceNotAvailable(peerChannel, "errorSendingRequest");
     }
 
     public void lastHttpContentSent(ChannelHandlerContext peerChannel) {
         if (!HttpUtil.isKeepAlive(request)) {
-            LOG.info("connection is to be closed");
-            releaseConnection(true);
-            peerChannel.close();
+            connectionToBeClosed = true;
         }
     }
 
