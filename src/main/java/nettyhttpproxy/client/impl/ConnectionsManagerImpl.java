@@ -54,7 +54,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     private final EventLoopGroup group;
 
     void returnConnection(EndpointConnectionImpl con) {
-        LOG.info("returnConnection:" + con);
+        LOG.log(Level.SEVERE, "returnConnection:" + con);
         connections.returnObject(con.getKey(), con);
     }
 

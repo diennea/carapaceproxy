@@ -273,22 +273,25 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
         channelToClient.writeAndFlush(msg).addListener(new GenericFutureListener<Future<? super Void>>() {
             @Override
             public void operationComplete(Future<? super Void> future) throws Exception {
+                boolean returnConnection = false;
                 if (future.isSuccess()) {
                     if (msg instanceof LastHttpContent) {
                         LOG.log(Level.SEVERE, "sent to client last " + msg);
-                        releaseConnectionToEndpoint(false);
+                        returnConnection = true;
                     } else {
                         LOG.log(Level.SEVERE, "sent to client " + msg);
                     }
                 } else {
                     boolean isOpen = channelToClient.channel().isOpen();
                     LOG.log(Level.SEVERE, "bad error writing to client, isOpen " + isOpen, future.cause());
-                    releaseConnectionToEndpoint(false);
+                    returnConnection = true;
                 }
                 if (connectionToBeClosed && msg instanceof LastHttpContent) {
                     channelToClient.close();
                 }
-
+                if (returnConnection) {
+                    releaseConnectionToEndpoint(false);
+                }
             }
         });
     }
