@@ -82,7 +82,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
             HttpRequest request = this.request = (HttpRequest) msg;
 
             action = mapper.map(request);
-            LOG.log(Level.INFO, "Mapped " + request.uri() + " to " + action);
+//            LOG.log(Level.INFO, "Mapped " + request.uri() + " to " + action);
             switch (action.action) {
                 case NOTFOUND:
                     if (HttpUtil.is100ContinueExpected(request)) {
@@ -122,7 +122,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
 
         } else if (msg instanceof LastHttpContent) {
             LastHttpContent trailer = (LastHttpContent) msg;
-            LOG.info("got LastHttpContent " + trailer + " connection: " + connection);
+//            LOG.info("got LastHttpContent " + trailer + " connection: " + connection);
             HttpContent httpContent = (HttpContent) msg;
             switch (action.action) {
                 case DEBUG: {
@@ -270,17 +270,17 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
 //            releaseConnection(true);
 //            peerChannel.close();
     public void receivedFromRemote(HttpObject msg, ChannelHandlerContext channelToClient) {
-        LOG.log(Level.INFO, "received from remote server:{0} keepAlive {1}", new Object[]{msg, keepAlive});
+//        LOG.log(Level.INFO, "received from remote server:{0} keepAlive {1}", new Object[]{msg, keepAlive});
         channelToClient.writeAndFlush(msg).addListener(new GenericFutureListener<Future<? super Void>>() {
             @Override
             public void operationComplete(Future<? super Void> future) throws Exception {
                 boolean returnConnection = false;
                 if (future.isSuccess()) {
                     if (msg instanceof LastHttpContent) {
-                        LOG.log(Level.SEVERE, "sent to client last " + msg);
+//                        LOG.log(Level.SEVERE, "sent to client last " + msg);
                         returnConnection = true;
                     } else {
-                        LOG.log(Level.SEVERE, "sent to client " + msg);
+//                        LOG.log(Level.SEVERE, "sent to client " + msg);
                     }
                 } else {
                     boolean isOpen = channelToClient.channel().isOpen();
@@ -290,7 +290,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
                 if (msg instanceof HttpMessage) {
                     HttpMessage httpMessage = (HttpMessage) msg;
                     long contentLength = HttpUtil.getContentLength(httpMessage, -1);
-                    LOG.log(Level.SEVERE, "response with contentLength" + contentLength);
+//                    LOG.log(Level.SEVERE, "response with contentLength" + contentLength);
                     if (contentLength < 0) {
                         keepAlive = false;
                     }
@@ -316,7 +316,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
 
     private synchronized void releaseConnectionToEndpoint(boolean forceClose) {
         if (connection != null) {
-            LOG.log(Level.INFO, "release connection {0}, forceClose {1}", new Object[]{connection, forceClose});
+//            LOG.log(Level.INFO, "release connection {0}, forceClose {1}", new Object[]{connection, forceClose});
             connection.release(forceClose);
             connection = null;
         }
@@ -338,7 +338,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
         } else if (keepAlive == null) {
             keepAlive = true;
         }
-        LOG.info("lastHttpContentSent, keepAlive:" + keepAlive);
+//        LOG.info("lastHttpContentSent, keepAlive:" + keepAlive);
     }
 
 }

@@ -54,7 +54,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     private final EventLoopGroup group;
 
     void returnConnection(EndpointConnectionImpl con) {
-        LOG.log(Level.SEVERE, "returnConnection:" + con);
+//        LOG.log(Level.SEVERE, "returnConnection:" + con);
         connections.returnObject(con.getKey(), con);
     }
 
@@ -77,20 +77,20 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         @Override
         public boolean validateObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) {
             boolean valid = po.getObject().isValid();
-            if (!valid) {
-                LOG.log(Level.INFO, "validateObject {0} {1}-> {2}", new Object[]{k, po.getObject(), valid});
-            }
+//            if (!valid) {
+//                LOG.log(Level.INFO, "validateObject {0} {1}-> {2}", new Object[]{k, po.getObject(), valid});
+//            }
             return valid;
         }
 
         @Override
         public void activateObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) throws Exception {
-            LOG.log(Level.INFO, "activateObject {0} {1}", new Object[]{k, po.getObject()});
+//            LOG.log(Level.INFO, "activateObject {0} {1}", new Object[]{k, po.getObject()});
         }
 
         @Override
         public void passivateObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) throws Exception {
-            LOG.log(Level.INFO, "passivateObject {0} {1}", new Object[]{k, po.getObject()});
+//            LOG.log(Level.INFO, "passivateObject {0} {1}", new Object[]{k, po.getObject()});
         }
 
     }
@@ -112,7 +112,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     @Override
     public EndpointConnection getConnection(EndpointKey key) throws EndpointNotAvailableException {
         try {
-            LOG.log(Level.INFO, "getConnection {0}", key);
+//            LOG.log(Level.INFO, "getConnection {0}", key);
             return connections.borrowObject(key, borrowTimeout);
         } catch (Exception ex) {
             throw new EndpointNotAvailableException(ex);

@@ -72,7 +72,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     private ChannelFuture connect() {
         if (channelToEndpoint != null) {
-            LOG.log(Level.INFO, "Connection {3} Already connected to {0}, channel {1}, pipeline {2}", new Object[]{key, channelToEndpoint, channelToEndpoint.pipeline(), id});
+//            LOG.log(Level.INFO, "Connection {3} Already connected to {0}, channel {1}, pipeline {2}", new Object[]{key, channelToEndpoint, channelToEndpoint.pipeline(), id});
             return channelToEndpoint.newSucceededFuture();
         }
         Bootstrap b = new Bootstrap();
@@ -113,7 +113,6 @@ public class EndpointConnectionImpl implements EndpointConnection {
             _channelToEndpoint.closeFuture().addListener(new GenericFutureListener<Future<? super Void>>() {
                 @Override
                 public void operationComplete(Future<? super Void> future) throws Exception {
-                    LOG.log(Level.INFO, "channel "+_channelToEndpoint+" has been closed now", new Exception().fillInStackTrace());
                     valid = false;
                 }
             });
@@ -127,7 +126,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                         LOG.log(Level.SEVERE, "sendRequest " + request.getClass() + " failed", future.cause());
                         clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, peerChannel, future.cause());
                     }
-                    LOG.log(Level.SEVERE, "sendRequest finished, now " + _channelToEndpoint + " is open ? " + _channelToEndpoint.isOpen());
+//                    LOG.log(Level.SEVERE, "sendRequest finished, now " + _channelToEndpoint + " is open ? " + _channelToEndpoint.isOpen());
                     if (!_channelToEndpoint.isOpen()) {
                         valid = false;
                     }
@@ -174,7 +173,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
             } else {
                 clientSidePeerHandler.lastHttpContentSent(peerChannel);
             }
-            LOG.log(Level.SEVERE, "sendLastHttpContent finished, now " + _contextToEndpoint + " is open ? " + _contextToEndpoint.channel().isOpen());
+//            LOG.log(Level.SEVERE, "sendLastHttpContent finished, now " + _contextToEndpoint + " is open ? " + _contextToEndpoint.channel().isOpen());
             if (!_contextToEndpoint.channel().isOpen()) {
                 valid = false;
             }
@@ -182,7 +181,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     }
 
     private void detachFromClient() {
-        LOG.info("detachFromClient");
+//        LOG.info("detachFromClient");
         clientSidePeerHandler = null;
         currentPeerChannel = null;
     }
@@ -193,13 +192,13 @@ public class EndpointConnectionImpl implements EndpointConnection {
             return;
         }
 
-        LOG.log(Level.INFO, "destroy {0}", this);
+//        LOG.log(Level.INFO, "destroy {0}", this);
         valid = false;
         if (channelToEndpoint != null) {
             channelToEndpoint.close().addListener(new GenericFutureListener() {
                 @Override
                 public void operationComplete(Future future) throws Exception {
-                    LOG.log(Level.INFO, "connection id " + id + " to " + key + " closed now");
+//                    LOG.log(Level.INFO, "connection id " + id + " to " + key + " closed now");
                     endpointstats.getOpenConnections().decrementAndGet();
                 }
             });
@@ -246,18 +245,18 @@ public class EndpointConnectionImpl implements EndpointConnection {
             }
             if (msg instanceof HttpContent) {
                 HttpContent f = (HttpContent) msg;
-                LOG.log(Level.INFO, "proxying HttpContent {0}: {1}", new Object[]{msg.getClass(), msg});
+//                LOG.log(Level.INFO, "proxying HttpContent {0}: {1}", new Object[]{msg.getClass(), msg});
                 clientSidePeerHandler.receivedFromRemote(f.copy(), currentPeerChannel);
             } else if (msg instanceof DefaultHttpResponse) {
                 DefaultHttpResponse f = (DefaultHttpResponse) msg;
-                LOG.log(Level.INFO, "proxying DefaultHttpResponse {0}: headers: {1}", new Object[]{msg.getClass(), msg});
+//                LOG.log(Level.INFO, "proxying DefaultHttpResponse {0}: headers: {1}", new Object[]{msg.getClass(), msg});
 //                f.headers().forEach((entry) -> {
 //                    LOG.log(Level.INFO, "proxying header " + entry.getKey() + ": " + entry.getValue());
 //                });
                 clientSidePeerHandler.receivedFromRemote(new DefaultHttpResponse(f.protocolVersion(),
                     f.status(), f.headers()), currentPeerChannel);
             } else {
-                LOG.log(Level.SEVERE, "unknown message type " + msg.getClass(), new Exception("unknown mesasge type " + msg.getClass())
+                LOG.log(Level.SEVERE, "unknown message type " + msg.getClass(), new Exception("unknown message type " + msg.getClass())
                     .fillInStackTrace());
             }
 
@@ -265,19 +264,19 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-            LOG.log(Level.INFO, "channelRead " + msg + ", clientSidePeerHandler:" + clientSidePeerHandler);
+//            LOG.log(Level.INFO, "channelRead " + msg + ", clientSidePeerHandler:" + clientSidePeerHandler);
             super.channelRead(ctx, msg); //To change body of generated methods, choose Tools | Templates.
         }
 
         @Override
         public boolean acceptInboundMessage(Object msg) throws Exception {
-            LOG.log(Level.INFO, "acceptInboundMessage " + msg);
+//            LOG.log(Level.INFO, "acceptInboundMessage " + msg);
             return super.acceptInboundMessage(msg);
         }
 
         @Override
         public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
-            LOG.log(Level.INFO, "channelReadComplete {0}", ctx);
+//            LOG.log(Level.INFO, "channelReadComplete {0}", ctx);
             if (clientSidePeerHandler != null) {
                 clientSidePeerHandler.readCompletedFromRemote(currentPeerChannel);
             }

@@ -145,7 +145,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                     return MapResult.NOT_FOUND;
                 }
                 List<String> selectedBackends = backendSelector.selectBackends(request, matchResult);
-                LOG.info("selected " + selectedBackends + " backends for " + request.uri());
+//                LOG.info("selected " + selectedBackends + " backends for " + request.uri());
                 for (String backendId : selectedBackends) {
                     switch (action.getType()) {
                         case ActionConfiguration.TYPE_PROXY: {
