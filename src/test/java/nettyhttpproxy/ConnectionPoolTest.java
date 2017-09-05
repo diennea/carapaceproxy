@@ -39,7 +39,7 @@ import org.junit.Test;
 public class ConnectionPoolTest {
 
     @Rule
-    public WireMockRule wireMockRule = new WireMockRule(18081);
+    public WireMockRule wireMockRule = new WireMockRule(0);
 
     @Test
 //    @Ignore

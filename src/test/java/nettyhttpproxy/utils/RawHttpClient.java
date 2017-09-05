@@ -23,42 +23,182 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.UnsupportedEncodingException;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Raw Socket based Http Client, very useful to reproduce weird behaviours
  */
-public final class RawHttpClient {
+public final class RawHttpClient implements AutoCloseable {
 
-    public static void executeHttpRequest(String host, int port, byte[] request, OutputStream responseReceived) throws IOException {
-        try (Socket socket = new Socket(host, port);
-            OutputStream oo = socket.getOutputStream();
-            InputStream in = socket.getInputStream()) {
-            oo.write(request);
-            oo.flush();
-            int b = in.read();
-            while (b != -1) {
-                char c = (char) b;
-//                System.out.println("Received: " + c);
-                responseReceived.write(b);
-                b = in.read();
+    private Socket socket;
+
+    public RawHttpClient(String host, int port) throws IOException {
+        socket = new Socket(host, port);
+    }
+
+    public OutputStream getOutputStream() throws IOException {
+        return socket.getOutputStream();
+    }
+
+    public InputStream getInputStream() throws IOException {
+        return socket.getInputStream();
+    }
+
+    @Override
+    public void close() throws IOException {
+        socket.close();
+    }
+
+    public void sendRequest(String request) throws IOException {
+        sendRequest(request.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public void sendRequest(byte[] request) throws IOException {
+        OutputStream oo = socket.getOutputStream();
+        oo.write(request);
+        oo.flush();
+    }
+
+    private static class BufferedStream extends OutputStream {
+
+        final OutputStream wrapped;
+        final ByteArrayOutputStream buffer;
+
+        public BufferedStream(OutputStream wrapped) {
+            this.wrapped = wrapped;
+            this.buffer = new ByteArrayOutputStream();
+        }
+
+        @Override
+        public void write(int b) throws IOException {
+            wrapped.write(b);
+            buffer.write(b);
+        }
+
+        @Override
+        public String toString() {
+            try {
+                return "BufferedStream{buffer=" + buffer.toString("utf-8") + '}';
+            } catch (UnsupportedEncodingException e) {
+                throw new RuntimeException(e);
             }
         }
+
     }
 
-    public static void sendOnlyHttpRequestAndClose(String host, int port, byte[] request) throws IOException {
-        try (Socket socket = new Socket(host, port);
-            OutputStream oo = socket.getOutputStream();
-            InputStream in = socket.getInputStream()) {
-            oo.write(request);
-            oo.flush();
+    public static final class HttpResponse {
+
+        ByteArrayOutputStream rawResponse = new ByteArrayOutputStream();
+        ByteArrayOutputStream body = new ByteArrayOutputStream();
+        List<String> headerLines = new ArrayList<>();
+        String statusLine;
+        int expectedContentLength = -1;
+
+        public int getExpectedContentLength() {
+            return expectedContentLength;
+        }
+
+        public List<String> getHeaderLines() {
+            return headerLines;
+        }
+
+        public String getStatusLine() {
+            return statusLine;
+        }
+
+        public byte[] getFull() {
+            return rawResponse.toByteArray();
+        }
+
+        public byte[] getBody() {
+            return body.toByteArray();
+        }
+
+        @Override
+        public String toString() {
+            try {
+                return rawResponse.toString("utf-8");
+            } catch (UnsupportedEncodingException ex) {
+                throw new RuntimeException(ex);
+            }
+        }
+
+    }
+
+    private static HttpResponse consumeHttpResponseInput(final InputStream in) throws IOException {
+
+        HttpResponse result = new HttpResponse();
+
+        BufferedStream firstLine = new BufferedStream(result.rawResponse);
+        consumeLFEndedLine(in, firstLine);
+        result.statusLine = firstLine.buffer.toString("utf-8");
+
+        // header
+        while (true) {
+            BufferedStream counter = new BufferedStream(result.rawResponse);
+            consumeLFEndedLine(in, counter);
+            String line = counter.buffer.toString("utf-8");
+            System.out.println("READ HEADER " + line.trim() + " size " + counter.buffer.size());
+            if (counter.buffer.size() <= 2) {
+                System.out.println("END OF HEADER");
+                // end of header
+                break;
+            } else {
+
+                result.headerLines.add(line);
+                if (line.startsWith("Content-Length")) {
+                    result.expectedContentLength = Integer.parseInt(line.substring("Content-Length".length()).trim());
+                    System.out.println("expectedContentLength:" + result.expectedContentLength);
+                }
+            }
+        }
+        if (result.expectedContentLength == 0) {
+            System.out.println("END OF BODY content-len 0");
+            return result;
+        }
+
+        // body
+        int b = in.read();
+        while (b != -1) {
+            result.rawResponse.write(b);
+            result.body.write(b);
+
+            if (result.expectedContentLength > 0 && result.body.size() == result.expectedContentLength) {
+                System.out.println("END OF BODY content-len " + result.expectedContentLength);
+                return result;
+            }
+
+            b = in.read();
+        }
+        if (result.expectedContentLength > 0 && result.body.size() < result.expectedContentLength) {
+            throw new IOException("Incomplete response, expected Content-Length: " + result.expectedContentLength + ", but read only " + result.body.size());
+        }
+        System.out.println("END OF BODY");
+        return result;
+    }
+
+    private static void consumeLFEndedLine(final InputStream in, OutputStream responseReceived) throws IOException {
+        int b = in.read();
+        while (b != -1) {
+            responseReceived.write(b);
+            if (b == '\n') {
+                break;
+            }
+            b = in.read();
         }
     }
 
-    public static String executeHttpRequest(String host, int port, String request) throws IOException {
-        ByteArrayOutputStream oo = new ByteArrayOutputStream();
-        executeHttpRequest(host, port, request.getBytes(StandardCharsets.UTF_8), oo);
-        return oo.toString("utf-8");
+    public HttpResponse executeRequest(String request) throws IOException {
+        sendRequest(request.getBytes(StandardCharsets.UTF_8));
+        return consumeHttpResponseInput(socket.getInputStream());
     }
+
+    public HttpResponse readResponse() throws IOException {
+        return consumeHttpResponseInput(socket.getInputStream());
+    }
+
 }

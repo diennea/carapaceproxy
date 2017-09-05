@@ -73,15 +73,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private ChannelFuture connect() {
         if (channelToEndpoint != null) {
             LOG.log(Level.INFO, "Connection {3} Already connected to {0}, channel {1}, pipeline {2}", new Object[]{key, channelToEndpoint, channelToEndpoint.pipeline(), id});
-            try {
-                channelToEndpoint.pipeline().remove(HttpClientCodec.class);
-                channelToEndpoint.pipeline().addFirst("client-codec", new HttpClientCodec());
-                LOG.log(Level.INFO, "connection " + this + " recycled");
-                return channelToEndpoint.newSucceededFuture();
-            } catch (NoSuchElementException err) {
-                LOG.log(Level.INFO, "Attempt of concurrent access to connection " + this);
-                return channelToEndpoint.newFailedFuture(err);
-            }
+            return channelToEndpoint.newSucceededFuture();
         }
         Bootstrap b = new Bootstrap();
         b.group(parent.getGroup())
@@ -116,15 +108,28 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, peerChannel, future.cause());
                 return;
             }
-            channelToEndpoint = afterConnect.channel();
+            Channel _channelToEndpoint = afterConnect.channel();
+            channelToEndpoint = _channelToEndpoint;
+            _channelToEndpoint.closeFuture().addListener(new GenericFutureListener<Future<? super Void>>() {
+                @Override
+                public void operationComplete(Future<? super Void> future) throws Exception {
+                    LOG.log(Level.INFO, "channel "+_channelToEndpoint+" has been closed now", new Exception().fillInStackTrace());
+                    valid = false;
+                }
+            });
             activateConnection(clientSidePeerHandler, peerChannel);
             endpointstats.getTotalRequests().incrementAndGet();
+
             channelToEndpoint.writeAndFlush(request).addListener(new GenericFutureListener<Future<? super Void>>() {
                 @Override
                 public void operationComplete(Future<? super Void> future) throws Exception {
                     if (!future.isSuccess()) {
                         LOG.log(Level.SEVERE, "sendRequest " + request.getClass() + " failed", future.cause());
                         clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, peerChannel, future.cause());
+                    }
+                    LOG.log(Level.SEVERE, "sendRequest finished, now " + _channelToEndpoint + " is open ? " + _channelToEndpoint.isOpen());
+                    if (!_channelToEndpoint.isOpen()) {
+                        valid = false;
                     }
                 }
             });
@@ -162,17 +167,22 @@ public class EndpointConnectionImpl implements EndpointConnection {
             LOG.severe("sendLastHttpContent " + msg + " to " + contextToEndpoint + " . skip to invalid connection");
             return;
         }
-        contextToEndpoint.writeAndFlush(msg).addListener((Future<? super Void> future) -> {
+        ChannelHandlerContext _contextToEndpoint = contextToEndpoint;
+        _contextToEndpoint.writeAndFlush(msg).addListener((Future<? super Void> future) -> {
             if (!future.isSuccess()) {
                 LOG.log(Level.INFO, "sendLastHttpContent failed " + msg, future.cause());
             } else {
                 clientSidePeerHandler.lastHttpContentSent(peerChannel);
             }
+            LOG.log(Level.SEVERE, "sendLastHttpContent finished, now " + _contextToEndpoint + " is open ? " + _contextToEndpoint.channel().isOpen());
+            if (!_contextToEndpoint.channel().isOpen()) {
+                valid = false;
+            }
         });
     }
 
-    private void detachFromSourceConnection() {
-        LOG.info("detachFromSourceConnection");
+    private void detachFromClient() {
+        LOG.info("detachFromClient");
         clientSidePeerHandler = null;
         currentPeerChannel = null;
     }
@@ -189,6 +199,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
             channelToEndpoint.close().addListener(new GenericFutureListener() {
                 @Override
                 public void operationComplete(Future future) throws Exception {
+                    LOG.log(Level.INFO, "connection id " + id + " to " + key + " closed now");
                     endpointstats.getOpenConnections().decrementAndGet();
                 }
             });
@@ -212,7 +223,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private void connectionDeactivated() {
         if (active.compareAndSet(true, false)) {
             endpointstats.getActiveConnections().decrementAndGet();
-            detachFromSourceConnection();
+            detachFromClient();
         } else {
             LOG.log(Level.SEVERE, "connectionDeactivated on a non active connection! {0}", this);
         }

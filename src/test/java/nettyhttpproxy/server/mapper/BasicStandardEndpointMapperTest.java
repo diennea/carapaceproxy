@@ -46,7 +46,7 @@ import org.junit.Test;
 public class BasicStandardEndpointMapperTest {
 
     @Rule
-    public WireMockRule backend1 = new WireMockRule(18081);
+    public WireMockRule backend1 = new WireMockRule(0);
 
     @Test
     public void test() throws Exception {

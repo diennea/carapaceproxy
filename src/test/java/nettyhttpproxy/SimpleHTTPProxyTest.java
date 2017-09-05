@@ -47,7 +47,7 @@ import org.junit.rules.TemporaryFolder;
 public class SimpleHTTPProxyTest {
 
     @Rule
-    public WireMockRule wireMockRule = new WireMockRule(18081);
+    public WireMockRule wireMockRule = new WireMockRule(0);
 
     @Rule
     public TemporaryFolder tmpDir = new TemporaryFolder();

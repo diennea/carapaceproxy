@@ -63,7 +63,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
     private EndpointConnection connection;
     private final StringBuilder output = new StringBuilder();
     private final ConnectionsManager connectionsManager;
-    private volatile boolean connectionToBeClosed;
+    private volatile boolean keepAlive = false;
 
     public ProxiedConnectionHandler(EndpointMapper mapper, ConnectionsManager connectionsManager) {
         this.mapper = mapper;
@@ -230,6 +230,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
     private boolean writeResponse(FullHttpResponse response, ChannelHandlerContext ctx) {
         // Decide whether to close the connection or not.
         boolean keepAlive = HttpUtil.isKeepAlive(request);
+        
         // Build the response object.
 
         if (keepAlive) {
@@ -269,7 +270,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
 //            releaseConnection(true);
 //            peerChannel.close();
     public void receivedFromRemote(HttpObject msg, ChannelHandlerContext channelToClient) {
-        LOG.log(Level.INFO, "received from remote server:{0} connectionToBeClosed {1}", new Object[]{msg, connectionToBeClosed});
+        LOG.log(Level.INFO, "received from remote server:{0} keepAlive {1}", new Object[]{msg, keepAlive});
         channelToClient.writeAndFlush(msg).addListener(new GenericFutureListener<Future<? super Void>>() {
             @Override
             public void operationComplete(Future<? super Void> future) throws Exception {
@@ -286,11 +287,11 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
                     LOG.log(Level.SEVERE, "bad error writing to client, isOpen " + isOpen, future.cause());
                     returnConnection = true;
                 }
-                if (connectionToBeClosed && msg instanceof LastHttpContent) {
+                if (!keepAlive && msg instanceof LastHttpContent) {
                     channelToClient.close();
                 }
                 if (returnConnection) {
-                    releaseConnectionToEndpoint(false);
+                    releaseConnectionToEndpoint(!keepAlive);
                 }
             }
         });
@@ -316,8 +317,9 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
 
     public void lastHttpContentSent(ChannelHandlerContext peerChannel) {
         if (!HttpUtil.isKeepAlive(request)) {
-            connectionToBeClosed = true;
+            keepAlive = false;
         }
+        LOG.info("lastHttpContentSent, keepAlive:"+keepAlive);
     }
 
 }

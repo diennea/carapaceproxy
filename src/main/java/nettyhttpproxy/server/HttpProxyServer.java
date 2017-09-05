@@ -35,6 +35,7 @@ import io.netty.handler.ssl.SslProvider;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -87,7 +88,7 @@ public class HttpProxyServer implements AutoCloseable {
             workerGroup = new EpollEventLoopGroup();
 
             for (NetworkListenerConfiguration listener : listeners) {
-                LOG.info("Starting listened at " + listener.getHost() + ":" + listener.getPort()+" ssl:"+listener.isSsl());
+                LOG.info("Starting listened at " + listener.getHost() + ":" + listener.getPort() + " ssl:" + listener.isSsl());
                 final SslContext sslCtx;
                 if (listener.isSsl()) {
                     String sslCertFilePassword = listener.getSslCertificatePassword();
@@ -138,6 +139,14 @@ public class HttpProxyServer implements AutoCloseable {
             throw err;
         }
 
+    }
+
+    public int getLocalPort() {
+        for (Channel c : listeningChannels) {
+            InetSocketAddress addr = (InetSocketAddress) c.localAddress();
+            return addr.getPort();
+        }
+        return -1;
     }
 
     @Override

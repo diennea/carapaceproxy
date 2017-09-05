@@ -25,17 +25,12 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import java.io.ByteArrayOutputStream;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -44,10 +39,10 @@ import org.junit.rules.TemporaryFolder;
  *
  * @author enrico.olivelli
  */
-public class WeirdClientTest {
+public class RawClientTest {
 
     @Rule
-    public WireMockRule wireMockRule = new WireMockRule(18081);
+    public WireMockRule wireMockRule = new WireMockRule(0);
 
     @Rule
     public TemporaryFolder tmpDir = new TemporaryFolder();
@@ -61,17 +56,19 @@ public class WeirdClientTest {
                 .withHeader("Content-Type", "text/html")
                 .withBody("it <b>works</b> !!")));
 
-        int port = 1234;
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port(), false);
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer("localhost", port, mapper);) {
+        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
             server.start();
+            int port = server.getLocalPort();
 
-            String s = RawHttpClient.executeHttpRequest("localhost", port, "GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-            System.out.println("s:" + s);
-            assertTrue(s.endsWith("it <b>works</b> !!"));
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").toString();
+                System.out.println("s:" + s);
+                assertTrue(s.endsWith("it <b>works</b> !!"));
+            }
 
             stats = server.getConnectionsManager().getStats();
             assertNotNull(stats.getEndpoints().get(key));
@@ -100,17 +97,19 @@ public class WeirdClientTest {
     @Test
     public void testClientsExpectsConnectionCloseWithDownEndpoint() throws Exception {
 
-        int port = 1234;
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", 1111);
         EndpointKey key = new EndpointKey("localhost", 1111, false);
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer("localhost", port, mapper);) {
+        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
             server.start();
+            int port = server.getLocalPort();
 
-            String s = RawHttpClient.executeHttpRequest("localhost", port, "GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-            System.out.println("s:" + s);
-            assertEquals("HTTP/1.1 500 Internal Server Error\r\n\r\n", s);
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").toString();
+                System.out.println("s:" + s);
+                assertEquals("HTTP/1.1 500 Internal Server Error\r\n\r\n", s);
+            }
 
             stats = server.getConnectionsManager().getStats();
             assertNotNull(stats.getEndpoints().get(key));
@@ -145,15 +144,17 @@ public class WeirdClientTest {
                 .withHeader("Content-Type", "text/html")
                 .withBody("it <b>works</b> !!")));
 
-        int port = 1234;
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port(), false);
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer("localhost", port, mapper);) {
+        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
             server.start();
+            int port = server.getLocalPort();
 
-            RawHttpClient.sendOnlyHttpRequestAndClose("localhost", port, "GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                client.sendRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+            }
 
             TestUtils.waitForCondition(() -> {
                 ConnectionsManagerStats _stats = server.getConnectionsManager().getStats();
@@ -186,15 +187,17 @@ public class WeirdClientTest {
     @Test
     public void testClientsSendsRequestAndCloseOnDownBackend() throws Exception {
 
-        int port = 1234;
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", 1111);
         EndpointKey key = new EndpointKey("localhost", 1111, false);
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer("localhost", port, mapper);) {
+        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
             server.start();
+            int port = server.getLocalPort();
 
-            RawHttpClient.sendOnlyHttpRequestAndClose("localhost", port, "GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                client.sendRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+            }
 
             TestUtils.waitForCondition(() -> {
                 ConnectionsManagerStats _stats = server.getConnectionsManager().getStats();
@@ -227,4 +230,68 @@ public class WeirdClientTest {
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
     }
+
+    @Test
+    public void clientsKeepAliveSimpleTest() throws Exception {
+
+        stubFor(get(urlEqualTo("/index.html"))
+            .willReturn(aResponse()
+                .withStatus(200)
+                .withHeader("Content-Type", "text/html")
+                .withBody("it <b>works</b> !!")));
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port(), false);
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
+            server.start();
+            int port = server.getLocalPort();
+
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+
+                String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").toString();
+                System.out.println("s:" + s);
+                assertTrue(s.endsWith("it <b>works</b> !!"));
+
+                // server will close connection
+                String s2 = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").toString();
+                assertTrue(s2.isEmpty());
+            }
+
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+
+                String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n").toString();
+                System.out.println("s:" + s);
+                assertTrue(s.contains("it <b>works</b> !!"));
+
+                String s2 = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").toString();
+                System.out.println("s2:" + s2);
+                assertTrue(s2.isEmpty());
+            }
+
+            stats = server.getConnectionsManager().getStats();
+            assertNotNull(stats.getEndpoints().get(key));
+            TestUtils.waitForCondition(() -> {
+                stats.getEndpoints().values().forEach((EndpointStats st) -> {
+                    System.out.println("st2:" + st);
+                });
+                EndpointStats epstats = stats.getEndpointStats(key);
+                return epstats.getTotalConnections().intValue() == 2
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
+            }, 100);
+        }
+
+        TestUtils.waitForCondition(() -> {
+            EndpointStats epstats = stats.getEndpointStats(key);
+            return epstats.getTotalConnections().intValue() == 2
+                && epstats.getActiveConnections().intValue() == 0
+                && epstats.getOpenConnections().intValue() == 0;
+        }, 100);
+
+        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+
+    }
+
 }
