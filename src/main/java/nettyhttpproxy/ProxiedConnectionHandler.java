@@ -34,6 +34,7 @@ import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponseStatus;
@@ -63,7 +64,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
     private EndpointConnection connection;
     private final StringBuilder output = new StringBuilder();
     private final ConnectionsManager connectionsManager;
-    private volatile boolean keepAlive = false;
+    private volatile Boolean keepAlive;
 
     public ProxiedConnectionHandler(EndpointMapper mapper, ConnectionsManager connectionsManager) {
         this.mapper = mapper;
@@ -230,9 +231,8 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
     private boolean writeResponse(FullHttpResponse response, ChannelHandlerContext ctx) {
         // Decide whether to close the connection or not.
         boolean keepAlive = HttpUtil.isKeepAlive(request);
-        
-        // Build the response object.
 
+        // Build the response object.
         if (keepAlive) {
             // Add 'Content-Length' header only for a keep-alive connection.
             response.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
@@ -287,6 +287,16 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
                     LOG.log(Level.SEVERE, "bad error writing to client, isOpen " + isOpen, future.cause());
                     returnConnection = true;
                 }
+                if (msg instanceof HttpMessage) {
+                    HttpMessage httpMessage = (HttpMessage) msg;
+                    long contentLength = HttpUtil.getContentLength(httpMessage, -1);
+                    LOG.log(Level.SEVERE, "response with contentLength" + contentLength);
+                    if (contentLength < 0) {
+                        keepAlive = false;
+                    }
+                }
+
+                boolean keepAlive = isKeepAlive();
                 if (!keepAlive && msg instanceof LastHttpContent) {
                     channelToClient.close();
                 }
@@ -297,9 +307,16 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
         });
     }
 
+    private boolean isKeepAlive() {
+        if (keepAlive == null) {
+            return false;
+        }
+        return keepAlive;
+    }
+
     private synchronized void releaseConnectionToEndpoint(boolean forceClose) {
         if (connection != null) {
-            LOG.log(Level.INFO, "release connection {0}", connection);
+            LOG.log(Level.INFO, "release connection {0}, forceClose {1}", new Object[]{connection, forceClose});
             connection.release(forceClose);
             connection = null;
         }
@@ -318,8 +335,10 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
     public void lastHttpContentSent(ChannelHandlerContext peerChannel) {
         if (!HttpUtil.isKeepAlive(request)) {
             keepAlive = false;
+        } else if (keepAlive == null) {
+            keepAlive = true;
         }
-        LOG.info("lastHttpContentSent, keepAlive:"+keepAlive);
+        LOG.info("lastHttpContentSent, keepAlive:" + keepAlive);
     }
 
 }

@@ -25,12 +25,14 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import java.io.IOException;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -72,15 +74,6 @@ public class RawClientTest {
 
             stats = server.getConnectionsManager().getStats();
             assertNotNull(stats.getEndpoints().get(key));
-            TestUtils.waitForCondition(() -> {
-                stats.getEndpoints().values().forEach((EndpointStats st) -> {
-                    System.out.println("st2:" + st);
-                });
-                EndpointStats epstats = stats.getEndpointStats(key);
-                return epstats.getTotalConnections().intValue() == 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 1;
-            }, 100);
         }
 
         TestUtils.waitForCondition(() -> {
@@ -113,15 +106,6 @@ public class RawClientTest {
 
             stats = server.getConnectionsManager().getStats();
             assertNotNull(stats.getEndpoints().get(key));
-            TestUtils.waitForCondition(() -> {
-                stats.getEndpoints().values().forEach((EndpointStats st) -> {
-                    System.out.println("st2:" + st);
-                });
-                EndpointStats epstats = stats.getEndpointStats(key);
-                return epstats.getTotalConnections().intValue() == 0
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
-            }, 100);
         }
 
         TestUtils.waitForCondition(() -> {
@@ -167,7 +151,7 @@ public class RawClientTest {
                 EndpointStats epstats = _stats.getEndpointStats(key);
                 return epstats.getTotalConnections().intValue() == 1
                     && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 1;
+                    && epstats.getOpenConnections().intValue() == 0;
             }, 100);
             stats = server.getConnectionsManager().getStats();
             assertNotNull(stats.getEndpoints().get(key));
@@ -238,6 +222,7 @@ public class RawClientTest {
             .willReturn(aResponse()
                 .withStatus(200)
                 .withHeader("Content-Type", "text/html")
+                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                 .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
@@ -250,24 +235,28 @@ public class RawClientTest {
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
 
-                String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").toString();
+                String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").getBodyString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.equals("it <b>works</b> !!"));
 
-                // server will close connection
-                String s2 = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").toString();
-                assertTrue(s2.isEmpty());
+                try {
+                    client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                    fail();
+                } catch (IOException ok) {
+                    assertTrue(ok.getMessage().contains("Connection reset"));
+                }
+
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
 
-                String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n").toString();
-                System.out.println("s:" + s);
-                assertTrue(s.contains("it <b>works</b> !!"));
+                String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
+                System.out.println("s3:" + s);
+                assertTrue(s.equals("it <b>works</b> !!"));
 
-                String s2 = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").toString();
-                System.out.println("s2:" + s2);
-                assertTrue(s2.isEmpty());
+                String s2 = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
+                System.out.println("s4:" + s2);
+                assertTrue(s.equals("it <b>works</b> !!"));
             }
 
             stats = server.getConnectionsManager().getStats();
@@ -279,7 +268,7 @@ public class RawClientTest {
                 EndpointStats epstats = stats.getEndpointStats(key);
                 return epstats.getTotalConnections().intValue() == 2
                     && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getOpenConnections().intValue() == 1;
             }, 100);
         }
 

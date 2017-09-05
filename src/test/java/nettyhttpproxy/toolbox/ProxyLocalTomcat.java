@@ -54,13 +54,13 @@ public class ProxyLocalTomcat {
     @Test
     public void test() throws Exception {
 
-        int port = 1234;
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", 8086);
         EndpointKey key = new EndpointKey("localhost", 8086, false);
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer("localhost", port, mapper);) {
+        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
             server.start();
+            int port = server.getLocalPort();
 
             String s = IOUtils.toString(new URL("http://localhost:" + port + "/be/admin").toURI(), "utf-8");
             System.out.println("s:" + s);

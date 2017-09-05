@@ -28,6 +28,7 @@ import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.net.URL;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
+import nettyhttpproxy.utils.RawHttpClient;
 import org.apache.commons.io.IOUtils;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -49,20 +50,22 @@ public class ConnectionPoolTest {
             .willReturn(aResponse()
                 .withStatus(200)
                 .withHeader("Content-Type", "text/html")
+                .withHeader("Content-Length", "2")
                 .withBody("ok")));
 
-        int port = 1234;
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port(), false);
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer("localhost", port, mapper);) {
+        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
             server.start();
+            int port = server.getLocalPort();
             stats = server.getConnectionsManager().getStats();
 
             assertNull(stats.getEndpointStats(key));
-            // pipe
-            assertEquals("ok", IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8"));
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                assertEquals("ok", client.get("/index.html").getBodyString().trim());
+            }
             TestUtils.waitForCondition(TestUtils.NO_ACTIVE_CONNECTION(stats), 100);
 
             EndpointStats epstats = stats.getEndpointStats(key);
@@ -73,7 +76,9 @@ public class ConnectionPoolTest {
             assertEquals(1, epstats.getOpenConnections().intValue());
             assertEquals(1, epstats.getTotalRequests().intValue());
 
-            assertEquals("ok", IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8"));
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                assertEquals("ok", client.get("/index.html").getBodyString().trim());
+            }
             TestUtils.waitForCondition(TestUtils.NO_ACTIVE_CONNECTION(stats), 100);
             System.out.println("STATS: " + epstats);
             assertEquals(1, epstats.getTotalConnections().intValue());

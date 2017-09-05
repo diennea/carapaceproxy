@@ -56,15 +56,15 @@ public class BasicStandardEndpointMapperTest {
                 .withHeader("Content-Type", "text/html")
                 .withBody("it <b>works</b> !!")));
 
-        int port = 1234;
         int backendPort = backend1.port();
         StandardEndpointMapper mapper = new StandardEndpointMapper();
         mapper.addBackend(new BackendConfiguration("backend-a", "localhost", backendPort, "/"));
         mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY));
         mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new URIRequestMatcher(".*index.html.*")));
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer("localhost", port, mapper);) {
+        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
             server.start();
+            int port = server.getLocalPort();
             stats = server.getConnectionsManager().getStats();
             // proxy
             String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8");

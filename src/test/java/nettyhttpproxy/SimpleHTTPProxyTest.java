@@ -61,13 +61,13 @@ public class SimpleHTTPProxyTest {
                 .withHeader("Content-Type", "text/html")
                 .withBody("it <b>works</b> !!")));
 
-        int port = 1234;
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port(), false);
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer("localhost", port, mapper);) {
+        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
             server.start();
+            int port = server.getLocalPort();
 
             // debug
             {
@@ -92,15 +92,6 @@ public class SimpleHTTPProxyTest {
 
             stats = server.getConnectionsManager().getStats();
             assertNotNull(stats.getEndpoints().get(key));
-            TestUtils.waitForCondition(() -> {
-                stats.getEndpoints().values().forEach((EndpointStats st) -> {
-                    System.out.println("st2:" + st);
-                });
-                EndpointStats epstats = stats.getEndpointStats(key);
-                return epstats.getTotalConnections().intValue() == 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 1;
-            }, 100);
         }
 
         TestUtils.waitForCondition(() -> {
@@ -127,16 +118,16 @@ public class SimpleHTTPProxyTest {
                 .withHeader("Content-Type", "text/html")
                 .withBody("it <b>works</b> !!")));
 
-        int port = 1234;
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port(), false);
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper);) {
-            server.addListener(new NetworkListenerConfiguration("localhost", port, true,
+            server.addListener(new NetworkListenerConfiguration("localhost", 0, true,
                 certificate, "testproxy",
                 null));
             server.start();
+            int port = server.getLocalPort();
 
             // debug
             {
@@ -161,15 +152,6 @@ public class SimpleHTTPProxyTest {
 
             stats = server.getConnectionsManager().getStats();
             assertNotNull(stats.getEndpoints().get(key));
-            TestUtils.waitForCondition(() -> {
-                stats.getEndpoints().values().forEach((EndpointStats st) -> {
-                    System.out.println("st2:" + st);
-                });
-                EndpointStats epstats = stats.getEndpointStats(key);
-                return epstats.getTotalConnections().intValue() == 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 1;
-            }, 100);
         }
 
         TestUtils.waitForCondition(() -> {
@@ -187,13 +169,14 @@ public class SimpleHTTPProxyTest {
     public void testEndpointDown() throws Exception {
 
         int badPort = TestUtils.getFreePort();
-        int port = 1234;
+
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", badPort);
         EndpointKey key = new EndpointKey("localhost", badPort, false);
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer("localhost", port, mapper);) {
+        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
             server.start();
+            int port = server.getLocalPort();
 
             HttpUtils.ResourceInfos result = HttpUtils.downloadFromUrl(new URL("http://localhost:" + port + "/index.html"),
                 new ByteArrayOutputStream(), Collections.singletonMap("return_errors", "true"));
@@ -203,15 +186,6 @@ public class SimpleHTTPProxyTest {
 
             stats = server.getConnectionsManager().getStats();
             assertNotNull(stats.getEndpoints().get(key));
-            TestUtils.waitForCondition(() -> {
-                stats.getEndpoints().values().forEach((EndpointStats st) -> {
-                    System.out.println("st2:" + st);
-                });
-                EndpointStats epstats = stats.getEndpointStats(key);
-                return epstats.getTotalConnections().intValue() == 0
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
-            }, 100);
         }
 
         TestUtils.waitForCondition(() -> {

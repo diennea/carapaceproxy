@@ -35,9 +35,12 @@ import java.util.List;
 public final class RawHttpClient implements AutoCloseable {
 
     private Socket socket;
+    private final String host;
 
     public RawHttpClient(String host, int port) throws IOException {
         socket = new Socket(host, port);
+        socket.setSoTimeout(1000);
+        this.host = host;
     }
 
     public OutputStream getOutputStream() throws IOException {
@@ -51,6 +54,10 @@ public final class RawHttpClient implements AutoCloseable {
     @Override
     public void close() throws IOException {
         socket.close();
+    }
+
+    public HttpResponse get(String uri) throws IOException {
+        return executeRequest("GET " + uri + " HTTP/1.1\r\nHost:" + host + "\r\nConnection: keep-alive\r\n\r\n");
     }
 
     public void sendRequest(String request) throws IOException {
@@ -118,6 +125,10 @@ public final class RawHttpClient implements AutoCloseable {
             return body.toByteArray();
         }
 
+        public String getBodyString() throws UnsupportedEncodingException {
+            return body.toString("utf-8");
+        }
+
         @Override
         public String toString() {
             try {
@@ -150,8 +161,8 @@ public final class RawHttpClient implements AutoCloseable {
             } else {
 
                 result.headerLines.add(line);
-                if (line.startsWith("Content-Length")) {
-                    result.expectedContentLength = Integer.parseInt(line.substring("Content-Length".length()).trim());
+                if (line.startsWith("Content-Length:")) {
+                    result.expectedContentLength = Integer.parseInt(line.substring("Content-Length:".length()).trim());
                     System.out.println("expectedContentLength:" + result.expectedContentLength);
                 }
             }
