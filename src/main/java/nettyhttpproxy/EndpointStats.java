@@ -20,6 +20,7 @@
 package nettyhttpproxy;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import nettyhttpproxy.client.EndpointKey;
 
 /**
@@ -33,10 +34,15 @@ public class EndpointStats {
     private final AtomicInteger activeConnections = new AtomicInteger();
     private final AtomicInteger totalConnections = new AtomicInteger();
     private final AtomicInteger totalRequests = new AtomicInteger();
+    private final AtomicLong lastActivity = new AtomicLong();
     private final EndpointKey key;
 
     public EndpointStats(EndpointKey key) {
         this.key = key;
+    }
+
+    public AtomicLong getLastActivity() {
+        return lastActivity;
     }
 
     public AtomicInteger getTotalRequests() {
@@ -61,7 +67,7 @@ public class EndpointStats {
 
     @Override
     public String toString() {
-        return "EndpointStats{" + "openConnections=" + openConnections + ", activeConnections=" + activeConnections + ", totalConnections=" + totalConnections + ", totalRequests=" + totalRequests + ", key=" + key + '}';
+        return "EndpointStats{" + "openConnections=" + openConnections + ", activeConnections=" + activeConnections + ", totalConnections=" + totalConnections + ", totalRequests=" + totalRequests + ", lastActivity=" + lastActivity + ", key=" + key + '}';
     }
 
 }

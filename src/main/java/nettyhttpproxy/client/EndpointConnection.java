@@ -31,6 +31,8 @@ import nettyhttpproxy.ProxiedConnectionHandler;
  */
 public interface EndpointConnection {
 
+    public void setIdleTimeout(int timeout);
+
     public void sendRequest(HttpRequest request, ProxiedConnectionHandler handler, ChannelHandlerContext channelToClient);
 
     public void release(boolean error);

@@ -56,6 +56,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private final EndpointStats endpointstats;
     private final AtomicBoolean closed = new AtomicBoolean();
     private final AtomicBoolean active = new AtomicBoolean();
+    private int idleTimeout = 500_000;
 
     private volatile Channel channelToEndpoint;
     private volatile ChannelHandlerContext contextToEndpoint;
@@ -68,9 +69,16 @@ public class EndpointConnectionImpl implements EndpointConnection {
         this.parent = parent;
         this.valid = true;
         this.endpointstats = endpointstats;
+        activityDone();
+    }
+
+    @Override
+    public void setIdleTimeout(int timeout) {
+        this.idleTimeout = timeout;
     }
 
     private ChannelFuture connect() {
+        activityDone();
         if (channelToEndpoint != null) {
 //            LOG.log(Level.INFO, "Connection {3} Already connected to {0}, channel {1}, pipeline {2}", new Object[]{key, channelToEndpoint, channelToEndpoint.pipeline(), id});
             return channelToEndpoint.newSucceededFuture();
@@ -98,6 +106,10 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     }
 
+    private void activityDone() {
+        endpointstats.getLastActivity().set(System.currentTimeMillis());
+    }
+
     @Override
     public void sendRequest(HttpRequest request, ProxiedConnectionHandler clientSidePeerHandler, ChannelHandlerContext peerChannel) {
         ChannelFuture afterConnect = connect();
@@ -122,6 +134,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
             channelToEndpoint.writeAndFlush(request).addListener(new GenericFutureListener<Future<? super Void>>() {
                 @Override
                 public void operationComplete(Future<? super Void> future) throws Exception {
+                    activityDone();
                     if (!future.isSuccess()) {
                         LOG.log(Level.SEVERE, "sendRequest " + request.getClass() + " failed", future.cause());
                         clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, peerChannel, future.cause());
@@ -166,6 +179,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
             LOG.severe("sendLastHttpContent " + msg + " to " + contextToEndpoint + " . skip to invalid connection");
             return;
         }
+        activityDone();
         ChannelHandlerContext _contextToEndpoint = contextToEndpoint;
         _contextToEndpoint.writeAndFlush(msg).addListener((Future<? super Void> future) -> {
             if (!future.isSuccess()) {
@@ -173,7 +187,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
             } else {
                 clientSidePeerHandler.lastHttpContentSent(peerChannel);
             }
-//            LOG.log(Level.SEVERE, "sendLastHttpContent finished, now " + _contextToEndpoint + " is open ? " + _contextToEndpoint.channel().isOpen());
+            LOG.log(Level.SEVERE, "sendLastHttpContent finished, now " + _contextToEndpoint + " is open ? " + _contextToEndpoint.channel().isOpen());
             if (!_contextToEndpoint.channel().isOpen()) {
                 valid = false;
             }
@@ -195,19 +209,16 @@ public class EndpointConnectionImpl implements EndpointConnection {
 //        LOG.log(Level.INFO, "destroy {0}", this);
         valid = false;
         if (channelToEndpoint != null) {
-            channelToEndpoint.close().addListener(new GenericFutureListener() {
-                @Override
-                public void operationComplete(Future future) throws Exception {
-//                    LOG.log(Level.INFO, "connection id " + id + " to " + key + " closed now");
-                    endpointstats.getOpenConnections().decrementAndGet();
-                }
+            channelToEndpoint.close().addListener((future) -> {
+                //                    LOG.log(Level.INFO, "connection id " + id + " to " + key + " closed now");
+                endpointstats.getOpenConnections().decrementAndGet();
             });
             channelToEndpoint = null;
         }
     }
 
     boolean isValid() {
-        return valid;
+        return valid && (System.currentTimeMillis() - endpointstats.getLastActivity().longValue() <= idleTimeout);
     }
 
     private void activateConnection(ProxiedConnectionHandler handler, ChannelHandlerContext peerChannel) {
@@ -289,6 +300,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
             ctx.close();
             connectionDeactivated();
         }
+
     }
 
     @Override

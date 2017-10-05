@@ -48,8 +48,9 @@ import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
 public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable {
 
     private final GenericKeyedObjectPool<EndpointKey, EndpointConnectionImpl> connections;
-    private final int maxConnectionsPerEndpoint = 10;
-    private final int borrowTimeout = 5000;
+    private final int maxConnectionsPerEndpoint;
+    private final int borrowTimeout;
+    private final int idleTimeout;
     private final ConcurrentHashMap<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
     private final EventLoopGroup group;
 
@@ -70,7 +71,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
         @Override
         public void destroyObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) throws Exception {
-//            LOG.log(Level.INFO, "destroyObject {0} {1}", new Object[]{k, po.getObject()});
+            LOG.log(Level.INFO, "destroyObject {0} {1}", new Object[]{k, po.getObject()});
             po.getObject().destroy();
         }
 
@@ -95,7 +96,10 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     }
 
-    public ConnectionsManagerImpl() {
+    public ConnectionsManagerImpl(int maxConnectionsPerEndpoint, int idleTimeout, int borrowTimeout) {
+        this.maxConnectionsPerEndpoint = maxConnectionsPerEndpoint;
+        this.idleTimeout = idleTimeout;
+        this.borrowTimeout = borrowTimeout;
         GenericKeyedObjectPoolConfig config = new GenericKeyedObjectPoolConfig();
         config.setMaxTotalPerKey(maxConnectionsPerEndpoint);
         config.setMaxIdlePerKey(maxConnectionsPerEndpoint);
@@ -113,7 +117,9 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     public EndpointConnection getConnection(EndpointKey key) throws EndpointNotAvailableException {
         try {
 //            LOG.log(Level.INFO, "getConnection {0}", key);
-            return connections.borrowObject(key, borrowTimeout);
+            EndpointConnection result = connections.borrowObject(key, borrowTimeout);
+            result.setIdleTimeout(idleTimeout);
+            return result;
         } catch (Exception ex) {
             throw new EndpointNotAvailableException(ex);
         }

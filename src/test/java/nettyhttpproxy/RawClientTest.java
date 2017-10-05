@@ -240,10 +240,10 @@ public class RawClientTest {
                 assertTrue(s.equals("it <b>works</b> !!"));
 
                 try {
-                    client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                    String s2 = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").getBodyString();
+                    System.out.println("response2: " + s2);
                     fail();
                 } catch (IOException ok) {
-                    assertTrue(ok.getMessage().contains("Connection reset"));
                 }
 
             }

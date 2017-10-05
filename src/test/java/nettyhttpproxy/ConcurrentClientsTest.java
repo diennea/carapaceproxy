@@ -34,6 +34,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Logger;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
@@ -110,6 +111,7 @@ public class ConcurrentClientsTest {
 
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
+            LOG.info("stats: " + epstats.getKey() + " " + (System.currentTimeMillis() - epstats.getLastActivity().longValue()) + " ms");
             return epstats.getTotalConnections().intValue() > 0
                 && epstats.getActiveConnections().intValue() == 0
                 && epstats.getOpenConnections().intValue() == 0;
@@ -118,5 +120,6 @@ public class ConcurrentClientsTest {
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
     }
+    private static final Logger LOG = Logger.getLogger(ConcurrentClientsTest.class.getName());
 
 }

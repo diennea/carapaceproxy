@@ -22,10 +22,8 @@ package nettyhttpproxy;
 import nettyhttpproxy.client.ConnectionsManager;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelOutboundInvoker;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.DecoderResult;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
@@ -65,6 +63,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
     private final StringBuilder output = new StringBuilder();
     private final ConnectionsManager connectionsManager;
     private volatile Boolean keepAlive;
+    private volatile boolean refuseOtherRequests;
 
     public ProxiedConnectionHandler(EndpointMapper mapper, ConnectionsManager connectionsManager) {
         this.mapper = mapper;
@@ -78,6 +77,10 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
 
     @Override
     protected synchronized void channelRead0(ChannelHandlerContext ctx, Object msg) {
+        if (refuseOtherRequests) {
+            ctx.close();
+            return;
+        }
         if (msg instanceof HttpRequest) {
             HttpRequest request = this.request = (HttpRequest) msg;
 
@@ -270,7 +273,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
 //            releaseConnection(true);
 //            peerChannel.close();
     public void receivedFromRemote(HttpObject msg, ChannelHandlerContext channelToClient) {
-//        LOG.log(Level.INFO, "received from remote server:{0} keepAlive {1}", new Object[]{msg, keepAlive});
+        LOG.log(Level.INFO, "received from remote server:{0} keepAlive {1}", new Object[]{msg, keepAlive});
         channelToClient.writeAndFlush(msg).addListener(new GenericFutureListener<Future<? super Void>>() {
             @Override
             public void operationComplete(Future<? super Void> future) throws Exception {
@@ -298,6 +301,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
 
                 boolean keepAlive = isKeepAlive();
                 if (!keepAlive && msg instanceof LastHttpContent) {
+                    refuseOtherRequests = true;
                     channelToClient.close();
                 }
                 if (returnConnection) {
@@ -316,7 +320,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
 
     private synchronized void releaseConnectionToEndpoint(boolean forceClose) {
         if (connection != null) {
-//            LOG.log(Level.INFO, "release connection {0}, forceClose {1}", new Object[]{connection, forceClose});
+            LOG.log(Level.INFO, "release connection {0}, forceClose {1}", new Object[]{connection, forceClose});
             connection.release(forceClose);
             connection = null;
         }
@@ -338,7 +342,7 @@ public class ProxiedConnectionHandler extends SimpleChannelInboundHandler<Object
         } else if (keepAlive == null) {
             keepAlive = true;
         }
-//        LOG.info("lastHttpContentSent, keepAlive:" + keepAlive);
+        LOG.info("lastHttpContentSent, keepAlive:" + keepAlive);
     }
 
 }

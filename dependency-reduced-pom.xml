@@ -58,19 +58,7 @@
       <scope>test</scope>
       <exclusions>
         <exclusion>
-          <artifactId>jetty-server</artifactId>
-          <groupId>org.eclipse.jetty</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>jetty-servlet</artifactId>
-          <groupId>org.eclipse.jetty</groupId>
-        </exclusion>
-        <exclusion>
           <artifactId>jetty-servlets</artifactId>
-          <groupId>org.eclipse.jetty</groupId>
-        </exclusion>
-        <exclusion>
-          <artifactId>jetty-webapp</artifactId>
           <groupId>org.eclipse.jetty</groupId>
         </exclusion>
         <exclusion>
@@ -133,11 +121,75 @@
       <version>2.5</version>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-server</artifactId>
+      <version>9.4.6.v20170531</version>
+      <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <artifactId>javax.servlet-api</artifactId>
+          <groupId>javax.servlet</groupId>
+        </exclusion>
+        <exclusion>
+          <artifactId>jetty-http</artifactId>
+          <groupId>org.eclipse.jetty</groupId>
+        </exclusion>
+        <exclusion>
+          <artifactId>jetty-io</artifactId>
+          <groupId>org.eclipse.jetty</groupId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-webapp</artifactId>
+      <version>9.4.6.v20170531</version>
+      <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <artifactId>jetty-xml</artifactId>
+          <groupId>org.eclipse.jetty</groupId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-servlet</artifactId>
+      <version>9.4.6.v20170531</version>
+      <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <artifactId>jetty-security</artifactId>
+          <groupId>org.eclipse.jetty</groupId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-util</artifactId>
+      <version>9.4.6.v20170531</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <version>1.7.24</version>
+      <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <artifactId>slf4j-api</artifactId>
+          <groupId>org.slf4j</groupId>
+        </exclusion>
+      </exclusions>
+    </dependency>
   </dependencies>
   <properties>
+    <jetty.version>9.4.6.v20170531</jetty.version>
     <maven.compiler.source>1.8</maven.compiler.source>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.target>1.8</maven.compiler.target>
+    <netty.version>4.1.15.Final</netty.version>
   </properties>
 </project>
 

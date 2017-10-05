@@ -70,7 +70,7 @@ public class HttpProxyServer implements AutoCloseable {
 
     public HttpProxyServer(EndpointMapper mapper) {
         this.mapper = mapper;
-        this.connectionsManager = new ConnectionsManagerImpl();
+        this.connectionsManager = new ConnectionsManagerImpl(10, 120000, 5000);
     }
 
     public HttpProxyServer(String host, int port, EndpointMapper mapper) {

@@ -34,12 +34,12 @@ import java.util.List;
  */
 public final class RawHttpClient implements AutoCloseable {
 
-    private Socket socket;
+    private final Socket socket;
     private final String host;
 
     public RawHttpClient(String host, int port) throws IOException {
         socket = new Socket(host, port);
-        socket.setSoTimeout(1000);
+        socket.setSoTimeout(300 * 000);
         this.host = host;
     }
 
@@ -145,13 +145,13 @@ public final class RawHttpClient implements AutoCloseable {
         HttpResponse result = new HttpResponse();
 
         BufferedStream firstLine = new BufferedStream(result.rawResponse);
-        consumeLFEndedLine(in, firstLine);
+        consumeLFEndedLine(in, firstLine, true);
         result.statusLine = firstLine.buffer.toString("utf-8");
 
         // header
         while (true) {
             BufferedStream counter = new BufferedStream(result.rawResponse);
-            consumeLFEndedLine(in, counter);
+            consumeLFEndedLine(in, counter, false);
             String line = counter.buffer.toString("utf-8");
             System.out.println("READ HEADER " + line.trim() + " size " + counter.buffer.size());
             if (counter.buffer.size() <= 2) {
@@ -192,8 +192,11 @@ public final class RawHttpClient implements AutoCloseable {
         return result;
     }
 
-    private static void consumeLFEndedLine(final InputStream in, OutputStream responseReceived) throws IOException {
+    private static void consumeLFEndedLine(final InputStream in, OutputStream responseReceived, boolean errorIfEmpty) throws IOException {
         int b = in.read();
+        if (b == -1 && errorIfEmpty) {
+            throw new IOException("unexpected end of input stream");
+        }
         while (b != -1) {
             responseReceived.write(b);
             if (b == '\n') {
