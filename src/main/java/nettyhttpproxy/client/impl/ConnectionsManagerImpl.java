@@ -62,16 +62,16 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     private final class ConnectionsFactory implements KeyedPooledObjectFactory<EndpointKey, EndpointConnectionImpl> {
 
         @Override
-        public PooledObject<EndpointConnectionImpl> makeObject(EndpointKey k) throws Exception {
-//            LOG.log(Level.INFO, "makeObject {0}", new Object[]{k});
+        public PooledObject<EndpointConnectionImpl> makeObject(EndpointKey k) throws Exception {            
             EndpointStats endpointstats = endpointsStats.computeIfAbsent(k, EndpointStats::new);
             EndpointConnectionImpl con = new EndpointConnectionImpl(k, ConnectionsManagerImpl.this, endpointstats);
+//            LOG.log(Level.INFO, "makeObject {0}", new Object[]{con});
             return new DefaultPooledObject<>(con);
         }
 
         @Override
         public void destroyObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) throws Exception {
-            LOG.log(Level.INFO, "destroyObject {0} {1}", new Object[]{k, po.getObject()});
+//            LOG.log(Level.INFO, "destroyObject {0} {1}", new Object[]{k, po.getObject()});
             po.getObject().destroy();
         }
 
@@ -104,6 +104,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         config.setMaxTotalPerKey(maxConnectionsPerEndpoint);
         config.setMaxIdlePerKey(maxConnectionsPerEndpoint);
         config.setTestOnReturn(true);
+        config.setTestWhileIdle(true);
         config.setBlockWhenExhausted(true);
         group = new NioEventLoopGroup();
         connections = new GenericKeyedObjectPool<>(new ConnectionsFactory(), config);

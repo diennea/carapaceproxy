@@ -22,7 +22,8 @@ package nettyhttpproxy.client;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
-import nettyhttpproxy.ProxiedConnectionHandler;
+import nettyhttpproxy.server.ClientConnectionHandler;
+import nettyhttpproxy.server.RequestHandler;
 
 /**
  * A Connection to a specific endpoint. Connections are pooled and so they have to be returned to the pool
@@ -33,10 +34,10 @@ public interface EndpointConnection {
 
     public void setIdleTimeout(int timeout);
 
-    public void sendRequest(HttpRequest request, ProxiedConnectionHandler handler, ChannelHandlerContext channelToClient);
+    public void sendRequest(HttpRequest request, RequestHandler handler, ChannelHandlerContext channelToClient);
 
     public void release(boolean error);
 
-    public void sendLastHttpContent(LastHttpContent msg, ProxiedConnectionHandler handler, ChannelHandlerContext channelToClient);
+    public void sendLastHttpContent(LastHttpContent msg, RequestHandler handler, ChannelHandlerContext channelToClient);
 
 }

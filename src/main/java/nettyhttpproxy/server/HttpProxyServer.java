@@ -50,7 +50,6 @@ import java.util.logging.Logger;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManagerFactory;
 import nettyhttpproxy.EndpointMapper;
-import nettyhttpproxy.ProxiedConnectionHandler;
 import nettyhttpproxy.client.ConnectionsManager;
 import nettyhttpproxy.client.impl.ConnectionsManagerImpl;
 import nettyhttpproxy.server.config.ConfigurationNotValidException;
@@ -119,14 +118,14 @@ public class HttpProxyServer implements AutoCloseable {
                     .channel(EpollServerSocketChannel.class)
                     .childHandler(new ChannelInitializer<SocketChannel>() {
                         @Override
-                        public void initChannel(SocketChannel ch) throws Exception {
+                        public void initChannel(SocketChannel channel) throws Exception {
 
                             if (listener.isSsl()) {
-                                ch.pipeline().addLast(sslCtx.newHandler(ch.alloc()));
+                                channel.pipeline().addLast(sslCtx.newHandler(channel.alloc()));
                             }
-                            ch.pipeline().addLast(new HttpRequestDecoder());
-                            ch.pipeline().addLast(new HttpResponseEncoder());
-                            ch.pipeline().addLast(new ProxiedConnectionHandler(mapper, connectionsManager));
+                            channel.pipeline().addLast(new HttpRequestDecoder());
+                            channel.pipeline().addLast(new HttpResponseEncoder());
+                            channel.pipeline().addLast(new ClientConnectionHandler(mapper, connectionsManager));
 
                         }
                     })

@@ -33,18 +33,17 @@ import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
-import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
-import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.EndpointStats;
-import nettyhttpproxy.ProxiedConnectionHandler;
+import nettyhttpproxy.server.ClientConnectionHandler;
 import nettyhttpproxy.client.EndpointConnection;
 import nettyhttpproxy.client.EndpointKey;
+import nettyhttpproxy.server.RequestHandler;
 
 public class EndpointConnectionImpl implements EndpointConnection {
 
@@ -61,7 +60,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private volatile Channel channelToEndpoint;
     private volatile ChannelHandlerContext contextToEndpoint;
     private volatile boolean valid;
-    private volatile ProxiedConnectionHandler clientSidePeerHandler;
+    private volatile RequestHandler clientSidePeerHandler;
     private volatile ChannelHandlerContext currentPeerChannel;
 
     public EndpointConnectionImpl(EndpointKey key, ConnectionsManagerImpl parent, EndpointStats endpointstats) {
@@ -111,7 +110,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     }
 
     @Override
-    public void sendRequest(HttpRequest request, ProxiedConnectionHandler clientSidePeerHandler, ChannelHandlerContext peerChannel) {
+    public void sendRequest(HttpRequest request, RequestHandler clientSidePeerHandler, ChannelHandlerContext peerChannel) {
         ChannelFuture afterConnect = connect();
         afterConnect.addListener((Future<Void> future) -> {
             if (!future.isSuccess()) {
@@ -173,7 +172,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private static final Logger LOG = Logger.getLogger(EndpointConnectionImpl.class.getName());
 
     @Override
-    public void sendLastHttpContent(LastHttpContent msg, ProxiedConnectionHandler clientSidePeerHandler, ChannelHandlerContext peerChannel) {
+    public void sendLastHttpContent(LastHttpContent msg, RequestHandler clientSidePeerHandler, ChannelHandlerContext peerChannel) {
 
         if (!valid) {
             LOG.severe("sendLastHttpContent " + msg + " to " + contextToEndpoint + " . skip to invalid connection");
@@ -185,9 +184,9 @@ public class EndpointConnectionImpl implements EndpointConnection {
             if (!future.isSuccess()) {
                 LOG.log(Level.INFO, "sendLastHttpContent failed " + msg, future.cause());
             } else {
-                clientSidePeerHandler.lastHttpContentSent(peerChannel);
+                clientSidePeerHandler.lastHttpContentSent();
             }
-            LOG.log(Level.SEVERE, "sendLastHttpContent finished, now " + _contextToEndpoint + " is open ? " + _contextToEndpoint.channel().isOpen());
+//            LOG.log(Level.SEVERE, "sendLastHttpContent finished, now " + _contextToEndpoint + " is open ? " + _contextToEndpoint.channel().isOpen());
             if (!_contextToEndpoint.channel().isOpen()) {
                 valid = false;
             }
@@ -221,7 +220,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         return valid && (System.currentTimeMillis() - endpointstats.getLastActivity().longValue() <= idleTimeout);
     }
 
-    private void activateConnection(ProxiedConnectionHandler handler, ChannelHandlerContext peerChannel) {
+    private void activateConnection(RequestHandler handler, ChannelHandlerContext peerChannel) {
         if (!active.compareAndSet(false, true)) {
             throw new IllegalStateException("this connection is already active!");
         }
