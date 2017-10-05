@@ -75,7 +75,7 @@ public class RequestHandler {
 
     public void start() {
         action = connectionToClient.mapper.map(request);
-//        LOG.log(Level.INFO, this+" Mapped " + request.uri() + " to " + action);
+//        LOG.log(Level.INFO, this + " Mapped " + request.uri() + " to " + action);
         switch (action.action) {
             case NOTFOUND:
                 if (HttpUtil.is100ContinueExpected(request)) {
@@ -253,6 +253,7 @@ public class RequestHandler {
             public void operationComplete(Future<? super Void> future) throws Exception {
                 LOG.info(this + " sendServiceNotAvailable result: " + future.isSuccess() + ", cause " + future.cause());
                 channelToClient.close();
+                releaseConnectionToEndpoint(false);
                 lastHttpContentSent();
             }
         });
@@ -302,7 +303,7 @@ public class RequestHandler {
 
     public void receivedFromRemote(HttpObject msg) {
         if (connectionToClient == null) {
-            LOG.log(Level.SEVERE, this + " received from remote server:{0} connection {1} server {2}", new Object[]{msg, connectionToClient, connectionToEndpoint});
+//            LOG.log(Level.SEVERE, this + " received from remote server:{0} connection {1} server {2}", new Object[]{msg, connectionToClient, connectionToEndpoint});
             releaseConnectionToEndpoint(true);
             return;
         }
@@ -323,9 +324,10 @@ public class RequestHandler {
             if (msg instanceof HttpMessage) {
                 HttpMessage httpMessage = (HttpMessage) msg;
                 long contentLength = HttpUtil.getContentLength(httpMessage, -1);
-//                    LOG.log(Level.SEVERE, "response with contentLength" + contentLength);
+
                 if (contentLength < 0) {
                     connectionToClient.keepAlive = false;
+//                    LOG.log(Level.SEVERE, "response without contentLength" + contentLength + " keepalive will be disabled");
                 }
             }
             boolean keepAlive1 = connectionToClient.isKeepAlive();

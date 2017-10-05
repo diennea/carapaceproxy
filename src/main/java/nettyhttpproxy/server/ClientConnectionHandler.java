@@ -61,6 +61,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, Object msg) {
         if (refuseOtherRequests) {
+            LOG.info(this + " closing");
             ctx.close();
             return;
         }
@@ -75,7 +76,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
                 RequestHandler currentRequest = pendingRequests.get(0);
                 currentRequest.lastHttpContent(trailer);
             } catch (java.lang.ArrayIndexOutOfBoundsException noMorePendingRequests) {
-//                LOG.info(this + " swallow " + msg + ", no more pending requests");
+                LOG.info(this + " swallow " + msg + ", no more pending requests");
                 refuseOtherRequests = true;
                 ctx.close();
             }
@@ -85,7 +86,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
                 RequestHandler currentRequest = pendingRequests.get(0);
                 currentRequest.continueRequest(httpContent);
             } catch (java.lang.ArrayIndexOutOfBoundsException noMorePendingRequests) {
-//                LOG.info(this + " swallow " + msg + ", no more pending requests");
+                LOG.info(this + " swallow " + msg + ", no more pending requests");
                 refuseOtherRequests = true;
                 ctx.close();
             }
@@ -94,7 +95,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
 
     boolean isKeepAlive() {
         if (keepAlive == null) {
-            return false;
+            return true;
         }
         return keepAlive;
     }
@@ -117,7 +118,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
 
     @Override
     public String toString() {
-        return "ClientConnectionHandler{" + id + '}';
+        return "ClientConnectionHandler{" + id + ",ka=" + keepAlive + '}';
     }
 
     void addPendingRequest(RequestHandler request) {

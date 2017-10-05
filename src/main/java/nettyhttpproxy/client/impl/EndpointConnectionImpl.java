@@ -35,6 +35,7 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
+import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
@@ -172,7 +173,8 @@ public class EndpointConnectionImpl implements EndpointConnection {
     public void sendLastHttpContent(LastHttpContent msg, RequestHandler clientSidePeerHandler) {
 
         if (!valid) {
-            LOG.severe("sendLastHttpContent " + msg + " to " + contextToEndpoint + " . skip to invalid connection");
+//            LOG.severe("sendLastHttpContent " + msg + " to " + contextToEndpoint + " . skip to invalid connection to endpoint " + this.key);
+            clientSidePeerHandler.errorSendingRequest(this, new IOException("endpoint died"));
             return;
         }
         activityDone();
