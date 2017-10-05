@@ -64,26 +64,27 @@ public class RequestHandler {
     private MapResult action;
     private EndpointConnection connectionToEndpoint;
     private final ClientConnectionHandler connectionToClient;
+    private final ChannelHandlerContext channelToClient;
 
-    public RequestHandler(long id, HttpRequest request, ClientConnectionHandler parent) {
+    public RequestHandler(long id, HttpRequest request, ClientConnectionHandler parent, ChannelHandlerContext channelToClient) {
         this.id = id;
         this.request = request;
         this.connectionToClient = parent;
+        this.channelToClient = channelToClient;
     }
 
-    public void start(ChannelHandlerContext ctx) {
-        connectionToClient.addPendingRequest(this);
+    public void start() {
         action = connectionToClient.mapper.map(request);
-//        LOG.log(Level.INFO, "Mapped " + request.uri() + " to " + action);
+//        LOG.log(Level.INFO, this+" Mapped " + request.uri() + " to " + action);
         switch (action.action) {
             case NOTFOUND:
                 if (HttpUtil.is100ContinueExpected(request)) {
-                    send100Continue(ctx);
+                    send100Continue();
                 }
                 return;
             case DEBUG:
                 if (HttpUtil.is100ContinueExpected(request)) {
-                    send100Continue(ctx);
+                    send100Continue();
                 }
                 return;
             case PROXY:
@@ -92,21 +93,21 @@ public class RequestHandler {
                     connectionToEndpoint = connectionToClient.connectionsManager.getConnection(new EndpointKey(action.host, action.port, false));
 //                    LOG.info(this + " got connecton " + connectionToEndpoint + " handle");
                 } catch (EndpointNotAvailableException err) {
-                    sendServiceNotAvailable(ctx, err + "");
+                    LOG.info(this + " error on endpoint " + action + ": " + err);
                     return;
                 }
 //                        LOG.info("sending http request to " + action.host + ":" + action.port);
-                connectionToEndpoint.sendRequest(request, this, ctx);
+                connectionToEndpoint.sendRequest(request, this);
 
                 return;
             case PIPE:
                 try {
                     connectionToEndpoint = connectionToClient.connectionsManager.getConnection(new EndpointKey(action.host, action.port, true));
                 } catch (EndpointNotAvailableException err) {
-                    sendServiceNotAvailable(ctx, err + "");
+                    LOG.info(this + " error on endpoint " + action + ": " + err);
                     return;
                 }
-                connectionToEndpoint.sendRequest(request, this, ctx);
+                connectionToEndpoint.sendRequest(request, this);
                 return;
             default:
                 throw new IllegalStateException("not yet implemented");
@@ -114,22 +115,26 @@ public class RequestHandler {
 
     }
 
-    void lastHttpContent(LastHttpContent trailer, ChannelHandlerContext ctx) {
+    void lastHttpContent(LastHttpContent trailer) {
 //        LOG.info(this + " got LastHttpContent " + trailer + " connection: " + connectionToEndpoint + " action:" + action.action);
         HttpContent httpContent = (HttpContent) trailer;
         switch (action.action) {
             case DEBUG: {
                 startDebugMessage(request);
-                serveDebugMessage(httpContent, trailer, trailer, ctx);
+                serveDebugMessage(httpContent, trailer, trailer);
                 break;
             }
             case NOTFOUND: {
-                serveNotFoundMessage(ctx);
+                serveNotFoundMessage();
                 break;
             }
             case CACHE:
             case PROXY: {
-                connectionToEndpoint.sendLastHttpContent(trailer.copy(), this, ctx);
+                if (connectionToEndpoint == null) {
+                    sendServiceNotAvailable();
+                } else {
+                    connectionToEndpoint.sendLastHttpContent(trailer.copy(), this);
+                }
                 break;
             }
             default:
@@ -139,24 +144,24 @@ public class RequestHandler {
 
     private final StringBuilder output = new StringBuilder();
 
-    private void serveNotFoundMessage(ChannelHandlerContext ctx) {
+    private void serveNotFoundMessage() {
         FullHttpResponse response = new DefaultFullHttpResponse(
             HTTP_1_1, NOT_FOUND);
-        if (!writeResponse(response, ctx)) {
+        if (!writeResponse(response)) {
             // If keep-alive is off, close the connection once the content is fully written.
-            ctx.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+            channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
         }
     }
 
-    private void serveDebugMessage(HttpContent httpContent, Object msg, LastHttpContent trailer, ChannelHandlerContext ctx) {
+    private void serveDebugMessage(HttpContent httpContent, Object msg, LastHttpContent trailer) {
         continueDebugMessage(httpContent, msg);
         FullHttpResponse response = new DefaultFullHttpResponse(
             HTTP_1_1, trailer.decoderResult().isSuccess() ? OK : BAD_REQUEST,
             Unpooled.copiedBuffer(output.toString(), CharsetUtil.UTF_8));
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8");
-        if (!writeResponse(response, ctx)) {
+        if (!writeResponse(response)) {
             // If keep-alive is off, close the connection once the content is fully written.
-            ctx.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+            channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
         }
     }
 
@@ -214,7 +219,7 @@ public class RequestHandler {
         buf.append("\r\n");
     }
 
-    private boolean writeResponse(FullHttpResponse response, ChannelHandlerContext ctx) {
+    private boolean writeResponse(FullHttpResponse response) {
         // Decide whether to close the connection or not.
         boolean keepAlive = HttpUtil.isKeepAlive(request);
 
@@ -228,34 +233,32 @@ public class RequestHandler {
         }
 
         // Write the response.
-        ctx.writeAndFlush(response).addListener(future -> {
+        channelToClient.writeAndFlush(response).addListener(future -> {
             lastHttpContentSent();
         });
 
         return keepAlive;
     }
 
-    private void send100Continue(ChannelHandlerContext ctx) {
+    private void send100Continue() {
         FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, CONTINUE);
-        ctx.writeAndFlush(response, ctx.voidPromise());
+        channelToClient.writeAndFlush(response, channelToClient.voidPromise());
     }
 
-    private void sendServiceNotAvailable(ChannelHandlerContext ctx, String cause) {
+    private void sendServiceNotAvailable() {
 //        LOG.info(this + " sendServiceNotAvailable due to " + cause + " to " + ctx);
         FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, HttpResponseStatus.INTERNAL_SERVER_ERROR);
-        ctx.writeAndFlush(response).addListener(new GenericFutureListener<Future<? super Void>>() {
+        channelToClient.writeAndFlush(response).addListener(new GenericFutureListener<Future<? super Void>>() {
             @Override
             public void operationComplete(Future<? super Void> future) throws Exception {
                 LOG.info(this + " sendServiceNotAvailable result: " + future.isSuccess() + ", cause " + future.cause());
-                if (future.isSuccess()) {
-                    ctx.close();
-                }
+                channelToClient.close();
                 lastHttpContentSent();
             }
         });
     }
 
-    void continueRequest(HttpContent httpContent, ChannelHandlerContext ctx) {
+    void continueRequest(HttpContent httpContent) {
         switch (action.action) {
             case DEBUG:
                 continueDebugMessage(httpContent, httpContent);
@@ -292,12 +295,12 @@ public class RequestHandler {
         return true;
     }
 
-    public void errorSendingRequest(EndpointConnectionImpl connectionToEndpoint, ChannelHandlerContext peerChannel, Throwable cause) {
-        connectionToClient.errorSendingRequest(this, connectionToEndpoint, peerChannel, cause);
-        sendServiceNotAvailable(peerChannel, "errorSendingRequest");
+    public void errorSendingRequest(EndpointConnectionImpl connectionToEndpoint, Throwable cause) {
+        connectionToClient.errorSendingRequest(this, connectionToEndpoint, channelToClient, cause);
+        sendServiceNotAvailable();
     }
 
-    public void receivedFromRemote(HttpObject msg, ChannelHandlerContext channelToClient) {
+    public void receivedFromRemote(HttpObject msg) {
         if (connectionToClient == null) {
             LOG.log(Level.SEVERE, this + " received from remote server:{0} connection {1} server {2}", new Object[]{msg, connectionToClient, connectionToEndpoint});
             releaseConnectionToEndpoint(true);
@@ -345,8 +348,8 @@ public class RequestHandler {
         }
     }
 
-    public void readCompletedFromRemote(ChannelHandlerContext channel) {
-        channel.flush();
+    public void readCompletedFromRemote() {
+        channelToClient.flush();
     }
 
     @Override

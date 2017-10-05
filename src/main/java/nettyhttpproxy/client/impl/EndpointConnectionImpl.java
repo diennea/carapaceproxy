@@ -40,7 +40,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.EndpointStats;
-import nettyhttpproxy.server.ClientConnectionHandler;
 import nettyhttpproxy.client.EndpointConnection;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.server.RequestHandler;
@@ -61,7 +60,6 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private volatile ChannelHandlerContext contextToEndpoint;
     private volatile boolean valid;
     private volatile RequestHandler clientSidePeerHandler;
-    private volatile ChannelHandlerContext currentPeerChannel;
 
     public EndpointConnectionImpl(EndpointKey key, ConnectionsManagerImpl parent, EndpointStats endpointstats) {
         this.key = key;
@@ -110,13 +108,13 @@ public class EndpointConnectionImpl implements EndpointConnection {
     }
 
     @Override
-    public void sendRequest(HttpRequest request, RequestHandler clientSidePeerHandler, ChannelHandlerContext peerChannel) {
+    public void sendRequest(HttpRequest request, RequestHandler clientSidePeerHandler) {
         ChannelFuture afterConnect = connect();
         afterConnect.addListener((Future<Void> future) -> {
             if (!future.isSuccess()) {
                 valid = false;
                 LOG.log(Level.INFO, "connect failed to " + key, future.cause());
-                clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, peerChannel, future.cause());
+                clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
                 return;
             }
             Channel _channelToEndpoint = afterConnect.channel();
@@ -127,7 +125,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                     valid = false;
                 }
             });
-            activateConnection(clientSidePeerHandler, peerChannel);
+            activateConnection(clientSidePeerHandler);
             endpointstats.getTotalRequests().incrementAndGet();
 
             channelToEndpoint.writeAndFlush(request).addListener(new GenericFutureListener<Future<? super Void>>() {
@@ -136,7 +134,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                     activityDone();
                     if (!future.isSuccess()) {
                         LOG.log(Level.SEVERE, "sendRequest " + request.getClass() + " failed", future.cause());
-                        clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, peerChannel, future.cause());
+                        clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
                     }
 //                    LOG.log(Level.SEVERE, "sendRequest finished, now " + _channelToEndpoint + " is open ? " + _channelToEndpoint.isOpen());
                     if (!_channelToEndpoint.isOpen()) {
@@ -149,9 +147,8 @@ public class EndpointConnectionImpl implements EndpointConnection {
             afterConnect.await(CONNECT_TIMEOUT);
         } catch (InterruptedException err) {
             LOG.log(Level.SEVERE, "sendRequest interrupted during connection", err);
-            clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, peerChannel, err);
+            clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, err);
         }
-
     }
 
     @Override
@@ -172,7 +169,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private static final Logger LOG = Logger.getLogger(EndpointConnectionImpl.class.getName());
 
     @Override
-    public void sendLastHttpContent(LastHttpContent msg, RequestHandler clientSidePeerHandler, ChannelHandlerContext peerChannel) {
+    public void sendLastHttpContent(LastHttpContent msg, RequestHandler clientSidePeerHandler) {
 
         if (!valid) {
             LOG.severe("sendLastHttpContent " + msg + " to " + contextToEndpoint + " . skip to invalid connection");
@@ -196,7 +193,6 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private void detachFromClient() {
 //        LOG.info("detachFromClient");
         clientSidePeerHandler = null;
-        currentPeerChannel = null;
     }
 
     void destroy() {
@@ -220,12 +216,11 @@ public class EndpointConnectionImpl implements EndpointConnection {
         return valid && (System.currentTimeMillis() - endpointstats.getLastActivity().longValue() <= idleTimeout);
     }
 
-    private void activateConnection(RequestHandler handler, ChannelHandlerContext peerChannel) {
+    private void activateConnection(RequestHandler handler) {
         if (!active.compareAndSet(false, true)) {
             throw new IllegalStateException("this connection is already active!");
         }
         this.clientSidePeerHandler = handler;
-        this.currentPeerChannel = peerChannel;
         endpointstats.getActiveConnections().incrementAndGet();
     }
 
@@ -256,7 +251,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
             if (msg instanceof HttpContent) {
                 HttpContent f = (HttpContent) msg;
 //                LOG.log(Level.INFO, "proxying HttpContent {0}: {1}", new Object[]{msg.getClass(), msg});
-                clientSidePeerHandler.receivedFromRemote(f.copy(), currentPeerChannel);
+                clientSidePeerHandler.receivedFromRemote(f.copy());
             } else if (msg instanceof DefaultHttpResponse) {
                 DefaultHttpResponse f = (DefaultHttpResponse) msg;
 //                LOG.log(Level.INFO, "proxying DefaultHttpResponse {0}: headers: {1}", new Object[]{msg.getClass(), msg});
@@ -264,7 +259,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
 //                    LOG.log(Level.INFO, "proxying header " + entry.getKey() + ": " + entry.getValue());
 //                });
                 clientSidePeerHandler.receivedFromRemote(new DefaultHttpResponse(f.protocolVersion(),
-                    f.status(), f.headers()), currentPeerChannel);
+                    f.status(), f.headers()));
             } else {
                 LOG.log(Level.SEVERE, "unknown message type " + msg.getClass(), new Exception("unknown message type " + msg.getClass())
                     .fillInStackTrace());
@@ -288,7 +283,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
 //            LOG.log(Level.INFO, "channelReadComplete {0}", ctx);
             if (clientSidePeerHandler != null) {
-                clientSidePeerHandler.readCompletedFromRemote(currentPeerChannel);
+                clientSidePeerHandler.readCompletedFromRemote();
             }
         }
 

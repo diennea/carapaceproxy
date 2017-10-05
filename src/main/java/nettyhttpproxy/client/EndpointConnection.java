@@ -19,10 +19,8 @@
  */
 package nettyhttpproxy.client;
 
-import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
-import nettyhttpproxy.server.ClientConnectionHandler;
 import nettyhttpproxy.server.RequestHandler;
 
 /**
@@ -34,10 +32,10 @@ public interface EndpointConnection {
 
     public void setIdleTimeout(int timeout);
 
-    public void sendRequest(HttpRequest request, RequestHandler handler, ChannelHandlerContext channelToClient);
+    public void sendRequest(HttpRequest request, RequestHandler handler);
 
     public void release(boolean error);
 
-    public void sendLastHttpContent(LastHttpContent msg, RequestHandler handler, ChannelHandlerContext channelToClient);
+    public void sendLastHttpContent(LastHttpContent msg, RequestHandler handler);
 
 }

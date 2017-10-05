@@ -66,17 +66,29 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         }
         if (msg instanceof HttpRequest) {
             HttpRequest request = (HttpRequest) msg;
-            RequestHandler currentRequest = new RequestHandler(requestIdGenerator.incrementAndGet(), request, this);
-            currentRequest.start(ctx);
+            RequestHandler currentRequest = new RequestHandler(requestIdGenerator.incrementAndGet(), request, this, ctx);
+            addPendingRequest(currentRequest);
+            currentRequest.start();
         } else if (msg instanceof LastHttpContent) {
             LastHttpContent trailer = (LastHttpContent) msg;
-            RequestHandler currentRequest = pendingRequests.get(0);
-            currentRequest.lastHttpContent(trailer, ctx);
-
+            try {
+                RequestHandler currentRequest = pendingRequests.get(0);
+                currentRequest.lastHttpContent(trailer);
+            } catch (java.lang.ArrayIndexOutOfBoundsException noMorePendingRequests) {
+//                LOG.info(this + " swallow " + msg + ", no more pending requests");
+                refuseOtherRequests = true;
+                ctx.close();
+            }
         } else if (msg instanceof HttpContent) {
             HttpContent httpContent = (HttpContent) msg;
-            RequestHandler currentRequest = pendingRequests.get(0);
-            currentRequest.continueRequest(httpContent, ctx);
+            try {
+                RequestHandler currentRequest = pendingRequests.get(0);
+                currentRequest.continueRequest(httpContent);
+            } catch (java.lang.ArrayIndexOutOfBoundsException noMorePendingRequests) {
+//                LOG.info(this + " swallow " + msg + ", no more pending requests");
+                refuseOtherRequests = true;
+                ctx.close();
+            }
         }
     }
 
