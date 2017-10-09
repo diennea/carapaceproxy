@@ -19,6 +19,7 @@
  */
 package nettyhttpproxy.client;
 
+import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
 import nettyhttpproxy.server.RequestHandler;
@@ -37,5 +38,7 @@ public interface EndpointConnection {
     public void release(boolean error);
 
     public void sendLastHttpContent(LastHttpContent msg, RequestHandler handler);
+
+    public void continueRequest(HttpContent httpContent);
 
 }

@@ -22,6 +22,7 @@ package nettyhttpproxy.server;
 import nettyhttpproxy.client.ConnectionsManager;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.handler.codec.http.DefaultHttpContent;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
@@ -84,21 +85,22 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
                 request, filters, this, ctx);
             addPendingRequest(currentRequest);
             currentRequest.start();
-        } else if (msg instanceof LastHttpContent) {
-            LastHttpContent trailer = (LastHttpContent) msg;
+        } else if (msg instanceof HttpContent) {
+            // for example chunks from client
+            HttpContent httpContent = (HttpContent) msg;
             try {
                 RequestHandler currentRequest = pendingRequests.get(0);
-                currentRequest.lastHttpContent(trailer);
+                currentRequest.continueRequest(httpContent);
             } catch (java.lang.ArrayIndexOutOfBoundsException noMorePendingRequests) {
                 LOG.info(this + " swallow " + msg + ", no more pending requests");
                 refuseOtherRequests = true;
                 ctx.close();
             }
-        } else if (msg instanceof HttpContent) {
-            HttpContent httpContent = (HttpContent) msg;
+        } else if (msg instanceof LastHttpContent) {
+            LastHttpContent trailer = (LastHttpContent) msg;
             try {
                 RequestHandler currentRequest = pendingRequests.get(0);
-                currentRequest.continueRequest(httpContent);
+                currentRequest.lastHttpContent(trailer);
             } catch (java.lang.ArrayIndexOutOfBoundsException noMorePendingRequests) {
                 LOG.info(this + " swallow " + msg + ", no more pending requests");
                 refuseOtherRequests = true;

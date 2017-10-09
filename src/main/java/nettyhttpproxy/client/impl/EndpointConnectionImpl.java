@@ -129,7 +129,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
             activateConnection(clientSidePeerHandler);
             endpointstats.getTotalRequests().incrementAndGet();
 
-            channelToEndpoint.writeAndFlush(request).addListener(new GenericFutureListener<Future<? super Void>>() {
+            _channelToEndpoint.writeAndFlush(request).addListener(new GenericFutureListener<Future<? super Void>>() {
                 @Override
                 public void operationComplete(Future<? super Void> future) throws Exception {
                     activityDone();
@@ -150,6 +150,29 @@ public class EndpointConnectionImpl implements EndpointConnection {
             LOG.log(Level.SEVERE, "sendRequest interrupted during connection", err);
             clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, err);
         }
+    }
+
+    @Override
+    public void continueRequest(HttpContent httpContent) {
+        Channel _channelToEndpoint = channelToEndpoint;
+        if (_channelToEndpoint == null) {
+            valid = false;
+            return;
+        }
+        _channelToEndpoint.writeAndFlush(httpContent).addListener(new GenericFutureListener<Future<? super Void>>() {
+            @Override
+            public void operationComplete(Future<? super Void> future) throws Exception {
+                activityDone();
+                if (!future.isSuccess()) {
+                    LOG.log(Level.SEVERE, "continueRequest " + httpContent.getClass() + " failed", future.cause());
+                    clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
+                }
+                LOG.log(Level.SEVERE, "continueRequest finished, now " + _channelToEndpoint + " is open ? " + _channelToEndpoint.isOpen());
+                if (!_channelToEndpoint.isOpen()) {
+                    valid = false;
+                }
+            }
+        });
     }
 
     @Override

@@ -270,6 +270,14 @@ public class RequestHandler {
             case DEBUG:
                 continueDebugMessage(httpContent, httpContent);
                 break;
+            case PROXY:
+            case CACHE:
+                if (connectionToEndpoint == null) {
+                    LOG.info(this + " swallow continued content " + httpContent + ". Not connected");
+                    return;
+                }
+                connectionToEndpoint.continueRequest(httpContent.retain());
+                break;
         }
     }
 
