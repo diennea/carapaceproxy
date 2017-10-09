@@ -43,6 +43,7 @@ import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.logging.Level;
@@ -54,6 +55,7 @@ import nettyhttpproxy.client.ConnectionsManager;
 import nettyhttpproxy.client.impl.ConnectionsManagerImpl;
 import nettyhttpproxy.server.config.ConfigurationNotValidException;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
+import nettyhttpproxy.server.mapper.XForwardedForRequestFilter;
 
 public class HttpProxyServer implements AutoCloseable {
 
@@ -62,6 +64,7 @@ public class HttpProxyServer implements AutoCloseable {
     private EventLoopGroup bossGroup;
     private EventLoopGroup workerGroup;
     private final EndpointMapper mapper;
+    private final List<RequestFilter> filters;
     private final ConnectionsManager connectionsManager;
 
     private final List<NetworkListenerConfiguration> listeners = new ArrayList<>();
@@ -70,6 +73,7 @@ public class HttpProxyServer implements AutoCloseable {
     public HttpProxyServer(EndpointMapper mapper) {
         this.mapper = mapper;
         this.connectionsManager = new ConnectionsManagerImpl(10, 120000, 5000);
+        this.filters = new ArrayList<>();
     }
 
     public HttpProxyServer(String host, int port, EndpointMapper mapper) {
@@ -81,13 +85,17 @@ public class HttpProxyServer implements AutoCloseable {
         listeners.add(listener);
     }
 
+    public void addRequestFilter(RequestFilter filter) {
+        filters.add(filter);
+    }
+
     public void start() throws InterruptedException, ConfigurationNotValidException {
         try {
             bossGroup = new EpollEventLoopGroup();
             workerGroup = new EpollEventLoopGroup();
 
             for (NetworkListenerConfiguration listener : listeners) {
-                LOG.info("Starting listened at " + listener.getHost() + ":" + listener.getPort() + " ssl:" + listener.isSsl());
+                LOG.info("Starting listener at " + listener.getHost() + ":" + listener.getPort() + " ssl:" + listener.isSsl());
                 final SslContext sslCtx;
                 if (listener.isSsl()) {
                     String sslCertFilePassword = listener.getSslCertificatePassword();
@@ -119,13 +127,14 @@ public class HttpProxyServer implements AutoCloseable {
                     .childHandler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         public void initChannel(SocketChannel channel) throws Exception {
-
                             if (listener.isSsl()) {
                                 channel.pipeline().addLast(sslCtx.newHandler(channel.alloc()));
                             }
                             channel.pipeline().addLast(new HttpRequestDecoder());
                             channel.pipeline().addLast(new HttpResponseEncoder());
-                            channel.pipeline().addLast(new ClientConnectionHandler(mapper, connectionsManager));
+                            channel.pipeline().addLast(
+                                new ClientConnectionHandler(mapper, connectionsManager,
+                                    filters, channel.remoteAddress()));
 
                         }
                     })
@@ -200,19 +209,40 @@ public class HttpProxyServer implements AutoCloseable {
         return ks;
     }
 
-    public void configure(Properties properties) {
+    public void configure(Properties properties) throws ConfigurationNotValidException {
         for (int i = 0; i < 100; i++) {
-            String prefix = "listener." + i + ".";
-            String host = properties.getProperty(prefix + "host", "0.0.0.0");
-            int port = Integer.parseInt(properties.getProperty(prefix + "port", "0"));
-            if (port > 0) {
-                boolean ssl = Boolean.parseBoolean(properties.getProperty(prefix + "ssl", "false"));
-                String certificateFile = properties.getProperty(prefix + "sslcertfile", "");
-                String certificatePassword = properties.getProperty(prefix + "sslcertfilepassword", "");
-                String sslciphers = properties.getProperty(prefix + "sslciphers", "");
-                NetworkListenerConfiguration config = new NetworkListenerConfiguration(host, port, ssl, certificateFile, certificatePassword, sslciphers);
-                addListener(config);
-            }
+            tryConfigureListener(i, properties);
+            tryConfigureFilter(i, properties);
+        }
+    }
+
+    private void tryConfigureListener(int i, Properties properties) {
+        String prefix = "listener." + i + ".";
+        String host = properties.getProperty(prefix + "host", "0.0.0.0");
+        int port = Integer.parseInt(properties.getProperty(prefix + "port", "0"));
+        if (port > 0) {
+            boolean ssl = Boolean.parseBoolean(properties.getProperty(prefix + "ssl", "false"));
+            String certificateFile = properties.getProperty(prefix + "sslcertfile", "");
+            String certificatePassword = properties.getProperty(prefix + "sslcertfilepassword", "");
+            String sslciphers = properties.getProperty(prefix + "sslciphers", "");
+            NetworkListenerConfiguration config = new NetworkListenerConfiguration(host, port, ssl, certificateFile, certificatePassword, sslciphers);
+            addListener(config);
+        }
+    }
+
+    private void tryConfigureFilter(int i, Properties properties) throws ConfigurationNotValidException {
+        String prefix = "filter." + i + ".";
+        String type = properties.getProperty(prefix + "type", "").trim();
+        if (type.isEmpty()) {
+            return;
+        }
+        LOG.log(Level.INFO, "configure filter type={0}", type);
+        switch (type) {
+            case "add-x-forwarded-for":
+                addRequestFilter(new XForwardedForRequestFilter());
+                break;
+            default:
+                throw new ConfigurationNotValidException("bad filter type '" + type + "' only 'add-x-forwarded-for'");
         }
     }
 

@@ -26,6 +26,7 @@ import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.LastHttpContent;
+import java.net.SocketAddress;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
@@ -44,13 +45,25 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     final EndpointMapper mapper;
 
     final ConnectionsManager connectionsManager;
+    final List<RequestFilter> filters;
+    final SocketAddress clientAddress;
     volatile Boolean keepAlive;
     volatile boolean refuseOtherRequests;
-    private List<RequestHandler> pendingRequests = new CopyOnWriteArrayList<>();
+    private final List<RequestHandler> pendingRequests = new CopyOnWriteArrayList<>();
 
-    public ClientConnectionHandler(EndpointMapper mapper, ConnectionsManager connectionsManager) {
+    public ClientConnectionHandler(
+        EndpointMapper mapper,
+        ConnectionsManager connectionsManager,
+        List<RequestFilter> filters,
+        SocketAddress clientAddress) {
         this.mapper = mapper;
         this.connectionsManager = connectionsManager;
+        this.filters = filters;
+        this.clientAddress = clientAddress;
+    }
+
+    public SocketAddress getClientAddress() {
+        return clientAddress;
     }
 
     @Override
@@ -67,7 +80,8 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         }
         if (msg instanceof HttpRequest) {
             HttpRequest request = (HttpRequest) msg;
-            RequestHandler currentRequest = new RequestHandler(requestIdGenerator.incrementAndGet(), request, this, ctx);
+            RequestHandler currentRequest = new RequestHandler(requestIdGenerator.incrementAndGet(),
+                request, filters, this, ctx);
             addPendingRequest(currentRequest);
             currentRequest.start();
         } else if (msg instanceof LastHttpContent) {

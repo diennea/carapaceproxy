@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.MapResult;
@@ -88,7 +89,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                         throw new ConfigurationNotValidException(prefix + "match can be only 'all' at the moment");
 
                 }
-                LOG.info("configured route" + id + " action: " + action + " enabled: " + enabled + " matcher: " + matcher);
+                LOG.log(Level.INFO, "configured route {0} action: {1} enabled: {2} matcher: {3}", new Object[]{id, action, enabled, matcher});
                 RouteConfiguration config = new RouteConfiguration(id, action, enabled, matcher);
                 addRoute(config);
             }

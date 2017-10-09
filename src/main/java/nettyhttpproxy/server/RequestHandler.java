@@ -44,8 +44,8 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.CharsetUtil;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
+import java.util.List;
 import java.util.Map;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.MapResult;
 import nettyhttpproxy.client.EndpointConnection;
@@ -60,21 +60,27 @@ public class RequestHandler {
 
     private static final Logger LOG = Logger.getLogger(RequestHandler.class.getName());
     private final long id;
-    final HttpRequest request;
+    HttpRequest request;
+    final List<RequestFilter> filters;
     private MapResult action;
     private EndpointConnection connectionToEndpoint;
     private final ClientConnectionHandler connectionToClient;
     private final ChannelHandlerContext channelToClient;
 
-    public RequestHandler(long id, HttpRequest request, ClientConnectionHandler parent, ChannelHandlerContext channelToClient) {
+    public RequestHandler(long id, HttpRequest request, List<RequestFilter> filters,
+        ClientConnectionHandler parent, ChannelHandlerContext channelToClient) {
         this.id = id;
         this.request = request;
         this.connectionToClient = parent;
         this.channelToClient = channelToClient;
+        this.filters = filters;
     }
 
     public void start() {
         action = connectionToClient.mapper.map(request);
+        for (RequestFilter filter : filters) {
+            filter.apply(request, connectionToClient);
+        }
 //        LOG.log(Level.INFO, this + " Mapped " + request.uri() + " to " + action);
         switch (action.action) {
             case NOTFOUND:
