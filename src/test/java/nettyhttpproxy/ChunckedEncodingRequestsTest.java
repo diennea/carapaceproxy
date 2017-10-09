@@ -46,6 +46,10 @@ public class ChunckedEncodingRequestsTest {
         + "E\r\n in\r\n\r\nchunks.\r\n"
         + "0\r\n" // last content
         + "\r\n";
+
+    private static final String TEST_DATA_ABORTED
+        = "4\r\nWiki\r\n"
+        + "5\r\npe";
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
 
@@ -88,6 +92,62 @@ public class ChunckedEncodingRequestsTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
+                && epstats.getActiveConnections().intValue() == 0
+                && epstats.getOpenConnections().intValue() == 0;
+        }, 100);
+
+        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+
+    }
+
+    @Test
+    public void testClientAbortsUpload() throws Exception {
+
+        wireMockRule.stubFor(
+            post(urlEqualTo("/index.html")).
+                withRequestBody(equalTo("Wikipedia in\r\n"
+                    + "\r\n"
+                    + "chunks."))
+                .willReturn(aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "text/html")
+                    .withBody("it <b>works</b> !!"))
+        );
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port(), false);
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
+            server.start();
+            int port = server.getLocalPort();
+
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                String s = client
+                    .executeRequest("POST /index.html HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n" + TEST_DATA).toString();
+                System.out.println("s:" + s);
+                assertTrue(s.endsWith("it <b>works</b> !!"));
+
+                client
+                    .sendRequest("POST /index.html HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n" + TEST_DATA_ABORTED);
+            }
+
+            // proxy server is not broker after aborted client
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                String s = client
+                    .executeRequest("POST /index.html HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n" + TEST_DATA).toString();
+                System.out.println("s:" + s);
+                assertTrue(s.endsWith("it <b>works</b> !!"));
+            }
+
+            stats = server.getConnectionsManager().getStats();
+            assertNotNull(stats.getEndpoints().get(key));
+        }
+
+        TestUtils.waitForCondition(() -> {
+            EndpointStats epstats = stats.getEndpointStats(key);
+            System.out.println("stats:"+epstats);
+            return epstats.getTotalConnections().intValue() == 2
                 && epstats.getActiveConnections().intValue() == 0
                 && epstats.getOpenConnections().intValue() == 0;
         }, 100);

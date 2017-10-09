@@ -167,7 +167,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                     LOG.log(Level.SEVERE, "continueRequest " + httpContent.getClass() + " failed", future.cause());
                     clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
                 }
-                LOG.log(Level.SEVERE, "continueRequest finished, now " + _channelToEndpoint + " is open ? " + _channelToEndpoint.isOpen());
+//                LOG.log(Level.SEVERE, "continueRequest finished, now " + _channelToEndpoint + " is open ? " + _channelToEndpoint.isOpen());
                 if (!_channelToEndpoint.isOpen()) {
                     valid = false;
                 }
