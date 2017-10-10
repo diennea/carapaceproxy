@@ -431,6 +431,8 @@ public class RequestHandler {
             HttpHeaders headers = new DefaultHttpHeaders();
             headers.add(resp.headers());
             headers.add("X-Cached", "yes; ts=" + payload.getCreationTs());
+            headers.remove(HttpHeaderNames.ACCEPT_RANGES);
+            headers.remove(HttpHeaderNames.ETAG);
             object = new DefaultHttpResponse(resp.protocolVersion(), resp.status(), headers);
         } else {
             ReferenceCountUtil.retain(object);
