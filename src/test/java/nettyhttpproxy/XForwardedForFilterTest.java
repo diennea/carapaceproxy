@@ -60,7 +60,7 @@ public class XForwardedForFilterTest {
                 .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port(), false);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
@@ -115,7 +115,7 @@ public class XForwardedForFilterTest {
                     .withBody("No X-Forwarded-For")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port(), false);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {

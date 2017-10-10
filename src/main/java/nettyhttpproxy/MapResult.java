@@ -42,11 +42,7 @@ public class MapResult {
         /**
          * Proxy the request, do not cache locally
          */
-        PROXY,
-        /**
-         * Switch to PIPE mode
-         */
-        PIPE,
+        PROXY,        
         /**
          * Pipe and cache if possible
          */

@@ -34,6 +34,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Logger;
 import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.client.impl.EndpointConnectionImpl;
+import nettyhttpproxy.server.cache.ContentsCache;
 
 public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object> {
 
@@ -48,6 +49,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     final ConnectionsManager connectionsManager;
     final List<RequestFilter> filters;
     final SocketAddress clientAddress;
+    final ContentsCache cache;
     volatile Boolean keepAlive;
     volatile boolean refuseOtherRequests;
     private final List<RequestHandler> pendingRequests = new CopyOnWriteArrayList<>();
@@ -56,7 +58,9 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         EndpointMapper mapper,
         ConnectionsManager connectionsManager,
         List<RequestFilter> filters,
+        ContentsCache cache,
         SocketAddress clientAddress) {
+        this.cache = cache;
         this.mapper = mapper;
         this.connectionsManager = connectionsManager;
         this.filters = filters;
@@ -89,7 +93,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             LastHttpContent trailer = (LastHttpContent) msg;
             try {
                 RequestHandler currentRequest = pendingRequests.get(0);
-                currentRequest.lastHttpContent(trailer);
+                currentRequest.clientRequestFinished(trailer);
             } catch (java.lang.ArrayIndexOutOfBoundsException noMorePendingRequests) {
                 LOG.info(this + " swallow " + msg + ", no more pending requests");
                 refuseOtherRequests = true;
@@ -100,7 +104,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             HttpContent httpContent = (HttpContent) msg;
             try {
                 RequestHandler currentRequest = pendingRequests.get(0);
-                currentRequest.continueRequest(httpContent);
+                currentRequest.continueClientRequest(httpContent);
             } catch (java.lang.ArrayIndexOutOfBoundsException noMorePendingRequests) {
                 LOG.info(this + " swallow " + msg + ", no more pending requests");
                 refuseOtherRequests = true;
@@ -123,7 +127,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     }
 
     public void lastHttpContentSent(RequestHandler requestHandler) {
-        if (!HttpUtil.isKeepAlive(requestHandler.request)) {
+        if (!requestHandler.isKeepAlive()) {
             keepAlive = false;
         } else if (keepAlive == null) {
             keepAlive = true;

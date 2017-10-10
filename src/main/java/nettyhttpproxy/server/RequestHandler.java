@@ -42,6 +42,7 @@ import io.netty.handler.codec.http.HttpUtil;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.CharsetUtil;
+import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import java.util.List;
@@ -52,6 +53,7 @@ import nettyhttpproxy.client.EndpointConnection;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.client.EndpointNotAvailableException;
 import nettyhttpproxy.client.impl.EndpointConnectionImpl;
+import nettyhttpproxy.server.cache.ContentsCache;
 
 /**
  * Keeps state for a single HttpRequest.
@@ -60,9 +62,10 @@ public class RequestHandler {
 
     private static final Logger LOG = Logger.getLogger(RequestHandler.class.getName());
     private final long id;
-    HttpRequest request;
-    final List<RequestFilter> filters;
+    private final HttpRequest request;
+    private final List<RequestFilter> filters;
     private MapResult action;
+    private ContentsCache.ContentReceiver cacheReceiver;
     private EndpointConnection connectionToEndpoint;
     private final ClientConnectionHandler connectionToClient;
     private final ChannelHandlerContext channelToClient;
@@ -94,34 +97,55 @@ public class RequestHandler {
                 }
                 return;
             case PROXY:
+                try {
+                    connectionToEndpoint = connectionToClient.connectionsManager.getConnection(new EndpointKey(action.host, action.port));
+                    connectionToEndpoint.sendRequest(request, this);
+                } catch (EndpointNotAvailableException err) {
+                    LOG.info(this + " error on endpoint " + action + ": " + err);
+                    return;
+                }
+                return;
             case CACHE:
                 try {
-                    connectionToEndpoint = connectionToClient.connectionsManager.getConnection(new EndpointKey(action.host, action.port, false));
-//                    LOG.info(this + " got connecton " + connectionToEndpoint + " handle");
+                    if (connectionToClient.cache.serveFromCache(this)) {
+                        return;
+                    }
+                    connectionToEndpoint = connectionToClient.connectionsManager.getConnection(new EndpointKey(action.host, action.port));
+                    cacheReceiver = connectionToClient.cache.startCachingResponse(request);
+                    connectionToEndpoint.sendRequest(request, this);
                 } catch (EndpointNotAvailableException err) {
                     LOG.info(this + " error on endpoint " + action + ": " + err);
                     return;
                 }
-//                        LOG.info("sending http request to " + action.host + ":" + action.port);
-                connectionToEndpoint.sendRequest(request, this);
+                return;
 
-                return;
-            case PIPE:
-                try {
-                    connectionToEndpoint = connectionToClient.connectionsManager.getConnection(new EndpointKey(action.host, action.port, true));
-                } catch (EndpointNotAvailableException err) {
-                    LOG.info(this + " error on endpoint " + action + ": " + err);
-                    return;
-                }
-                connectionToEndpoint.sendRequest(request, this);
-                return;
             default:
                 throw new IllegalStateException("not yet implemented");
         }
 
     }
 
-    void lastHttpContent(LastHttpContent trailer) {
+    void continueClientRequest(HttpContent httpContent) {
+        switch (action.action) {
+            case DEBUG:
+                continueDebugMessage(httpContent, httpContent);
+                break;
+            case PROXY:
+            case CACHE:
+                if (connectionToEndpoint == null) {
+                    LOG.info(this + " swallow continued content " + httpContent + ". Not connected");
+                    return;
+                }
+                connectionToEndpoint.continueRequest(httpContent.retain());
+                break;
+        }
+    }
+
+    public HttpRequest getRequest() {
+        return request;
+    }
+
+    void clientRequestFinished(LastHttpContent trailer) {
 //        LOG.info(this + " got LastHttpContent " + trailer + " connection: " + connectionToEndpoint + " action:" + action.action);
         HttpContent httpContent = (HttpContent) trailer;
         switch (action.action) {
@@ -265,22 +289,6 @@ public class RequestHandler {
         });
     }
 
-    void continueRequest(HttpContent httpContent) {
-        switch (action.action) {
-            case DEBUG:
-                continueDebugMessage(httpContent, httpContent);
-                break;
-            case PROXY:
-            case CACHE:
-                if (connectionToEndpoint == null) {
-                    LOG.info(this + " swallow continued content " + httpContent + ". Not connected");
-                    return;
-                }
-                connectionToEndpoint.continueRequest(httpContent.retain());
-                break;
-        }
-    }
-
     public void lastHttpContentSent() {
         connectionToClient.lastHttpContentSent(this);
     }
@@ -318,8 +326,14 @@ public class RequestHandler {
     public void receivedFromRemote(HttpObject msg) {
         if (connectionToClient == null) {
 //            LOG.log(Level.SEVERE, this + " received from remote server:{0} connection {1} server {2}", new Object[]{msg, connectionToClient, connectionToEndpoint});
+            if (cacheReceiver != null) {
+                cacheReceiver.abort();
+            }
             releaseConnectionToEndpoint(true);
             return;
+        }
+        if (cacheReceiver != null) {
+            cacheReceiver.receivedFromRemote(msg);
         }
         channelToClient.writeAndFlush(msg).addListener((Future<? super Void> future) -> {
             boolean returnConnection = false;
@@ -371,6 +385,28 @@ public class RequestHandler {
     @Override
     public String toString() {
         return "RequestHandler{" + "id=" + id + ", connectionToEndpoint=" + connectionToEndpoint + ", connectionToClient=" + connectionToClient + '}';
+    }
+
+    public boolean isKeepAlive() {
+        return HttpUtil.isKeepAlive(request);
+    }
+
+    public void serveFromCache(ContentsCache.ContentPayload cached) {
+        LOG.severe(this + " serving content from cache!");
+        int size = cached.getChunks().size();
+        for (int i = 0; i < size; i++) {
+            HttpObject object = cached.getChunks().get(i);
+            ReferenceCountUtil.retain(object);
+            if (i == size - 1) {
+                channelToClient.writeAndFlush(object).addListener((g) -> {
+                    lastHttpContentSent();
+                }
+                );
+            } else {
+                channelToClient.write(object, channelToClient.voidPromise());
+            }
+        }
+
     }
 
 }

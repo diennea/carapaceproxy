@@ -30,12 +30,10 @@ public final class EndpointKey {
 
     private final String host;
     private final int port;
-    private final boolean pipe;
 
-    public EndpointKey(String host, int port, boolean pipe) {
+    public EndpointKey(String host, int port) {
         this.host = host;
         this.port = port;
-        this.pipe = pipe;
     }
 
     public String getHost() {
@@ -46,16 +44,11 @@ public final class EndpointKey {
         return port;
     }
 
-    public boolean isPipe() {
-        return pipe;
-    }
-
     @Override
     public int hashCode() {
-        int hash = 7;
-        hash = 59 * hash + Objects.hashCode(this.host);
-        hash = 59 * hash + this.port;
-        hash = 59 * hash + (this.pipe ? 1 : 0);
+        int hash = 3;
+        hash = 23 * hash + Objects.hashCode(this.host);
+        hash = 23 * hash + this.port;
         return hash;
     }
 
@@ -74,9 +67,6 @@ public final class EndpointKey {
         if (this.port != other.port) {
             return false;
         }
-        if (this.pipe != other.pipe) {
-            return false;
-        }
         if (!Objects.equals(this.host, other.host)) {
             return false;
         }
@@ -85,7 +75,7 @@ public final class EndpointKey {
 
     @Override
     public String toString() {
-        return "EndpointKey{" + "host=" + host + ", port=" + port + ", pipe=" + pipe + '}';
+        return "EndpointKey{" + "host=" + host + ", port=" + port + '}';
     }
 
 }

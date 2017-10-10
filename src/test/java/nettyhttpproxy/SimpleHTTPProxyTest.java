@@ -62,7 +62,7 @@ public class SimpleHTTPProxyTest {
                 .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port(), false);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
@@ -119,7 +119,7 @@ public class SimpleHTTPProxyTest {
                 .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port(), false);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper);) {
@@ -171,7 +171,7 @@ public class SimpleHTTPProxyTest {
         int badPort = TestUtils.getFreePort();
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", badPort);
-        EndpointKey key = new EndpointKey("localhost", badPort, false);
+        EndpointKey key = new EndpointKey("localhost", badPort);
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {

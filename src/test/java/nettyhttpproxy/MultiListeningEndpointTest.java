@@ -58,7 +58,7 @@ public class MultiListeningEndpointTest {
         int port = 1234;
         int port2 = 1235;
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port(), false);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         try (HttpProxyServer server = new HttpProxyServer("localhost", port, mapper);) {
             server.addListener(new NetworkListenerConfiguration("localhost", port2));

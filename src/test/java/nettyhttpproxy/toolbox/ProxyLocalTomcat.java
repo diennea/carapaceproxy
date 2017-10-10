@@ -55,7 +55,7 @@ public class ProxyLocalTomcat {
     public void test() throws Exception {
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", 8086);
-        EndpointKey key = new EndpointKey("localhost", 8086, false);
+        EndpointKey key = new EndpointKey("localhost", 8086);
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {

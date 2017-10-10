@@ -25,10 +25,16 @@ public class TestEndpointMapper extends EndpointMapper {
 
     private final String host;
     private final int port;
+    private final boolean cacheAll;
 
     public TestEndpointMapper(String host, int port) {
+        this(host, port, false);
+    }
+
+    public TestEndpointMapper(String host, int port, boolean cacheAll) {
         this.host = host;
         this.port = port;
+        this.cacheAll = cacheAll;
     }
 
     @Override
@@ -38,6 +44,8 @@ public class TestEndpointMapper extends EndpointMapper {
             return MapResult.NOT_FOUND;
         } else if (uri.contains("debug")) {
             return new MapResult(null, 0, MapResult.Action.DEBUG);
+        } else if (cacheAll) {
+            return new MapResult(host, port, MapResult.Action.CACHE);
         } else {
             return new MapResult(host, port, MapResult.Action.PROXY);
         }

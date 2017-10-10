@@ -43,7 +43,6 @@ import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.logging.Level;
@@ -53,6 +52,7 @@ import javax.net.ssl.TrustManagerFactory;
 import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.client.ConnectionsManager;
 import nettyhttpproxy.client.impl.ConnectionsManagerImpl;
+import nettyhttpproxy.server.cache.ContentsCache;
 import nettyhttpproxy.server.config.ConfigurationNotValidException;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
 import nettyhttpproxy.server.mapper.XForwardedForRequestFilter;
@@ -66,6 +66,7 @@ public class HttpProxyServer implements AutoCloseable {
     private final EndpointMapper mapper;
     private final List<RequestFilter> filters;
     private final ConnectionsManager connectionsManager;
+    private final ContentsCache cache;
 
     private final List<NetworkListenerConfiguration> listeners = new ArrayList<>();
     private final List<Channel> listeningChannels = new ArrayList<>();
@@ -74,6 +75,7 @@ public class HttpProxyServer implements AutoCloseable {
         this.mapper = mapper;
         this.connectionsManager = new ConnectionsManagerImpl(10, 120000, 5000);
         this.filters = new ArrayList<>();
+        this.cache = new ContentsCache();
     }
 
     public HttpProxyServer(String host, int port, EndpointMapper mapper) {
@@ -134,7 +136,7 @@ public class HttpProxyServer implements AutoCloseable {
                             channel.pipeline().addLast(new HttpResponseEncoder());
                             channel.pipeline().addLast(
                                 new ClientConnectionHandler(mapper, connectionsManager,
-                                    filters, channel.remoteAddress()));
+                                    filters, cache, channel.remoteAddress()));
 
                         }
                     })
@@ -171,10 +173,15 @@ public class HttpProxyServer implements AutoCloseable {
         if (connectionsManager != null) {
             connectionsManager.close();
         }
+        cache.close();
     }
 
     public ConnectionsManager getConnectionsManager() {
         return connectionsManager;
+    }
+
+    public ContentsCache getCache() {
+        return cache;
     }
 
     private KeyManagerFactory initKeyManagerFactory(String keyStoreType, File keyStoreLocation,

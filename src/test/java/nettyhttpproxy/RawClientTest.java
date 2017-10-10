@@ -59,7 +59,7 @@ public class RawClientTest {
                 .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port(), false);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
@@ -91,7 +91,7 @@ public class RawClientTest {
     public void testClientsExpectsConnectionCloseWithDownEndpoint() throws Exception {
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", 1111);
-        EndpointKey key = new EndpointKey("localhost", 1111, false);
+        EndpointKey key = new EndpointKey("localhost", 1111);
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
@@ -129,7 +129,7 @@ public class RawClientTest {
                 .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port(), false);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
@@ -172,7 +172,7 @@ public class RawClientTest {
     public void testClientsSendsRequestAndCloseOnDownBackend() throws Exception {
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", 1111);
-        EndpointKey key = new EndpointKey("localhost", 1111, false);
+        EndpointKey key = new EndpointKey("localhost", 1111);
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
@@ -226,7 +226,7 @@ public class RawClientTest {
                 .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port(), false);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
