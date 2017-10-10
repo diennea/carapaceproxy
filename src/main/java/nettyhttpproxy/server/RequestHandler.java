@@ -166,7 +166,6 @@ public class RequestHandler {
             return;
         }
 
-//        LOG.info(this + " got LastHttpContent " + trailer + " connection: " + connectionToEndpoint + " action:" + action.action);
         HttpContent httpContent = (HttpContent) trailer;
         switch (action.action) {
             case DEBUG: {
@@ -414,7 +413,6 @@ public class RequestHandler {
     }
 
     public void serveFromCache() {
-        LOG.severe(this.request.uri() + " serving content from cache!");
         ContentsCache.ContentPayload payload = cacheSender.getCached();
 
         sendCachedChunk(payload, 0);
@@ -434,41 +432,32 @@ public class RequestHandler {
             headers.remove(HttpHeaderNames.ACCEPT_RANGES);
             headers.remove(HttpHeaderNames.ETAG);
             object = new DefaultHttpResponse(resp.protocolVersion(), resp.status(), headers);
+
+            long contentLength = HttpUtil.getContentLength(resp, -1);
+            String transferEncoding = resp.headers().get(HttpHeaderNames.TRANSFER_ENCODING);
+            if (contentLength < 0 && !"chunked".equals(transferEncoding)) {
+                connectionToClient.keepAlive = false;
+                LOG.log(Level.SEVERE, request.uri() + " response without contentLength{0} and with Transfer-Encoding {1}. keepalive will be disabled " + resp, new Object[]{contentLength, transferEncoding});
+            }
         } else {
-            ReferenceCountUtil.retain(object);
+            object = ContentsCache.cloneHttpObject(object);
         }
         HttpObject _object = object;
-        LOG.severe(this.request.uri() + " serving #" + (i + 1) + "/" + size + " " + object + " to " + channelToClient);
-        channelToClient.writeAndFlush(object).addListener((g) -> {
-            LOG.severe(this.request.uri() + " serving #" + (i + 1) + "/" + size + " result: " + g.isSuccess() + " " + _object);
-            if (_object instanceof HttpResponse) {
-                HttpResponse httpMessage = (HttpResponse) _object;
-                long contentLength = HttpUtil.getContentLength(httpMessage, -1);
-                String transferEncoding = httpMessage.headers().get(HttpHeaderNames.TRANSFER_ENCODING);
-                if (contentLength < 0 && !"chunked".equals(transferEncoding)) {
-                    connectionToClient.keepAlive = false;
-                    LOG.log(Level.SEVERE, request.uri() + " response without contentLength{0} and with Transfer-Encoding {1}. keepalive will be disabled " + _object, new Object[]{contentLength, transferEncoding});
-                }
-            }
-            if (isLastHttpContent) {
-                lastHttpContentSent();
-                boolean keepAlive1 = connectionToClient.isKeepAlive();
-                LOG.log(Level.INFO, this + " keepAlive1:" + keepAlive1 + " connecton " + connectionToEndpoint);
-                if (!keepAlive1) {
-                    connectionToClient.refuseOtherRequests = true;
-                    channelToClient.close();
-                }
-            } else if (i + 1 < size) {
-                if (g.isSuccess()) {
-                    sendCachedChunk(payload, i + 1);
-                } else {
+
+        channelToClient.writeAndFlush(_object)
+            .addListener((g) -> {
+                if (isLastHttpContent) {
                     lastHttpContentSent();
+                    boolean keepAlive1 = connectionToClient.isKeepAlive();
+                    if (!keepAlive1) {
+                        connectionToClient.refuseOtherRequests = true;
+                        channelToClient.close();
+                    }
                 }
-            }
-
-        }
-        );
-
+                if (i + 1 < size && g.isSuccess()) {
+                    sendCachedChunk(payload, i + 1);
+                }
+            });
     }
 
     private void cleanRequestFromCacheValidators(HttpRequest request) {

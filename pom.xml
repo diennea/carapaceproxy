@@ -135,7 +135,7 @@
         </plugins>            
     </build>
     <properties>
-        <netty.version>4.1.15.Final</netty.version>
+        <netty.version>4.1.16.Final</netty.version>
         <jetty.version>9.4.6.v20170531</jetty.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>

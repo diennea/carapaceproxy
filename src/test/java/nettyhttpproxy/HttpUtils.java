@@ -74,6 +74,10 @@ public class HttpUtils {
         }
     };
 
+    public static SSLSocketFactory getSocket_factory() {
+        return socket_factory;
+    }
+
     public static void readFullContent(URLConnection con) throws IOException {
         InputStream in = con.getInputStream();
         try {

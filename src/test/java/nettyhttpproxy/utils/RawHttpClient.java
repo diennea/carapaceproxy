@@ -29,6 +29,8 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import javax.net.ssl.SSLSocketFactory;
+import nettyhttpproxy.HttpUtils;
 
 /**
  * Raw Socket based Http Client, very useful to reproduce weird behaviours
@@ -37,11 +39,22 @@ public final class RawHttpClient implements AutoCloseable {
 
     private final Socket socket;
     private final String host;
+    private final boolean ssl;
 
     public RawHttpClient(String host, int port) throws IOException {
-        socket = new Socket(host, port);
-        socket.setSoTimeout(300 * 000);
+        this(host, port, false);
+    }
+
+    public RawHttpClient(String host, int port, boolean ssl) throws IOException {
         this.host = host;
+        this.ssl = ssl;
+        if (ssl) {
+            SSLSocketFactory factory = HttpUtils.getSocket_factory();
+            socket = factory.createSocket(host, port);
+        } else {
+            socket = new Socket(host, port);
+        }
+        socket.setSoTimeout(300 * 000);
     }
 
     public OutputStream getOutputStream() throws IOException {

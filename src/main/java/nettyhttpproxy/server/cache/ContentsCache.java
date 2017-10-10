@@ -19,6 +19,10 @@
  */
 package nettyhttpproxy.server.cache;
 
+import io.netty.handler.codec.http.DefaultHttpContent;
+import io.netty.handler.codec.http.DefaultHttpResponse;
+import io.netty.handler.codec.http.DefaultLastHttpContent;
+import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
@@ -221,7 +225,6 @@ public class ContentsCache {
     }
 
     private void cacheContent(ContentReceiver receiver) {
-        LOG.info("Caching content " + receiver.key);
         cache.put(receiver.key, receiver.content);
 
     }
@@ -253,13 +256,34 @@ public class ContentsCache {
                 abort();
                 return;
             }
-            LOG.info(key + " accepting chunk " + msg);
-            ReferenceCountUtil.retain(msg);
+            msg = cloneHttpObject(msg);
+//            LOG.info(key + " accepting chunk " + msg);
+
             content.chunks.add(msg);
             if (msg instanceof LastHttpContent) {
                 cacheContent(this);
             }
         }
+    }
 
+    public static HttpObject cloneHttpObject(HttpObject msg) {
+        if (msg instanceof FullHttpResponse) {
+            FullHttpResponse fr = (FullHttpResponse) msg;
+            return fr.copy();
+        } else if (msg instanceof DefaultHttpResponse) {
+            DefaultHttpResponse fr = (DefaultHttpResponse) msg;
+            return new DefaultHttpResponse(fr.protocolVersion(), fr.status(), fr.headers());
+        } else if (msg instanceof DefaultLastHttpContent) {
+            DefaultLastHttpContent df = (DefaultLastHttpContent) msg;
+            return df.copy();
+        } else if (msg instanceof DefaultHttpContent) {
+            DefaultHttpContent df = (DefaultHttpContent) msg;
+            return df.copy();
+        } else if (msg instanceof LastHttpContent) {
+            return ((LastHttpContent) msg).copy();
+        } else {
+            LOG.severe("cannot duplicate HttpObject " + msg);
+            throw new IllegalStateException("cannot duplicate HttpObject " + msg);
+        }
     }
 }

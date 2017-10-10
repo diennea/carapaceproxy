@@ -29,6 +29,7 @@ import java.net.SocketAddress;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.client.impl.EndpointConnectionImpl;
@@ -72,6 +73,12 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     @Override
     public void channelReadComplete(ChannelHandlerContext ctx) {
         ctx.flush();
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        super.exceptionCaught(ctx, cause);
+        LOG.log(Level.SEVERE, "bad error", cause);
     }
 
     @Override
@@ -130,7 +137,6 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         } else if (keepAlive == null) {
             keepAlive = true;
         }
-        LOG.info(this + " lastHttpContentSent, keepAlive:" + keepAlive);
         pendingRequests.remove(requestHandler);
     }
 
