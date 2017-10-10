@@ -25,19 +25,22 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.DecoderResult;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.DefaultHttpHeaders;
+import io.netty.handler.codec.http.DefaultHttpResponse;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
 import static io.netty.handler.codec.http.HttpResponseStatus.CONTINUE;
 import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
+import static io.netty.handler.codec.http.HttpStatusClass.SUCCESS;
 import io.netty.handler.codec.http.HttpUtil;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 import io.netty.handler.codec.http.LastHttpContent;
@@ -47,6 +50,7 @@ import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.MapResult;
 import nettyhttpproxy.client.EndpointConnection;
@@ -66,6 +70,7 @@ public class RequestHandler {
     private final List<RequestFilter> filters;
     private MapResult action;
     private ContentsCache.ContentReceiver cacheReceiver;
+    private ContentsCache.ContentSender cacheSender;
     private EndpointConnection connectionToEndpoint;
     private final ClientConnectionHandler connectionToClient;
     private final ChannelHandlerContext channelToClient;
@@ -107,11 +112,16 @@ public class RequestHandler {
                 return;
             case CACHE:
                 try {
-                    if (connectionToClient.cache.serveFromCache(this)) {
+                    cacheSender = connectionToClient.cache.serveFromCache(this);
+                    if (cacheSender != null) {
                         return;
                     }
                     connectionToEndpoint = connectionToClient.connectionsManager.getConnection(new EndpointKey(action.host, action.port));
                     cacheReceiver = connectionToClient.cache.startCachingResponse(request);
+                    if (cacheReceiver != null) {
+                        // https://tools.ietf.org/html/rfc7234#section-4.3.4
+                        cleanRequestFromCacheValidators(request);
+                    }
                     connectionToEndpoint.sendRequest(request, this);
                 } catch (EndpointNotAvailableException err) {
                     LOG.info(this + " error on endpoint " + action + ": " + err);
@@ -126,6 +136,10 @@ public class RequestHandler {
     }
 
     void continueClientRequest(HttpContent httpContent) {
+        if (cacheSender != null) {
+            LOG.severe(this + " swallow chunk " + httpContent + ", I am serving a cache content " + cacheReceiver);
+            return;
+        }
         switch (action.action) {
             case DEBUG:
                 continueDebugMessage(httpContent, httpContent);
@@ -146,6 +160,12 @@ public class RequestHandler {
     }
 
     void clientRequestFinished(LastHttpContent trailer) {
+
+        if (cacheSender != null) {
+            serveFromCache();
+            return;
+        }
+
 //        LOG.info(this + " got LastHttpContent " + trailer + " connection: " + connectionToEndpoint + " action:" + action.action);
         HttpContent httpContent = (HttpContent) trailer;
         switch (action.action) {
@@ -349,13 +369,15 @@ public class RequestHandler {
 //                LOG.log(Level.INFO, this + " bad error writing to client, isOpen " + isOpen, future.cause());
                 returnConnection = true;
             }
-            if (msg instanceof HttpMessage) {
-                HttpMessage httpMessage = (HttpMessage) msg;
-                long contentLength = HttpUtil.getContentLength(httpMessage, -1);
-
-                if (contentLength < 0) {
-                    connectionToClient.keepAlive = false;
-//                    LOG.log(Level.SEVERE, "response without contentLength" + contentLength + " keepalive will be disabled");
+            if (msg instanceof HttpResponse) {
+                HttpResponse httpMessage = (HttpResponse) msg;
+                if (SUCCESS == httpMessage.status().codeClass()) {
+                    long contentLength = HttpUtil.getContentLength(httpMessage, -1);
+                    String transferEncoding = httpMessage.headers().get(HttpHeaderNames.TRANSFER_ENCODING);
+                    if (contentLength < 0 && !"chunked".equals(transferEncoding)) {
+                        connectionToClient.keepAlive = false;
+                        LOG.log(Level.SEVERE, request.uri() + " response without contentLength{0} and with Transfer-Encoding {1}. keepalive will be disabled " + msg, new Object[]{contentLength, transferEncoding});
+                    }
                 }
             }
             boolean keepAlive1 = connectionToClient.isKeepAlive();
@@ -391,22 +413,71 @@ public class RequestHandler {
         return HttpUtil.isKeepAlive(request);
     }
 
-    public void serveFromCache(ContentsCache.ContentPayload cached) {
-        LOG.severe(this + " serving content from cache!");
-        int size = cached.getChunks().size();
-        for (int i = 0; i < size; i++) {
-            HttpObject object = cached.getChunks().get(i);
+    public void serveFromCache() {
+        LOG.severe(this.request.uri() + " serving content from cache!");
+        ContentsCache.ContentPayload payload = cacheSender.getCached();
+
+        sendCachedChunk(payload, 0);
+
+    }
+
+    private void sendCachedChunk(ContentsCache.ContentPayload payload, int i) {
+        int size = payload.getChunks().size();
+        HttpObject object = payload.getChunks().get(i);
+
+        boolean isLastHttpContent = object instanceof LastHttpContent;
+        if (object instanceof HttpResponse) {
+            HttpResponse resp = (HttpResponse) object;
+            HttpHeaders headers = new DefaultHttpHeaders();
+            headers.add(resp.headers());
+            headers.add("X-Cached", "yes; ts=" + payload.getCreationTs());
+            object = new DefaultHttpResponse(resp.protocolVersion(), resp.status(), headers);
+        } else {
             ReferenceCountUtil.retain(object);
-            if (i == size - 1) {
-                channelToClient.writeAndFlush(object).addListener((g) -> {
+        }
+        HttpObject _object = object;
+        LOG.severe(this.request.uri() + " serving #" + (i + 1) + "/" + size + " " + object + " to " + channelToClient);
+        channelToClient.writeAndFlush(object).addListener((g) -> {
+            LOG.severe(this.request.uri() + " serving #" + (i + 1) + "/" + size + " result: " + g.isSuccess() + " " + _object);
+            if (_object instanceof HttpResponse) {
+                HttpResponse httpMessage = (HttpResponse) _object;
+                long contentLength = HttpUtil.getContentLength(httpMessage, -1);
+                String transferEncoding = httpMessage.headers().get(HttpHeaderNames.TRANSFER_ENCODING);
+                if (contentLength < 0 && !"chunked".equals(transferEncoding)) {
+                    connectionToClient.keepAlive = false;
+                    LOG.log(Level.SEVERE, request.uri() + " response without contentLength{0} and with Transfer-Encoding {1}. keepalive will be disabled " + _object, new Object[]{contentLength, transferEncoding});
+                }
+            }
+            if (isLastHttpContent) {
+                lastHttpContentSent();
+                boolean keepAlive1 = connectionToClient.isKeepAlive();
+                LOG.log(Level.INFO, this + " keepAlive1:" + keepAlive1 + " connecton " + connectionToEndpoint);
+                if (!keepAlive1) {
+                    connectionToClient.refuseOtherRequests = true;
+                    channelToClient.close();
+                }
+            } else if (i + 1 < size) {
+                if (g.isSuccess()) {
+                    sendCachedChunk(payload, i + 1);
+                } else {
                     lastHttpContentSent();
                 }
-                );
-            } else {
-                channelToClient.write(object, channelToClient.voidPromise());
             }
-        }
 
+        }
+        );
+
+    }
+
+    private void cleanRequestFromCacheValidators(HttpRequest request) {
+        HttpHeaders headers = request.headers();
+        headers.remove(HttpHeaderNames.IF_MATCH);
+        headers.remove(HttpHeaderNames.IF_MODIFIED_SINCE);
+        headers.remove(HttpHeaderNames.IF_NONE_MATCH);
+        headers.remove(HttpHeaderNames.IF_RANGE);
+        headers.remove(HttpHeaderNames.IF_UNMODIFIED_SINCE);
+        headers.remove(HttpHeaderNames.ETAG);
+        headers.remove(HttpHeaderNames.CONNECTION);
     }
 
 }

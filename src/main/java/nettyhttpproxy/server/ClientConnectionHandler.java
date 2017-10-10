@@ -22,10 +22,8 @@ package nettyhttpproxy.server;
 import nettyhttpproxy.client.ConnectionsManager;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.handler.codec.http.DefaultHttpContent;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.LastHttpContent;
 import java.net.SocketAddress;
 import java.util.List;
@@ -132,7 +130,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         } else if (keepAlive == null) {
             keepAlive = true;
         }
-//        LOG.info(this + " lastHttpContentSent, keepAlive:" + keepAlive);
+        LOG.info(this + " lastHttpContentSent, keepAlive:" + keepAlive);
         pendingRequests.remove(requestHandler);
     }
 

@@ -20,6 +20,7 @@
 package nettyhttpproxy.utils;
 
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -103,10 +104,15 @@ public final class RawHttpClient implements AutoCloseable {
         ByteArrayOutputStream body = new ByteArrayOutputStream();
         List<String> headerLines = new ArrayList<>();
         String statusLine;
+        String transferEncoding;
         int expectedContentLength = -1;
 
         public int getExpectedContentLength() {
             return expectedContentLength;
+        }
+
+        public String getTransferEncoding() {
+            return transferEncoding;
         }
 
         public List<String> getHeaderLines() {
@@ -161,9 +167,12 @@ public final class RawHttpClient implements AutoCloseable {
             } else {
 
                 result.headerLines.add(line);
-                if (line.startsWith("Content-Length:")) {
-                    result.expectedContentLength = Integer.parseInt(line.substring("Content-Length:".length()).trim());
+                if (line.startsWith("Content-Length: ")) {
+                    result.expectedContentLength = Integer.parseInt(line.substring("Content-Length: ".length()).trim());
                     System.out.println("expectedContentLength:" + result.expectedContentLength);
+                }
+                if (line.startsWith("Transfer-Encoding: ")) {
+                    result.transferEncoding = line.substring("Transfer-Encoding: ".length()).trim();
                 }
             }
         }
@@ -171,25 +180,65 @@ public final class RawHttpClient implements AutoCloseable {
             System.out.println("END OF BODY content-len 0");
             return result;
         }
+        boolean chunked = "chunked".equals(result.transferEncoding);
+        if (chunked) {
+            DataInputStream dataIn = new DataInputStream(in);
+            while (true) {
+                String line = readASCIILine(dataIn, true);
+                result.rawResponse.write(line.getBytes("ASCII"));
+                System.out.println("CHUNK SIZE " + line + "(hex)");
+                int size = Integer.parseInt(line.trim(), 16);
+                if (size == 0) {
+                    // last chunk
+                    byte[] eol = new byte[2];
+                    dataIn.readFully(eol);
+                    result.rawResponse.write(eol);
+                    if (eol[0] != '\r' || eol[1] != '\n') {
+                        throw new IOException("unexpected delimiter " + new String(eol, "ASCII"));
+                    }
+                    break;
+                }
+                byte[] chunk = new byte[size];
+                dataIn.readFully(chunk);
 
-        // body
-        int b = in.read();
-        while (b != -1) {
-            result.rawResponse.write(b);
-            result.body.write(b);
+                result.rawResponse.write(chunk);
+                result.body.write(chunk);
+                System.out.println("READ " + new String(chunk, "ASCII"));
 
-            if (result.expectedContentLength > 0 && result.body.size() == result.expectedContentLength) {
-                System.out.println("END OF BODY content-len " + result.expectedContentLength);
-                return result;
+                byte[] eol = new byte[2];
+                dataIn.readFully(eol);
+                result.rawResponse.write(eol);
+                if (eol[0] != '\r' || eol[1] != '\n') {
+                    throw new IOException("unexpected delimiter " + new String(eol, "ASCII"));
+                }
             }
+        } else {
+            // body
+            int b = in.read();
+            while (b != -1) {
+                result.rawResponse.write(b);
+                result.body.write(b);
 
-            b = in.read();
+                if (result.expectedContentLength > 0 && result.body.size() == result.expectedContentLength) {
+                    System.out.println("END OF BODY content-len " + result.expectedContentLength);
+                    return result;
+                }
+
+                b = in.read();
+            }
+            if (result.expectedContentLength > 0 && result.body.size() < result.expectedContentLength) {
+                throw new IOException("Incomplete response, expected Content-Length: " + result.expectedContentLength + ", but read only " + result.body.size());
+            }
         }
-        if (result.expectedContentLength > 0 && result.body.size() < result.expectedContentLength) {
-            throw new IOException("Incomplete response, expected Content-Length: " + result.expectedContentLength + ", but read only " + result.body.size());
-        }
+
         System.out.println("END OF BODY");
         return result;
+    }
+
+    private static String readASCIILine(final InputStream in, boolean errorIfEmpty) throws IOException {
+        ByteArrayOutputStream oo = new ByteArrayOutputStream();
+        consumeLFEndedLine(in, oo, errorIfEmpty);
+        return oo.toString("ASCII");
     }
 
     private static void consumeLFEndedLine(final InputStream in, OutputStream responseReceived, boolean errorIfEmpty) throws IOException {

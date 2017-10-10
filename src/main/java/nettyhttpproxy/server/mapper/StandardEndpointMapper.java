@@ -58,6 +58,7 @@ public class StandardEndpointMapper extends EndpointMapper {
 
         LOG.info("configured build-in action id=proxy-all");
         addAction(new ActionConfiguration("proxy-all", ActionConfiguration.TYPE_PROXY));
+        addAction(new ActionConfiguration("cache-if-possible", ActionConfiguration.TYPE_CACHE));
 
         for (int i = 0; i < 100; i++) {
             String prefix = "backend." + i + ".";

@@ -19,8 +19,11 @@
  */
 package nettyhttpproxy.server.cache;
 
+import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponse;
+import static io.netty.handler.codec.http.HttpStatusClass.REDIRECTION;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import java.util.ArrayList;
@@ -29,7 +32,6 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Logger;
-import nettyhttpproxy.server.ClientConnectionHandler;
 import nettyhttpproxy.server.RequestHandler;
 
 /**
@@ -47,8 +49,58 @@ public class ContentsCache {
         cache.clear();
     }
 
+    private static boolean isCachable(HttpResponse response) {
+        String pragma = response.headers().get(HttpHeaderNames.PRAGMA);
+        if (pragma != null && pragma.contains("no-cache")) {
+            // never cache Pragma: no-cache
+            LOG.info("not cachable " + response);
+            return false;
+        }
+        switch (response.status().codeClass()) {
+            case SUCCESS:
+                return true;
+            case REDIRECTION:
+            case INFORMATIONAL:
+            case SERVER_ERROR:
+            case UNKNOWN:
+            default:
+                return false;
+        }
+
+    }
+
     private static boolean isCachable(HttpRequest request) {
-        return request.method().name().equals("GET");
+        if (!request.method().name().equals("GET")) {
+            return false;
+        }
+        String uri = request.uri();
+        String queryString = "";
+        int question = uri.indexOf('?');
+        if (question > 0) {
+            queryString = uri.substring(question + 1);
+            uri = uri.substring(0, question);
+        }
+        if (!queryString.isEmpty()) {
+            // never cache data with a query string, unless it is an image or a script or css
+            int dot = uri.lastIndexOf('.');
+            String extension = "";
+            if (dot >= 0) {
+                extension = uri.substring(dot + 1);
+            }
+            switch (extension) {
+                case "png":
+                case "gif":
+                case "jpg":
+                case "jpeg":
+                case "js":
+                case "css":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+        return true;
+
     }
 
     public ContentReceiver startCachingResponse(HttpRequest request) {
@@ -56,27 +108,53 @@ public class ContentsCache {
             return null;
         }
         String uri = request.uri();
-        return new ContentReceiver(new ContentKey(uri, System.currentTimeMillis()));
+        return new ContentReceiver(new ContentKey(uri));
+
     }
 
-    public boolean serveFromCache(RequestHandler handler) {
+    public class ContentSender {
+
+        private final ContentKey key;
+        private final ContentPayload cached;
+
+        private ContentSender(ContentKey key, ContentPayload cached) {
+            this.key = key;
+            this.cached = cached;
+        }
+
+        public ContentKey getKey() {
+            return key;
+        }
+
+        public ContentPayload getCached() {
+            return cached;
+        }
+
+    }
+
+    public ContentSender serveFromCache(RequestHandler handler) {
         if (!isCachable(handler.getRequest())) {
-            return false;
+            return null;
         }
         String uri = handler.getRequest().uri();
-        ContentKey key = new ContentKey(uri, 0);
+        ContentKey key = new ContentKey(uri);
         ContentPayload cached = cache.get(key);
         stats.update(cached != null);
         if (cached == null) {
-            return false;
+            return null;
         }
-        handler.serveFromCache(cached);
-        return true;
+        return new ContentSender(key, cached);
+
     }
 
     public static class ContentPayload {
 
         private final List<HttpObject> chunks = new ArrayList<>();
+        private long creationTs = System.currentTimeMillis();
+
+        public long getCreationTs() {
+            return creationTs;
+        }
 
         public List<HttpObject> getChunks() {
             return chunks;
@@ -93,19 +171,18 @@ public class ContentsCache {
     public static class ContentKey {
 
         private final String uri;
-        private final long creationTs;
 
-        public ContentKey(String uri, long creationTs) {
+        public ContentKey(String uri) {
             this.uri = uri;
-            this.creationTs = creationTs;
         }
 
         public String getUri() {
             return uri;
         }
 
-        public long getCreationTs() {
-            return creationTs;
+        @Override
+        public String toString() {
+            return "ContentKey{" + "uri=" + uri + '}';
         }
 
         @Override
@@ -146,12 +223,14 @@ public class ContentsCache {
     private void cacheContent(ContentReceiver receiver) {
         LOG.info("Caching content " + receiver.key);
         cache.put(receiver.key, receiver.content);
+
     }
 
     public class ContentReceiver {
 
         private final ContentKey key;
         private final ContentPayload content;
+        private boolean notReallyCachable = false;
 
         public ContentReceiver(ContentKey key) {
             this.key = key;
@@ -164,6 +243,16 @@ public class ContentsCache {
         }
 
         public void receivedFromRemote(HttpObject msg) {
+            if (msg instanceof HttpResponse) {
+                if (!isCachable((HttpResponse) msg)) {
+                    notReallyCachable = true;
+                }
+            }
+            if (notReallyCachable) {
+                LOG.info(key + " rejecting non-cachable response");
+                abort();
+                return;
+            }
             LOG.info(key + " accepting chunk " + msg);
             ReferenceCountUtil.retain(msg);
             content.chunks.add(msg);
