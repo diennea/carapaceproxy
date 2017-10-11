@@ -62,10 +62,6 @@
           <groupId>org.eclipse.jetty</groupId>
         </exclusion>
         <exclusion>
-          <artifactId>guava</artifactId>
-          <groupId>com.google.guava</groupId>
-        </exclusion>
-        <exclusion>
           <artifactId>jackson-core</artifactId>
           <groupId>com.fasterxml.jackson.core</groupId>
         </exclusion>

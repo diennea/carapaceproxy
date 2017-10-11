@@ -19,6 +19,7 @@
  */
 package nettyhttpproxy.server.cache;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.netty.handler.codec.http.DefaultHttpContent;
 import io.netty.handler.codec.http.DefaultHttpResponse;
 import io.netty.handler.codec.http.DefaultLastHttpContent;
@@ -35,6 +36,12 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.server.RequestHandler;
 
@@ -47,8 +54,24 @@ public class ContentsCache {
 
     private final ConcurrentMap<ContentKey, ContentPayload> cache = new ConcurrentHashMap<>();
     private final CacheStats stats = new CacheStats();
+    private final ScheduledExecutorService threadPool;
+    private static final long DEFAULT_TTL = 1000 * 60 * 60;
+
+    public ContentsCache() {
+        this.threadPool = Executors.newSingleThreadScheduledExecutor();
+    }
+
+    public void start() {
+        this.threadPool.scheduleWithFixedDelay(new Evictor(), 1, 1, TimeUnit.MINUTES);
+    }
 
     public void close() {
+        this.threadPool.shutdownNow();
+        try {
+            this.threadPool.awaitTermination(1, TimeUnit.MINUTES);
+        } catch (InterruptedException exit) {
+            Thread.currentThread().interrupt();
+        }
         cache.values().forEach(ContentPayload::clear);
         cache.clear();
     }
@@ -107,6 +130,11 @@ public class ContentsCache {
 
     }
 
+    @VisibleForTesting
+    void runEvictor() {
+        new Evictor().run();
+    }
+
     public ContentReceiver startCachingResponse(HttpRequest request) {
         if (!isCachable(request)) {
             return null;
@@ -114,6 +142,10 @@ public class ContentsCache {
         String uri = request.uri();
         return new ContentReceiver(new ContentKey(uri));
 
+    }
+
+    public final long computeDefaultExpireDate() {
+        return System.currentTimeMillis() + DEFAULT_TTL;
     }
 
     public class ContentSender {
@@ -142,7 +174,17 @@ public class ContentsCache {
         }
         String uri = handler.getRequest().uri();
         ContentKey key = new ContentKey(uri);
-        ContentPayload cached = cache.get(key);
+        long now = System.currentTimeMillis();
+        ContentPayload cached = cache.computeIfPresent(key, new BiFunction<ContentKey, ContentPayload, ContentPayload>() {
+            @Override
+            public ContentPayload apply(ContentKey t, ContentPayload u) {
+                if (u == null || u.expiresTs < now) {
+                    // never serve expired entries and automatically purge from cache
+                    return null;
+                }
+                return u;
+            }
+        });
         stats.update(cached != null);
         if (cached == null) {
             return null;
@@ -154,7 +196,12 @@ public class ContentsCache {
     public static class ContentPayload {
 
         private final List<HttpObject> chunks = new ArrayList<>();
-        private long creationTs = System.currentTimeMillis();
+        private final long creationTs = System.currentTimeMillis();
+        private long expiresTs = -1;
+
+        public long getExpiresTs() {
+            return expiresTs;
+        }
 
         public long getCreationTs() {
             return creationTs;
@@ -247,9 +294,18 @@ public class ContentsCache {
 
         public void receivedFromRemote(HttpObject msg) {
             if (msg instanceof HttpResponse) {
-                if (!isCachable((HttpResponse) msg)) {
+                HttpResponse response = (HttpResponse) msg;
+                if (!isCachable(response)) {
                     notReallyCachable = true;
                 }
+                long expiresTs = response.headers().getTimeMillis(HttpHeaderNames.EXPIRES, -1);
+                if (expiresTs == -1) {
+                    expiresTs = computeDefaultExpireDate();
+                } else if (expiresTs < System.currentTimeMillis()) {
+                    // already expired ?
+                    notReallyCachable = true;
+                }
+                content.expiresTs = expiresTs;
             }
             if (notReallyCachable) {
                 LOG.info(key + " rejecting non-cachable response");
@@ -284,6 +340,24 @@ public class ContentsCache {
         } else {
             LOG.severe("cannot duplicate HttpObject " + msg);
             throw new IllegalStateException("cannot duplicate HttpObject " + msg);
+        }
+    }
+
+    private class Evictor implements Runnable {
+
+        @Override
+        public void run() {
+            List<ContentKey> toRemove = new ArrayList<>();
+            long now = System.currentTimeMillis();
+            cache.forEach((ContentKey k, ContentPayload u) -> {
+                if (u.expiresTs < now) {
+                    toRemove.add(k);
+                }
+            });
+            toRemove.forEach(cache::remove);
+            if (!toRemove.isEmpty()) {
+                LOG.log(Level.INFO, "evicted {0} contents", toRemove.size());
+            }
         }
     }
 }

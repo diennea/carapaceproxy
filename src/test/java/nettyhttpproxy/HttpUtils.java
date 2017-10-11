@@ -34,9 +34,12 @@ import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.text.SimpleDateFormat;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.TimeZone;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
@@ -497,6 +500,12 @@ public class HttpUtils {
     public static void overideJvmWideHttpsVerifier() {
         HttpsURLConnection.setDefaultHostnameVerifier(hostname_verifier);
         HttpsURLConnection.setDefaultSSLSocketFactory(socket_factory);
+    }
+
+    public static final String formatDateHeader(java.util.Date date) {
+        SimpleDateFormat fmt = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.ENGLISH);
+        fmt.setTimeZone(TimeZone.getTimeZone("GMT"));
+        return fmt.format(date);
     }
 
 }

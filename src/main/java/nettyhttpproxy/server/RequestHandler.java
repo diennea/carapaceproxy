@@ -45,7 +45,6 @@ import io.netty.handler.codec.http.HttpUtil;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.CharsetUtil;
-import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import java.util.List;
@@ -353,6 +352,10 @@ public class RequestHandler {
         }
         if (cacheReceiver != null) {
             cacheReceiver.receivedFromRemote(msg);
+            if (msg instanceof HttpResponse) {
+                HttpResponse httpMessage = (HttpResponse) msg;
+                cleanResponseForCachedData(httpMessage);
+            }
         }
         channelToClient.writeAndFlush(msg).addListener((Future<? super Void> future) -> {
             boolean returnConnection = false;
@@ -428,9 +431,12 @@ public class RequestHandler {
             HttpResponse resp = (HttpResponse) object;
             HttpHeaders headers = new DefaultHttpHeaders();
             headers.add(resp.headers());
-            headers.add("X-Cached", "yes; ts=" + payload.getCreationTs());
+            headers.remove(HttpHeaderNames.EXPIRES);
             headers.remove(HttpHeaderNames.ACCEPT_RANGES);
             headers.remove(HttpHeaderNames.ETAG);
+            headers.add("X-Cached", "yes; ts=" + payload.getCreationTs());
+            headers.add("Expires", new java.util.Date(payload.getExpiresTs()));
+
             object = new DefaultHttpResponse(resp.protocolVersion(), resp.status(), headers);
 
             long contentLength = HttpUtil.getContentLength(resp, -1);
@@ -469,6 +475,13 @@ public class RequestHandler {
         headers.remove(HttpHeaderNames.IF_UNMODIFIED_SINCE);
         headers.remove(HttpHeaderNames.ETAG);
         headers.remove(HttpHeaderNames.CONNECTION);
+    }
+
+    private void cleanResponseForCachedData(HttpResponse httpMessage) {
+        HttpHeaders headers = httpMessage.headers();
+        if (!headers.contains(HttpHeaderNames.EXPIRES)) {
+            headers.add("Expires", new java.util.Date(connectionToClient.cache.computeDefaultExpireDate()));
+        }
     }
 
 }

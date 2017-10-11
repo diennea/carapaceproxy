@@ -144,6 +144,7 @@ public class HttpProxyServer implements AutoCloseable {
                     .childOption(ChannelOption.SO_KEEPALIVE, true);
                 listeningChannels.add(b.bind(listener.getHost(), listener.getPort()).sync().channel());
             }
+            cache.start();
         } catch (RuntimeException err) {
             close();
             throw err;
