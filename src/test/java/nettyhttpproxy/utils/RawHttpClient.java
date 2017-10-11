@@ -166,6 +166,11 @@ public final class RawHttpClient implements AutoCloseable {
         BufferedStream firstLine = new BufferedStream(result.rawResponse);
         consumeLFEndedLine(in, firstLine, true);
         result.statusLine = firstLine.buffer.toString("utf-8");
+        System.out.println("[STATUSLINE] " + result.statusLine);
+
+        if (!result.statusLine.startsWith("HTTP/1.1 ")) {
+            throw new IOException("bad response, does not start with HTTP/1.1. Received: " + result.statusLine);
+        }
 
         // header
         while (true) {
@@ -191,6 +196,10 @@ public final class RawHttpClient implements AutoCloseable {
         }
         if (result.expectedContentLength == 0) {
             System.out.println("END OF BODY content-len 0");
+            return result;
+        }
+        if (result.statusLine.startsWith("HTTP/1.1 304 ")) {
+            // not modified
             return result;
         }
         boolean chunked = "chunked".equals(result.transferEncoding);

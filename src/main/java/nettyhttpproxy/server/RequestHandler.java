@@ -417,7 +417,6 @@ public class RequestHandler {
 
     public void serveFromCache() {
         ContentsCache.ContentPayload payload = cacheSender.getCached();
-
         sendCachedChunk(payload, 0);
 
     }
@@ -425,34 +424,50 @@ public class RequestHandler {
     private void sendCachedChunk(ContentsCache.ContentPayload payload, int i) {
         int size = payload.getChunks().size();
         HttpObject object = payload.getChunks().get(i);
-
+        boolean notModified;
         boolean isLastHttpContent = object instanceof LastHttpContent;
         if (object instanceof HttpResponse) {
-            HttpResponse resp = (HttpResponse) object;
-            HttpHeaders headers = new DefaultHttpHeaders();
-            headers.add(resp.headers());
-            headers.remove(HttpHeaderNames.EXPIRES);
-            headers.remove(HttpHeaderNames.ACCEPT_RANGES);
-            headers.remove(HttpHeaderNames.ETAG);
-            headers.add("X-Cached", "yes; ts=" + payload.getCreationTs());
-            headers.add("Expires", new java.util.Date(payload.getExpiresTs()));
 
-            object = new DefaultHttpResponse(resp.protocolVersion(), resp.status(), headers);
+            HttpHeaders requestHeaders = request.headers();
+            long ifModifiedSince = requestHeaders.getTimeMillis(HttpHeaderNames.IF_MODIFIED_SINCE, -1);
+            LOG.info("compare ifModifiedSince:" + new java.util.Date(ifModifiedSince) + " with " + new java.util.Date(payload.getLastModified()));
+            if (ifModifiedSince != -1 && payload.getLastModified() > 0 && ifModifiedSince > payload.getLastModified()) {
+                HttpHeaders newHeaders = new DefaultHttpHeaders();
+                newHeaders.set("Last-Modified", new java.util.Date(payload.getLastModified()));
+                newHeaders.set("Expires", new java.util.Date(payload.getExpiresTs()));
+                newHeaders.add("X-Cached", "yes; ts=" + payload.getCreationTs());
+                FullHttpResponse resp = new DefaultFullHttpResponse(HTTP_1_1, HttpResponseStatus.NOT_MODIFIED,
+                    Unpooled.EMPTY_BUFFER, newHeaders, new DefaultHttpHeaders());
+                object = resp;
+                notModified = true;
+            } else {
+                HttpResponse resp = (HttpResponse) object;
+                HttpHeaders headers = new DefaultHttpHeaders();
+                headers.add(resp.headers());
+                headers.remove(HttpHeaderNames.EXPIRES);
+                headers.remove(HttpHeaderNames.ACCEPT_RANGES);
+                headers.remove(HttpHeaderNames.ETAG);
+                headers.add("X-Cached", "yes; ts=" + payload.getCreationTs());
+                headers.add("Expires", new java.util.Date(payload.getExpiresTs()));
 
-            long contentLength = HttpUtil.getContentLength(resp, -1);
-            String transferEncoding = resp.headers().get(HttpHeaderNames.TRANSFER_ENCODING);
-            if (contentLength < 0 && !"chunked".equals(transferEncoding)) {
-                connectionToClient.keepAlive = false;
-                LOG.log(Level.SEVERE, request.uri() + " response without contentLength{0} and with Transfer-Encoding {1}. keepalive will be disabled " + resp, new Object[]{contentLength, transferEncoding});
+                object = new DefaultHttpResponse(resp.protocolVersion(), resp.status(), headers);
+                long contentLength = HttpUtil.getContentLength(resp, -1);
+                String transferEncoding = resp.headers().get(HttpHeaderNames.TRANSFER_ENCODING);
+                if (contentLength < 0 && !"chunked".equals(transferEncoding)) {
+                    connectionToClient.keepAlive = false;
+                    LOG.log(Level.SEVERE, request.uri() + " response without contentLength{0} and with Transfer-Encoding {1}. keepalive will be disabled " + resp, new Object[]{contentLength, transferEncoding});
+                }
+                notModified = false;
             }
         } else {
             object = ContentsCache.cloneHttpObject(object);
+            notModified = false;
         }
         HttpObject _object = object;
 
         channelToClient.writeAndFlush(_object)
             .addListener((g) -> {
-                if (isLastHttpContent) {
+                if (isLastHttpContent || notModified) {
                     lastHttpContentSent();
                     boolean keepAlive1 = connectionToClient.isKeepAlive();
                     if (!keepAlive1) {
@@ -460,7 +475,7 @@ public class RequestHandler {
                         channelToClient.close();
                     }
                 }
-                if (i + 1 < size && g.isSuccess()) {
+                if (i + 1 < size && g.isSuccess() && !notModified) {
                     sendCachedChunk(payload, i + 1);
                 }
             });

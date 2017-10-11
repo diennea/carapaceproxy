@@ -178,8 +178,12 @@ public class ContentsCache {
         ContentPayload cached = cache.computeIfPresent(key, new BiFunction<ContentKey, ContentPayload, ContentPayload>() {
             @Override
             public ContentPayload apply(ContentKey t, ContentPayload u) {
-                if (u == null || u.expiresTs < now) {
+                if (u == null) {
+                    return null;
+                }
+                if (u.expiresTs < now) {
                     // never serve expired entries and automatically purge from cache
+                    LOG.info("expiring content " + t.uri + ", expired at " + new java.util.Date(u.expiresTs));
                     return null;
                 }
                 return u;
@@ -197,7 +201,12 @@ public class ContentsCache {
 
         private final List<HttpObject> chunks = new ArrayList<>();
         private final long creationTs = System.currentTimeMillis();
+        private long lastModified;
         private long expiresTs = -1;
+
+        public long getLastModified() {
+            return lastModified;
+        }
 
         public long getExpiresTs() {
             return expiresTs;
@@ -306,6 +315,8 @@ public class ContentsCache {
                     notReallyCachable = true;
                 }
                 content.expiresTs = expiresTs;
+                long lastModified = response.headers().getTimeMillis(HttpHeaderNames.LAST_MODIFIED, -1);
+                content.lastModified = lastModified;
             }
             if (notReallyCachable) {
                 LOG.info(key + " rejecting non-cachable response");
@@ -313,7 +324,7 @@ public class ContentsCache {
                 return;
             }
             msg = cloneHttpObject(msg);
-//            LOG.info(key + " accepting chunk " + msg);
+            LOG.info(key + " accepting chunk " + msg);
 
             content.chunks.add(msg);
             if (msg instanceof LastHttpContent) {
