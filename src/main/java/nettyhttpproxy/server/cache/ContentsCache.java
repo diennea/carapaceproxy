@@ -324,7 +324,7 @@ public class ContentsCache {
                 return;
             }
             msg = cloneHttpObject(msg);
-            LOG.info(key + " accepting chunk " + msg);
+//            LOG.info(key + " accepting chunk " + msg);
 
             content.chunks.add(msg);
             if (msg instanceof LastHttpContent) {

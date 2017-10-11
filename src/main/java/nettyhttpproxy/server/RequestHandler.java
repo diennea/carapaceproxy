@@ -430,8 +430,7 @@ public class RequestHandler {
 
             HttpHeaders requestHeaders = request.headers();
             long ifModifiedSince = requestHeaders.getTimeMillis(HttpHeaderNames.IF_MODIFIED_SINCE, -1);
-            LOG.info("compare ifModifiedSince:" + new java.util.Date(ifModifiedSince) + " with " + new java.util.Date(payload.getLastModified()));
-            if (ifModifiedSince != -1 && payload.getLastModified() > 0 && ifModifiedSince > payload.getLastModified()) {
+            if (ifModifiedSince != -1 && payload.getLastModified() > 0 && ifModifiedSince >= payload.getLastModified()) {
                 HttpHeaders newHeaders = new DefaultHttpHeaders();
                 newHeaders.set("Last-Modified", new java.util.Date(payload.getLastModified()));
                 newHeaders.set("Expires", new java.util.Date(payload.getExpiresTs()));
