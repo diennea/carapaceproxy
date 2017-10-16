@@ -28,4 +28,9 @@ public class MatchAllRequestMatcher implements RequestMatcher {
         return AttributesRoutingKey.EMPTY;
     }
 
+    @Override
+    public String toString() {
+        return "MatchAll";
+    }
+
 }

@@ -99,9 +99,15 @@ public class RawClientTest {
             int port = server.getLocalPort();
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").toString();
+                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                String s = resp.toString();
                 System.out.println("s:" + s);
-                assertEquals("HTTP/1.1 500 Internal Server Error\r\n\r\n", s);
+                assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
+                assertEquals("<html>\n"
+                    + "    <body>\n"
+                    + "        An internal error occurred\n"
+                    + "    </body>        \n"
+                    + "</html>\n", resp.getBodyString());
             }
 
             stats = server.getConnectionsManager().getStats();

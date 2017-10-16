@@ -27,8 +27,10 @@ import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.net.URL;
 import nettyhttpproxy.client.ConnectionsManagerStats;
+import nettyhttpproxy.server.StaticContentsManager;
 import nettyhttpproxy.server.config.ActionConfiguration;
 import nettyhttpproxy.server.config.BackendConfiguration;
 import nettyhttpproxy.server.config.RouteConfiguration;
@@ -59,8 +61,16 @@ public class BasicStandardEndpointMapperTest {
         int backendPort = backend1.port();
         StandardEndpointMapper mapper = new StandardEndpointMapper();
         mapper.addBackend(new BackendConfiguration("backend-a", "localhost", backendPort, "/"));
-        mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY));
+        mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, null, -1));
+
+        mapper.addAction(new ActionConfiguration("not-found-custom", ActionConfiguration.TYPE_STATIC, StaticContentsManager.DEFAULT_NOT_FOUND, 404));
+        mapper.addAction(new ActionConfiguration("error-custom", ActionConfiguration.TYPE_STATIC, StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR, 500));
+        mapper.addAction(new ActionConfiguration("static-custom", ActionConfiguration.TYPE_STATIC, "classpath:/test-static-page.html", 200));
+
         mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new URIRequestMatcher(".*index.html.*")));
+        mapper.addRoute(new RouteConfiguration("route-2-not-found", "not-found-custom", true, new URIRequestMatcher(".*notfound.html.*")));
+        mapper.addRoute(new RouteConfiguration("route-3-error", "error-custom", true, new URIRequestMatcher(".*error.html.*")));
+        mapper.addRoute(new RouteConfiguration("route-4-static", "static-custom", true, new URIRequestMatcher(".*static.html.*")));
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
             server.start();
@@ -71,7 +81,28 @@ public class BasicStandardEndpointMapperTest {
             assertEquals("it <b>works</b> !!", s);
 
             try {
-                IOUtils.toString(new URL("http://localhost:" + port + "/other.html").toURI(), "utf-8");
+                IOUtils.toString(new URL("http://localhost:" + port + "/notfound.html").toURI(), "utf-8");
+                fail("expected 404");
+            } catch (FileNotFoundException ok) {
+            }
+
+            {
+                String staticContent = IOUtils.toString(new URL("http://localhost:" + port + "/static.html").toURI(), "utf-8");
+                assertEquals("Test static page", staticContent);
+            }
+            {
+                String staticContent = IOUtils.toString(new URL("http://localhost:" + port + "/static.html").toURI(), "utf-8");
+                assertEquals("Test static page", staticContent);
+            }
+
+            try {
+                IOUtils.toString(new URL("http://localhost:" + port + "/error.html").toURI(), "utf-8");
+                fail("expected 500");
+            } catch (IOException ok) {
+            }
+
+            try {
+                IOUtils.toString(new URL("http://localhost:" + port + "/notmapped.html").toURI(), "utf-8");
                 fail("expected 404");
             } catch (FileNotFoundException ok) {
             }

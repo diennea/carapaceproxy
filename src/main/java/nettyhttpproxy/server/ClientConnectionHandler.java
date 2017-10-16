@@ -49,6 +49,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     final List<RequestFilter> filters;
     final SocketAddress clientAddress;
     final ContentsCache cache;
+    final StaticContentsManager staticContentsManager;
     volatile Boolean keepAlive;
     volatile boolean refuseOtherRequests;
     private final List<RequestHandler> pendingRequests = new CopyOnWriteArrayList<>();
@@ -58,7 +59,9 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         ConnectionsManager connectionsManager,
         List<RequestFilter> filters,
         ContentsCache cache,
-        SocketAddress clientAddress) {
+        SocketAddress clientAddress,
+        StaticContentsManager staticContentsManager) {
+        this.staticContentsManager = staticContentsManager;
         this.cache = cache;
         this.mapper = mapper;
         this.connectionsManager = connectionsManager;

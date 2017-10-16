@@ -30,6 +30,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.MapResult;
+import static nettyhttpproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
+import static nettyhttpproxy.server.StaticContentsManager.DEFAULT_NOT_FOUND;
 import nettyhttpproxy.server.config.ActionConfiguration;
 import nettyhttpproxy.server.config.BackendConfiguration;
 import nettyhttpproxy.server.config.BackendSelector;
@@ -38,6 +40,7 @@ import nettyhttpproxy.server.config.MatchAllRequestMatcher;
 import nettyhttpproxy.server.config.RequestMatcher;
 import nettyhttpproxy.server.config.RouteConfiguration;
 import nettyhttpproxy.server.config.RoutingKey;
+import nettyhttpproxy.server.config.URIRequestMatcher;
 
 /**
  * Standard Endpoint mapping
@@ -49,6 +52,8 @@ public class StandardEndpointMapper extends EndpointMapper {
     private final List<RouteConfiguration> routes = new ArrayList<>();
     private final Map<String, ActionConfiguration> actions = new HashMap<>();
     private final BackendSelector backendSelector;
+    private String defaultNotFoundAction = "not-found";
+    private String defaultInternalErrorAction = "internal-error";
 
     public StandardEndpointMapper(BackendSelector backendSelector) {
         this.backendSelector = backendSelector;
@@ -57,10 +62,33 @@ public class StandardEndpointMapper extends EndpointMapper {
     public void configure(Properties properties) throws ConfigurationNotValidException {
 
         LOG.info("configured build-in action id=proxy-all");
-        addAction(new ActionConfiguration("proxy-all", ActionConfiguration.TYPE_PROXY));
-        addAction(new ActionConfiguration("cache-if-possible", ActionConfiguration.TYPE_CACHE));
+        addAction(new ActionConfiguration("proxy-all", ActionConfiguration.TYPE_PROXY, null, -1));
+        addAction(new ActionConfiguration("cache-if-possible", ActionConfiguration.TYPE_CACHE, null, -1));
+        addAction(new ActionConfiguration("not-found", ActionConfiguration.TYPE_STATIC, DEFAULT_NOT_FOUND, 404));
+        addAction(new ActionConfiguration("internal-error", ActionConfiguration.TYPE_STATIC, DEFAULT_INTERNAL_SERVER_ERROR, 500));
 
-        for (int i = 0; i < 100; i++) {
+        this.defaultNotFoundAction = properties.getProperty("default.action.notfound", "not-found");
+        LOG.info("configured default.action.notfound=" + defaultNotFoundAction);
+        this.defaultInternalErrorAction = properties.getProperty("default.action.internalerror", "internal-error");
+        LOG.info("configured default.action.internalerror=" + defaultInternalErrorAction);
+
+        for (int i = 0; i < MAX_IDS; i++) {
+            String prefix = "action." + i + ".";
+            String id = properties.getProperty(prefix + "id", "");
+            if (!id.isEmpty()) {
+                boolean enabled = Boolean.parseBoolean(properties.getProperty(prefix + "enabled", "false"));
+                String action = properties.getProperty(prefix + "type", "proxy");
+                String file = properties.getProperty(prefix + "file", "");
+                int code = Integer.parseInt(properties.getProperty(prefix + "code", "-1"));
+                LOG.info("configured action " + id + " type=" + action + " enabled:" + enabled);
+                if (enabled) {
+                    ActionConfiguration config = new ActionConfiguration(id, action, file, code);
+                    addAction(config);
+                }
+            }
+        }
+
+        for (int i = 0; i < MAX_IDS; i++) {
             String prefix = "backend." + i + ".";
             String id = properties.getProperty(prefix + "id", "");
             if (!id.isEmpty()) {
@@ -74,20 +102,29 @@ public class StandardEndpointMapper extends EndpointMapper {
                 }
             }
         }
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < MAX_IDS; i++) {
             String prefix = "route." + i + ".";
             String id = properties.getProperty(prefix + "id", "");
             if (!id.isEmpty()) {
                 String action = properties.getProperty(prefix + "action", "");
                 boolean enabled = Boolean.parseBoolean(properties.getProperty(prefix + "enabled", "false"));
-                String match = properties.getProperty(prefix + "match", "all");
+                String match = properties.getProperty(prefix + "match", "all").trim();
+                int space = match.indexOf(' ');
+                String matchType = match;
+                if (space >= 0) {
+                    matchType = match.substring(0, space);
+                    match = match.substring(space + 1);
+                }
                 RequestMatcher matcher;
-                switch (match) {
+                switch (matchType) {
                     case "all":
                         matcher = new MatchAllRequestMatcher();
                         break;
+                    case "regexp":
+                        matcher = new URIRequestMatcher(match);
+                        break;
                     default:
-                        throw new ConfigurationNotValidException(prefix + "match can be only 'all' at the moment");
+                        throw new ConfigurationNotValidException(prefix + "match can be only 'all' and 'regexp' at the moment");
 
                 }
                 LOG.log(Level.INFO, "configured route {0} action: {1} enabled: {2} matcher: {3}", new Object[]{id, action, enabled, matcher});
@@ -96,6 +133,7 @@ public class StandardEndpointMapper extends EndpointMapper {
             }
         }
     }
+    private static final int MAX_IDS = 200;
     private static final Logger LOG = Logger.getLogger(StandardEndpointMapper.class.getName());
 
     private final class RandomBackendSelector implements BackendSelector {
@@ -143,11 +181,18 @@ public class StandardEndpointMapper extends EndpointMapper {
             if (matchResult != null) {
                 ActionConfiguration action = actions.get(route.getAction());
                 if (action == null) {
-                    LOG.info("no action " + route.getAction() + " -> not-found for " + request.uri());
+                    LOG.info("no action '" + route.getAction() + "' -> not-found for " + request.uri() + ", valid " + actions.keySet());
                     return MapResult.NOT_FOUND;
                 }
+
+                if (ActionConfiguration.TYPE_STATIC.equals(action.getType())) {
+                    return new MapResult(null, -1, MapResult.Action.STATIC)
+                        .setResource(action.getFile())
+                        .setErrorcode(action.getErrorcode());
+                }
+
                 List<String> selectedBackends = backendSelector.selectBackends(request, matchResult);
-//                LOG.info("selected " + selectedBackends + " backends for " + request.uri());
+                LOG.log(Level.FINEST, "selected {0} backends for {1}", new Object[]{selectedBackends, request.uri()});
                 for (String backendId : selectedBackends) {
                     switch (action.getType()) {
                         case ActionConfiguration.TYPE_PROXY: {

@@ -24,8 +24,11 @@ public class MapResult {
     public final String host;
     public final int port;
     public final Action action;
+    public int errorcode;
+    public String resource;
 
     public static final MapResult NOT_FOUND = new MapResult(null, 0, Action.NOTFOUND);
+    public static final MapResult INTERNAL_ERROR = new MapResult(null, 0, Action.INTERNAL_ERROR);
 
     public MapResult(String host, int port, Action action) {
         this.host = host;
@@ -33,16 +36,34 @@ public class MapResult {
         this.action = action;
     }
 
+    public int getErrorcode() {
+        return errorcode;
+    }
+
+    public MapResult setErrorcode(int errorcode) {
+        this.errorcode = errorcode;
+        return this;
+    }
+
+    public String getResource() {
+        return resource;
+    }
+
+    public MapResult setResource(String resource) {
+        this.resource = resource;
+        return this;
+    }
+
     @Override
     public String toString() {
-        return "MapResult{" + "host=" + host + ", port=" + port + ", action=" + action + '}';
+        return "MapResult{" + "host=" + host + ", port=" + port + ", action=" + action + ", errorcode=" + errorcode + ", resource=" + resource + '}';
     }
 
     public static enum Action {
         /**
          * Proxy the request, do not cache locally
          */
-        PROXY,        
+        PROXY,
         /**
          * Pipe and cache if possible
          */
@@ -52,9 +73,17 @@ public class MapResult {
          */
         NOTFOUND,
         /**
-         * Answer with debug info
+         * Internal error
          */
-        DEBUG
+        INTERNAL_ERROR,
+        /**
+         * Custom static message
+         */
+        STATIC,
+        /**
+         * Answer with system info
+         */
+        SYSTEM
     }
 
 }

@@ -26,13 +26,26 @@ public class ActionConfiguration {
 
     public static final String TYPE_PROXY = "proxy";
     public static final String TYPE_CACHE = "cache";
+    public static final String TYPE_STATIC = "static";
 
     private final String id;
     private final String type;
+    private final String file;
+    private final int errorcode;
 
-    public ActionConfiguration(String id, String type) {
+    public ActionConfiguration(String id, String type, String file, int errorcode) {
         this.id = id;
         this.type = type;
+        this.file = file;
+        this.errorcode = errorcode;
+    }
+
+    public int getErrorcode() {
+        return errorcode;
+    }
+
+    public String getFile() {
+        return file;
     }
 
     public String getId() {
@@ -41,6 +54,11 @@ public class ActionConfiguration {
 
     public String getType() {
         return type;
+    }
+
+    @Override
+    public String toString() {
+        return "ActionConfiguration{" + "id=" + id + ", type=" + type + ", file=" + file + ", errorcode=" + errorcode + '}';
     }
 
 }

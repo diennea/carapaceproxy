@@ -37,8 +37,6 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
-import static io.netty.handler.codec.http.HttpResponseStatus.CONTINUE;
-import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static io.netty.handler.codec.http.HttpStatusClass.SUCCESS;
 import io.netty.handler.codec.http.HttpUtil;
@@ -56,6 +54,7 @@ import nettyhttpproxy.client.EndpointConnection;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.client.EndpointNotAvailableException;
 import nettyhttpproxy.client.impl.EndpointConnectionImpl;
+import static nettyhttpproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
 import nettyhttpproxy.server.cache.ContentsCache;
 
 /**
@@ -88,24 +87,19 @@ public class RequestHandler {
         for (RequestFilter filter : filters) {
             filter.apply(request, connectionToClient);
         }
-//        LOG.log(Level.INFO, this + " Mapped " + request.uri() + " to " + action);
+        LOG.log(Level.FINER, "{0} Mapped {1} to {2}", new Object[]{this, request.uri(), action});
         switch (action.action) {
             case NOTFOUND:
-                if (HttpUtil.is100ContinueExpected(request)) {
-                    send100Continue();
-                }
-                return;
-            case DEBUG:
-                if (HttpUtil.is100ContinueExpected(request)) {
-                    send100Continue();
-                }
+            case INTERNAL_ERROR:
+            case SYSTEM:
+            case STATIC:
                 return;
             case PROXY:
                 try {
                     connectionToEndpoint = connectionToClient.connectionsManager.getConnection(new EndpointKey(action.host, action.port));
                     connectionToEndpoint.sendRequest(request, this);
                 } catch (EndpointNotAvailableException err) {
-                    LOG.info(this + " error on endpoint " + action + ": " + err);
+                    LOG.log(Level.INFO, "{0} error on endpoint {1}: {2}", new Object[]{this, action, err});
                     return;
                 }
                 return;
@@ -123,7 +117,7 @@ public class RequestHandler {
                     }
                     connectionToEndpoint.sendRequest(request, this);
                 } catch (EndpointNotAvailableException err) {
-                    LOG.info(this + " error on endpoint " + action + ": " + err);
+                    LOG.log(Level.INFO, "{0} error on endpoint {1}: {2}", new Object[]{this, action, err});
                     return;
                 }
                 return;
@@ -136,11 +130,13 @@ public class RequestHandler {
 
     void continueClientRequest(HttpContent httpContent) {
         if (cacheSender != null) {
-            LOG.severe(this + " swallow chunk " + httpContent + ", I am serving a cache content " + cacheReceiver);
+            LOG.log(Level.SEVERE, "{0} swallow chunk {1}, I am serving a cache content {2}", new Object[]{this, httpContent, cacheReceiver});
             return;
         }
         switch (action.action) {
-            case DEBUG:
+            case STATIC:
+                break;
+            case SYSTEM:
                 continueDebugMessage(httpContent, httpContent);
                 break;
             case PROXY:
@@ -167,13 +163,21 @@ public class RequestHandler {
 
         HttpContent httpContent = (HttpContent) trailer;
         switch (action.action) {
-            case DEBUG: {
+            case SYSTEM: {
                 startDebugMessage(request);
                 serveDebugMessage(httpContent, trailer, trailer);
                 break;
             }
             case NOTFOUND: {
                 serveNotFoundMessage();
+                break;
+            }
+            case INTERNAL_ERROR: {
+                serveInternalErrorMessage();
+                break;
+            }
+            case STATIC: {
+                serveStaticMessage();
                 break;
             }
             case CACHE:
@@ -193,8 +197,54 @@ public class RequestHandler {
     private final StringBuilder output = new StringBuilder();
 
     private void serveNotFoundMessage() {
-        FullHttpResponse response = new DefaultFullHttpResponse(
-            HTTP_1_1, NOT_FOUND);
+        MapResult fromDefault = connectionToClient.mapper.mapDefaultPageNotFound(request);
+        int code = 0;
+        String resource = null;
+        if (fromDefault != null) {
+            code = fromDefault.getErrorcode();
+            resource = fromDefault.getResource();
+        }
+        if (resource == null) {
+            resource = StaticContentsManager.DEFAULT_NOT_FOUND;
+        }
+        if (code <= 0) {
+            code = 404;
+        }
+
+        FullHttpResponse response = connectionToClient.staticContentsManager.buildResponse(code, resource);
+
+        if (!writeResponse(response)) {
+            // If keep-alive is off, close the connection once the content is fully written.
+            channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+        }
+    }
+
+    private void serveInternalErrorMessage() {
+        MapResult fromDefault = connectionToClient.mapper.mapDefaultInternalError(request);
+        int code = 0;
+        String resource = null;
+        if (fromDefault != null) {
+            code = fromDefault.getErrorcode();
+            resource = fromDefault.getResource();
+        }
+        if (resource == null) {
+            resource = StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
+        }
+        if (code <= 0) {
+            code = 500;
+        }
+
+        FullHttpResponse response = connectionToClient.staticContentsManager.buildResponse(code, resource);
+
+        if (!writeResponse(response)) {
+            // If keep-alive is off, close the connection once the content is fully written.
+            channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+        }
+    }
+
+    private void serveStaticMessage() {
+        FullHttpResponse response
+            = connectionToClient.staticContentsManager.buildResponse(action.errorcode, action.resource);
         if (!writeResponse(response)) {
             // If keep-alive is off, close the connection once the content is fully written.
             channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
@@ -274,7 +324,9 @@ public class RequestHandler {
         // Build the response object.
         if (keepAlive) {
             // Add 'Content-Length' header only for a keep-alive connection.
-            response.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+            if (response.content() != null) {
+                response.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+            }
             // Add keep alive header as per:
             // - http://www.w3.org/Protocols/HTTP/1.1/draft-ietf-http-v11-spec-01.html#Connection
             response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
@@ -288,18 +340,21 @@ public class RequestHandler {
         return keepAlive;
     }
 
-    private void send100Continue() {
-        FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, CONTINUE);
-        channelToClient.writeAndFlush(response, channelToClient.voidPromise());
-    }
-
     private void sendServiceNotAvailable() {
 //        LOG.info(this + " sendServiceNotAvailable due to " + cause + " to " + ctx);
-        FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, HttpResponseStatus.INTERNAL_SERVER_ERROR);
+        FullHttpResponse response
+            = connectionToClient.staticContentsManager.buildResponse(500, DEFAULT_INTERNAL_SERVER_ERROR);
+        if (!writeResponse(response)) {
+            // If keep-alive is off, close the connection once the content is fully written.
+            channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+            releaseConnectionToEndpoint(false);
+            lastHttpContentSent();
+        }
         channelToClient.writeAndFlush(response).addListener(new GenericFutureListener<Future<? super Void>>() {
             @Override
             public void operationComplete(Future<? super Void> future) throws Exception {
-                LOG.info(this + " sendServiceNotAvailable result: " + future.isSuccess() + ", cause " + future.cause());
+                LOG.log(Level.INFO, "{0} sendServiceNotAvailable result: {1}, cause {2}",
+                    new Object[]{this, future.isSuccess(), future.cause()});
                 channelToClient.close();
                 releaseConnectionToEndpoint(false);
                 lastHttpContentSent();

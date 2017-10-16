@@ -67,6 +67,7 @@ public class HttpProxyServer implements AutoCloseable {
     private final List<RequestFilter> filters;
     private final ConnectionsManager connectionsManager;
     private final ContentsCache cache;
+    private final StaticContentsManager staticContentsManager = new StaticContentsManager();
 
     private final List<NetworkListenerConfiguration> listeners = new ArrayList<>();
     private final List<Channel> listeningChannels = new ArrayList<>();
@@ -136,7 +137,7 @@ public class HttpProxyServer implements AutoCloseable {
                             channel.pipeline().addLast(new HttpResponseEncoder());
                             channel.pipeline().addLast(
                                 new ClientConnectionHandler(mapper, connectionsManager,
-                                    filters, cache, channel.remoteAddress()));
+                                    filters, cache, channel.remoteAddress(), staticContentsManager));
 
                         }
                     })
@@ -175,6 +176,7 @@ public class HttpProxyServer implements AutoCloseable {
             connectionsManager.close();
         }
         cache.close();
+        staticContentsManager.close();
     }
 
     public ConnectionsManager getConnectionsManager() {

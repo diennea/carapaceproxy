@@ -43,7 +43,7 @@ public class TestEndpointMapper extends EndpointMapper {
         if (uri.contains("not-found")) {
             return MapResult.NOT_FOUND;
         } else if (uri.contains("debug")) {
-            return new MapResult(null, 0, MapResult.Action.DEBUG);
+            return new MapResult(null, 0, MapResult.Action.SYSTEM);
         } else if (cacheAll) {
             return new MapResult(host, port, MapResult.Action.CACHE);
         } else {

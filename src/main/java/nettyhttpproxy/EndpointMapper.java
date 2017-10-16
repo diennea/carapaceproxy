@@ -31,6 +31,14 @@ public abstract class EndpointMapper {
 
     public abstract MapResult map(HttpRequest request);
 
+    public MapResult mapDefaultInternalError(HttpRequest request) {
+        return MapResult.INTERNAL_ERROR;
+    }
+
+    public MapResult mapDefaultPageNotFound(HttpRequest request) {
+        return MapResult.NOT_FOUND;
+    }
+
     public void endpointFailed(EndpointKey key, Throwable error) {
     }
 

@@ -39,7 +39,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -297,7 +296,7 @@ public class ContentsCache {
         }
 
         public void abort() {
-            LOG.info("Aborting cache receiver for " + key);
+            LOG.log(Level.FINEST, "Aborting cache receiver for {0}", key);
             content.clear();
         }
 
@@ -319,7 +318,7 @@ public class ContentsCache {
                 content.lastModified = lastModified;
             }
             if (notReallyCachable) {
-                LOG.info(key + " rejecting non-cachable response");
+                LOG.log(Level.FINEST, "{0} rejecting non-cachable response", key);
                 abort();
                 return;
             }
