@@ -344,12 +344,7 @@ public class RequestHandler {
 //        LOG.info(this + " sendServiceNotAvailable due to " + cause + " to " + ctx);
         FullHttpResponse response
             = connectionToClient.staticContentsManager.buildResponse(500, DEFAULT_INTERNAL_SERVER_ERROR);
-        if (!writeResponse(response)) {
-            // If keep-alive is off, close the connection once the content is fully written.
-            channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
-            releaseConnectionToEndpoint(false);
-            lastHttpContentSent();
-        }
+        
         channelToClient.writeAndFlush(response).addListener(new GenericFutureListener<Future<? super Void>>() {
             @Override
             public void operationComplete(Future<? super Void> future) throws Exception {

@@ -42,7 +42,7 @@ import org.junit.rules.TemporaryFolder;
 public class RestartEndpointTest {
 
     // in order to be restartable this must be fixed
-    private int tryDiscoverEmptyPort() {
+    private static int tryDiscoverEmptyPort() {
         try (ServerSocket s = new ServerSocket();) {
             s.bind(null);
             return s.getLocalPort();
@@ -79,6 +79,53 @@ public class RestartEndpointTest {
                 assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
                 assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
                 wireMockRule.stop();
+                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                System.out.println("statusline:" + resp.getStatusLine());
+                assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
+            }
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                wireMockRule.start();
+                // ensure that wiremock started again
+                IOUtils.toByteArray(new URL("http://localhost:" + wireMockRule.port() + "/index.html"));
+                System.out.println("Server at " + "http://localhost:" + wireMockRule.port() + "/index.html" + " is UP an running !");
+
+                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
+            }
+
+            stats = server.getConnectionsManager().getStats();
+        }
+
+        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+
+    }
+
+    @Test
+    public void testClientsSendsRequestOnDownBackendAtSendRequestWithCache() throws Exception {
+        stubFor(get(urlEqualTo("/index.html"))
+            .willReturn(aResponse()
+                .withStatus(200)
+                .withHeader("Content-Type", "text/html")
+                .withBody("it <b>works</b> !!")
+                .withHeader("Content-Length", "it <b>works</b> !!".getBytes(StandardCharsets.UTF_8).length + "")
+            ));
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
+            server.start();
+            int port = server.getLocalPort();
+
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
+                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
+                wireMockRule.stop();
+                // content is cached
+                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
+
+                server.getCache().clear();
+                
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 System.out.println("statusline:" + resp.getStatusLine());
                 assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());

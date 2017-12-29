@@ -147,6 +147,12 @@ public class ContentsCache {
         return System.currentTimeMillis() + DEFAULT_TTL;
     }
 
+    // only for tests
+    public void clear() {
+        cache.values().forEach(ContentPayload::clear);
+        cache.clear();
+    }
+
     public class ContentSender {
 
         private final ContentKey key;
