@@ -122,7 +122,7 @@ public class SimpleHTTPProxyTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer(mapper);) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addListener(new NetworkListenerConfiguration("localhost", 0, true,
                 certificate, "testproxy",
                 null));

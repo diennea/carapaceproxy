@@ -110,6 +110,29 @@ public class CacheTest {
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
     }
+    @Test
+    public void testBootSslRelativeCertificatePath() throws Exception {
+
+        String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+
+        stubFor(get(urlEqualTo("/index.html"))
+            .willReturn(aResponse()
+                .withStatus(200)
+                .withHeader("Content-Type", "text/html")
+                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                .withBody("it <b>works</b> !!")));
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
+            server.addListener(new NetworkListenerConfiguration("localhost", 0, true,
+                "localhost.p12", "testproxy",
+                null));
+            server.start();
+        }
+    }
 
     @Test
     public void testServeFromCacheSsl() throws Exception {
@@ -127,7 +150,7 @@ public class CacheTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer(mapper);) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addListener(new NetworkListenerConfiguration("localhost", 0, true,
                 certificate, "testproxy",
                 null));

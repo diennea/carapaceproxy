@@ -34,6 +34,7 @@ public class Launcher {
                 configFile = args[0];
             }
             File file = new File(configFile).getAbsoluteFile();
+            File basePath = file.getParentFile().getParentFile();
             System.out.println("Reading configuration from " + file.getAbsolutePath());
             Properties properties = new Properties();
             try (FileInputStream i = new FileInputStream(file)) {
@@ -41,7 +42,7 @@ public class Launcher {
             }
             StandardEndpointMapper mapper = new StandardEndpointMapper();
             mapper.configure(properties);
-            HttpProxyServer server = new HttpProxyServer(mapper);
+            HttpProxyServer server = new HttpProxyServer(mapper, basePath);
             server.configure(properties);
             server.start();
             System.out.println("HTTP Proxy server started");

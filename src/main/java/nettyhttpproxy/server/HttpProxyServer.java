@@ -67,20 +67,22 @@ public class HttpProxyServer implements AutoCloseable {
     private final List<RequestFilter> filters;
     private final ConnectionsManager connectionsManager;
     private final ContentsCache cache;
+    private final File basePath;
     private final StaticContentsManager staticContentsManager = new StaticContentsManager();
 
     private final List<NetworkListenerConfiguration> listeners = new ArrayList<>();
     private final List<Channel> listeningChannels = new ArrayList<>();
 
-    public HttpProxyServer(EndpointMapper mapper) {
+    public HttpProxyServer(EndpointMapper mapper, File basePath) {
         this.mapper = mapper;
+        this.basePath = basePath;
         this.connectionsManager = new ConnectionsManagerImpl(10, 120000, 5000);
         this.filters = new ArrayList<>();
         this.cache = new ContentsCache();
     }
 
     public HttpProxyServer(String host, int port, EndpointMapper mapper) {
-        this(mapper);
+        this(mapper, new File(".").getAbsoluteFile());
         listeners.add(new NetworkListenerConfiguration(host, port));
     }
 
@@ -103,7 +105,9 @@ public class HttpProxyServer implements AutoCloseable {
                 if (listener.isSsl()) {
                     String sslCertFilePassword = listener.getSslCertificatePassword();
                     String sslCiphers = listener.getSslCiphers();
-                    File sslCertFile = new File(listener.getSslCertificateFile()).getAbsoluteFile();
+                    String certificateFile = listener.getSslCertificateFile();
+                    File sslCertFile = certificateFile.startsWith("/") ? new File(listener.getSslCertificateFile()) : new File(basePath, listener.getSslCertificateFile());
+                    sslCertFile = sslCertFile.getAbsoluteFile();
                     LOG.log(Level.SEVERE, "start SSL with certificate " + sslCertFile);
                     try {
                         KeyManagerFactory keyFactory = initKeyManagerFactory("PKCS12", sslCertFile, sslCertFilePassword);
@@ -114,11 +118,11 @@ public class HttpProxyServer implements AutoCloseable {
                             ciphers = Arrays.asList(sslCiphers.split(","));
                         }
                         sslCtx = SslContextBuilder
-                            .forServer(keyFactory)
-                            .sslProvider(SslProvider.OPENSSL)
-                            .ciphers(ciphers).build();
+                                .forServer(keyFactory)
+                                .sslProvider(SslProvider.OPENSSL)
+                                .ciphers(ciphers).build();
                     } catch (CertificateException | IOException | KeyStoreException | SecurityException
-                        | NoSuchAlgorithmException | UnrecoverableKeyException err) {
+                            | NoSuchAlgorithmException | UnrecoverableKeyException err) {
                         throw new ConfigurationNotValidException(err);
                     };
                 } else {
@@ -126,23 +130,23 @@ public class HttpProxyServer implements AutoCloseable {
                 }
                 ServerBootstrap b = new ServerBootstrap();
                 b.group(bossGroup, workerGroup)
-                    .channel(EpollServerSocketChannel.class)
-                    .childHandler(new ChannelInitializer<SocketChannel>() {
-                        @Override
-                        public void initChannel(SocketChannel channel) throws Exception {
-                            if (listener.isSsl()) {
-                                channel.pipeline().addLast(sslCtx.newHandler(channel.alloc()));
-                            }
-                            channel.pipeline().addLast(new HttpRequestDecoder());
-                            channel.pipeline().addLast(new HttpResponseEncoder());
-                            channel.pipeline().addLast(
-                                new ClientConnectionHandler(mapper, connectionsManager,
-                                    filters, cache, channel.remoteAddress(), staticContentsManager));
+                        .channel(EpollServerSocketChannel.class)
+                        .childHandler(new ChannelInitializer<SocketChannel>() {
+                            @Override
+                            public void initChannel(SocketChannel channel) throws Exception {
+                                if (listener.isSsl()) {
+                                    channel.pipeline().addLast(sslCtx.newHandler(channel.alloc()));
+                                }
+                                channel.pipeline().addLast(new HttpRequestDecoder());
+                                channel.pipeline().addLast(new HttpResponseEncoder());
+                                channel.pipeline().addLast(
+                                        new ClientConnectionHandler(mapper, connectionsManager,
+                                                filters, cache, channel.remoteAddress(), staticContentsManager));
 
-                        }
-                    })
-                    .option(ChannelOption.SO_BACKLOG, 128)
-                    .childOption(ChannelOption.SO_KEEPALIVE, true);
+                            }
+                        })
+                        .option(ChannelOption.SO_BACKLOG, 128)
+                        .childOption(ChannelOption.SO_KEEPALIVE, true);
                 listeningChannels.add(b.bind(listener.getHost(), listener.getPort()).sync().channel());
             }
             cache.start();
@@ -188,18 +192,18 @@ public class HttpProxyServer implements AutoCloseable {
     }
 
     private KeyManagerFactory initKeyManagerFactory(String keyStoreType, File keyStoreLocation,
-        String keyStorePassword) throws SecurityException, KeyStoreException, NoSuchAlgorithmException,
-        CertificateException, IOException, UnrecoverableKeyException {
+            String keyStorePassword) throws SecurityException, KeyStoreException, NoSuchAlgorithmException,
+            CertificateException, IOException, UnrecoverableKeyException {
         KeyStore ks = loadKeyStore(keyStoreType, keyStoreLocation, keyStorePassword);
         KeyManagerFactory kmf = KeyManagerFactory
-            .getInstance(KeyManagerFactory.getDefaultAlgorithm());
+                .getInstance(KeyManagerFactory.getDefaultAlgorithm());
         kmf.init(ks, keyStorePassword.toCharArray());
         return kmf;
     }
 
     private TrustManagerFactory initTrustManagerFactory(String trustStoreType, File trustStoreLocation,
-        String trustStorePassword)
-        throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException, SecurityException {
+            String trustStorePassword)
+            throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException, SecurityException {
         TrustManagerFactory tmf;
 
         // Initialize trust store
@@ -210,10 +214,10 @@ public class HttpProxyServer implements AutoCloseable {
         return tmf;
     }
 
-    private KeyStore loadKeyStore(String keyStoreType, File keyStoreLocation, String keyStorePassword)
-        throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException {
+    private static KeyStore loadKeyStore(String keyStoreType, File keyStoreLocation, String keyStorePassword)
+            throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException {
         KeyStore ks = KeyStore.getInstance(keyStoreType);
-        try (FileInputStream in = new FileInputStream(keyStoreLocation)) {
+        try ( FileInputStream in = new FileInputStream(keyStoreLocation)) {
             ks.load(in, keyStorePassword.trim().toCharArray());
         }
         return ks;
