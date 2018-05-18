@@ -80,6 +80,7 @@ public class HttpProxyServer implements AutoCloseable {
     private final List<Channel> listeningChannels = new ArrayList<>();
 
     private StatsProvider statsProvider;
+    private PropertiesConfiguration statsProviderConfig = new PropertiesConfiguration();
 
     public HttpProxyServer(EndpointMapper mapper, File basePath) {
         this.mapper = mapper;
@@ -170,11 +171,6 @@ public class HttpProxyServer implements AutoCloseable {
     }
 
     public void startMetrics() throws ConfigurationException {
-        PropertiesConfiguration statsProviderConfig = new PropertiesConfiguration();
-        File config = new File(basePath, "conf/metrics.properties");
-        if (config.isFile()) {
-            statsProviderConfig.load(config);
-        }
         statsProvider.start(statsProviderConfig);
     }
 
@@ -249,6 +245,9 @@ public class HttpProxyServer implements AutoCloseable {
         for (int i = 0; i < 100; i++) {
             tryConfigureListener(i, properties);
             tryConfigureFilter(i, properties);
+        }
+        for (Object key : properties.keySet()) {
+            statsProviderConfig.setProperty(key + "", properties.get(key));
         }
     }
 
