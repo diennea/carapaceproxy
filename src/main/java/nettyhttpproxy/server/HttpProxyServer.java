@@ -56,6 +56,11 @@ import nettyhttpproxy.server.cache.ContentsCache;
 import nettyhttpproxy.server.config.ConfigurationNotValidException;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
 import nettyhttpproxy.server.mapper.XForwardedForRequestFilter;
+import org.apache.bookkeeper.stats.*;
+import org.apache.bookkeeper.stats.prometheus.*;
+import org.apache.commons.configuration.BaseConfiguration;
+import org.apache.commons.configuration.ConfigurationException;
+import org.apache.commons.configuration.PropertiesConfiguration;
 
 public class HttpProxyServer implements AutoCloseable {
 
@@ -67,18 +72,23 @@ public class HttpProxyServer implements AutoCloseable {
     private final List<RequestFilter> filters;
     private final ConnectionsManager connectionsManager;
     private final ContentsCache cache;
+    private final StatsLogger mainLogger;
     private final File basePath;
     private final StaticContentsManager staticContentsManager = new StaticContentsManager();
 
     private final List<NetworkListenerConfiguration> listeners = new ArrayList<>();
     private final List<Channel> listeningChannels = new ArrayList<>();
 
+    private StatsProvider statsProvider;
+
     public HttpProxyServer(EndpointMapper mapper, File basePath) {
         this.mapper = mapper;
         this.basePath = basePath;
-        this.connectionsManager = new ConnectionsManagerImpl(10, 120000, 5000);
+        this.statsProvider = new PrometheusMetricsProvider();
+        this.mainLogger = statsProvider.getStatsLogger("");
+        this.connectionsManager = new ConnectionsManagerImpl(10, 120000, 5000, mainLogger);
         this.filters = new ArrayList<>();
-        this.cache = new ContentsCache();
+        this.cache = new ContentsCache(mainLogger);
     }
 
     public HttpProxyServer(String host, int port, EndpointMapper mapper) {
@@ -140,8 +150,10 @@ public class HttpProxyServer implements AutoCloseable {
                                 channel.pipeline().addLast(new HttpRequestDecoder());
                                 channel.pipeline().addLast(new HttpResponseEncoder());
                                 channel.pipeline().addLast(
-                                        new ClientConnectionHandler(mapper, connectionsManager,
-                                                filters, cache, channel.remoteAddress(), staticContentsManager));
+                                        new ClientConnectionHandler(mainLogger, mapper,
+                                                connectionsManager,
+                                                filters, cache,
+                                                channel.remoteAddress(), staticContentsManager));
 
                             }
                         })
@@ -157,6 +169,15 @@ public class HttpProxyServer implements AutoCloseable {
 
     }
 
+    public void startMetrics() throws ConfigurationException {
+        PropertiesConfiguration statsProviderConfig = new PropertiesConfiguration();
+        File config = new File(basePath, "conf/metrics.properties");
+        if (config.isFile()) {
+            statsProviderConfig.load(config);
+        }
+        statsProvider.start(statsProviderConfig);
+    }
+
     public int getLocalPort() {
         for (Channel c : listeningChannels) {
             InetSocketAddress addr = (InetSocketAddress) c.localAddress();
@@ -167,6 +188,7 @@ public class HttpProxyServer implements AutoCloseable {
 
     @Override
     public void close() {
+        statsProvider.stop();
         for (Channel channel : listeningChannels) {
             channel.close().syncUninterruptibly();
         }
@@ -217,7 +239,7 @@ public class HttpProxyServer implements AutoCloseable {
     private static KeyStore loadKeyStore(String keyStoreType, File keyStoreLocation, String keyStorePassword)
             throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException {
         KeyStore ks = KeyStore.getInstance(keyStoreType);
-        try ( FileInputStream in = new FileInputStream(keyStoreLocation)) {
+        try (FileInputStream in = new FileInputStream(keyStoreLocation)) {
             ks.load(in, keyStorePassword.trim().toCharArray());
         }
         return ks;

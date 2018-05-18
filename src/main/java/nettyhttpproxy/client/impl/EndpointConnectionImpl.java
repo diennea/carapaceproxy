@@ -36,6 +36,7 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
@@ -44,6 +45,8 @@ import nettyhttpproxy.EndpointStats;
 import nettyhttpproxy.client.EndpointConnection;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.server.RequestHandler;
+import org.apache.bookkeeper.stats.OpStatsLogger;
+import org.apache.bookkeeper.stats.StatsLogger;
 
 public class EndpointConnectionImpl implements EndpointConnection {
 
@@ -61,8 +64,12 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private volatile ChannelHandlerContext contextToEndpoint;
     private volatile boolean valid;
     private volatile RequestHandler clientSidePeerHandler;
+    private final StatsLogger endpointStatsLogger;
+    private final OpStatsLogger connectionStats;
 
     public EndpointConnectionImpl(EndpointKey key, ConnectionsManagerImpl parent, EndpointStats endpointstats) {
+        this.endpointStatsLogger = parent.mainLogger.scope(key.getHost() + "_" + key.getPort());
+        this.connectionStats = endpointStatsLogger.getOpStatsLogger("connections");
         this.key = key;
         this.parent = parent;
         this.valid = true;
@@ -81,16 +88,17 @@ public class EndpointConnectionImpl implements EndpointConnection {
 //            LOG.log(Level.INFO, "Connection {3} Already connected to {0}, channel {1}, pipeline {2}", new Object[]{key, channelToEndpoint, channelToEndpoint.pipeline(), id});
             return channelToEndpoint.newSucceededFuture();
         }
+        long now = System.nanoTime();
         Bootstrap b = new Bootstrap();
         b.group(parent.getGroup())
-            .channel(NioSocketChannel.class)
-            .handler(new ChannelInitializer<SocketChannel>() {
-                @Override
-                public void initChannel(SocketChannel ch) throws Exception {
-                    ch.pipeline().addLast("client-codec", new HttpClientCodec());
-                    ch.pipeline().addLast(new ReadEndpointResponseHandler());
-                }
-            });
+                .channel(NioSocketChannel.class)
+                .handler(new ChannelInitializer<SocketChannel>() {
+                    @Override
+                    public void initChannel(SocketChannel ch) throws Exception {
+                        ch.pipeline().addLast("client-codec", new HttpClientCodec());
+                        ch.pipeline().addLast(new ReadEndpointResponseHandler());
+                    }
+                });
 
         final ChannelFuture connectFuture = b.connect(key.getHost(), key.getPort());
 
@@ -98,6 +106,9 @@ public class EndpointConnectionImpl implements EndpointConnection {
             if (future.isSuccess()) {
                 endpointstats.getTotalConnections().incrementAndGet();
                 endpointstats.getOpenConnections().incrementAndGet();
+                connectionStats.registerSuccessfulEvent(System.nanoTime() - now, TimeUnit.NANOSECONDS);
+            } else {
+                connectionStats.registerFailedEvent(System.nanoTime() - now, TimeUnit.NANOSECONDS);
             }
         });
         return connectFuture;
@@ -284,10 +295,10 @@ public class EndpointConnectionImpl implements EndpointConnection {
 //                    LOG.log(Level.INFO, "proxying header " + entry.getKey() + ": " + entry.getValue());
 //                });
                 clientSidePeerHandler.receivedFromRemote(new DefaultHttpResponse(f.protocolVersion(),
-                    f.status(), f.headers()));
+                        f.status(), f.headers()));
             } else {
                 LOG.log(Level.SEVERE, "unknown message type " + msg.getClass(), new Exception("unknown message type " + msg.getClass())
-                    .fillInStackTrace());
+                        .fillInStackTrace());
             }
 
         }

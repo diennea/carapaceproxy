@@ -43,6 +43,8 @@ import java.util.function.BiFunction;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.server.RequestHandler;
+import org.apache.bookkeeper.stats.Counter;
+import org.apache.bookkeeper.stats.StatsLogger;
 
 /**
  * Keeps contents in cache
@@ -53,10 +55,15 @@ public class ContentsCache {
 
     private final ConcurrentMap<ContentKey, ContentPayload> cache = new ConcurrentHashMap<>();
     private final CacheStats stats = new CacheStats();
+    private final Counter cacheHits;
+    private final Counter cacheMisses;
     private final ScheduledExecutorService threadPool;
     private static final long DEFAULT_TTL = 1000 * 60 * 60;
 
-    public ContentsCache() {
+    public ContentsCache(StatsLogger mainLogger) {
+        StatsLogger cacheScope = mainLogger.scope("cache");
+        cacheHits = cacheScope.getCounter("hits");
+        cacheMisses = cacheScope.getCounter("misses");
         this.threadPool = Executors.newSingleThreadScheduledExecutor();
     }
 
@@ -196,8 +203,10 @@ public class ContentsCache {
         });
         stats.update(cached != null);
         if (cached == null) {
+            cacheMisses.inc();
             return null;
         }
+        cacheHits.inc();
         return new ContentSender(key, cached);
 
     }

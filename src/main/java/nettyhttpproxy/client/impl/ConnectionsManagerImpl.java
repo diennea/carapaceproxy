@@ -25,7 +25,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.EndpointStats;
 import nettyhttpproxy.client.ConnectionsManager;
@@ -33,6 +32,7 @@ import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointConnection;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.client.EndpointNotAvailableException;
+import org.apache.bookkeeper.stats.StatsLogger;
 import org.apache.commons.pool2.KeyedPooledObjectFactory;
 import org.apache.commons.pool2.PooledObject;
 import org.apache.commons.pool2.impl.DefaultPooledObject;
@@ -53,6 +53,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     private final int idleTimeout;
     private final ConcurrentHashMap<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
     private final EventLoopGroup group;
+    final StatsLogger mainLogger;
 
     void returnConnection(EndpointConnectionImpl con) {
 //        LOG.log(Level.SEVERE, "returnConnection:" + con);
@@ -96,7 +97,8 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     }
 
-    public ConnectionsManagerImpl(int maxConnectionsPerEndpoint, int idleTimeout, int borrowTimeout) {
+    public ConnectionsManagerImpl(int maxConnectionsPerEndpoint, int idleTimeout, int borrowTimeout, StatsLogger statsLogger) {
+        this.mainLogger = statsLogger.scope("outbound");
         this.maxConnectionsPerEndpoint = maxConnectionsPerEndpoint;
         this.idleTimeout = idleTimeout;
         this.borrowTimeout = borrowTimeout;
@@ -127,7 +129,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         }
     }
     private static final Logger LOG = Logger.getLogger(ConnectionsManagerImpl.class
-        .getName());
+            .getName());
 
     @Override
     public void close() {

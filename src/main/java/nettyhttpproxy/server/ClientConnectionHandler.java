@@ -28,12 +28,15 @@ import io.netty.handler.codec.http.LastHttpContent;
 import java.net.SocketAddress;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.client.impl.EndpointConnectionImpl;
 import nettyhttpproxy.server.cache.ContentsCache;
+import org.apache.bookkeeper.stats.OpStatsLogger;
+import org.apache.bookkeeper.stats.StatsLogger;
 
 public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object> {
 
@@ -44,29 +47,35 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     private final AtomicLong requestIdGenerator = new AtomicLong();
 
     final EndpointMapper mapper;
-
+    final StatsLogger mainLogger;
+    final OpStatsLogger processedRequestsStats;
     final ConnectionsManager connectionsManager;
     final List<RequestFilter> filters;
     final SocketAddress clientAddress;
     final ContentsCache cache;
     final StaticContentsManager staticContentsManager;
+    final long connectionStartsTs;
     volatile Boolean keepAlive;
     volatile boolean refuseOtherRequests;
     private final List<RequestHandler> pendingRequests = new CopyOnWriteArrayList<>();
 
     public ClientConnectionHandler(
-        EndpointMapper mapper,
-        ConnectionsManager connectionsManager,
-        List<RequestFilter> filters,
-        ContentsCache cache,
-        SocketAddress clientAddress,
-        StaticContentsManager staticContentsManager) {
+            StatsLogger mainLogger,
+            EndpointMapper mapper,
+            ConnectionsManager connectionsManager,
+            List<RequestFilter> filters,
+            ContentsCache cache,
+            SocketAddress clientAddress,
+            StaticContentsManager staticContentsManager) {
+        this.mainLogger = mainLogger;
+        this.processedRequestsStats = mainLogger.getOpStatsLogger("requests");
         this.staticContentsManager = staticContentsManager;
         this.cache = cache;
         this.mapper = mapper;
         this.connectionsManager = connectionsManager;
         this.filters = filters;
         this.clientAddress = clientAddress;
+        this.connectionStartsTs = System.nanoTime();
     }
 
     public SocketAddress getClientAddress() {
@@ -94,7 +103,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         if (msg instanceof HttpRequest) {
             HttpRequest request = (HttpRequest) msg;
             RequestHandler currentRequest = new RequestHandler(requestIdGenerator.incrementAndGet(),
-                request, filters, this, ctx);
+                    request, filters, this, ctx);
             addPendingRequest(currentRequest);
             currentRequest.start();
         } else if (msg instanceof LastHttpContent) {
@@ -102,6 +111,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             try {
                 RequestHandler currentRequest = pendingRequests.get(0);
                 currentRequest.clientRequestFinished(trailer);
+                processedRequestsStats.registerSuccessfulEvent(System.nanoTime() - connectionStartsTs, TimeUnit.NANOSECONDS);
             } catch (java.lang.ArrayIndexOutOfBoundsException noMorePendingRequests) {
                 LOG.info(this + " swallow " + msg + ", no more pending requests");
                 refuseOtherRequests = true;

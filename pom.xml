@@ -22,6 +22,16 @@
             <groupId>io.netty</groupId>
             <artifactId>netty-all</artifactId>
             <version>${netty.version}</version>
+        </dependency>        
+        <dependency>
+            <groupId>org.apache.bookkeeper.stats</groupId>
+            <artifactId>bookkeeper-stats-api</artifactId>
+            <version>${bookkeeper.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.bookkeeper.stats</groupId>
+            <artifactId>prometheus-metrics-provider</artifactId>
+            <version>${bookkeeper.version}</version>
         </dependency>
         <dependency>
             <groupId>io.netty</groupId>
@@ -61,26 +71,22 @@
         <dependency>
             <groupId>org.eclipse.jetty</groupId>
             <artifactId>jetty-server</artifactId>
-            <version>${jetty.version}</version>
-            <scope>test</scope>
+            <version>${jetty.version}</version>            
         </dependency>
         <dependency>
             <groupId>org.eclipse.jetty</groupId>
             <artifactId>jetty-webapp</artifactId>
-            <version>${jetty.version}</version>
-            <scope>test</scope>
+            <version>${jetty.version}</version>            
         </dependency>
         <dependency>
             <groupId>org.eclipse.jetty</groupId>
             <artifactId>jetty-servlet</artifactId>
-            <version>${jetty.version}</version>
-            <scope>test</scope>
+            <version>${jetty.version}</version>            
         </dependency>        
         <dependency>
             <groupId>org.eclipse.jetty</groupId>
             <artifactId>jetty-util</artifactId>
-            <version>${jetty.version}</version>
-            <scope>test</scope>
+            <version>${jetty.version}</version>            
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -157,6 +163,7 @@
         </plugins>            
     </build>
     <properties>
+        <bookkeeper.version>4.7.0</bookkeeper.version>
         <netty.version>4.1.25.Final</netty.version>
         <netty.ssl.version>2.0.8.Final</netty.ssl.version>
         <jetty.version>9.4.8.v20171121</jetty.version>

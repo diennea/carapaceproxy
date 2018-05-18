@@ -45,7 +45,8 @@ public class Launcher {
             HttpProxyServer server = new HttpProxyServer(mapper, basePath);
             server.configure(properties);
             server.start();
-            System.out.println("HTTP Proxy server started");
+            server.startMetrics();
+            System.out.println("HTTP Proxy server started, pid: "+java.lang.management.ManagementFactory.getRuntimeMXBean().getName());
             Thread.sleep(Integer.MAX_VALUE);
         } catch (Exception ex) {
             ex.printStackTrace();
