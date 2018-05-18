@@ -74,7 +74,7 @@ public class RequestHandler {
     private final ChannelHandlerContext channelToClient;
 
     public RequestHandler(long id, HttpRequest request, List<RequestFilter> filters,
-        ClientConnectionHandler parent, ChannelHandlerContext channelToClient) {
+            ClientConnectionHandler parent, ChannelHandlerContext channelToClient) {
         this.id = id;
         this.request = request;
         this.connectionToClient = parent;
@@ -147,6 +147,8 @@ public class RequestHandler {
                 }
                 connectionToEndpoint.continueRequest(httpContent.retain());
                 break;
+            default:
+                throw new IllegalStateException("not yet implemented");
         }
     }
 
@@ -244,7 +246,7 @@ public class RequestHandler {
 
     private void serveStaticMessage() {
         FullHttpResponse response
-            = connectionToClient.staticContentsManager.buildResponse(action.errorcode, action.resource);
+                = connectionToClient.staticContentsManager.buildResponse(action.errorcode, action.resource);
         if (!writeResponse(response)) {
             // If keep-alive is off, close the connection once the content is fully written.
             channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
@@ -254,8 +256,8 @@ public class RequestHandler {
     private void serveDebugMessage(HttpContent httpContent, Object msg, LastHttpContent trailer) {
         continueDebugMessage(httpContent, msg);
         FullHttpResponse response = new DefaultFullHttpResponse(
-            HTTP_1_1, trailer.decoderResult().isSuccess() ? OK : BAD_REQUEST,
-            Unpooled.copiedBuffer(output.toString(), CharsetUtil.UTF_8));
+                HTTP_1_1, trailer.decoderResult().isSuccess() ? OK : BAD_REQUEST,
+                Unpooled.copiedBuffer(output.toString(), CharsetUtil.UTF_8));
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8");
         if (!writeResponse(response)) {
             // If keep-alive is off, close the connection once the content is fully written.
@@ -343,13 +345,13 @@ public class RequestHandler {
     private void sendServiceNotAvailable() {
 //        LOG.info(this + " sendServiceNotAvailable due to " + cause + " to " + ctx);
         FullHttpResponse response
-            = connectionToClient.staticContentsManager.buildResponse(500, DEFAULT_INTERNAL_SERVER_ERROR);
-        
+                = connectionToClient.staticContentsManager.buildResponse(500, DEFAULT_INTERNAL_SERVER_ERROR);
+
         channelToClient.writeAndFlush(response).addListener(new GenericFutureListener<Future<? super Void>>() {
             @Override
             public void operationComplete(Future<? super Void> future) throws Exception {
                 LOG.log(Level.INFO, "{0} sendServiceNotAvailable result: {1}, cause {2}",
-                    new Object[]{this, future.isSuccess(), future.cause()});
+                        new Object[]{this, future.isSuccess(), future.cause()});
                 channelToClient.close();
                 releaseConnectionToEndpoint(false);
                 lastHttpContentSent();
@@ -486,7 +488,7 @@ public class RequestHandler {
                 newHeaders.set("Expires", new java.util.Date(payload.getExpiresTs()));
                 newHeaders.add("X-Cached", "yes; ts=" + payload.getCreationTs());
                 FullHttpResponse resp = new DefaultFullHttpResponse(HTTP_1_1, HttpResponseStatus.NOT_MODIFIED,
-                    Unpooled.EMPTY_BUFFER, newHeaders, new DefaultHttpHeaders());
+                        Unpooled.EMPTY_BUFFER, newHeaders, new DefaultHttpHeaders());
                 object = resp;
                 notModified = true;
             } else {
@@ -515,19 +517,19 @@ public class RequestHandler {
         HttpObject _object = object;
 
         channelToClient.writeAndFlush(_object)
-            .addListener((g) -> {
-                if (isLastHttpContent || notModified) {
-                    lastHttpContentSent();
-                    boolean keepAlive1 = connectionToClient.isKeepAlive();
-                    if (!keepAlive1) {
-                        connectionToClient.refuseOtherRequests = true;
-                        channelToClient.close();
+                .addListener((g) -> {
+                    if (isLastHttpContent || notModified) {
+                        lastHttpContentSent();
+                        boolean keepAlive1 = connectionToClient.isKeepAlive();
+                        if (!keepAlive1) {
+                            connectionToClient.refuseOtherRequests = true;
+                            channelToClient.close();
+                        }
                     }
-                }
-                if (i + 1 < size && g.isSuccess() && !notModified) {
-                    sendCachedChunk(payload, i + 1);
-                }
-            });
+                    if (i + 1 < size && g.isSuccess() && !notModified) {
+                        sendCachedChunk(payload, i + 1);
+                    }
+                });
     }
 
     private void cleanRequestFromCacheValidators(HttpRequest request) {

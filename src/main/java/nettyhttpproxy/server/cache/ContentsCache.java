@@ -153,7 +153,7 @@ public class ContentsCache {
         cache.clear();
     }
 
-    public class ContentSender {
+    public static final class ContentSender {
 
         private final ContentKey key;
         private final ContentPayload cached;
