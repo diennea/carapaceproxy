@@ -27,6 +27,13 @@ import nettyhttpproxy.server.mapper.StandardEndpointMapper;
 
 public class Launcher {
 
+    static {
+        // see https://github.com/netty/netty/pull/7650
+        if (System.getProperty("io.netty.tryReflectionSetAccessible") == null) {
+            System.setProperty("io.netty.tryReflectionSetAccessible", "true");
+        }
+    }
+    
     public static void main(String... args) {
         try {
             String configFile = "conf/server.properties";

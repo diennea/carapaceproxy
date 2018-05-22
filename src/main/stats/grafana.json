@@ -14,7 +14,7 @@
       "type": "grafana",
       "id": "grafana",
       "name": "Grafana",
-      "version": "5.1.0"
+      "version": "5.1.3"
     },
     {
       "type": "panel",
@@ -85,7 +85,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "outbound_localhost_8086_connections_count",
+          "expr": "outbound_sviluppo05_sviluppo_dna_8080_connections_count",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -252,16 +252,18 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "cache_hits",
+          "expr": "cache_misses*100/(cache_hits+cache_misses)",
           "format": "time_series",
           "intervalFactor": 1,
-          "refId": "A"
+          "legendFormat": "Cache miss ratio",
+          "refId": "B"
         },
         {
-          "expr": "cache_misses",
+          "expr": "cache_hits*100/(cache_hits+cache_misses)",
           "format": "time_series",
           "intervalFactor": 1,
-          "refId": "B"
+          "legendFormat": "Cache hit ratio",
+          "refId": "C"
         }
       ],
       "thresholds": [],
@@ -305,6 +307,7 @@
       }
     }
   ],
+  "refresh": "5s",
   "schemaVersion": 16,
   "style": "dark",
   "tags": [],
@@ -312,7 +315,7 @@
     "list": []
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-30m",
     "to": "now"
   },
   "timepicker": {
@@ -343,5 +346,5 @@
   "timezone": "",
   "title": "HttpProxy",
   "uid": "mxlkh9niz",
-  "version": 4
+  "version": 3
 }

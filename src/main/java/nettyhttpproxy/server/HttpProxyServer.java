@@ -44,6 +44,7 @@ import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -58,7 +59,6 @@ import nettyhttpproxy.server.config.NetworkListenerConfiguration;
 import nettyhttpproxy.server.mapper.XForwardedForRequestFilter;
 import org.apache.bookkeeper.stats.*;
 import org.apache.bookkeeper.stats.prometheus.*;
-import org.apache.commons.configuration.BaseConfiguration;
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.PropertiesConfiguration;
 
@@ -246,9 +246,9 @@ public class HttpProxyServer implements AutoCloseable {
             tryConfigureListener(i, properties);
             tryConfigureFilter(i, properties);
         }
-        for (Object key : properties.keySet()) {
-            statsProviderConfig.setProperty(key + "", properties.get(key));
-        }
+        properties.forEach((key, value) -> {
+            statsProviderConfig.setProperty(key + "", value);
+        });
     }
 
     private void tryConfigureListener(int i, Properties properties) {
