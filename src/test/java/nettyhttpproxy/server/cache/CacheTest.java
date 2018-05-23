@@ -110,6 +110,73 @@ public class CacheTest {
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
     }
+    
+    @Test
+    public void testNotServeFromCacheIfCachableButClientsDisablesCache() throws Exception {
+
+        stubFor(get(urlEqualTo("/index.html"))
+            .willReturn(aResponse()
+                .withStatus(200)
+                .withHeader("Content-Type", "text/html")
+                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                .withBody("it <b>works</b> !!")));
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
+            server.start();
+            int port = server.getLocalPort();
+
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                String s = resp.toString();
+                System.out.println("s:" + s);
+                assertTrue(s.endsWith("it <b>works</b> !!"));
+                resp.getHeaderLines().forEach(h -> {
+                    System.out.println("HEADER LINE :" + h);
+                });
+                assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+            }
+
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                {
+                    // Ctrl-F5
+                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: no-cache\r\n\r\n");
+                    String s = resp.toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                }
+
+                {
+                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                    String s = resp.toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                }
+            }
+
+            stats = server.getConnectionsManager().getStats();
+            assertNotNull(stats.getEndpoints().get(key));
+            assertEquals(1, server.getCache().getCacheSize());
+            assertEquals(1, server.getCache().getStats().getHits());
+            assertEquals(1, server.getCache().getStats().getMisses());
+        }
+
+        TestUtils.waitForCondition(() -> {
+            EndpointStats epstats = stats.getEndpointStats(key);
+            return epstats.getTotalConnections().intValue() == 1
+                && epstats.getActiveConnections().intValue() == 0
+                && epstats.getOpenConnections().intValue() == 0;
+        }, 100);
+
+        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+
+    }
+    
     @Test
     public void testBootSslRelativeCertificatePath() throws Exception {
 

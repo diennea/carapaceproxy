@@ -25,6 +25,7 @@ import io.netty.handler.codec.http.DefaultHttpResponse;
 import io.netty.handler.codec.http.DefaultLastHttpContent;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
@@ -103,9 +104,19 @@ public class ContentsCache {
     }
 
     private static boolean isCachable(HttpRequest request) {
-        if (!request.method().name().equals("GET")) {
-            return false;
+        switch (request.method().name()) {
+            case "GET":
+            case "HEAD":
+                // got haed and cache
+                break;
+            default:
+                return false;
         }
+        boolean ctrlF5 = request.headers()
+                .containsValue(HttpHeaderNames.CACHE_CONTROL, HttpHeaderValues.NO_CACHE, false);
+        if (ctrlF5) {
+            return false;
+        }        
         String uri = request.uri();
         String queryString = "";
         int question = uri.indexOf('?');
