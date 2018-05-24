@@ -45,6 +45,7 @@ import nettyhttpproxy.EndpointStats;
 import nettyhttpproxy.client.EndpointConnection;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.server.RequestHandler;
+import org.apache.bookkeeper.stats.Counter;
 import org.apache.bookkeeper.stats.OpStatsLogger;
 import org.apache.bookkeeper.stats.StatsLogger;
 
@@ -66,10 +67,16 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private volatile RequestHandler clientSidePeerHandler;
     private final StatsLogger endpointStatsLogger;
     private final OpStatsLogger connectionStats;
+    private final Counter openConnectionsStats;
+    private final Counter activeConnectionsStats;
+    private final Counter requestsStats;
 
     public EndpointConnectionImpl(EndpointKey key, ConnectionsManagerImpl parent, EndpointStats endpointstats) {
         this.endpointStatsLogger = parent.mainLogger.scope(key.getHost() + "_" + key.getPort());
         this.connectionStats = endpointStatsLogger.getOpStatsLogger("connections");
+        this.openConnectionsStats = endpointStatsLogger.getCounter("openconnections");
+        this.activeConnectionsStats = endpointStatsLogger.getCounter("activeconnections");
+        this.requestsStats = endpointStatsLogger.getCounter("requests");
         this.key = key;
         this.parent = parent;
         this.valid = true;
@@ -105,7 +112,8 @@ public class EndpointConnectionImpl implements EndpointConnection {
         connectFuture.addListener((Future<Void> future) -> {
             if (future.isSuccess()) {
                 endpointstats.getTotalConnections().incrementAndGet();
-                endpointstats.getOpenConnections().incrementAndGet();
+                endpointstats.getOpenConnections().incrementAndGet();                
+                openConnectionsStats.inc();
                 connectionStats.registerSuccessfulEvent(System.nanoTime() - now, TimeUnit.NANOSECONDS);
             } else {
                 connectionStats.registerFailedEvent(System.nanoTime() - now, TimeUnit.NANOSECONDS);
@@ -134,11 +142,12 @@ public class EndpointConnectionImpl implements EndpointConnection {
             _channelToEndpoint.closeFuture().addListener(new GenericFutureListener<Future<? super Void>>() {
                 @Override
                 public void operationComplete(Future<? super Void> future) throws Exception {
-                    valid = false;
+                    valid = false;                    
                 }
             });
             activateConnection(clientSidePeerHandler);
             endpointstats.getTotalRequests().incrementAndGet();
+            requestsStats.inc();
 
             _channelToEndpoint.writeAndFlush(request).addListener(new GenericFutureListener<Future<? super Void>>() {
                 @Override
@@ -243,6 +252,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
             channelToEndpoint.close().addListener((future) -> {
                 //                    LOG.log(Level.INFO, "connection id " + id + " to " + key + " closed now");
                 endpointstats.getOpenConnections().decrementAndGet();
+                openConnectionsStats.dec();
             });
             channelToEndpoint = null;
         }
@@ -258,11 +268,13 @@ public class EndpointConnectionImpl implements EndpointConnection {
         }
         this.clientSidePeerHandler = handler;
         endpointstats.getActiveConnections().incrementAndGet();
+        activeConnectionsStats.inc();
     }
 
     private void connectionDeactivated() {
         if (active.compareAndSet(true, false)) {
             endpointstats.getActiveConnections().decrementAndGet();
+            activeConnectionsStats.dec();
             detachFromClient();
         } else {
             LOG.log(Level.SEVERE, "connectionDeactivated on a non active connection! {0}", this);
