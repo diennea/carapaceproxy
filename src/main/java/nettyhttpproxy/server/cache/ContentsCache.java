@@ -58,13 +58,15 @@ public class ContentsCache {
     private final CacheStats stats = new CacheStats();
     private final Counter cacheHits;
     private final Counter cacheMisses;
+    private final Counter noCacheRequests;
     private final ScheduledExecutorService threadPool;
     private static final long DEFAULT_TTL = 1000 * 60 * 60;
 
     public ContentsCache(StatsLogger mainLogger) {
         StatsLogger cacheScope = mainLogger.scope("cache");
-        cacheHits = cacheScope.getCounter("hits");
-        cacheMisses = cacheScope.getCounter("misses");
+        this.cacheHits = cacheScope.getCounter("hits");
+        this.cacheMisses = cacheScope.getCounter("misses");
+        this.noCacheRequests = cacheScope.getCounter("nocacherequests");
         this.threadPool = Executors.newSingleThreadScheduledExecutor();
     }
 
@@ -103,7 +105,7 @@ public class ContentsCache {
 
     }
 
-    private static boolean isCachable(HttpRequest request) {
+    private boolean isCachable(HttpRequest request, boolean registerNoCacheStat) {
         switch (request.method().name()) {
             case "GET":
             case "HEAD":
@@ -115,8 +117,11 @@ public class ContentsCache {
         boolean ctrlF5 = request.headers()
                 .containsValue(HttpHeaderNames.CACHE_CONTROL, HttpHeaderValues.NO_CACHE, false);
         if (ctrlF5) {
+            if (registerNoCacheStat) {
+                noCacheRequests.inc();
+            }
             return false;
-        }        
+        }
         String uri = request.uri();
         String queryString = "";
         int question = uri.indexOf('?');
@@ -153,7 +158,7 @@ public class ContentsCache {
     }
 
     public ContentReceiver startCachingResponse(HttpRequest request) {
-        if (!isCachable(request)) {
+        if (!isCachable(request, true)) {
             return null;
         }
         String uri = request.uri();
@@ -192,7 +197,7 @@ public class ContentsCache {
     }
 
     public ContentSender serveFromCache(RequestHandler handler) {
-        if (!isCachable(handler.getRequest())) {
+        if (!isCachable(handler.getRequest(), false)) {
             return null;
         }
         String uri = handler.getRequest().uri();
