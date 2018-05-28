@@ -135,6 +135,7 @@ public class HttpProxyServer implements AutoCloseable {
                         KeyManagerFactory keyFactory = initKeyManagerFactory("PKCS12", sslCertFile, sslCertFilePassword);
                         TrustManagerFactory trustManagerFactory = null;
                         if (caFileConfigured) {
+                            LOG.log(Level.SEVERE, "loading CA from "+caCertFile);
                             trustManagerFactory = initTrustManagerFactory("PKCS12", caCertFile, caPassword);
                         }
 

@@ -110,7 +110,8 @@ public class SimpleHTTPProxyTest {
 
         HttpUtils.overideJvmWideHttpsVerifier();
 
-        String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+        String certificate = TestUtils.deployResource("ia.p12", tmpDir.getRoot());
+        String cacertificate = TestUtils.deployResource("ca.p12", tmpDir.getRoot());
 
         stubFor(get(urlEqualTo("/index.html?redir"))
             .willReturn(aResponse()
@@ -124,8 +125,8 @@ public class SimpleHTTPProxyTest {
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addListener(new NetworkListenerConfiguration("localhost", 0, true,
-                certificate, "testproxy",
-                null, null, null));
+                certificate, "changeit",
+                cacertificate, "changeit", null));
             server.start();
             int port = server.getLocalPort();
 
