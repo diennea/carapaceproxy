@@ -50,11 +50,11 @@ public class CacheTest {
     public void testServeFromCache() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                .withBody("it <b>works</b> !!")));
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
@@ -103,23 +103,23 @@ public class CacheTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
     }
-    
+
     @Test
     public void testNotServeFromCacheIfCachableButClientsDisablesCache() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                .withBody("it <b>works</b> !!")));
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
@@ -169,25 +169,25 @@ public class CacheTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
     }
-    
+
     @Test
     public void testBootSslRelativeCertificatePath() throws Exception {
 
         String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
 
         stubFor(get(urlEqualTo("/index.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                .withBody("it <b>works</b> !!")));
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
@@ -195,8 +195,8 @@ public class CacheTest {
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addListener(new NetworkListenerConfiguration("localhost", 0, true,
-                "localhost.p12", "testproxy",
-                null));
+                    "localhost.p12", "testproxy",
+                    null, null, null));
             server.start();
         }
     }
@@ -207,11 +207,11 @@ public class CacheTest {
         String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
 
         stubFor(get(urlEqualTo("/index.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                .withBody("it <b>works</b> !!")));
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
@@ -219,8 +219,8 @@ public class CacheTest {
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addListener(new NetworkListenerConfiguration("localhost", 0, true,
-                certificate, "testproxy",
-                null));
+                    certificate, "testproxy",
+                    null, null, null));
             server.start();
             int port = server.getLocalPort();
 
@@ -263,8 +263,8 @@ public class CacheTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
@@ -275,10 +275,10 @@ public class CacheTest {
     public void testServeFromCacheChunked() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withBody("it <b>works</b> !!")));
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
@@ -293,8 +293,8 @@ public class CacheTest {
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertTrue(s.endsWith("12\r\n"
-                    + "it <b>works</b> !!\r\n"
-                    + "0\r\n\r\n"));
+                        + "it <b>works</b> !!\r\n"
+                        + "0\r\n\r\n"));
                 resp.getHeaderLines().forEach(h -> {
                     System.out.println("HEADER LINE :" + h);
                 });
@@ -307,8 +307,8 @@ public class CacheTest {
                     String s = resp.toString();
                     System.out.println("s:" + s);
                     assertTrue(s.endsWith("12\r\n"
-                        + "it <b>works</b> !!\r\n"
-                        + "0\r\n\r\n"));
+                            + "it <b>works</b> !!\r\n"
+                            + "0\r\n\r\n"));
                     assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
 
@@ -317,8 +317,8 @@ public class CacheTest {
                     String s = resp.toString();
                     System.out.println("s:" + s);
                     assertTrue(s.endsWith("12\r\n"
-                        + "it <b>works</b> !!\r\n"
-                        + "0\r\n\r\n"));
+                            + "it <b>works</b> !!\r\n"
+                            + "0\r\n\r\n"));
                     assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
             }
@@ -333,8 +333,8 @@ public class CacheTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
@@ -345,10 +345,10 @@ public class CacheTest {
     public void testServeFromCacheWithConnectionClose() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withBody("it <b>works</b> !!")));
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
@@ -363,8 +363,8 @@ public class CacheTest {
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertTrue(s.endsWith("12\r\n"
-                    + "it <b>works</b> !!\r\n"
-                    + "0\r\n\r\n"));
+                        + "it <b>works</b> !!\r\n"
+                        + "0\r\n\r\n"));
                 resp.getHeaderLines().forEach(h -> {
                     System.out.println("HEADER LINE :" + h);
                 });
@@ -377,8 +377,8 @@ public class CacheTest {
                     String s = resp.toString();
                     System.out.println("s:" + s);
                     assertTrue(s.endsWith("12\r\n"
-                        + "it <b>works</b> !!\r\n"
-                        + "0\r\n\r\n"));
+                            + "it <b>works</b> !!\r\n"
+                            + "0\r\n\r\n"));
                     assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
 
@@ -387,8 +387,8 @@ public class CacheTest {
                     String s = resp.toString();
                     System.out.println("s:" + s);
                     assertTrue(s.endsWith("12\r\n"
-                        + "it <b>works</b> !!\r\n"
-                        + "0\r\n\r\n"));
+                            + "it <b>works</b> !!\r\n"
+                            + "0\r\n\r\n"));
                     assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
             }
@@ -403,8 +403,8 @@ public class CacheTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
@@ -414,11 +414,11 @@ public class CacheTest {
     @Test
     public void testNotCachableResourceWithQueryString() throws Exception {
         stubFor(get(urlEqualTo("/index.html?_nocache"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                .withBody("it <b>works</b> !!")));
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
@@ -450,8 +450,8 @@ public class CacheTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
@@ -461,11 +461,11 @@ public class CacheTest {
     @Test
     public void testImagesCachableWithQueryString() throws Exception {
         stubFor(get(urlEqualTo("/index.png?_nocache"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                .withBody("it <b>works</b> !!")));
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
@@ -497,14 +497,12 @@ public class CacheTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
     }
-
-  
 
 }

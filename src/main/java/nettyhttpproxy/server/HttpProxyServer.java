@@ -29,6 +29,7 @@ import io.netty.channel.epoll.EpollServerSocketChannel;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.http.HttpRequestDecoder;
 import io.netty.handler.codec.http.HttpResponseEncoder;
+import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
@@ -80,7 +81,7 @@ public class HttpProxyServer implements AutoCloseable {
     private final List<Channel> listeningChannels = new ArrayList<>();
 
     private StatsProvider statsProvider;
-    private PropertiesConfiguration statsProviderConfig = new PropertiesConfiguration();
+    private final PropertiesConfiguration statsProviderConfig = new PropertiesConfiguration();
 
     public HttpProxyServer(EndpointMapper mapper, File basePath) {
         this.mapper = mapper;
@@ -117,11 +118,25 @@ public class HttpProxyServer implements AutoCloseable {
                     String sslCertFilePassword = listener.getSslCertificatePassword();
                     String sslCiphers = listener.getSslCiphers();
                     String certificateFile = listener.getSslCertificateFile();
-                    File sslCertFile = certificateFile.startsWith("/") ? new File(listener.getSslCertificateFile()) : new File(basePath, listener.getSslCertificateFile());
+                    File sslCertFile = certificateFile.startsWith("/") ? new File(certificateFile) : new File(basePath, certificateFile);
                     sslCertFile = sslCertFile.getAbsoluteFile();
+
+                    String caPassword = listener.getSslCertificatePassword();
+                    String caFile = listener.getSslChainFile();
+                    File caCertFile = null;
+                    boolean caFileConfigured = caFile != null && !caFile.isEmpty();
+                    if (caFileConfigured) {
+                        caCertFile = caFile.startsWith("/") ? new File(caFile) : new File(basePath, caFile);
+                        caCertFile = caCertFile.getAbsoluteFile();
+                    }
+
                     LOG.log(Level.SEVERE, "start SSL with certificate " + sslCertFile);
                     try {
                         KeyManagerFactory keyFactory = initKeyManagerFactory("PKCS12", sslCertFile, sslCertFilePassword);
+                        TrustManagerFactory trustManagerFactory = null;
+                        if (caFileConfigured) {
+                            trustManagerFactory = initTrustManagerFactory("PKCS12", caCertFile, caPassword);
+                        }
 
                         List<String> ciphers = null;
                         if (sslCiphers != null && !sslCiphers.isEmpty()) {
@@ -130,6 +145,8 @@ public class HttpProxyServer implements AutoCloseable {
                         }
                         sslCtx = SslContextBuilder
                                 .forServer(keyFactory)
+                                .enableOcsp(OpenSsl.isOcspSupported())
+                                .trustManager(trustManagerFactory)
                                 .sslProvider(SslProvider.OPENSSL)
                                 .ciphers(ciphers).build();
                     } catch (CertificateException | IOException | KeyStoreException | SecurityException
@@ -259,8 +276,10 @@ public class HttpProxyServer implements AutoCloseable {
             boolean ssl = Boolean.parseBoolean(properties.getProperty(prefix + "ssl", "false"));
             String certificateFile = properties.getProperty(prefix + "sslcertfile", "");
             String certificatePassword = properties.getProperty(prefix + "sslcertfilepassword", "");
+            String caFile = properties.getProperty(prefix + "sslcafile", "");
+            String caPassword = properties.getProperty(prefix + "sslcapassword", "");
             String sslciphers = properties.getProperty(prefix + "sslciphers", "");
-            NetworkListenerConfiguration config = new NetworkListenerConfiguration(host, port, ssl, certificateFile, certificatePassword, sslciphers);
+            NetworkListenerConfiguration config = new NetworkListenerConfiguration(host, port, ssl, certificateFile, certificatePassword, caFile, caPassword, sslciphers);
             addListener(config);
         }
     }
