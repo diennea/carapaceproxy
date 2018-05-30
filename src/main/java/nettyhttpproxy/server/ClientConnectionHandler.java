@@ -35,7 +35,7 @@ import java.util.logging.Logger;
 import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.client.impl.EndpointConnectionImpl;
 import nettyhttpproxy.server.cache.ContentsCache;
-import org.apache.bookkeeper.stats.OpStatsLogger;
+import org.apache.bookkeeper.stats.Counter;
 import org.apache.bookkeeper.stats.StatsLogger;
 
 public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object> {
@@ -48,7 +48,8 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
 
     final EndpointMapper mapper;
     final StatsLogger mainLogger;
-    final OpStatsLogger processedRequestsStats;
+    final Counter totalRequests;
+    final Counter runningRequests;
     final ConnectionsManager connectionsManager;
     final List<RequestFilter> filters;
     final SocketAddress clientAddress;
@@ -70,7 +71,8 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             StaticContentsManager staticContentsManager,
             Runnable onClientDisconnected) {
         this.mainLogger = mainLogger;
-        this.processedRequestsStats = mainLogger.getOpStatsLogger("requests");
+        this.totalRequests = mainLogger.getCounter("totalrequests");
+        this.runningRequests = mainLogger.getCounter("runningrequests");
         this.staticContentsManager = staticContentsManager;
         this.cache = cache;
         this.mapper = mapper;
@@ -111,7 +113,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         if (msg instanceof HttpRequest) {
             HttpRequest request = (HttpRequest) msg;
             RequestHandler currentRequest = new RequestHandler(requestIdGenerator.incrementAndGet(),
-                    request, filters, this, ctx);
+                    request, filters, this, ctx, () -> runningRequests.dec());
             addPendingRequest(currentRequest);
             currentRequest.start();
         } else if (msg instanceof LastHttpContent) {
@@ -119,7 +121,8 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             try {
                 RequestHandler currentRequest = pendingRequests.get(0);
                 currentRequest.clientRequestFinished(trailer);
-                processedRequestsStats.registerSuccessfulEvent(System.nanoTime() - connectionStartsTs, TimeUnit.NANOSECONDS);
+                totalRequests.inc();
+                runningRequests.inc();
             } catch (java.lang.ArrayIndexOutOfBoundsException noMorePendingRequests) {
                 LOG.info(this + " swallow " + msg + ", no more pending requests");
                 refuseOtherRequests = true;

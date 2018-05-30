@@ -47,6 +47,7 @@ import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.MapResult;
@@ -72,14 +73,26 @@ public class RequestHandler {
     private EndpointConnection connectionToEndpoint;
     private final ClientConnectionHandler connectionToClient;
     private final ChannelHandlerContext channelToClient;
+    private final AtomicReference<Runnable> onRequestFinished;
 
     public RequestHandler(long id, HttpRequest request, List<RequestFilter> filters,
-            ClientConnectionHandler parent, ChannelHandlerContext channelToClient) {
+            ClientConnectionHandler parent, ChannelHandlerContext channelToClient, Runnable onRequestFinished) {
         this.id = id;
         this.request = request;
         this.connectionToClient = parent;
         this.channelToClient = channelToClient;
         this.filters = filters;
+        this.onRequestFinished = new AtomicReference<>(onRequestFinished);
+    }
+    
+    private void fireRequestFinished() {
+        System.out.println("FIRE-REQUEST-FINISHED for "+id);
+        Runnable handler = onRequestFinished.getAndSet(null);        
+        if (handler != null) {            
+            handler.run();
+        } else {
+            new Exception().printStackTrace();
+        }    
     }
 
     public void start() {
@@ -99,6 +112,7 @@ public class RequestHandler {
                     connectionToEndpoint = connectionToClient.connectionsManager.getConnection(new EndpointKey(action.host, action.port));
                     connectionToEndpoint.sendRequest(request, this);
                 } catch (EndpointNotAvailableException err) {
+                    fireRequestFinished();
                     LOG.log(Level.INFO, "{0} error on endpoint {1}: {2}", new Object[]{this, action, err});
                     return;
                 }
@@ -117,6 +131,7 @@ public class RequestHandler {
                     }
                     connectionToEndpoint.sendRequest(request, this);
                 } catch (EndpointNotAvailableException err) {
+                    fireRequestFinished();
                     LOG.log(Level.INFO, "{0} error on endpoint {1}: {2}", new Object[]{this, action, err});
                     return;
                 }
@@ -198,7 +213,7 @@ public class RequestHandler {
 
     private final StringBuilder output = new StringBuilder();
 
-    private void serveNotFoundMessage() {
+    private void serveNotFoundMessage() {        
         MapResult fromDefault = connectionToClient.mapper.mapDefaultPageNotFound(request);
         int code = 0;
         String resource = null;
@@ -215,13 +230,13 @@ public class RequestHandler {
 
         FullHttpResponse response = connectionToClient.staticContentsManager.buildResponse(code, resource);
 
-        if (!writeResponse(response)) {
+        if (!writeSimpleResponse(response)) {
             // If keep-alive is off, close the connection once the content is fully written.
             channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
         }
     }
 
-    private void serveInternalErrorMessage() {
+    private void serveInternalErrorMessage() {        
         MapResult fromDefault = connectionToClient.mapper.mapDefaultInternalError(request);
         int code = 0;
         String resource = null;
@@ -238,28 +253,28 @@ public class RequestHandler {
 
         FullHttpResponse response = connectionToClient.staticContentsManager.buildResponse(code, resource);
 
-        if (!writeResponse(response)) {
+        if (!writeSimpleResponse(response)) {
             // If keep-alive is off, close the connection once the content is fully written.
             channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
         }
     }
 
-    private void serveStaticMessage() {
+    private void serveStaticMessage() {        
         FullHttpResponse response
                 = connectionToClient.staticContentsManager.buildResponse(action.errorcode, action.resource);
-        if (!writeResponse(response)) {
+        if (!writeSimpleResponse(response)) {
             // If keep-alive is off, close the connection once the content is fully written.
             channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
         }
     }
 
-    private void serveDebugMessage(HttpContent httpContent, Object msg, LastHttpContent trailer) {
+    private void serveDebugMessage(HttpContent httpContent, Object msg, LastHttpContent trailer) {        
         continueDebugMessage(httpContent, msg);
         FullHttpResponse response = new DefaultFullHttpResponse(
                 HTTP_1_1, trailer.decoderResult().isSuccess() ? OK : BAD_REQUEST,
                 Unpooled.copiedBuffer(output.toString(), CharsetUtil.UTF_8));
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8");
-        if (!writeResponse(response)) {
+        if (!writeSimpleResponse(response)) {
             // If keep-alive is off, close the connection once the content is fully written.
             channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
         }
@@ -319,7 +334,8 @@ public class RequestHandler {
         buf.append("\r\n");
     }
 
-    private boolean writeResponse(FullHttpResponse response) {
+    private boolean writeSimpleResponse(FullHttpResponse response) {
+        fireRequestFinished();
         // Decide whether to close the connection or not.
         boolean keepAlive = HttpUtil.isKeepAlive(request);
 
@@ -342,7 +358,7 @@ public class RequestHandler {
         return keepAlive;
     }
 
-    private void sendServiceNotAvailable() {
+    private void sendServiceNotAvailable() {        
 //        LOG.info(this + " sendServiceNotAvailable due to " + cause + " to " + ctx);
         FullHttpResponse response
                 = connectionToClient.staticContentsManager.buildResponse(500, DEFAULT_INTERNAL_SERVER_ERROR);
@@ -398,7 +414,7 @@ public class RequestHandler {
 //            LOG.log(Level.SEVERE, this + " received from remote server:{0} connection {1} server {2}", new Object[]{msg, connectionToClient, connectionToEndpoint});
             if (cacheReceiver != null) {
                 cacheReceiver.abort();
-            }
+            }            
             releaseConnectionToEndpoint(true);
             return;
         }
@@ -452,6 +468,7 @@ public class RequestHandler {
             connectionToEndpoint.release(forceClose);
             connectionToEndpoint = null;
         }
+        fireRequestFinished();
     }
 
     public void readCompletedFromRemote() {
@@ -469,8 +486,7 @@ public class RequestHandler {
 
     public void serveFromCache() {
         ContentsCache.ContentPayload payload = cacheSender.getCached();
-        sendCachedChunk(payload, 0);
-
+        sendCachedChunk(payload, 0);        
     }
 
     private void sendCachedChunk(ContentsCache.ContentPayload payload, int i) {
@@ -528,6 +544,8 @@ public class RequestHandler {
                     }
                     if (i + 1 < size && g.isSuccess() && !notModified) {
                         sendCachedChunk(payload, i + 1);
+                    } else {
+                        fireRequestFinished();
                     }
                 });
     }
