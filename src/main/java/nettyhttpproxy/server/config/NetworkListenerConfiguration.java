@@ -27,6 +27,7 @@ public class NetworkListenerConfiguration {
     private final String host;
     private final int port;
     private final boolean ssl;
+    private final boolean ocps;
     private final String sslCertificateFile;
     private final String sslCertificatePassword;
 
@@ -44,6 +45,7 @@ public class NetworkListenerConfiguration {
         this.sslChainPassword = null;
         this.ssl = false;
         this.sslCiphers = null;
+        this.ocps = false;
     }
 
     public NetworkListenerConfiguration(String host, int port, boolean ssl,
@@ -51,7 +53,8 @@ public class NetworkListenerConfiguration {
             String sslCertificatePassword,
             String sslChainFile,
             String sslChainPassword,
-            String sslCiphers) {
+            String sslCiphers,
+            boolean ocps) {
         this.host = host;
         this.port = port;
         this.ssl = ssl;
@@ -60,6 +63,11 @@ public class NetworkListenerConfiguration {
         this.sslChainFile = sslChainFile;
         this.sslChainPassword = sslChainPassword;
         this.sslCiphers = sslCiphers;
+        this.ocps = ocps;
+    }
+
+    public boolean isOcps() {
+        return ocps;
     }
 
     public String getHost() {

@@ -130,7 +130,7 @@ public class HttpProxyServer implements AutoCloseable {
                         caCertFile = caCertFile.getAbsoluteFile();
                     }
 
-                    LOG.log(Level.SEVERE, "start SSL with certificate " + sslCertFile);
+                    LOG.log(Level.SEVERE, "start SSL with certificate " + sslCertFile+" OCPS "+listener.isOcps());
                     try {
                         KeyManagerFactory keyFactory = initKeyManagerFactory("PKCS12", sslCertFile, sslCertFilePassword);
                         TrustManagerFactory trustManagerFactory = null;
@@ -146,7 +146,7 @@ public class HttpProxyServer implements AutoCloseable {
                         }
                         sslCtx = SslContextBuilder
                                 .forServer(keyFactory)
-                                .enableOcsp(OpenSsl.isOcspSupported())
+                                .enableOcsp(listener.isOcps() && OpenSsl.isOcspSupported())
                                 .trustManager(trustManagerFactory)
                                 .sslProvider(SslProvider.OPENSSL)
                                 .ciphers(ciphers).build();
@@ -275,12 +275,13 @@ public class HttpProxyServer implements AutoCloseable {
         int port = Integer.parseInt(properties.getProperty(prefix + "port", "0"));
         if (port > 0) {
             boolean ssl = Boolean.parseBoolean(properties.getProperty(prefix + "ssl", "false"));
+            boolean ocps = Boolean.parseBoolean(properties.getProperty(prefix + "ocps", "true"));
             String certificateFile = properties.getProperty(prefix + "sslcertfile", "");
             String certificatePassword = properties.getProperty(prefix + "sslcertfilepassword", "");
             String caFile = properties.getProperty(prefix + "sslcafile", "");
             String caPassword = properties.getProperty(prefix + "sslcapassword", "");
-            String sslciphers = properties.getProperty(prefix + "sslciphers", "");
-            NetworkListenerConfiguration config = new NetworkListenerConfiguration(host, port, ssl, certificateFile, certificatePassword, caFile, caPassword, sslciphers);
+            String sslciphers = properties.getProperty(prefix + "sslciphers", "");            
+            NetworkListenerConfiguration config = new NetworkListenerConfiguration(host, port, ssl, certificateFile, certificatePassword, caFile, caPassword, sslciphers, ocps);
             addListener(config);
         }
     }

@@ -196,7 +196,7 @@ public class CacheTest {
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addListener(new NetworkListenerConfiguration("localhost", 0, true,
                     "localhost.p12", "testproxy",
-                    null, null, null));
+                    null, null, null, false));
             server.start();
         }
     }
@@ -220,7 +220,7 @@ public class CacheTest {
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addListener(new NetworkListenerConfiguration("localhost", 0, true,
                     certificate, "testproxy",
-                    null, null, null));
+                    null, null, null, false));
             server.start();
             int port = server.getLocalPort();
 
