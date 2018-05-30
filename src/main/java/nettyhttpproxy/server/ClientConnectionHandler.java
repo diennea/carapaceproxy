@@ -58,6 +58,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     volatile Boolean keepAlive;
     volatile boolean refuseOtherRequests;
     private final List<RequestHandler> pendingRequests = new CopyOnWriteArrayList<>();
+    final Runnable onClientDisconnected;
 
     public ClientConnectionHandler(
             StatsLogger mainLogger,
@@ -66,7 +67,8 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             List<RequestFilter> filters,
             ContentsCache cache,
             SocketAddress clientAddress,
-            StaticContentsManager staticContentsManager) {
+            StaticContentsManager staticContentsManager,
+            Runnable onClientDisconnected) {
         this.mainLogger = mainLogger;
         this.processedRequestsStats = mainLogger.getOpStatsLogger("requests");
         this.staticContentsManager = staticContentsManager;
@@ -76,10 +78,16 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         this.filters = filters;
         this.clientAddress = clientAddress;
         this.connectionStartsTs = System.nanoTime();
+        this.onClientDisconnected = onClientDisconnected;
     }
 
     public SocketAddress getClientAddress() {
         return clientAddress;
+    }
+
+    @Override
+    public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
+        onClientDisconnected.run();
     }
 
     @Override

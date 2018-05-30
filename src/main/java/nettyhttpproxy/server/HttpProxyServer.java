@@ -74,6 +74,7 @@ public class HttpProxyServer implements AutoCloseable {
     private final ConnectionsManager connectionsManager;
     private final ContentsCache cache;
     private final StatsLogger mainLogger;
+    private final Counter currentClientConnections;
     private final File basePath;
     private final StaticContentsManager staticContentsManager = new StaticContentsManager();
 
@@ -88,6 +89,7 @@ public class HttpProxyServer implements AutoCloseable {
         this.basePath = basePath;
         this.statsProvider = new PrometheusMetricsProvider();
         this.mainLogger = statsProvider.getStatsLogger("");
+        this.currentClientConnections = mainLogger.getCounter("clients");
         this.connectionsManager = new ConnectionsManagerImpl(10, 120000, 5000, mainLogger);
         this.filters = new ArrayList<>();
         this.cache = new ContentsCache(mainLogger);
@@ -130,12 +132,12 @@ public class HttpProxyServer implements AutoCloseable {
                         caCertFile = caCertFile.getAbsoluteFile();
                     }
 
-                    LOG.log(Level.SEVERE, "start SSL with certificate " + sslCertFile+" OCPS "+listener.isOcps());
+                    LOG.log(Level.SEVERE, "start SSL with certificate " + sslCertFile + " OCPS " + listener.isOcps());
                     try {
                         KeyManagerFactory keyFactory = initKeyManagerFactory("PKCS12", sslCertFile, sslCertFilePassword);
                         TrustManagerFactory trustManagerFactory = null;
                         if (caFileConfigured) {
-                            LOG.log(Level.SEVERE, "loading CA from "+caCertFile);
+                            LOG.log(Level.SEVERE, "loading CA from " + caCertFile);
                             trustManagerFactory = initTrustManagerFactory("PKCS12", caCertFile, caPassword);
                         }
 
@@ -163,6 +165,7 @@ public class HttpProxyServer implements AutoCloseable {
                         .childHandler(new ChannelInitializer<SocketChannel>() {
                             @Override
                             public void initChannel(SocketChannel channel) throws Exception {
+                                currentClientConnections.inc();
                                 if (listener.isSsl()) {
                                     channel.pipeline().addLast(sslCtx.newHandler(channel.alloc()));
                                 }
@@ -172,7 +175,8 @@ public class HttpProxyServer implements AutoCloseable {
                                         new ClientConnectionHandler(mainLogger, mapper,
                                                 connectionsManager,
                                                 filters, cache,
-                                                channel.remoteAddress(), staticContentsManager));
+                                                channel.remoteAddress(), staticContentsManager,
+                                                () -> currentClientConnections.dec()));
 
                             }
                         })
@@ -280,7 +284,7 @@ public class HttpProxyServer implements AutoCloseable {
             String certificatePassword = properties.getProperty(prefix + "sslcertfilepassword", "");
             String caFile = properties.getProperty(prefix + "sslcafile", "");
             String caPassword = properties.getProperty(prefix + "sslcapassword", "");
-            String sslciphers = properties.getProperty(prefix + "sslciphers", "");            
+            String sslciphers = properties.getProperty(prefix + "sslciphers", "");
             NetworkListenerConfiguration config = new NetworkListenerConfiguration(host, port, ssl, certificateFile, certificatePassword, caFile, caPassword, sslciphers, ocps);
             addListener(config);
         }
