@@ -86,7 +86,6 @@ public class RequestHandler {
     }
     
     private void fireRequestFinished() {
-        System.out.println("FIRE-REQUEST-FINISHED for "+id);
         Runnable handler = onRequestFinished.getAndSet(null);        
         if (handler != null) {            
             handler.run();
