@@ -89,9 +89,7 @@ public class RequestHandler {
         Runnable handler = onRequestFinished.getAndSet(null);        
         if (handler != null) {            
             handler.run();
-        } else {
-            new Exception().printStackTrace();
-        }    
+        }
     }
 
     public void start() {
