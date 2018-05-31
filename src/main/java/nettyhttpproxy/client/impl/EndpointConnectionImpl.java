@@ -39,6 +39,8 @@ import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.EndpointStats;
@@ -91,9 +93,10 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     private ChannelFuture connect() {
         activityDone();
-        if (channelToEndpoint != null) {
+        Channel _channelToEndpoint = channelToEndpoint;
+        if (_channelToEndpoint != null) {
 //            LOG.log(Level.INFO, "Connection {3} Already connected to {0}, channel {1}, pipeline {2}", new Object[]{key, channelToEndpoint, channelToEndpoint.pipeline(), id});
-            return channelToEndpoint.newSucceededFuture();
+            return _channelToEndpoint.newSucceededFuture();
         }
         long now = System.nanoTime();
         Bootstrap b = new Bootstrap();
@@ -112,7 +115,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         connectFuture.addListener((Future<Void> future) -> {
             if (future.isSuccess()) {
                 endpointstats.getTotalConnections().incrementAndGet();
-                endpointstats.getOpenConnections().incrementAndGet();                
+                endpointstats.getOpenConnections().incrementAndGet();
                 openConnectionsStats.inc();
                 connectionStats.registerSuccessfulEvent(System.nanoTime() - now, TimeUnit.NANOSECONDS);
             } else {
@@ -127,22 +130,28 @@ public class EndpointConnectionImpl implements EndpointConnection {
         endpointstats.getLastActivity().set(System.currentTimeMillis());
     }
 
+    private void invalidate() {
+        valid = false;
+    }
+
     @Override
     public void sendRequest(HttpRequest request, RequestHandler clientSidePeerHandler) {
         ChannelFuture afterConnect = connect();
         afterConnect.addListener((Future<Void> future) -> {
             if (!future.isSuccess()) {
-                valid = false;
+                invalidate();
                 LOG.log(Level.INFO, "connect failed to " + key, future.cause());
                 clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
                 return;
             }
-            Channel _channelToEndpoint = afterConnect.channel();
+            final Channel _channelToEndpoint = afterConnect.channel();
             channelToEndpoint = _channelToEndpoint;
+
             _channelToEndpoint.closeFuture().addListener(new GenericFutureListener<Future<? super Void>>() {
                 @Override
                 public void operationComplete(Future<? super Void> future) throws Exception {
-                    valid = false;                    
+                    LOG.info("channel to " + _channelToEndpoint + " closed");
+                    invalidate();
                 }
             });
             activateConnection(clientSidePeerHandler);
@@ -159,7 +168,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                     }
 //                    LOG.log(Level.SEVERE, "sendRequest finished, now " + _channelToEndpoint + " is open ? " + _channelToEndpoint.isOpen());
                     if (!_channelToEndpoint.isOpen()) {
-                        valid = false;
+                        invalidate();
                     }
                 }
             });
@@ -174,26 +183,36 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     @Override
     public void continueRequest(HttpContent httpContent) {
+        for (int i = 0; channelToEndpoint == null && i < 100; i++) {
+            try {
+                // endpoint not still connected
+                // this can happen during a chuncked request and the connection
+                // needs time to setup and chunks are arriving very quickly
+                // from the client
+                
+                // TODO: THIS SHOULD BE IMPLEMENTED BETTER
+                Thread.sleep(10);
+            } catch (InterruptedException err) {
+                Thread.currentThread().interrupt();
+            }
+        }
         Channel _channelToEndpoint = channelToEndpoint;
         if (_channelToEndpoint == null) {
             valid = false;
             return;
         }
-        _channelToEndpoint.writeAndFlush(httpContent).addListener(new GenericFutureListener<Future<? super Void>>() {
-            @Override
-            public void operationComplete(Future<? super Void> future) throws Exception {
-                activityDone();
-                if (!future.isSuccess()) {
-                    LOG.log(Level.SEVERE, "continueRequest " + httpContent.getClass() + " failed", future.cause());
-                    RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
-                    if (_clientSidePeerHandler != null) {
-                        _clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
-                    }
+        _channelToEndpoint.writeAndFlush(httpContent).addListener((Future<? super Void> future) -> {
+            activityDone();
+            if (!future.isSuccess()) {
+                LOG.log(Level.SEVERE, "continueRequest " + httpContent.getClass() + " failed", future.cause());
+                RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
+                if (_clientSidePeerHandler != null) {
+                    _clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
                 }
+            }
 //                LOG.log(Level.SEVERE, "continueClientRequest finished, now " + _channelToEndpoint + " is open ? " + _channelToEndpoint.isOpen());
-                if (!_channelToEndpoint.isOpen()) {
-                    valid = false;
-                }
+            if (!_channelToEndpoint.isOpen()) {
+                valid = false;
             }
         });
     }
@@ -219,7 +238,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     public void sendLastHttpContent(LastHttpContent msg, RequestHandler clientSidePeerHandler) {
 
         if (!valid) {
-//            LOG.severe("sendLastHttpContent " + msg + " to " + contextToEndpoint + " . skip to invalid connection to endpoint " + this.key);
+            LOG.severe("sendLastHttpContent " + msg + " to " + contextToEndpoint + " . skip to invalid connection to endpoint " + this.key);
             clientSidePeerHandler.errorSendingRequest(this, new IOException("endpoint died"));
             return;
         }
@@ -233,7 +252,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
             }
 //            LOG.log(Level.SEVERE, "sendLastHttpContent finished, now " + _contextToEndpoint + " is open ? " + _contextToEndpoint.channel().isOpen());
             if (!_contextToEndpoint.channel().isOpen()) {
-                valid = false;
+                invalidate();
             }
         });
     }
@@ -250,14 +269,15 @@ public class EndpointConnectionImpl implements EndpointConnection {
         }
 
 //        LOG.log(Level.INFO, "destroy {0}", this);
-        valid = false;
-        if (channelToEndpoint != null) {
-            channelToEndpoint.close().addListener((future) -> {
+        invalidate();
+        Channel _channel = channelToEndpoint;
+        if (_channel != null) {
+            _channel.close().addListener((future) -> {
                 //                    LOG.log(Level.INFO, "connection id " + id + " to " + key + " closed now");
                 endpointstats.getOpenConnections().decrementAndGet();
                 openConnectionsStats.dec();
             });
-            channelToEndpoint = null;
+            _channel = null;
         }
     }
 
@@ -343,7 +363,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
             LOG.log(Level.SEVERE, "bad error", cause);
-            valid = false;
+            invalidate();
             ctx.close();
             connectionDeactivated();
         }

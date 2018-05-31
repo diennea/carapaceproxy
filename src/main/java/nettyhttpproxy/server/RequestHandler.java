@@ -152,12 +152,13 @@ public class RequestHandler {
                 continueDebugMessage(httpContent, httpContent);
                 break;
             case PROXY:
-            case CACHE:
-                if (connectionToEndpoint == null) {
+            case CACHE:                
+                EndpointConnection _connectionToEndpoint = connectionToEndpoint;
+                if (_connectionToEndpoint == null) {
                     LOG.info(this + " swallow continued content " + httpContent + ". Not connected");
                     return;
                 }
-                connectionToEndpoint.continueRequest(httpContent.retain());
+                _connectionToEndpoint.continueRequest(httpContent.retain());
                 break;
             default:
                 throw new IllegalStateException("not yet implemented");

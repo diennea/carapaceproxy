@@ -253,7 +253,7 @@ public class ContentsCache {
             return chunks;
         }
 
-        private void clear() {
+        private void clear() {            
             for (HttpObject o : chunks) {
                 ReferenceCountUtil.release(o);
             }
@@ -398,7 +398,12 @@ public class ContentsCache {
                     toRemove.add(k);
                 }
             });
-            toRemove.forEach(cache::remove);
+            toRemove.forEach((ContentKey k) -> {
+                ContentPayload removed = cache.remove(k);
+                if (removed != null) {
+                    removed.clear();
+                }
+            });
             if (!toRemove.isEmpty()) {
                 LOG.log(Level.INFO, "evicted {0} contents", toRemove.size());
             }

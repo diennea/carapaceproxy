@@ -152,7 +152,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     public void errorSendingRequest(RequestHandler request, EndpointConnectionImpl aThis, ChannelHandlerContext peerChannel, Throwable error) {
         pendingRequests.remove(request);
         mapper.endpointFailed(aThis.getKey(), error);
-        LOG.info(this + " errorSendingRequest " + aThis);
+        LOG.log(Level.INFO, error, () -> this + " errorSendingRequest " + aThis);
     }
 
     public void lastHttpContentSent(RequestHandler requestHandler) {
