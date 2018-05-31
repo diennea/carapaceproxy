@@ -185,7 +185,10 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 activityDone();
                 if (!future.isSuccess()) {
                     LOG.log(Level.SEVERE, "continueRequest " + httpContent.getClass() + " failed", future.cause());
-                    clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
+                    RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
+                    if (_clientSidePeerHandler != null) {
+                        _clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
+                    }
                 }
 //                LOG.log(Level.SEVERE, "continueClientRequest finished, now " + _channelToEndpoint + " is open ? " + _channelToEndpoint.isOpen());
                 if (!_channelToEndpoint.isOpen()) {
@@ -292,21 +295,22 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
         @Override
         public void channelRead0(ChannelHandlerContext ctx, HttpObject msg) {
-            if (clientSidePeerHandler == null) {
+            RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
+            if (_clientSidePeerHandler == null) {
                 LOG.log(Level.INFO, "swallow content {0}: {1}, disconnected client", new Object[]{msg.getClass(), msg});
                 return;
             }
             if (msg instanceof HttpContent) {
                 HttpContent f = (HttpContent) msg;
 //                LOG.log(Level.INFO, "proxying HttpContent {0}: {1}", new Object[]{msg.getClass(), msg});
-                clientSidePeerHandler.receivedFromRemote(f.copy());
+                _clientSidePeerHandler.receivedFromRemote(f.copy());
             } else if (msg instanceof DefaultHttpResponse) {
                 DefaultHttpResponse f = (DefaultHttpResponse) msg;
 //                LOG.log(Level.INFO, "proxying DefaultHttpResponse {0}: headers: {1}", new Object[]{msg.getClass(), msg});
 //                f.headers().forEach((entry) -> {
 //                    LOG.log(Level.INFO, "proxying header " + entry.getKey() + ": " + entry.getValue());
 //                });
-                clientSidePeerHandler.receivedFromRemote(new DefaultHttpResponse(f.protocolVersion(),
+                _clientSidePeerHandler.receivedFromRemote(new DefaultHttpResponse(f.protocolVersion(),
                         f.status(), f.headers()));
             } else {
                 LOG.log(Level.SEVERE, "unknown message type " + msg.getClass(), new Exception("unknown message type " + msg.getClass())
@@ -330,8 +334,9 @@ public class EndpointConnectionImpl implements EndpointConnection {
         @Override
         public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
 //            LOG.log(Level.INFO, "channelReadComplete {0}", ctx);
-            if (clientSidePeerHandler != null) {
-                clientSidePeerHandler.readCompletedFromRemote();
+            RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
+            if (_clientSidePeerHandler != null) {
+                _clientSidePeerHandler.readCompletedFromRemote();
             }
         }
 
