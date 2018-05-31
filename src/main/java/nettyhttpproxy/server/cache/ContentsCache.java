@@ -26,6 +26,7 @@ import io.netty.handler.codec.http.DefaultLastHttpContent;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
@@ -86,10 +87,12 @@ public class ContentsCache {
     }
 
     private static boolean isCachable(HttpResponse response) {
-        String pragma = response.headers().get(HttpHeaderNames.PRAGMA);
-        if (pragma != null && pragma.contains("no-cache")) {
-            // never cache Pragma: no-cache
-            LOG.info("not cachable " + response);
+        HttpHeaders headers = response.headers();
+        if (headers.contains(HttpHeaderNames.CACHE_CONTROL, "no-cache", false)
+                || headers.contains(HttpHeaderNames.CACHE_CONTROL, "no-store", false)
+                || headers.contains(HttpHeaderNames.PRAGMA, "no-cache", false)) {
+            // never cache Pragma: no-cache, Cache-Control: nostore/no-cache
+            LOG.log(Level.FINER, "not cachable {0}", response);
             return false;
         }
         switch (response.status().codeClass()) {
