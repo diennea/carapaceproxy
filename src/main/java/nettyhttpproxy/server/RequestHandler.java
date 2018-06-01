@@ -57,6 +57,8 @@ import nettyhttpproxy.client.EndpointNotAvailableException;
 import nettyhttpproxy.client.impl.EndpointConnectionImpl;
 import static nettyhttpproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
 import nettyhttpproxy.server.cache.ContentsCache;
+import org.apache.bookkeeper.stats.Counter;
+import org.apache.bookkeeper.stats.StatsLogger;
 
 /**
  * Keeps state for a single HttpRequest.
@@ -74,21 +76,23 @@ public class RequestHandler {
     private final ClientConnectionHandler connectionToClient;
     private final ChannelHandlerContext channelToClient;
     private final AtomicReference<Runnable> onRequestFinished;
+    private final StatsLogger logger;
     private String userId;
 
-    public RequestHandler(long id, HttpRequest request, List<RequestFilter> filters,
+    public RequestHandler(long id, HttpRequest request, List<RequestFilter> filters, StatsLogger logger,
             ClientConnectionHandler parent, ChannelHandlerContext channelToClient, Runnable onRequestFinished) {
         this.id = id;
         this.request = request;
         this.connectionToClient = parent;
         this.channelToClient = channelToClient;
         this.filters = filters;
+        this.logger = logger;
         this.onRequestFinished = new AtomicReference<>(onRequestFinished);
     }
-    
+
     private void fireRequestFinished() {
-        Runnable handler = onRequestFinished.getAndSet(null);        
-        if (handler != null) {            
+        Runnable handler = onRequestFinished.getAndSet(null);
+        if (handler != null) {
             handler.run();
         }
     }
@@ -98,7 +102,15 @@ public class RequestHandler {
         for (RequestFilter filter : filters) {
             filter.apply(request, connectionToClient, this);
         }
-        LOG.log(Level.FINER, "{0} Mapped {1} to {2}", new Object[]{this, request.uri(), action});
+        Counter requestsPerUser;
+        if (userId != null) {
+            requestsPerUser = logger.getCounter("requests_" + userId + "_count");
+        } else {
+            requestsPerUser = logger.getCounter("requests_nobody_count");
+        }
+        requestsPerUser.inc();
+
+        LOG.log(Level.FINER, "{0} Mapped {1} to {2}, userid {3}", new Object[]{this, request.uri(), action, userId});
         switch (action.action) {
             case NOTFOUND:
             case INTERNAL_ERROR:
@@ -153,7 +165,7 @@ public class RequestHandler {
                 continueDebugMessage(httpContent, httpContent);
                 break;
             case PROXY:
-            case CACHE:                
+            case CACHE:
                 EndpointConnection _connectionToEndpoint = connectionToEndpoint;
                 if (_connectionToEndpoint == null) {
                     LOG.info(this + " swallow continued content " + httpContent + ". Not connected");
@@ -212,7 +224,7 @@ public class RequestHandler {
 
     private final StringBuilder output = new StringBuilder();
 
-    private void serveNotFoundMessage() {        
+    private void serveNotFoundMessage() {
         MapResult fromDefault = connectionToClient.mapper.mapDefaultPageNotFound(request);
         int code = 0;
         String resource = null;
@@ -235,7 +247,7 @@ public class RequestHandler {
         }
     }
 
-    private void serveInternalErrorMessage() {        
+    private void serveInternalErrorMessage() {
         MapResult fromDefault = connectionToClient.mapper.mapDefaultInternalError(request);
         int code = 0;
         String resource = null;
@@ -258,7 +270,7 @@ public class RequestHandler {
         }
     }
 
-    private void serveStaticMessage() {        
+    private void serveStaticMessage() {
         FullHttpResponse response
                 = connectionToClient.staticContentsManager.buildResponse(action.errorcode, action.resource);
         if (!writeSimpleResponse(response)) {
@@ -267,7 +279,7 @@ public class RequestHandler {
         }
     }
 
-    private void serveDebugMessage(HttpContent httpContent, Object msg, LastHttpContent trailer) {        
+    private void serveDebugMessage(HttpContent httpContent, Object msg, LastHttpContent trailer) {
         continueDebugMessage(httpContent, msg);
         FullHttpResponse response = new DefaultFullHttpResponse(
                 HTTP_1_1, trailer.decoderResult().isSuccess() ? OK : BAD_REQUEST,
@@ -357,7 +369,7 @@ public class RequestHandler {
         return keepAlive;
     }
 
-    private void sendServiceNotAvailable() {        
+    private void sendServiceNotAvailable() {
 //        LOG.info(this + " sendServiceNotAvailable due to " + cause + " to " + ctx);
         FullHttpResponse response
                 = connectionToClient.staticContentsManager.buildResponse(500, DEFAULT_INTERNAL_SERVER_ERROR);
@@ -413,7 +425,7 @@ public class RequestHandler {
 //            LOG.log(Level.SEVERE, this + " received from remote server:{0} connection {1} server {2}", new Object[]{msg, connectionToClient, connectionToEndpoint});
             if (cacheReceiver != null) {
                 cacheReceiver.abort();
-            }            
+            }
             releaseConnectionToEndpoint(true);
             return;
         }
@@ -485,7 +497,7 @@ public class RequestHandler {
 
     public void serveFromCache() {
         ContentsCache.ContentPayload payload = cacheSender.getCached();
-        sendCachedChunk(payload, 0);        
+        sendCachedChunk(payload, 0);
     }
 
     private void sendCachedChunk(ContentsCache.ContentPayload payload, int i) {
@@ -574,5 +586,5 @@ public class RequestHandler {
     public void setUserId(String userId) {
         this.userId = userId;
     }
-    
+
 }

@@ -105,14 +105,14 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, Object msg) {
         if (refuseOtherRequests) {
-            LOG.info(this + " closing");
+            LOG.log(Level.INFO, "{0} refuseOtherRequests", this);
             ctx.close();
             return;
         }
         if (msg instanceof HttpRequest) {
             HttpRequest request = (HttpRequest) msg;
             RequestHandler currentRequest = new RequestHandler(requestIdGenerator.incrementAndGet(),
-                    request, filters, this, ctx, () -> runningRequests.dec());
+                    request, filters, mainLogger, this, ctx, () -> runningRequests.dec());
             addPendingRequest(currentRequest);
             currentRequest.start();
         } else if (msg instanceof LastHttpContent) {
