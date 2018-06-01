@@ -150,7 +150,6 @@ public class EndpointConnectionImpl implements EndpointConnection {
             _channelToEndpoint.closeFuture().addListener(new GenericFutureListener<Future<? super Void>>() {
                 @Override
                 public void operationComplete(Future<? super Void> future) throws Exception {
-                    LOG.info("channel to " + _channelToEndpoint + " closed");
                     invalidate();
                 }
             });

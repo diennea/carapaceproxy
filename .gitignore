@@ -4,3 +4,4 @@
 **/.classpath
 **/target/
 dependency-reduced-pom.xml
+/nbproject/

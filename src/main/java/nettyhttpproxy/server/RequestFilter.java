@@ -31,5 +31,5 @@ public interface RequestFilter {
      *
      * @param request
      */
-    void apply(HttpRequest request, ClientConnectionHandler client);
+    void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler);
 }

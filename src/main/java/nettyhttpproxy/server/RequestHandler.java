@@ -74,6 +74,7 @@ public class RequestHandler {
     private final ClientConnectionHandler connectionToClient;
     private final ChannelHandlerContext channelToClient;
     private final AtomicReference<Runnable> onRequestFinished;
+    private String userId;
 
     public RequestHandler(long id, HttpRequest request, List<RequestFilter> filters,
             ClientConnectionHandler parent, ChannelHandlerContext channelToClient, Runnable onRequestFinished) {
@@ -95,7 +96,7 @@ public class RequestHandler {
     public void start() {
         action = connectionToClient.mapper.map(request);
         for (RequestFilter filter : filters) {
-            filter.apply(request, connectionToClient);
+            filter.apply(request, connectionToClient, this);
         }
         LOG.log(Level.FINER, "{0} Mapped {1} to {2}", new Object[]{this, request.uri(), action});
         switch (action.action) {
@@ -566,4 +567,12 @@ public class RequestHandler {
         }
     }
 
+    public String getUserId() {
+        return userId;
+    }
+
+    public void setUserId(String userId) {
+        this.userId = userId;
+    }
+    
 }

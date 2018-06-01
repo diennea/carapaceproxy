@@ -57,6 +57,7 @@ import nettyhttpproxy.client.impl.ConnectionsManagerImpl;
 import nettyhttpproxy.server.cache.ContentsCache;
 import nettyhttpproxy.server.config.ConfigurationNotValidException;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
+import nettyhttpproxy.server.filters.RegexpMapUserIdFilter;
 import nettyhttpproxy.server.mapper.XForwardedForRequestFilter;
 import org.apache.bookkeeper.stats.*;
 import org.apache.bookkeeper.stats.prometheus.*;
@@ -296,13 +297,20 @@ public class HttpProxyServer implements AutoCloseable {
         if (type.isEmpty()) {
             return;
         }
-        LOG.log(Level.INFO, "configure filter type={0}", type);
+        LOG.log(Level.INFO, "configure filter " + prefix + "type={0}", type);
         switch (type) {
             case "add-x-forwarded-for":
                 addRequestFilter(new XForwardedForRequestFilter());
                 break;
+            case "match-user-regexp":
+                String param = properties.getProperty(prefix + "param", "userid").trim();
+                String regexp = properties.getProperty(prefix + "regexp", "(.*)").trim();
+                LOG.log(Level.INFO, prefix + "param" + "=" + param);
+                LOG.log(Level.INFO, prefix + "regexp" + "=" + regexp);
+                addRequestFilter(new RegexpMapUserIdFilter(param, regexp));
+                break;
             default:
-                throw new ConfigurationNotValidException("bad filter type '" + type + "' only 'add-x-forwarded-for'");
+                throw new ConfigurationNotValidException("bad filter type '" + type + "' only 'add-x-forwarded-for', 'match-user-regexp'");
         }
     }
 

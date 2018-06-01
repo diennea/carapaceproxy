@@ -23,6 +23,7 @@ import io.netty.handler.codec.http.HttpRequest;
 import java.net.InetSocketAddress;
 import nettyhttpproxy.server.ClientConnectionHandler;
 import nettyhttpproxy.server.RequestFilter;
+import nettyhttpproxy.server.RequestHandler;
 
 /**
  * Add a X-Forwarded-For Header
@@ -30,7 +31,7 @@ import nettyhttpproxy.server.RequestFilter;
 public class XForwardedForRequestFilter implements RequestFilter {
 
     @Override
-    public void apply(HttpRequest request, ClientConnectionHandler client) {
+    public void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler) {
         request.headers().remove("X-Forwarded-For");
         if (client.getClientAddress() instanceof InetSocketAddress) {
             InetSocketAddress address = (InetSocketAddress) client.getClientAddress();
