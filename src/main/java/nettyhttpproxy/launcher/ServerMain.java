@@ -177,6 +177,7 @@ public class ServerMain implements AutoCloseable {
         server.configure(configuration);
         server.start();
         server.startMetrics();
+        server.startAdminInterface();
         started = true;
     }
 

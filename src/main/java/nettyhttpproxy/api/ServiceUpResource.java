@@ -19,24 +19,20 @@
  */
 package nettyhttpproxy.api;
 
-import java.util.Set;
-import javax.ws.rs.ApplicationPath;
-import javax.ws.rs.core.Application;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
 
 /**
- * Configuration of the REST API
+ * Access to proxy cache
  *
  * @author enrico.olivelli
  */
-@ApplicationPath("api")
-public class ApplicationConfig extends Application {
+@Path("/up")
+public class ServiceUpResource {
 
-    @Override
-    public Set<Class<?>> getClasses() {
-        Set<Class<?>> resources = new java.util.HashSet<>();
-        resources.add(CacheResource.class);
-        resources.add(ServiceUpResource.class);
-        resources.add(StatsResource.class);
-        return resources;
+    @GET
+    public String ok() {
+        return "ok";
     }
 }

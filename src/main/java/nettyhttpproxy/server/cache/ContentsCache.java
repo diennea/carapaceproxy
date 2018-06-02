@@ -173,10 +173,11 @@ public class ContentsCache {
         return System.currentTimeMillis() + DEFAULT_TTL;
     }
 
-    // only for tests
-    public void clear() {
+    public int clear() {
+        int size = cache.size();
         cache.values().forEach(ContentPayload::clear);
         cache.clear();
+        return size;
     }
 
     public static final class ContentSender {

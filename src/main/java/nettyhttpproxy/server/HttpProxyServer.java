@@ -68,8 +68,8 @@ import org.eclipse.jetty.server.handler.ContextHandlerCollection;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.webapp.WebAppContext;
-import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.servlet.ServletContainer;
+import static org.glassfish.jersey.servlet.ServletProperties.JAXRS_APPLICATION_CLASS;
 
 public class HttpProxyServer implements AutoCloseable {
 
@@ -131,10 +131,10 @@ public class HttpProxyServer implements AutoCloseable {
 
         ServletContextHandler context = new ServletContextHandler(ServletContextHandler.GZIP);
         context.setContextPath("/");
-        ResourceConfig config = new ResourceConfig(ApplicationConfig.class);
-        ServletHolder jerseyServlet = new ServletHolder(new ServletContainer(config));
+        ServletHolder jerseyServlet = new ServletHolder(new ServletContainer());
         jerseyServlet.setInitOrder(0);
-        context.addServlet(jerseyServlet, "/api");
+        jerseyServlet.setInitParameter(JAXRS_APPLICATION_CLASS, ApplicationConfig.class.getCanonicalName());
+        context.addServlet(jerseyServlet, "/api/*");
         context.setAttribute("server", this);
         contexts.addHandler(context);
 
@@ -329,6 +329,9 @@ public class HttpProxyServer implements AutoCloseable {
         adminServerEnabled = Boolean.parseBoolean(properties.getProperty("http.admin.enabled", "false"));
         adminServerPort = Integer.parseInt(properties.getProperty("http.admin.port", adminServerPort + ""));
         adminServerHost = properties.getProperty("http.admin.host", adminServerHost);
+        LOG.info("http.admin.enabled="+adminServerEnabled);
+        LOG.info("http.admin.port="+adminServerPort);
+        LOG.info("http.admin.host="+adminServerHost);
     }
 
     private void tryConfigureListener(int i, Properties properties) {

@@ -59,12 +59,48 @@ public class StartAPIServerTest {
             server.startAdminInterface();
             
             try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
-                RawHttpClient.HttpResponse resp = client.get("/api/cache/flush");
-                String s = resp.toString();
+                RawHttpClient.HttpResponse resp = client.get("/api/up");
+                String s = resp.getBodyString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("ok"));
+                assertTrue(s.equals("ok"));
+            }
+            
+            try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+                RawHttpClient.HttpResponse resp = client.get("/api/stats/endpoints");
+                String s = resp.getBodyString();
+                System.out.println("s:" + s);
+                assertTrue(s.equals("{\"endpoints\":{}}"));
             }
 
+        }
+    }
+    
+    @Test
+    public void testCache() throws Exception {
+
+        try (HttpProxyServer server = new HttpProxyServer("localhost", 0,
+                new TestEndpointMapper("localhost", 0));) {
+            Properties prop = new Properties();
+            prop.setProperty("http.admin.enabled", "true");
+            prop.setProperty("http.admin.port", "8761");
+            prop.setProperty("http.admin.host", "localhost");
+            server.configure(prop);
+            server.start();
+            server.startAdminInterface();
+            
+            try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+                RawHttpClient.HttpResponse resp = client.get("/api/cache/info");
+                String s = resp.getBodyString();
+                System.out.println("s:" + s);
+                assertTrue(s.equals("{\"result\":\"ok\",\"cachesize\":0}"));
+            }
+
+            try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+                RawHttpClient.HttpResponse resp = client.get("/api/cache/flush");
+                String s = resp.getBodyString();
+                System.out.println("s:" + s);
+                assertTrue(s.equals("{\"result\":\"ok\",\"cachesize\":0}"));
+            }
         }
     }
 }

@@ -25,6 +25,7 @@ import javax.servlet.ServletContext;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.server.HttpProxyServer;
 
 /**
@@ -32,32 +33,18 @@ import nettyhttpproxy.server.HttpProxyServer;
  *
  * @author enrico.olivelli
  */
-@Path("/cache")
+@Path("/stats")
 @Produces("application/json")
-public class CacheResource {
+public class StatsResource {
 
     @javax.ws.rs.core.Context
     ServletContext context;
 
-    @Path("/flush")
+    @Path("/endpoints")
     @GET
-    public Map<String, Object> flush() {
+    public ConnectionsManagerStats endpointsStats() {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-        int size = server.getCache().clear();
-        Map<String, Object> res = new HashMap<>();
-        res.put("result", "ok");
-        res.put("cachesize", size);
-        return res;
+        return server.getConnectionsManager().getStats();
     }
-    
-    @Path("/info")
-    @GET
-    public Map<String, Object> info() {
-        HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-        int size = server.getCache().getCacheSize();
-        Map<String, Object> res = new HashMap<>();
-        res.put("result", "ok");
-        res.put("cachesize", size);
-        return res;
-    }
+
 }
