@@ -45,13 +45,13 @@ import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManagerFactory;
 import nettyhttpproxy.EndpointMapper;
+import nettyhttpproxy.api.ApplicationConfig;
 import nettyhttpproxy.client.ConnectionsManager;
 import nettyhttpproxy.client.impl.ConnectionsManagerImpl;
 import nettyhttpproxy.server.cache.ContentsCache;
@@ -63,6 +63,13 @@ import org.apache.bookkeeper.stats.*;
 import org.apache.bookkeeper.stats.prometheus.*;
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.PropertiesConfiguration;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.handler.ContextHandlerCollection;
+import org.eclipse.jetty.servlet.ServletContextHandler;
+import org.eclipse.jetty.servlet.ServletHolder;
+import org.eclipse.jetty.webapp.WebAppContext;
+import org.glassfish.jersey.server.ResourceConfig;
+import org.glassfish.jersey.servlet.ServletContainer;
 
 public class HttpProxyServer implements AutoCloseable {
 
@@ -84,6 +91,11 @@ public class HttpProxyServer implements AutoCloseable {
 
     private StatsProvider statsProvider;
     private final PropertiesConfiguration statsProviderConfig = new PropertiesConfiguration();
+
+    private Server adminserver;
+    private boolean adminServerEnabled;
+    private int adminServerPort = 8001;
+    private String adminServerHost = "localhost";
 
     public HttpProxyServer(EndpointMapper mapper, File basePath) {
         this.mapper = mapper;
@@ -107,6 +119,39 @@ public class HttpProxyServer implements AutoCloseable {
 
     public void addRequestFilter(RequestFilter filter) {
         filters.add(filter);
+    }
+
+    public void startAdminInterface() throws Exception {
+        if (!adminServerEnabled) {
+            return;
+        }
+        adminserver = new Server(new InetSocketAddress(adminServerHost, adminServerPort));
+        ContextHandlerCollection contexts = new ContextHandlerCollection();
+        adminserver.setHandler(contexts);
+
+        ServletContextHandler context = new ServletContextHandler(ServletContextHandler.GZIP);
+        context.setContextPath("/");
+        ResourceConfig config = new ResourceConfig(ApplicationConfig.class);
+        ServletHolder jerseyServlet = new ServletHolder(new ServletContainer(config));
+        jerseyServlet.setInitOrder(0);
+        context.addServlet(jerseyServlet, "/api");
+        context.setAttribute("server", this);
+        contexts.addHandler(context);
+
+        File webUi = new File(basePath, "web/ui");
+        if (webUi.isDirectory()) {
+            WebAppContext webApp = new WebAppContext(webUi.getAbsolutePath(), "/ui");
+            contexts.addHandler(webApp);
+        } else {
+            System.out.println("Cannot find " + webUi.getAbsolutePath() + " directory. Web UI will not be deployed");
+        }
+
+        adminserver.start();
+        String apiUrl = "http://" + adminServerHost + ":" + adminServerPort + "/api";
+        String uiUrl = "http://" + adminServerHost + ":" + adminServerPort + "/ui";
+        System.out.println("Base Admin UI url: " + uiUrl);
+        System.out.println("Base Admin/API url: " + apiUrl);
+
     }
 
     public void start() throws InterruptedException, ConfigurationNotValidException {
@@ -207,6 +252,15 @@ public class HttpProxyServer implements AutoCloseable {
 
     @Override
     public void close() {
+        if (adminserver != null) {
+            try {
+                adminserver.stop();
+            } catch (Exception err) {
+                LOG.log(Level.SEVERE, "Error while stopping admin server", err);
+            } finally {
+                adminserver = null;
+            }
+        }
         statsProvider.stop();
         for (Channel channel : listeningChannels) {
             channel.close().syncUninterruptibly();
@@ -272,6 +326,9 @@ public class HttpProxyServer implements AutoCloseable {
         properties.forEach((key, value) -> {
             statsProviderConfig.setProperty(key + "", value);
         });
+        adminServerEnabled = Boolean.parseBoolean(properties.getProperty("http.admin.enabled", "false"));
+        adminServerPort = Integer.parseInt(properties.getProperty("http.admin.port", adminServerPort + ""));
+        adminServerHost = properties.getProperty("http.admin.host", adminServerHost);
     }
 
     private void tryConfigureListener(int i, Properties properties) {
