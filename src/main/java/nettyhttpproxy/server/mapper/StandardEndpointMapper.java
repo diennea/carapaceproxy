@@ -40,6 +40,7 @@ import nettyhttpproxy.server.config.MatchAllRequestMatcher;
 import nettyhttpproxy.server.config.RequestMatcher;
 import nettyhttpproxy.server.config.RouteConfiguration;
 import nettyhttpproxy.server.config.RoutingKey;
+import nettyhttpproxy.server.config.ServiceConfiguration;
 import nettyhttpproxy.server.config.URIRequestMatcher;
 
 /**
@@ -48,6 +49,7 @@ import nettyhttpproxy.server.config.URIRequestMatcher;
 public class StandardEndpointMapper extends EndpointMapper {
 
     private final Map<String, BackendConfiguration> backends = new HashMap<>();
+    private final Map<String, ServiceConfiguration> services = new HashMap<>();
     private final List<String> allbackendids = new ArrayList<>();
     private final List<RouteConfiguration> routes = new ArrayList<>();
     private final Map<String, ActionConfiguration> actions = new HashMap<>();
@@ -102,6 +104,27 @@ public class StandardEndpointMapper extends EndpointMapper {
                 }
             }
         }
+
+        for (int i = 0; i < MAX_IDS; i++) {
+            String prefix = "service." + i + ".";
+            String id = properties.getProperty(prefix + "id", "");
+            if (!id.isEmpty()) {
+                boolean enabled = Boolean.parseBoolean(properties.getProperty(prefix + "enabled", "false"));
+                String backends = properties.getProperty(prefix + "backends", "");
+                LOG.info("configured service" + id + " backends:" + backends + ", enabled:" + enabled);
+                if (enabled) {
+                    ServiceConfiguration config = new ServiceConfiguration(id);
+                    String[] backendids = backends.split(",");
+                    for (String backendId : backendids) {
+                        if (!this.backends.containsKey(backendId)) {
+                            throw new ConfigurationNotValidException("while configuringservice '" + id + "': backend '" + backendId + "' does not exist");
+                        }
+                        config.addBackend(id);
+                    }
+                    addService(config);
+                }
+            }
+        }
         for (int i = 0; i < MAX_IDS; i++) {
             String prefix = "route." + i + ".";
             String id = properties.getProperty(prefix + "id", "");
@@ -151,6 +174,12 @@ public class StandardEndpointMapper extends EndpointMapper {
         this.backendSelector = new RandomBackendSelector();
     }
 
+    public void addService(ServiceConfiguration service) throws ConfigurationNotValidException {
+        if (services.put(service.getId(), service) != null) {
+            throw new ConfigurationNotValidException("service " + service.getId() + " is already configured");
+        }
+    }
+
     public void addBackend(BackendConfiguration backend) throws ConfigurationNotValidException {
         if (backends.put(backend.getId(), backend) != null) {
             throw new ConfigurationNotValidException("backend " + backend.getId() + " is already configured");
@@ -187,8 +216,8 @@ public class StandardEndpointMapper extends EndpointMapper {
 
                 if (ActionConfiguration.TYPE_STATIC.equals(action.getType())) {
                     return new MapResult(null, -1, MapResult.Action.STATIC)
-                        .setResource(action.getFile())
-                        .setErrorcode(action.getErrorcode());
+                            .setResource(action.getFile())
+                            .setErrorcode(action.getErrorcode());
                 }
 
                 List<String> selectedBackends = backendSelector.selectBackends(request, matchResult);
