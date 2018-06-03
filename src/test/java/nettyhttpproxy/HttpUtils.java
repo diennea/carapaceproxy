@@ -35,6 +35,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import static java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
@@ -251,21 +255,21 @@ public class HttpUtils {
                     long length = copyStreams(res, out);
                     if (httpCon != null) {
                         return new ResourceInfos(
-                            url,
-                            length,
-                            contentType,
-                            httpCode,
-                            responseMessage,
-                            location
+                                url,
+                                length,
+                                contentType,
+                                httpCode,
+                                responseMessage,
+                                location
                         );
                     } else {
                         return new ResourceInfos(
-                            url,
-                            length,
-                            contentType,
-                            httpCode,
-                            responseMessage,
-                            location
+                                url,
+                                length,
+                                contentType,
+                                httpCode,
+                                responseMessage,
+                                location
                         );
                     }
                 }
@@ -423,7 +427,7 @@ public class HttpUtils {
 
     private static String streamToString(InputStream in) throws IOException {
         try (BufferedInputStream ii = new BufferedInputStream(in);
-            Reader r = new InputStreamReader(ii, StandardCharsets.UTF_8)) {
+                Reader r = new InputStreamReader(ii, StandardCharsets.UTF_8)) {
             StringWriter writer = new StringWriter();
             int c = r.read();
             while (c != -1) {
@@ -460,8 +464,9 @@ public class HttpUtils {
     }
 
     /**
-     * Imposta i parametri nella connection in modo che non venga verificato il certificato HTTPs. da 18.10 imposta
-     * anche readtimeout e connection timeout se non impostati
+     * Imposta i parametri nella connection in modo che non venga verificato il
+     * certificato HTTPs. da 18.10 imposta anche readtimeout e connection
+     * timeout se non impostati
      *
      * @param con
      */
@@ -503,9 +508,8 @@ public class HttpUtils {
     }
 
     public static final String formatDateHeader(java.util.Date date) {
-        SimpleDateFormat fmt = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.ENGLISH);
-        fmt.setTimeZone(TimeZone.getTimeZone("GMT"));
-        return fmt.format(date);
+        return RFC_1123_DATE_TIME.format(ZonedDateTime.ofInstant(date.toInstant(), GMT));
     }
+    private static final ZoneId GMT = ZoneId.of("GMT");
 
 }
