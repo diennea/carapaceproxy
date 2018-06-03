@@ -142,6 +142,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 invalidate();
                 LOG.log(Level.INFO, "connect failed to " + key, future.cause());
                 clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
+                parent.backendHealthManager.reportBackendUnreachable(key.getHost() + ":" + key.getPort(), System.currentTimeMillis());
                 return;
             }
             final Channel _channelToEndpoint = afterConnect.channel();
@@ -164,6 +165,11 @@ public class EndpointConnectionImpl implements EndpointConnection {
                     if (!future.isSuccess()) {
                         LOG.log(Level.SEVERE, "sendRequest " + request.getClass() + " failed", future.cause());
                         clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
+                        // send to unreachable state if we are not able to send a request on the wire
+                        parent.backendHealthManager.reportBackendUnreachable(key.getHost() + ":" + key.getPort(), System.currentTimeMillis());
+                    } else {
+                        // back to reachable state at first request sent to the backend
+                        parent.backendHealthManager.reportBackendReachable(key.getHost() + ":" + key.getPort());
                     }
 //                    LOG.log(Level.SEVERE, "sendRequest finished, now " + _channelToEndpoint + " is open ? " + _channelToEndpoint.isOpen());
                     if (!_channelToEndpoint.isOpen()) {
@@ -188,7 +194,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 // this can happen during a chuncked request and the connection
                 // needs time to setup and chunks are arriving very quickly
                 // from the client
-                
+
                 // TODO: THIS SHOULD BE IMPLEMENTED BETTER
                 Thread.sleep(10);
             } catch (InterruptedException err) {

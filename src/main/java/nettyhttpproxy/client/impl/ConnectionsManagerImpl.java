@@ -32,6 +32,7 @@ import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointConnection;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.client.EndpointNotAvailableException;
+import nettyhttpproxy.server.backends.BackendHealthManager;
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.apache.commons.pool2.KeyedPooledObjectFactory;
 import org.apache.commons.pool2.PooledObject;
@@ -54,6 +55,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     private final ConcurrentHashMap<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
     private final EventLoopGroup group;
     final StatsLogger mainLogger;
+    final BackendHealthManager backendHealthManager;
 
     void returnConnection(EndpointConnectionImpl con) {
 //        LOG.log(Level.SEVERE, "returnConnection:" + con);
@@ -97,7 +99,8 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     }
 
-    public ConnectionsManagerImpl(int maxConnectionsPerEndpoint, int idleTimeout, int borrowTimeout, StatsLogger statsLogger) {
+    public ConnectionsManagerImpl(int maxConnectionsPerEndpoint, int idleTimeout,
+            int borrowTimeout, StatsLogger statsLogger, BackendHealthManager backendHealthManager) {
         this.mainLogger = statsLogger.scope("outbound");
         this.maxConnectionsPerEndpoint = maxConnectionsPerEndpoint;
         this.idleTimeout = idleTimeout;
@@ -111,6 +114,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         config.setBlockWhenExhausted(true);
         group = new NioEventLoopGroup();
         connections = new GenericKeyedObjectPool<>(new ConnectionsFactory(), config);
+        this.backendHealthManager = backendHealthManager;
     }
 
     EventLoopGroup getGroup() {

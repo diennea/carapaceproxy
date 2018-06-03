@@ -54,6 +54,7 @@ import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.api.ApplicationConfig;
 import nettyhttpproxy.client.ConnectionsManager;
 import nettyhttpproxy.client.impl.ConnectionsManagerImpl;
+import nettyhttpproxy.server.backends.BackendHealthManager;
 import nettyhttpproxy.server.cache.ContentsCache;
 import nettyhttpproxy.server.config.ConfigurationNotValidException;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
@@ -85,6 +86,7 @@ public class HttpProxyServer implements AutoCloseable {
     private final Counter currentClientConnections;
     private final File basePath;
     private final StaticContentsManager staticContentsManager = new StaticContentsManager();
+    private final BackendHealthManager backendHealthManager;
 
     private final List<NetworkListenerConfiguration> listeners = new ArrayList<>();
     private final List<Channel> listeningChannels = new ArrayList<>();
@@ -103,7 +105,8 @@ public class HttpProxyServer implements AutoCloseable {
         this.statsProvider = new PrometheusMetricsProvider();
         this.mainLogger = statsProvider.getStatsLogger("");
         this.currentClientConnections = mainLogger.getCounter("clients");
-        this.connectionsManager = new ConnectionsManagerImpl(10, 120000, 5000, mainLogger);
+        this.backendHealthManager = new BackendHealthManager();
+        this.connectionsManager = new ConnectionsManagerImpl(10, 120000, 5000, mainLogger, backendHealthManager);
         this.filters = new ArrayList<>();
         this.cache = new ContentsCache(mainLogger);
     }
@@ -286,6 +289,12 @@ public class HttpProxyServer implements AutoCloseable {
         return cache;
     }
 
+    public BackendHealthManager getBackendHealthManager() {
+        return backendHealthManager;
+    }
+    
+    
+
     private KeyManagerFactory initKeyManagerFactory(String keyStoreType, File keyStoreLocation,
             String keyStorePassword) throws SecurityException, KeyStoreException, NoSuchAlgorithmException,
             CertificateException, IOException, UnrecoverableKeyException {
@@ -329,9 +338,9 @@ public class HttpProxyServer implements AutoCloseable {
         adminServerEnabled = Boolean.parseBoolean(properties.getProperty("http.admin.enabled", "false"));
         adminServerPort = Integer.parseInt(properties.getProperty("http.admin.port", adminServerPort + ""));
         adminServerHost = properties.getProperty("http.admin.host", adminServerHost);
-        LOG.info("http.admin.enabled="+adminServerEnabled);
-        LOG.info("http.admin.port="+adminServerPort);
-        LOG.info("http.admin.host="+adminServerHost);
+        LOG.info("http.admin.enabled=" + adminServerEnabled);
+        LOG.info("http.admin.port=" + adminServerPort);
+        LOG.info("http.admin.host=" + adminServerHost);
     }
 
     private void tryConfigureListener(int i, Properties properties) {
