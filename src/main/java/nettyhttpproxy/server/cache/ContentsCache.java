@@ -146,6 +146,7 @@ public class ContentsCache {
                 case "jpeg":
                 case "js":
                 case "css":
+                case "woff2":
                     return true;
                 default:
                     return false;
