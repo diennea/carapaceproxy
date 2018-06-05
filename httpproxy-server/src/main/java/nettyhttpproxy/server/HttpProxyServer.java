@@ -30,18 +30,25 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.http.HttpRequestDecoder;
 import io.netty.handler.codec.http.HttpResponseEncoder;
 import io.netty.handler.ssl.OpenSsl;
+import io.netty.handler.ssl.SniHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
+import io.netty.util.AsyncMapping;
+import io.netty.util.concurrent.Promise;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.Principal;
+import java.security.PrivateKey;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -49,8 +56,15 @@ import java.util.List;
 import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.net.ssl.ExtendedSSLSession;
+import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SNIHostName;
+import javax.net.ssl.SNIServerName;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.StandardConstants;
 import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509ExtendedKeyManager;
 import javax.servlet.DispatcherType;
 import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.api.ApplicationConfig;
@@ -167,75 +181,7 @@ public class HttpProxyServer implements AutoCloseable {
             workerGroup = new EpollEventLoopGroup();
 
             for (NetworkListenerConfiguration listener : listeners) {
-                LOG.info("Starting listener at " + listener.getHost() + ":" + listener.getPort() + " ssl:" + listener.isSsl());
-                final SslContext sslCtx;
-                if (listener.isSsl()) {
-                    String sslCertFilePassword = listener.getSslCertificatePassword();
-                    String sslCiphers = listener.getSslCiphers();
-                    String certificateFile = listener.getSslCertificateFile();
-                    File sslCertFile = certificateFile.startsWith("/") ? new File(certificateFile) : new File(basePath, certificateFile);
-                    sslCertFile = sslCertFile.getAbsoluteFile();
-
-                    String caPassword = listener.getSslCertificatePassword();
-                    String caFile = listener.getSslChainFile();
-                    File caCertFile = null;
-                    boolean caFileConfigured = caFile != null && !caFile.isEmpty();
-                    if (caFileConfigured) {
-                        caCertFile = caFile.startsWith("/") ? new File(caFile) : new File(basePath, caFile);
-                        caCertFile = caCertFile.getAbsoluteFile();
-                    }
-
-                    LOG.log(Level.SEVERE, "start SSL with certificate " + sslCertFile + " OCPS " + listener.isOcps());
-                    try {
-                        KeyManagerFactory keyFactory = initKeyManagerFactory("PKCS12", sslCertFile, sslCertFilePassword);
-                        TrustManagerFactory trustManagerFactory = null;
-                        if (caFileConfigured) {
-                            LOG.log(Level.SEVERE, "loading CA from " + caCertFile);
-                            trustManagerFactory = initTrustManagerFactory("PKCS12", caCertFile, caPassword);
-                        }
-
-                        List<String> ciphers = null;
-                        if (sslCiphers != null && !sslCiphers.isEmpty()) {
-                            LOG.log(Level.SEVERE, "required sslCiphers " + sslCiphers);
-                            ciphers = Arrays.asList(sslCiphers.split(","));
-                        }
-                        sslCtx = SslContextBuilder
-                                .forServer(keyFactory)
-                                .enableOcsp(listener.isOcps() && OpenSsl.isOcspSupported())
-                                .trustManager(trustManagerFactory)
-                                .sslProvider(SslProvider.OPENSSL)
-                                .ciphers(ciphers).build();
-                    } catch (CertificateException | IOException | KeyStoreException | SecurityException
-                            | NoSuchAlgorithmException | UnrecoverableKeyException err) {
-                        throw new ConfigurationNotValidException(err);
-                    };
-                } else {
-                    sslCtx = null;
-                }
-                ServerBootstrap b = new ServerBootstrap();
-                b.group(bossGroup, workerGroup)
-                        .channel(EpollServerSocketChannel.class)
-                        .childHandler(new ChannelInitializer<SocketChannel>() {
-                            @Override
-                            public void initChannel(SocketChannel channel) throws Exception {
-                                currentClientConnections.inc();
-                                if (listener.isSsl()) {
-                                    channel.pipeline().addLast(sslCtx.newHandler(channel.alloc()));
-                                }
-                                channel.pipeline().addLast(new HttpRequestDecoder());
-                                channel.pipeline().addLast(new HttpResponseEncoder());
-                                channel.pipeline().addLast(
-                                        new ClientConnectionHandler(mainLogger, mapper,
-                                                connectionsManager,
-                                                filters, cache,
-                                                channel.remoteAddress(), staticContentsManager,
-                                                () -> currentClientConnections.dec()));
-
-                            }
-                        })
-                        .option(ChannelOption.SO_BACKLOG, 128)
-                        .childOption(ChannelOption.SO_KEEPALIVE, true);
-                listeningChannels.add(b.bind(listener.getHost(), listener.getPort()).sync().channel());
+                bootListener(listener);
             }
             cache.start();
         } catch (RuntimeException err) {
@@ -243,6 +189,84 @@ public class HttpProxyServer implements AutoCloseable {
             throw err;
         }
 
+    }
+
+    private void bootListener(NetworkListenerConfiguration listener) throws ConfigurationNotValidException, InterruptedException {
+        LOG.info("Starting listener at " + listener.getHost() + ":" + listener.getPort() + " ssl:" + listener.isSsl());
+        final SslContext defaultSslCtx;
+        if (listener.isSsl()) {
+            String sslCertFilePassword = listener.getSslCertificatePassword();
+            String sslCiphers = listener.getSslCiphers();
+            String certificateFile = listener.getSslCertificateFile();
+            File sslCertFile = certificateFile.startsWith("/") ? new File(certificateFile) : new File(basePath, certificateFile);
+            sslCertFile = sslCertFile.getAbsoluteFile();
+
+            String caPassword = listener.getSslCertificatePassword();
+            String caFile = listener.getSslTrustoreFile();
+            File caCertFile = null;
+            boolean caFileConfigured = caFile != null && !caFile.isEmpty();
+            if (caFileConfigured) {
+                caCertFile = caFile.startsWith("/") ? new File(caFile) : new File(basePath, caFile);
+                caCertFile = caCertFile.getAbsoluteFile();
+            }
+
+            LOG.log(Level.SEVERE, "start SSL with certificate " + sslCertFile + " OCPS " + listener.isOcps());
+            try {
+                KeyManagerFactory keyFactory = initKeyManagerFactory("PKCS12", sslCertFile, sslCertFilePassword);
+                TrustManagerFactory trustManagerFactory = null;
+                if (caFileConfigured) {
+                    LOG.log(Level.SEVERE, "loading CA from " + caCertFile);
+                    trustManagerFactory = initTrustManagerFactory("PKCS12", caCertFile, caPassword);
+                }
+
+                List<String> ciphers = null;
+                if (sslCiphers != null && !sslCiphers.isEmpty()) {
+                    LOG.log(Level.SEVERE, "required sslCiphers " + sslCiphers);
+                    ciphers = Arrays.asList(sslCiphers.split(","));
+                }
+                defaultSslCtx = SslContextBuilder
+                        .forServer(keyFactory)
+                        .enableOcsp(listener.isOcps() && OpenSsl.isOcspSupported())
+                        .trustManager(trustManagerFactory)
+                        .sslProvider(SslProvider.OPENSSL)
+                        .ciphers(ciphers).build();
+            } catch (CertificateException | IOException | KeyStoreException | SecurityException
+                    | NoSuchAlgorithmException | UnrecoverableKeyException err) {
+                throw new ConfigurationNotValidException(err);
+            };
+        } else {
+            defaultSslCtx = null;
+        }
+        AsyncMapping<String, SslContext> sniMappings = (String hostname, Promise<SslContext> promise) -> {
+            LOG.log(Level.INFO, "resolve SNI for hostname {0}", hostname);
+            return promise.setSuccess(defaultSslCtx);
+        };
+        ServerBootstrap b = new ServerBootstrap();
+        b.group(bossGroup, workerGroup)
+                .channel(EpollServerSocketChannel.class)
+                .childHandler(new ChannelInitializer<SocketChannel>() {
+                    @Override
+                    public void initChannel(SocketChannel channel) throws Exception {
+                        currentClientConnections.inc();
+                        if (listener.isSsl()) {
+                            SniHandler sni = new SniHandler(sniMappings);
+                            channel.pipeline().addLast(sni);
+                            // channel.pipeline().addLast(sslCtx.newHandler(channel.alloc()));
+                        }
+                        channel.pipeline().addLast(new HttpRequestDecoder());
+                        channel.pipeline().addLast(new HttpResponseEncoder());
+                        channel.pipeline().addLast(
+                                new ClientConnectionHandler(mainLogger, mapper,
+                                        connectionsManager,
+                                        filters, cache,
+                                        channel.remoteAddress(), staticContentsManager,
+                                        () -> currentClientConnections.dec()));
+
+                    }
+                })
+                .option(ChannelOption.SO_BACKLOG, 128)
+                .childOption(ChannelOption.SO_KEEPALIVE, true);
+        listeningChannels.add(b.bind(listener.getHost(), listener.getPort()).sync().channel());
     }
 
     public void startMetrics() throws ConfigurationException {

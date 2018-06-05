@@ -31,8 +31,8 @@ public class NetworkListenerConfiguration {
     private final String sslCertificateFile;
     private final String sslCertificatePassword;
 
-    private final String sslChainFile;
-    private final String sslChainPassword;
+    private final String sslTrustoreFile;
+    private final String sslTrustorePassword;
 
     private final String sslCiphers;
 
@@ -41,8 +41,8 @@ public class NetworkListenerConfiguration {
         this.port = port;
         this.sslCertificateFile = null;
         this.sslCertificatePassword = null;
-        this.sslChainFile = null;
-        this.sslChainPassword = null;
+        this.sslTrustoreFile = null;
+        this.sslTrustorePassword = null;
         this.ssl = false;
         this.sslCiphers = null;
         this.ocps = false;
@@ -51,8 +51,8 @@ public class NetworkListenerConfiguration {
     public NetworkListenerConfiguration(String host, int port, boolean ssl,
             String sslCertificateFile,
             String sslCertificatePassword,
-            String sslChainFile,
-            String sslChainPassword,
+            String sslTrustoreFile,
+            String sslTrustorePassword,
             String sslCiphers,
             boolean ocps) {
         this.host = host;
@@ -60,8 +60,8 @@ public class NetworkListenerConfiguration {
         this.ssl = ssl;
         this.sslCertificateFile = sslCertificateFile;
         this.sslCertificatePassword = sslCertificatePassword;
-        this.sslChainFile = sslChainFile;
-        this.sslChainPassword = sslChainPassword;
+        this.sslTrustoreFile = sslTrustoreFile;
+        this.sslTrustorePassword = sslTrustorePassword;
         this.sslCiphers = sslCiphers;
         this.ocps = ocps;
     }
@@ -94,12 +94,12 @@ public class NetworkListenerConfiguration {
         return sslCiphers;
     }
 
-    public String getSslChainFile() {
-        return sslChainFile;
+    public String getSslTrustoreFile() {
+        return sslTrustoreFile;
     }
 
-    public String getSslChainPassword() {
-        return sslChainPassword;
+    public String getSslTrustorePassword() {
+        return sslTrustorePassword;
     }
 
 }
