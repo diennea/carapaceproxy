@@ -39,7 +39,7 @@
             <unpack>false</unpack>                                  
             <outputDirectory>lib</outputDirectory>
         </dependencySet>
-        <dependencySet>
+        <!-- <dependencySet>
             <useProjectArtifact>true</useProjectArtifact>
             <useStrictFiltering>true</useStrictFiltering>
             <unpack>true</unpack>           
@@ -47,7 +47,7 @@
                 <include>httpproxy:httpproxy-ui:war</include>                                
             </includes>                        
             <outputDirectory>web/ui</outputDirectory>
-        </dependencySet> 
+        </dependencySet> -->
     </dependencySets>
   
 
