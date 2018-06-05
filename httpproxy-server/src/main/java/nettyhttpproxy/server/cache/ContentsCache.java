@@ -176,6 +176,7 @@ public class ContentsCache {
     }
 
     public int clear() {
+        LOG.info("clearing cache");
         int size = cache.size();
         cache.values().forEach(removed -> {
             removed.clear();
