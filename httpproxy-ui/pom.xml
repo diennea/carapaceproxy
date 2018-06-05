@@ -47,7 +47,7 @@
                 <artifactId>maven-war-plugin</artifactId>
                 <version>3.2.1</version>
                 <configuration>
-                    <warSourceDirectory>src/main/webapp/build</warSourceDirectory>
+                    <packagingIncludes>ui/**</packagingIncludes>
                     <failOnMissingWebXml>false</failOnMissingWebXml>
                 </configuration>
             </plugin>
@@ -94,6 +94,16 @@
                     </execution>
                     <execution>
                         <id>npm install</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>--prefix ./src/main/webapp install</arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>npm build</id>
                         <phase>process-resources</phase>
                         <goals>
                             <goal>npm</goal>
