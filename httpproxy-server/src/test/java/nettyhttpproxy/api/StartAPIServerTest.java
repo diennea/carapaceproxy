@@ -50,6 +50,10 @@ public class StartAPIServerTest {
                 String s = resp.getBodyString();
                 System.out.println("s:" + s);
                 assertTrue(s.equals("ok"));
+                // API calls cannot be cached by the client (browser)
+                assertTrue(resp.getHeaderLines().contains("Cache-Control: no-cache\r\n"));
+                // Allow CORS
+                assertTrue(resp.getHeaderLines().contains("Access-Control-Allow-Origin: *\r\n"));
             }
 
         }

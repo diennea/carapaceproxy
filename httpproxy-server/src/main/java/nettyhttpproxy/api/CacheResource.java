@@ -58,7 +58,7 @@ public class CacheResource {
     public Map<String, Object> info() {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         ContentsCache cache = server.getCache();
-        int size = cache.clear();
+        int size = cache.getCacheSize();
         CacheStats stats = cache.getStats();
         Map<String, Object> res = new HashMap<>();
         res.put("result", "ok");

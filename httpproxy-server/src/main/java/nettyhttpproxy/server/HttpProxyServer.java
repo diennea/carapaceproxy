@@ -44,14 +44,17 @@ import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManagerFactory;
+import javax.servlet.DispatcherType;
 import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.api.ApplicationConfig;
+import nettyhttpproxy.api.ForceHeadersAPIRequestsFilter;
 import nettyhttpproxy.client.ConnectionsManager;
 import nettyhttpproxy.client.impl.ConnectionsManagerImpl;
 import nettyhttpproxy.server.backends.BackendHealthManager;
@@ -134,6 +137,7 @@ public class HttpProxyServer implements AutoCloseable {
 
         ServletContextHandler context = new ServletContextHandler(ServletContextHandler.GZIP);
         context.setContextPath("/");
+        context.addFilter(ForceHeadersAPIRequestsFilter.class, "/api/*", EnumSet.of(DispatcherType.REQUEST));
         ServletHolder jerseyServlet = new ServletHolder(new ServletContainer());
         jerseyServlet.setInitOrder(0);
         jerseyServlet.setInitParameter(JAXRS_APPLICATION_CLASS, ApplicationConfig.class.getCanonicalName());
@@ -292,8 +296,6 @@ public class HttpProxyServer implements AutoCloseable {
     public BackendHealthManager getBackendHealthManager() {
         return backendHealthManager;
     }
-    
-    
 
     private KeyManagerFactory initKeyManagerFactory(String keyStoreType, File keyStoreLocation,
             String keyStorePassword) throws SecurityException, KeyStoreException, NoSuchAlgorithmException,
