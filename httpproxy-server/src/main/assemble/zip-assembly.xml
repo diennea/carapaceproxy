@@ -39,6 +39,16 @@
             <unpack>false</unpack>                                  
             <outputDirectory>lib</outputDirectory>
         </dependencySet>
+        <dependencySet>
+            <useProjectArtifact>true</useProjectArtifact>
+            <useStrictFiltering>true</useStrictFiltering>
+            <unpack>true</unpack>           
+            <includes>
+                <include>httpproxy:httpproxy-ui:war</include>                                
+            </includes>                        
+            <outputDirectory>web/ui</outputDirectory>
+        </dependencySet> 
     </dependencySets>
+  
 
 </assembly>

@@ -3,5 +3,6 @@
 **/.settings/
 **/.classpath
 **/target/
+**/node/
 dependency-reduced-pom.xml
 /nbproject/

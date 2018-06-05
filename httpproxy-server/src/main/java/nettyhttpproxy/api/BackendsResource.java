@@ -19,12 +19,13 @@
  */
 package nettyhttpproxy.api;
 
-import java.util.HashMap;
 import java.util.Map;
 import javax.servlet.ServletContext;
+import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.core.Context;
 import nettyhttpproxy.server.HttpProxyServer;
 import nettyhttpproxy.server.backends.BackendHealthStatus;
 
@@ -39,7 +40,7 @@ public class BackendsResource {
 
     @javax.ws.rs.core.Context
     ServletContext context;
-
+    
     @GET
     public Map<String, BackendHealthStatus> getAll() {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");

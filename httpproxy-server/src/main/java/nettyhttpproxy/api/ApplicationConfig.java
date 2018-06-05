@@ -20,6 +20,7 @@
 package nettyhttpproxy.api;
 
 import java.util.Set;
+import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.ApplicationPath;
 import javax.ws.rs.core.Application;
 
@@ -37,6 +38,7 @@ public class ApplicationConfig extends Application {
         resources.add(CacheResource.class);
         resources.add(ServiceUpResource.class);
         resources.add(StatsResource.class);
+        resources.add(BackendsResource.class);
         return resources;
     }
 }

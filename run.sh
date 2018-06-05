@@ -1,6 +1,5 @@
 #!/bin/bash
 mvn clean install -DskipTests
-cd target
+cd httpproxy-server/target
 unzip *.zip
-cd ..
-target/nettyhttpproxy*/bin/service server console conf/server.properties
+httpproxy-server*/bin/service server console conf/server.properties
