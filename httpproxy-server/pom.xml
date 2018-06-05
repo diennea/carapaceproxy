@@ -163,13 +163,13 @@
             <version>${libs.mockito}</version>
             <scope>test</scope>
         </dependency>
-<!--         <dependency>
+         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>httpproxy-ui</artifactId>
             <version>${project.version}</version>            
             <scope>runtime</scope>
             <type>war</type>
-        </dependency> -->
+        </dependency> 
     </dependencies>
     <build>        
         <plugins>  

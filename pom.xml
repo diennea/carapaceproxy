@@ -7,7 +7,7 @@
     <packaging>pom</packaging>
     <modules>
         <module>httpproxy-server</module>
-<!--        <module>httpproxy-ui</module> -->
+        <module>httpproxy-ui</module> 
     </modules>
     <name>HttpProxy :: Parent</name>
     <build>        
