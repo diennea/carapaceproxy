@@ -19,24 +19,11 @@
  */
 package nettyhttpproxy.api;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import static com.github.tomakehurst.wiremock.client.WireMock.get;
-import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
-import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.util.Properties;
 import nettyhttpproxy.TestEndpointMapper;
-import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.server.HttpProxyServer;
-import nettyhttpproxy.server.StaticContentsManager;
-import nettyhttpproxy.server.config.ActionConfiguration;
-import nettyhttpproxy.server.config.BackendConfiguration;
-import nettyhttpproxy.server.config.RouteConfiguration;
-import nettyhttpproxy.server.config.URIRequestMatcher;
-import nettyhttpproxy.server.mapper.StandardEndpointMapper;
 import nettyhttpproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertTrue;
-import org.junit.Rule;
 import org.junit.Test;
 
 /**
@@ -57,24 +44,17 @@ public class StartAPIServerTest {
             server.configure(prop);
             server.start();
             server.startAdminInterface();
-            
+
             try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
                 RawHttpClient.HttpResponse resp = client.get("/api/up");
                 String s = resp.getBodyString();
                 System.out.println("s:" + s);
                 assertTrue(s.equals("ok"));
             }
-            
-            try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
-                RawHttpClient.HttpResponse resp = client.get("/api/stats/endpoints");
-                String s = resp.getBodyString();
-                System.out.println("s:" + s);
-                assertTrue(s.equals("{\"endpoints\":{}}"));
-            }
 
         }
     }
-    
+
     @Test
     public void testCache() throws Exception {
 
@@ -87,12 +67,12 @@ public class StartAPIServerTest {
             server.configure(prop);
             server.start();
             server.startAdminInterface();
-            
+
             try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
                 RawHttpClient.HttpResponse resp = client.get("/api/cache/info");
                 String s = resp.getBodyString();
                 System.out.println("s:" + s);
-                assertTrue(s.equals("{\"result\":\"ok\",\"cachesize\":0}"));
+                assertTrue(s.equals("{\"result\":\"ok\",\"hits\":0,\"directMemoryUsed\":0,\"misses\":0,\"heapMemoryUsed\":0,\"cachesize\":0}"));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
@@ -101,6 +81,30 @@ public class StartAPIServerTest {
                 System.out.println("s:" + s);
                 assertTrue(s.equals("{\"result\":\"ok\",\"cachesize\":0}"));
             }
+        }
+    }
+
+    @Test
+    public void testBackends() throws Exception {
+
+        try (HttpProxyServer server = new HttpProxyServer("localhost", 0,
+                new TestEndpointMapper("localhost", 0));) {
+            Properties prop = new Properties();
+            prop.setProperty("http.admin.enabled", "true");
+            prop.setProperty("http.admin.port", "8761");
+            prop.setProperty("http.admin.host", "localhost");
+            server.configure(prop);
+            server.start();
+            server.startAdminInterface();
+
+            try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+                RawHttpClient.HttpResponse resp = client.get("/api/backends");
+                String s = resp.getBodyString();
+                System.out.println("s:" + s);
+                // no backend configured
+                assertTrue(s.equals("{}"));
+            }
+
         }
     }
 }

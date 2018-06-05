@@ -26,6 +26,8 @@ import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import nettyhttpproxy.server.HttpProxyServer;
+import nettyhttpproxy.server.cache.CacheStats;
+import nettyhttpproxy.server.cache.ContentsCache;
 
 /**
  * Access to proxy cache
@@ -43,21 +45,28 @@ public class CacheResource {
     @GET
     public Map<String, Object> flush() {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-        int size = server.getCache().clear();
+        ContentsCache cache = server.getCache();
+        int size = cache.clear();
         Map<String, Object> res = new HashMap<>();
         res.put("result", "ok");
         res.put("cachesize", size);
         return res;
     }
-    
+
     @Path("/info")
     @GET
     public Map<String, Object> info() {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-        int size = server.getCache().getCacheSize();
+        ContentsCache cache = server.getCache();
+        int size = cache.clear();
+        CacheStats stats = cache.getStats();
         Map<String, Object> res = new HashMap<>();
         res.put("result", "ok");
         res.put("cachesize", size);
+        res.put("hits", stats.getHits());
+        res.put("misses", stats.getMisses());
+        res.put("directMemoryUsed", stats.getDirectMemoryUsed());
+        res.put("heapMemoryUsed", stats.getHeapMemoryUsed());
         return res;
     }
 }

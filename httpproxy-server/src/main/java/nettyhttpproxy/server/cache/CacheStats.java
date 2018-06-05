@@ -20,29 +20,58 @@
 package nettyhttpproxy.server.cache;
 
 import java.util.concurrent.atomic.AtomicLong;
+import org.apache.bookkeeper.stats.Counter;
+import org.apache.bookkeeper.stats.StatsLogger;
 
 /**
  * Overall statistics about cache
  */
 public class CacheStats {
 
-    private final AtomicLong hits = new AtomicLong();
-    private final AtomicLong misses = new AtomicLong();
+    private final Counter hits;
+    private final Counter misses;
+    private final Counter directMemoryUsed;
+    private final Counter heapMemoryUsed;
+
+    public CacheStats(StatsLogger cacheScope) {
+        this.hits = cacheScope.getCounter("hits");
+        this.misses = cacheScope.getCounter("misses");
+        this.directMemoryUsed = cacheScope.getCounter("directMemoryUsed");
+        this.heapMemoryUsed = cacheScope.getCounter("heapMemoryUsed");
+    }
 
     public void update(boolean hit) {
         if (hit) {
-            hits.incrementAndGet();
+            hits.inc();
         } else {
-            misses.incrementAndGet();
+            misses.inc();
         }
     }
 
+    public void cached(long heap, long direct) {
+        directMemoryUsed.add(direct);
+        heapMemoryUsed.add(heap);
+    }
+
+    public void released(long heap, long direct) {
+        directMemoryUsed.add(-direct);
+        heapMemoryUsed.add(-heap);
+    }
+
+    public long getDirectMemoryUsed() {
+        return directMemoryUsed.get();
+    }
+
+    public long getHeapMemoryUsed() {
+        return heapMemoryUsed.get();
+    }
+
     public long getHits() {
-        return hits.longValue();
+        return hits.get();
     }
 
     public long getMisses() {
-        return misses.longValue();
+        return misses.get();
     }
 
 }

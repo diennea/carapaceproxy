@@ -20,6 +20,7 @@
 package nettyhttpproxy.server.cache;
 
 import com.google.common.annotations.VisibleForTesting;
+import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.DefaultHttpContent;
 import io.netty.handler.codec.http.DefaultHttpResponse;
 import io.netty.handler.codec.http.DefaultLastHttpContent;
@@ -56,17 +57,14 @@ public class ContentsCache {
     private static final Logger LOG = Logger.getLogger(ContentsCache.class.getName());
 
     private final ConcurrentMap<ContentKey, ContentPayload> cache = new ConcurrentHashMap<>();
-    private final CacheStats stats = new CacheStats();
-    private final Counter cacheHits;
-    private final Counter cacheMisses;
+    private final CacheStats stats;
     private final Counter noCacheRequests;
     private final ScheduledExecutorService threadPool;
     private static final long DEFAULT_TTL = 1000 * 60 * 60;
 
     public ContentsCache(StatsLogger mainLogger) {
         StatsLogger cacheScope = mainLogger.scope("cache");
-        this.cacheHits = cacheScope.getCounter("hits");
-        this.cacheMisses = cacheScope.getCounter("misses");
+        this.stats = new CacheStats(cacheScope);
         this.noCacheRequests = cacheScope.getCounter("nocacherequests");
         this.threadPool = Executors.newSingleThreadScheduledExecutor();
     }
@@ -82,7 +80,10 @@ public class ContentsCache {
         } catch (InterruptedException exit) {
             Thread.currentThread().interrupt();
         }
-        cache.values().forEach(ContentPayload::clear);
+        cache.values().forEach(removed -> {
+            removed.clear();
+            stats.released(removed.heapSize, removed.directSize);
+        });
         cache.clear();
     }
 
@@ -176,7 +177,10 @@ public class ContentsCache {
 
     public int clear() {
         int size = cache.size();
-        cache.values().forEach(ContentPayload::clear);
+        cache.values().forEach(removed -> {
+            removed.clear();
+            stats.released(removed.heapSize, removed.directSize);
+        });
         cache.clear();
         return size;
     }
@@ -224,10 +228,8 @@ public class ContentsCache {
         });
         stats.update(cached != null);
         if (cached == null) {
-            cacheMisses.inc();
             return null;
         }
-        cacheHits.inc();
         return new ContentSender(key, cached);
 
     }
@@ -238,6 +240,8 @@ public class ContentsCache {
         private final long creationTs = System.currentTimeMillis();
         private long lastModified;
         private long expiresTs = -1;
+        private long heapSize;
+        private long directSize;
 
         public long getLastModified() {
             return lastModified;
@@ -251,16 +255,31 @@ public class ContentsCache {
             return creationTs;
         }
 
+        public long getHeapSize() {
+            return heapSize;
+        }
+
+        public long getDirectSize() {
+            return directSize;
+        }
+
         public List<HttpObject> getChunks() {
             return chunks;
         }
 
-        private void clear() {            
+        private void clear() {
             for (HttpObject o : chunks) {
                 ReferenceCountUtil.release(o);
             }
             chunks.clear();
         }
+
+        private void addChunk(HttpObject msg) {
+            chunks.add(msg);
+            heapSize += getHttpObjectHeapSize(msg);
+            directSize += getHttpObjectDirectSize(msg);
+        }
+
     }
 
     public static class ContentKey {
@@ -316,8 +335,9 @@ public class ContentsCache {
     }
 
     private void cacheContent(ContentReceiver receiver) {
-        cache.put(receiver.key, receiver.content);
-
+        ContentPayload content = receiver.content;
+        cache.put(receiver.key, content);
+        stats.cached(content.heapSize, content.directSize);
     }
 
     public class ContentReceiver {
@@ -361,10 +381,48 @@ public class ContentsCache {
             msg = cloneHttpObject(msg);
 //            LOG.info(key + " accepting chunk " + msg);
 
-            content.chunks.add(msg);
+            content.addChunk(msg);
             if (msg instanceof LastHttpContent) {
                 cacheContent(this);
             }
+        }
+    }
+
+    public static long getHttpObjectHeapSize(HttpObject msg) {
+        if (msg instanceof HttpResponse) {
+            return 0;
+        } else if (msg instanceof DefaultHttpContent) {
+            DefaultHttpContent df = (DefaultHttpContent) msg;
+            ByteBuf content = df.content();
+            if (content.isDirect()) {
+                return 0;
+            } else {
+                return content.capacity();
+            }
+        } else if (msg instanceof LastHttpContent) {
+            // EmptyLastHttpContent
+            return 0;
+        } else {
+            throw new IllegalStateException("cannot estimate HttpObject " + msg);
+        }
+    }
+
+    public static long getHttpObjectDirectSize(HttpObject msg) {
+        if (msg instanceof HttpResponse) {
+            return 0;
+        } else if (msg instanceof DefaultHttpContent) {
+            DefaultHttpContent df = (DefaultHttpContent) msg;
+            ByteBuf content = df.content();
+            if (content.isDirect()) {
+                return content.capacity();
+            } else {
+                return 0;
+            }
+        } else if (msg instanceof LastHttpContent) {
+            // EmptyLastHttpContent
+            return 0;
+        } else {
+            throw new IllegalStateException("cannot estimate HttpObject " + msg);
         }
     }
 
@@ -404,6 +462,7 @@ public class ContentsCache {
                 ContentPayload removed = cache.remove(k);
                 if (removed != null) {
                     removed.clear();
+                    stats.released(removed.heapSize, removed.directSize);
                 }
             });
             if (!toRemove.isEmpty()) {

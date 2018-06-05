@@ -31,6 +31,20 @@ public final class EndpointKey {
     private final String host;
     private final int port;
 
+    public static EndpointKey make(String host, int port) {
+        return new EndpointKey(host, port);
+    }
+
+    public static EndpointKey make(String hostAndPort) {
+        int pos = hostAndPort.indexOf(':');
+        if (pos > 0) {
+            return new EndpointKey(hostAndPort.substring(0, pos),
+                    Integer.parseInt(hostAndPort.substring(pos + 1, hostAndPort.length() - 1)));
+        } else {
+            return new EndpointKey(hostAndPort, 0);
+        }
+    }
+
     public EndpointKey(String host, int port) {
         this.host = host;
         this.port = port;

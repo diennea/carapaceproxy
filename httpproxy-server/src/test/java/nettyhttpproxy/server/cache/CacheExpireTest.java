@@ -52,12 +52,12 @@ public class CacheExpireTest {
         String formatted = HttpUtils.formatDateHeader(expire);
 
         stubFor(get(urlEqualTo("/index-with-expire.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                .withHeader("Expires", formatted)
-                .withBody("it <b>works</b> !!"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withHeader("Expires", formatted)
+                        .withBody("it <b>works</b> !!"))
         );
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
@@ -97,13 +97,15 @@ public class CacheExpireTest {
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(1, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
+            assertEquals(18, server.getCache().getStats().getDirectMemoryUsed());
+            assertEquals(0, server.getCache().getStats().getHeapMemoryUsed());
         }
 
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
@@ -113,11 +115,11 @@ public class CacheExpireTest {
     public void testHandleExpiresMissingFromServer() throws Exception {
 
         stubFor(get(urlEqualTo("/index-no-expire.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                .withBody("it <b>works</b> !!"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withBody("it <b>works</b> !!"))
         );
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
@@ -163,8 +165,8 @@ public class CacheExpireTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
@@ -178,12 +180,12 @@ public class CacheExpireTest {
         String formatted = HttpUtils.formatDateHeader(expire);
 
         stubFor(get(urlEqualTo("/index-with-expire.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                .withHeader("Expires", formatted)
-                .withBody("it <b>works</b> !!"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withHeader("Expires", formatted)
+                        .withBody("it <b>works</b> !!"))
         );
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
@@ -228,8 +230,8 @@ public class CacheExpireTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
@@ -242,12 +244,12 @@ public class CacheExpireTest {
         String formatted = HttpUtils.formatDateHeader(expire);
 
         stubFor(get(urlEqualTo("/index-with-expire.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                .withHeader("Expires", formatted)
-                .withBody("it <b>works</b> !!"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withHeader("Expires", formatted)
+                        .withBody("it <b>works</b> !!"))
         );
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
@@ -300,8 +302,8 @@ public class CacheExpireTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
@@ -314,12 +316,12 @@ public class CacheExpireTest {
         String formatted = HttpUtils.formatDateHeader(expire);
 
         stubFor(get(urlEqualTo("/index-with-expire.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                .withHeader("Expires", formatted)
-                .withBody("it <b>works</b> !!"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withHeader("Expires", formatted)
+                        .withBody("it <b>works</b> !!"))
         );
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
@@ -359,8 +361,8 @@ public class CacheExpireTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
