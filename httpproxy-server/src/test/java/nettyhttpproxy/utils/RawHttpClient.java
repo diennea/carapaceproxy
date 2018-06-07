@@ -25,10 +25,15 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import javax.net.ssl.SNIHostName;
+import javax.net.ssl.SNIServerName;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import nettyhttpproxy.HttpUtils;
 
@@ -46,11 +51,25 @@ public final class RawHttpClient implements AutoCloseable {
     }
 
     public RawHttpClient(String host, int port, boolean ssl) throws IOException {
+        this(host, port, ssl, null);
+    }
+
+    public RawHttpClient(String host, int port, boolean ssl, String sniHostname) throws IOException {
         this.host = host;
         this.ssl = ssl;
         if (ssl) {
+            SSLParameters sslParameters = null;
             SSLSocketFactory factory = HttpUtils.getSocket_factory();
-            socket = factory.createSocket(host, port);
+            socket = factory.createSocket();
+            if (sniHostname != null) {
+                SSLSocket sSLSocket = (SSLSocket) socket;
+                sslParameters = new SSLParameters();
+                List<SNIServerName> sniHostNames = new ArrayList<>();
+                sniHostNames.add(new SNIHostName(sniHostname));
+                sslParameters.setServerNames(sniHostNames);
+                sSLSocket.setSSLParameters(sslParameters);
+            }
+            socket.connect(new InetSocketAddress(host, port));
         } else {
             socket = new Socket(host, port);
         }
@@ -280,6 +299,14 @@ public final class RawHttpClient implements AutoCloseable {
     public HttpResponse executeRequest(String request) throws IOException {
         sendRequest(request.getBytes(StandardCharsets.UTF_8));
         return consumeHttpResponseInput(socket.getInputStream());
+    }
+
+    public Socket getSocket() {
+        return socket;
+    }
+
+    public SSLSocket getSSLSocket() {
+        return (SSLSocket) socket;
     }
 
     public HttpResponse readResponse() throws IOException {

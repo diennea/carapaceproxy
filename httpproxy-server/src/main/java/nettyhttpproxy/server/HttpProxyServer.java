@@ -40,31 +40,23 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.Socket;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
-import java.security.Principal;
-import java.security.PrivateKey;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.net.ssl.ExtendedSSLSession;
-import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SNIHostName;
-import javax.net.ssl.SNIServerName;
-import javax.net.ssl.SSLEngine;
-import javax.net.ssl.StandardConstants;
 import javax.net.ssl.TrustManagerFactory;
-import javax.net.ssl.X509ExtendedKeyManager;
 import javax.servlet.DispatcherType;
 import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.api.ApplicationConfig;
@@ -75,6 +67,7 @@ import nettyhttpproxy.server.backends.BackendHealthManager;
 import nettyhttpproxy.server.cache.ContentsCache;
 import nettyhttpproxy.server.config.ConfigurationNotValidException;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
+import nettyhttpproxy.server.config.SSLCertificateConfiguration;
 import nettyhttpproxy.server.filters.RegexpMapUserIdFilter;
 import nettyhttpproxy.server.mapper.XForwardedForRequestFilter;
 import org.apache.bookkeeper.stats.*;
@@ -106,6 +99,9 @@ public class HttpProxyServer implements AutoCloseable {
     private final BackendHealthManager backendHealthManager;
 
     private final List<NetworkListenerConfiguration> listeners = new ArrayList<>();
+    private final Map<String, SSLCertificateConfiguration> certificates = new HashMap<>();
+
+    private final Map<String, SslContext> sslContexts = new ConcurrentHashMap<>();
     private final List<Channel> listeningChannels = new ArrayList<>();
 
     private StatsProvider statsProvider;
@@ -135,6 +131,13 @@ public class HttpProxyServer implements AutoCloseable {
 
     public void addListener(NetworkListenerConfiguration listener) {
         listeners.add(listener);
+    }
+
+    public void addCertificate(SSLCertificateConfiguration certificate) throws ConfigurationNotValidException {
+        SSLCertificateConfiguration exists = certificates.put(certificate.getId(), certificate);
+        if (exists != null) {
+            throw new ConfigurationNotValidException("certificate with id " + certificate.getId() + " already configured");
+        }
     }
 
     public void addRequestFilter(RequestFilter filter) {
@@ -191,55 +194,62 @@ public class HttpProxyServer implements AutoCloseable {
 
     }
 
-    private void bootListener(NetworkListenerConfiguration listener) throws ConfigurationNotValidException, InterruptedException {
-        LOG.info("Starting listener at " + listener.getHost() + ":" + listener.getPort() + " ssl:" + listener.isSsl());
-        final SslContext defaultSslCtx;
-        if (listener.isSsl()) {
-            String sslCertFilePassword = listener.getSslCertificatePassword();
-            String sslCiphers = listener.getSslCiphers();
-            String certificateFile = listener.getSslCertificateFile();
-            File sslCertFile = certificateFile.startsWith("/") ? new File(certificateFile) : new File(basePath, certificateFile);
-            sslCertFile = sslCertFile.getAbsoluteFile();
+    private SslContext bootSslContext(NetworkListenerConfiguration listener, SSLCertificateConfiguration certificate) throws ConfigurationNotValidException {
+        String sslCiphers = listener.getSslCiphers();
 
-            String caPassword = listener.getSslCertificatePassword();
-            String caFile = listener.getSslTrustoreFile();
-            File caCertFile = null;
-            boolean caFileConfigured = caFile != null && !caFile.isEmpty();
+        String trustStrorePassword = listener.getSslTrustorePassword();
+        String trustStoreFile = listener.getSslTrustoreFile();
+        File trustStoreCertFile = null;
+        boolean caFileConfigured = trustStoreFile != null && !trustStoreFile.isEmpty();
+        if (caFileConfigured) {
+            trustStoreCertFile = trustStoreFile.startsWith("/") ? new File(trustStoreFile) : new File(basePath, trustStoreFile);
+            trustStoreCertFile = trustStoreCertFile.getAbsoluteFile();
+        }
+
+        String sslCertFilePassword = certificate.getSslCertificatePassword();
+        String certificateFile = certificate.getSslCertificateFile();
+        File sslCertFile = certificateFile.startsWith("/") ? new File(certificateFile) : new File(basePath, certificateFile);
+        sslCertFile = sslCertFile.getAbsoluteFile();
+
+        LOG.log(Level.SEVERE, "start SSL with certificate id " + certificate + ", on listener " + listener.getHost() + ":" + listener.getPort() + " file=" + sslCertFile + " OCPS " + listener.isOcps());
+        try {
+            KeyManagerFactory keyFactory = initKeyManagerFactory("PKCS12", sslCertFile, sslCertFilePassword);
+            TrustManagerFactory trustManagerFactory = null;
             if (caFileConfigured) {
-                caCertFile = caFile.startsWith("/") ? new File(caFile) : new File(basePath, caFile);
-                caCertFile = caCertFile.getAbsoluteFile();
+                LOG.log(Level.SEVERE, "loading trustore from " + trustStoreCertFile);
+                trustManagerFactory = initTrustManagerFactory("PKCS12", trustStoreCertFile, trustStrorePassword);
             }
 
-            LOG.log(Level.SEVERE, "start SSL with certificate " + sslCertFile + " OCPS " + listener.isOcps());
-            try {
-                KeyManagerFactory keyFactory = initKeyManagerFactory("PKCS12", sslCertFile, sslCertFilePassword);
-                TrustManagerFactory trustManagerFactory = null;
-                if (caFileConfigured) {
-                    LOG.log(Level.SEVERE, "loading CA from " + caCertFile);
-                    trustManagerFactory = initTrustManagerFactory("PKCS12", caCertFile, caPassword);
-                }
-
-                List<String> ciphers = null;
-                if (sslCiphers != null && !sslCiphers.isEmpty()) {
-                    LOG.log(Level.SEVERE, "required sslCiphers " + sslCiphers);
-                    ciphers = Arrays.asList(sslCiphers.split(","));
-                }
-                defaultSslCtx = SslContextBuilder
-                        .forServer(keyFactory)
-                        .enableOcsp(listener.isOcps() && OpenSsl.isOcspSupported())
-                        .trustManager(trustManagerFactory)
-                        .sslProvider(SslProvider.OPENSSL)
-                        .ciphers(ciphers).build();
-            } catch (CertificateException | IOException | KeyStoreException | SecurityException
-                    | NoSuchAlgorithmException | UnrecoverableKeyException err) {
-                throw new ConfigurationNotValidException(err);
-            };
-        } else {
-            defaultSslCtx = null;
+            List<String> ciphers = null;
+            if (sslCiphers != null && !sslCiphers.isEmpty()) {
+                LOG.log(Level.SEVERE, "required sslCiphers " + sslCiphers);
+                ciphers = Arrays.asList(sslCiphers.split(","));
+            }
+            return SslContextBuilder
+                    .forServer(keyFactory)
+                    .enableOcsp(listener.isOcps() && OpenSsl.isOcspSupported())
+                    .trustManager(trustManagerFactory)
+                    .sslProvider(SslProvider.OPENSSL)
+                    .ciphers(ciphers).build();
+        } catch (CertificateException | IOException | KeyStoreException | SecurityException
+                | NoSuchAlgorithmException | UnrecoverableKeyException err) {
+            throw new ConfigurationNotValidException(err);
         }
-        AsyncMapping<String, SslContext> sniMappings = (String hostname, Promise<SslContext> promise) -> {
-            LOG.log(Level.INFO, "resolve SNI for hostname {0}", hostname);
-            return promise.setSuccess(defaultSslCtx);
+
+    }
+
+    private void bootListener(NetworkListenerConfiguration listener) throws ConfigurationNotValidException, InterruptedException {
+        LOG.info("Starting listener at " + listener.getHost() + ":" + listener.getPort() + " ssl:" + listener.isSsl());
+
+        AsyncMapping<String, SslContext> sniMappings = (String sniHostname, Promise<SslContext> promise) -> {
+            LOG.log(Level.INFO, "resolve SNI for SNI hostname {0}", sniHostname);
+            try {
+                SslContext sslContext = resolveSslContext(listener, sniHostname);
+                return promise.setSuccess(sslContext);
+            } catch (ConfigurationNotValidException err) {
+                LOG.log(Level.SEVERE, "Error booting certificate for SNI hostname {0}, on listener {1}", new Object[]{sniHostname, listener});
+                return promise.setFailure(err);
+            }
         };
         ServerBootstrap b = new ServerBootstrap();
         b.group(bossGroup, workerGroup)
@@ -355,6 +365,7 @@ public class HttpProxyServer implements AutoCloseable {
 
     public void configure(Properties properties) throws ConfigurationNotValidException {
         for (int i = 0; i < 100; i++) {
+            tryConfigureCertificate(i, properties);
             tryConfigureListener(i, properties);
             tryConfigureFilter(i, properties);
         }
@@ -369,19 +380,30 @@ public class HttpProxyServer implements AutoCloseable {
         LOG.info("http.admin.host=" + adminServerHost);
     }
 
-    private void tryConfigureListener(int i, Properties properties) {
+    private void tryConfigureCertificate(int i, Properties properties) throws ConfigurationNotValidException {
+        String prefix = "certificate." + i + ".";
+
+        String certificateHostname = properties.getProperty(prefix + "hostname", "*");
+        String certificateFile = properties.getProperty(prefix + "sslcertfile", "");
+        String certificatePassword = properties.getProperty(prefix + "sslcertfilepassword", "");
+
+        SSLCertificateConfiguration config = new SSLCertificateConfiguration(certificateHostname, certificateFile, certificatePassword);
+        addCertificate(config);
+
+    }
+
+    private void tryConfigureListener(int i, Properties properties) throws ConfigurationNotValidException {
         String prefix = "listener." + i + ".";
         String host = properties.getProperty(prefix + "host", "0.0.0.0");
         int port = Integer.parseInt(properties.getProperty(prefix + "port", "0"));
         if (port > 0) {
             boolean ssl = Boolean.parseBoolean(properties.getProperty(prefix + "ssl", "false"));
             boolean ocps = Boolean.parseBoolean(properties.getProperty(prefix + "ocps", "true"));
-            String certificateFile = properties.getProperty(prefix + "sslcertfile", "");
-            String certificatePassword = properties.getProperty(prefix + "sslcertfilepassword", "");
             String caFile = properties.getProperty(prefix + "sslcafile", "");
             String caPassword = properties.getProperty(prefix + "sslcapassword", "");
             String sslciphers = properties.getProperty(prefix + "sslciphers", "");
-            NetworkListenerConfiguration config = new NetworkListenerConfiguration(host, port, ssl, certificateFile, certificatePassword, caFile, caPassword, sslciphers, ocps);
+            String defautlSslCertificate = properties.getProperty(prefix + "defaultcertificate", "*");
+            NetworkListenerConfiguration config = new NetworkListenerConfiguration(host, port, ssl, ocps, defautlSslCertificate, caFile, caPassword, sslciphers);
             addListener(config);
         }
     }
@@ -406,6 +428,60 @@ public class HttpProxyServer implements AutoCloseable {
                 break;
             default:
                 throw new ConfigurationNotValidException("bad filter type '" + type + "' only 'add-x-forwarded-for', 'match-user-regexp'");
+        }
+    }
+
+    private SslContext resolveSslContext(NetworkListenerConfiguration listener, String sniHostname) throws ConfigurationNotValidException {
+        String key = listener.getHost() + ":" + listener.getPort() + "+" + sniHostname;
+        try {
+            return sslContexts.computeIfAbsent(key, (k) -> {
+                try {
+                    LOG.info("choosing certificate for snihostname " + sniHostname + ", listener " + listener.getHost() + ":" + listener.getPort() + ", default host " + listener.getDefaultCertificate());
+                    SSLCertificateConfiguration certificateMatchExact = null;
+                    SSLCertificateConfiguration certificateMatchNoExact = null;
+                    if (sniHostname != null) {
+                        for (SSLCertificateConfiguration c : certificates.values()) {
+                            if (certificateMatches(sniHostname, c, true)) {
+                                certificateMatchExact = c;
+                            } else if (certificateMatches(sniHostname, c, false)) {
+                                certificateMatchNoExact = c;
+                            }
+                        }
+                    }
+                    SSLCertificateConfiguration choosen = null;
+                    if (certificateMatchExact != null) {
+                        LOG.info("choosing certificate for snihostname " + sniHostname + ", listener " + listener.getHost() + ":" + listener.getPort() + ", exact match " + certificateMatchExact);
+                        choosen = certificateMatchExact;
+                    } else if (certificateMatchNoExact != null) {
+                        LOG.info("choosing certificate for snihostname " + sniHostname + ", listener " + listener.getHost() + ":" + listener.getPort() + ", wildcard match " + certificateMatchExact);
+                        choosen = certificateMatchNoExact;
+                    }
+                    if (choosen == null) {
+                        choosen = certificates.get(listener.getDefaultCertificate());
+                        LOG.info("choosing certificate for snihostname " + sniHostname + ", listener " + listener.getHost() + ":" + listener.getPort() + ", fallback to default " + choosen);
+                    }
+                    if (choosen == null) {
+                        throw new ConfigurationNotValidException("cannot find a certificate for snihostname " + sniHostname);
+                    }
+                    return bootSslContext(listener, choosen);
+                } catch (ConfigurationNotValidException err) {
+                    throw new RuntimeException(err);
+                }
+            });
+        } catch (RuntimeException err) {
+            if (err.getCause() instanceof ConfigurationNotValidException) {
+                throw (ConfigurationNotValidException) err.getCause();
+            } else {
+                throw new ConfigurationNotValidException(err);
+            }
+        }
+    }
+
+    private boolean certificateMatches(String hostname, SSLCertificateConfiguration c, boolean exact) {
+        if (exact) {
+            return !c.isWildcard() && hostname.equals(c.getHostname());
+        } else {
+            return c.isWildcard() && hostname.endsWith(c.getHostname());
         }
     }
 

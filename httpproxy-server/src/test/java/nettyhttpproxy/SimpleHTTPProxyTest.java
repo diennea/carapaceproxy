@@ -32,6 +32,7 @@ import java.util.Collections;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
+import nettyhttpproxy.server.config.SSLCertificateConfiguration;
 import org.apache.commons.io.IOUtils;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -56,10 +57,10 @@ public class SimpleHTTPProxyTest {
     public void test() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html?redir"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withBody("it <b>works</b> !!")));
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
@@ -97,8 +98,8 @@ public class SimpleHTTPProxyTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
@@ -114,19 +115,23 @@ public class SimpleHTTPProxyTest {
         String cacertificate = TestUtils.deployResource("ca.p12", tmpDir.getRoot());
 
         stubFor(get(urlEqualTo("/index.html?redir"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withBody("it <b>works</b> !!")));
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
-            server.addListener(new NetworkListenerConfiguration("localhost", 0, true,
-                certificate, "changeit",
-                cacertificate, "changeit", null, false));
+
+            server.addCertificate(new SSLCertificateConfiguration("localhost",
+                    certificate, "changeit"));
+            server.addListener(new NetworkListenerConfiguration("localhost", 0,
+                    true, false, null, "localhost",
+                    cacertificate, "changeit"));
+
             server.start();
             int port = server.getLocalPort();
 
@@ -158,8 +163,8 @@ public class SimpleHTTPProxyTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
@@ -180,7 +185,7 @@ public class SimpleHTTPProxyTest {
             int port = server.getLocalPort();
 
             HttpUtils.ResourceInfos result = HttpUtils.downloadFromUrl(new URL("http://localhost:" + port + "/index.html"),
-                new ByteArrayOutputStream(), Collections.singletonMap("return_errors", "true"));
+                    new ByteArrayOutputStream(), Collections.singletonMap("return_errors", "true"));
             assertEquals(500, result.responseCode);
 //            String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8");
 //            System.out.println("s:" + s);
@@ -192,8 +197,8 @@ public class SimpleHTTPProxyTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 0
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);

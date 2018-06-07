@@ -28,46 +28,44 @@ public class NetworkListenerConfiguration {
     private final int port;
     private final boolean ssl;
     private final boolean ocps;
-    private final String sslCertificateFile;
-    private final String sslCertificatePassword;
-
+    private final String sslCiphers;
+    private final String defaultCertificate;
     private final String sslTrustoreFile;
     private final String sslTrustorePassword;
-
-    private final String sslCiphers;
 
     public NetworkListenerConfiguration(String host, int port) {
         this.host = host;
         this.port = port;
-        this.sslCertificateFile = null;
-        this.sslCertificatePassword = null;
-        this.sslTrustoreFile = null;
-        this.sslTrustorePassword = null;
         this.ssl = false;
         this.sslCiphers = null;
         this.ocps = false;
+        this.defaultCertificate = null;
+        this.sslTrustoreFile = null;
+        this.sslTrustorePassword = null;
     }
 
     public NetworkListenerConfiguration(String host, int port, boolean ssl,
-            String sslCertificateFile,
-            String sslCertificatePassword,
-            String sslTrustoreFile,
-            String sslTrustorePassword,
-            String sslCiphers,
-            boolean ocps) {
+            boolean ocps, String sslCiphers, String defaultCertificate, String sslTrustoreFile, String sslTrustorePassword) {
         this.host = host;
         this.port = port;
         this.ssl = ssl;
-        this.sslCertificateFile = sslCertificateFile;
-        this.sslCertificatePassword = sslCertificatePassword;
-        this.sslTrustoreFile = sslTrustoreFile;
-        this.sslTrustorePassword = sslTrustorePassword;
+        this.defaultCertificate = defaultCertificate;
         this.sslCiphers = sslCiphers;
         this.ocps = ocps;
+        this.sslTrustoreFile = sslTrustoreFile;
+        this.sslTrustorePassword = sslTrustorePassword;
     }
 
-    public boolean isOcps() {
-        return ocps;
+    public String getSslTrustoreFile() {
+        return sslTrustoreFile;
+    }
+
+    public String getSslTrustorePassword() {
+        return sslTrustorePassword;
+    }
+
+    public String getDefaultCertificate() {
+        return defaultCertificate;
     }
 
     public String getHost() {
@@ -82,24 +80,12 @@ public class NetworkListenerConfiguration {
         return ssl;
     }
 
-    public String getSslCertificateFile() {
-        return sslCertificateFile;
-    }
-
-    public String getSslCertificatePassword() {
-        return sslCertificatePassword;
+    public boolean isOcps() {
+        return ocps;
     }
 
     public String getSslCiphers() {
         return sslCiphers;
-    }
-
-    public String getSslTrustoreFile() {
-        return sslTrustoreFile;
-    }
-
-    public String getSslTrustorePassword() {
-        return sslTrustorePassword;
     }
 
 }

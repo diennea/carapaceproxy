@@ -19,21 +19,19 @@ package nettyhttpproxy;
  under the License.
 
  */
-import nettyhttpproxy.server.cache.*;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import nettyhttpproxy.*;
 import nettyhttpproxy.server.HttpProxyServer;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import java.security.cert.X509Certificate;
+import java.util.Arrays;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
+import nettyhttpproxy.server.config.SSLCertificateConfiguration;
 import nettyhttpproxy.utils.RawHttpClient;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import org.junit.Rule;
 import org.junit.Test;
@@ -48,9 +46,10 @@ public class SSLSNITest {
     public TemporaryFolder tmpDir = new TemporaryFolder();
 
     @Test
-    public void testSelectCertWithSNI() throws Exception {
+    public void testSelectCertWithoutSNI() throws Exception {
 
         String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+        String certificate2 = TestUtils.deployResource("ia.p12", tmpDir.getRoot());
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -64,22 +63,43 @@ public class SSLSNITest {
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
-            server.addListener(new NetworkListenerConfiguration("localhost", 0, true,
-                    certificate, "testproxy",
-                    null, null, null, false));
+
+            server.addCertificate(new SSLCertificateConfiguration("localhost",
+                    certificate, "testproxy"));
+
+            server.addCertificate(new SSLCertificateConfiguration("*",
+                    certificate2, "testproxy"));
+
+            server.addListener(new NetworkListenerConfiguration("localhost", 0,
+                    true, false, null, "localhost" /* default */,
+                    null, null));
+
             server.start();
+            stats = server.getConnectionsManager().getStats();
             int port = server.getLocalPort();
 
-            try (RawHttpClient client = new RawHttpClient("localhost", port, true)) {
+            // NO SNI
+            try (RawHttpClient client = new RawHttpClient("localhost", port, true, null)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-                String s = resp.toString();
-                System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
-                resp.getHeaderLines().forEach(h -> {
-                    System.out.println("HEADER LINE :" + h);
-                });
-                assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
-                stats = server.getConnectionsManager().getStats();
+                assertTrue(resp.toString().endsWith("it <b>works</b> !!"));
+                X509Certificate cert = (X509Certificate) client.getSSLSocket().getSession().getPeerCertificates()[0];
+                System.out.println("cert: " + cert.getSerialNumber());
+            }
+
+            // SNI 'localhost'
+            try (RawHttpClient client = new RawHttpClient("localhost", port, true, "localhost")) {
+                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                assertTrue(resp.toString().endsWith("it <b>works</b> !!"));
+                X509Certificate cert = (X509Certificate) client.getSSLSocket().getSession().getPeerCertificates()[0];
+                System.out.println("cert2: " + cert.getSerialNumber());
+            }
+
+            // SNI host sconosciuto
+            try (RawHttpClient client = new RawHttpClient("localhost", port, true, "unknow-host")) {
+                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                assertTrue(resp.toString().endsWith("it <b>works</b> !!"));
+                X509Certificate cert = (X509Certificate) client.getSSLSocket().getSession().getPeerCertificates()[0];
+                System.out.println("cert3: " + cert.getSerialNumber());
             }
         }
 

@@ -29,6 +29,7 @@ import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
+import nettyhttpproxy.server.config.SSLCertificateConfiguration;
 import nettyhttpproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -194,9 +195,11 @@ public class CacheTest {
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
-            server.addListener(new NetworkListenerConfiguration("localhost", 0, true,
-                    "localhost.p12", "testproxy",
-                    null, null, null, false));
+            server.addCertificate(new SSLCertificateConfiguration("localhost",
+                    "localhost.p12", "testproxy"));
+            server.addListener(new NetworkListenerConfiguration("localhost", 0,
+                    true, false, null, "localhost",
+                    null, null));
             server.start();
         }
     }
@@ -218,9 +221,11 @@ public class CacheTest {
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
-            server.addListener(new NetworkListenerConfiguration("localhost", 0, true,
-                    certificate, "testproxy",
-                    null, null, null, false));
+            server.addCertificate(new SSLCertificateConfiguration("localhost",
+                    "localhost.p12", "testproxy"));
+            server.addListener(new NetworkListenerConfiguration("localhost", 0,
+                    true, false, null, "localhost",
+                    null, null));
             server.start();
             int port = server.getLocalPort();
 
