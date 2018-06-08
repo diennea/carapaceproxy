@@ -58,5 +58,6 @@
         <libs.jaxws.jaxb-api>2.3.0</libs.jaxws.jaxb-api>
         <libs.jaxws.jaxb-impl>2.3.0</libs.jaxws.jaxb-impl>
         <libs.javaxactivation.api>1.2.0</libs.javaxactivation.api>
+        <libs.slf4j>1.7.25</libs.slf4j>
     </properties>
 </project>

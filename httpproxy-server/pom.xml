@@ -136,9 +136,14 @@
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-simple</artifactId>
-            <version>1.7.24</version>
-            <scope>test</scope>
+            <artifactId>slf4j-api</artifactId>            
+            <version>${libs.slf4j}</version>            
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-jdk14</artifactId>
+            <version>${libs.slf4j}</version>            
+            <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>com.google.guava</groupId>
@@ -163,7 +168,7 @@
             <version>${libs.mockito}</version>
             <scope>test</scope>
         </dependency>
-         <dependency>
+        <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>httpproxy-ui</artifactId>
             <version>${project.version}</version>            

@@ -130,7 +130,10 @@ public class HttpProxyServer implements AutoCloseable {
         listeners.add(new NetworkListenerConfiguration(host, port));
     }
 
-    public void addListener(NetworkListenerConfiguration listener) {
+    public void addListener(NetworkListenerConfiguration listener) throws ConfigurationNotValidException {
+        if (listener.isSsl() && !certificates.containsKey(listener.getDefaultCertificate())) {
+            throw new ConfigurationNotValidException("listener " + listener.getHost() + ":" + listener.getPort() + ", ssl=" + listener.isSsl() + ", default certificate " + listener.getDefaultCertificate() + " not configured");
+        }
         listeners.add(listener);
     }
 
@@ -243,7 +246,6 @@ public class HttpProxyServer implements AutoCloseable {
         LOG.info("Starting listener at " + listener.getHost() + ":" + listener.getPort() + " ssl:" + listener.isSsl());
 
         AsyncMapping<String, SslContext> sniMappings = (String sniHostname, Promise<SslContext> promise) -> {
-            LOG.log(Level.INFO, "resolve SNI for SNI hostname {0}", sniHostname);
             try {
                 SslContext sslContext = resolveSslContext(listener, sniHostname);
                 return promise.setSuccess(sslContext);
@@ -366,7 +368,11 @@ public class HttpProxyServer implements AutoCloseable {
     public void configure(Properties properties) throws ConfigurationNotValidException {
         for (int i = 0; i < 100; i++) {
             tryConfigureCertificate(i, properties);
+        }
+        for (int i = 0; i < 100; i++) {
             tryConfigureListener(i, properties);
+        }
+        for (int i = 0; i < 100; i++) {
             tryConfigureFilter(i, properties);
         }
         properties.forEach((key, value) -> {
@@ -383,12 +389,15 @@ public class HttpProxyServer implements AutoCloseable {
     private void tryConfigureCertificate(int i, Properties properties) throws ConfigurationNotValidException {
         String prefix = "certificate." + i + ".";
 
-        String certificateHostname = properties.getProperty(prefix + "hostname", "*");
-        String certificateFile = properties.getProperty(prefix + "sslcertfile", "");
-        String certificatePassword = properties.getProperty(prefix + "sslcertfilepassword", "");
+        String certificateHostname = properties.getProperty(prefix + "hostname", "");
+        if (!certificateHostname.isEmpty()) {
+            String certificateFile = properties.getProperty(prefix + "sslcertfile", "");
+            String certificatePassword = properties.getProperty(prefix + "sslcertfilepassword", "");
+            LOG.log(Level.INFO, "Configuring SSL certificate {0}hostname={1}, file: {2}", new Object[]{prefix, certificateHostname, certificateFile});
 
-        SSLCertificateConfiguration config = new SSLCertificateConfiguration(certificateHostname, certificateFile, certificatePassword);
-        addCertificate(config);
+            SSLCertificateConfiguration config = new SSLCertificateConfiguration(certificateHostname, certificateFile, certificatePassword);
+            addCertificate(config);
+        }
 
     }
 
@@ -399,11 +408,15 @@ public class HttpProxyServer implements AutoCloseable {
         if (port > 0) {
             boolean ssl = Boolean.parseBoolean(properties.getProperty(prefix + "ssl", "false"));
             boolean ocps = Boolean.parseBoolean(properties.getProperty(prefix + "ocps", "true"));
-            String caFile = properties.getProperty(prefix + "sslcafile", "");
-            String caPassword = properties.getProperty(prefix + "sslcapassword", "");
+            String trustStoreFile = properties.getProperty(prefix + "ssltruststorefile", "");
+            String trustStorePassword = properties.getProperty(prefix + "ssltruststorepassword", "");
             String sslciphers = properties.getProperty(prefix + "sslciphers", "");
             String defautlSslCertificate = properties.getProperty(prefix + "defaultcertificate", "*");
-            NetworkListenerConfiguration config = new NetworkListenerConfiguration(host, port, ssl, ocps, defautlSslCertificate, caFile, caPassword, sslciphers);
+            NetworkListenerConfiguration config = new NetworkListenerConfiguration(host, port,
+                    ssl, ocps,
+                    sslciphers,
+                    defautlSslCertificate,
+                    trustStoreFile, trustStorePassword);
             addListener(config);
         }
     }
@@ -438,7 +451,8 @@ public class HttpProxyServer implements AutoCloseable {
                 try {
                     SSLCertificateConfiguration choosen = chooseCertificate(sniHostname, listener.getDefaultCertificate());
                     if (choosen == null) {
-                        throw new ConfigurationNotValidException("cannot find a certificate for snihostname " + sniHostname);
+                        throw new ConfigurationNotValidException("cannot find a certificate for snihostname "
+                                + sniHostname + ", with default cert for listener as '" + listener.getDefaultCertificate() + "', available " + certificates.keySet());
                     }
                     return bootSslContext(listener, choosen);
                 } catch (ConfigurationNotValidException err) {
