@@ -34,16 +34,13 @@ import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.text.SimpleDateFormat;
-import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import static java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
-import java.util.TimeZone;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
@@ -77,6 +74,7 @@ public class HttpUtils {
     private static HostnameVerifier hostname_verifier = new HostnameVerifier() {
         @Override
         public boolean verify(String hostname, SSLSession session) {
+            System.out.println("[SSLCLIENT] verify " + hostname + ", session " + session);
             return true;
         }
     };
@@ -86,14 +84,11 @@ public class HttpUtils {
     }
 
     public static void readFullContent(URLConnection con) throws IOException {
-        InputStream in = con.getInputStream();
-        try {
+        try (InputStream in = con.getInputStream()) {
             int b = in.read();
             while (b != -1) {
                 b = in.read();
             }
-        } finally {
-            in.close();
         }
     }
 
@@ -454,6 +449,7 @@ public class HttpUtils {
         @Override
         public void checkServerTrusted(X509Certificate chain[], String authType) throws CertificateException {
             // special handling such as poping dialog boxes
+            System.out.println("[SSL CLIENT] checkServerTrusted "+Arrays.toString(chain));
         }
 
         @Override
