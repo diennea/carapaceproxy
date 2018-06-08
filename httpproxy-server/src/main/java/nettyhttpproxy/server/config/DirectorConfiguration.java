@@ -23,14 +23,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A service is a group of backends
+ * A director is a group of backends
  * @author enrico.olivelli
  */
-public class ServiceConfiguration {
+public class DirectorConfiguration {
     private final String id;
     private final List<String> backends = new ArrayList<>();
 
-    public ServiceConfiguration(String id) {
+    public DirectorConfiguration(String id) {
         this.id = id;
     }
     

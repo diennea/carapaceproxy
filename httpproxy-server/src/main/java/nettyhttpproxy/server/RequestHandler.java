@@ -56,6 +56,7 @@ import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.client.EndpointNotAvailableException;
 import nettyhttpproxy.client.impl.EndpointConnectionImpl;
 import static nettyhttpproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
+import nettyhttpproxy.server.backends.BackendHealthManager;
 import nettyhttpproxy.server.cache.ContentsCache;
 import org.apache.bookkeeper.stats.Counter;
 import org.apache.bookkeeper.stats.StatsLogger;
@@ -77,16 +78,18 @@ public class RequestHandler {
     private final ChannelHandlerContext channelToClient;
     private final AtomicReference<Runnable> onRequestFinished;
     private final StatsLogger logger;
+    private final BackendHealthManager backendHealthManager;
     private String userId;
 
     public RequestHandler(long id, HttpRequest request, List<RequestFilter> filters, StatsLogger logger,
-            ClientConnectionHandler parent, ChannelHandlerContext channelToClient, Runnable onRequestFinished) {
+            ClientConnectionHandler parent, ChannelHandlerContext channelToClient, Runnable onRequestFinished, BackendHealthManager backendHealthManager) {
         this.id = id;
         this.request = request;
         this.connectionToClient = parent;
         this.channelToClient = channelToClient;
         this.filters = filters;
         this.logger = logger;
+        this.backendHealthManager = backendHealthManager;
         this.onRequestFinished = new AtomicReference<>(onRequestFinished);
     }
 
@@ -98,7 +101,7 @@ public class RequestHandler {
     }
 
     public void start() {
-        action = connectionToClient.mapper.map(request);
+        action = connectionToClient.mapper.map(request, backendHealthManager);
         for (RequestFilter filter : filters) {
             filter.apply(request, connectionToClient, this);
         }

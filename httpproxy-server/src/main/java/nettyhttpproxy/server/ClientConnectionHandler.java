@@ -33,6 +33,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.client.impl.EndpointConnectionImpl;
+import nettyhttpproxy.server.backends.BackendHealthManager;
 import nettyhttpproxy.server.cache.ContentsCache;
 import org.apache.bookkeeper.stats.Counter;
 import org.apache.bookkeeper.stats.StatsLogger;
@@ -49,6 +50,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     final StatsLogger mainLogger;
     final Counter totalRequests;
     final Counter runningRequests;
+    final BackendHealthManager backendHealthManager;
     final ConnectionsManager connectionsManager;
     final List<RequestFilter> filters;
     final SocketAddress clientAddress;
@@ -68,7 +70,8 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             ContentsCache cache,
             SocketAddress clientAddress,
             StaticContentsManager staticContentsManager,
-            Runnable onClientDisconnected) {
+            Runnable onClientDisconnected,
+            BackendHealthManager backendHealthManager) {
         this.mainLogger = mainLogger;
         this.totalRequests = mainLogger.getCounter("totalrequests");
         this.runningRequests = mainLogger.getCounter("runningrequests");
@@ -80,6 +83,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         this.clientAddress = clientAddress;
         this.connectionStartsTs = System.nanoTime();
         this.onClientDisconnected = onClientDisconnected;
+        this.backendHealthManager = backendHealthManager;
     }
 
     public SocketAddress getClientAddress() {
@@ -112,7 +116,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         if (msg instanceof HttpRequest) {
             HttpRequest request = (HttpRequest) msg;
             RequestHandler currentRequest = new RequestHandler(requestIdGenerator.incrementAndGet(),
-                    request, filters, mainLogger, this, ctx, () -> runningRequests.dec());
+                    request, filters, mainLogger, this, ctx, () -> runningRequests.dec(), backendHealthManager);
             addPendingRequest(currentRequest);
             currentRequest.start();
         } else if (msg instanceof LastHttpContent) {

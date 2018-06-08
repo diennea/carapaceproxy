@@ -51,6 +51,9 @@ public class BackendHealthManager {
     public Map<String, BackendHealthStatus> getBackendsSnapshot() {
         return new HashMap<>(backends);
     }
-    
-    
+
+    public boolean isAvailable(String host, int port) {
+        return true;
+    }
+
 }

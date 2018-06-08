@@ -20,6 +20,7 @@ package nettyhttpproxy;
 
  */
 import io.netty.handler.codec.http.HttpRequest;
+import nettyhttpproxy.server.backends.BackendHealthManager;
 
 public class TestEndpointMapper extends EndpointMapper {
 
@@ -38,7 +39,7 @@ public class TestEndpointMapper extends EndpointMapper {
     }
 
     @Override
-    public MapResult map(HttpRequest request) {
+    public MapResult map(HttpRequest request, BackendHealthManager backendHealthManager) {
         String uri = request.uri();
         if (uri.contains("not-found")) {
             return MapResult.NOT_FOUND;

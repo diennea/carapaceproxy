@@ -272,7 +272,8 @@ public class HttpProxyServer implements AutoCloseable {
                                         connectionsManager,
                                         filters, cache,
                                         channel.remoteAddress(), staticContentsManager,
-                                        () -> currentClientConnections.dec()));
+                                        () -> currentClientConnections.dec(),
+                                        backendHealthManager));
 
                     }
                 })

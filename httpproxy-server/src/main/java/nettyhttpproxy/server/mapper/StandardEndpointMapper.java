@@ -32,6 +32,7 @@ import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.MapResult;
 import static nettyhttpproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
 import static nettyhttpproxy.server.StaticContentsManager.DEFAULT_NOT_FOUND;
+import nettyhttpproxy.server.backends.BackendHealthManager;
 import nettyhttpproxy.server.config.ActionConfiguration;
 import nettyhttpproxy.server.config.BackendConfiguration;
 import nettyhttpproxy.server.config.BackendSelector;
@@ -40,7 +41,7 @@ import nettyhttpproxy.server.config.MatchAllRequestMatcher;
 import nettyhttpproxy.server.config.RequestMatcher;
 import nettyhttpproxy.server.config.RouteConfiguration;
 import nettyhttpproxy.server.config.RoutingKey;
-import nettyhttpproxy.server.config.ServiceConfiguration;
+import nettyhttpproxy.server.config.DirectorConfiguration;
 import nettyhttpproxy.server.config.URIRequestMatcher;
 
 /**
@@ -49,13 +50,16 @@ import nettyhttpproxy.server.config.URIRequestMatcher;
 public class StandardEndpointMapper extends EndpointMapper {
 
     private final Map<String, BackendConfiguration> backends = new HashMap<>();
-    private final Map<String, ServiceConfiguration> services = new HashMap<>();
+    private final Map<String, DirectorConfiguration> directors = new HashMap<>();
     private final List<String> allbackendids = new ArrayList<>();
     private final List<RouteConfiguration> routes = new ArrayList<>();
     private final Map<String, ActionConfiguration> actions = new HashMap<>();
     private final BackendSelector backendSelector;
     private String defaultNotFoundAction = "not-found";
     private String defaultInternalErrorAction = "internal-error";
+
+    private static final int MAX_IDS = 200;
+    private static final Logger LOG = Logger.getLogger(StandardEndpointMapper.class.getName());
 
     public StandardEndpointMapper(BackendSelector backendSelector) {
         this.backendSelector = backendSelector;
@@ -106,18 +110,18 @@ public class StandardEndpointMapper extends EndpointMapper {
         }
 
         for (int i = 0; i < MAX_IDS; i++) {
-            String prefix = "service." + i + ".";
+            String prefix = "director." + i + ".";
             String id = properties.getProperty(prefix + "id", "");
             if (!id.isEmpty()) {
                 boolean enabled = Boolean.parseBoolean(properties.getProperty(prefix + "enabled", "false"));
                 String backends = properties.getProperty(prefix + "backends", "");
-                LOG.info("configured service" + id + " backends:" + backends + ", enabled:" + enabled);
+                LOG.info("configured director " + id + " backends:" + backends + ", enabled:" + enabled);
                 if (enabled) {
-                    ServiceConfiguration config = new ServiceConfiguration(id);
+                    DirectorConfiguration config = new DirectorConfiguration(id);
                     String[] backendids = backends.split(",");
                     for (String backendId : backendids) {
                         if (!this.backends.containsKey(backendId)) {
-                            throw new ConfigurationNotValidException("while configuringservice '" + id + "': backend '" + backendId + "' does not exist");
+                            throw new ConfigurationNotValidException("while configuring director '" + id + "': backend '" + backendId + "' does not exist");
                         }
                         config.addBackend(id);
                     }
@@ -156,8 +160,6 @@ public class StandardEndpointMapper extends EndpointMapper {
             }
         }
     }
-    private static final int MAX_IDS = 200;
-    private static final Logger LOG = Logger.getLogger(StandardEndpointMapper.class.getName());
 
     private final class RandomBackendSelector implements BackendSelector {
 
@@ -174,8 +176,8 @@ public class StandardEndpointMapper extends EndpointMapper {
         this.backendSelector = new RandomBackendSelector();
     }
 
-    public void addService(ServiceConfiguration service) throws ConfigurationNotValidException {
-        if (services.put(service.getId(), service) != null) {
+    public void addService(DirectorConfiguration service) throws ConfigurationNotValidException {
+        if (directors.put(service.getId(), service) != null) {
             throw new ConfigurationNotValidException("service " + service.getId() + " is already configured");
         }
     }
@@ -201,7 +203,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     }
 
     @Override
-    public MapResult map(HttpRequest request) {
+    public MapResult map(HttpRequest request, BackendHealthManager backendHealthManager) {
         for (RouteConfiguration route : routes) {
             if (!route.isEnabled()) {
                 continue;
@@ -226,14 +228,14 @@ public class StandardEndpointMapper extends EndpointMapper {
                     switch (action.getType()) {
                         case ActionConfiguration.TYPE_PROXY: {
                             BackendConfiguration backend = this.backends.get(backendId);
-                            if (backend != null && isAvailable(backend)) {
+                            if (backend != null && backendHealthManager.isAvailable(backend.getHost(), backend.getPort())) {
                                 return new MapResult(backend.getHost(), backend.getPort(), MapResult.Action.PROXY);
                             }
                             break;
                         }
                         case ActionConfiguration.TYPE_CACHE:
                             BackendConfiguration backend = this.backends.get(backendId);
-                            if (backend != null && isAvailable(backend)) {
+                            if (backend != null && backendHealthManager.isAvailable(backend.getHost(), backend.getPort())) {
                                 return new MapResult(backend.getHost(), backend.getPort(), MapResult.Action.CACHE);
                             }
                             break;
@@ -244,10 +246,6 @@ public class StandardEndpointMapper extends EndpointMapper {
             }
         }
         return MapResult.NOT_FOUND;
-    }
-
-    private boolean isAvailable(BackendConfiguration backend) {
-        return true;
     }
 
 }
