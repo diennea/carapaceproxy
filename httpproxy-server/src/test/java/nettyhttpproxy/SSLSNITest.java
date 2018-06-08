@@ -25,13 +25,15 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import java.net.InetAddress;
 import java.security.cert.X509Certificate;
-import java.util.Arrays;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
 import nettyhttpproxy.server.config.SSLCertificateConfiguration;
 import nettyhttpproxy.utils.RawHttpClient;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import org.junit.Rule;
 import org.junit.Test;
@@ -48,8 +50,9 @@ public class SSLSNITest {
     @Test
     public void testSelectCertWithoutSNI() throws Exception {
 
+        String nonLocalhost = InetAddress.getLocalHost().getCanonicalHostName();
+
         String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
-        String certificate2 = TestUtils.deployResource("ia.p12", tmpDir.getRoot());
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -64,43 +67,24 @@ public class SSLSNITest {
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
 
-            server.addCertificate(new SSLCertificateConfiguration("localhost",
+            server.addCertificate(new SSLCertificateConfiguration(nonLocalhost,
                     certificate, "testproxy"));
 
-            server.addCertificate(new SSLCertificateConfiguration("*",
-                    certificate2, "testproxy"));
-
-            server.addListener(new NetworkListenerConfiguration("localhost", 0,
-                    true, false, null, "localhost" /* default */,
+            server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0,
+                    true, false, null, nonLocalhost /* default */,
                     null, null));
 
             server.start();
             stats = server.getConnectionsManager().getStats();
             int port = server.getLocalPort();
 
-            // NO SNI
-            try (RawHttpClient client = new RawHttpClient("localhost", port, true, null)) {
+            try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 assertTrue(resp.toString().endsWith("it <b>works</b> !!"));
                 X509Certificate cert = (X509Certificate) client.getSSLSocket().getSession().getPeerCertificates()[0];
-                System.out.println("cert: " + cert.getSerialNumber());
+                System.out.println("acert2: " + cert.getSerialNumber());
             }
 
-            // SNI 'localhost'
-            try (RawHttpClient client = new RawHttpClient("localhost", port, true, "localhost")) {
-                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-                assertTrue(resp.toString().endsWith("it <b>works</b> !!"));
-                X509Certificate cert = (X509Certificate) client.getSSLSocket().getSession().getPeerCertificates()[0];
-                System.out.println("cert2: " + cert.getSerialNumber());
-            }
-
-            // SNI host sconosciuto
-            try (RawHttpClient client = new RawHttpClient("localhost", port, true, "unknow-host")) {
-                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-                assertTrue(resp.toString().endsWith("it <b>works</b> !!"));
-                X509Certificate cert = (X509Certificate) client.getSSLSocket().getSession().getPeerCertificates()[0];
-                System.out.println("cert3: " + cert.getSerialNumber());
-            }
         }
 
         TestUtils.waitForCondition(() -> {
@@ -114,4 +98,46 @@ public class SSLSNITest {
 
     }
 
+    @Test
+    public void testchooseCertificate() throws Exception {
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
+
+            server.addCertificate(new SSLCertificateConfiguration("other",
+                    "cert", "pwd"));
+
+            server.addCertificate(new SSLCertificateConfiguration("*.example.com",
+                    "cert", "pwd"));
+            server.addCertificate(new SSLCertificateConfiguration("www.example.com",
+                    "cert", "pwd"));
+
+            // client requests bad SNI, bad default in listener
+            assertNull(server.chooseCertificate("no", "no-default"));
+
+            // client requests SNI, bad default in listener
+            assertEquals("other", server.chooseCertificate("other", "no-default").getId());
+
+            assertEquals("www.example.com", server.chooseCertificate("unkn-other", "www.example.com").getId());
+            // client without SNI
+            assertEquals("www.example.com", server.chooseCertificate(null, "www.example.com").getId());
+            // exact match
+            assertEquals("www.example.com", server.chooseCertificate("www.example.com", "no-default").getId());
+            // wildcard
+            assertEquals("*.example.com", server.chooseCertificate("test.example.com", "no-default").getId());
+        }
+
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
+
+            // full wildcard
+            server.addCertificate(new SSLCertificateConfiguration("*", "cert", "pwd"));
+
+            assertEquals("*", server.chooseCertificate(null, "www.example.com").getId());
+            assertEquals("*", server.chooseCertificate("www.example.com", null).getId());
+            assertEquals("*", server.chooseCertificate(null, null).getId());
+            assertEquals("*", server.chooseCertificate("", null).getId());
+            assertEquals("*", server.chooseCertificate(null, "").getId());
+        }
+    }
 }

@@ -19,6 +19,7 @@
  */
 package nettyhttpproxy.server;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
@@ -261,7 +262,6 @@ public class HttpProxyServer implements AutoCloseable {
                         if (listener.isSsl()) {
                             SniHandler sni = new SniHandler(sniMappings);
                             channel.pipeline().addLast(sni);
-                            // channel.pipeline().addLast(sslCtx.newHandler(channel.alloc()));
                         }
                         channel.pipeline().addLast(new HttpRequestDecoder());
                         channel.pipeline().addLast(new HttpResponseEncoder());
@@ -436,30 +436,7 @@ public class HttpProxyServer implements AutoCloseable {
         try {
             return sslContexts.computeIfAbsent(key, (k) -> {
                 try {
-                    LOG.info("choosing certificate for snihostname " + sniHostname + ", listener " + listener.getHost() + ":" + listener.getPort() + ", default host " + listener.getDefaultCertificate());
-                    SSLCertificateConfiguration certificateMatchExact = null;
-                    SSLCertificateConfiguration certificateMatchNoExact = null;
-                    if (sniHostname != null) {
-                        for (SSLCertificateConfiguration c : certificates.values()) {
-                            if (certificateMatches(sniHostname, c, true)) {
-                                certificateMatchExact = c;
-                            } else if (certificateMatches(sniHostname, c, false)) {
-                                certificateMatchNoExact = c;
-                            }
-                        }
-                    }
-                    SSLCertificateConfiguration choosen = null;
-                    if (certificateMatchExact != null) {
-                        LOG.info("choosing certificate for snihostname " + sniHostname + ", listener " + listener.getHost() + ":" + listener.getPort() + ", exact match " + certificateMatchExact);
-                        choosen = certificateMatchExact;
-                    } else if (certificateMatchNoExact != null) {
-                        LOG.info("choosing certificate for snihostname " + sniHostname + ", listener " + listener.getHost() + ":" + listener.getPort() + ", wildcard match " + certificateMatchExact);
-                        choosen = certificateMatchNoExact;
-                    }
-                    if (choosen == null) {
-                        choosen = certificates.get(listener.getDefaultCertificate());
-                        LOG.info("choosing certificate for snihostname " + sniHostname + ", listener " + listener.getHost() + ":" + listener.getPort() + ", fallback to default " + choosen);
-                    }
+                    SSLCertificateConfiguration choosen = chooseCertificate(sniHostname, listener.getDefaultCertificate());
                     if (choosen == null) {
                         throw new ConfigurationNotValidException("cannot find a certificate for snihostname " + sniHostname);
                     }
@@ -475,6 +452,34 @@ public class HttpProxyServer implements AutoCloseable {
                 throw new ConfigurationNotValidException(err);
             }
         }
+    }
+
+    @VisibleForTesting
+    public SSLCertificateConfiguration chooseCertificate(String sniHostname, String defaultCertificate) {
+        if (sniHostname == null) {
+            sniHostname = "";
+        }
+        SSLCertificateConfiguration certificateMatchExact = null;
+        SSLCertificateConfiguration certificateMatchNoExact = null;
+
+        for (SSLCertificateConfiguration c : certificates.values()) {
+            if (certificateMatches(sniHostname, c, true)) {
+                certificateMatchExact = c;
+            } else if (certificateMatches(sniHostname, c, false)) {
+                certificateMatchNoExact = c;
+            }
+        }
+
+        SSLCertificateConfiguration choosen = null;
+        if (certificateMatchExact != null) {
+            choosen = certificateMatchExact;
+        } else if (certificateMatchNoExact != null) {
+            choosen = certificateMatchNoExact;
+        }
+        if (choosen == null) {
+            choosen = certificates.get(defaultCertificate);
+        }
+        return choosen;
     }
 
     private boolean certificateMatches(String hostname, SSLCertificateConfiguration c, boolean exact) {

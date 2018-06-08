@@ -68,4 +68,9 @@ public class SSLCertificateConfiguration {
         return sslCertificatePassword;
     }
 
+    @Override
+    public String toString() {
+        return "{" + id + '}';
+    }
+
 }

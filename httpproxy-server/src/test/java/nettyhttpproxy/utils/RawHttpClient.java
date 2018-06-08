@@ -29,10 +29,8 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import javax.net.ssl.SNIHostName;
-import javax.net.ssl.SNIMatcher;
 import javax.net.ssl.SNIServerName;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
@@ -61,18 +59,16 @@ public final class RawHttpClient implements AutoCloseable {
         this.ssl = ssl;
         if (ssl) {
 
+            SSLSocketFactory factory = HttpUtils.getSocket_factory();
+            socket = factory.createSocket();
             if (sniHostname != null) {
-                SSLSocketFactory factory = HttpUtils.getSocket_factory();
-                socket = factory.createSocket();
+
                 SSLSocket sSLSocket = (SSLSocket) socket;
                 SSLParameters sslParameters = new SSLParameters();
                 List<SNIServerName> sniHostNames = new ArrayList<>();
                 sniHostNames.add(new SNIHostName(sniHostname));
                 sslParameters.setServerNames(sniHostNames);
                 sSLSocket.setSSLParameters(sslParameters);
-            } else {
-                SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
-                socket = factory.createSocket();
             }
             socket.connect(new InetSocketAddress(host, port));
         } else {
