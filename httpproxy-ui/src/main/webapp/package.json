@@ -10,7 +10,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "rm -rf ui/* && react-scripts build && mv build/* ui",
+    "build": "rm -rf ui && react-scripts build && mkdir ui && mv build/* ui",
     "eject": "react-scripts eject"
   }
 }
