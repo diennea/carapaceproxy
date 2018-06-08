@@ -5,12 +5,12 @@
   "dependencies": {
     "react": "^16.3.2",
     "react-dom": "^16.3.2",
-    "react-scripts": "1.1.4",
-    "react-router-dom": "latest"
+    "react-router-dom": "latest",
+    "react-scripts": "1.1.4"
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build && mv build ui",
+    "build": "rm -rf ui/* && react-scripts build && mv build/* ui",
     "eject": "react-scripts eject"
   }
 }
