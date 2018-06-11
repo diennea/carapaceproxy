@@ -1,5 +1,6 @@
 #!/bin/bash
-mvn clean install -DskipTests -Pproduction
-cd httpproxy-server/target
+cd httpproxy-server
+mvn clean install -DskipTests
+cd target
 unzip *.zip
-httpproxy-server*/bin/service server console conf/server.properties
+./bin/service server console conf/server.properties
