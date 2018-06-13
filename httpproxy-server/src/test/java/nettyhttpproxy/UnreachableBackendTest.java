@@ -29,6 +29,7 @@ import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.server.HttpProxyServer;
 import nettyhttpproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -49,11 +50,11 @@ public class UnreachableBackendTest {
     public void testWithUnreachableBackend() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                .withBody("it <b>works</b> !!")));
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withBody("it <b>works</b> !!")));
 
         int dummyport = wireMockRule.port();
         wireMockRule.stop();
@@ -72,11 +73,12 @@ public class UnreachableBackendTest {
                 System.out.println("s:" + s);
                 assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
                 assertEquals("<html>\n"
-                    + "    <body>\n"
-                    + "        An internal error occurred\n"
-                    + "    </body>        \n"
-                    + "</html>\n", resp.getBodyString());
+                        + "    <body>\n"
+                        + "        An internal error occurred\n"
+                        + "    </body>        \n"
+                        + "</html>\n", resp.getBodyString());
             }
+            assertFalse(server.getBackendHealthManager().isAvailable(key.toBackendId()));
             TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
         }
@@ -86,11 +88,11 @@ public class UnreachableBackendTest {
     public void testCacheWithUnreachableBackend() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                .withBody("it <b>works</b> !!")));
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withBody("it <b>works</b> !!")));
 
         int dummyport = wireMockRule.port();
         wireMockRule.stop();
@@ -109,10 +111,10 @@ public class UnreachableBackendTest {
                 System.out.println("s:" + s);
                 assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
                 assertEquals("<html>\n"
-                    + "    <body>\n"
-                    + "        An internal error occurred\n"
-                    + "    </body>        \n"
-                    + "</html>\n", resp.getBodyString());
+                        + "    <body>\n"
+                        + "        An internal error occurred\n"
+                        + "    </body>        \n"
+                        + "</html>\n", resp.getBodyString());
             }
             TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 

@@ -19,16 +19,23 @@
  */
 package nettyhttpproxy.server.backends;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 /**
  * Health of a backend
+ *
  * @author enrico.olivelli
  */
 public class BackendHealthStatus {
+
+    private static final Logger LOG = Logger.getLogger(BackendHealthStatus.class.getName());
+
     private final String id;
-    
-    private boolean reportedAsUnreachable;
+
+    private volatile boolean reportedAsUnreachable;
     private long reportedAsUnreachableTs;
-    
+
     private long lastProbeTs;
     private boolean lastProbeSuccess;
     private String lastProbeResult;
@@ -82,6 +89,7 @@ public class BackendHealthStatus {
     }
 
     void reportAsUnreachable(long timestamp) {
+        LOG.log(Level.INFO, "{0}: reportAsUnreachable {1}", new Object[]{id, new java.sql.Timestamp(timestamp)});
         reportedAsUnreachableTs = timestamp;
         reportedAsUnreachable = true;
     }
@@ -90,6 +98,9 @@ public class BackendHealthStatus {
         reportedAsUnreachable = false;
         reportedAsUnreachableTs = 0;
     }
-    
-    
+
+    boolean isAvailable() {
+        return !reportedAsUnreachable;
+    }
+
 }

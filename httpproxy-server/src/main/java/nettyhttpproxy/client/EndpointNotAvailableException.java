@@ -30,4 +30,8 @@ public class EndpointNotAvailableException extends Exception {
         super(cause);
     }
 
+    public EndpointNotAvailableException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
 }

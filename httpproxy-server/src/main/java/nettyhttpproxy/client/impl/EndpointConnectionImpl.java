@@ -142,7 +142,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 invalidate();
                 LOG.log(Level.INFO, "connect failed to " + key, future.cause());
                 clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
-                parent.backendHealthManager.reportBackendUnreachable(key.getHost() + ":" + key.getPort(), System.currentTimeMillis());
+                parent.backendHealthManager.reportBackendUnreachable(key.toBackendId(), System.currentTimeMillis());
                 return;
             }
             final Channel _channelToEndpoint = afterConnect.channel();
@@ -166,10 +166,10 @@ public class EndpointConnectionImpl implements EndpointConnection {
                         LOG.log(Level.SEVERE, "sendRequest " + request.getClass() + " failed", future.cause());
                         clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
                         // send to unreachable state if we are not able to send a request on the wire
-                        parent.backendHealthManager.reportBackendUnreachable(key.getHost() + ":" + key.getPort(), System.currentTimeMillis());
+                        parent.backendHealthManager.reportBackendUnreachable(key.toBackendId(), System.currentTimeMillis());
                     } else {
                         // back to reachable state at first request sent to the backend
-                        parent.backendHealthManager.reportBackendReachable(key.getHost() + ":" + key.getPort());
+                        parent.backendHealthManager.reportBackendReachable(key.toBackendId());
                     }
 //                    LOG.log(Level.SEVERE, "sendRequest finished, now " + _channelToEndpoint + " is open ? " + _channelToEndpoint.isOpen());
                     if (!_channelToEndpoint.isOpen()) {

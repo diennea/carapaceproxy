@@ -24,6 +24,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 import nettyhttpproxy.EndpointStats;
@@ -128,6 +129,8 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
             EndpointConnection result = connections.borrowObject(key, borrowTimeout);
             result.setIdleTimeout(idleTimeout);
             return result;
+        } catch (NoSuchElementException ex) {
+            throw new EndpointNotAvailableException("Too many connections to "+key+" and/or cannot create a new connection", ex);
         } catch (Exception ex) {
             throw new EndpointNotAvailableException(ex);
         }

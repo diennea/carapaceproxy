@@ -224,18 +224,18 @@ public class StandardEndpointMapper extends EndpointMapper {
 
                 List<String> selectedBackends = backendSelector.selectBackends(request, matchResult);
                 LOG.log(Level.FINEST, "selected {0} backends for {1}", new Object[]{selectedBackends, request.uri()});
-                for (String backendId : selectedBackends) {
+                for (String backendId : selectedBackends) {                    
                     switch (action.getType()) {
                         case ActionConfiguration.TYPE_PROXY: {
                             BackendConfiguration backend = this.backends.get(backendId);
-                            if (backend != null && backendHealthManager.isAvailable(backend.getHost(), backend.getPort())) {
+                            if (backend != null && backendHealthManager.isAvailable(backendId)) {
                                 return new MapResult(backend.getHost(), backend.getPort(), MapResult.Action.PROXY);
                             }
                             break;
                         }
                         case ActionConfiguration.TYPE_CACHE:
                             BackendConfiguration backend = this.backends.get(backendId);
-                            if (backend != null && backendHealthManager.isAvailable(backend.getHost(), backend.getPort())) {
+                            if (backend != null && backendHealthManager.isAvailable(backendId)) {
                                 return new MapResult(backend.getHost(), backend.getPort(), MapResult.Action.CACHE);
                             }
                             break;

@@ -87,6 +87,10 @@ public final class EndpointKey {
         return true;
     }
 
+    public String toBackendId() {
+        return host + ":" + port;
+    }
+
     @Override
     public String toString() {
         return "EndpointKey{" + "host=" + host + ", port=" + port + '}';
