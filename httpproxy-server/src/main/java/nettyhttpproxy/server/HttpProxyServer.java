@@ -91,7 +91,7 @@ public class HttpProxyServer implements AutoCloseable {
     private EventLoopGroup workerGroup;
     private final EndpointMapper mapper;
     private final List<RequestFilter> filters;
-    private final ConnectionsManager connectionsManager;
+    private ConnectionsManager connectionsManager;
     private final ContentsCache cache;
     private final StatsLogger mainLogger;
     private final Counter currentClientConnections;
@@ -112,6 +112,9 @@ public class HttpProxyServer implements AutoCloseable {
     private boolean adminServerEnabled;
     private int adminServerPort = 8001;
     private String adminServerHost = "localhost";
+    private int maxConnectionsPerEndpoint = 10;
+    private int idleTimeout = 10000;
+    private int connectTimeout = 10000;
 
     public HttpProxyServer(EndpointMapper mapper, File basePath) {
         this.mapper = mapper;
@@ -119,13 +122,7 @@ public class HttpProxyServer implements AutoCloseable {
         this.statsProvider = new PrometheusMetricsProvider();
         this.mainLogger = statsProvider.getStatsLogger("");
         this.currentClientConnections = mainLogger.getCounter("clients");
-        this.backendHealthManager = new BackendHealthManager();
-        this.connectionsManager = new ConnectionsManagerImpl(
-                10 /*maxconnectionsperendpoint*/,
-                10000 /*idletimeout */,
-                5000 /*borrowtimeout*/,
-                10000 /*connecttimeout*/,
-                mainLogger, backendHealthManager);
+        this.backendHealthManager = new BackendHealthManager(mainLogger);
         this.filters = new ArrayList<>();
         this.cache = new ContentsCache(mainLogger);
     }
@@ -189,6 +186,12 @@ public class HttpProxyServer implements AutoCloseable {
 
     public void start() throws InterruptedException, ConfigurationNotValidException {
         try {
+
+            this.connectionsManager = new ConnectionsManagerImpl(
+                    maxConnectionsPerEndpoint,
+                    idleTimeout,
+                    connectTimeout,
+                    mainLogger, backendHealthManager);
             bossGroup = new EpollEventLoopGroup();
             workerGroup = new EpollEventLoopGroup();
 
@@ -398,123 +401,307 @@ public class HttpProxyServer implements AutoCloseable {
         int healthProbePeriod = Integer.parseInt(properties.getProperty("healthmanager.period", "0"));
         LOG.info("healthmanager.period=" + healthProbePeriod);
         backendHealthManager.setPeriod(healthProbePeriod);
+
+        this.maxConnectionsPerEndpoint = Integer.parseInt(properties.getProperty("connectionsmanager.maxconnectionsperendpoint", "10"));
+        this.idleTimeout = Integer.parseInt(properties.getProperty("connectionsmanager.idletimeout", "10000"));
+        this.connectTimeout = Integer.parseInt(properties.getProperty("connectionsmanager.connecttimeout", "10000"));
+        LOG.info("connectionsmanager.maxconnectionsperendpoint=" + maxConnectionsPerEndpoint);
+        LOG.info("connectionsmanager.idletimeout=" + idleTimeout);
+        LOG.info("connectionsmanager.connecttimeout=" + connectTimeout);
+
     }
 
-    private void tryConfigureCertificate(int i, Properties properties) throws ConfigurationNotValidException {
-        String prefix = "certificate." + i + ".";
+    private void tryConfigureCertificate(int i,
+            Properties properties
+    ) throws ConfigurationNotValidException {
+        String prefix
+                = "certificate." + i
+                + ".";
 
-        String certificateHostname = properties.getProperty(prefix + "hostname", "");
-        if (!certificateHostname.isEmpty()) {
-            String certificateFile = properties.getProperty(prefix + "sslcertfile", "");
-            String certificatePassword = properties.getProperty(prefix + "sslcertfilepassword", "");
-            LOG.log(Level.INFO, "Configuring SSL certificate {0}hostname={1}, file: {2}", new Object[]{prefix, certificateHostname, certificateFile});
+        String certificateHostname
+                = properties
+                        .getProperty(prefix
+                                + "hostname", "");
 
-            SSLCertificateConfiguration config = new SSLCertificateConfiguration(certificateHostname, certificateFile, certificatePassword);
-            addCertificate(config);
+        if (!certificateHostname
+                .isEmpty()) {
+            String certificateFile
+                    = properties
+                            .getProperty(prefix
+                                    + "sslcertfile", "");
+            String certificatePassword
+                    = properties
+                            .getProperty(prefix
+                                    + "sslcertfilepassword", "");
+            LOG
+                    .log(Level.INFO,
+                            "Configuring SSL certificate {0}hostname={1}, file: {2}", new Object[]{prefix,
+                        certificateHostname,
+                        certificateFile
+
+                    });
+
+            SSLCertificateConfiguration config
+                    = new SSLCertificateConfiguration(certificateHostname,
+                            certificateFile,
+                            certificatePassword
+                    );
+            addCertificate(config
+            );
+
         }
 
     }
 
-    private void tryConfigureListener(int i, Properties properties) throws ConfigurationNotValidException {
-        String prefix = "listener." + i + ".";
-        String host = properties.getProperty(prefix + "host", "0.0.0.0");
-        int port = Integer.parseInt(properties.getProperty(prefix + "port", "0"));
-        if (port > 0) {
-            boolean ssl = Boolean.parseBoolean(properties.getProperty(prefix + "ssl", "false"));
-            boolean ocps = Boolean.parseBoolean(properties.getProperty(prefix + "ocps", "true"));
-            String trustStoreFile = properties.getProperty(prefix + "ssltruststorefile", "");
-            String trustStorePassword = properties.getProperty(prefix + "ssltruststorepassword", "");
-            String sslciphers = properties.getProperty(prefix + "sslciphers", "");
-            String defautlSslCertificate = properties.getProperty(prefix + "defaultcertificate", "*");
-            NetworkListenerConfiguration config = new NetworkListenerConfiguration(host, port,
-                    ssl, ocps,
-                    sslciphers,
-                    defautlSslCertificate,
-                    trustStoreFile, trustStorePassword);
-            addListener(config);
+    private void tryConfigureListener(int i,
+            Properties properties
+    ) throws ConfigurationNotValidException {
+        String prefix
+                = "listener." + i
+                + ".";
+        String host
+                = properties
+                        .getProperty(prefix
+                                + "host", "0.0.0.0");
+
+        int port
+                = Integer
+                        .parseInt(properties
+                                .getProperty(prefix
+                                        + "port", "0"));
+
+        if (port
+                > 0) {
+            boolean ssl
+                    = Boolean
+                            .parseBoolean(properties
+                                    .getProperty(prefix
+                                            + "ssl", "false"));
+
+            boolean ocps
+                    = Boolean
+                            .parseBoolean(properties
+                                    .getProperty(prefix
+                                            + "ocps", "true"));
+            String trustStoreFile
+                    = properties
+                            .getProperty(prefix
+                                    + "ssltruststorefile", "");
+            String trustStorePassword
+                    = properties
+                            .getProperty(prefix
+                                    + "ssltruststorepassword", "");
+            String sslciphers
+                    = properties
+                            .getProperty(prefix
+                                    + "sslciphers", "");
+            String defautlSslCertificate
+                    = properties
+                            .getProperty(prefix
+                                    + "defaultcertificate", "*");
+            NetworkListenerConfiguration config
+                    = new NetworkListenerConfiguration(host,
+                            port,
+                            ssl,
+                            ocps,
+                            sslciphers,
+                            defautlSslCertificate,
+                            trustStoreFile,
+                            trustStorePassword
+                    );
+            addListener(config
+            );
+
         }
     }
 
-    private void tryConfigureFilter(int i, Properties properties) throws ConfigurationNotValidException {
-        String prefix = "filter." + i + ".";
-        String type = properties.getProperty(prefix + "type", "").trim();
-        if (type.isEmpty()) {
+    private void tryConfigureFilter(int i,
+            Properties properties
+    ) throws ConfigurationNotValidException {
+        String prefix
+                = "filter." + i
+                + ".";
+        String type
+                = properties
+                        .getProperty(prefix
+                                + "type", "").trim();
+
+        if (type
+                .isEmpty()) {
             return;
+
         }
-        LOG.log(Level.INFO, "configure filter " + prefix + "type={0}", type);
+        LOG
+                .log(Level.INFO,
+                        "configure filter " + prefix
+                        + "type={0}", type
+                );
+
         switch (type) {
             case "add-x-forwarded-for":
                 addRequestFilter(new XForwardedForRequestFilter());
+
                 break;
+
             case "match-user-regexp":
-                String param = properties.getProperty(prefix + "param", "userid").trim();
-                String regexp = properties.getProperty(prefix + "regexp", "(.*)").trim();
-                LOG.log(Level.INFO, prefix + "param" + "=" + param);
-                LOG.log(Level.INFO, prefix + "regexp" + "=" + regexp);
-                addRequestFilter(new RegexpMapUserIdFilter(param, regexp));
+                String param
+                        = properties
+                                .getProperty(prefix
+                                        + "param", "userid").trim();
+                String regexp
+                        = properties
+                                .getProperty(prefix
+                                        + "regexp", "(.*)").trim();
+                LOG
+                        .log(Level.INFO,
+                                prefix
+                                + "param" + "=" + param
+                        );
+                LOG
+                        .log(Level.INFO,
+                                prefix
+                                + "regexp" + "=" + regexp
+                        );
+                addRequestFilter(new RegexpMapUserIdFilter(param,
+                        regexp
+                ));
+
                 break;
             default:
-                throw new ConfigurationNotValidException("bad filter type '" + type + "' only 'add-x-forwarded-for', 'match-user-regexp'");
+                throw new ConfigurationNotValidException("bad filter type '" + type
+                        + "' only 'add-x-forwarded-for', 'match-user-regexp'");
+
         }
     }
 
-    private SslContext resolveSslContext(NetworkListenerConfiguration listener, String sniHostname) throws ConfigurationNotValidException {
-        String key = listener.getHost() + ":" + listener.getPort() + "+" + sniHostname;
+    private SslContext
+            resolveSslContext(NetworkListenerConfiguration listener,
+                    String sniHostname
+            ) throws ConfigurationNotValidException {
+        String key
+                = listener
+                        .getHost() + ":" + listener
+                        .getPort() + "+" + sniHostname;
+
         try {
-            return sslContexts.computeIfAbsent(key, (k) -> {
-                try {
-                    SSLCertificateConfiguration choosen = chooseCertificate(sniHostname, listener.getDefaultCertificate());
-                    if (choosen == null) {
-                        throw new ConfigurationNotValidException("cannot find a certificate for snihostname "
-                                + sniHostname + ", with default cert for listener as '" + listener.getDefaultCertificate() + "', available " + certificates.keySet());
-                    }
-                    return bootSslContext(listener, choosen);
-                } catch (ConfigurationNotValidException err) {
-                    throw new RuntimeException(err);
-                }
-            });
+            return sslContexts
+                    .computeIfAbsent(key,
+                            (k) -> {
+                                try {
+                                    SSLCertificateConfiguration choosen
+                                    = chooseCertificate(sniHostname,
+                                            listener
+                                                    .getDefaultCertificate());
+
+                                    if (choosen
+                                    == null) {
+                                        throw new ConfigurationNotValidException("cannot find a certificate for snihostname "
+                                                + sniHostname
+                                                + ", with default cert for listener as '" + listener
+                                                        .getDefaultCertificate() + "', available " + certificates
+                                                        .keySet());
+
+                                    }
+                                    return bootSslContext(listener,
+                                            choosen
+                                    );
+
+                                } catch (ConfigurationNotValidException err) {
+                                    throw new RuntimeException(err
+                                    );
+
+                                }
+                            });
+
         } catch (RuntimeException err) {
-            if (err.getCause() instanceof ConfigurationNotValidException) {
-                throw (ConfigurationNotValidException) err.getCause();
+            if (err
+                    .getCause() instanceof ConfigurationNotValidException) {
+                throw (ConfigurationNotValidException) err
+                        .getCause();
+
             } else {
-                throw new ConfigurationNotValidException(err);
+                throw new ConfigurationNotValidException(err
+                );
+
             }
         }
     }
 
     @VisibleForTesting
-    public SSLCertificateConfiguration chooseCertificate(String sniHostname, String defaultCertificate) {
-        if (sniHostname == null) {
-            sniHostname = "";
-        }
-        SSLCertificateConfiguration certificateMatchExact = null;
-        SSLCertificateConfiguration certificateMatchNoExact = null;
+    public SSLCertificateConfiguration
+            chooseCertificate(String sniHostname,
+                    String defaultCertificate
+            ) {
+        if (sniHostname
+                == null) {
+            sniHostname
+                    = "";
 
-        for (SSLCertificateConfiguration c : certificates.values()) {
-            if (certificateMatches(sniHostname, c, true)) {
-                certificateMatchExact = c;
-            } else if (certificateMatches(sniHostname, c, false)) {
-                certificateMatchNoExact = c;
+        }
+        SSLCertificateConfiguration certificateMatchExact
+                = null;
+        SSLCertificateConfiguration certificateMatchNoExact
+                = null;
+
+        for (SSLCertificateConfiguration c
+                : certificates
+                        .values()) {
+            if (certificateMatches(sniHostname,
+                    c,
+                    true)) {
+                certificateMatchExact
+                        = c;
+
+            } else if (certificateMatches(sniHostname,
+                    c,
+                    false)) {
+                certificateMatchNoExact
+                        = c;
+
             }
         }
 
-        SSLCertificateConfiguration choosen = null;
-        if (certificateMatchExact != null) {
-            choosen = certificateMatchExact;
-        } else if (certificateMatchNoExact != null) {
-            choosen = certificateMatchNoExact;
+        SSLCertificateConfiguration choosen
+                = null;
+
+        if (certificateMatchExact
+                != null) {
+            choosen
+                    = certificateMatchExact;
+
+        } else if (certificateMatchNoExact
+                != null) {
+            choosen
+                    = certificateMatchNoExact;
+
         }
-        if (choosen == null) {
-            choosen = certificates.get(defaultCertificate);
+        if (choosen
+                == null) {
+            choosen
+                    = certificates
+                            .get(defaultCertificate
+                            );
+
         }
         return choosen;
+
     }
 
-    private boolean certificateMatches(String hostname, SSLCertificateConfiguration c, boolean exact) {
+    private boolean certificateMatches(String hostname,
+            SSLCertificateConfiguration c,
+            boolean exact
+    ) {
         if (exact) {
-            return !c.isWildcard() && hostname.equals(c.getHostname());
+            return !c
+                    .isWildcard() && hostname
+                            .equals(c
+                                    .getHostname());
+
         } else {
-            return c.isWildcard() && hostname.endsWith(c.getHostname());
+            return c
+                    .isWildcard() && hostname
+                            .endsWith(c
+                                    .getHostname());
         }
     }
 

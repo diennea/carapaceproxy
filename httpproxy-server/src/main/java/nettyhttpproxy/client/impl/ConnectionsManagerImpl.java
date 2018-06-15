@@ -57,8 +57,7 @@ import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
  */
 public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable {
 
-    private final GenericKeyedObjectPool<EndpointKey, EndpointConnectionImpl> connections;
-    private final int borrowTimeout;
+    private final GenericKeyedObjectPool<EndpointKey, EndpointConnectionImpl> connections;    
     private final int idleTimeout;
     private final int connectTimeout;
     private final ConcurrentHashMap<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
@@ -155,12 +154,11 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     }
 
     public ConnectionsManagerImpl(int maxConnectionsPerEndpoint, int idleTimeout,
-            int borrowTimeout, int connectTimeout, StatsLogger statsLogger, BackendHealthManager backendHealthManager) {
+            int connectTimeout, StatsLogger statsLogger, BackendHealthManager backendHealthManager) {
         this.mainLogger = statsLogger.scope("outbound");
         this.pendingRequestsStat = mainLogger.getCounter("pendingrequests");
         this.stuckRequestsStat = mainLogger.getCounter("stuckrequests");
-        this.idleTimeout = idleTimeout;
-        this.borrowTimeout = borrowTimeout;
+        this.idleTimeout = idleTimeout;        
         this.connectTimeout = connectTimeout;
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
         this.stuckRequestsReaperFuture = this.scheduler.scheduleWithFixedDelay(new RequestHandlerChecker(), idleTimeout / 4, idleTimeout / 4, TimeUnit.MILLISECONDS);
@@ -183,7 +181,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     @Override
     public EndpointConnection getConnection(EndpointKey key) throws EndpointNotAvailableException {
         try {
-            EndpointConnection result = connections.borrowObject(key, borrowTimeout);
+            EndpointConnection result = connections.borrowObject(key, connectTimeout * 2);
             result.setIdleTimeout(idleTimeout);
             return result;
         } catch (NoSuchElementException ex) {

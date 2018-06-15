@@ -27,6 +27,9 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.apache.bookkeeper.stats.Counter;
+import org.apache.bookkeeper.stats.OpStatsLogger;
+import org.apache.bookkeeper.stats.StatsLogger;
 
 /**
  * Keeps status about backends
@@ -40,10 +43,12 @@ public class BackendHealthManager implements Runnable {
 
     private ScheduledExecutorService timer;
     private int period;
+    private StatsLogger mainLogger;
 
-    public BackendHealthManager() {
+    public BackendHealthManager(StatsLogger logger) {
         // will be overridden before start
         this.period = 60000;
+        this.mainLogger = logger.scope("health");
     }
 
     public int getPeriod() {
@@ -64,9 +69,11 @@ public class BackendHealthManager implements Runnable {
     }
 
     @Override
-    public void run() {        
+    public void run() {
         for (BackendHealthStatus status : backends.values()) {
+            OpStatsLogger logger = mainLogger.getOpStatsLogger("backend_" + status.getId().replace(":", "_") + "_up");
             if (status.isReportedAsUnreachable()) {
+                logger.registerSuccessfulValue(0);
                 // TODO: perform a probe
                 LOG.log(Level.INFO, "backend {0} was unreachable, setting again to reachable (probe not really performed!!)", status.getId());
                 status.reportAsReachable();
@@ -74,6 +81,7 @@ public class BackendHealthManager implements Runnable {
                 status.setLastProbeSuccess(true);
                 status.setLastProbeTs(System.currentTimeMillis());
             } else {
+                logger.registerSuccessfulValue(1);
                 LOG.log(Level.INFO, "backend {0} seems reachable", status.getId());
             }
         }
