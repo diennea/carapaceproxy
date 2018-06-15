@@ -23,7 +23,11 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Properties;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.server.HttpProxyServer;
@@ -33,18 +37,31 @@ import static org.junit.Assert.assertFalse;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
 
-/**
- *
- * @author enrico.olivelli
- */
+@RunWith(Parameterized.class)
 public class UnreachableBackendTest {
+
+    @Parameters
+    public static Collection<Object[]> data() {
+        return Arrays.asList(new Object[][]{
+            {true}, {false}
+        });
+    }
 
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
 
     @Rule
     public TemporaryFolder tmpDir = new TemporaryFolder();
+
+    private final boolean useCache;
+
+    public UnreachableBackendTest(boolean useCache) {
+        this.useCache = useCache;
+    }
 
     @Test
     public void testWithUnreachableBackend() throws Exception {
@@ -58,7 +75,7 @@ public class UnreachableBackendTest {
 
         int dummyport = wireMockRule.port();
         wireMockRule.stop();
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, false);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
         ConnectionsManagerStats stats;
@@ -85,18 +102,52 @@ public class UnreachableBackendTest {
     }
 
     @Test
-    public void testCacheWithUnreachableBackend() throws Exception {
+    public void testEmptyResponse() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "text/html")
-                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                        .withBody("it <b>works</b> !!")));
+                        .withFault(Fault.EMPTY_RESPONSE)));
 
         int dummyport = wireMockRule.port();
-        wireMockRule.stop();
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, true);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
+        EndpointKey key = new EndpointKey("localhost", dummyport);
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
+            Properties properties = new Properties();
+            properties.put("connectionsmanager.idletimeout", "100"); // ms
+            server.configure(properties);
+            assertEquals(100, server.getIdleTimeout());
+            server.start();
+            stats = server.getConnectionsManager().getStats();
+            int port = server.getLocalPort();
+
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                String s = resp.toString();
+                System.out.println("s:" + s);
+                assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
+                assertEquals("<html>\n"
+                        + "    <body>\n"
+                        + "        An internal error occurred\n"
+                        + "    </body>        \n"
+                        + "</html>\n", resp.getBodyString());
+            }
+            assertFalse(server.getBackendHealthManager().isAvailable(key.toBackendId()));
+            TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+
+        }
+    }
+
+    @Test
+    public void testConnectionResetByPeer() throws Exception {
+
+        stubFor(get(urlEqualTo("/index.html"))
+                .willReturn(aResponse()
+                        .withFault(Fault.CONNECTION_RESET_BY_PEER)));
+
+        int dummyport = wireMockRule.port();
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
         ConnectionsManagerStats stats;
@@ -116,8 +167,44 @@ public class UnreachableBackendTest {
                         + "    </body>        \n"
                         + "</html>\n", resp.getBodyString());
             }
+            assertFalse(server.getBackendHealthManager().isAvailable(key.toBackendId()));
             TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
         }
     }
+
+    @Test
+    public void testNonHttpResponseThenClose() throws Exception {
+
+        stubFor(get(urlEqualTo("/index.html"))
+                .willReturn(aResponse()
+                        .withFault(Fault.RANDOM_DATA_THEN_CLOSE)));
+
+        int dummyport = wireMockRule.port();
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
+        EndpointKey key = new EndpointKey("localhost", dummyport);
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
+            server.start();
+            stats = server.getConnectionsManager().getStats();
+            int port = server.getLocalPort();
+
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                String s = resp.toString();
+                System.out.println("s:" + s);
+                assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
+                assertEquals("<html>\n"
+                        + "    <body>\n"
+                        + "        An internal error occurred\n"
+                        + "    </body>        \n"
+                        + "</html>\n", resp.getBodyString());
+            }
+            assertFalse(server.getBackendHealthManager().isAvailable(key.toBackendId()));
+            TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+
+        }
+    }
+
 }

@@ -99,7 +99,8 @@ public class BackendHealthManager implements Runnable {
         }
     }
 
-    public void reportBackendUnreachable(String id, long timestamp) {
+    public void reportBackendUnreachable(String id, long timestamp, String cause) {
+        LOG.log(Level.INFO, "reportBackendUnreachable {0}, cause: {1}", new Object[]{id, cause});
         BackendHealthStatus backend = getBackendStatus(id);
         backend.reportAsUnreachable(timestamp);
     }

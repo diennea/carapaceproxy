@@ -25,11 +25,14 @@ import io.netty.handler.codec.http.LastHttpContent;
 import nettyhttpproxy.server.RequestHandler;
 
 /**
- * A Connection to a specific endpoint. Connections are pooled and so they have to be returned to the pool
+ * A Connection to a specific endpoint. Connections are pooled and so they have
+ * to be returned to the pool
  *
  * @author enrico.olivelli
  */
 public interface EndpointConnection {
+
+    public EndpointKey getKey();
 
     public void setIdleTimeout(int timeout);
 

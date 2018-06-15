@@ -98,14 +98,14 @@ public class EndpointConnectionImpl implements EndpointConnection {
         long now = System.nanoTime();
         Bootstrap b = new Bootstrap();
         b.group(parent.getGroup())
-                .channel(NioSocketChannel.class)                
+                .channel(NioSocketChannel.class)
                 .option(ChannelOption.SO_KEEPALIVE, true)
                 .handler(new ChannelInitializer<SocketChannel>() {
                     @Override
                     public void initChannel(SocketChannel ch) throws Exception {
                         ch.pipeline().addLast("readTimeoutHandler", new ReadTimeoutHandler(idleTimeout / 2));
                         ch.pipeline().addLast("writeTimeoutHandler", new WriteTimeoutHandler(idleTimeout / 2));
-                        ch.pipeline().addLast("client-codec", new HttpClientCodec());                        
+                        ch.pipeline().addLast("client-codec", new HttpClientCodec());
                         ch.pipeline().addLast(new ReadEndpointResponseHandler());
                     }
                 });
@@ -122,7 +122,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 connectionStats.registerFailedEvent(System.nanoTime() - now, TimeUnit.NANOSECONDS);
                 invalidate();
                 LOG.log(Level.INFO, "connect failed to " + key, future.cause());
-                parent.backendHealthManager.reportBackendUnreachable(key.toBackendId(), System.currentTimeMillis());
+                parent.backendHealthManager.reportBackendUnreachable(key.toBackendId(), System.currentTimeMillis(), "connection failed");
             }
         });
         try {
@@ -192,7 +192,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                             _clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
                         }
                         // send to unreachable state if we are not able to send a request on the wire
-                        parent.backendHealthManager.reportBackendUnreachable(key.toBackendId(), System.currentTimeMillis());
+                        parent.backendHealthManager.reportBackendUnreachable(key.toBackendId(), System.currentTimeMillis(), "write failed (" + future.cause() + ")");
                     } else {
                         if (_clientSidePeerHandler != null) {
                             _clientSidePeerHandler.messageSentToBackend(EndpointConnectionImpl.this);
@@ -379,6 +379,11 @@ public class EndpointConnectionImpl implements EndpointConnection {
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
             LOG.log(Level.SEVERE, "bad error", cause);
+            parent.backendHealthManager.reportBackendUnreachable(key.toBackendId(), System.currentTimeMillis(), "I/O error: " + cause);
+            RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
+            if (_clientSidePeerHandler != null) {
+                _clientSidePeerHandler.badErrorOnRemote(cause);
+            }
             invalidate();
             ctx.close();
             connectionDeactivated();
@@ -402,6 +407,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     }
 
+    @Override
     public EndpointKey getKey() {
         return key;
     }

@@ -81,15 +81,22 @@ public class RequestHandler {
     private final StatsLogger logger;
     private final BackendHealthManager backendHealthManager;
     private String userId;
+    private final String uri;
     private volatile long lastActivity;
+    private volatile boolean headerSent = false;
 
     public long getId() {
         return id;
     }
 
+    public String getUri() {
+        return uri;
+    }
+
     public RequestHandler(long id, HttpRequest request, List<RequestFilter> filters, StatsLogger logger,
             ClientConnectionHandler parent, ChannelHandlerContext channelToClient, Runnable onRequestFinished, BackendHealthManager backendHealthManager) {
         this.id = id;
+        this.uri = request.uri();
         this.request = request;
         this.connectionToClient = parent;
         this.channelToClient = channelToClient;
@@ -120,7 +127,7 @@ public class RequestHandler {
         }
         requestsPerUser.inc();
 
-        LOG.log(Level.FINER, "{0} Mapped {1} to {2}, userid {3}", new Object[]{this, request.uri(), action, userId});
+        LOG.log(Level.FINER, "{0} Mapped {1} to {2}, userid {3}", new Object[]{this, uri, action, userId});
         switch (action.action) {
             case NOTFOUND:
             case INTERNAL_ERROR:
@@ -252,9 +259,13 @@ public class RequestHandler {
         FullHttpResponse response = connectionToClient.staticContentsManager.buildResponse(code, resource);
 
         if (!writeSimpleResponse(response)) {
-            // If keep-alive is off, close the connection once the content is fully written.
-            channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+            forceCloseChannelToClient();
         }
+    }
+
+    private void forceCloseChannelToClient() {
+        // If keep-alive is off, close the connection once the content is fully written.
+        channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
     }
 
     private void serveInternalErrorMessage(boolean forceClose) {
@@ -276,7 +287,7 @@ public class RequestHandler {
 
         if (!writeSimpleResponse(response) || forceClose) {
             // If keep-alive is off, close the connection once the content is fully written.
-            channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+            forceCloseChannelToClient();
         }
     }
 
@@ -285,7 +296,7 @@ public class RequestHandler {
                 = connectionToClient.staticContentsManager.buildResponse(action.errorcode, action.resource);
         if (!writeSimpleResponse(response)) {
             // If keep-alive is off, close the connection once the content is fully written.
-            channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+            forceCloseChannelToClient();
         }
     }
 
@@ -297,7 +308,7 @@ public class RequestHandler {
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8");
         if (!writeSimpleResponse(response)) {
             // If keep-alive is off, close the connection once the content is fully written.
-            channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+            forceCloseChannelToClient();
         }
     }
 
@@ -357,6 +368,12 @@ public class RequestHandler {
 
     private boolean writeSimpleResponse(FullHttpResponse response) {
         fireRequestFinished();
+        
+        if (headerSent) {
+            LOG.log(Level.INFO, this+": headers for already sent to client, cannot send static response");
+            return true;
+        }
+        
         // Decide whether to close the connection or not.
         boolean keepAlive = HttpUtil.isKeepAlive(request);
 
@@ -426,6 +443,10 @@ public class RequestHandler {
         return true;
     }
 
+    public EndpointConnection getConnectionToEndpoint() {
+        return connectionToEndpoint;
+    }
+
     public void errorSendingRequest(EndpointConnectionImpl connectionToEndpoint, Throwable cause) {
         connectionToClient.errorSendingRequest(this, connectionToEndpoint, channelToClient, cause);
         sendServiceNotAvailable();
@@ -445,7 +466,7 @@ public class RequestHandler {
                 HttpResponse httpMessage = (HttpResponse) msg;
                 cleanResponseForCachedData(httpMessage);
             }
-        }
+        }        
         channelToClient.writeAndFlush(msg).addListener((Future<? super Void> future) -> {
             boolean returnConnection = false;
             if (future.isSuccess()) {
@@ -461,13 +482,14 @@ public class RequestHandler {
                 returnConnection = true;
             }
             if (msg instanceof HttpResponse) {
+                headerSent = true;
                 HttpResponse httpMessage = (HttpResponse) msg;
                 if (SUCCESS == httpMessage.status().codeClass()) {
                     long contentLength = HttpUtil.getContentLength(httpMessage, -1);
                     String transferEncoding = httpMessage.headers().get(HttpHeaderNames.TRANSFER_ENCODING);
                     if (contentLength < 0 && !"chunked".equals(transferEncoding)) {
                         connectionToClient.keepAlive = false;
-                        LOG.log(Level.SEVERE, request.uri() + " response without contentLength{0} and with Transfer-Encoding {1}. keepalive will be disabled " + msg, new Object[]{contentLength, transferEncoding});
+                        LOG.log(Level.SEVERE, uri + " response without contentLength{0} and with Transfer-Encoding {1}. keepalive will be disabled " + msg, new Object[]{contentLength, transferEncoding});
                     }
                 }
             }
@@ -543,7 +565,7 @@ public class RequestHandler {
                 String transferEncoding = resp.headers().get(HttpHeaderNames.TRANSFER_ENCODING);
                 if (contentLength < 0 && !"chunked".equals(transferEncoding)) {
                     connectionToClient.keepAlive = false;
-                    LOG.log(Level.SEVERE, request.uri() + " response without contentLength{0} and with Transfer-Encoding {1}. keepalive will be disabled " + resp, new Object[]{contentLength, transferEncoding});
+                    LOG.log(Level.SEVERE, uri + " response without contentLength{0} and with Transfer-Encoding {1}. keepalive will be disabled " + resp, new Object[]{contentLength, transferEncoding});
                 }
                 notModified = false;
             }
@@ -597,25 +619,24 @@ public class RequestHandler {
         this.userId = userId;
     }
 
-    public boolean failIfStuck(int idleTimeout) {
-        if (1 == 1) {
-            return false;
-        }
-        long now = System.currentTimeMillis();
+    public void failIfStuck(long now, int idleTimeout, Runnable onStuck) {
         long delta = now - lastActivity;
         if (delta >= idleTimeout) {
             LOG.log(Level.INFO, this + " connection appears stuck " + connectionToEndpoint);
-            serveInternalErrorMessage(true);
+            onStuck.run();
             releaseConnectionToEndpoint(true);
-            return true;
-        } else {
-            LOG.log(Level.INFO, this + " connection seems alive " + delta + "/" + idleTimeout + " ms");
+            serveInternalErrorMessage(true);
         }
-        return false;
     }
 
     public void messageSentToBackend(EndpointConnectionImpl aThis) {
         lastActivity = System.currentTimeMillis();
+    }
+
+    public void badErrorOnRemote(Throwable cause) {
+        LOG.log(Level.INFO, this + " badErrorOnRemote " + cause);
+        releaseConnectionToEndpoint(true);
+        serveInternalErrorMessage(true);
     }
 
 }

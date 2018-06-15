@@ -57,7 +57,7 @@ import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
  */
 public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable {
 
-    private final GenericKeyedObjectPool<EndpointKey, EndpointConnectionImpl> connections;    
+    private final GenericKeyedObjectPool<EndpointKey, EndpointConnectionImpl> connections;
     private final int idleTimeout;
     private final int connectTimeout;
     private final ConcurrentHashMap<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
@@ -137,14 +137,19 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
         @Override
         public void run() {
+            long now = System.currentTimeMillis();
             List<RequestHandler> toRemove = new ArrayList<>();
             for (Map.Entry<Long, RequestHandler> entry : pendingRequests.entrySet()) {
                 RequestHandler requestHandler = entry.getValue();
-                if (requestHandler.failIfStuck(idleTimeout)) {
+                requestHandler.failIfStuck(now, idleTimeout, () -> {
+                    EndpointConnection connectionToEndpoint = requestHandler.getConnectionToEndpoint();
+                    if (connectionToEndpoint != null) {
+                        backendHealthManager.reportBackendUnreachable(connectionToEndpoint.getKey().toBackendId(), now, "a request to "+requestHandler.getUri()+" for user "+requestHandler.getUserId()+" appears stuck");
+                    }
                     stuckRequestsStat.inc();
                     pendingRequestsStat.dec();
                     toRemove.add(entry.getValue());
-                }
+                });
             }
             toRemove.forEach(r -> {
                 unregisterPendingRequest(r);
@@ -158,7 +163,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         this.mainLogger = statsLogger.scope("outbound");
         this.pendingRequestsStat = mainLogger.getCounter("pendingrequests");
         this.stuckRequestsStat = mainLogger.getCounter("stuckrequests");
-        this.idleTimeout = idleTimeout;        
+        this.idleTimeout = idleTimeout;
         this.connectTimeout = connectTimeout;
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
         this.stuckRequestsReaperFuture = this.scheduler.scheduleWithFixedDelay(new RequestHandlerChecker(), idleTimeout / 4, idleTimeout / 4, TimeUnit.MILLISECONDS);

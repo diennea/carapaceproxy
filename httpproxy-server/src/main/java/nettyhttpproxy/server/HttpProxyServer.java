@@ -402,13 +402,25 @@ public class HttpProxyServer implements AutoCloseable {
         LOG.info("healthmanager.period=" + healthProbePeriod);
         backendHealthManager.setPeriod(healthProbePeriod);
 
-        this.maxConnectionsPerEndpoint = Integer.parseInt(properties.getProperty("connectionsmanager.maxconnectionsperendpoint", "10"));
-        this.idleTimeout = Integer.parseInt(properties.getProperty("connectionsmanager.idletimeout", "10000"));
-        this.connectTimeout = Integer.parseInt(properties.getProperty("connectionsmanager.connecttimeout", "10000"));
+        this.maxConnectionsPerEndpoint = Integer.parseInt(properties.getProperty("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint + ""));
+        this.idleTimeout = Integer.parseInt(properties.getProperty("connectionsmanager.idletimeout", idleTimeout + ""));
+        this.connectTimeout = Integer.parseInt(properties.getProperty("connectionsmanager.connecttimeout", connectTimeout + ""));
         LOG.info("connectionsmanager.maxconnectionsperendpoint=" + maxConnectionsPerEndpoint);
         LOG.info("connectionsmanager.idletimeout=" + idleTimeout);
         LOG.info("connectionsmanager.connecttimeout=" + connectTimeout);
 
+    }
+
+    public int getMaxConnectionsPerEndpoint() {
+        return maxConnectionsPerEndpoint;
+    }
+
+    public int getIdleTimeout() {
+        return idleTimeout;
+    }
+
+    public int getConnectTimeout() {
+        return connectTimeout;
     }
 
     private void tryConfigureCertificate(int i,
