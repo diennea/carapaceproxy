@@ -204,6 +204,7 @@ public class StandardEndpointMapper extends EndpointMapper {
 
     @Override
     public MapResult map(HttpRequest request, BackendHealthManager backendHealthManager) {
+        boolean somethingMatched = false;
         for (RouteConfiguration route : routes) {
             if (!route.isEnabled()) {
                 continue;
@@ -223,7 +224,8 @@ public class StandardEndpointMapper extends EndpointMapper {
                 }
 
                 List<String> selectedBackends = backendSelector.selectBackends(request, matchResult);
-                LOG.log(Level.FINEST, "selected {0} backends for {1}", new Object[]{selectedBackends, request.uri()});
+                somethingMatched = somethingMatched | !selectedBackends.isEmpty();
+                LOG.log(Level.FINEST, "selected {0} backends for {1}", new Object[]{selectedBackends, request.uri()});                
                 for (String backendId : selectedBackends) {                    
                     switch (action.getType()) {
                         case ActionConfiguration.TYPE_PROXY: {
@@ -245,7 +247,11 @@ public class StandardEndpointMapper extends EndpointMapper {
                 }
             }
         }
-        return MapResult.NOT_FOUND;
+        if (somethingMatched) {
+            return MapResult.INTERNAL_ERROR;
+        } else {
+            return MapResult.NOT_FOUND;
+        }
     }
 
 }

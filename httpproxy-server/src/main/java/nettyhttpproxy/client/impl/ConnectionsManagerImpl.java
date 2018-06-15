@@ -21,11 +21,17 @@ package nettyhttpproxy.client.impl;
 
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.EndpointStats;
 import nettyhttpproxy.client.ConnectionsManager;
@@ -33,7 +39,9 @@ import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointConnection;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.client.EndpointNotAvailableException;
+import nettyhttpproxy.server.RequestHandler;
 import nettyhttpproxy.server.backends.BackendHealthManager;
+import org.apache.bookkeeper.stats.Counter;
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.apache.commons.pool2.KeyedPooledObjectFactory;
 import org.apache.commons.pool2.PooledObject;
@@ -50,17 +58,24 @@ import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
 public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable {
 
     private final GenericKeyedObjectPool<EndpointKey, EndpointConnectionImpl> connections;
-    private final int maxConnectionsPerEndpoint;
     private final int borrowTimeout;
     private final int idleTimeout;
+    private final int connectTimeout;
     private final ConcurrentHashMap<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
     private final EventLoopGroup group;
     final StatsLogger mainLogger;
     final BackendHealthManager backendHealthManager;
+    final ScheduledExecutorService scheduler;
+    final Counter pendingRequestsStat;
+    final Counter stuckRequestsStat;
 
     void returnConnection(EndpointConnectionImpl con) {
 //        LOG.log(Level.SEVERE, "returnConnection:" + con);
         connections.returnObject(con.getKey(), con);
+    }
+
+    public int getConnectTimeout() {
+        return connectTimeout;
     }
 
     private final class ConnectionsFactory implements KeyedPooledObjectFactory<EndpointKey, EndpointConnectionImpl> {
@@ -69,7 +84,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         public PooledObject<EndpointConnectionImpl> makeObject(EndpointKey k) throws Exception {
             EndpointStats endpointstats = endpointsStats.computeIfAbsent(k, EndpointStats::new);
             EndpointConnectionImpl con = new EndpointConnectionImpl(k, ConnectionsManagerImpl.this, endpointstats);
-//            LOG.log(Level.INFO, "makeObject {0}", new Object[]{con});
+            LOG.log(Level.INFO, "opened new connection {0}", new Object[]{con});
             return new DefaultPooledObject<>(con);
         }
 
@@ -100,12 +115,55 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     }
 
+    private final ScheduledFuture<?> stuckRequestsReaperFuture;
+
+    private ConcurrentHashMap<Long, RequestHandler> pendingRequests = new ConcurrentHashMap<>();
+
+    void registerPendingRequest(RequestHandler handler) {
+        pendingRequests.put(handler.getId(), handler);
+        pendingRequestsStat.inc();
+    }
+
+    void unregisterPendingRequest(RequestHandler clientSidePeerHandler) {
+        if (clientSidePeerHandler == null) {
+            return;
+        }
+        RequestHandler removed = pendingRequests.remove(clientSidePeerHandler.getId());
+        if (removed != null) {
+            pendingRequestsStat.dec();
+        }
+    }
+
+    private class RequestHandlerChecker implements Runnable {
+
+        @Override
+        public void run() {
+            List<RequestHandler> toRemove = new ArrayList<>();
+            for (Map.Entry<Long, RequestHandler> entry : pendingRequests.entrySet()) {
+                RequestHandler requestHandler = entry.getValue();
+                if (requestHandler.failIfStuck(idleTimeout)) {
+                    stuckRequestsStat.inc();
+                    pendingRequestsStat.dec();
+                    toRemove.add(entry.getValue());
+                }
+            }
+            toRemove.forEach(r -> {
+                unregisterPendingRequest(r);
+            });
+        }
+
+    }
+
     public ConnectionsManagerImpl(int maxConnectionsPerEndpoint, int idleTimeout,
-            int borrowTimeout, StatsLogger statsLogger, BackendHealthManager backendHealthManager) {
+            int borrowTimeout, int connectTimeout, StatsLogger statsLogger, BackendHealthManager backendHealthManager) {
         this.mainLogger = statsLogger.scope("outbound");
-        this.maxConnectionsPerEndpoint = maxConnectionsPerEndpoint;
+        this.pendingRequestsStat = mainLogger.getCounter("pendingrequests");
+        this.stuckRequestsStat = mainLogger.getCounter("stuckrequests");
         this.idleTimeout = idleTimeout;
         this.borrowTimeout = borrowTimeout;
+        this.connectTimeout = connectTimeout;
+        this.scheduler = Executors.newSingleThreadScheduledExecutor();
+        this.stuckRequestsReaperFuture = this.scheduler.scheduleWithFixedDelay(new RequestHandlerChecker(), idleTimeout / 4, idleTimeout / 4, TimeUnit.MILLISECONDS);
         GenericKeyedObjectPoolConfig config = new GenericKeyedObjectPoolConfig();
         config.setMaxTotalPerKey(maxConnectionsPerEndpoint);
         config.setMaxIdlePerKey(maxConnectionsPerEndpoint);
@@ -125,12 +183,11 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     @Override
     public EndpointConnection getConnection(EndpointKey key) throws EndpointNotAvailableException {
         try {
-//            LOG.log(Level.INFO, "getConnection {0}", key);
             EndpointConnection result = connections.borrowObject(key, borrowTimeout);
             result.setIdleTimeout(idleTimeout);
             return result;
         } catch (NoSuchElementException ex) {
-            throw new EndpointNotAvailableException("Too many connections to "+key+" and/or cannot create a new connection", ex);
+            throw new EndpointNotAvailableException("Too many connections to " + key + " and/or cannot create a new connection", ex);
         } catch (Exception ex) {
             throw new EndpointNotAvailableException(ex);
         }
@@ -140,6 +197,8 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     @Override
     public void close() {
+        stuckRequestsReaperFuture.cancel(true);
+        scheduler.shutdown();
         Map<String, List<DefaultPooledObjectInfo>> all = connections.listAllObjects();
         System.out.println("[POOL] numIdle: " + connections.getNumIdle() + " numActive: " + connections.getNumActive());
         connections.clear();

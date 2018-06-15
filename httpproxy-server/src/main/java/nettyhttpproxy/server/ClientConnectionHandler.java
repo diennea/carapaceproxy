@@ -44,7 +44,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     private static final AtomicLong idgenerator = new AtomicLong();
     private final long id = idgenerator.incrementAndGet();
 
-    private final AtomicLong requestIdGenerator = new AtomicLong();
+    private final static AtomicLong requestIdGenerator = new AtomicLong();
 
     final EndpointMapper mapper;
     final StatsLogger mainLogger;

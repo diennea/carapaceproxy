@@ -120,7 +120,12 @@ public class HttpProxyServer implements AutoCloseable {
         this.mainLogger = statsProvider.getStatsLogger("");
         this.currentClientConnections = mainLogger.getCounter("clients");
         this.backendHealthManager = new BackendHealthManager();
-        this.connectionsManager = new ConnectionsManagerImpl(10, 120000, 5000, mainLogger, backendHealthManager);
+        this.connectionsManager = new ConnectionsManagerImpl(
+                10 /*maxconnectionsperendpoint*/,
+                10000 /*idletimeout */,
+                5000 /*borrowtimeout*/,
+                10000 /*connecttimeout*/,
+                mainLogger, backendHealthManager);
         this.filters = new ArrayList<>();
         this.cache = new ContentsCache(mainLogger);
     }

@@ -1,5 +1,4 @@
 #!/bin/bash
-cd httpproxy-server
 mvn clean install -DskipTests
 cd target
 unzip *.zip

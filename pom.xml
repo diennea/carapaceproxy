@@ -35,7 +35,7 @@
                 <configuration>
                     <reuseForks>false</reuseForks>
                     <trimStackTrace>false</trimStackTrace>
-                    <forkedProcessTimeoutInSeconds>180</forkedProcessTimeoutInSeconds>
+                    <!--<forkedProcessTimeoutInSeconds>180</forkedProcessTimeoutInSeconds>-->
                 </configuration>
             </plugin>
         </plugins>            

@@ -47,6 +47,7 @@ import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -80,6 +81,11 @@ public class RequestHandler {
     private final StatsLogger logger;
     private final BackendHealthManager backendHealthManager;
     private String userId;
+    private volatile long lastActivity;
+
+    public long getId() {
+        return id;
+    }
 
     public RequestHandler(long id, HttpRequest request, List<RequestFilter> filters, StatsLogger logger,
             ClientConnectionHandler parent, ChannelHandlerContext channelToClient, Runnable onRequestFinished, BackendHealthManager backendHealthManager) {
@@ -101,6 +107,7 @@ public class RequestHandler {
     }
 
     public void start() {
+        lastActivity = System.currentTimeMillis();
         action = connectionToClient.mapper.map(request, backendHealthManager);
         for (RequestFilter filter : filters) {
             filter.apply(request, connectionToClient, this);
@@ -204,7 +211,7 @@ public class RequestHandler {
                 break;
             }
             case INTERNAL_ERROR: {
-                serveInternalErrorMessage();
+                serveInternalErrorMessage(false);
                 break;
             }
             case STATIC: {
@@ -250,7 +257,7 @@ public class RequestHandler {
         }
     }
 
-    private void serveInternalErrorMessage() {
+    private void serveInternalErrorMessage(boolean forceClose) {
         MapResult fromDefault = connectionToClient.mapper.mapDefaultInternalError(request);
         int code = 0;
         String resource = null;
@@ -267,7 +274,7 @@ public class RequestHandler {
 
         FullHttpResponse response = connectionToClient.staticContentsManager.buildResponse(code, resource);
 
-        if (!writeSimpleResponse(response)) {
+        if (!writeSimpleResponse(response) || forceClose) {
             // If keep-alive is off, close the connection once the content is fully written.
             channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
         }
@@ -390,6 +397,7 @@ public class RequestHandler {
     }
 
     public void lastHttpContentSent() {
+        lastActivity = System.currentTimeMillis();
         connectionToClient.lastHttpContentSent(this);
     }
 
@@ -425,7 +433,6 @@ public class RequestHandler {
 
     public void receivedFromRemote(HttpObject msg) {
         if (connectionToClient == null) {
-//            LOG.log(Level.SEVERE, this + " received from remote server:{0} connection {1} server {2}", new Object[]{msg, connectionToClient, connectionToEndpoint});
             if (cacheReceiver != null) {
                 cacheReceiver.abort();
             }
@@ -450,7 +457,7 @@ public class RequestHandler {
                 }
             } else {
                 boolean isOpen = channelToClient.channel().isOpen();
-//                LOG.log(Level.INFO, this + " bad error writing to client, isOpen " + isOpen, future.cause());
+                LOG.log(Level.FINE, this + " bad error writing to client, isOpen " + isOpen, future.cause());
                 returnConnection = true;
             }
             if (msg instanceof HttpResponse) {
@@ -465,7 +472,7 @@ public class RequestHandler {
                 }
             }
             boolean keepAlive1 = connectionToClient.isKeepAlive();
-//            LOG.log(Level.INFO, this + " returnConnection:" + returnConnection + ", keepAlive1:" + keepAlive1 + " connecton " + connectionToEndpoint);
+            // LOG.log(Level.INFO, this + " returnConnection:" + returnConnection + ", keepAlive1:" + keepAlive1 + " connecton " + connectionToEndpoint);
             if (!keepAlive1 && msg instanceof LastHttpContent) {
                 connectionToClient.refuseOtherRequests = true;
                 channelToClient.close();
@@ -491,7 +498,7 @@ public class RequestHandler {
 
     @Override
     public String toString() {
-        return "RequestHandler{" + "id=" + id + ", connectionToEndpoint=" + connectionToEndpoint + ", connectionToClient=" + connectionToClient + '}';
+        return "RequestHandler{" + "id=" + id + ", connectionToEndpoint=" + connectionToEndpoint + ", connectionToClient=" + connectionToClient + ", last " + lastActivity + '}';
     }
 
     public boolean isKeepAlive() {
@@ -588,6 +595,27 @@ public class RequestHandler {
 
     public void setUserId(String userId) {
         this.userId = userId;
+    }
+
+    public boolean failIfStuck(int idleTimeout) {
+        if (1 == 1) {
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        long delta = now - lastActivity;
+        if (delta >= idleTimeout) {
+            LOG.log(Level.INFO, this + " connection appears stuck " + connectionToEndpoint);
+            serveInternalErrorMessage(true);
+            releaseConnectionToEndpoint(true);
+            return true;
+        } else {
+            LOG.log(Level.INFO, this + " connection seems alive " + delta + "/" + idleTimeout + " ms");
+        }
+        return false;
+    }
+
+    public void messageSentToBackend(EndpointConnectionImpl aThis) {
+        lastActivity = System.currentTimeMillis();
     }
 
 }
