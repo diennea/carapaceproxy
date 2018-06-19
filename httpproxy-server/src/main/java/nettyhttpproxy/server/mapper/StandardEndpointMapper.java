@@ -42,6 +42,7 @@ import nettyhttpproxy.server.config.RequestMatcher;
 import nettyhttpproxy.server.config.RouteConfiguration;
 import nettyhttpproxy.server.config.RoutingKey;
 import nettyhttpproxy.server.config.DirectorConfiguration;
+import static nettyhttpproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
 import nettyhttpproxy.server.config.URIRequestMatcher;
 
 /**
@@ -67,11 +68,10 @@ public class StandardEndpointMapper extends EndpointMapper {
 
     public void configure(Properties properties) throws ConfigurationNotValidException {
 
-        LOG.info("configured build-in action id=proxy-all");
-        addAction(new ActionConfiguration("proxy-all", ActionConfiguration.TYPE_PROXY, null, -1));
-        addAction(new ActionConfiguration("cache-if-possible", ActionConfiguration.TYPE_CACHE, null, -1));
-        addAction(new ActionConfiguration("not-found", ActionConfiguration.TYPE_STATIC, DEFAULT_NOT_FOUND, 404));
-        addAction(new ActionConfiguration("internal-error", ActionConfiguration.TYPE_STATIC, DEFAULT_INTERNAL_SERVER_ERROR, 500));
+        addAction(new ActionConfiguration("proxy-all", ActionConfiguration.TYPE_PROXY, DirectorConfiguration.DEFAULT, null, -1));
+        addAction(new ActionConfiguration("cache-if-possible", ActionConfiguration.TYPE_CACHE, DirectorConfiguration.DEFAULT, null, -1));
+        addAction(new ActionConfiguration("not-found", ActionConfiguration.TYPE_STATIC, DEFAULT_NOT_FOUND, null, 404));
+        addAction(new ActionConfiguration("internal-error", ActionConfiguration.TYPE_STATIC, null, DEFAULT_INTERNAL_SERVER_ERROR, 500));
 
         this.defaultNotFoundAction = properties.getProperty("default.action.notfound", "not-found");
         LOG.info("configured default.action.notfound=" + defaultNotFoundAction);
@@ -85,10 +85,11 @@ public class StandardEndpointMapper extends EndpointMapper {
                 boolean enabled = Boolean.parseBoolean(properties.getProperty(prefix + "enabled", "false"));
                 String action = properties.getProperty(prefix + "type", "proxy");
                 String file = properties.getProperty(prefix + "file", "");
+                String director = properties.getProperty(prefix + "director", DirectorConfiguration.DEFAULT);
                 int code = Integer.parseInt(properties.getProperty(prefix + "code", "-1"));
                 LOG.info("configured action " + id + " type=" + action + " enabled:" + enabled);
                 if (enabled) {
-                    ActionConfiguration config = new ActionConfiguration(id, action, file, code);
+                    ActionConfiguration config = new ActionConfiguration(id, action, director, file, code);
                     addAction(config);
                 }
             }
@@ -120,12 +121,12 @@ public class StandardEndpointMapper extends EndpointMapper {
                     DirectorConfiguration config = new DirectorConfiguration(id);
                     String[] backendids = backends.split(",");
                     for (String backendId : backendids) {
-                        if (!this.backends.containsKey(backendId)) {
+                        if (!backendId.equals(DirectorConfiguration.ALL_BACKENDS) && !this.backends.containsKey(backendId)) {
                             throw new ConfigurationNotValidException("while configuring director '" + id + "': backend '" + backendId + "' does not exist");
                         }
                         config.addBackend(id);
                     }
-                    addService(config);
+                    addDirector(config);
                 }
             }
         }
@@ -164,10 +165,23 @@ public class StandardEndpointMapper extends EndpointMapper {
     private final class RandomBackendSelector implements BackendSelector {
 
         @Override
-        public List<String> selectBackends(HttpRequest request, RoutingKey key) {
-            ArrayList<String> result = new ArrayList<>(allbackendids);
-            Collections.shuffle(result);
-            return result;
+        public List<String> selectBackends(String userId, String sessionId, String director, RoutingKey key) {
+            DirectorConfiguration directorConfig = directors.get(director);
+            if (directorConfig == null) {
+                LOG.log(Level.SEVERE, "Director '" + director + "' not configured, while handling request key=" + key + " userId=" + userId + " sessionId=" + sessionId);
+                return Collections.emptyList();
+            }
+            if (directorConfig.getBackends().contains(ALL_BACKENDS)) {
+                ArrayList<String> result = new ArrayList<>(allbackendids);
+                Collections.shuffle(result);
+                return result;
+            } else if (directorConfig.getBackends().size() == 1) {
+                return directorConfig.getBackends();
+            } else {
+                ArrayList<String> result = new ArrayList<>(directorConfig.getBackends());
+                Collections.shuffle(result);
+                return result;
+            }
         }
 
     }
@@ -176,7 +190,7 @@ public class StandardEndpointMapper extends EndpointMapper {
         this.backendSelector = new RandomBackendSelector();
     }
 
-    public void addService(DirectorConfiguration service) throws ConfigurationNotValidException {
+    public void addDirector(DirectorConfiguration service) throws ConfigurationNotValidException {
         if (directors.put(service.getId(), service) != null) {
             throw new ConfigurationNotValidException("service " + service.getId() + " is already configured");
         }
@@ -203,7 +217,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     }
 
     @Override
-    public MapResult map(HttpRequest request, BackendHealthManager backendHealthManager) {
+    public MapResult map(HttpRequest request, String userId, String sessionId, BackendHealthManager backendHealthManager) {
         boolean somethingMatched = false;
         for (RouteConfiguration route : routes) {
             if (!route.isEnabled()) {
@@ -223,10 +237,10 @@ public class StandardEndpointMapper extends EndpointMapper {
                             .setErrorcode(action.getErrorcode());
                 }
 
-                List<String> selectedBackends = backendSelector.selectBackends(request, matchResult);
+                List<String> selectedBackends = backendSelector.selectBackends(userId, sessionId, action.getDirector(), matchResult);
                 somethingMatched = somethingMatched | !selectedBackends.isEmpty();
-                LOG.log(Level.FINEST, "selected {0} backends for {1}", new Object[]{selectedBackends, request.uri()});                
-                for (String backendId : selectedBackends) {                    
+                LOG.log(Level.FINEST, "selected {0} backends for {1}, director is {2}", new Object[]{selectedBackends, request.uri(), action.getDirector()});
+                for (String backendId : selectedBackends) {
                     switch (action.getType()) {
                         case ActionConfiguration.TYPE_PROXY: {
                             BackendConfiguration backend = this.backends.get(backendId);

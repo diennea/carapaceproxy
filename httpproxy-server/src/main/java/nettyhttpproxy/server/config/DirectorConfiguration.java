@@ -24,20 +24,27 @@ import java.util.List;
 
 /**
  * A director is a group of backends
+ *
  * @author enrico.olivelli
  */
 public class DirectorConfiguration {
+
     private final String id;
     private final List<String> backends = new ArrayList<>();
+
+    public static final String DEFAULT = "*";
+
+    public static final String ALL_BACKENDS = "*";
 
     public DirectorConfiguration(String id) {
         this.id = id;
     }
-    
-    public void addBackend(String id) {
+
+    public DirectorConfiguration addBackend(String id) {
         if (!backends.contains(id)) {
             backends.add(id);
         }
+        return this;
     }
 
     public String getId() {
@@ -48,6 +55,5 @@ public class DirectorConfiguration {
         // no copy for efficiency, at runtime this bean is immutable
         return backends;
     }
-    
-    
+
 }

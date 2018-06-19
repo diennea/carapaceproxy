@@ -27,5 +27,5 @@ import java.util.List;
  */
 public interface BackendSelector {
 
-    public List<String> selectBackends(HttpRequest request, RoutingKey result);
+    public List<String> selectBackends(String userId, String sessionId, String director, RoutingKey result);
 }

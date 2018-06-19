@@ -39,7 +39,7 @@ public class TestEndpointMapper extends EndpointMapper {
     }
 
     @Override
-    public MapResult map(HttpRequest request, BackendHealthManager backendHealthManager) {
+    public MapResult map(HttpRequest request, String userId, String sessionId, BackendHealthManager backendHealthManager) {
         String uri = request.uri();
         if (uri.contains("not-found")) {
             return MapResult.NOT_FOUND;

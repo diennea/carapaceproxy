@@ -33,6 +33,7 @@ import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.server.StaticContentsManager;
 import nettyhttpproxy.server.config.ActionConfiguration;
 import nettyhttpproxy.server.config.BackendConfiguration;
+import nettyhttpproxy.server.config.DirectorConfiguration;
 import nettyhttpproxy.server.config.RouteConfiguration;
 import nettyhttpproxy.server.config.URIRequestMatcher;
 import org.apache.commons.io.IOUtils;
@@ -53,21 +54,42 @@ public class BasicStandardEndpointMapperTest {
     @Test
     public void test() throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withBody("it <b>works</b> !!")));
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
+
+        stubFor(get(urlEqualTo("/index2.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
+
+        stubFor(get(urlEqualTo("/index3.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
 
         int backendPort = backend1.port();
         StandardEndpointMapper mapper = new StandardEndpointMapper();
-        mapper.addBackend(new BackendConfiguration("backend-a", "localhost", backendPort, "/"));
-        mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, null, -1));
 
-        mapper.addAction(new ActionConfiguration("not-found-custom", ActionConfiguration.TYPE_STATIC, StaticContentsManager.DEFAULT_NOT_FOUND, 404));
-        mapper.addAction(new ActionConfiguration("error-custom", ActionConfiguration.TYPE_STATIC, StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR, 500));
-        mapper.addAction(new ActionConfiguration("static-custom", ActionConfiguration.TYPE_STATIC, "classpath:/test-static-page.html", 200));
+        mapper.addBackend(new BackendConfiguration("backend-a", "localhost", backendPort, "/"));
+        mapper.addBackend(new BackendConfiguration("backend-b", "localhost", backendPort, "/"));
+        mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
+        mapper.addDirector(new DirectorConfiguration("director-2").addBackend("backend-b"));
+        mapper.addDirector(new DirectorConfiguration("director-all").addBackend("*")); // all of the known backends
+        mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1));
+        mapper.addAction(new ActionConfiguration("cache-1", ActionConfiguration.TYPE_CACHE, "director-2", null, -1));
+        mapper.addAction(new ActionConfiguration("all-1", ActionConfiguration.TYPE_CACHE, "director-all", null, -1));
+
+        mapper.addAction(new ActionConfiguration("not-found-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_NOT_FOUND, 404));
+        mapper.addAction(new ActionConfiguration("error-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR, 500));
+        mapper.addAction(new ActionConfiguration("static-custom", ActionConfiguration.TYPE_STATIC, null, "classpath:/test-static-page.html", 200));
 
         mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new URIRequestMatcher(".*index.html.*")));
+        mapper.addRoute(new RouteConfiguration("route-1b", "cache-1", true, new URIRequestMatcher(".*index2.html.*")));
+        mapper.addRoute(new RouteConfiguration("route-1c", "all-1", true, new URIRequestMatcher(".*index3.html.*")));
         mapper.addRoute(new RouteConfiguration("route-2-not-found", "not-found-custom", true, new URIRequestMatcher(".*notfound.html.*")));
         mapper.addRoute(new RouteConfiguration("route-3-error", "error-custom", true, new URIRequestMatcher(".*error.html.*")));
         mapper.addRoute(new RouteConfiguration("route-4-static", "static-custom", true, new URIRequestMatcher(".*static.html.*")));
@@ -76,9 +98,23 @@ public class BasicStandardEndpointMapperTest {
             server.start();
             int port = server.getLocalPort();
             stats = server.getConnectionsManager().getStats();
-            // proxy
-            String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8");
-            assertEquals("it <b>works</b> !!", s);
+//            {
+//                // proxy on director 1
+//                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8");
+//                assertEquals("it <b>works</b> !!", s);
+//            }
+//
+//            {
+//                // cache on director 2
+//                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index2.html").toURI(), "utf-8");
+//                assertEquals("it <b>works</b> !!", s);
+//            }
+
+            {
+                // director "all"
+                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index3.html").toURI(), "utf-8");
+                assertEquals("it <b>works</b> !!", s);
+            }
 
             try {
                 IOUtils.toString(new URL("http://localhost:" + port + "/notfound.html").toURI(), "utf-8");

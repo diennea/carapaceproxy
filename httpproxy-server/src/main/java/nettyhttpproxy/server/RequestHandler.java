@@ -81,6 +81,7 @@ public class RequestHandler {
     private final StatsLogger logger;
     private final BackendHealthManager backendHealthManager;
     private String userId;
+    private String sessionId;
     private final String uri;
     private volatile long lastActivity;
     private volatile boolean headerSent = false;
@@ -115,10 +116,11 @@ public class RequestHandler {
 
     public void start() {
         lastActivity = System.currentTimeMillis();
-        action = connectionToClient.mapper.map(request, backendHealthManager);
         for (RequestFilter filter : filters) {
             filter.apply(request, connectionToClient, this);
         }
+        action = connectionToClient.mapper.map(request, userId, sessionId, backendHealthManager);
+        LOG.info("map " + request.uri() + " to " + action.action);
         Counter requestsPerUser;
         if (userId != null) {
             requestsPerUser = logger.getCounter("requests_" + userId + "_count");
@@ -368,12 +370,12 @@ public class RequestHandler {
 
     private boolean writeSimpleResponse(FullHttpResponse response) {
         fireRequestFinished();
-        
+
         if (headerSent) {
-            LOG.log(Level.INFO, this+": headers for already sent to client, cannot send static response");
+            LOG.log(Level.INFO, this + ": headers for already sent to client, cannot send static response");
             return true;
         }
-        
+
         // Decide whether to close the connection or not.
         boolean keepAlive = HttpUtil.isKeepAlive(request);
 
@@ -466,7 +468,7 @@ public class RequestHandler {
                 HttpResponse httpMessage = (HttpResponse) msg;
                 cleanResponseForCachedData(httpMessage);
             }
-        }        
+        }
         channelToClient.writeAndFlush(msg).addListener((Future<? super Void> future) -> {
             boolean returnConnection = false;
             if (future.isSuccess()) {
@@ -617,6 +619,14 @@ public class RequestHandler {
 
     public void setUserId(String userId) {
         this.userId = userId;
+    }
+
+    public String getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
     }
 
     public void failIfStuck(long now, int idleTimeout, Runnable onStuck) {

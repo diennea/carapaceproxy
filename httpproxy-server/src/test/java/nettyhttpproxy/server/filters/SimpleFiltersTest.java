@@ -32,14 +32,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- *
- * @author enrico.olivelli
- */
-public class RegexpMapTenantFilterTest {
+public class SimpleFiltersTest {
 
     @Test
-    public void testApply() {
+    public void testRegexpMapUserIdFilter() {
 
         Map<String, String> cases = new HashMap<>();
         cases.put("/test?param1=&sSID=H*29gnay4j68mt9c", "H");
@@ -48,10 +44,10 @@ public class RegexpMapTenantFilterTest {
         cases.put("/test?ssid=H*29gnay4j68mt9c", "H"); // non case sensitive
         cases.put("/test?param1=&sSID=", null);
         cases.put("/test?param1=&sSID=nomatch", null);
-        
+
         cases.put("/test?param1=noparam", null);
         cases.put("/testnoquerystring", null);
-        cases.put("/be/redazione/index.do?sSID=H*90s856faxe0tbq", "H");
+        cases.put("/be/xxx/index.do?sSID=H*90s856faxe0tbq", "H");
 
         cases.forEach((uri, userId) -> {
             HttpRequest request = mock(HttpRequest.class);
@@ -65,6 +61,38 @@ public class RegexpMapTenantFilterTest {
                 verify(requestHandler, times(1)).setUserId(eq(userId));
             } else {
                 verify(requestHandler, times(0)).setUserId(ArgumentMatchers.anyString());
+            }
+        });
+
+    }
+
+    @Test
+    public void testRegexpMapSessionIdFilter() {
+
+        Map<String, String> cases = new HashMap<>();
+        cases.put("/test?param1=&sSID=H*29gnay4j68mt9c", "H*29gnay4j68mt9c");
+        cases.put("/test?sSID=H*29gnay4j68mt9c", "H*29gnay4j68mt9c");
+        cases.put("/test?param1=&ssid=H*29gnay4j68mt9c", "H*29gnay4j68mt9c"); // non case sensitive
+        cases.put("/test?ssid=H*29gnay4j68mt9c", "H*29gnay4j68mt9c"); // non case sensitive
+        cases.put("/test?param1=&sSID=", null);
+        cases.put("/test?param1=&sSID=nomatch", "nomatch");
+
+        cases.put("/test?param1=noparam", null);
+        cases.put("/testnoquerystring", null);
+        cases.put("/be/xxx/index.do?sSID=H*90s856faxe0tbq", "H*90s856faxe0tbq");
+
+        cases.forEach((uri, sessionId) -> {
+            HttpRequest request = mock(HttpRequest.class);
+            RequestHandler requestHandler = mock(RequestHandler.class);
+            ClientConnectionHandler client = null;
+            when(request.uri()).thenReturn(uri);
+
+            RegexpMapSessionIdFilter instance = new RegexpMapSessionIdFilter("sSID", "(.+)");
+            instance.apply(request, client, requestHandler);
+            if (sessionId != null) {
+                verify(requestHandler, times(1)).setSessionId(eq(sessionId));
+            } else {
+                verify(requestHandler, times(0)).setSessionId(ArgumentMatchers.anyString());
             }
         });
 

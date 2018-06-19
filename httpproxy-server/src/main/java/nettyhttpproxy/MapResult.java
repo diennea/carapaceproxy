@@ -25,7 +25,7 @@ public class MapResult {
     public final int port;
     public final Action action;
     public int errorcode;
-    public String resource;
+    public String resource;    
 
     public static final MapResult NOT_FOUND = new MapResult(null, 0, Action.NOTFOUND);
     public static final MapResult INTERNAL_ERROR = new MapResult(null, 0, Action.INTERNAL_ERROR);

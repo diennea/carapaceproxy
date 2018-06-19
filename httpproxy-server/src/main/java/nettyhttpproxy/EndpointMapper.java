@@ -30,7 +30,7 @@ import nettyhttpproxy.server.backends.BackendHealthManager;
  */
 public abstract class EndpointMapper {
 
-    public abstract MapResult map(HttpRequest request, BackendHealthManager backendHealthManager);
+    public abstract MapResult map(HttpRequest request, String userId, String sessionId, BackendHealthManager backendHealthManager);
 
     public MapResult mapDefaultInternalError(HttpRequest request) {
         return MapResult.INTERNAL_ERROR;

@@ -31,13 +31,19 @@ public class ActionConfiguration {
     private final String id;
     private final String type;
     private final String file;
+    private final String director;
     private final int errorcode;
 
-    public ActionConfiguration(String id, String type, String file, int errorcode) {
+    public ActionConfiguration(String id, String type, String director, String file, int errorcode) {
         this.id = id;
         this.type = type;
+        this.director = director;
         this.file = file;
         this.errorcode = errorcode;
+    }
+
+    public String getDirector() {
+        return director;
     }
 
     public int getErrorcode() {
