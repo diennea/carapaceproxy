@@ -59,6 +59,7 @@ import nettyhttpproxy.client.impl.EndpointConnectionImpl;
 import static nettyhttpproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
 import nettyhttpproxy.server.backends.BackendHealthManager;
 import nettyhttpproxy.server.cache.ContentsCache;
+import nettyhttpproxy.server.filters.UrlEncodedQueryString;
 import org.apache.bookkeeper.stats.Counter;
 import org.apache.bookkeeper.stats.StatsLogger;
 
@@ -85,6 +86,7 @@ public class RequestHandler {
     private final String uri;
     private volatile long lastActivity;
     private volatile boolean headerSent = false;
+    private UrlEncodedQueryString queryString;
 
     public long getId() {
         return id;
@@ -114,12 +116,27 @@ public class RequestHandler {
         }
     }
 
+    private static final UrlEncodedQueryString EMPTY = UrlEncodedQueryString.create();
+
+    public UrlEncodedQueryString getQueryString() {
+        if (queryString != null) {
+            return queryString;
+        }
+        int pos = uri.indexOf('?');
+        if (pos < 0 || pos == uri.length() - 1) {
+            queryString = EMPTY;
+        } else {
+            queryString = UrlEncodedQueryString.parse(uri.substring(pos + 1));
+        }
+        return queryString;
+    }
+
     public void start() {
         lastActivity = System.currentTimeMillis();
         for (RequestFilter filter : filters) {
             filter.apply(request, connectionToClient, this);
         }
-        action = connectionToClient.mapper.map(request, userId, sessionId, backendHealthManager);
+        action = connectionToClient.mapper.map(request, userId, sessionId, backendHealthManager, this);
         LOG.info("map " + request.uri() + " to " + action.action);
         Counter requestsPerUser;
         if (userId != null) {
@@ -632,7 +649,7 @@ public class RequestHandler {
     public void failIfStuck(long now, int stuckRequestTimeout, Runnable onStuck) {
         long delta = now - lastActivity;
         if (delta >= stuckRequestTimeout) {
-            LOG.log(Level.INFO, this + " connection appears stuck " + connectionToEndpoint+", on request "+uri+" for userId: "+userId);
+            LOG.log(Level.INFO, this + " connection appears stuck " + connectionToEndpoint + ", on request " + uri + " for userId: " + userId);
             onStuck.run();
             releaseConnectionToEndpoint(true);
             serveInternalErrorMessage(true);

@@ -48,13 +48,8 @@ public class RegexpMapSessionIdFilter implements RequestFilter {
 
     @Override
     public void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler) {
-        String uri = request.uri();
-        int pos = uri.indexOf('?');
-        if (pos < 0 || pos == uri.length() - 1) {
-            return;
-        }
-        UrlEncodedQueryString parsed = UrlEncodedQueryString.parse(uri.substring(pos + 1));
-        String value = parsed.get(parameterName);
+        UrlEncodedQueryString queryString = requestHandler.getQueryString();
+        String value = queryString.get(parameterName);
         if (value == null) {
             return;
         }

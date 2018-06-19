@@ -21,6 +21,7 @@ package nettyhttpproxy;
 
 import io.netty.handler.codec.http.HttpRequest;
 import nettyhttpproxy.client.EndpointKey;
+import nettyhttpproxy.server.RequestHandler;
 import nettyhttpproxy.server.backends.BackendHealthManager;
 
 /**
@@ -30,7 +31,7 @@ import nettyhttpproxy.server.backends.BackendHealthManager;
  */
 public abstract class EndpointMapper {
 
-    public abstract MapResult map(HttpRequest request, String userId, String sessionId, BackendHealthManager backendHealthManager);
+    public abstract MapResult map(HttpRequest request, String userId, String sessionId, BackendHealthManager backendHealthManager, RequestHandler requestHandler);
 
     public MapResult mapDefaultInternalError(HttpRequest request) {
         return MapResult.INTERNAL_ERROR;

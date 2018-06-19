@@ -98,17 +98,17 @@ public class BasicStandardEndpointMapperTest {
             server.start();
             int port = server.getLocalPort();
             stats = server.getConnectionsManager().getStats();
-//            {
-//                // proxy on director 1
-//                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8");
-//                assertEquals("it <b>works</b> !!", s);
-//            }
-//
-//            {
-//                // cache on director 2
-//                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index2.html").toURI(), "utf-8");
-//                assertEquals("it <b>works</b> !!", s);
-//            }
+            {
+                // proxy on director 1
+                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8");
+                assertEquals("it <b>works</b> !!", s);
+            }
+
+            {
+                // cache on director 2
+                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index2.html").toURI(), "utf-8");
+                assertEquals("it <b>works</b> !!", s);
+            }
 
             {
                 // director "all"

@@ -30,6 +30,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.MapResult;
+import nettyhttpproxy.server.RequestHandler;
 import static nettyhttpproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
 import static nettyhttpproxy.server.StaticContentsManager.DEFAULT_NOT_FOUND;
 import nettyhttpproxy.server.backends.BackendHealthManager;
@@ -44,6 +45,7 @@ import nettyhttpproxy.server.config.RoutingKey;
 import nettyhttpproxy.server.config.DirectorConfiguration;
 import static nettyhttpproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
 import nettyhttpproxy.server.config.URIRequestMatcher;
+import nettyhttpproxy.server.filters.UrlEncodedQueryString;
 
 /**
  * Standard Endpoint mapping
@@ -58,6 +60,8 @@ public class StandardEndpointMapper extends EndpointMapper {
     private final BackendSelector backendSelector;
     private String defaultNotFoundAction = "not-found";
     private String defaultInternalErrorAction = "internal-error";
+    private String forceDirectorParameter = "x-director";
+    private String forceBackendParameter = "x-backend";
 
     private static final int MAX_IDS = 200;
     private static final Logger LOG = Logger.getLogger(StandardEndpointMapper.class.getName());
@@ -77,6 +81,10 @@ public class StandardEndpointMapper extends EndpointMapper {
         LOG.info("configured default.action.notfound=" + defaultNotFoundAction);
         this.defaultInternalErrorAction = properties.getProperty("default.action.internalerror", "internal-error");
         LOG.info("configured default.action.internalerror=" + defaultInternalErrorAction);
+        this.forceDirectorParameter = properties.getProperty("mapper.forcedirector.parameter", forceDirectorParameter);
+        LOG.info("configured mapper.forcedirector.parameter=" + forceDirectorParameter);
+        this.forceBackendParameter = properties.getProperty("mapper.forcebackend.parameter", forceBackendParameter);
+        LOG.info("configured mapper.forcebackend.parameter=" + forceBackendParameter);
 
         for (int i = 0; i < MAX_IDS; i++) {
             String prefix = "action." + i + ".";
@@ -217,7 +225,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     }
 
     @Override
-    public MapResult map(HttpRequest request, String userId, String sessionId, BackendHealthManager backendHealthManager) {
+    public MapResult map(HttpRequest request, String userId, String sessionId, BackendHealthManager backendHealthManager, RequestHandler requestHandler) {
         boolean somethingMatched = false;
         for (RouteConfiguration route : routes) {
             if (!route.isEnabled()) {
@@ -236,10 +244,24 @@ public class StandardEndpointMapper extends EndpointMapper {
                             .setResource(action.getFile())
                             .setErrorcode(action.getErrorcode());
                 }
+                UrlEncodedQueryString queryString = requestHandler.getQueryString();
+                String director = action.getDirector();
+                String forceBackendParameterValue = queryString.get(forceBackendParameter);
 
-                List<String> selectedBackends = backendSelector.selectBackends(userId, sessionId, action.getDirector(), matchResult);
+                final List<String> selectedBackends;
+                if (forceBackendParameterValue != null) {
+                    LOG.log(Level.INFO, "forcing backend = {0} for {1}", new Object[]{forceBackendParameterValue, request.uri()});
+                    selectedBackends = Collections.singletonList(forceBackendParameterValue);
+                } else {
+                    String forceDirectorParameterValue = queryString.get(forceDirectorParameter);
+                    if (forceDirectorParameterValue != null) {
+                        director = forceDirectorParameterValue;
+                        LOG.log(Level.INFO, "forcing director = {0} for {1}", new Object[]{director, request.uri()});
+                    }
+                    selectedBackends = backendSelector.selectBackends(userId, sessionId, director, matchResult);
+                }
                 somethingMatched = somethingMatched | !selectedBackends.isEmpty();
-                LOG.log(Level.FINEST, "selected {0} backends for {1}, director is {2}", new Object[]{selectedBackends, request.uri(), action.getDirector()});
+                LOG.log(Level.FINEST, "selected {0} backends for {1}, director is {2}", new Object[]{selectedBackends, request.uri(), director});
                 for (String backendId : selectedBackends) {
                     switch (action.getType()) {
                         case ActionConfiguration.TYPE_PROXY: {
@@ -266,6 +288,22 @@ public class StandardEndpointMapper extends EndpointMapper {
         } else {
             return MapResult.NOT_FOUND;
         }
+    }
+
+    public String getDefaultNotFoundAction() {
+        return defaultNotFoundAction;
+    }
+
+    public String getDefaultInternalErrorAction() {
+        return defaultInternalErrorAction;
+    }
+
+    public String getForceDirectorParameter() {
+        return forceDirectorParameter;
+    }
+
+    public String getForceBackendParameter() {
+        return forceBackendParameter;
     }
 
 }
