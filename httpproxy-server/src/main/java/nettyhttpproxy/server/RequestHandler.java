@@ -629,10 +629,10 @@ public class RequestHandler {
         this.sessionId = sessionId;
     }
 
-    public void failIfStuck(long now, int idleTimeout, Runnable onStuck) {
+    public void failIfStuck(long now, int stuckRequestTimeout, Runnable onStuck) {
         long delta = now - lastActivity;
-        if (delta >= idleTimeout) {
-            LOG.log(Level.INFO, this + " connection appears stuck " + connectionToEndpoint);
+        if (delta >= stuckRequestTimeout) {
+            LOG.log(Level.INFO, this + " connection appears stuck " + connectionToEndpoint+", on request "+uri+" for userId: "+userId);
             onStuck.run();
             releaseConnectionToEndpoint(true);
             serveInternalErrorMessage(true);

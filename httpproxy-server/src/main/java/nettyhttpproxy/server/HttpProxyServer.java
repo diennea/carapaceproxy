@@ -114,7 +114,8 @@ public class HttpProxyServer implements AutoCloseable {
     private int adminServerPort = 8001;
     private String adminServerHost = "localhost";
     private int maxConnectionsPerEndpoint = 10;
-    private int idleTimeout = 10000;
+    private int idleTimeout = 60000;
+    private int stuckRequestTimeout = 120000;
     private int connectTimeout = 10000;
 
     public HttpProxyServer(EndpointMapper mapper, File basePath) {
@@ -191,6 +192,7 @@ public class HttpProxyServer implements AutoCloseable {
             this.connectionsManager = new ConnectionsManagerImpl(
                     maxConnectionsPerEndpoint,
                     idleTimeout,
+                    stuckRequestTimeout,
                     connectTimeout,
                     mainLogger, backendHealthManager);
             bossGroup = new EpollEventLoopGroup();
@@ -405,9 +407,11 @@ public class HttpProxyServer implements AutoCloseable {
 
         this.maxConnectionsPerEndpoint = Integer.parseInt(properties.getProperty("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint + ""));
         this.idleTimeout = Integer.parseInt(properties.getProperty("connectionsmanager.idletimeout", idleTimeout + ""));
+        this.stuckRequestTimeout = Integer.parseInt(properties.getProperty("connectionsmanager.stuckrequesttimeout", stuckRequestTimeout + ""));
         this.connectTimeout = Integer.parseInt(properties.getProperty("connectionsmanager.connecttimeout", connectTimeout + ""));
         LOG.info("connectionsmanager.maxconnectionsperendpoint=" + maxConnectionsPerEndpoint);
         LOG.info("connectionsmanager.idletimeout=" + idleTimeout);
+        LOG.info("connectionsmanager.stuckrequesttimeout=" + stuckRequestTimeout);
         LOG.info("connectionsmanager.connecttimeout=" + connectTimeout);
 
     }

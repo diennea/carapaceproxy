@@ -59,6 +59,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     private final GenericKeyedObjectPool<EndpointKey, EndpointConnectionImpl> connections;
     private final int idleTimeout;
+    private final int stuckRequestTimeout;
     private final int connectTimeout;
     private final ConcurrentHashMap<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
     private final EventLoopGroup group;
@@ -141,7 +142,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
             List<RequestHandler> toRemove = new ArrayList<>();
             for (Map.Entry<Long, RequestHandler> entry : pendingRequests.entrySet()) {
                 RequestHandler requestHandler = entry.getValue();
-                requestHandler.failIfStuck(now, idleTimeout, () -> {
+                requestHandler.failIfStuck(now, stuckRequestTimeout, () -> {
                     EndpointConnection connectionToEndpoint = requestHandler.getConnectionToEndpoint();
                     if (connectionToEndpoint != null) {
                         backendHealthManager.reportBackendUnreachable(connectionToEndpoint.getKey().toBackendId(), now, "a request to "+requestHandler.getUri()+" for user "+requestHandler.getUserId()+" appears stuck");
@@ -158,12 +159,13 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     }
 
-    public ConnectionsManagerImpl(int maxConnectionsPerEndpoint, int idleTimeout,
+    public ConnectionsManagerImpl(int maxConnectionsPerEndpoint, int idleTimeout, int stuckRequestTimeout,
             int connectTimeout, StatsLogger statsLogger, BackendHealthManager backendHealthManager) {
         this.mainLogger = statsLogger.scope("outbound");
         this.pendingRequestsStat = mainLogger.getCounter("pendingrequests");
         this.stuckRequestsStat = mainLogger.getCounter("stuckrequests");
         this.idleTimeout = idleTimeout;
+        this.stuckRequestTimeout = stuckRequestTimeout;
         this.connectTimeout = connectTimeout;
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
         this.stuckRequestsReaperFuture = this.scheduler.scheduleWithFixedDelay(new RequestHandlerChecker(), idleTimeout / 4, idleTimeout / 4, TimeUnit.MILLISECONDS);
