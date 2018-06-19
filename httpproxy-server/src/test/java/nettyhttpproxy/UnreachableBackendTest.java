@@ -115,9 +115,9 @@ public class UnreachableBackendTest {
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
             Properties properties = new Properties();
-            properties.put("connectionsmanager.idletimeout", "100"); // ms
+            properties.put("connectionsmanager.stuckrequesttimeout", "100"); // ms
             server.configure(properties);
-            assertEquals(100, server.getIdleTimeout());
+            assertEquals(100, server.getStuckRequestTimeout());
             server.start();
             stats = server.getConnectionsManager().getStats();
             int port = server.getLocalPort();

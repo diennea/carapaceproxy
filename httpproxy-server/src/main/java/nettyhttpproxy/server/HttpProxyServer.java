@@ -424,6 +424,10 @@ public class HttpProxyServer implements AutoCloseable {
         return idleTimeout;
     }
 
+    public int getStuckRequestTimeout() {
+        return stuckRequestTimeout;
+    }
+
     public int getConnectTimeout() {
         return connectTimeout;
     }
