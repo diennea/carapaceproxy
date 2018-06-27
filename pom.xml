@@ -41,7 +41,7 @@
         </plugins>            
     </build>
     <properties>
-        <bookkeeper.version>4.7.0</bookkeeper.version>
+        <bookkeeper.version>4.7.1</bookkeeper.version>
         <netty.version>4.1.25.Final</netty.version>
         <netty.ssl.version>2.0.8.Final</netty.ssl.version>
         <jetty.version>9.4.8.v20171121</jetty.version>

@@ -106,7 +106,7 @@ public class HttpProxyServer implements AutoCloseable {
     private final Map<String, SslContext> sslContexts = new ConcurrentHashMap<>();
     private final List<Channel> listeningChannels = new ArrayList<>();
 
-    private StatsProvider statsProvider;
+    private PrometheusMetricsProvider statsProvider;
     private final PropertiesConfiguration statsProviderConfig = new PropertiesConfiguration();
 
     private Server adminserver;
@@ -167,6 +167,7 @@ public class HttpProxyServer implements AutoCloseable {
         jerseyServlet.setInitOrder(0);
         jerseyServlet.setInitParameter(JAXRS_APPLICATION_CLASS, ApplicationConfig.class.getCanonicalName());
         context.addServlet(jerseyServlet, "/api/*");
+        context.addServlet(new ServletHolder(new PrometheusServlet(statsProvider)), "/metrics");
         context.setAttribute("server", this);
         contexts.addHandler(context);
 
@@ -181,8 +182,10 @@ public class HttpProxyServer implements AutoCloseable {
         adminserver.start();
         String apiUrl = "http://" + adminServerHost + ":" + adminServerPort + "/api";
         String uiUrl = "http://" + adminServerHost + ":" + adminServerPort + "/ui";
+        String metricsUrl = "http://" + adminServerHost + ":" + adminServerPort + "/metrics";
         System.out.println("Base Admin UI url: " + uiUrl);
         System.out.println("Base Admin/API url: " + apiUrl);
+        System.out.println("Prometheus Metrics url: " + metricsUrl);
 
     }
 
@@ -391,6 +394,7 @@ public class HttpProxyServer implements AutoCloseable {
         for (int i = 0; i < 100; i++) {
             tryConfigureFilter(i, properties);
         }
+        statsProviderConfig.setProperty(PrometheusMetricsProvider.PROMETHEUS_STATS_HTTP_ENABLE, false);
         properties.forEach((key, value) -> {
             statsProviderConfig.setProperty(key + "", value);
         });
