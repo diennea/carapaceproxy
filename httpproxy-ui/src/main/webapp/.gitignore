@@ -2,11 +2,8 @@
 /node_modules
 /node
 
-# testing
-/coverage
-
 # production
-/build
+/dist
 /ui
 
 # misc

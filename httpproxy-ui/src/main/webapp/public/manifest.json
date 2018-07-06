@@ -1,6 +1,0 @@
-{
-  "short_name": "Http Proxy UI",
-  "name": "Http Proxy UI",
-  "start_url": "./index.html",
-  "display": "standalone"
-}
