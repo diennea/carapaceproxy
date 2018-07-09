@@ -122,13 +122,18 @@ public class RequestHandler {
         if (queryString != null) {
             return queryString;
         }
+        queryString = parseQueryString(uri);
+        return queryString;
+    }
+
+    public static UrlEncodedQueryString parseQueryString(String uri) {
         int pos = uri.indexOf('?');
         if (pos < 0 || pos == uri.length() - 1) {
-            queryString = EMPTY;
+            return EMPTY;
         } else {
-            queryString = UrlEncodedQueryString.parse(uri.substring(pos + 1));
+            return UrlEncodedQueryString.parse(uri.substring(pos + 1));
         }
-        return queryString;
+       
     }
 
     public void start() {

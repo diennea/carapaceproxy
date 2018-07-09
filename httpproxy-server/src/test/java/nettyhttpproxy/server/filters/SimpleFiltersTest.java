@@ -53,7 +53,9 @@ public class SimpleFiltersTest {
             HttpRequest request = mock(HttpRequest.class);
             RequestHandler requestHandler = mock(RequestHandler.class);
             ClientConnectionHandler client = null;
+            UrlEncodedQueryString queryString = RequestHandler.parseQueryString(uri);
             when(request.uri()).thenReturn(uri);
+            when(requestHandler.getQueryString()).thenReturn(queryString);
 
             RegexpMapUserIdFilter instance = new RegexpMapUserIdFilter("sSID", "([\\w\\d]+)([*])");
             instance.apply(request, client, requestHandler);
@@ -85,7 +87,9 @@ public class SimpleFiltersTest {
             HttpRequest request = mock(HttpRequest.class);
             RequestHandler requestHandler = mock(RequestHandler.class);
             ClientConnectionHandler client = null;
+            UrlEncodedQueryString queryString = RequestHandler.parseQueryString(uri);
             when(request.uri()).thenReturn(uri);
+            when(requestHandler.getQueryString()).thenReturn(queryString);
 
             RegexpMapSessionIdFilter instance = new RegexpMapSessionIdFilter("sSID", "(.+)");
             instance.apply(request, client, requestHandler);
