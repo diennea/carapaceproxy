@@ -28,6 +28,8 @@ import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.logging.LogManager;
+import nettyhttpproxy.configstore.ConfigurationStore;
+import nettyhttpproxy.configstore.PropertiesConfigurationStore;
 import nettyhttpproxy.server.HttpProxyServer;
 import nettyhttpproxy.server.mapper.StandardEndpointMapper;
 
@@ -46,7 +48,7 @@ public class ServerMain implements AutoCloseable {
     private static final Logger LOG = Logger.getLogger(ServerMain.class.getName());
     private final static CountDownLatch running = new CountDownLatch(1);
 
-    private final Properties configuration;
+    private final ConfigurationStore configuration;
     private final PidFileLocker pidFileLocker;
     private HttpProxyServer server;
     private boolean started;
@@ -54,7 +56,7 @@ public class ServerMain implements AutoCloseable {
 
     private static ServerMain runningInstance;
 
-    public ServerMain(Properties configuration, File basePath) {
+    public ServerMain(ConfigurationStore configuration, File basePath) {
         this.configuration = configuration;
         this.pidFileLocker = new PidFileLocker(basePath.toPath().toAbsolutePath());
         this.basePath = basePath;
@@ -137,7 +139,8 @@ public class ServerMain implements AutoCloseable {
                 }
 
             });
-            runningInstance = new ServerMain(configuration, basePath);
+            ConfigurationStore configurationStore = new PropertiesConfigurationStore(configuration);
+            runningInstance = new ServerMain(configurationStore, basePath);
             runningInstance.start();
 
             runningInstance.join();

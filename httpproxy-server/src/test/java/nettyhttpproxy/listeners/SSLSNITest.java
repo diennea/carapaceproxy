@@ -1,4 +1,4 @@
-package nettyhttpproxy;
+package nettyhttpproxy.listeners;
 
 /*
  Licensed to Diennea S.r.l. under one
@@ -19,6 +19,8 @@ package nettyhttpproxy;
  under the License.
 
  */
+import nettyhttpproxy.utils.TestEndpointMapper;
+import nettyhttpproxy.utils.TestUtils;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import nettyhttpproxy.server.HttpProxyServer;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
@@ -27,6 +29,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.net.InetAddress;
 import java.security.cert.X509Certificate;
+import nettyhttpproxy.EndpointStats;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
@@ -114,18 +117,18 @@ public class SSLSNITest {
                     "cert", "pwd"));
 
             // client requests bad SNI, bad default in listener
-            assertNull(server.chooseCertificate("no", "no-default"));
+            assertNull(server.getListeners().chooseCertificate("no", "no-default"));
 
             // client requests SNI, bad default in listener
-            assertEquals("other", server.chooseCertificate("other", "no-default").getId());
+            assertEquals("other", server.getListeners().chooseCertificate("other", "no-default").getId());
 
-            assertEquals("www.example.com", server.chooseCertificate("unkn-other", "www.example.com").getId());
+            assertEquals("www.example.com", server.getListeners().chooseCertificate("unkn-other", "www.example.com").getId());
             // client without SNI
-            assertEquals("www.example.com", server.chooseCertificate(null, "www.example.com").getId());
+            assertEquals("www.example.com", server.getListeners().chooseCertificate(null, "www.example.com").getId());
             // exact match
-            assertEquals("www.example.com", server.chooseCertificate("www.example.com", "no-default").getId());
+            assertEquals("www.example.com", server.getListeners().chooseCertificate("www.example.com", "no-default").getId());
             // wildcard
-            assertEquals("*.example.com", server.chooseCertificate("test.example.com", "no-default").getId());
+            assertEquals("*.example.com", server.getListeners().chooseCertificate("test.example.com", "no-default").getId());
         }
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
@@ -133,11 +136,11 @@ public class SSLSNITest {
             // full wildcard
             server.addCertificate(new SSLCertificateConfiguration("*", "cert", "pwd"));
 
-            assertEquals("*", server.chooseCertificate(null, "www.example.com").getId());
-            assertEquals("*", server.chooseCertificate("www.example.com", null).getId());
-            assertEquals("*", server.chooseCertificate(null, null).getId());
-            assertEquals("*", server.chooseCertificate("", null).getId());
-            assertEquals("*", server.chooseCertificate(null, "").getId());
+            assertEquals("*", server.getListeners().chooseCertificate(null, "www.example.com").getId());
+            assertEquals("*", server.getListeners().chooseCertificate("www.example.com", null).getId());
+            assertEquals("*", server.getListeners().chooseCertificate(null, null).getId());
+            assertEquals("*", server.getListeners().chooseCertificate("", null).getId());
+            assertEquals("*", server.getListeners().chooseCertificate(null, "").getId());
         }
     }
 }

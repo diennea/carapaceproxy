@@ -1,4 +1,4 @@
-package nettyhttpproxy;
+package nettyhttpproxy.server.filters;
 
 /*
  Licensed to Diennea S.r.l. under one
@@ -19,6 +19,8 @@ package nettyhttpproxy;
  under the License.
 
  */
+import nettyhttpproxy.utils.TestEndpointMapper;
+import nettyhttpproxy.utils.TestUtils;
 import nettyhttpproxy.server.HttpProxyServer;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.absent;
@@ -27,8 +29,11 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import java.util.Collections;
+import nettyhttpproxy.EndpointStats;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
+import nettyhttpproxy.server.config.RequestFilterConfiguration;
 import nettyhttpproxy.server.mapper.XForwardedForRequestFilter;
 import nettyhttpproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertNotNull;
@@ -53,18 +58,18 @@ public class XForwardedForFilterTest {
     public void testXForwardedForFilter() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
-            .withHeader("X-Forwarded-For", equalTo("127.0.0.1"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withBody("it <b>works</b> !!")));
+                .withHeader("X-Forwarded-For", equalTo("127.0.0.1"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
-            server.addRequestFilter(new XForwardedForRequestFilter());
+            server.addRequestFilter(new RequestFilterConfiguration(XForwardedForRequestFilter.TYPE, Collections.emptyMap()));
             server.start();
             int port = server.getLocalPort();
 
@@ -87,8 +92,8 @@ public class XForwardedForFilterTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 2
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
@@ -99,20 +104,20 @@ public class XForwardedForFilterTest {
     public void testNoXForwardedForFilter() throws Exception {
 
         stubFor(
-            get(urlEqualTo("/index.html"))
-                .withHeader("X-Forwarded-For", equalTo("1.2.3.4"))
-                .willReturn(aResponse()
-                    .withStatus(200)
-                    .withHeader("Content-Type", "text/html")
-                    .withBody("it <b>works</b> !!")));
+                get(urlEqualTo("/index.html"))
+                        .withHeader("X-Forwarded-For", equalTo("1.2.3.4"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withBody("it <b>works</b> !!")));
 
         stubFor(
-            get(urlEqualTo("/index.html"))
-                .withHeader("X-Forwarded-For", absent())
-                .willReturn(aResponse()
-                    .withStatus(200)
-                    .withHeader("Content-Type", "text/html")
-                    .withBody("No X-Forwarded-For")));
+                get(urlEqualTo("/index.html"))
+                        .withHeader("X-Forwarded-For", absent())
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withBody("No X-Forwarded-For")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
@@ -140,8 +145,8 @@ public class XForwardedForFilterTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 2
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);

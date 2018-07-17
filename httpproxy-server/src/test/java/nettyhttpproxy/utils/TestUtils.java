@@ -1,4 +1,4 @@
-package nettyhttpproxy;
+package nettyhttpproxy.utils;
 
 /*
  Licensed to Diennea S.r.l. under one
@@ -27,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import nettyhttpproxy.EndpointStats;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
 import org.junit.Assert;
@@ -111,7 +112,7 @@ public class TestUtils {
         }
     }
 
-    static int getFreePort() throws IOException {
+    public static int getFreePort() throws IOException {
         try (ServerSocket s = new ServerSocket(0);) {
             System.out.println("Got free ephemeral port " + s.getLocalPort());
             assertTrue(s.getLocalPort() > 0);

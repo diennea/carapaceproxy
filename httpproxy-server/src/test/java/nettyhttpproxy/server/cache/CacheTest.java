@@ -19,6 +19,8 @@ package nettyhttpproxy.server.cache;
  under the License.
 
  */
+import nettyhttpproxy.utils.TestEndpointMapper;
+import nettyhttpproxy.utils.TestUtils;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import nettyhttpproxy.*;
 import nettyhttpproxy.server.HttpProxyServer;

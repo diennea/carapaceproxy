@@ -29,14 +29,15 @@ import nettyhttpproxy.server.RequestFilter;
 import nettyhttpproxy.server.RequestHandler;
 
 /**
- * Maps a parameter of the querystring to the sessionId, using simple pattern
- * matching
+ * Maps a parameter of the querystring to the sessionId, using simple pattern matching
  *
  * @author enrico.olivelli
  */
 public class RegexpMapSessionIdFilter implements RequestFilter {
 
     private static final Logger LOG = Logger.getLogger(RegexpMapSessionIdFilter.class.getName());
+
+    public static final String TYPE = "match-session-regexp";
 
     private final String parameterName;
     private final Pattern compiledPattern;

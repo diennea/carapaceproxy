@@ -162,8 +162,6 @@ public class EndpointConnectionImpl implements EndpointConnection {
         valid = false;
     }
 
-    private CopyOnWriteArrayList<Runnable> queue = new CopyOnWriteArrayList<Runnable>();
-
     @Override
     public void sendRequest(HttpRequest request, RequestHandler clientSidePeerHandler) {
         activateConnection(clientSidePeerHandler);

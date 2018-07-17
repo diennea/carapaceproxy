@@ -30,6 +30,8 @@ import nettyhttpproxy.server.RequestHandler;
  */
 public class XForwardedForRequestFilter implements RequestFilter {
 
+    public static final String TYPE = "add-x-forwarded-for";
+
     @Override
     public void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler) {
         request.headers().remove("X-Forwarded-For");

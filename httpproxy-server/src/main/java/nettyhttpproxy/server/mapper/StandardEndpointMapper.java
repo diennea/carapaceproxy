@@ -25,11 +25,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.MapResult;
+import nettyhttpproxy.configstore.ConfigurationStore;
 import nettyhttpproxy.server.RequestHandler;
 import static nettyhttpproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
 import static nettyhttpproxy.server.StaticContentsManager.DEFAULT_NOT_FOUND;
@@ -70,7 +70,7 @@ public class StandardEndpointMapper extends EndpointMapper {
         this.backendSelector = backendSelector;
     }
 
-    public void configure(Properties properties) throws ConfigurationNotValidException {
+    public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
 
         addAction(new ActionConfiguration("proxy-all", ActionConfiguration.TYPE_PROXY, DirectorConfiguration.DEFAULT, null, -1));
         addAction(new ActionConfiguration("cache-if-possible", ActionConfiguration.TYPE_CACHE, DirectorConfiguration.DEFAULT, null, -1));

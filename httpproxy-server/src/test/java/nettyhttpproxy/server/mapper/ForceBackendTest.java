@@ -19,6 +19,7 @@ package nettyhttpproxy.server.mapper;
  under the License.
 
  */
+import nettyhttpproxy.utils.TestUtils;
 import nettyhttpproxy.server.HttpProxyServer;
 import nettyhttpproxy.*;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
@@ -29,6 +30,7 @@ import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.net.URL;
 import java.util.Properties;
 import nettyhttpproxy.client.ConnectionsManagerStats;
+import nettyhttpproxy.configstore.PropertiesConfigurationStore;
 import nettyhttpproxy.server.config.ActionConfiguration;
 import nettyhttpproxy.server.config.BackendConfiguration;
 import nettyhttpproxy.server.config.DirectorConfiguration;
@@ -55,8 +57,8 @@ public class ForceBackendTest {
                         .withStatus(200)
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
-        
-         stubFor(get(urlEqualTo("/index.html?thebackend=backend-b"))
+
+        stubFor(get(urlEqualTo("/index.html?thebackend=backend-b"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "text/html")
@@ -67,7 +69,7 @@ public class ForceBackendTest {
         Properties properties = new Properties();
         properties.put("mapper.forcedirector.parameter", "thedirector");
         properties.put("mapper.forcebackend.parameter", "thebackend");
-        mapper.configure(properties);
+        mapper.configure(new PropertiesConfigurationStore(properties));
         assertEquals("thedirector", mapper.getForceDirectorParameter());
         assertEquals("thebackend", mapper.getForceBackendParameter());
 

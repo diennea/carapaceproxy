@@ -39,6 +39,7 @@ import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointConnection;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.client.EndpointNotAvailableException;
+import nettyhttpproxy.server.RuntimeServerConfiguration;
 import nettyhttpproxy.server.RequestHandler;
 import nettyhttpproxy.server.backends.BackendHealthManager;
 import org.apache.bookkeeper.stats.Counter;
@@ -145,7 +146,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
                 requestHandler.failIfStuck(now, stuckRequestTimeout, () -> {
                     EndpointConnection connectionToEndpoint = requestHandler.getConnectionToEndpoint();
                     if (connectionToEndpoint != null) {
-                        backendHealthManager.reportBackendUnreachable(connectionToEndpoint.getKey().toBackendId(), now, "a request to "+requestHandler.getUri()+" for user "+requestHandler.getUserId()+" appears stuck");
+                        backendHealthManager.reportBackendUnreachable(connectionToEndpoint.getKey().toBackendId(), now, "a request to " + requestHandler.getUri() + " for user " + requestHandler.getUserId() + " appears stuck");
                     }
                     stuckRequestsStat.inc();
                     pendingRequestsStat.dec();
@@ -159,17 +160,17 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     }
 
-    public ConnectionsManagerImpl(int maxConnectionsPerEndpoint, int idleTimeout, int stuckRequestTimeout,
-            int connectTimeout, StatsLogger statsLogger, BackendHealthManager backendHealthManager) {
+    public ConnectionsManagerImpl(RuntimeServerConfiguration configuration, StatsLogger statsLogger, BackendHealthManager backendHealthManager) {
         this.mainLogger = statsLogger.scope("outbound");
         this.pendingRequestsStat = mainLogger.getCounter("pendingrequests");
         this.stuckRequestsStat = mainLogger.getCounter("stuckrequests");
-        this.idleTimeout = idleTimeout;
-        this.stuckRequestTimeout = stuckRequestTimeout;
-        this.connectTimeout = connectTimeout;
+        this.idleTimeout = configuration.getIdleTimeout();
+        this.stuckRequestTimeout = configuration.getStuckRequestTimeout();
+        this.connectTimeout = configuration.getConnectTimeout();
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
         this.stuckRequestsReaperFuture = this.scheduler.scheduleWithFixedDelay(new RequestHandlerChecker(), idleTimeout / 4, idleTimeout / 4, TimeUnit.MILLISECONDS);
         GenericKeyedObjectPoolConfig config = new GenericKeyedObjectPoolConfig();
+        int maxConnectionsPerEndpoint = configuration.getMaxConnectionsPerEndpoint();
         config.setMaxTotalPerKey(maxConnectionsPerEndpoint);
         config.setMaxIdlePerKey(maxConnectionsPerEndpoint);
         config.setTestOnReturn(true);

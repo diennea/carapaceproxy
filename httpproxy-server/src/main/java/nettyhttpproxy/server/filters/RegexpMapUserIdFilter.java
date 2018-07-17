@@ -29,14 +29,15 @@ import nettyhttpproxy.server.RequestFilter;
 import nettyhttpproxy.server.RequestHandler;
 
 /**
- * Maps a parameter of the querystring to the tenant, using simple pattern
- * matching
+ * Maps a parameter of the querystring to the tenant, using simple pattern matching
  *
  * @author enrico.olivelli
  */
 public class RegexpMapUserIdFilter implements RequestFilter {
 
     private static final Logger LOG = Logger.getLogger(RegexpMapUserIdFilter.class.getName());
+
+    public static final String TYPE = "match-user-regexp";
 
     private final String parameterName;
     private final Pattern compiledPattern;
@@ -48,7 +49,7 @@ public class RegexpMapUserIdFilter implements RequestFilter {
 
     @Override
     public void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler) {
-        
+
         UrlEncodedQueryString queryString = requestHandler.getQueryString();
         String value = queryString.get(parameterName);
         if (value == null) {

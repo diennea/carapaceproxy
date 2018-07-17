@@ -20,7 +20,7 @@
 package nettyhttpproxy.api;
 
 import java.util.Properties;
-import nettyhttpproxy.TestEndpointMapper;
+import nettyhttpproxy.utils.TestEndpointMapper;
 import nettyhttpproxy.server.HttpProxyServer;
 import nettyhttpproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertTrue;

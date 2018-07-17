@@ -142,7 +142,7 @@ public class RequestHandler {
             filter.apply(request, connectionToClient, this);
         }
         action = connectionToClient.mapper.map(request, userId, sessionId, backendHealthManager, this);
-        LOG.info("map " + request.uri() + " to " + action.action);
+        //LOG.info("map " + request.uri() + " to " + action.action);
         Counter requestsPerUser;
         if (userId != null) {
             requestsPerUser = logger.getCounter("requests_" + userId + "_count");
@@ -394,7 +394,7 @@ public class RequestHandler {
         fireRequestFinished();
 
         if (headerSent) {
-            LOG.log(Level.INFO, this + ": headers for already sent to client, cannot send static response");
+            LOG.log(Level.INFO, "{0}: headers for already sent to client, cannot send static response", this);
             return true;
         }
 

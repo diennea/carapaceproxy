@@ -35,7 +35,6 @@ import javax.net.ssl.SNIServerName;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
-import nettyhttpproxy.HttpUtils;
 
 /**
  * Raw Socket based Http Client, very useful to reproduce weird behaviours

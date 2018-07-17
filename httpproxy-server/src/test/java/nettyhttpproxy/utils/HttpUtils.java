@@ -1,4 +1,4 @@
-package nettyhttpproxy;
+package nettyhttpproxy.utils;
 
 /*
  Licensed to Diennea S.r.l. under one

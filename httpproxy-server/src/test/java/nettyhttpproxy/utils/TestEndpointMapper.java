@@ -1,4 +1,4 @@
-package nettyhttpproxy;
+package nettyhttpproxy.utils;
 
 /*
  Licensed to Diennea S.r.l. under one
@@ -20,6 +20,8 @@ package nettyhttpproxy;
 
  */
 import io.netty.handler.codec.http.HttpRequest;
+import nettyhttpproxy.EndpointMapper;
+import nettyhttpproxy.MapResult;
 import nettyhttpproxy.server.RequestHandler;
 import nettyhttpproxy.server.backends.BackendHealthManager;
 

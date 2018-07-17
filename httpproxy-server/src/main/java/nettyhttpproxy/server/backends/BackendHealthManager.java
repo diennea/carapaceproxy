@@ -43,7 +43,7 @@ public class BackendHealthManager implements Runnable {
 
     private ScheduledExecutorService timer;
     private int period;
-    private StatsLogger mainLogger;
+    private final StatsLogger mainLogger;
 
     public BackendHealthManager(StatsLogger logger) {
         // will be overridden before start

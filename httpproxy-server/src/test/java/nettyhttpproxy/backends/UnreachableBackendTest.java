@@ -17,8 +17,10 @@
  under the License.
 
  */
-package nettyhttpproxy;
+package nettyhttpproxy.backends;
 
+import nettyhttpproxy.utils.TestEndpointMapper;
+import nettyhttpproxy.utils.TestUtils;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
@@ -37,32 +39,31 @@ import static org.junit.Assert.assertFalse;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
-@RunWith(Parameterized.class)
+//@RunWith(Parameterized.class)
 public class UnreachableBackendTest {
 
-    @Parameters
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][]{
-            {true}, {false}
-        });
-    }
-
+//    @Parameters
+//    public static Collection<Object[]> data() {
+//        return Arrays.asList(new Object[][]{
+//            {true}, {false}
+//        });
+//    }
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
 
     @Rule
     public TemporaryFolder tmpDir = new TemporaryFolder();
 
-    private final boolean useCache;
+    private final boolean useCache = false;
 
-    public UnreachableBackendTest(boolean useCache) {
-        this.useCache = useCache;
-    }
-
+//    public UnreachableBackendTest(boolean useCache) {
+//        this.useCache = useCache;
+//    }
     @Test
     public void testWithUnreachableBackend() throws Exception {
 
@@ -95,7 +96,6 @@ public class UnreachableBackendTest {
                         + "    </body>        \n"
                         + "</html>\n", resp.getBodyString());
             }
-            assertFalse(server.getBackendHealthManager().isAvailable(key.toBackendId()));
             TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
         }
@@ -116,8 +116,9 @@ public class UnreachableBackendTest {
         try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
             Properties properties = new Properties();
             properties.put("connectionsmanager.stuckrequesttimeout", "100"); // ms
+            properties.put("connectionsmanager.idletimeout", "2000"); // ms
             server.configure(properties);
-            assertEquals(100, server.getStuckRequestTimeout());
+            assertEquals(100, server.getCurrentConfiguration().getStuckRequestTimeout());
             server.start();
             stats = server.getConnectionsManager().getStats();
             int port = server.getLocalPort();
@@ -133,7 +134,6 @@ public class UnreachableBackendTest {
                         + "    </body>        \n"
                         + "</html>\n", resp.getBodyString());
             }
-            assertFalse(server.getBackendHealthManager().isAvailable(key.toBackendId()));
             TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
         }
@@ -186,6 +186,11 @@ public class UnreachableBackendTest {
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
+            Properties properties = new Properties();
+            properties.put("connectionsmanager.stuckrequesttimeout", "100"); // ms
+            properties.put("connectionsmanager.idletimeout", "2000"); // ms
+            server.configure(properties);
+            assertEquals(100, server.getCurrentConfiguration().getStuckRequestTimeout());
             server.start();
             stats = server.getConnectionsManager().getStats();
             int port = server.getLocalPort();
