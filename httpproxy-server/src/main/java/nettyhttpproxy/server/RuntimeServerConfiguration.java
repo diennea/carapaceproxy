@@ -48,6 +48,7 @@ public class RuntimeServerConfiguration {
     private int idleTimeout = 60000;
     private int stuckRequestTimeout = 120000;
     private int connectTimeout = 10000;
+    private long cacheMaxFileSize = 0;
 
     public int getMaxConnectionsPerEndpoint() {
         return maxConnectionsPerEndpoint;
@@ -81,16 +82,26 @@ public class RuntimeServerConfiguration {
         this.connectTimeout = connectTimeout;
     }
 
+    public long getCacheMaxFileSize() {
+        return cacheMaxFileSize;
+    }
+
+    public void setCacheMaxFileSize(long cacheMaxFileSize) {
+        this.cacheMaxFileSize = cacheMaxFileSize;
+    }
+
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
 
         this.maxConnectionsPerEndpoint = Integer.parseInt(properties.getProperty("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint + ""));
         this.idleTimeout = Integer.parseInt(properties.getProperty("connectionsmanager.idletimeout", idleTimeout + ""));
         this.stuckRequestTimeout = Integer.parseInt(properties.getProperty("connectionsmanager.stuckrequesttimeout", stuckRequestTimeout + ""));
         this.connectTimeout = Integer.parseInt(properties.getProperty("connectionsmanager.connecttimeout", connectTimeout + ""));
+        this.cacheMaxFileSize = Long.parseLong(properties.getProperty("cache.maxfilesize", cacheMaxFileSize + ""));
         LOG.info("connectionsmanager.maxconnectionsperendpoint=" + maxConnectionsPerEndpoint);
         LOG.info("connectionsmanager.idletimeout=" + idleTimeout);
         LOG.info("connectionsmanager.stuckrequesttimeout=" + stuckRequestTimeout);
         LOG.info("connectionsmanager.connecttimeout=" + connectTimeout);
+        LOG.info("connectionsmanager.cacheMaxFileSize=" + cacheMaxFileSize);
 
         for (int i = 0; i < 100; i++) {
             tryConfigureCertificate(i, properties);

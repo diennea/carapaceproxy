@@ -20,43 +20,14 @@
 package nettyhttpproxy.server;
 
 import com.google.common.annotations.VisibleForTesting;
-import io.netty.bootstrap.ServerBootstrap;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.epoll.EpollEventLoopGroup;
-import io.netty.channel.epoll.EpollServerSocketChannel;
-import io.netty.channel.socket.SocketChannel;
-import io.netty.handler.codec.http.HttpRequestDecoder;
-import io.netty.handler.codec.http.HttpResponseEncoder;
-import io.netty.handler.ssl.OpenSsl;
-import io.netty.handler.ssl.SniHandler;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
-import io.netty.handler.ssl.SslProvider;
-import io.netty.util.AsyncMapping;
-import io.netty.util.concurrent.Promise;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.UnrecoverableKeyException;
-import java.security.cert.CertificateException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.TrustManagerFactory;
 import javax.servlet.DispatcherType;
 import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.api.ApplicationConfig;
@@ -93,7 +64,7 @@ public class HttpProxyServer implements AutoCloseable {
     private ConnectionsManager connectionsManager;
     private final Listeners listeners;
     private volatile boolean started;
-    private final ContentsCache cache;
+    private ContentsCache cache;
     private final StatsLogger mainLogger;
 
     private final File basePath;
@@ -117,11 +88,10 @@ public class HttpProxyServer implements AutoCloseable {
 
         this.backendHealthManager = new BackendHealthManager(mainLogger);
         this.filters = new ArrayList<>();
-        this.cache = new ContentsCache(mainLogger);
         this.currentConfiguration = new RuntimeServerConfiguration();
         this.listeners = new Listeners(this);
     }
-
+    
     public HttpProxyServer(String host, int port, EndpointMapper mapper) throws ConfigurationNotValidException {
         this(mapper, new File(".").getAbsoluteFile());
         currentConfiguration.addListener(new NetworkListenerConfiguration(host, port));
@@ -168,6 +138,7 @@ public class HttpProxyServer implements AutoCloseable {
         try {
             started = true;
             bootFilters();
+            this.cache = new ContentsCache(mainLogger, currentConfiguration);
             this.connectionsManager = new ConnectionsManagerImpl(currentConfiguration,
                     mainLogger, backendHealthManager);
 

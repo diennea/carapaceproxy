@@ -39,6 +39,8 @@ import static org.junit.Assert.assertTrue;
  * @author enrico.olivelli
  */
 public class TestUtils {
+    
+    private static final int WAIT_FOR_CONDITION_DEFAULT_WAIT_SECONDS = 20;
 
     public static final Callable<Boolean> ALL_CONNECTIONS_CLOSED(ConnectionsManagerStats stats) {
         return new Callable<Boolean>() {
@@ -79,6 +81,10 @@ public class TestUtils {
 
     public static void waitForCondition(Callable<Boolean> condition, int seconds) throws Exception {
         waitForCondition(condition, null, seconds);
+    }
+
+    public static void waitForCondition(Callable<Boolean> condition) throws Exception {
+        waitForCondition(condition, null, WAIT_FOR_CONDITION_DEFAULT_WAIT_SECONDS);
     }
 
     public static void waitForCondition(Callable<Boolean> condition, Callable<Void> callback, int seconds) throws Exception {

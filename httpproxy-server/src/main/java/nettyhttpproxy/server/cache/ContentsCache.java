@@ -46,6 +46,7 @@ import java.util.function.BiFunction;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.server.RequestHandler;
+import nettyhttpproxy.server.RuntimeServerConfiguration;
 import org.apache.bookkeeper.stats.Counter;
 import org.apache.bookkeeper.stats.StatsLogger;
 
@@ -60,13 +61,16 @@ public class ContentsCache {
     private final CacheStats stats;
     private final Counter noCacheRequests;
     private final ScheduledExecutorService threadPool;
+    private final long cacheMaxFileSize;
     private static final long DEFAULT_TTL = 1000 * 60 * 60;
 
-    public ContentsCache(StatsLogger mainLogger) {
+    public ContentsCache(StatsLogger mainLogger, RuntimeServerConfiguration currentConfiguration) {
         StatsLogger cacheScope = mainLogger.scope("cache");
         this.stats = new CacheStats(cacheScope);
         this.noCacheRequests = cacheScope.getCounter("nocacherequests");
         this.threadPool = Executors.newSingleThreadScheduledExecutor();
+        
+        this.cacheMaxFileSize = currentConfiguration.getCacheMaxFileSize();
     }
 
     public void start() {
@@ -87,11 +91,36 @@ public class ContentsCache {
         cache.clear();
     }
 
-    private static boolean isCachable(HttpResponse response) {
+    private boolean isContentLengthCachable(long contentLength) {
+        if (cacheMaxFileSize > 0 && contentLength > cacheMaxFileSize) {
+            return false;
+        } else {
+            return true;
+        }
+    }
+    
+    private boolean isContentLengthCachable(HttpHeaders headers) {
+        if (cacheMaxFileSize <= 0) {
+            return true;
+        }
+        try {
+            long contentLength = Integer.parseInt(headers.get(HttpHeaderNames.CONTENT_LENGTH, "-1"));
+            if (contentLength > 0) {
+                return contentLength <= cacheMaxFileSize;
+            } else {
+                return true;
+            }
+        } catch (NumberFormatException ex) {
+            return true;
+        }
+    }
+    
+    private boolean isCachable(HttpResponse response) {
         HttpHeaders headers = response.headers();
-        if (headers.contains(HttpHeaderNames.CACHE_CONTROL, "no-cache", false)
-                || headers.contains(HttpHeaderNames.CACHE_CONTROL, "no-store", false)
-                || headers.contains(HttpHeaderNames.PRAGMA, "no-cache", false)) {
+        if (headers.contains(HttpHeaderNames.CACHE_CONTROL, HttpHeaderValues.NO_CACHE, false)
+                || headers.contains(HttpHeaderNames.CACHE_CONTROL, HttpHeaderValues.NO_STORE, false)
+                || headers.contains(HttpHeaderNames.PRAGMA, HttpHeaderValues.NO_CACHE, false)
+                || !isContentLengthCachable(headers)) {
             // never cache Pragma: no-cache, Cache-Control: nostore/no-cache
             LOG.log(Level.FINER, "not cachable {0}", response);
             return false;
@@ -153,8 +182,8 @@ public class ContentsCache {
                     return false;
             }
         }
-        return true;
-
+        
+        return isContentLengthCachable(request.headers());
     }
 
     @VisibleForTesting
@@ -243,6 +272,11 @@ public class ContentsCache {
         private long expiresTs = -1;
         private long heapSize;
         private long directSize;
+
+        @Override
+        public String toString() {
+            return "ContentPayload{" + "chunks_n=" + chunks.size() + ", creationTs=" + new java.sql.Timestamp(creationTs) + ", lastModified=" + new java.sql.Timestamp(lastModified) + ", expiresTs=" + new java.sql.Timestamp(expiresTs) + ", size=" + (heapSize+directSize) + " (heap=" + heapSize + ", direct=" + directSize + ")" + '}';
+        }
 
         public long getLastModified() {
             return lastModified;
@@ -337,6 +371,10 @@ public class ContentsCache {
 
     private void cacheContent(ContentReceiver receiver) {
         ContentPayload content = receiver.content;
+        if (!isContentLengthCachable(content.heapSize + content.directSize)) {
+            cache.remove(receiver.key); // just for make sure
+            return;
+        }
         cache.put(receiver.key, content);
         stats.cached(content.heapSize, content.directSize);
     }
