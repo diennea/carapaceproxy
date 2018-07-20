@@ -27,7 +27,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.apache.bookkeeper.stats.Counter;
+import org.apache.bookkeeper.stats.Gauge;
 import org.apache.bookkeeper.stats.OpStatsLogger;
 import org.apache.bookkeeper.stats.StatsLogger;
 
@@ -68,12 +68,31 @@ public class BackendHealthManager implements Runnable {
         timer.scheduleAtFixedRate(this, period, period, TimeUnit.SECONDS);
     }
 
+    private ConcurrentHashMap<String, Gauge> gauges = new ConcurrentHashMap<>();
+
+    private void ensureGauge(String key, BackendHealthStatus status) {
+        gauges.computeIfAbsent(key, (k) -> {
+            Gauge gauge = new Gauge() {
+                @Override
+                public Number getDefaultValue() {
+                    return 0;
+                }
+
+                @Override
+                public Number getSample() {
+                    return status.isReportedAsUnreachable() ? 0 : 1;
+                }
+            };
+            mainLogger.registerGauge(k, gauge);
+            return gauge;
+        });
+    }
+
     @Override
     public void run() {
         for (BackendHealthStatus status : backends.values()) {
-            OpStatsLogger logger = mainLogger.getOpStatsLogger("backend_" + status.getId().replace(":", "_") + "_up");
+            ensureGauge("backend_" + status.getId().replace(":", "_") + "_up", status);
             if (status.isReportedAsUnreachable()) {
-                logger.registerSuccessfulValue(0);
                 // TODO: perform a probe
                 LOG.log(Level.INFO, "backend {0} was unreachable, setting again to reachable (probe not really performed!!)", status.getId());
                 status.reportAsReachable();
@@ -81,7 +100,6 @@ public class BackendHealthManager implements Runnable {
                 status.setLastProbeSuccess(true);
                 status.setLastProbeTs(System.currentTimeMillis());
             } else {
-                logger.registerSuccessfulValue(1);
                 LOG.log(Level.INFO, "backend {0} seems reachable", status.getId());
             }
         }
