@@ -15,6 +15,12 @@
           <li>
             <router-link to="/cache">Cache</router-link>
           </li>
+          <li>
+            <router-link to="/certificates">Certificates</router-link>
+          </li>
+          <li>
+            <router-link to="/listeners">Listeners</router-link>
+          </li>
         </ul>
       </div>
       <div id="page-content-wrapper">
@@ -27,8 +33,6 @@
 </template>
 
 <script>
-  import Vue from 'vue'
-
   export default {
     name: 'app',
   }

@@ -3,8 +3,14 @@ import Router from 'vue-router'
 
 import Backends from './components/Backends'
 import CacheStatus from './components/CacheStatus'
+import ListenersStatus from './components/ListenersStatus'
+import CertificatesStatus from './components/CertificatesStatus'
+import Certificate from './components/Certificate'
+
 Vue.component('backends-status', Backends)
 Vue.component('cache-status', CacheStatus)
+Vue.component('listeners-status', ListenersStatus)
+Vue.component('certificates-status', CertificatesStatus)
 
 Vue.use(Router)
 
@@ -14,10 +20,26 @@ export default new Router({
       path: '/',
       name: 'Root',
       component: Backends
-    },{
+    },
+    {
       path: '/cache',
       name: 'Cache',
       component: CacheStatus
+    },
+    {
+      path: '/listeners',
+      name: 'Listeners',
+      component: ListenersStatus
+    },
+    {
+      path: '/certificates',
+      name: 'Certificates',
+      component: CertificatesStatus
+    },
+    {
+      path: '/certificates/:id',
+      name: 'Certificate',
+      component: Certificate
     }
   ]
 })

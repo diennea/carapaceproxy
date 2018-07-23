@@ -37,6 +37,8 @@ public class ApplicationConfig extends Application {
         resources.add(CacheResource.class);
         resources.add(ServiceUpResource.class);
         resources.add(BackendsResource.class);
+        resources.add(ListenersResource.class);
+        resources.add(CertificatesResource.class);
         return resources;
     }
 }

@@ -17,7 +17,7 @@
                     <td>{{item.openConnections}}</td>
                     <td>{{item.totalRequests}}</td>
                     <td>{{formatDate(item.lastActivityTs)}}</td>
-
+                    
                 </tr>
             </tbody>
         </table>

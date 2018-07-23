@@ -1,6 +1,11 @@
 <template>
     <div>
-        <h2>Cache</h2>
+        <div class="row">
+            <h2 class="col-2">Cache</h2>
+            <button class="btn btn-dark col-2 offset-8" v-on:click="flushCache">Flush cache</button>
+        </div>
+        <div class="row mt-3">
+        
         <table class="table table-striped">
             <thead>
                 <tr>
@@ -21,13 +26,12 @@
 
             </tbody>
         </table>
+        </div>
     </div>
 </template>
 
 <script>
-    import {
-        doRequest
-    } from './../mockserver'
+    import { doRequest } from './../mockserver'
     export default {
         name: 'CacheStatus',
         data: function () {
@@ -42,6 +46,12 @@
                 d.status = json;
             })
 
+        },
+        methods: {
+            flushCache: function () {
+                var url = "/api/cache/flush";
+                doRequest(url, {}, function () {});
+            }
         }
     }
 </script>
