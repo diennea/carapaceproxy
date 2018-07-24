@@ -16,8 +16,10 @@ function mockRequest(url) {
             result: 'OK', cachesize: 0
         };
         case "/api/backends": return {
-            'localhost8086': { host: 'test', port: 3000, openConnections: 50, totalRequests: 99, lastActivityTs: 1012123 },
-            'localhost8000': { host: 'test2', port: 3080, openConnections: 50, totalRequests: 99, lastActivityTs: 1012123 }
+            'localhost8086': { host: 'test', port: 3000, openConnections: 50, totalRequests: 99, lastActivityTs: 1012123, 
+            isAvailable: true, reportedAsUnreachable: false, reportedAsUnreachableTs: 1012123, lastProbeTs: 1012123, lastProbeSuccess: "DOWN", lastProbeResult: "MOCK1<br>MOCK1<br>MOCK1"},
+            'localhost8000': { host: 'test2', port: 3080, openConnections: 50, totalRequests: 99, lastActivityTs: 1012123,
+            isAvailable: true, reportedAsUnreachable: false, reportedAsUnreachableTs: 1012123, lastProbeTs: 1012123, lastProbeSuccess: "DOWN", lastProbeResult: "MOCK2<br>MOCK2<br>MOCK2"}
         };
         case "/api/certificates": return {
             "*": { id: "*", hostname: "hostname*", sslCertificateFile: "conf/localhost.p12", sslCertificatePassword: "test0"},

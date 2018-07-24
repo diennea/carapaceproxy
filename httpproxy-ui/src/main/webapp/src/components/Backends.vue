@@ -1,3 +1,9 @@
+<style scoped>
+    table th, table tr {
+        font-size: 13px;
+    }
+</style>
+
 <template>
     <div>
         <h2>Backends</h2>
@@ -6,9 +12,14 @@
                 <tr>
                     <th scope="col">Backend</th>
                     <th scope="col">Open connections</th>
-                    <th scope="col">totalRequests</th>
-                    <th scope="col">lastActivityTs</th>
-
+                    <th scope="col">Total Requests</th>
+                    <th scope="col">Last Activity (Timestamp)</th>
+                    <th scope="col">Available</th>
+                    <th scope="col">Reported as Unreachable</th>
+                    <th scope="col">Reported as Unreachable (Timestamp)</th>
+                    <th scope="col">Last probe success</th>
+                    <th scope="col">Last probe success (Timestamp)</th>
+                    <th scope="col">Last probe result</th>
                 </tr>
             </thead>
             <tbody>
@@ -17,7 +28,12 @@
                     <td>{{item.openConnections}}</td>
                     <td>{{item.totalRequests}}</td>
                     <td>{{formatDate(item.lastActivityTs)}}</td>
-                    
+                    <td>{{item.isAvailable}}</td>
+                    <td>{{item.reportedAsUnreachable}}</td>
+                    <td>{{formatDate(item.reportedAsUnreachableTs)}}</td>
+                    <td>{{item.lastProbeSuccess}}</td>
+                    <td>{{formatDate(item.lastProbeTs)}}</td>
+                    <td v-html="item.lastProbeResult"></td>
                 </tr>
             </tbody>
         </table>
@@ -25,11 +41,7 @@
 </template>
 
 <script>
-    import {
-        doRequest
-    } from './../mockserver'
-
-
+    import { doRequest } from './../mockserver'
     export default {
         name: 'Backends',
         data: function () {
@@ -56,6 +68,5 @@
                 return new Date(value).toUTCString();
             }
         }
-
     }
 </script>

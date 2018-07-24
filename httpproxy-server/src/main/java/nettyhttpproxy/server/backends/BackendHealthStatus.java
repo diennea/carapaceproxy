@@ -99,7 +99,7 @@ public class BackendHealthStatus {
         reportedAsUnreachableTs = 0;
     }
 
-    boolean isAvailable() {
+    public boolean isAvailable() {
         return !reportedAsUnreachable;
     }
 
