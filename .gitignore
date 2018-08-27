@@ -4,5 +4,7 @@
 **/.classpath
 **/target/
 **/node/
+*.pyc
 dependency-reduced-pom.xml
 /nbproject/
+
