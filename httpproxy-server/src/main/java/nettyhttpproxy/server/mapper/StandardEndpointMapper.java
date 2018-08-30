@@ -110,9 +110,10 @@ public class StandardEndpointMapper extends EndpointMapper {
                 boolean enabled = Boolean.parseBoolean(properties.getProperty(prefix + "enabled", "false"));
                 String host = properties.getProperty(prefix + "host", "localhost");
                 int port = Integer.parseInt(properties.getProperty(prefix + "port", "8086"));
+                String probePath = properties.getProperty(prefix + "probePath", null);
                 LOG.info("configured backend " + id + " " + host + ":" + port + " enabled:" + enabled);
                 if (enabled) {
-                    BackendConfiguration config = new BackendConfiguration(id, host, port, "/test.html");
+                    BackendConfiguration config = new BackendConfiguration(id, host, port, probePath);
                     addBackend(config);
                 }
             }
@@ -222,6 +223,11 @@ public class StandardEndpointMapper extends EndpointMapper {
             throw new ConfigurationNotValidException("route " + route.getId() + " is already configured");
         }
         routes.add(route);
+    }
+
+    @Override
+    public Map<String, BackendConfiguration> getBackends() {
+        return backends;
     }
 
     @Override

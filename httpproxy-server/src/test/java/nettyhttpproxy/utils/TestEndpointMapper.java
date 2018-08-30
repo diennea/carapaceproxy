@@ -20,25 +20,34 @@ package nettyhttpproxy.utils;
 
  */
 import io.netty.handler.codec.http.HttpRequest;
+import java.util.Collections;
+import java.util.Map;
 import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.MapResult;
 import nettyhttpproxy.server.RequestHandler;
 import nettyhttpproxy.server.backends.BackendHealthManager;
+import nettyhttpproxy.server.config.BackendConfiguration;
 
 public class TestEndpointMapper extends EndpointMapper {
 
     private final String host;
     private final int port;
     private final boolean cacheAll;
+    private final Map<String, BackendConfiguration> backends; 
 
     public TestEndpointMapper(String host, int port) {
         this(host, port, false);
     }
 
     public TestEndpointMapper(String host, int port, boolean cacheAll) {
+        this(host, port, cacheAll, Collections.EMPTY_MAP);
+    }
+        
+    public TestEndpointMapper(String host, int port, boolean cacheAll, Map<String, BackendConfiguration> backends) {
         this.host = host;
         this.port = port;
         this.cacheAll = cacheAll;
+        this.backends = backends;
     }
 
     @Override
@@ -53,5 +62,10 @@ public class TestEndpointMapper extends EndpointMapper {
         } else {
             return new MapResult(host, port, MapResult.Action.PROXY);
         }
+    }
+
+    @Override
+    public Map<String, BackendConfiguration> getBackends() {
+        return backends;
     }
 }

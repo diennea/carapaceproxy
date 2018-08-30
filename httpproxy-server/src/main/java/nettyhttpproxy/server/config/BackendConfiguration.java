@@ -52,4 +52,12 @@ public class BackendConfiguration {
         return probePath;
     }
 
+    public String toBackendId() {
+        return host + ":" + port;
+    }
+
+    @Override
+    public String toString() {
+        return "BackendConfiguration{" + "id=" + id + ", host=" + host + ", port=" + port + ", probePath=" + probePath + '}';
+    }
 }

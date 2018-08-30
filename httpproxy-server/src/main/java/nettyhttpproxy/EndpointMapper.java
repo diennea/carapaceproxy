@@ -20,9 +20,11 @@
 package nettyhttpproxy;
 
 import io.netty.handler.codec.http.HttpRequest;
+import java.util.Map;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.server.RequestHandler;
 import nettyhttpproxy.server.backends.BackendHealthManager;
+import nettyhttpproxy.server.config.BackendConfiguration;
 
 /**
  * Maps requests to a remote HTTP server
@@ -31,6 +33,8 @@ import nettyhttpproxy.server.backends.BackendHealthManager;
  */
 public abstract class EndpointMapper {
 
+    public abstract Map<String, BackendConfiguration> getBackends();
+    
     public abstract MapResult map(HttpRequest request, String userId, String sessionId, BackendHealthManager backendHealthManager, RequestHandler requestHandler);
 
     public MapResult mapDefaultInternalError(HttpRequest request) {

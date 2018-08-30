@@ -21,6 +21,7 @@ package nettyhttpproxy.server.backends;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import nettyhttpproxy.server.config.BackendConfiguration;
 
 /**
  * Health of a backend
@@ -32,6 +33,7 @@ public class BackendHealthStatus {
     private static final Logger LOG = Logger.getLogger(BackendHealthStatus.class.getName());
 
     private final String id;
+    private final BackendConfiguration conf;
 
     private volatile boolean reportedAsUnreachable;
     private long reportedAsUnreachableTs;
@@ -40,12 +42,17 @@ public class BackendHealthStatus {
     private boolean lastProbeSuccess;
     private String lastProbeResult;
 
-    public BackendHealthStatus(String id) {
+    public BackendHealthStatus(String id, BackendConfiguration conf) {
         this.id = id;
+        this.conf = conf;
     }
 
     public String getId() {
         return id;
+    }
+
+    public BackendConfiguration getConf() {
+        return conf;
     }
 
     public boolean isLastProbeSuccess() {
@@ -101,6 +108,11 @@ public class BackendHealthStatus {
 
     public boolean isAvailable() {
         return !reportedAsUnreachable;
+    }
+
+    @Override
+    public String toString() {
+        return "BackendHealthStatus{" + "id=" + id + ", conf=" + conf + ", reportedAsUnreachable=" + reportedAsUnreachable + ", reportedAsUnreachableTs=" + reportedAsUnreachableTs + ", lastProbeTs=" + lastProbeTs + ", lastProbeSuccess=" + lastProbeSuccess + ", lastProbeResult=" + lastProbeResult + '}';
     }
 
 }

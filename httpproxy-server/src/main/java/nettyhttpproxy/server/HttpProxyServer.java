@@ -86,9 +86,9 @@ public class HttpProxyServer implements AutoCloseable {
         this.statsProvider = new PrometheusMetricsProvider();
         this.mainLogger = statsProvider.getStatsLogger("");
 
-        this.backendHealthManager = new BackendHealthManager(mainLogger);
         this.filters = new ArrayList<>();
         this.currentConfiguration = new RuntimeServerConfiguration();
+        this.backendHealthManager = new BackendHealthManager(currentConfiguration, mapper, mainLogger);
         this.listeners = new Listeners(this);
     }
     
