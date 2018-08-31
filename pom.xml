@@ -55,6 +55,7 @@
         <libs.powermock>2.0.0-beta.5</libs.powermock>        
         <libs.mockito>2.18.3</libs.mockito>   
         <libs.guava>21.0</libs.guava>
+        <libs.caffeine>2.6.2</libs.caffeine>
         <libs.jaxws.jaxb-api>2.3.0</libs.jaxws.jaxb-api>
         <libs.jaxws.jaxb-impl>2.3.0</libs.jaxws.jaxb-impl>
         <libs.javaxactivation.api>1.2.0</libs.javaxactivation.api>

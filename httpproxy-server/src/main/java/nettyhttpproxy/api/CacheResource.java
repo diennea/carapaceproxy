@@ -67,6 +67,7 @@ public class CacheResource {
         res.put("misses", stats.getMisses());
         res.put("directMemoryUsed", stats.getDirectMemoryUsed());
         res.put("heapMemoryUsed", stats.getHeapMemoryUsed());
+        res.put("totalMemoryUsed", stats.getTotalMemoryUsed());
         return res;
     }
 }

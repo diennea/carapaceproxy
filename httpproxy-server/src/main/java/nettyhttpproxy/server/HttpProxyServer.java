@@ -181,7 +181,9 @@ public class HttpProxyServer implements AutoCloseable {
         if (connectionsManager != null) {
             connectionsManager.close();
         }
-        cache.close();
+        if (cache != null) {
+            cache.close();
+        }
         staticContentsManager.close();
     }
 

@@ -48,6 +48,7 @@ public class RuntimeServerConfiguration {
     private int idleTimeout = 60000;
     private int stuckRequestTimeout = 120000;
     private int connectTimeout = 10000;
+    private long cacheMaxSize = 0;
     private long cacheMaxFileSize = 0;
 
     public int getMaxConnectionsPerEndpoint() {
@@ -82,6 +83,14 @@ public class RuntimeServerConfiguration {
         this.connectTimeout = connectTimeout;
     }
 
+    public long getCacheMaxSize() {
+        return cacheMaxSize;
+    }
+
+    public void setCacheMaxSize(long cacheMaxSize) {
+        this.cacheMaxSize = cacheMaxSize;
+    }
+
     public long getCacheMaxFileSize() {
         return cacheMaxFileSize;
     }
@@ -96,12 +105,15 @@ public class RuntimeServerConfiguration {
         this.idleTimeout = Integer.parseInt(properties.getProperty("connectionsmanager.idletimeout", idleTimeout + ""));
         this.stuckRequestTimeout = Integer.parseInt(properties.getProperty("connectionsmanager.stuckrequesttimeout", stuckRequestTimeout + ""));
         this.connectTimeout = Integer.parseInt(properties.getProperty("connectionsmanager.connecttimeout", connectTimeout + ""));
-        this.cacheMaxFileSize = Long.parseLong(properties.getProperty("cache.maxfilesize", cacheMaxFileSize + ""));
         LOG.info("connectionsmanager.maxconnectionsperendpoint=" + maxConnectionsPerEndpoint);
         LOG.info("connectionsmanager.idletimeout=" + idleTimeout);
         LOG.info("connectionsmanager.stuckrequesttimeout=" + stuckRequestTimeout);
         LOG.info("connectionsmanager.connecttimeout=" + connectTimeout);
-        LOG.info("connectionsmanager.cacheMaxFileSize=" + cacheMaxFileSize);
+        
+        this.cacheMaxSize = Long.parseLong(properties.getProperty("cache.maxsize", cacheMaxSize + ""));
+        this.cacheMaxFileSize = Long.parseLong(properties.getProperty("cache.maxfilesize", cacheMaxFileSize + ""));
+        LOG.info("cache.maxsize=" + cacheMaxSize);
+        LOG.info("cache.maxfilesize=" + cacheMaxFileSize);
 
         for (int i = 0; i < 100; i++) {
             tryConfigureCertificate(i, properties);

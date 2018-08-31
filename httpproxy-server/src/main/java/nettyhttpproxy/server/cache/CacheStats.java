@@ -19,7 +19,6 @@
  */
 package nettyhttpproxy.server.cache;
 
-import java.util.concurrent.atomic.AtomicLong;
 import org.apache.bookkeeper.stats.Counter;
 import org.apache.bookkeeper.stats.StatsLogger;
 
@@ -32,12 +31,14 @@ public class CacheStats {
     private final Counter misses;
     private final Counter directMemoryUsed;
     private final Counter heapMemoryUsed;
+    private final Counter totalMemoryUsed;
 
     public CacheStats(StatsLogger cacheScope) {
         this.hits = cacheScope.getCounter("hits");
         this.misses = cacheScope.getCounter("misses");
         this.directMemoryUsed = cacheScope.getCounter("directMemoryUsed");
         this.heapMemoryUsed = cacheScope.getCounter("heapMemoryUsed");
+        this.totalMemoryUsed = cacheScope.getCounter("totalMemoryUsed");
     }
 
     public void update(boolean hit) {
@@ -48,14 +49,16 @@ public class CacheStats {
         }
     }
 
-    public void cached(long heap, long direct) {
+    public void cached(long heap, long direct, long total) {
         directMemoryUsed.add(direct);
         heapMemoryUsed.add(heap);
+        totalMemoryUsed.add(total);
     }
 
-    public void released(long heap, long direct) {
+    public void released(long heap, long direct, long total) {
         directMemoryUsed.add(-direct);
         heapMemoryUsed.add(-heap);
+        totalMemoryUsed.add(-total);
     }
 
     public long getDirectMemoryUsed() {
@@ -64,6 +67,10 @@ public class CacheStats {
 
     public long getHeapMemoryUsed() {
         return heapMemoryUsed.get();
+    }
+
+    public long getTotalMemoryUsed() {
+        return totalMemoryUsed.get();
     }
 
     public long getHits() {

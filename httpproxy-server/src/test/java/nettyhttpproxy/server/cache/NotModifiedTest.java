@@ -31,7 +31,6 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
-import nettyhttpproxy.server.config.NetworkListenerConfiguration;
 import nettyhttpproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;

@@ -37,12 +37,9 @@ import io.netty.util.ReferenceCountUtil;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiFunction;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.server.RequestHandler;
@@ -57,22 +54,29 @@ public class ContentsCache {
 
     private static final Logger LOG = Logger.getLogger(ContentsCache.class.getName());
 
-    private final ConcurrentMap<ContentKey, ContentPayload> cache = new ConcurrentHashMap<>();
+    private CacheImpl cache;
+    
     private final CacheStats stats;
     private final Counter noCacheRequests;
     private final ScheduledExecutorService threadPool;
+    private final long cacheMaxSize;
     private final long cacheMaxFileSize;
+    
     private static final long DEFAULT_TTL = 1000 * 60 * 60;
-
+    
     public ContentsCache(StatsLogger mainLogger, RuntimeServerConfiguration currentConfiguration) {
         StatsLogger cacheScope = mainLogger.scope("cache");
         this.stats = new CacheStats(cacheScope);
         this.noCacheRequests = cacheScope.getCounter("nocacherequests");
         this.threadPool = Executors.newSingleThreadScheduledExecutor();
         
+        this.cacheMaxSize = currentConfiguration.getCacheMaxSize();
         this.cacheMaxFileSize = currentConfiguration.getCacheMaxFileSize();
+        
+        this.cache = new CaffeineCacheImpl(stats, cacheMaxSize, LOG);
+        this.cache.setVerbose(true);
     }
-
+    
     public void start() {
         this.threadPool.scheduleWithFixedDelay(new Evictor(), 1, 1, TimeUnit.MINUTES);
     }
@@ -84,11 +88,7 @@ public class ContentsCache {
         } catch (InterruptedException exit) {
             Thread.currentThread().interrupt();
         }
-        cache.values().forEach(removed -> {
-            removed.clear();
-            stats.released(removed.heapSize, removed.directSize);
-        });
-        cache.clear();
+        this.cache.close();
     }
 
     private boolean isContentLengthCachable(long contentLength) {
@@ -182,15 +182,15 @@ public class ContentsCache {
                     return false;
             }
         }
-        
-        return isContentLengthCachable(request.headers());
+       
+        return true;
     }
 
     @VisibleForTesting
     void runEvictor() {
         new Evictor().run();
     }
-
+    
     public ContentReceiver startCachingResponse(HttpRequest request) {
         if (!isCachable(request, true)) {
             return null;
@@ -206,13 +206,7 @@ public class ContentsCache {
 
     public int clear() {
         LOG.info("clearing cache");
-        int size = cache.size();
-        cache.values().forEach(removed -> {
-            removed.clear();
-            stats.released(removed.heapSize, removed.directSize);
-        });
-        cache.clear();
-        return size;
+        return this.cache.clear();
     }
 
     public static final class ContentSender {
@@ -241,22 +235,7 @@ public class ContentsCache {
         }
         String uri = handler.getRequest().uri();
         ContentKey key = new ContentKey(uri);
-        long now = System.currentTimeMillis();
-        ContentPayload cached = cache.computeIfPresent(key, new BiFunction<ContentKey, ContentPayload, ContentPayload>() {
-            @Override
-            public ContentPayload apply(ContentKey t, ContentPayload u) {
-                if (u == null) {
-                    return null;
-                }
-                if (u.expiresTs < now) {
-                    // never serve expired entries and automatically purge from cache
-                    LOG.info("expiring content " + t.uri + ", expired at " + new java.util.Date(u.expiresTs));
-                    return null;
-                }
-                return u;
-            }
-        });
-        stats.update(cached != null);
+        ContentPayload cached = cache.get(key);
         if (cached == null) {
             return null;
         }
@@ -266,12 +245,12 @@ public class ContentsCache {
 
     public static class ContentPayload {
 
-        private final List<HttpObject> chunks = new ArrayList<>();
-        private final long creationTs = System.currentTimeMillis();
-        private long lastModified;
-        private long expiresTs = -1;
-        private long heapSize;
-        private long directSize;
+        final List<HttpObject> chunks = new ArrayList<>();
+        final long creationTs = System.currentTimeMillis();
+        long lastModified;
+        long expiresTs = -1;
+        long heapSize;
+        long directSize;
 
         @Override
         public String toString() {
@@ -298,11 +277,19 @@ public class ContentsCache {
             return directSize;
         }
 
+        public long getMemUsage() {
+            // Just an estimate
+            return
+                chunks.size() * 8 +
+                directSize + heapSize + 
+                8 * 5; // other fields
+        }
+
         public List<HttpObject> getChunks() {
             return chunks;
         }
 
-        private void clear() {
+        void clear() {
             for (HttpObject o : chunks) {
                 ReferenceCountUtil.release(o);
             }
@@ -315,14 +302,78 @@ public class ContentsCache {
             directSize += getHttpObjectDirectSize(msg);
         }
 
+        @Override
+        public int hashCode() {
+            int hash = 7;
+            hash = 41 * hash + Objects.hashCode(this.chunks);
+            hash = 41 * hash + (int) (this.creationTs ^ (this.creationTs >>> 32));
+            hash = 41 * hash + (int) (this.lastModified ^ (this.lastModified >>> 32));
+            hash = 41 * hash + (int) (this.expiresTs ^ (this.expiresTs >>> 32));
+            hash = 41 * hash + (int) (this.heapSize ^ (this.heapSize >>> 32));
+            hash = 41 * hash + (int) (this.directSize ^ (this.directSize >>> 32));
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null) {
+                return false;
+            }
+            if (getClass() != obj.getClass()) {
+                return false;
+            }
+            final ContentPayload other = (ContentPayload) obj;
+            if (this.creationTs != other.creationTs) {
+                return false;
+            }
+            if (this.lastModified != other.lastModified) {
+                return false;
+            }
+            if (this.expiresTs != other.expiresTs) {
+                return false;
+            }
+            if (this.heapSize != other.heapSize) {
+                return false;
+            }
+            if (this.directSize != other.directSize) {
+                return false;
+            }
+            if (!Objects.equals(this.chunks, other.chunks)) {
+                return false;
+            }
+            return true;
+        }
+
+    }
+    
+    private static long sizeof(Object o) {
+        if (o instanceof String) {
+            return
+                8 + // object header used by the VM
+                8 + // 64-bit reference to char array (value)
+                8 + ((String) o).length() * 2 + // character array itself (object header + 16-bit chars)
+                4 + // offset integer
+                4 + // count integer
+                4; // cached hash code
+        }
+        throw new IllegalArgumentException("Unknown object "+o.getClass());
     }
 
     public static class ContentKey {
 
-        private final String uri;
+        final String uri;
 
         public ContentKey(String uri) {
             this.uri = uri;
+        }
+        
+        public long getMemUsage() {
+            // Just an estimate
+            return
+                sizeof(uri);
         }
 
         public String getUri() {
@@ -336,9 +387,7 @@ public class ContentsCache {
 
         @Override
         public int hashCode() {
-            int hash = 3;
-            hash = 61 * hash + Objects.hashCode(this.uri);
-            return hash;
+            return Objects.hashCode(this.uri);
         }
 
         @Override
@@ -360,9 +409,18 @@ public class ContentsCache {
         }
 
     }
-
+    
+    @VisibleForTesting
+    CacheImpl getInnerCache() {
+        return this.cache;
+    }
+    
     public int getCacheSize() {
-        return cache.size();
+        return (int) cache.getSize();
+    }
+    
+    public long getCacheMemSize() {
+        return cache.getMemSize();
     }
 
     public CacheStats getStats() {
@@ -371,12 +429,12 @@ public class ContentsCache {
 
     private void cacheContent(ContentReceiver receiver) {
         ContentPayload content = receiver.content;
+        // Now we have the actual content size
         if (!isContentLengthCachable(content.heapSize + content.directSize)) {
             cache.remove(receiver.key); // just for make sure
             return;
         }
         cache.put(receiver.key, content);
-        stats.cached(content.heapSize, content.directSize);
     }
 
     public class ContentReceiver {
@@ -487,26 +545,9 @@ public class ContentsCache {
     }
 
     private class Evictor implements Runnable {
-
         @Override
         public void run() {
-            List<ContentKey> toRemove = new ArrayList<>();
-            long now = System.currentTimeMillis();
-            cache.forEach((ContentKey k, ContentPayload u) -> {
-                if (u.expiresTs < now) {
-                    toRemove.add(k);
-                }
-            });
-            toRemove.forEach((ContentKey k) -> {
-                ContentPayload removed = cache.remove(k);
-                if (removed != null) {
-                    removed.clear();
-                    stats.released(removed.heapSize, removed.directSize);
-                }
-            });
-            if (!toRemove.isEmpty()) {
-                LOG.log(Level.INFO, "evicted {0} contents", toRemove.size());
-            }
+            cache.evict();
         }
     }
 }
