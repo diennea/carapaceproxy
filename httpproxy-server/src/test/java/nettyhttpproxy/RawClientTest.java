@@ -31,8 +31,10 @@ import java.io.IOException;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.utils.RawHttpClient;
+import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import org.junit.Rule;
@@ -289,6 +291,20 @@ public class RawClientTest {
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
+    }
+    
+    @Test
+    public void endpointKeyTest() throws Exception {
+        {
+            EndpointKey entryPoint = EndpointKey.make("localhost:8080");
+            assertThat(entryPoint.getHost(), is("localhost"));
+            assertThat(entryPoint.getPort(), is(8080));
+        }
+        {
+            EndpointKey entryPoint = EndpointKey.make("localhost");
+            assertThat(entryPoint.getHost(), is("localhost"));
+            assertThat(entryPoint.getPort(), is(0));
+        }
     }
 
 }

@@ -13,7 +13,6 @@
                     <th scope="col">ID</th>
                     <th scope="col">Hostname</th>
                     <th scope="col">SSLCertificateFile</th>
-                    <th scope="col">SSLCertificatePassword</th>
                 </tr>
             </thead>
             <tbody>
@@ -27,8 +26,6 @@
                     <td>{{(item.id)}}</td>
                     <td>{{(item.hostname)}}</td>
                     <td>{{(item.sslCertificateFile)}}</td>
-                    <td>{{(item.sslCertificatePassword)}}</td>
-
                 </router-link>
             </tbody>
         </table>

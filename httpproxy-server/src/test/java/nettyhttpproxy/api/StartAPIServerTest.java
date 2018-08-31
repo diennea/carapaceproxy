@@ -113,7 +113,6 @@ public class StartAPIServerTest {
                 // no backend configured
                 assertTrue(s.equals("{}"));
             }
-
         }
     }
 
@@ -176,8 +175,6 @@ public class StartAPIServerTest {
 
                 assertThat(json, containsString("127.0.0.1"));
                 assertThat(json, containsString("conf/mock2.file"));
-
-                assertThat(json, containsString("mock-pass"));
             }
 
             // single cert request to /{certId}

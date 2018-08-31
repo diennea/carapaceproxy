@@ -11,7 +11,6 @@
                             <li class="list-group-item"><strong>Certificate id</strong> {{certificate.id}}</li>
                             <li class="list-group-item"><strong>Hostname:</strong> {{certificate.hostname}}</li>
                             <li class="list-group-item"><strong>SSL Certificate file:</strong> {{certificate.sslCertificateFile}}</li>
-                            <li class="list-group-item"><strong>SSL Certificate password:</strong> {{certificate.sslCertificatePassword}}</li>
                         </ul>
                     </div>
                 </div>

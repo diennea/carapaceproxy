@@ -47,9 +47,6 @@ public class BackendsResource {
 
     public static final class BackendBean {
 
-        private static final String STATUS_UP = "UP";
-        private static final String STATUS_DOWN = "DOWN";
-
         private String host;
         private int port;
         private long openConnections;
@@ -60,7 +57,7 @@ public class BackendsResource {
         private boolean reportedAsUnreachable;
         private long reportedAsUnreachableTs;
         private long lastProbeTs;
-        private String lastProbeSuccess;
+        private boolean lastProbeSuccess;
         private String lastProbeResult;
 
         public BackendBean(String host, int port) {
@@ -104,7 +101,7 @@ public class BackendsResource {
             return lastProbeTs;
         }
 
-        public String getLastProbeSuccess() {
+        public boolean getLastProbeSuccess() {
             return lastProbeSuccess;
         }
 
@@ -138,8 +135,8 @@ public class BackendsResource {
                 bean.reportedAsUnreachable = bhs.isReportedAsUnreachable();
                 bean.reportedAsUnreachableTs = bhs.getReportedAsUnreachableTs();
                 bean.lastProbeTs = bhs.getLastProbeTs();
-                bean.lastProbeSuccess = bhs.isLastProbeSuccess() ? BackendBean.STATUS_UP : BackendBean.STATUS_DOWN;
-                
+                bean.lastProbeSuccess = bhs.isLastProbeSuccess();
+
                 if (bhs.getLastProbeResult() != null) {
                     String result = bhs.getLastProbeResult().replaceAll("(\r\n|\n)", "<br>");
                     bean.lastProbeResult = StringUtils.htmlEncode(result);

@@ -17,14 +17,16 @@ function mockRequest(url) {
         };
         case "/api/backends": return {
             'localhost8086': { host: 'test', port: 3000, openConnections: 50, totalRequests: 99, lastActivityTs: 1012123, 
-            isAvailable: true, reportedAsUnreachable: false, reportedAsUnreachableTs: 1012123, lastProbeTs: 1012123, lastProbeSuccess: "DOWN", lastProbeResult: "MOCK1<br>MOCK1<br>MOCK1"},
-            'localhost8000': { host: 'test2', port: 3080, openConnections: 50, totalRequests: 99, lastActivityTs: 1012123,
-            isAvailable: true, reportedAsUnreachable: false, reportedAsUnreachableTs: 1012123, lastProbeTs: 1012123, lastProbeSuccess: "DOWN", lastProbeResult: "MOCK2<br>MOCK2<br>MOCK2"}
+            isAvailable: true, reportedAsUnreachable: false, reportedAsUnreachableTs: 1012123, lastProbeTs: 1012123, lastProbeSuccess: true, lastProbeResult: "MOCK1<br>MOCK1<br>MOCK1"},
+            'localhost3000': { host: 'test', port: 3000, openConnections: 50, totalRequests: 99, lastActivityTs: 1012123, 
+            isAvailable: true, reportedAsUnreachable: false, reportedAsUnreachableTs: 1012123, lastProbeTs: 1012123, lastProbeSuccess: true, lastProbeResult: "MOCK1<br>MOCK1<br>MOCK1"},
+            'localhost8000': { host: 'test2', port: 8080, openConnections: 50, totalRequests: 99, lastActivityTs: 0,
+            isAvailable: false, reportedAsUnreachable: true, reportedAsUnreachableTs: 0, lastProbeTs: 0, lastProbeSuccess: false, lastProbeResult: "MOCK2<br>MOCK2<br>MOCK2"}
         };
         case "/api/certificates": return {
-            "*": { id: "*", hostname: "hostname*", sslCertificateFile: "conf/localhost.p12", sslCertificatePassword: "test0"},
-            "cert1": { id: "cert1", hostname: "hostname1", sslCertificateFile: "conf/hostname1.p12", sslCertificatePassword: "test1" },
-            "cert2": { id: "cert2", hostname: "hostnam2", sslCertificateFile: "conf/hostname2.p12", sslCertificatePassword: "test2" }
+            "*": { id: "*", hostname: "hostname*", sslCertificateFile: "conf/localhost.p12"},
+            "cert1": { id: "cert1", hostname: "hostname1", sslCertificateFile: "conf/hostname1.p12"},
+            "cert2": { id: "cert2", hostname: "hostnam2", sslCertificateFile: "conf/hostname2.p12"}
         }
         case "/api/listeners": return {
             "0.0.0.0:4089": { host: "0.0.0.0", port: 4089, ssl: true, ocps: true, sslCiphers: "ciph1", defaultCertificate: "*" },
@@ -32,7 +34,7 @@ function mockRequest(url) {
         }
         default:
             if (url.includes("/api/certificates/")) {
-                return {"*": {"id": "*", "hostname": "", "sslCertificateFile": "conf/localhost.p12", "sslCertificatePassword": "testproxy"}};
+                return {"*": {"id": "*", "hostname": "", "sslCertificateFile": "conf/localhost.p12"}};
             }
     }
     return {};

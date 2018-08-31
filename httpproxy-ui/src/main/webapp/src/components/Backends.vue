@@ -1,6 +1,29 @@
 <style scoped>
-    table th, table tr {
+    table th,
+    table tr td .label {
         font-size: 13px;
+    }
+    table tr td .label-error{
+        background-color: #f44336;
+        border-radius: 2px;
+
+        text-transform: uppercase;
+        text-align: center;
+        font-weight: bold;
+        color: white;
+
+        padding: 10px;
+    }
+    table tr td .label-success{
+        background-color: #4CAF50;
+        border-radius: 2px;
+        
+        text-transform: uppercase;
+        font-weight: bold;
+        text-align: center;
+        color: white;
+
+        padding: 10px;
     }
 </style>
 
@@ -24,16 +47,34 @@
             </thead>
             <tbody>
                 <tr v-for="item of backends" :key="item.id">
-                    <td>{{formatBackendName(item.host, item.port)}}</td>
-                    <td>{{item.openConnections}}</td>
-                    <td>{{item.totalRequests}}</td>
-                    <td>{{formatDate(item.lastActivityTs)}}</td>
-                    <td>{{item.isAvailable}}</td>
-                    <td>{{item.reportedAsUnreachable}}</td>
-                    <td>{{formatDate(item.reportedAsUnreachableTs)}}</td>
-                    <td>{{item.lastProbeSuccess}}</td>
-                    <td>{{formatDate(item.lastProbeTs)}}</td>
-                    <td v-html="item.lastProbeResult"></td>
+                    <td><div class="label">
+                        {{formatBackendName(item.host, item.port)}}
+                    </div></td>
+                    <td><div class="label">
+                        {{item.openConnections}}
+                    </div></td>
+                    <td><div class="label">
+                        {{item.totalRequests}}
+                    </div></td>
+                    <td><div class="label">
+                        {{formatDate(item.lastActivityTs)}}
+                    </div></td>
+                    <td><div class="label" v-bind:class="[item.isAvailable ? 'label-success' : 'label-error']">
+                        {{formatStatus(item.isAvailable)}}
+                    </div></td>
+                    <td><div class="label" v-bind:class="[!item.reportedAsUnreachable ? 'label-success' : 'label-error']">
+                        {{formatUnreachable(item.reportedAsUnreachable)}}
+                    </div></td>
+                    <td><div class="label">
+                        {{formatDate(item.reportedAsUnreachableTs)}}
+                    </div></td>
+                    <td><div class="label" v-bind:class="[item.lastProbeSuccess ? 'label-success' : 'label-error']">
+                        {{formatStatus(item.lastProbeSuccess)}}
+                    </div></td>
+                    <td><div class="label">
+                        {{formatDate(item.lastProbeTs)}}
+                    </div></td>
+                    <td><div class="label" v-html="item.lastProbeResult"></div></td>
                 </tr>
             </tbody>
         </table>
@@ -62,9 +103,24 @@
         },
         methods: {
             formatBackendName(host, port) {
-                return host + ":" + port
+                return host + ":" + port + ""
+            },
+            formatUnreachable(status) {
+                if (status === true) {
+                    return "UNREACHABLE" 
+                }
+                return "OK"
+            },
+            formatStatus(status) {
+                if (status === true) {
+                    return "UP"
+                }
+                return "DOWN"
             },
             formatDate(value) {
+                if (!value || value <= 0) {
+                    return '';
+                }
                 return new Date(value).toUTCString();
             }
         }

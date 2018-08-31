@@ -47,13 +47,11 @@ public class CertificatesResource {
         private final String id;
         private final String hostname;
         private final String sslCertificateFile;
-        private final String sslCertificatePassword;
 
-        public CertificateBean(String id, String hostname, String sslCertificateFile, String sslCertificatePassword) {
+        public CertificateBean(String id, String hostname, String sslCertificateFile) {
             this.id = id;
             this.hostname = hostname;
             this.sslCertificateFile = sslCertificateFile;
-            this.sslCertificatePassword = sslCertificatePassword;
         }
 
         public String getId() {
@@ -66,10 +64,6 @@ public class CertificatesResource {
 
         public String getSslCertificateFile() {
             return sslCertificateFile;
-        }
-
-        public String getSslCertificatePassword() {
-            return sslCertificatePassword;
         }
 
     }
@@ -86,8 +80,7 @@ public class CertificatesResource {
             CertificateBean certBean = new CertificateBean(
                     certificate.getId(),
                     certificate.getHostname(),
-                    certificate.getSslCertificateFile(),
-                    certificate.getSslCertificatePassword()
+                    certificate.getSslCertificateFile()
             );
             res.put(certificateEntry.getKey(), certBean);
         }
@@ -109,8 +102,7 @@ public class CertificatesResource {
             CertificateBean certBean = new CertificateBean(
                     certificate.getId(),
                     certificate.getHostname(),
-                    certificate.getSslCertificateFile(),
-                    certificate.getSslCertificatePassword()
+                    certificate.getSslCertificateFile()
             );
             res.put(certId, certBean);
         }
