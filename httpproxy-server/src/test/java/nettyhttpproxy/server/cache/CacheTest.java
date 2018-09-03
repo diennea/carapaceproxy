@@ -28,14 +28,19 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import java.util.List;
+import java.util.Map;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
 import nettyhttpproxy.server.config.SSLCertificateConfiguration;
 import nettyhttpproxy.utils.RawHttpClient;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import org.junit.Rule;
 import org.junit.Test;
@@ -67,6 +72,8 @@ public class CacheTest {
             server.start();
             int port = server.getLocalPort();
 
+            long startTs = System.currentTimeMillis();
+        
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
@@ -101,6 +108,17 @@ public class CacheTest {
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(2, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
+            
+            List<Map<String,Object>> inspect = server.getCache().inspectCache();
+            System.out.println("inspect: "+inspect);
+            assertThat(inspect.size(), is(1));
+            assertThat(inspect.get(0).get("uri"), is("/index.html"));
+            assertThat(inspect.get(0).get("heapSize"), is(not(0)));
+            assertThat(inspect.get(0).get("directSize"), is(not(0)));
+            assertThat(inspect.get(0).get("totalSize"), is(not(0)));
+            assertTrue((long) inspect.get(0).get("creationTs") >= startTs);
+            assertTrue((long) inspect.get(0).get("expiresTs") >= startTs + ContentsCache.DEFAULT_TTL);
+            assertThat(inspect.get(0).get("hits"), is(2));
         }
 
         TestUtils.waitForCondition(() -> {

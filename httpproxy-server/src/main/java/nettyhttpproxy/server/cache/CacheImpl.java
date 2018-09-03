@@ -70,7 +70,7 @@ interface CacheImpl {
      * @return The removed element
      */
     public void remove(ContentKey key);
-
+    
     /**
      * Tries to force eviction on cache
      */
@@ -86,5 +86,15 @@ interface CacheImpl {
      * Clears the cache and free all its resources
      */
     public void close();
+    
+    interface CacheEntriesSink {
+        public void accept(ContentKey key, ContentPayload payload);
+    } 
+    
+    /**
+     * Calls "sink" for every current element in cache
+     * @param sink 
+     */
+    public void inspectCache(CacheEntriesSink sink);
     
 }

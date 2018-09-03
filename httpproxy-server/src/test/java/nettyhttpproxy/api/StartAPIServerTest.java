@@ -26,6 +26,7 @@ import nettyhttpproxy.server.config.NetworkListenerConfiguration;
 import nettyhttpproxy.server.config.SSLCertificateConfiguration;
 import nettyhttpproxy.utils.RawHttpClient;
 import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
@@ -81,14 +82,14 @@ public class StartAPIServerTest {
                 RawHttpClient.HttpResponse resp = client.get("/api/cache/info");
                 String s = resp.getBodyString();
                 System.out.println("s:" + s);
-                assertTrue(s.equals("{\"result\":\"ok\",\"hits\":0,\"directMemoryUsed\":0,\"misses\":0,\"heapMemoryUsed\":0,\"cachesize\":0}"));
+                assertThat(s, is("{\"result\":\"ok\",\"hits\":0,\"directMemoryUsed\":0,\"misses\":0,\"heapMemoryUsed\":0,\"totalMemoryUsed\":0,\"cachesize\":0}"));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
                 RawHttpClient.HttpResponse resp = client.get("/api/cache/flush");
                 String s = resp.getBodyString();
                 System.out.println("s:" + s);
-                assertTrue(s.equals("{\"result\":\"ok\",\"cachesize\":0}"));
+                assertThat(s, is("{\"result\":\"ok\",\"cachesize\":0}"));
             }
         }
     }

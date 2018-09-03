@@ -20,6 +20,7 @@
 package nettyhttpproxy.api;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import javax.servlet.ServletContext;
 import javax.ws.rs.GET;
@@ -69,5 +70,13 @@ public class CacheResource {
         res.put("heapMemoryUsed", stats.getHeapMemoryUsed());
         res.put("totalMemoryUsed", stats.getTotalMemoryUsed());
         return res;
+    }
+    
+    @Path("/inspect")
+    @GET
+    public List<Map<String, Object>> inspect() {
+        HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
+        ContentsCache cache = server.getCache();
+        return cache.inspectCache();
     }
 }

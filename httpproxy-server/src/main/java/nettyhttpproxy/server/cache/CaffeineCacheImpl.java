@@ -153,6 +153,9 @@ class CaffeineCacheImpl implements CacheImpl {
             cached = null;
         }
         stats.update(cached != null);
+        if (cached != null) {
+            cached.hits++;
+        }
         return cached;
     }
 
@@ -184,5 +187,12 @@ class CaffeineCacheImpl implements CacheImpl {
     @Override
     public void close() {
         clear();
+    }
+
+    @Override
+    public void inspectCache(CacheEntriesSink sink) {
+        cache.asMap().forEach((key, payload) -> {
+            sink.accept(key, payload);
+        });
     }
 }

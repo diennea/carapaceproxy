@@ -35,7 +35,9 @@ import static io.netty.handler.codec.http.HttpStatusClass.REDIRECTION;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -62,7 +64,7 @@ public class ContentsCache {
     private final long cacheMaxSize;
     private final long cacheMaxFileSize;
     
-    private static final long DEFAULT_TTL = 1000 * 60 * 60;
+    static final long DEFAULT_TTL = 1000 * 60 * 60;
     
     public ContentsCache(StatsLogger mainLogger, RuntimeServerConfiguration currentConfiguration) {
         StatsLogger cacheScope = mainLogger.scope("cache");
@@ -208,7 +210,23 @@ public class ContentsCache {
         LOG.info("clearing cache");
         return this.cache.clear();
     }
-
+    
+    public List<Map<String,Object>> inspectCache() {
+        List<Map<String,Object>> res = new ArrayList<>();
+        this.cache.inspectCache((key, payload) -> {
+            Map<String,Object> entry = new HashMap<>();
+            entry.put("uri", key.uri);
+            entry.put("heapSize", payload.heapSize);
+            entry.put("directSize", payload.directSize);
+            entry.put("totalSize", key.getMemUsage() + payload.getMemUsage());
+            entry.put("creationTs", payload.creationTs);
+            entry.put("expiresTs", payload.expiresTs);
+            entry.put("hits", payload.hits);
+            res.add(entry);
+        });
+        return res;
+    }
+    
     public static final class ContentSender {
 
         private final ContentKey key;
@@ -251,6 +269,7 @@ public class ContentsCache {
         long expiresTs = -1;
         long heapSize;
         long directSize;
+        int hits;
 
         @Override
         public String toString() {
@@ -277,12 +296,17 @@ public class ContentsCache {
             return directSize;
         }
 
+        public int getHits() {
+            return hits;
+        }
+
         public long getMemUsage() {
             // Just an estimate
             return
                 chunks.size() * 8 +
                 directSize + heapSize + 
-                8 * 5; // other fields
+                8 * 5 + // other fields
+                4 * 1;
         }
 
         public List<HttpObject> getChunks() {
