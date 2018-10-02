@@ -21,11 +21,12 @@ package nettyhttpproxy.server;
 
 import com.google.common.annotations.VisibleForTesting;
 import java.io.File;
+import java.lang.reflect.InvocationTargetException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Properties;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.servlet.DispatcherType;
@@ -35,9 +36,9 @@ import nettyhttpproxy.api.ForceHeadersAPIRequestsFilter;
 import nettyhttpproxy.client.ConnectionsManager;
 import nettyhttpproxy.client.impl.ConnectionsManagerImpl;
 import nettyhttpproxy.configstore.ConfigurationStore;
-import nettyhttpproxy.configstore.PropertiesConfigurationStore;
 import nettyhttpproxy.server.backends.BackendHealthManager;
 import nettyhttpproxy.server.cache.ContentsCache;
+import nettyhttpproxy.server.config.ConfigurationChangeInProgressException;
 import nettyhttpproxy.server.config.ConfigurationNotValidException;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
 import nettyhttpproxy.server.config.RequestFilterConfiguration;
@@ -59,21 +60,25 @@ public class HttpProxyServer implements AutoCloseable {
 
     private static final Logger LOG = Logger.getLogger(HttpProxyServer.class.getName());
 
-    private final EndpointMapper mapper;
-    private final List<RequestFilter> filters;
-    private ConnectionsManager connectionsManager;
     private final Listeners listeners;
-    private volatile boolean started;
-    private ContentsCache cache;
+    private final ContentsCache cache;
     private final StatsLogger mainLogger;
-
     private final File basePath;
     private final StaticContentsManager staticContentsManager = new StaticContentsManager();
     private final BackendHealthManager backendHealthManager;
-    private RuntimeServerConfiguration currentConfiguration;
-
-    private PrometheusMetricsProvider statsProvider;
+    private final ConnectionsManager connectionsManager;
+    private final PrometheusMetricsProvider statsProvider;
     private final PropertiesConfiguration statsProviderConfig = new PropertiesConfiguration();
+
+    private RuntimeServerConfiguration currentConfiguration;
+    private EndpointMapper mapper;
+    private List<RequestFilter> filters;
+    private volatile boolean started;
+
+    /**
+     * Guards concurrent configuration changes
+     */
+    private final ReentrantLock configurationLock = new ReentrantLock();
 
     private Server adminserver;
     private boolean adminServerEnabled;
@@ -90,11 +95,15 @@ public class HttpProxyServer implements AutoCloseable {
         this.currentConfiguration = new RuntimeServerConfiguration();
         this.backendHealthManager = new BackendHealthManager(currentConfiguration, mapper, mainLogger);
         this.listeners = new Listeners(this);
+        this.cache = new ContentsCache(mainLogger, currentConfiguration);
+        this.connectionsManager = new ConnectionsManagerImpl(currentConfiguration,
+                mainLogger, backendHealthManager);
     }
-    
-    public HttpProxyServer(String host, int port, EndpointMapper mapper) throws ConfigurationNotValidException {
-        this(mapper, new File(".").getAbsoluteFile());
-        currentConfiguration.addListener(new NetworkListenerConfiguration(host, port));
+
+    public static HttpProxyServer buildForTests(String host, int port, EndpointMapper mapper) throws ConfigurationNotValidException {
+        HttpProxyServer res = new HttpProxyServer(mapper, new File(".").getAbsoluteFile());
+        res.currentConfiguration.addListener(new NetworkListenerConfiguration(host, port));
+        return res;
     }
 
     public void startAdminInterface() throws Exception {
@@ -121,30 +130,25 @@ public class HttpProxyServer implements AutoCloseable {
             WebAppContext webApp = new WebAppContext(webUi.getAbsolutePath(), "/ui");
             contexts.addHandler(webApp);
         } else {
-            System.out.println("Cannot find " + webUi.getAbsolutePath() + " directory. Web UI will not be deployed");
+            LOG.severe("Cannot find " + webUi.getAbsolutePath() + " directory. Web UI will not be deployed");
         }
 
         adminserver.start();
         String apiUrl = "http://" + adminServerHost + ":" + adminServerPort + "/api";
         String uiUrl = "http://" + adminServerHost + ":" + adminServerPort + "/ui";
         String metricsUrl = "http://" + adminServerHost + ":" + adminServerPort + "/metrics";
-        System.out.println("Base Admin UI url: " + uiUrl);
-        System.out.println("Base Admin/API url: " + apiUrl);
-        System.out.println("Prometheus Metrics url: " + metricsUrl);
+        LOG.info("Base Admin UI url: " + uiUrl);
+        LOG.info("Base Admin/API url: " + apiUrl);
+        LOG.info("Prometheus Metrics url: " + metricsUrl);
 
     }
 
     public void start() throws InterruptedException, ConfigurationNotValidException {
         try {
             started = true;
-            bootFilters();
-            this.cache = new ContentsCache(mainLogger, currentConfiguration);
-            this.connectionsManager = new ConnectionsManagerImpl(currentConfiguration,
-                    mainLogger, backendHealthManager);
-
-            listeners.start();
+            connectionsManager.start();
             cache.start();
-
+            listeners.start();
             backendHealthManager.start();
         } catch (RuntimeException err) {
             close();
@@ -199,14 +203,49 @@ public class HttpProxyServer implements AutoCloseable {
         return backendHealthManager;
     }
 
-    public void configure(Properties properties) throws ConfigurationNotValidException {
-        PropertiesConfigurationStore simpleStore = new PropertiesConfigurationStore(properties);
-        configure(simpleStore);
+    private static EndpointMapper buildMapper(String className, ConfigurationStore properties) throws ConfigurationNotValidException {
+        try {
+            EndpointMapper res = (EndpointMapper) Class.forName(className).getConstructor().newInstance();
+            res.configure(properties);
+            return res;
+        } catch (ClassNotFoundException err) {
+            throw new ConfigurationNotValidException(err);
+        } catch (IllegalAccessException | IllegalArgumentException
+                | InstantiationException | NoSuchMethodException
+                | SecurityException | InvocationTargetException err) {
+            throw new RuntimeException(err);
+        }
     }
 
-    public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
-        currentConfiguration.configure(properties);
+    /**
+     * Configure the service BEFORE starting it.
+     *
+     * @param properties
+     * @throws ConfigurationNotValidException
+     * @throws InterruptedException
+     * @see
+     * #applyDynamicConfiguration(nettyhttpproxy.server.RuntimeServerConfiguration,
+     * nettyhttpproxy.configstore.ConfigurationStore)
+     */
+    public void configure(ConfigurationStore properties) throws ConfigurationNotValidException, InterruptedException {
+        if (started) {
+            throw new IllegalStateException("server already started");
+        }
+        applyStaticConfiguration(properties);
 
+        RuntimeServerConfiguration newConfiguration = buildValidConfiguration(properties);
+
+        try {
+            applyDynamicConfiguration(newConfiguration, properties);
+        } catch (ConfigurationChangeInProgressException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+    }
+
+    private void applyStaticConfiguration(ConfigurationStore properties) throws NumberFormatException {
+        if (started) {
+            throw new IllegalStateException("server already started");
+        }
         statsProviderConfig.setProperty(PrometheusMetricsProvider.PROMETHEUS_STATS_HTTP_ENABLE, false);
         properties.forEach((String key, String value) -> {
             statsProviderConfig.setProperty(key + "", value);
@@ -221,14 +260,15 @@ public class HttpProxyServer implements AutoCloseable {
         int healthProbePeriod = Integer.parseInt(properties.getProperty("healthmanager.period", "0"));
         LOG.info("healthmanager.period=" + healthProbePeriod);
         backendHealthManager.setPeriod(healthProbePeriod);
-
     }
 
-    private void bootFilters() throws ConfigurationNotValidException {
+    private static List<RequestFilter> buildFilters(RuntimeServerConfiguration currentConfiguration) throws ConfigurationNotValidException {
+        final List<RequestFilter> newFilters = new ArrayList<>();
         for (RequestFilterConfiguration filterConfig : currentConfiguration.getRequestFilters()) {
             RequestFilter filter = buildRequestFilter(filterConfig);
-            filters.add(filter);
+            newFilters.add(filter);
         }
+        return newFilters;
     }
 
     @VisibleForTesting
@@ -237,6 +277,7 @@ public class HttpProxyServer implements AutoCloseable {
             throw new IllegalStateException("server already started");
         }
         currentConfiguration.addRequestFilter(filter);
+        this.filters = buildFilters(currentConfiguration);
     }
 
     @VisibleForTesting
@@ -245,6 +286,11 @@ public class HttpProxyServer implements AutoCloseable {
             throw new IllegalStateException("server already started");
         }
         currentConfiguration.addListener(configuration);
+        try {
+            listeners.reloadConfiguration(currentConfiguration);
+        } catch (InterruptedException ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 
     @VisibleForTesting
@@ -253,6 +299,11 @@ public class HttpProxyServer implements AutoCloseable {
             throw new IllegalStateException("server already started");
         }
         currentConfiguration.addCertificate(sslCertificateConfiguration);
+        try {
+            listeners.reloadConfiguration(currentConfiguration);
+        } catch (InterruptedException ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 
     public EndpointMapper getMapper() {
@@ -281,6 +332,50 @@ public class HttpProxyServer implements AutoCloseable {
 
     public Listeners getListeners() {
         return listeners;
+    }
+
+    public RuntimeServerConfiguration buildValidConfiguration(ConfigurationStore simpleStore) throws ConfigurationNotValidException {
+        RuntimeServerConfiguration newConfiguration = new RuntimeServerConfiguration();
+        newConfiguration.configure(simpleStore);
+        // creating a mapper validates the configuration
+        buildMapper(newConfiguration.getMapperClassname(), simpleStore);
+        return newConfiguration;
+    }
+
+    /**
+     * Apply a new configuration. The configuration MUST be valid
+     *
+     * @param newConfiguration
+     * @param simpleStore
+     * @throws InterruptedException
+     * @see
+     * #buildValidConfiguration(nettyhttpproxy.configstore.ConfigurationStore)
+     */
+    public void applyDynamicConfiguration(RuntimeServerConfiguration newConfiguration, ConfigurationStore simpleStore)
+            throws InterruptedException, ConfigurationChangeInProgressException {
+        if (!configurationLock.tryLock()) {
+            throw new ConfigurationChangeInProgressException();
+        }
+        try {
+            EndpointMapper newMapper = buildMapper(newConfiguration.getMapperClassname(), simpleStore);
+            this.filters = buildFilters(newConfiguration);
+            this.backendHealthManager.reloadConfiguration(newConfiguration);
+            this.listeners.reloadConfiguration(newConfiguration);
+            this.cache.reloadConfiguration(newConfiguration);
+            this.mapper = newMapper;
+            this.connectionsManager.applyNewConfiguration(newConfiguration);
+            this.currentConfiguration = newConfiguration;
+        } catch (ConfigurationNotValidException err) {
+            // impossible to have a non valid configuration here
+            throw new IllegalStateException(err);
+        } finally {
+            configurationLock.unlock();
+        }
+    }
+
+    @VisibleForTesting
+    public void setMapper(EndpointMapper mapper) {
+        this.mapper = mapper;
     }
 
 }

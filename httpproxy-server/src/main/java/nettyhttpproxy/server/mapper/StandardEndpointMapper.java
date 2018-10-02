@@ -70,6 +70,7 @@ public class StandardEndpointMapper extends EndpointMapper {
         this.backendSelector = backendSelector;
     }
 
+    @Override
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
 
         addAction(new ActionConfiguration("proxy-all", ActionConfiguration.TYPE_PROXY, DirectorConfiguration.DEFAULT, null, -1));

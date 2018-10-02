@@ -22,9 +22,11 @@ package nettyhttpproxy;
 import io.netty.handler.codec.http.HttpRequest;
 import java.util.Map;
 import nettyhttpproxy.client.EndpointKey;
+import nettyhttpproxy.configstore.ConfigurationStore;
 import nettyhttpproxy.server.RequestHandler;
 import nettyhttpproxy.server.backends.BackendHealthManager;
 import nettyhttpproxy.server.config.BackendConfiguration;
+import nettyhttpproxy.server.config.ConfigurationNotValidException;
 
 /**
  * Maps requests to a remote HTTP server
@@ -46,6 +48,9 @@ public abstract class EndpointMapper {
     }
 
     public void endpointFailed(EndpointKey key, Throwable error) {
+    }
+    
+    public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
     }
 
 }

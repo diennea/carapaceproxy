@@ -21,6 +21,7 @@ package nettyhttpproxy.client;
 
 import java.util.Map;
 import nettyhttpproxy.EndpointStats;
+import nettyhttpproxy.server.RuntimeServerConfiguration;
 
 /**
  * Handles connection to all the endpoints
@@ -30,18 +31,27 @@ import nettyhttpproxy.EndpointStats;
 public interface ConnectionsManager extends AutoCloseable {
 
     /**
-     * Obtain a connection to the requested endpoint. Connections are pooled, so the returned object MUST be returned to
-     * the pool
+     * Obtain a connection to the requested endpoint. Connections are pooled, so
+     * the returned object MUST be returned to the pool
      *
      * @param key
      * @return
      * @throws nettyhttpproxy.client.EndpointNotAvailableException
      */
     EndpointConnection getConnection(EndpointKey key) throws EndpointNotAvailableException;
-
+    
+    void start();
+    
     @Override
-    public void close();
+    void close();
 
-    public ConnectionsManagerStats getStats();
+    ConnectionsManagerStats getStats();
+
+    /**
+     * Apply new configuration an runtime
+     *
+     * @param configuration
+     */
+    void applyNewConfiguration(RuntimeServerConfiguration configuration);
 
 }

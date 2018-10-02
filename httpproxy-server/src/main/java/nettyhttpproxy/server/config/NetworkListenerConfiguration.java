@@ -19,6 +19,8 @@
  */
 package nettyhttpproxy.server.config;
 
+import java.util.Objects;
+
 /**
  * Listens for connections on the network
  */
@@ -32,6 +34,64 @@ public class NetworkListenerConfiguration {
     private final String defaultCertificate;
     private final String sslTrustoreFile;
     private final String sslTrustorePassword;
+
+    public HostPort getKey() {
+        return new HostPort(host, port);
+    }
+
+    public static final class HostPort {
+
+        private final String host;
+        private final int port;
+
+        public HostPort(String host, int port) {
+            this.host = host;
+            this.port = port;
+        }
+
+        public String getHost() {
+            return host;
+        }
+
+        public int getPort() {
+            return port;
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 7;
+            hash = 43 * hash + Objects.hashCode(this.host);
+            hash = 43 * hash + this.port;
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null) {
+                return false;
+            }
+            if (getClass() != obj.getClass()) {
+                return false;
+            }
+            final HostPort other = (HostPort) obj;
+            if (this.port != other.port) {
+                return false;
+            }
+            if (!Objects.equals(this.host, other.host)) {
+                return false;
+            }
+            return true;
+        }
+
+        @Override
+        public String toString() {
+            return "HostPort{" + "host=" + host + ", port=" + port + '}';
+        }
+
+    }
 
     public NetworkListenerConfiguration(String host, int port) {
         this.host = host;
@@ -86,6 +146,59 @@ public class NetworkListenerConfiguration {
 
     public String getSslCiphers() {
         return sslCiphers;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 5;
+        hash = 29 * hash + Objects.hashCode(this.host);
+        hash = 29 * hash + this.port;
+        hash = 29 * hash + (this.ssl ? 1 : 0);
+        hash = 29 * hash + (this.ocps ? 1 : 0);
+        hash = 29 * hash + Objects.hashCode(this.sslCiphers);
+        hash = 29 * hash + Objects.hashCode(this.defaultCertificate);
+        hash = 29 * hash + Objects.hashCode(this.sslTrustoreFile);
+        hash = 29 * hash + Objects.hashCode(this.sslTrustorePassword);
+        return hash;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        final NetworkListenerConfiguration other = (NetworkListenerConfiguration) obj;
+        if (this.port != other.port) {
+            return false;
+        }
+        if (this.ssl != other.ssl) {
+            return false;
+        }
+        if (this.ocps != other.ocps) {
+            return false;
+        }
+        if (!Objects.equals(this.host, other.host)) {
+            return false;
+        }
+        if (!Objects.equals(this.sslCiphers, other.sslCiphers)) {
+            return false;
+        }
+        if (!Objects.equals(this.defaultCertificate, other.defaultCertificate)) {
+            return false;
+        }
+        if (!Objects.equals(this.sslTrustoreFile, other.sslTrustoreFile)) {
+            return false;
+        }
+        if (!Objects.equals(this.sslTrustorePassword, other.sslTrustorePassword)) {
+            return false;
+        }
+        return true;
     }
 
 }

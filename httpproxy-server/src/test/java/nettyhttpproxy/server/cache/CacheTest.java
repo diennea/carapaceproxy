@@ -68,12 +68,12 @@ public class CacheTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
             server.start();
             int port = server.getLocalPort();
 
             long startTs = System.currentTimeMillis();
-        
+
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
@@ -108,9 +108,9 @@ public class CacheTest {
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(2, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
-            
-            List<Map<String,Object>> inspect = server.getCache().inspectCache();
-            System.out.println("inspect: "+inspect);
+
+            List<Map<String, Object>> inspect = server.getCache().inspectCache();
+            System.out.println("inspect: " + inspect);
             assertThat(inspect.size(), is(1));
             assertThat(inspect.get(0).get("uri"), is("/index.html"));
             assertThat(inspect.get(0).get("heapSize"), is(not(0)));
@@ -146,7 +146,7 @@ public class CacheTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
             server.start();
             int port = server.getLocalPort();
 
@@ -309,7 +309,7 @@ public class CacheTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
             server.start();
             int port = server.getLocalPort();
 
@@ -379,7 +379,7 @@ public class CacheTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
             server.start();
             int port = server.getLocalPort();
 
@@ -449,7 +449,7 @@ public class CacheTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
             server.start();
             int port = server.getLocalPort();
 
@@ -496,7 +496,7 @@ public class CacheTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
             server.start();
             int port = server.getLocalPort();
 

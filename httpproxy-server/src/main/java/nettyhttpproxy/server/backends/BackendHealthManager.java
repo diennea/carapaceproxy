@@ -19,7 +19,11 @@
  */
 package nettyhttpproxy.server.backends;
 
+import com.google.common.annotations.VisibleForTesting;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -41,29 +45,29 @@ import org.apache.bookkeeper.stats.StatsLogger;
 public class BackendHealthManager implements Runnable {
 
     private static final Logger LOG = Logger.getLogger(BackendHealthManager.class.getName());
-    
-    private final RuntimeServerConfiguration conf;
+
     private final EndpointMapper mapper;
     private final StatsLogger mainLogger;
-    
+
     private ScheduledExecutorService timer;
+    // configured only at start
     private int period;
-    
+
+    // can change at runtime
+    private volatile int connectTimeout = 60000;
+
     private final ConcurrentHashMap<String, BackendHealthStatus> backends = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Gauge> gauges = new ConcurrentHashMap<>();
-    
+
     public BackendHealthManager(RuntimeServerConfiguration conf, EndpointMapper mapper, StatsLogger logger) {
-        
-        this.conf = conf;
+
         this.mapper = mapper;
         this.mainLogger = logger.scope("health");
 
         // will be overridden before start
         this.period = 60000;
-        
-        for (BackendConfiguration bconf: mapper.getBackends().values()) {
-            backends.put(bconf.toBackendId(), new BackendHealthStatus(bconf.toBackendId(), bconf));
-        }
+        this.connectTimeout = conf.getConnectTimeout();
+
     }
 
     public int getPeriod() {
@@ -103,35 +107,55 @@ public class BackendHealthManager implements Runnable {
 
     @Override
     public void run() {
-        for (BackendHealthStatus status : backends.values()) {
+        Collection<BackendConfiguration> backendConfigurations = mapper.getBackends().values();
+        for (BackendConfiguration bconf : backendConfigurations) {
+            String backendId = bconf.getHostPort();
+            BackendHealthStatus status = backends.computeIfAbsent(backendId, (id) -> new BackendHealthStatus(id));
             ensureGauge("backend_" + status.getId().replace(":", "_") + "_up", status);
-            
+
             BackendHealthCheck checkResult = BackendHealthCheck.check(
-                status.getConf().getHost(), status.getConf().getPort(), status.getConf().getProbePath(), conf.getConnectTimeout());
-            
+                    bconf.getHost(), bconf.getPort(), bconf.getProbePath(), connectTimeout);
+
             if (checkResult.isOk()) {
                 if (status.isReportedAsUnreachable()) {
-                    LOG.log(Level.WARNING, "backend {0} was unreachable, setting again to reachable. Response time {1}ms", 
-                        new Object[] {status.getId(), checkResult.getEndTs() - checkResult.getStartTs()});
+                    LOG.log(Level.WARNING, "backend {0} was unreachable, setting again to reachable. Response time {1}ms",
+                            new Object[]{status.getId(), checkResult.getEndTs() - checkResult.getStartTs()});
                     reportBackendReachable(status.getId());
                 } else {
-                    LOG.log(Level.INFO, "backend {0} seems reachable. Response time {1}ms", 
-                        new Object[] {status.getId(), checkResult.getEndTs() - checkResult.getStartTs()});
+                    LOG.log(Level.INFO, "backend {0} seems reachable. Response time {1}ms",
+                            new Object[]{status.getId(), checkResult.getEndTs() - checkResult.getStartTs()});
                 }
                 status.setLastProbeSuccess(true);
-                
+
             } else {
                 if (status.isReportedAsUnreachable()) {
-                    LOG.log(Level.INFO, "backend {0} still unreachable. Cause: {1}", new Object[] {status.getId(), checkResult.getResultStr()});
+                    LOG.log(Level.INFO, "backend {0} still unreachable. Cause: {1}", new Object[]{status.getId(), checkResult.getResultStr()});
                 } else {
-                    LOG.log(Level.WARNING, "backend {0} became unreachable. Cause: {1}", new Object[] {status.getId(), checkResult.getResultStr()});
+                    LOG.log(Level.WARNING, "backend {0} became unreachable. Cause: {1}", new Object[]{status.getId(), checkResult.getResultStr()});
                     reportBackendUnreachable(status.getId(), checkResult.getEndTs(), checkResult.getResultStr());
                 }
                 status.setLastProbeSuccess(false);
             }
-            
+
             status.setLastProbeResult(checkResult.getResultStr());
             status.setLastProbeTs(checkResult.getEndTs());
+        }
+        List<String> toRemove = new ArrayList<>();
+        for (String key : backends.keySet()) {
+            boolean found = false;
+            for (BackendConfiguration bconf : backendConfigurations) {
+                if (bconf.getHostPort().equals(key)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                toRemove.add(key);
+            }
+        }
+        if (!toRemove.isEmpty()) {
+            LOG.log(Level.INFO, "discarding backends {0}", toRemove);
+            toRemove.forEach(backends::remove);
         }
     }
 
@@ -151,12 +175,12 @@ public class BackendHealthManager implements Runnable {
         backend.reportAsUnreachable(timestamp);
     }
 
-    private BackendHealthStatus getBackendStatus(String id) {
-        BackendHealthStatus backend = backends.get(id);
-        if (backend == null) {
-            throw new RuntimeException("Unknown backend "+id);
+    private BackendHealthStatus getBackendStatus(String backendId) {
+        BackendHealthStatus status = backends.computeIfAbsent(backendId, (id) -> new BackendHealthStatus(id));
+        if (status == null) {
+            throw new RuntimeException("Unknown backend " + backendId);
         }
-        return backend;
+        return status;
     }
 
     public void reportBackendReachable(String id) {
@@ -171,6 +195,18 @@ public class BackendHealthManager implements Runnable {
     public boolean isAvailable(String id) {
         BackendHealthStatus backend = getBackendStatus(id);
         return backend != null && backend.isAvailable();
+    }
+
+    public void reloadConfiguration(RuntimeServerConfiguration newConfiguration) {
+        if (this.connectTimeout != newConfiguration.getConnectTimeout()) {
+            this.connectTimeout = newConfiguration.getConnectTimeout();
+            LOG.info("Applying new connect timeout " + this.connectTimeout + " ms");
+        }
+    }
+
+    @VisibleForTesting
+    public int getConnectTimeout() {
+        return connectTimeout;
     }
 
 }

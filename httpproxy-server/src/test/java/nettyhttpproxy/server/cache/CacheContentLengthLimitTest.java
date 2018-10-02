@@ -45,6 +45,7 @@ import org.junit.rules.TemporaryFolder;
  * @author francesco.caliumi
  */
 public class CacheContentLengthLimitTest {
+
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
 
@@ -55,37 +56,37 @@ public class CacheContentLengthLimitTest {
     public void testWithContentLenghtHeader() throws Exception {
 
         String body = "01234567890123456789";
-        
+
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "text/html")
                         .withHeader("Content-Length", body.length() + "")
                         .withBody(body)));
-        
+
         testFileSizeCache(body, false);
     }
-    
+
     @Test
     public void testWithoutContentLenghtHeader() throws Exception {
 
         String body = "01234567890123456789";
-        
+
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "text/html")
                         .withBody(body)));
-        
+
         testFileSizeCache(body, true);
     }
-    
+
     private void requestAndTestCached(
             String body, boolean chunked, EndpointKey key, HttpProxyServer server, boolean cached, int cacheSize) throws IOException {
-        
+
         int port = server.getLocalPort();
         ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
-        
+
         try (RawHttpClient client = new RawHttpClient("localhost", port)) {
             RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
             String s = resp.toString();
@@ -94,9 +95,9 @@ public class CacheContentLengthLimitTest {
                 assertTrue(s.endsWith(body));
             } else {
                 assertTrue(s.endsWith(
-                    Integer.toString(body.length(), 16)+"\r\n" +
-                    body+"\r\n" +
-                    "0\r\n\r\n"));
+                        Integer.toString(body.length(), 16) + "\r\n"
+                        + body + "\r\n"
+                        + "0\r\n\r\n"));
             }
             assertThat(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")), is(cached));
 
@@ -104,29 +105,30 @@ public class CacheContentLengthLimitTest {
             assertThat(server.getCache().getCacheSize(), is(cacheSize));
         }
     }
-    
+
     private void testFileSizeCache(String body, boolean chunked) throws Exception {
-        
+
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-        
+
         // No size checking
         {
             ConnectionsManagerStats stats;
-    
-            try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {            
+
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(0);
+                server.getCache().reloadConfiguration(server.getCurrentConfiguration());
                 server.start();
 
                 stats = server.getConnectionsManager().getStats();
-                
+
                 // First request
                 requestAndTestCached(body, chunked, key, server, false, 1);
-                
+
                 // Should be cached
                 requestAndTestCached(body, chunked, key, server, true, 1);
             }
-            
+
             TestUtils.waitForCondition(() -> {
                 EndpointStats epstats = stats.getEndpointStats(key);
                 return epstats.getTotalConnections().intValue() == 1
@@ -136,25 +138,25 @@ public class CacheContentLengthLimitTest {
 
             TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats));
         }
-            
 
         // Max size set to current content size
         {
             ConnectionsManagerStats stats;
-        
-            try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
+
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(body.length());
+                server.getCache().reloadConfiguration(server.getCurrentConfiguration());
                 server.start();
-                
+
                 stats = server.getConnectionsManager().getStats();
 
                 // First request
                 requestAndTestCached(body, chunked, key, server, false, 1);
-                
+
                 // Should be cached
                 requestAndTestCached(body, chunked, key, server, true, 1);
             }
-            
+
             TestUtils.waitForCondition(() -> {
                 EndpointStats epstats = stats.getEndpointStats(key);
                 return epstats.getTotalConnections().intValue() == 1
@@ -168,11 +170,12 @@ public class CacheContentLengthLimitTest {
         // Max size set to drop current content
         {
             ConnectionsManagerStats stats;
-            
-            try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
-                server.getCurrentConfiguration().setCacheMaxFileSize(body.length()-1);
+
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
+                server.getCurrentConfiguration().setCacheMaxFileSize(body.length() - 1);
+                server.getCache().reloadConfiguration(server.getCurrentConfiguration());
                 server.start();
-                
+
                 stats = server.getConnectionsManager().getStats();
 
                 // First request

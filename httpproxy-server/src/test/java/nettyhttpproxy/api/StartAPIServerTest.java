@@ -20,6 +20,7 @@
 package nettyhttpproxy.api;
 
 import java.util.Properties;
+import nettyhttpproxy.configstore.PropertiesConfigurationStore;
 import nettyhttpproxy.utils.TestEndpointMapper;
 import nettyhttpproxy.server.HttpProxyServer;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
@@ -30,7 +31,9 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 /**
  *
@@ -41,13 +44,13 @@ public class StartAPIServerTest {
     @Test
     public void test() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer("localhost", 0,
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0,
                 new TestEndpointMapper("localhost", 0));) {
             Properties prop = new Properties();
             prop.setProperty("http.admin.enabled", "true");
             prop.setProperty("http.admin.port", "8761");
             prop.setProperty("http.admin.host", "localhost");
-            server.configure(prop);
+            server.configure(new PropertiesConfigurationStore(prop));
             server.start();
             server.startAdminInterface();
 
@@ -68,13 +71,13 @@ public class StartAPIServerTest {
     @Test
     public void testCache() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer("localhost", 0,
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0,
                 new TestEndpointMapper("localhost", 0));) {
             Properties prop = new Properties();
             prop.setProperty("http.admin.enabled", "true");
             prop.setProperty("http.admin.port", "8761");
             prop.setProperty("http.admin.host", "localhost");
-            server.configure(prop);
+            server.configure(new PropertiesConfigurationStore(prop));
             server.start();
             server.startAdminInterface();
 
@@ -97,13 +100,13 @@ public class StartAPIServerTest {
     @Test
     public void testBackends() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer("localhost", 0,
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0,
                 new TestEndpointMapper("localhost", 0));) {
             Properties prop = new Properties();
             prop.setProperty("http.admin.enabled", "true");
             prop.setProperty("http.admin.port", "8761");
             prop.setProperty("http.admin.host", "localhost");
-            server.configure(prop);
+            server.configure(new PropertiesConfigurationStore(prop));
             server.start();
             server.startAdminInterface();
 
@@ -118,15 +121,66 @@ public class StartAPIServerTest {
     }
 
     @Test
-    public void testListeners() throws Exception {
+    public void testConfig() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer("localhost", 0,
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0,
                 new TestEndpointMapper("localhost", 0));) {
             Properties prop = new Properties();
             prop.setProperty("http.admin.enabled", "true");
             prop.setProperty("http.admin.port", "8761");
             prop.setProperty("http.admin.host", "localhost");
-            server.configure(prop);
+            server.configure(new PropertiesConfigurationStore(prop));
+            server.start();
+            server.startAdminInterface();
+
+            try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+                {
+                    String body = "connectionsmanager.maxconnectionsperendpoint=20";
+                    RawHttpClient.HttpResponse resp = client.executeRequest("POST /api/config/validate HTTP/1.1\r\n"
+                            + "Host: localhost\r\n"
+                            + "Content-Type: text/plain\r\n"
+                            + "Content-Length: " + body.length() + "\r\n"
+                            + "\r\n"
+                            + body);
+                    String s = resp.getBodyString();
+                    System.out.println("s:" + s);
+                    // no backend configured
+                    assertTrue(s.equals("{\"ok\":true,\"error\":null}"));
+                }
+
+            }
+            try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+                {
+                    String body = "connectionsmanager.maxconnectionsperendpoint=20-BAD-VALUE";
+                    RawHttpClient.HttpResponse resp = client.executeRequest("POST /api/config/validate HTTP/1.1\r\n"
+                            + "Host: localhost\r\n"
+                            + "Content-Type: text/plain\r\n"
+                            + "Content-Length: " + body.length() + "\r\n"
+                            + "\r\n"
+                            + body);
+                    String s = resp.getBodyString();
+                    System.out.println("s:" + s);
+                    // no backend configured
+                    assertTrue(s.contains("\"ok\":false"));
+                    assertTrue(s.contains("Invalid integer value '20-BAD-VALUE' for parameter 'connectionsmanager.maxconnectionsperendpoint'"));
+                }
+            }
+        }
+    }
+
+    @Rule
+    public TemporaryFolder tmpDir = new TemporaryFolder();
+
+    @Test
+    public void testListeners() throws Exception {
+
+        try (HttpProxyServer server = new HttpProxyServer(
+                new TestEndpointMapper("localhost", 0), tmpDir.newFile());) {
+            Properties prop = new Properties();
+            prop.setProperty("http.admin.enabled", "true");
+            prop.setProperty("http.admin.port", "8761");
+            prop.setProperty("http.admin.host", "localhost");
+            server.configure(new PropertiesConfigurationStore(prop));
 
             server.addListener(new NetworkListenerConfiguration("localhost", 1234));
             server.addListener(new NetworkListenerConfiguration("127.0.0.1", 9876));
@@ -152,13 +206,13 @@ public class StartAPIServerTest {
     @Test
     public void testCertificates() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer("localhost", 0,
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0,
                 new TestEndpointMapper("localhost", 0));) {
             Properties prop = new Properties();
             prop.setProperty("http.admin.enabled", "true");
             prop.setProperty("http.admin.port", "8761");
             prop.setProperty("http.admin.host", "localhost");
-            server.configure(prop);
+            server.configure(new PropertiesConfigurationStore(prop));
 
             server.addCertificate(new SSLCertificateConfiguration("localhost", "conf/mock1.file", "mock-pass"));
             server.addCertificate(new SSLCertificateConfiguration("127.0.0.1", "conf/mock2.file", "mock-pass"));

@@ -174,9 +174,7 @@ public class ServerMain implements AutoCloseable {
     public void start() throws Exception {
         pidFileLocker.lock();
 
-        StandardEndpointMapper mapper = new StandardEndpointMapper();
-        mapper.configure(configuration);
-        server = new HttpProxyServer(mapper, basePath);
+        server = new HttpProxyServer(null, basePath);
         server.configure(configuration);
         server.start();
         server.startMetrics();

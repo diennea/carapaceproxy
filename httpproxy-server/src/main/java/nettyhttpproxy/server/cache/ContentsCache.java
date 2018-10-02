@@ -57,28 +57,25 @@ public class ContentsCache {
     private static final Logger LOG = Logger.getLogger(ContentsCache.class.getName());
 
     private CacheImpl cache;
-    
+
     private final CacheStats stats;
     private final Counter noCacheRequests;
     private final ScheduledExecutorService threadPool;
-    private final long cacheMaxSize;
-    private final long cacheMaxFileSize;
-    
+    private CacheRuntimeConfiguration currentConfiguration;
+
     static final long DEFAULT_TTL = 1000 * 60 * 60;
-    
+
     public ContentsCache(StatsLogger mainLogger, RuntimeServerConfiguration currentConfiguration) {
         StatsLogger cacheScope = mainLogger.scope("cache");
         this.stats = new CacheStats(cacheScope);
         this.noCacheRequests = cacheScope.getCounter("nocacherequests");
         this.threadPool = Executors.newSingleThreadScheduledExecutor();
-        
-        this.cacheMaxSize = currentConfiguration.getCacheMaxSize();
-        this.cacheMaxFileSize = currentConfiguration.getCacheMaxFileSize();
-        
-        this.cache = new CaffeineCacheImpl(stats, cacheMaxSize, LOG);
-        this.cache.setVerbose(true);
+
+        this.currentConfiguration = new CacheRuntimeConfiguration(currentConfiguration.getCacheMaxSize(), currentConfiguration.getCacheMaxFileSize());
+
+        this.cache = new CaffeineCacheImpl(stats, currentConfiguration.getCacheMaxSize(), LOG);
     }
-    
+
     public void start() {
         this.threadPool.scheduleWithFixedDelay(new Evictor(), 1, 1, TimeUnit.MINUTES);
     }
@@ -94,21 +91,22 @@ public class ContentsCache {
     }
 
     private boolean isContentLengthCachable(long contentLength) {
-        if (cacheMaxFileSize > 0 && contentLength > cacheMaxFileSize) {
+        if (currentConfiguration.getCacheMaxFileSize() > 0
+                && contentLength > currentConfiguration.getCacheMaxFileSize()) {
             return false;
         } else {
             return true;
         }
     }
-    
+
     private boolean isContentLengthCachable(HttpHeaders headers) {
-        if (cacheMaxFileSize <= 0) {
+        if (currentConfiguration.getCacheMaxFileSize() <= 0) {
             return true;
         }
         try {
             long contentLength = Integer.parseInt(headers.get(HttpHeaderNames.CONTENT_LENGTH, "-1"));
             if (contentLength > 0) {
-                return contentLength <= cacheMaxFileSize;
+                return contentLength <= currentConfiguration.getCacheMaxFileSize();
             } else {
                 return true;
             }
@@ -116,7 +114,7 @@ public class ContentsCache {
             return true;
         }
     }
-    
+
     private boolean isCachable(HttpResponse response) {
         HttpHeaders headers = response.headers();
         if (headers.contains(HttpHeaderNames.CACHE_CONTROL, HttpHeaderValues.NO_CACHE, false)
@@ -184,7 +182,7 @@ public class ContentsCache {
                     return false;
             }
         }
-       
+
         return true;
     }
 
@@ -192,7 +190,7 @@ public class ContentsCache {
     void runEvictor() {
         new Evictor().run();
     }
-    
+
     public ContentReceiver startCachingResponse(HttpRequest request) {
         if (!isCachable(request, true)) {
             return null;
@@ -210,11 +208,11 @@ public class ContentsCache {
         LOG.info("clearing cache");
         return this.cache.clear();
     }
-    
-    public List<Map<String,Object>> inspectCache() {
-        List<Map<String,Object>> res = new ArrayList<>();
+
+    public List<Map<String, Object>> inspectCache() {
+        List<Map<String, Object>> res = new ArrayList<>();
         this.cache.inspectCache((key, payload) -> {
-            Map<String,Object> entry = new HashMap<>();
+            Map<String, Object> entry = new HashMap<>();
             entry.put("uri", key.uri);
             entry.put("heapSize", payload.heapSize);
             entry.put("directSize", payload.directSize);
@@ -226,7 +224,23 @@ public class ContentsCache {
         });
         return res;
     }
-    
+
+    public void reloadConfiguration(RuntimeServerConfiguration newConfiguration) {
+        CacheRuntimeConfiguration newCacheConfiguration = new CacheRuntimeConfiguration(
+                newConfiguration.getCacheMaxSize(), newConfiguration.getCacheMaxFileSize());
+        if (newCacheConfiguration.equals(currentConfiguration)) {
+            LOG.info("Cache configuration not changed during hot reload");
+            return;
+        }
+
+        LOG.info("Cache configuration changed during hot reload, flushing");
+        // need to clear
+        CacheImpl oldCache = this.cache;
+        this.cache = new CaffeineCacheImpl(stats, newCacheConfiguration.getCacheMaxSize(), LOG);
+        currentConfiguration = newCacheConfiguration;
+        oldCache.clear();
+    }
+
     public static final class ContentSender {
 
         private final ContentKey key;
@@ -273,7 +287,7 @@ public class ContentsCache {
 
         @Override
         public String toString() {
-            return "ContentPayload{" + "chunks_n=" + chunks.size() + ", creationTs=" + new java.sql.Timestamp(creationTs) + ", lastModified=" + new java.sql.Timestamp(lastModified) + ", expiresTs=" + new java.sql.Timestamp(expiresTs) + ", size=" + (heapSize+directSize) + " (heap=" + heapSize + ", direct=" + directSize + ")" + '}';
+            return "ContentPayload{" + "chunks_n=" + chunks.size() + ", creationTs=" + new java.sql.Timestamp(creationTs) + ", lastModified=" + new java.sql.Timestamp(lastModified) + ", expiresTs=" + new java.sql.Timestamp(expiresTs) + ", size=" + (heapSize + directSize) + " (heap=" + heapSize + ", direct=" + directSize + ")" + '}';
         }
 
         public long getLastModified() {
@@ -302,11 +316,11 @@ public class ContentsCache {
 
         public long getMemUsage() {
             // Just an estimate
-            return
-                chunks.size() * 8 +
-                directSize + heapSize + 
-                8 * 5 + // other fields
-                4 * 1;
+            return chunks.size() * 8
+                    + directSize + heapSize
+                    + 8 * 5
+                    + // other fields
+                    4 * 1;
         }
 
         public List<HttpObject> getChunks() {
@@ -372,18 +386,22 @@ public class ContentsCache {
         }
 
     }
-    
+
     private static long sizeof(Object o) {
         if (o instanceof String) {
-            return
-                8 + // object header used by the VM
-                8 + // 64-bit reference to char array (value)
-                8 + ((String) o).length() * 2 + // character array itself (object header + 16-bit chars)
-                4 + // offset integer
-                4 + // count integer
-                4; // cached hash code
+            return 8
+                    + // object header used by the VM
+                    8
+                    + // 64-bit reference to char array (value)
+                    8 + ((String) o).length() * 2
+                    + // character array itself (object header + 16-bit chars)
+                    4
+                    + // offset integer
+                    4
+                    + // count integer
+                    4; // cached hash code
         }
-        throw new IllegalArgumentException("Unknown object "+o.getClass());
+        throw new IllegalArgumentException("Unknown object " + o.getClass());
     }
 
     public static class ContentKey {
@@ -393,11 +411,10 @@ public class ContentsCache {
         public ContentKey(String uri) {
             this.uri = uri;
         }
-        
+
         public long getMemUsage() {
             // Just an estimate
-            return
-                sizeof(uri);
+            return sizeof(uri);
         }
 
         public String getUri() {
@@ -433,16 +450,16 @@ public class ContentsCache {
         }
 
     }
-    
+
     @VisibleForTesting
     CacheImpl getInnerCache() {
         return this.cache;
     }
-    
+
     public int getCacheSize() {
         return (int) cache.getSize();
     }
-    
+
     public long getCacheMemSize() {
         return cache.getMemSize();
     }
@@ -569,6 +586,7 @@ public class ContentsCache {
     }
 
     private class Evictor implements Runnable {
+
         @Override
         public void run() {
             cache.evict();

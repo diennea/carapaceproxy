@@ -23,7 +23,7 @@ package nettyhttpproxy.server.config;
  * Configuration of a single backend server
  */
 public class BackendConfiguration {
-    
+
     private final String id;
     private final String host;
     private final int port;
@@ -52,7 +52,7 @@ public class BackendConfiguration {
         return probePath;
     }
 
-    public String toBackendId() {
+    public String getHostPort() {
         return host + ":" + port;
     }
 

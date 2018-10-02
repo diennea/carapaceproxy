@@ -133,7 +133,7 @@ public class RequestHandler {
         } else {
             return UrlEncodedQueryString.parse(uri.substring(pos + 1));
         }
-       
+
     }
 
     public void start() {
@@ -142,6 +142,10 @@ public class RequestHandler {
             filter.apply(request, connectionToClient, this);
         }
         action = connectionToClient.mapper.map(request, userId, sessionId, backendHealthManager, this);
+        if (action == null) {
+            LOG.severe("Mapper returned NULL action !");
+            action = MapResult.INTERNAL_ERROR;
+        }
         //LOG.info("map " + request.uri() + " to " + action.action);
         Counter requestsPerUser;
         if (userId != null) {
@@ -227,6 +231,12 @@ public class RequestHandler {
 
         if (cacheSender != null) {
             serveFromCache();
+            return;
+        }
+
+        if (action == null) {
+            LOG.log(Level.SEVERE, "Impossible action NULL on request {0}", this.uri);
+            serveInternalErrorMessage(true);
             return;
         }
 

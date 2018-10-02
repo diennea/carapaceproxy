@@ -57,6 +57,7 @@ import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManagerFactory;
 import nettyhttpproxy.server.config.ConfigurationNotValidException;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
+import nettyhttpproxy.server.config.NetworkListenerConfiguration.HostPort;
 import nettyhttpproxy.server.config.SSLCertificateConfiguration;
 import org.apache.bookkeeper.stats.Counter;
 import org.apache.bookkeeper.stats.StatsLogger;
@@ -71,12 +72,14 @@ public class Listeners {
     private final Counter currentClientConnections;
     private final EventLoopGroup bossGroup;
     private final EventLoopGroup workerGroup;
-    private final RuntimeServerConfiguration currentConfiguration;
     private final HttpProxyServer parent;
     private final Map<String, SslContext> sslContexts = new ConcurrentHashMap<>();
-    private final List<Channel> listeningChannels = new ArrayList<>();
+    private final Map<HostPort, Channel> listeningChannels = new ConcurrentHashMap<>();
     private final StatsLogger mainLogger;
     private final File basePath;
+    private boolean started;
+
+    private RuntimeServerConfiguration currentConfiguration;
 
     public Listeners(HttpProxyServer parent) {
         this.parent = parent;
@@ -89,10 +92,8 @@ public class Listeners {
     }
 
     public void start() throws InterruptedException, ConfigurationNotValidException {
-
-        for (NetworkListenerConfiguration listener : currentConfiguration.getListeners()) {
-            bootListener(listener);
-        }
+        started = true;
+        reloadConfiguration(currentConfiguration);
     }
 
     private SslContext bootSslContext(NetworkListenerConfiguration listener, SSLCertificateConfiguration certificate) throws ConfigurationNotValidException {
@@ -139,8 +140,8 @@ public class Listeners {
 
     }
 
-    private void bootListener(NetworkListenerConfiguration listener) throws ConfigurationNotValidException, InterruptedException {
-        LOG.info("Starting listener at " + listener.getHost() + ":" + listener.getPort() + " ssl:" + listener.isSsl());
+    private void bootListener(NetworkListenerConfiguration listener) throws InterruptedException {
+        LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{listener.getHost(), listener.getPort(), listener.isSsl()});
 
         AsyncMapping<String, SslContext> sniMappings = (String sniHostname, Promise<SslContext> promise) -> {
             try {
@@ -176,7 +177,12 @@ public class Listeners {
                 })
                 .option(ChannelOption.SO_BACKLOG, 128)
                 .childOption(ChannelOption.SO_KEEPALIVE, true);
-        listeningChannels.add(b.bind(listener.getHost(), listener.getPort()).sync().channel());
+        HostPort key = new HostPort(listener.getHost(), listener.getPort());
+        Channel channel = b.bind(listener.getHost(), listener.getPort()).sync().channel();
+
+        listeningChannels.put(key, channel);
+        LOG.log(Level.INFO, "started listener at {0}: {1}", new Object[]{key, channel});
+
     }
 
     private KeyManagerFactory initKeyManagerFactory(String keyStoreType, File keyStoreLocation,
@@ -212,7 +218,7 @@ public class Listeners {
     }
 
     public int getLocalPort() {
-        for (Channel c : listeningChannels) {
+        for (Channel c : listeningChannels.values()) {
             InetSocketAddress addr = (InetSocketAddress) c.localAddress();
             return addr.getPort();
         }
@@ -220,9 +226,15 @@ public class Listeners {
     }
 
     public void stop() {
-        for (Channel channel : listeningChannels) {
-            channel.close().syncUninterruptibly();
+        for (HostPort key : listeningChannels.keySet()) {
+            try {
+                stopListener(key);
+            } catch (InterruptedException ex) {
+                LOG.log(Level.SEVERE, "Interrupted while stopping a listener", ex);
+                Thread.currentThread().interrupt();
+            }
         }
+
         if (bossGroup != null) {
             bossGroup.shutdownGracefully();
         }
@@ -300,6 +312,73 @@ public class Listeners {
             return !c.isWildcard() && hostname.equals(c.getHostname());
         } else {
             return c.isWildcard() && hostname.endsWith(c.getHostname());
+        }
+    }
+
+    void reloadConfiguration(RuntimeServerConfiguration newConfiguration) throws InterruptedException {
+        if (!started) {
+            this.currentConfiguration = newConfiguration;
+            return;
+        }
+        // stop dropped listeners, start new one
+
+        List<HostPort> listenersToStop = new ArrayList<>();
+        List<HostPort> listenersToStart = new ArrayList<>();
+        List<HostPort> listenersToRestart = new ArrayList<>();
+        for (HostPort key : listeningChannels.keySet()) {
+            NetworkListenerConfiguration actualListenerConfig = currentConfiguration.getListener(key);
+
+            NetworkListenerConfiguration newConfigurationForListener = newConfiguration.getListener(key);
+            if (newConfigurationForListener == null) {
+                LOG.log(Level.INFO, "listener: {0} is to be shut down", key);
+                listenersToStop.add(key);
+            } else if (!newConfigurationForListener.equals(actualListenerConfig)) {
+                LOG.log(Level.INFO, "listener: {0} is to be restarted", key);
+                listenersToRestart.add(key);
+            }
+        }
+        for (NetworkListenerConfiguration config : newConfiguration.getListeners()) {
+            HostPort key = config.getKey();
+            if (!listeningChannels.containsKey(key)) {
+                LOG.log(Level.INFO, "listener: {0} is to be started", key);
+                listenersToStart.add(key);
+            }
+        }
+
+        try {
+            for (HostPort hostport : listenersToStop) {
+                LOG.log(Level.INFO, "Stopping {0}", hostport);
+                stopListener(hostport);
+            }
+
+            for (HostPort hostport : listenersToRestart) {
+                LOG.log(Level.INFO, "Restart {0}", hostport);
+                stopListener(hostport);
+                NetworkListenerConfiguration newConfigurationForListener = newConfiguration.getListener(hostport);
+                bootListener(newConfigurationForListener);
+            }
+
+            for (HostPort hostport : listenersToStart) {
+                LOG.log(Level.INFO, "Starting {0}", hostport);
+                NetworkListenerConfiguration newConfigurationForListener = newConfiguration.getListener(hostport);
+                bootListener(newConfigurationForListener);
+            }
+
+            // apply new configuration, this will affect SSL certificates
+            this.currentConfiguration = newConfiguration;
+        } catch (InterruptedException stopMe) {
+            Thread.currentThread().interrupt();
+            throw stopMe;
+        }
+
+    }
+
+    private void stopListener(HostPort hostport) throws InterruptedException {
+        Channel channel = listeningChannels.remove(hostport);
+        if (channel != null) {
+            channel
+                    .close()
+                    .sync();
         }
     }
 

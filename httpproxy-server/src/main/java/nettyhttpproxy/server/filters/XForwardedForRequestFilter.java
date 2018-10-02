@@ -17,7 +17,7 @@
  under the License.
 
  */
-package nettyhttpproxy.server.mapper;
+package nettyhttpproxy.server.filters;
 
 import io.netty.handler.codec.http.HttpRequest;
 import java.net.InetSocketAddress;

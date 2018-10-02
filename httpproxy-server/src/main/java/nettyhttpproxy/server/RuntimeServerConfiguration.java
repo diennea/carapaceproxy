@@ -31,6 +31,7 @@ import nettyhttpproxy.server.config.NetworkListenerConfiguration;
 import nettyhttpproxy.server.config.RequestFilterConfiguration;
 import nettyhttpproxy.server.config.SSLCertificateConfiguration;
 import static nettyhttpproxy.server.filters.RequestFilterFactory.buildRequestFilter;
+import nettyhttpproxy.server.mapper.StandardEndpointMapper;
 
 /**
  * Configuration
@@ -50,6 +51,15 @@ public class RuntimeServerConfiguration {
     private int connectTimeout = 10000;
     private long cacheMaxSize = 0;
     private long cacheMaxFileSize = 0;
+    private String mapperClassname;
+
+    public String getMapperClassname() {
+        return mapperClassname;
+    }
+
+    public void setMapperClassname(String mapperClassname) {
+        this.mapperClassname = mapperClassname;
+    }
 
     public int getMaxConnectionsPerEndpoint() {
         return maxConnectionsPerEndpoint;
@@ -99,19 +109,48 @@ public class RuntimeServerConfiguration {
         this.cacheMaxFileSize = cacheMaxFileSize;
     }
 
+    private static int getInt(String key, int defaultValue, ConfigurationStore properties) throws ConfigurationNotValidException {
+        String property = properties.getProperty(key, defaultValue + "");
+        try {
+            return Integer.parseInt(properties.getProperty(key, defaultValue + ""));
+        } catch (NumberFormatException err) {
+            throw new ConfigurationNotValidException("Invalid integer value '" + property + "' for parameter '" + key + "'");
+        }
+    }
+
+    private static long getLong(String key, long defaultValue, ConfigurationStore properties) throws ConfigurationNotValidException {
+        String property = properties.getProperty(key, defaultValue + "");
+        try {
+            return Long.parseLong(properties.getProperty(key, defaultValue + ""));
+        } catch (NumberFormatException err) {
+            throw new ConfigurationNotValidException("Invalid integer value '" + property + "' for parameter '" + key + "'");
+        }
+    }
+
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
 
-        this.maxConnectionsPerEndpoint = Integer.parseInt(properties.getProperty("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint + ""));
-        this.idleTimeout = Integer.parseInt(properties.getProperty("connectionsmanager.idletimeout", idleTimeout + ""));
-        this.stuckRequestTimeout = Integer.parseInt(properties.getProperty("connectionsmanager.stuckrequesttimeout", stuckRequestTimeout + ""));
-        this.connectTimeout = Integer.parseInt(properties.getProperty("connectionsmanager.connecttimeout", connectTimeout + ""));
+        this.maxConnectionsPerEndpoint = getInt("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint, properties);
+        this.idleTimeout = getInt("connectionsmanager.idletimeout", idleTimeout, properties);;
+        if (this.idleTimeout <= 0) {
+            throw new ConfigurationNotValidException("Invalid value '" + this.idleTimeout + "' for connectionsmanager.idletimeout");
+        }
+        this.stuckRequestTimeout = getInt("connectionsmanager.stuckrequesttimeout", stuckRequestTimeout, properties);;
+        this.connectTimeout = getInt("connectionsmanager.connecttimeout", connectTimeout, properties);
         LOG.info("connectionsmanager.maxconnectionsperendpoint=" + maxConnectionsPerEndpoint);
         LOG.info("connectionsmanager.idletimeout=" + idleTimeout);
         LOG.info("connectionsmanager.stuckrequesttimeout=" + stuckRequestTimeout);
         LOG.info("connectionsmanager.connecttimeout=" + connectTimeout);
-        
-        this.cacheMaxSize = Long.parseLong(properties.getProperty("cache.maxsize", cacheMaxSize + ""));
-        this.cacheMaxFileSize = Long.parseLong(properties.getProperty("cache.maxfilesize", cacheMaxFileSize + ""));
+
+        this.mapperClassname = properties.getProperty("mapper.class", StandardEndpointMapper.class.getName());
+        LOG.log(Level.INFO, "mapper.class={0}", this.mapperClassname);
+        try {
+            Class.forName(this.mapperClassname, true, Thread.currentThread().getContextClassLoader());
+        } catch (ClassNotFoundException err) {
+            throw new ConfigurationNotValidException("Invalid mapper.class='" + mapperClassname + ": " + err);
+        }
+
+        this.cacheMaxSize = getLong("cache.maxsize", cacheMaxSize, properties);;
+        this.cacheMaxFileSize = getLong("cache.maxfilesize", cacheMaxFileSize, properties);;
         LOG.info("cache.maxsize=" + cacheMaxSize);
         LOG.info("cache.maxfilesize=" + cacheMaxFileSize);
 
@@ -148,7 +187,7 @@ public class RuntimeServerConfiguration {
         String prefix = "listener." + i + ".";
         String host = properties.getProperty(prefix + "host", "0.0.0.0");
 
-        int port = Integer.parseInt(properties.getProperty(prefix + "port", "0"));
+        int port = getInt(prefix + "port", 0, properties);
 
         if (port > 0) {
             boolean ssl = Boolean.parseBoolean(properties.getProperty(prefix + "ssl", "false"));
@@ -214,6 +253,14 @@ public class RuntimeServerConfiguration {
 
     public List<RequestFilterConfiguration> getRequestFilters() {
         return requestFilters;
+    }
+
+    NetworkListenerConfiguration getListener(NetworkListenerConfiguration.HostPort hostPort) {
+        return listeners
+                .stream()
+                .filter(s -> s.getHost().equalsIgnoreCase(hostPort.getHost()) && s.getPort() == hostPort.getPort())
+                .findFirst()
+                .orElse(null);
     }
 
 }

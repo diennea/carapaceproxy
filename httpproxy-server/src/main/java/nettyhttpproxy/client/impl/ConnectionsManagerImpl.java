@@ -19,6 +19,7 @@
  */
 package nettyhttpproxy.client.impl;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import java.util.ArrayList;
@@ -59,11 +60,15 @@ import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
 public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable {
 
     private final GenericKeyedObjectPool<EndpointKey, EndpointConnectionImpl> connections;
-    private final int idleTimeout;
-    private final int stuckRequestTimeout;
-    private final int connectTimeout;
+    private int idleTimeout;
+    private int stuckRequestTimeout;
+    private int connectTimeout;
     private final ConcurrentHashMap<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
     private final EventLoopGroup group;
+
+    private ScheduledFuture<?> stuckRequestsReaperFuture;
+    private ConcurrentHashMap<Long, RequestHandler> pendingRequests = new ConcurrentHashMap<>();
+
     final StatsLogger mainLogger;
     final BackendHealthManager backendHealthManager;
     final ScheduledExecutorService scheduler;
@@ -116,10 +121,6 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     }
 
-    private final ScheduledFuture<?> stuckRequestsReaperFuture;
-
-    private ConcurrentHashMap<Long, RequestHandler> pendingRequests = new ConcurrentHashMap<>();
-
     void registerPendingRequest(RequestHandler handler) {
         pendingRequests.put(handler.getId(), handler);
         pendingRequestsStat.inc();
@@ -160,19 +161,32 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     }
 
+    @Override
+    public final void applyNewConfiguration(RuntimeServerConfiguration configuration) {
+        int oldIdleTimeout = this.idleTimeout;
+        this.idleTimeout = configuration.getIdleTimeout();
+        this.stuckRequestTimeout = configuration.getStuckRequestTimeout();
+        this.connectTimeout = configuration.getConnectTimeout();
+        int maxConnectionsPerEndpoint = configuration.getMaxConnectionsPerEndpoint();
+        connections.setMaxTotalPerKey(maxConnectionsPerEndpoint);
+        connections.setMaxIdlePerKey(maxConnectionsPerEndpoint);
+
+        if (this.stuckRequestsReaperFuture != null && (oldIdleTimeout != idleTimeout)) {
+            this.stuckRequestsReaperFuture.cancel(false);
+            LOG.log(Level.INFO, "Re-scheduling stuckRequestsReaper with period (idleTimeout/4):" + (idleTimeout / 4) + " ms");
+            this.stuckRequestsReaperFuture
+                    = this.scheduler.scheduleWithFixedDelay(new RequestHandlerChecker(), idleTimeout / 4, idleTimeout / 4, TimeUnit.MILLISECONDS);
+        }
+
+    }
+
     public ConnectionsManagerImpl(RuntimeServerConfiguration configuration, StatsLogger statsLogger, BackendHealthManager backendHealthManager) {
         this.mainLogger = statsLogger.scope("outbound");
         this.pendingRequestsStat = mainLogger.getCounter("pendingrequests");
         this.stuckRequestsStat = mainLogger.getCounter("stuckrequests");
-        this.idleTimeout = configuration.getIdleTimeout();
-        this.stuckRequestTimeout = configuration.getStuckRequestTimeout();
-        this.connectTimeout = configuration.getConnectTimeout();
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
-        this.stuckRequestsReaperFuture = this.scheduler.scheduleWithFixedDelay(new RequestHandlerChecker(), idleTimeout / 4, idleTimeout / 4, TimeUnit.MILLISECONDS);
+
         GenericKeyedObjectPoolConfig config = new GenericKeyedObjectPoolConfig();
-        int maxConnectionsPerEndpoint = configuration.getMaxConnectionsPerEndpoint();
-        config.setMaxTotalPerKey(maxConnectionsPerEndpoint);
-        config.setMaxIdlePerKey(maxConnectionsPerEndpoint);
         config.setTestOnReturn(true);
         config.setTestOnBorrow(true);
         config.setTestWhileIdle(true);
@@ -180,6 +194,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         group = new NioEventLoopGroup();
         connections = new GenericKeyedObjectPool<>(new ConnectionsFactory(), config);
         this.backendHealthManager = backendHealthManager;
+        applyNewConfiguration(configuration);
     }
 
     EventLoopGroup getGroup() {
@@ -202,19 +217,28 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
             .getName());
 
     @Override
+    public void start() {
+        LOG.log(Level.INFO, "Scheduling stuckRequestsReaper with period (idleTimeout/4):" + (idleTimeout / 4) + " ms");
+        this.stuckRequestsReaperFuture
+                = this.scheduler.scheduleWithFixedDelay(new RequestHandlerChecker(), idleTimeout / 4, idleTimeout / 4, TimeUnit.MILLISECONDS);
+    }
+
+    @Override
     public void close() {
-        stuckRequestsReaperFuture.cancel(true);
+        if (stuckRequestsReaperFuture != null) {
+            stuckRequestsReaperFuture.cancel(true);
+        }
         scheduler.shutdown();
         Map<String, List<DefaultPooledObjectInfo>> all = connections.listAllObjects();
-        System.out.println("[POOL] numIdle: " + connections.getNumIdle() + " numActive: " + connections.getNumActive());
+        LOG.fine("[POOL] numIdle: " + connections.getNumIdle() + " numActive: " + connections.getNumActive());
         connections.clear();
-        System.out.println("[POOL] numIdle: " + connections.getNumIdle() + " numActive: " + connections.getNumActive());
+        LOG.fine("[POOL] numIdle: " + connections.getNumIdle() + " numActive: " + connections.getNumActive());
 
         all.forEach((key, value) -> {
-            System.out.println("[POOL] " + key + " -> " + value.size() + " connections");
+            LOG.fine("[POOL] " + key + " -> " + value.size() + " connections");
 
             for (DefaultPooledObjectInfo info : value) {
-                System.out.println("[POOL] " + key + " -> " + info.getPooledObjectToString());
+                LOG.fine("[POOL] " + key + " -> " + info.getPooledObjectToString());
             }
         });
 
@@ -234,4 +258,13 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         return stats;
     }
 
+    @VisibleForTesting
+    public int getIdleTimeout() {
+        return idleTimeout;
+    }
+
+    @VisibleForTesting
+    public ScheduledFuture<?> getStuckRequestsReaperFuture() {
+        return stuckRequestsReaperFuture;
+    }
 }

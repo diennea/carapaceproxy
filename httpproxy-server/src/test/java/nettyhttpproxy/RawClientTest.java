@@ -57,16 +57,16 @@ public class RawClientTest {
     public void testClientsExpectsConnectionClose() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withBody("it <b>works</b> !!")));
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
             server.start();
             int port = server.getLocalPort();
 
@@ -83,8 +83,8 @@ public class RawClientTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
@@ -98,7 +98,7 @@ public class RawClientTest {
         EndpointKey key = new EndpointKey("localhost", 1111);
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
             server.start();
             int port = server.getLocalPort();
 
@@ -108,10 +108,10 @@ public class RawClientTest {
                 System.out.println("s:" + s);
                 assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
                 assertEquals("<html>\n"
-                    + "    <body>\n"
-                    + "        An internal error occurred\n"
-                    + "    </body>        \n"
-                    + "</html>\n", resp.getBodyString());
+                        + "    <body>\n"
+                        + "        An internal error occurred\n"
+                        + "    </body>        \n"
+                        + "</html>\n", resp.getBodyString());
             }
 
             stats = server.getConnectionsManager().getStats();
@@ -121,8 +121,8 @@ public class RawClientTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 0
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
@@ -133,16 +133,16 @@ public class RawClientTest {
     public void testClientsSendsRequestAndClose() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withBody("it <b>works</b> !!")));
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
             server.start();
             int port = server.getLocalPort();
 
@@ -160,8 +160,8 @@ public class RawClientTest {
                 });
                 EndpointStats epstats = _stats.getEndpointStats(key);
                 return epstats.getTotalConnections().intValue() == 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
+                        && epstats.getActiveConnections().intValue() == 0
+                        && epstats.getOpenConnections().intValue() == 0;
             }, 100);
             stats = server.getConnectionsManager().getStats();
             assertNotNull(stats.getEndpoints().get(key));
@@ -170,8 +170,8 @@ public class RawClientTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
@@ -185,7 +185,7 @@ public class RawClientTest {
         EndpointKey key = new EndpointKey("localhost", 1111);
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
             server.start();
             int port = server.getLocalPort();
 
@@ -204,8 +204,8 @@ public class RawClientTest {
                 });
                 EndpointStats epstats = _stats.getEndpointStats(key);
                 return epstats.getTotalConnections().intValue() == 0
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
+                        && epstats.getActiveConnections().intValue() == 0
+                        && epstats.getOpenConnections().intValue() == 0;
             }, 100);
             stats = server.getConnectionsManager().getStats();
             assertNotNull(stats.getEndpoints().get(key));
@@ -217,8 +217,8 @@ public class RawClientTest {
                 System.out.println("st3:" + st);
             });
             return epstats.getTotalConnections().intValue() == 0
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
@@ -229,17 +229,17 @@ public class RawClientTest {
     public void clientsKeepAliveSimpleTest() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                .withBody("it <b>works</b> !!")));
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer("localhost", 0, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
             server.start();
             int port = server.getLocalPort();
 
@@ -277,22 +277,22 @@ public class RawClientTest {
                 });
                 EndpointStats epstats = stats.getEndpointStats(key);
                 return epstats.getTotalConnections().intValue() == 2
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 1;
+                        && epstats.getActiveConnections().intValue() == 0
+                        && epstats.getOpenConnections().intValue() == 1;
             }, 100);
         }
 
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 2
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
     }
-    
+
     @Test
     public void endpointKeyTest() throws Exception {
         {

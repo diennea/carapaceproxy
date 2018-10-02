@@ -17,29 +17,23 @@
  under the License.
 
  */
-package nettyhttpproxy.api;
-
-import java.util.Set;
-import javax.ws.rs.ApplicationPath;
-import javax.ws.rs.core.Application;
+package nettyhttpproxy.server.config;
 
 /**
- * Configuration of the REST API
- *
- * @author enrico.olivelli
+ * Cannot change configuration concurrently with another configuration change
  */
-@ApplicationPath("api")
-public class ApplicationConfig extends Application {
+public class ConfigurationChangeInProgressException extends Exception {
 
-    @Override
-    public Set<Class<?>> getClasses() {
-        Set<Class<?>> resources = new java.util.HashSet<>();
-        resources.add(CacheResource.class);
-        resources.add(ServiceUpResource.class);
-        resources.add(BackendsResource.class);
-        resources.add(ConfigResource.class);
-        resources.add(ListenersResource.class);
-        resources.add(CertificatesResource.class);
-        return resources;
+    public ConfigurationChangeInProgressException(String message) {
+        super(message);
     }
+
+    public ConfigurationChangeInProgressException(Throwable cause) {
+        super(cause);
+    }
+
+    public ConfigurationChangeInProgressException() {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
 }

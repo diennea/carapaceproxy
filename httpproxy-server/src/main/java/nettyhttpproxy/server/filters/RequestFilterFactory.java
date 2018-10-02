@@ -23,7 +23,6 @@ import java.util.Map;
 import nettyhttpproxy.server.RequestFilter;
 import nettyhttpproxy.server.config.ConfigurationNotValidException;
 import nettyhttpproxy.server.config.RequestFilterConfiguration;
-import nettyhttpproxy.server.mapper.XForwardedForRequestFilter;
 
 /**
  * Factory for all filters.
