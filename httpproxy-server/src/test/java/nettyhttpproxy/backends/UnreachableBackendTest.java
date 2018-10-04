@@ -32,6 +32,7 @@ import java.util.Collection;
 import java.util.Properties;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.client.EndpointKey;
+import nettyhttpproxy.client.impl.ConnectionsManagerImpl;
 import nettyhttpproxy.configstore.PropertiesConfigurationStore;
 import nettyhttpproxy.server.HttpProxyServer;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
@@ -143,6 +144,9 @@ public class UnreachableBackendTest {
                         + "</html>\n", resp.getBodyString());
             }
             TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+            
+            Long value = ((ConnectionsManagerImpl) server.getConnectionsManager()).getPendingRequestsStat().get();            
+            assertEquals(0, value.intValue());
 
         }
     }

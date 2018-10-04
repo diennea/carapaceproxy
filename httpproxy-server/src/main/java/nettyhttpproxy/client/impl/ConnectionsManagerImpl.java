@@ -136,6 +136,11 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         }
     }
 
+    @VisibleForTesting
+    public Counter getPendingRequestsStat() {
+        return pendingRequestsStat;
+    }        
+
     private class RequestHandlerChecker implements Runnable {
 
         @Override
@@ -147,10 +152,10 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
                 requestHandler.failIfStuck(now, stuckRequestTimeout, () -> {
                     EndpointConnection connectionToEndpoint = requestHandler.getConnectionToEndpoint();
                     if (connectionToEndpoint != null) {
-                        backendHealthManager.reportBackendUnreachable(connectionToEndpoint.getKey().toBackendId(), now, "a request to " + requestHandler.getUri() + " for user " + requestHandler.getUserId() + " appears stuck");
+                        backendHealthManager.reportBackendUnreachable(connectionToEndpoint.getKey().toBackendId(),
+                                now, "a request to " + requestHandler.getUri() + " for user " + requestHandler.getUserId() + " appears stuck");
                     }
                     stuckRequestsStat.inc();
-                    pendingRequestsStat.dec();
                     toRemove.add(entry.getValue());
                 });
             }
