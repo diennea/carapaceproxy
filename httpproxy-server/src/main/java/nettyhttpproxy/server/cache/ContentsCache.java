@@ -195,8 +195,7 @@ public class ContentsCache {
         if (!isCachable(request, true)) {
             return null;
         }
-        String uri = request.uri();
-        return new ContentReceiver(new ContentKey(uri));
+        return new ContentReceiver(new ContentKey(request));
 
     }
 
@@ -213,7 +212,10 @@ public class ContentsCache {
         List<Map<String, Object>> res = new ArrayList<>();
         this.cache.inspectCache((key, payload) -> {
             Map<String, Object> entry = new HashMap<>();
+            entry.put("method", key.method);
+            entry.put("host", key.host);
             entry.put("uri", key.uri);
+            entry.put("cacheKey", key.composeKey());
             entry.put("heapSize", payload.heapSize);
             entry.put("directSize", payload.directSize);
             entry.put("totalSize", key.getMemUsage() + payload.getMemUsage());
@@ -265,8 +267,7 @@ public class ContentsCache {
         if (!isCachable(handler.getRequest(), false)) {
             return null;
         }
-        String uri = handler.getRequest().uri();
-        ContentKey key = new ContentKey(uri);
+        ContentKey key = new ContentKey(handler.getRequest());
         ContentPayload cached = cache.get(key);
         if (cached == null) {
             return null;
@@ -406,29 +407,58 @@ public class ContentsCache {
 
     public static class ContentKey {
 
+        final String method;
+        final String host;
         final String uri;
 
-        public ContentKey(String uri) {
+        ContentKey(String method, String host, String uri) {
+            this.method = method;
+            this.host = host;
             this.uri = uri;
         }
-
+        
+        public ContentKey(HttpRequest request) {
+            this.method = request.method().name();
+            this.host = request.headers().getAsString(HttpHeaderNames.HOST);
+            this.uri = request.uri();
+        }
+        
         public long getMemUsage() {
             // Just an estimate
-            return sizeof(uri);
+            return 
+                sizeof(method) +
+                sizeof(host) +
+                sizeof(uri);
+        }
+
+        public String getMethod() {
+            return method;
+        }
+
+        public String getHost() {
+            return host;
         }
 
         public String getUri() {
             return uri;
         }
+        
+        public String composeKey() {
+            return method + " | " + host + " | " + uri;
+        }
 
         @Override
         public String toString() {
-            return "ContentKey{" + "uri=" + uri + '}';
+            return "ContentKey{" + "method=" + method + ", host=" + host + ", uri=" + uri + '}';
         }
 
         @Override
         public int hashCode() {
-            return Objects.hashCode(this.uri);
+            int hash = 3;
+            hash = 83 * hash + Objects.hashCode(this.method);
+            hash = 83 * hash + Objects.hashCode(this.host);
+            hash = 83 * hash + Objects.hashCode(this.uri);
+            return hash;
         }
 
         @Override
@@ -443,12 +473,17 @@ public class ContentsCache {
                 return false;
             }
             final ContentKey other = (ContentKey) obj;
+            if (!Objects.equals(this.method, other.method)) {
+                return false;
+            }
+            if (!Objects.equals(this.host, other.host)) {
+                return false;
+            }
             if (!Objects.equals(this.uri, other.uri)) {
                 return false;
             }
             return true;
         }
-
     }
 
     @VisibleForTesting

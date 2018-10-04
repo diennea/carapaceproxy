@@ -112,7 +112,10 @@ public class CacheTest {
             List<Map<String, Object>> inspect = server.getCache().inspectCache();
             System.out.println("inspect: " + inspect);
             assertThat(inspect.size(), is(1));
+            assertThat(inspect.get(0).get("method"), is("GET"));
+            assertThat(inspect.get(0).get("host"), is("localhost"));
             assertThat(inspect.get(0).get("uri"), is("/index.html"));
+            assertThat(inspect.get(0).get("cacheKey"), is("GET | localhost | /index.html"));
             assertThat(inspect.get(0).get("heapSize"), is(not(0)));
             assertThat(inspect.get(0).get("directSize"), is(not(0)));
             assertThat(inspect.get(0).get("totalSize"), is(not(0)));

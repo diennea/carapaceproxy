@@ -159,7 +159,7 @@ public class CaffeineCacheImplTest {
     }
     
     private static CacheEntry genCacheEntry(String resource, int payloadLength, long expireTs) {
-        ContentKey key = new ContentKey(resource);
+        ContentKey key = new ContentKey("", "", resource);
         ContentPayload payload = new ContentPayload();
         payload.chunks.add(null);
         payload.chunks.add(null);
