@@ -243,11 +243,11 @@ public class StandardEndpointMapper extends EndpointMapper {
                 ActionConfiguration action = actions.get(route.getAction());
                 if (action == null) {
                     LOG.info("no action '" + route.getAction() + "' -> not-found for " + request.uri() + ", valid " + actions.keySet());
-                    return MapResult.NOT_FOUND;
+                    return MapResult.NOT_FOUND(route.getId());
                 }
 
                 if (ActionConfiguration.TYPE_STATIC.equals(action.getType())) {
-                    return new MapResult(null, -1, MapResult.Action.STATIC)
+                    return new MapResult(null, -1, MapResult.Action.STATIC, route.getId())
                             .setResource(action.getFile())
                             .setErrorcode(action.getErrorcode());
                 }
@@ -274,26 +274,26 @@ public class StandardEndpointMapper extends EndpointMapper {
                         case ActionConfiguration.TYPE_PROXY: {
                             BackendConfiguration backend = this.backends.get(backendId);
                             if (backend != null && backendHealthManager.isAvailable(backendId)) {
-                                return new MapResult(backend.getHost(), backend.getPort(), MapResult.Action.PROXY);
+                                return new MapResult(backend.getHost(), backend.getPort(), MapResult.Action.PROXY, route.getId());
                             }
                             break;
                         }
                         case ActionConfiguration.TYPE_CACHE:
                             BackendConfiguration backend = this.backends.get(backendId);
                             if (backend != null && backendHealthManager.isAvailable(backendId)) {
-                                return new MapResult(backend.getHost(), backend.getPort(), MapResult.Action.CACHE);
+                                return new MapResult(backend.getHost(), backend.getPort(), MapResult.Action.CACHE, route.getId());
                             }
                             break;
                         default:
-                            return MapResult.NOT_FOUND;
+                            return MapResult.NOT_FOUND(route.getId());
                     }
                 }
             }
         }
         if (somethingMatched) {
-            return MapResult.INTERNAL_ERROR;
+            return MapResult.INTERNAL_ERROR(MapResult.NO_ROUTE);
         } else {
-            return MapResult.NOT_FOUND;
+            return MapResult.NOT_FOUND(MapResult.NO_ROUTE);
         }
     }
 

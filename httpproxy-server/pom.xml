@@ -156,6 +156,12 @@
             <version>${libs.caffeine}</version>
         </dependency>
         <dependency>
+            <groupId>org.antlr</groupId>
+            <artifactId>ST4</artifactId>
+            <version>${libs.stringtemplate}</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
             <groupId>org.powermock</groupId>
             <artifactId>powermock-module-junit4</artifactId>
             <version>${libs.powermock}</version>

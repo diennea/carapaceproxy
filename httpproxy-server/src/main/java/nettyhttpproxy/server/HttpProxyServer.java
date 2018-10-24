@@ -69,6 +69,7 @@ public class HttpProxyServer implements AutoCloseable {
     private final ConnectionsManager connectionsManager;
     private final PrometheusMetricsProvider statsProvider;
     private final PropertiesConfiguration statsProviderConfig = new PropertiesConfiguration();
+    private final RequestsLogger requestsLogger;
 
     private RuntimeServerConfiguration currentConfiguration;
     private EndpointMapper mapper;
@@ -96,6 +97,7 @@ public class HttpProxyServer implements AutoCloseable {
         this.backendHealthManager = new BackendHealthManager(currentConfiguration, mapper, mainLogger);
         this.listeners = new Listeners(this);
         this.cache = new ContentsCache(mainLogger, currentConfiguration);
+        this.requestsLogger = new RequestsLogger(currentConfiguration);
         this.connectionsManager = new ConnectionsManagerImpl(currentConfiguration,
                 mainLogger, backendHealthManager);
     }
@@ -148,6 +150,7 @@ public class HttpProxyServer implements AutoCloseable {
             started = true;
             connectionsManager.start();
             cache.start();
+            requestsLogger.start();
             listeners.start();
             backendHealthManager.start();
         } catch (RuntimeException err) {
@@ -164,7 +167,7 @@ public class HttpProxyServer implements AutoCloseable {
     public int getLocalPort() {
         return listeners.getLocalPort();
     }
-
+    
     @Override
     public void close() {
         backendHealthManager.stop();
@@ -185,6 +188,9 @@ public class HttpProxyServer implements AutoCloseable {
         if (connectionsManager != null) {
             connectionsManager.close();
         }
+        if (requestsLogger != null) {
+            requestsLogger.stop();
+        }
         if (cache != null) {
             cache.close();
         }
@@ -201,6 +207,10 @@ public class HttpProxyServer implements AutoCloseable {
 
     public BackendHealthManager getBackendHealthManager() {
         return backendHealthManager;
+    }
+
+    public RequestsLogger getRequestsLogger() {
+        return requestsLogger;
     }
 
     private static EndpointMapper buildMapper(String className, ConfigurationStore properties) throws ConfigurationNotValidException {
@@ -362,6 +372,7 @@ public class HttpProxyServer implements AutoCloseable {
             this.backendHealthManager.reloadConfiguration(newConfiguration);
             this.listeners.reloadConfiguration(newConfiguration);
             this.cache.reloadConfiguration(newConfiguration);
+            this.requestsLogger.reloadConfiguration(newConfiguration);
             this.mapper = newMapper;
             this.connectionsManager.applyNewConfiguration(newConfiguration);
             this.currentConfiguration = newConfiguration;

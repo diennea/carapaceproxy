@@ -45,9 +45,9 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.CharsetUtil;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
+import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -81,23 +81,19 @@ public class RequestHandler {
     private final AtomicReference<Runnable> onRequestFinished;
     private final StatsLogger logger;
     private final BackendHealthManager backendHealthManager;
+    private final RequestsLogger requestsLogger;
     private String userId;
     private String sessionId;
     private final String uri;
+    private long startTs;
+    private long backendStartTs = 0;
     private volatile long lastActivity;
     private volatile boolean headerSent = false;
     private UrlEncodedQueryString queryString;
 
-    public long getId() {
-        return id;
-    }
-
-    public String getUri() {
-        return uri;
-    }
-
     public RequestHandler(long id, HttpRequest request, List<RequestFilter> filters, StatsLogger logger,
-            ClientConnectionHandler parent, ChannelHandlerContext channelToClient, Runnable onRequestFinished, BackendHealthManager backendHealthManager) {
+            ClientConnectionHandler parent, ChannelHandlerContext channelToClient, Runnable onRequestFinished, 
+            BackendHealthManager backendHealthManager, RequestsLogger requestsLogger) {
         this.id = id;
         this.uri = request.uri();
         this.request = request;
@@ -107,8 +103,45 @@ public class RequestHandler {
         this.logger = logger;
         this.backendHealthManager = backendHealthManager;
         this.onRequestFinished = new AtomicReference<>(onRequestFinished);
+        this.requestsLogger = requestsLogger;
+    }
+    
+    public long getId() {
+        return id;
     }
 
+    public String getUri() {
+        return uri;
+    }
+
+    MapResult getAction() {
+        return action;
+    }
+
+    long getStartTs() {
+        return startTs;
+    }
+
+    long getBackendStartTs() {
+        return backendStartTs;
+    }
+    
+    long getLastActivity() {
+        return lastActivity;
+    }
+
+    boolean isServedFromCache() {
+        return cacheSender != null;
+    }
+
+    InetSocketAddress getRemoteAddress() {
+        return (InetSocketAddress) channelToClient.channel().remoteAddress();
+    }
+
+    InetSocketAddress getLocalAddress() {
+        return (InetSocketAddress) channelToClient.channel().localAddress();
+    }
+    
     private void fireRequestFinished() {
         Runnable handler = onRequestFinished.getAndSet(null);
         if (handler != null) {
@@ -137,14 +170,15 @@ public class RequestHandler {
     }
 
     public void start() {
-        lastActivity = System.currentTimeMillis();
+        startTs = System.currentTimeMillis();
+        lastActivity = startTs;
         for (RequestFilter filter : filters) {
             filter.apply(request, connectionToClient, this);
         }
         action = connectionToClient.mapper.map(request, userId, sessionId, backendHealthManager, this);
         if (action == null) {
             LOG.severe("Mapper returned NULL action !");
-            action = MapResult.INTERNAL_ERROR;
+            action = MapResult.INTERNAL_ERROR(MapResult.NO_ROUTE);
         }
         //LOG.info("map " + request.uri() + " to " + action.action);
         Counter requestsPerUser;
@@ -276,7 +310,7 @@ public class RequestHandler {
     private final StringBuilder output = new StringBuilder();
 
     private void serveNotFoundMessage() {
-        MapResult fromDefault = connectionToClient.mapper.mapDefaultPageNotFound(request);
+        MapResult fromDefault = connectionToClient.mapper.mapDefaultPageNotFound(request, action.routeid);
         int code = 0;
         String resource = null;
         if (fromDefault != null) {
@@ -303,7 +337,7 @@ public class RequestHandler {
     }
 
     private void serveInternalErrorMessage(boolean forceClose) {
-        MapResult fromDefault = connectionToClient.mapper.mapDefaultInternalError(request);
+        MapResult fromDefault = connectionToClient.mapper.mapDefaultInternalError(request, action.routeid);
         int code = 0;
         String resource = null;
         if (fromDefault != null) {
@@ -450,6 +484,7 @@ public class RequestHandler {
     public void lastHttpContentSent() {
         lastActivity = System.currentTimeMillis();
         connectionToClient.lastHttpContentSent(this);
+        requestsLogger.logRequest(this);
     }
 
     @Override
@@ -487,6 +522,9 @@ public class RequestHandler {
     }
 
     public void receivedFromRemote(HttpObject msg) {
+        if (backendStartTs == 0) {
+            backendStartTs = System.currentTimeMillis();
+        }
         if (connectionToClient == null) {
             if (cacheReceiver != null) {
                 cacheReceiver.abort();

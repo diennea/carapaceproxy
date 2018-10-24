@@ -19,6 +19,8 @@
  */
 package nettyhttpproxy.server;
 
+import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -52,6 +54,63 @@ public class RuntimeServerConfiguration {
     private long cacheMaxSize = 0;
     private long cacheMaxFileSize = 0;
     private String mapperClassname;
+    private String accessLogPath = "access.log";
+    private String accessLogTimestampFormat = "yyyy-MM-dd HH:mm:ss.SSS";
+    private String accessLogFormat = 
+        "[<timestamp>] [<method> <host> <uri>] [uid:<user_id>, sid:<session_id>, ip:<client_ip>] " +
+        "server=<server_ip>, act=<action_id>, route=<route_id>, backend=<backend_id>. " +
+        "time t=<total_time>ms b=<backend_time>ms";
+    private int accessLogMaxQueueCapacity = 2000;
+    private int accessLogFlushInterval = 5000;
+    private int accessLogWaitBetweenFailures = 10000;
+
+    public String getAccessLogPath() {
+        return accessLogPath;
+    }
+
+    public void setAccessLogPath(String accessLogPath) {
+        this.accessLogPath = accessLogPath;
+    }
+
+    public String getAccessLogTimestampFormat() {
+        return accessLogTimestampFormat;
+    }
+
+    public void setAccessLogTimestampFormat(String accessLogTimestampFormat) {
+        this.accessLogTimestampFormat = accessLogTimestampFormat;
+    }
+
+    public String getAccessLogFormat() {
+        return accessLogFormat;
+    }
+
+    public void setAccessLogFormat(String accessLogFormat) {
+        this.accessLogFormat = accessLogFormat;
+    }
+
+    public int getAccessLogMaxQueueCapacity() {
+        return accessLogMaxQueueCapacity;
+    }
+
+    public void setAccessLogMaxQueueCapacity(int accessLogMaxQueueCapacity) {
+        this.accessLogMaxQueueCapacity = accessLogMaxQueueCapacity;
+    }
+
+    public int getAccessLogFlushInterval() {
+        return accessLogFlushInterval;
+    }
+
+    public void setAccessLogFlushInterval(int accessLogFlushInterval) {
+        this.accessLogFlushInterval = accessLogFlushInterval;
+    }
+
+    public int getAccessLogWaitBetweenFailures() {
+        return accessLogWaitBetweenFailures;
+    }
+
+    public void setAccessLogWaitBetweenFailures(int accessLogWaitBetweenFailures) {
+        this.accessLogWaitBetweenFailures = accessLogWaitBetweenFailures;
+    }
 
     public String getMapperClassname() {
         return mapperClassname;
@@ -130,11 +189,11 @@ public class RuntimeServerConfiguration {
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
 
         this.maxConnectionsPerEndpoint = getInt("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint, properties);
-        this.idleTimeout = getInt("connectionsmanager.idletimeout", idleTimeout, properties);;
+        this.idleTimeout = getInt("connectionsmanager.idletimeout", idleTimeout, properties);
         if (this.idleTimeout <= 0) {
             throw new ConfigurationNotValidException("Invalid value '" + this.idleTimeout + "' for connectionsmanager.idletimeout");
         }
-        this.stuckRequestTimeout = getInt("connectionsmanager.stuckrequesttimeout", stuckRequestTimeout, properties);;
+        this.stuckRequestTimeout = getInt("connectionsmanager.stuckrequesttimeout", stuckRequestTimeout, properties);
         this.connectTimeout = getInt("connectionsmanager.connecttimeout", connectTimeout, properties);
         LOG.info("connectionsmanager.maxconnectionsperendpoint=" + maxConnectionsPerEndpoint);
         LOG.info("connectionsmanager.idletimeout=" + idleTimeout);
@@ -149,11 +208,31 @@ public class RuntimeServerConfiguration {
             throw new ConfigurationNotValidException("Invalid mapper.class='" + mapperClassname + ": " + err);
         }
 
-        this.cacheMaxSize = getLong("cache.maxsize", cacheMaxSize, properties);;
-        this.cacheMaxFileSize = getLong("cache.maxfilesize", cacheMaxFileSize, properties);;
+        this.cacheMaxSize = getLong("cache.maxsize", cacheMaxSize, properties);
+        this.cacheMaxFileSize = getLong("cache.maxfilesize", cacheMaxFileSize, properties);
         LOG.info("cache.maxsize=" + cacheMaxSize);
         LOG.info("cache.maxfilesize=" + cacheMaxFileSize);
-
+        
+        this.accessLogPath = properties.getProperty("accesslog.path", accessLogPath);
+        this.accessLogTimestampFormat = properties.getProperty("accesslog.format.timestamp", accessLogTimestampFormat);
+        this.accessLogFormat = properties.getProperty("accesslog.format", accessLogFormat);
+        this.accessLogMaxQueueCapacity = getInt("accesslog.queue.maxcapacity", accessLogMaxQueueCapacity, properties);
+        this.accessLogFlushInterval = getInt("accesslog.flush.interval", accessLogFlushInterval, properties);
+        this.accessLogWaitBetweenFailures = getInt("accesslog.failure.wait", accessLogWaitBetweenFailures, properties);
+        String tsFormatExample;
+        try {
+            SimpleDateFormat formatter = new SimpleDateFormat(this.accessLogTimestampFormat);
+            tsFormatExample = formatter.format(new Timestamp(System.currentTimeMillis()));
+        } catch (Exception err) {
+            throw new ConfigurationNotValidException("Invalid accesslog.format.timestamp='" + accessLogTimestampFormat + ": " + err);
+        }
+        LOG.info("accesslog.path=" + accessLogPath);
+        LOG.info("accesslog.format.timestamp=" + accessLogTimestampFormat+" (example: "+tsFormatExample+")");
+        LOG.info("accesslog.format=" + accessLogFormat);
+        LOG.info("accesslog.queue.maxcapacity=" + accessLogMaxQueueCapacity);
+        LOG.info("accesslog.flush.interval=" + accessLogFlushInterval);
+        LOG.info("accesslog.failure.wait=" + accessLogWaitBetweenFailures);
+        
         for (int i = 0; i < 100; i++) {
             tryConfigureCertificate(i, properties);
         }

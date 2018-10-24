@@ -56,6 +56,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     final SocketAddress clientAddress;
     final ContentsCache cache;
     final StaticContentsManager staticContentsManager;
+    final RequestsLogger requestsLogger;
     final long connectionStartsTs;
     volatile Boolean keepAlive;
     volatile boolean refuseOtherRequests;
@@ -71,7 +72,8 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             SocketAddress clientAddress,
             StaticContentsManager staticContentsManager,
             Runnable onClientDisconnected,
-            BackendHealthManager backendHealthManager) {
+            BackendHealthManager backendHealthManager,
+            RequestsLogger requestsLogger) {
         this.mainLogger = mainLogger;
         this.totalRequests = mainLogger.getCounter("totalrequests");
         this.runningRequests = mainLogger.getCounter("runningrequests");
@@ -84,6 +86,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         this.connectionStartsTs = System.nanoTime();
         this.onClientDisconnected = onClientDisconnected;
         this.backendHealthManager = backendHealthManager;
+        this.requestsLogger = requestsLogger;
     }
 
     public SocketAddress getClientAddress() {
@@ -116,7 +119,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         if (msg instanceof HttpRequest) {
             HttpRequest request = (HttpRequest) msg;
             RequestHandler currentRequest = new RequestHandler(requestIdGenerator.incrementAndGet(),
-                    request, filters, mainLogger, this, ctx, () -> runningRequests.dec(), backendHealthManager);
+                    request, filters, mainLogger, this, ctx, () -> runningRequests.dec(), backendHealthManager, requestsLogger);
             addPendingRequest(currentRequest);
             currentRequest.start();
         } else if (msg instanceof LastHttpContent) {

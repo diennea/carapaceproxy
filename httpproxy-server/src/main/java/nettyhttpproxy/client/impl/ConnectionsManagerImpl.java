@@ -152,8 +152,9 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
                 requestHandler.failIfStuck(now, stuckRequestTimeout, () -> {
                     EndpointConnection connectionToEndpoint = requestHandler.getConnectionToEndpoint();
                     if (connectionToEndpoint != null) {
-                        backendHealthManager.reportBackendUnreachable(connectionToEndpoint.getKey().toBackendId(),
-                                now, "a request to " + requestHandler.getUri() + " for user " + requestHandler.getUserId() + " appears stuck");
+                        backendHealthManager.reportBackendUnreachable(
+                            connectionToEndpoint.getKey().toBackendId(), now, 
+                            "a request to " + requestHandler.getUri() + " for user " + requestHandler.getUserId() + " appears stuck");
                     }
                     stuckRequestsStat.inc();
                     toRemove.add(entry.getValue());

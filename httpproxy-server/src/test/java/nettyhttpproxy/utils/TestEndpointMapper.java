@@ -54,13 +54,13 @@ public class TestEndpointMapper extends EndpointMapper {
     public MapResult map(HttpRequest request, String userId, String sessionId, BackendHealthManager backendHealthManager, RequestHandler requestHandler) {
         String uri = request.uri();
         if (uri.contains("not-found")) {
-            return MapResult.NOT_FOUND;
+            return MapResult.NOT_FOUND(MapResult.NO_ROUTE);
         } else if (uri.contains("debug")) {
-            return new MapResult(null, 0, MapResult.Action.SYSTEM);
+            return new MapResult(null, 0, MapResult.Action.SYSTEM, MapResult.NO_ROUTE);
         } else if (cacheAll) {
-            return new MapResult(host, port, MapResult.Action.CACHE);
+            return new MapResult(host, port, MapResult.Action.CACHE, MapResult.NO_ROUTE);
         } else {
-            return new MapResult(host, port, MapResult.Action.PROXY);
+            return new MapResult(host, port, MapResult.Action.PROXY, MapResult.NO_ROUTE);
         }
     }
 

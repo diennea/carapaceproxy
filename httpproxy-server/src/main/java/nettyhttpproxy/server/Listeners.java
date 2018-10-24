@@ -166,12 +166,13 @@ public class Listeners {
                         channel.pipeline().addLast(new HttpRequestDecoder());
                         channel.pipeline().addLast(new HttpResponseEncoder());
                         channel.pipeline().addLast(
-                                new ClientConnectionHandler(mainLogger, parent.getMapper(),
-                                        parent.getConnectionsManager(),
-                                        parent.getFilters(), parent.getCache(),
-                                        channel.remoteAddress(), parent.getStaticContentsManager(),
-                                        () -> currentClientConnections.dec(),
-                                        parent.getBackendHealthManager()));
+                            new ClientConnectionHandler(mainLogger, parent.getMapper(),
+                                parent.getConnectionsManager(),
+                                parent.getFilters(), parent.getCache(),
+                                channel.remoteAddress(), parent.getStaticContentsManager(),
+                                () -> currentClientConnections.dec(),
+                                parent.getBackendHealthManager(),
+                                parent.getRequestsLogger()));
 
                     }
                 })

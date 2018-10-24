@@ -21,19 +21,28 @@ package nettyhttpproxy;
 
 public class MapResult {
 
+    public static final String NO_ROUTE = "-";
+    
     public final String host;
     public final int port;
     public final Action action;
+    public final String routeid;
     public int errorcode;
     public String resource;    
 
-    public static final MapResult NOT_FOUND = new MapResult(null, 0, Action.NOTFOUND);
-    public static final MapResult INTERNAL_ERROR = new MapResult(null, 0, Action.INTERNAL_ERROR);
-
-    public MapResult(String host, int port, Action action) {
+    public MapResult(String host, int port, Action action, String routeid) {
         this.host = host;
         this.port = port;
         this.action = action;
+        this.routeid = routeid;
+    }
+    
+    public static MapResult NOT_FOUND(String routeid) {
+        return new MapResult(null, 0, Action.NOTFOUND, routeid);
+    }
+    
+    public static MapResult INTERNAL_ERROR(String routeid) {
+        return new MapResult(null, 0, Action.INTERNAL_ERROR, routeid);
     }
 
     public int getErrorcode() {
