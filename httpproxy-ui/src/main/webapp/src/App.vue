@@ -21,6 +21,9 @@
           <li>
             <router-link to="/listeners">Listeners</router-link>
           </li>
+          <li>
+            <router-link to="/requestfilters">Request filters</router-link>
+          </li>
         </ul>
       </div>
       <div id="page-content-wrapper">

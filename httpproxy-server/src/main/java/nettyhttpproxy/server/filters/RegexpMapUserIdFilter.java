@@ -20,8 +20,6 @@
 package nettyhttpproxy.server.filters;
 
 import io.netty.handler.codec.http.HttpRequest;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import nettyhttpproxy.server.ClientConnectionHandler;
@@ -29,13 +27,12 @@ import nettyhttpproxy.server.RequestFilter;
 import nettyhttpproxy.server.RequestHandler;
 
 /**
- * Maps a parameter of the querystring to the tenant, using simple pattern matching
+ * Maps a parameter of the querystring to the tenant, using simple pattern
+ * matching
  *
  * @author enrico.olivelli
  */
 public class RegexpMapUserIdFilter implements RequestFilter {
-
-    private static final Logger LOG = Logger.getLogger(RegexpMapUserIdFilter.class.getName());
 
     public static final String TYPE = "match-user-regexp";
 
@@ -45,6 +42,14 @@ public class RegexpMapUserIdFilter implements RequestFilter {
     public RegexpMapUserIdFilter(String parameterName, String pattern) {
         this.parameterName = parameterName;
         this.compiledPattern = Pattern.compile(pattern);
+    }
+
+    public String getParameterName() {
+        return parameterName;
+    }
+
+    public Pattern getCompiledPattern() {
+        return compiledPattern;
     }
 
     @Override

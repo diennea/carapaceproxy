@@ -38,6 +38,14 @@ function mockRequest(url) {
             "0.0.0.0:4089": { host: "0.0.0.0", port: 4089, ssl: true, ocps: true, sslCiphers: "ciph1", defaultCertificate: "*" },
             "0.0.0.0:8089": { host: "0.0.0.0", port: 8089, ssl: false, ocps: true, sslCiphers: "ciph2", defaultCertificate: "*" }
         }
+        case "/api/requestfilters": return [
+            { type: "match-user-regexp", values: { "parameterName": "Parameter name", "compiledPattern" : "compiledPattern"} },
+            { type: "match-user-regexp", values: { "parameterName": "Parameter name", "compiledPattern" : "compiledPattern"} },
+            { type: "match-session-regexp", values: { "parameterName": "Parameter name", "compiledPattern" : "compiledPattern"} },
+            { type: "add-x-forwarded-for", values: {} },
+            { type: "match-session-regexp", values: { "parameterName": "Parameter name", "compiledPattern" : "compiledPattern"} },
+            { type: "match-user-regexp", values: { "parameterName": "Parameter name", "compiledPattern" : "compiledPattern"} },
+        ]
         default:
             if (url.includes("/api/certificates/")) {
                 return {"*": {"id": "*", "hostname": "", "sslCertificateFile": "conf/localhost.p12"}};

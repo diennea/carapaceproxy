@@ -19,12 +19,19 @@
  */
 package nettyhttpproxy.api;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 import nettyhttpproxy.configstore.PropertiesConfigurationStore;
 import nettyhttpproxy.utils.TestEndpointMapper;
 import nettyhttpproxy.server.HttpProxyServer;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
+import nettyhttpproxy.server.config.RequestFilterConfiguration;
 import nettyhttpproxy.server.config.SSLCertificateConfiguration;
+import nettyhttpproxy.server.filters.RegexpMapSessionIdFilter;
+import nettyhttpproxy.server.filters.RegexpMapUserIdFilter;
+import nettyhttpproxy.server.filters.XForwardedForRequestFilter;
 import nettyhttpproxy.utils.RawHttpClient;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
@@ -242,6 +249,47 @@ public class StartAPIServerTest {
 
                 assertThat(json, containsString("127.0.0.1"));
                 assertThat(json, containsString("conf/mock2.file"));
+            }
+
+        }
+    }
+    
+    @Test
+    public void testResourcesFilter() throws Exception {
+
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0,
+                new TestEndpointMapper("localhost", 0));) {
+            Properties prop = new Properties();
+            prop.setProperty("http.admin.enabled", "true");
+            prop.setProperty("http.admin.port", "8761");
+            prop.setProperty("http.admin.host", "localhost");
+            server.configure(new PropertiesConfigurationStore(prop));
+            
+            Map<String, String> parametersUser = new HashMap<>();
+            parametersUser.put("param", "param_test_user");
+            parametersUser.put("regexp", "(.*)");
+            server.addRequestFilter(new RequestFilterConfiguration(RegexpMapUserIdFilter.TYPE, parametersUser));
+
+            Map<String, String> parametersSession = new HashMap<>();
+            parametersSession.put("param", "param_test_session");
+            parametersSession.put("regexp", "(.*)");
+            server.addRequestFilter(new RequestFilterConfiguration(RegexpMapSessionIdFilter.TYPE, parametersSession));
+
+            server.addRequestFilter(new RequestFilterConfiguration(XForwardedForRequestFilter.TYPE, Collections.emptyMap()));
+            
+            server.start();
+            server.startAdminInterface();
+
+            // full list request
+            try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+                RawHttpClient.HttpResponse response = client.get("/api/requestfilters");
+                String json = response.getBodyString();
+
+                assertThat(json, containsString(RegexpMapUserIdFilter.TYPE));
+                assertThat(json, containsString("param_test_session"));
+                assertThat(json, containsString(RegexpMapSessionIdFilter.TYPE));
+                assertThat(json, containsString("param_test_user"));
+                assertThat(json, containsString(XForwardedForRequestFilter.TYPE));
             }
 
         }

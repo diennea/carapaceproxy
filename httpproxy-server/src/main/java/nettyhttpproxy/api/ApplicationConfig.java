@@ -40,6 +40,7 @@ public class ApplicationConfig extends Application {
         resources.add(ConfigResource.class);
         resources.add(ListenersResource.class);
         resources.add(CertificatesResource.class);
+        resources.add(RequestFiltersResource.class);
         return resources;
     }
 }
