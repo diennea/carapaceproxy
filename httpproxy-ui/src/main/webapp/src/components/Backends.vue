@@ -83,6 +83,7 @@
 
 <script>
     import { doRequest } from './../mockserver'
+    import { formatTimestamp } from './../lib/formatter'
     export default {
         name: 'Backends',
         data: function () {
@@ -121,7 +122,7 @@
                 if (!value || value <= 0) {
                     return '';
                 }
-                return new Date(value).toUTCString();
+                return formatTimestamp(value);
             }
         }
     }

@@ -12,6 +12,12 @@ function mockRequest(url) {
         case "/api/cache/info": return {
             result: 'OK', cachesize: 50
         };
+        case "/api/cache/inspect": return [
+            {  "hits":0,"totalSize":1178,"method":"GET","cacheKey":"GET | localhost:4089 | /test/image.png",
+               "host":"localhost:4089","heapSize":0,"expiresTs":1540397475000,"directSize":892,
+                "uri":"/test/image.png","creationTs":1540393875788
+            }
+        ];
         case "/api/cache/flush": return {
             result: 'OK', cachesize: 0
         };
