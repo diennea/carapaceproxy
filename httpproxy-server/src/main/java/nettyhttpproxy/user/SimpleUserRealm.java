@@ -26,6 +26,8 @@ import nettyhttpproxy.configstore.ConfigurationStore;
 import nettyhttpproxy.server.config.ConfigurationNotValidException;
 
 /**
+ * Simple implementation of an {@link UserRealm} that has only one user and it's
+ * always authorized.
  *
  * @author matteo.minardi
  */

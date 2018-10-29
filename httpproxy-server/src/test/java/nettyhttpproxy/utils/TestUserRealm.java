@@ -23,12 +23,13 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 import nettyhttpproxy.configstore.ConfigurationStore;
 import nettyhttpproxy.server.config.ConfigurationNotValidException;
 import nettyhttpproxy.user.UserRealm;
 
 /**
+ * Test {@link UserRealm} that takes the users from the
+ * {@link ConfigurationStore}
  *
  * @author matteo.minardi
  */

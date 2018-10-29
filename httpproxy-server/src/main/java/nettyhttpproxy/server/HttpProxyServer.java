@@ -32,6 +32,7 @@ import java.util.logging.Logger;
 import javax.servlet.DispatcherType;
 import nettyhttpproxy.EndpointMapper;
 import nettyhttpproxy.api.ApplicationConfig;
+import nettyhttpproxy.api.AuthAPIRequestsFilter;
 import nettyhttpproxy.api.ForceHeadersAPIRequestsFilter;
 import nettyhttpproxy.client.ConnectionsManager;
 import nettyhttpproxy.client.impl.ConnectionsManagerImpl;
@@ -120,6 +121,7 @@ public class HttpProxyServer implements AutoCloseable {
 
         ServletContextHandler context = new ServletContextHandler(ServletContextHandler.GZIP);
         context.setContextPath("/");
+        context.addFilter(AuthAPIRequestsFilter.class, "/api/*", EnumSet.of(DispatcherType.REQUEST));
         context.addFilter(ForceHeadersAPIRequestsFilter.class, "/api/*", EnumSet.of(DispatcherType.REQUEST));
         ServletHolder jerseyServlet = new ServletHolder(new ServletContainer());
         jerseyServlet.setInitOrder(0);

@@ -29,6 +29,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SNIServerName;
@@ -90,7 +91,18 @@ public final class RawHttpClient implements AutoCloseable {
     }
 
     public HttpResponse get(String uri) throws IOException {
-        return executeRequest("GET " + uri + " HTTP/1.1\r\nHost:" + host + "\r\nConnection: keep-alive\r\n\r\n");
+        return executeRequest("GET " + uri + " HTTP/1.1"
+                + "\r\nHost:" + host
+                + "\r\nConnection: keep-alive"
+                + "\r\n\r\n");
+    }
+
+    public HttpResponse get(String uri, BasicAuthCredentials credentials) throws IOException {
+        return executeRequest("GET " + uri + " HTTP/1.1"
+                + "\r\nHost:" + host
+                + "\r\nConnection: keep-alive"
+                + "\r\nAuthorization: Basic " + credentials.toBase64()
+                + "\r\n\r\n");
     }
 
     public void sendRequest(String request) throws IOException {
@@ -126,6 +138,39 @@ public final class RawHttpClient implements AutoCloseable {
             } catch (UnsupportedEncodingException e) {
                 throw new RuntimeException(e);
             }
+        }
+
+    }
+
+    public static final class BasicAuthCredentials {
+
+        String username;
+        String password;
+
+        public BasicAuthCredentials(String username, String password) {
+            this.username = username;
+            this.password = password;
+        }
+
+        public String getUsername() {
+            return username;
+        }
+
+        public void setUsername(String username) {
+            this.username = username;
+        }
+
+        public String getPassword() {
+            return password;
+        }
+
+        public void setPassword(String password) {
+            this.password = password;
+        }
+
+        public String toBase64() throws UnsupportedEncodingException {
+            String credentials = (username + ":" + password);
+            return Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
         }
 
     }
