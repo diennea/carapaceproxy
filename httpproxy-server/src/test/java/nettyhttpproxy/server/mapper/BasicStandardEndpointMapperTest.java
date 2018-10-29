@@ -21,7 +21,6 @@ package nettyhttpproxy.server.mapper;
  */
 import nettyhttpproxy.utils.TestUtils;
 import nettyhttpproxy.server.HttpProxyServer;
-import nettyhttpproxy.*;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
@@ -30,7 +29,9 @@ import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URL;
+import java.util.Properties;
 import nettyhttpproxy.client.ConnectionsManagerStats;
+import nettyhttpproxy.configstore.PropertiesConfigurationStore;
 import nettyhttpproxy.server.StaticContentsManager;
 import nettyhttpproxy.server.config.ActionConfiguration;
 import nettyhttpproxy.server.config.BackendConfiguration;
@@ -42,6 +43,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 /**
  *
@@ -51,6 +53,9 @@ public class BasicStandardEndpointMapperTest {
 
     @Rule
     public WireMockRule backend1 = new WireMockRule(0);
+
+    @Rule
+    public TemporaryFolder tmpDir = new TemporaryFolder();
 
     @Test
     public void test() throws Exception {
@@ -146,5 +151,67 @@ public class BasicStandardEndpointMapperTest {
         }
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
+    }
+
+    @Test
+    public void testAlwaysServeStaticContent() throws Exception {
+
+        stubFor(get(urlEqualTo("/seconda.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
+
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+
+            {
+                Properties configuration = new Properties();
+                configuration.put("backend.1.id", "foo");
+                configuration.put("backend.1.host", "localhost");
+                configuration.put("backend.1.port", backend1.port()+"");
+                configuration.put("backend.1.enabled", "true");
+
+                configuration.put("director.1.id", "*");
+                configuration.put("director.1.backends", "*");
+                configuration.put("director.1.enabled", "true");
+
+                configuration.put("listener.1.host", "0.0.0.0");
+                configuration.put("listener.1.port", "1425");
+                configuration.put("listener.1.ssl", "false");
+                configuration.put("listener.1.enabled", "true");
+
+                configuration.put("route.10.id", "default");
+                configuration.put("route.10.enabled", "true");
+                configuration.put("route.10.match", "all");
+                configuration.put("route.10.action", "proxy-all");
+
+                configuration.put("action.1.id", "serve-static");
+                configuration.put("action.1.enabled", "true");
+                configuration.put("action.1.type", "static");
+                configuration.put("action.1.file", "classpath:/test-static-page.html");
+                configuration.put("action.1.code", "200");
+                configuration.put("route.8.id", "static-page");
+                configuration.put("route.8.enabled", "true");
+                configuration.put("route.8.match", "regexp .*index.*");
+                configuration.put("route.8.action", "serve-static");
+                PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
+                server.applyDynamicConfiguration(server.buildValidConfiguration(config), config);
+            }
+
+            server.start();
+
+            {
+                String url = "http://localhost:" + server.getLocalPort() + "/index.html";
+                String s = IOUtils.toString(new URL(url).toURI(), "utf-8");
+                assertEquals("Test static page", s);
+            } 
+            {
+
+                String url = "http://localhost:" + server.getLocalPort() + "/seconda.html";
+                String s = IOUtils.toString(new URL(url).toURI(), "utf-8");
+                assertEquals("it <b>works</b> !!", s);
+            }
+
+        }
     }
 }
