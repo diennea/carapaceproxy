@@ -31,7 +31,6 @@ import java.util.logging.LogManager;
 import nettyhttpproxy.configstore.ConfigurationStore;
 import nettyhttpproxy.configstore.PropertiesConfigurationStore;
 import nettyhttpproxy.server.HttpProxyServer;
-import nettyhttpproxy.server.mapper.StandardEndpointMapper;
 
 /**
  * Created by enrico.olivelli on 23/03/2015.

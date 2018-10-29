@@ -7,3 +7,4 @@
 *.pyc
 dependency-reduced-pom.xml
 **/nbproject/
+**/access.log

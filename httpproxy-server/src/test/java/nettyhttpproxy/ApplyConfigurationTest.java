@@ -37,6 +37,9 @@ import nettyhttpproxy.server.config.ConfigurationNotValidException;
 import nettyhttpproxy.server.filters.RegexpMapUserIdFilter;
 import nettyhttpproxy.server.mapper.StandardEndpointMapper;
 import nettyhttpproxy.server.filters.XForwardedForRequestFilter;
+import nettyhttpproxy.utils.TestUserRealm;
+import nettyhttpproxy.user.SimpleUserRealm;
+import nettyhttpproxy.user.UserRealm;
 import nettyhttpproxy.utils.TestEndpointMapper;
 import org.apache.commons.io.IOUtils;
 import static org.junit.Assert.assertEquals;
@@ -236,6 +239,54 @@ public class ApplyConfigurationTest {
                 assertNotNull(mapper.getBackends().get("bar"));
             }
 
+        }
+    }
+
+    @Test
+    public void testReloadRealm() throws Exception {
+
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+            {
+                Properties configuration = new Properties();
+                server.configure(new PropertiesConfigurationStore(configuration));
+            }
+            server.start();
+            {
+                UserRealm realm = server.getRealm();
+                assertTrue(realm instanceof SimpleUserRealm);
+
+                // default user with auth always valid
+                SimpleUserRealm userRealm = (SimpleUserRealm) server.getRealm();
+                assertEquals(1, userRealm.listUsers().size());
+
+                assertNotNull(userRealm.login("test_0", "anypass0"));
+                assertNotNull(userRealm.login("test_1", "anypass1"));
+                assertNotNull(userRealm.login("test_2", "anypass2"));
+            }
+
+            {
+                // dynamic class change with a Test realm impelementation
+                Properties configuration = new Properties();
+                configuration.put("userrealm.class", "nettyhttpproxy.utils.TestUserRealm");
+
+                configuration.put("user.test1", "pass1");
+                configuration.put("user.test2", "pass2");
+                configuration.put("user.test3", "pass3");
+
+                reloadConfiguration(configuration, server);
+
+                UserRealm realm = server.getRealm();
+                assertTrue(realm instanceof TestUserRealm);
+
+                TestUserRealm userRealm = (TestUserRealm) server.getRealm();
+                assertEquals(3, userRealm.listUsers().size());
+
+                assertNotNull(userRealm.login("test1", "pass1"));
+                assertNotNull(userRealm.login("test2", "pass2"));
+                assertNotNull(userRealm.login("test3", "pass3"));
+
+                assertNull(userRealm.login("test1", "pass3")); // wrong pass
+            }
         }
     }
 

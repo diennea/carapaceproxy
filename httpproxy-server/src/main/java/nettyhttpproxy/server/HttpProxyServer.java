@@ -44,6 +44,7 @@ import nettyhttpproxy.server.config.NetworkListenerConfiguration;
 import nettyhttpproxy.server.config.RequestFilterConfiguration;
 import nettyhttpproxy.server.config.SSLCertificateConfiguration;
 import static nettyhttpproxy.server.filters.RequestFilterFactory.buildRequestFilter;
+import nettyhttpproxy.user.UserRealm;
 import org.apache.bookkeeper.stats.*;
 import org.apache.bookkeeper.stats.prometheus.*;
 import org.apache.commons.configuration.ConfigurationException;
@@ -73,6 +74,7 @@ public class HttpProxyServer implements AutoCloseable {
 
     private RuntimeServerConfiguration currentConfiguration;
     private EndpointMapper mapper;
+    private UserRealm realm;
     private List<RequestFilter> filters;
     private volatile boolean started;
 
@@ -226,6 +228,20 @@ public class HttpProxyServer implements AutoCloseable {
             throw new RuntimeException(err);
         }
     }
+    
+    private static UserRealm buildRealm(String className, ConfigurationStore properties) throws ConfigurationNotValidException {
+        try {
+            UserRealm res = (UserRealm) Class.forName(className).getConstructor().newInstance();
+            res.configure(properties);
+            return res;
+        } catch (ClassNotFoundException err) {
+            throw new ConfigurationNotValidException(err);
+        } catch (IllegalAccessException | IllegalArgumentException
+                | InstantiationException | NoSuchMethodException
+                | SecurityException | InvocationTargetException err) {
+            throw new RuntimeException(err);
+        }
+    }
 
     /**
      * Configure the service BEFORE starting it.
@@ -319,6 +335,10 @@ public class HttpProxyServer implements AutoCloseable {
     public EndpointMapper getMapper() {
         return mapper;
     }
+    
+    public UserRealm getRealm() {
+        return realm;
+    }
 
     public StatsLogger getMainLogger() {
         return mainLogger;
@@ -349,6 +369,8 @@ public class HttpProxyServer implements AutoCloseable {
         newConfiguration.configure(simpleStore);
         // creating a mapper validates the configuration
         buildMapper(newConfiguration.getMapperClassname(), simpleStore);
+        buildRealm(newConfiguration.getUserRealmClassname(), simpleStore);
+        
         return newConfiguration;
     }
 
@@ -368,14 +390,18 @@ public class HttpProxyServer implements AutoCloseable {
         }
         try {
             EndpointMapper newMapper = buildMapper(newConfiguration.getMapperClassname(), simpleStore);
+            UserRealm newRealm = buildRealm(newConfiguration.getUserRealmClassname(), simpleStore);
+            
             this.filters = buildFilters(newConfiguration);
             this.backendHealthManager.reloadConfiguration(newConfiguration);
             this.listeners.reloadConfiguration(newConfiguration);
             this.cache.reloadConfiguration(newConfiguration);
             this.requestsLogger.reloadConfiguration(newConfiguration);
-            this.mapper = newMapper;
             this.connectionsManager.applyNewConfiguration(newConfiguration);
+            
             this.currentConfiguration = newConfiguration;
+            this.mapper = newMapper;
+            this.realm = newRealm;
         } catch (ConfigurationNotValidException err) {
             // impossible to have a non valid configuration here
             throw new IllegalStateException(err);
@@ -387,6 +413,11 @@ public class HttpProxyServer implements AutoCloseable {
     @VisibleForTesting
     public void setMapper(EndpointMapper mapper) {
         this.mapper = mapper;
+    }
+    
+    @VisibleForTesting
+    public void setRealm(UserRealm realm) {
+        this.realm = realm;
     }
 
 }

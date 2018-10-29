@@ -28,12 +28,16 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.configstore.ConfigurationStore;
+import static nettyhttpproxy.configstore.ConfigurationStoreUtils.getClassname;
+import static nettyhttpproxy.configstore.ConfigurationStoreUtils.getInt;
+import static nettyhttpproxy.configstore.ConfigurationStoreUtils.getLong;
 import nettyhttpproxy.server.config.ConfigurationNotValidException;
 import nettyhttpproxy.server.config.NetworkListenerConfiguration;
 import nettyhttpproxy.server.config.RequestFilterConfiguration;
 import nettyhttpproxy.server.config.SSLCertificateConfiguration;
 import static nettyhttpproxy.server.filters.RequestFilterFactory.buildRequestFilter;
 import nettyhttpproxy.server.mapper.StandardEndpointMapper;
+import nettyhttpproxy.user.SimpleUserRealm;
 
 /**
  * Configuration
@@ -56,13 +60,14 @@ public class RuntimeServerConfiguration {
     private String mapperClassname;
     private String accessLogPath = "access.log";
     private String accessLogTimestampFormat = "yyyy-MM-dd HH:mm:ss.SSS";
-    private String accessLogFormat = 
-        "[<timestamp>] [<method> <host> <uri>] [uid:<user_id>, sid:<session_id>, ip:<client_ip>] " +
-        "server=<server_ip>, act=<action_id>, route=<route_id>, backend=<backend_id>. " +
-        "time t=<total_time>ms b=<backend_time>ms";
+    private String accessLogFormat
+            = "[<timestamp>] [<method> <host> <uri>] [uid:<user_id>, sid:<session_id>, ip:<client_ip>] "
+            + "server=<server_ip>, act=<action_id>, route=<route_id>, backend=<backend_id>. "
+            + "time t=<total_time>ms b=<backend_time>ms";
     private int accessLogMaxQueueCapacity = 2000;
     private int accessLogFlushInterval = 5000;
     private int accessLogWaitBetweenFailures = 10000;
+    private String userRealmClassname;
 
     public String getAccessLogPath() {
         return accessLogPath;
@@ -120,6 +125,14 @@ public class RuntimeServerConfiguration {
         this.mapperClassname = mapperClassname;
     }
 
+    public String getUserRealmClassname() {
+        return userRealmClassname;
+    }
+
+    public void setUserRealmClassname(String userRealmClassname) {
+        this.userRealmClassname = userRealmClassname;
+    }
+    
     public int getMaxConnectionsPerEndpoint() {
         return maxConnectionsPerEndpoint;
     }
@@ -168,24 +181,6 @@ public class RuntimeServerConfiguration {
         this.cacheMaxFileSize = cacheMaxFileSize;
     }
 
-    private static int getInt(String key, int defaultValue, ConfigurationStore properties) throws ConfigurationNotValidException {
-        String property = properties.getProperty(key, defaultValue + "");
-        try {
-            return Integer.parseInt(properties.getProperty(key, defaultValue + ""));
-        } catch (NumberFormatException err) {
-            throw new ConfigurationNotValidException("Invalid integer value '" + property + "' for parameter '" + key + "'");
-        }
-    }
-
-    private static long getLong(String key, long defaultValue, ConfigurationStore properties) throws ConfigurationNotValidException {
-        String property = properties.getProperty(key, defaultValue + "");
-        try {
-            return Long.parseLong(properties.getProperty(key, defaultValue + ""));
-        } catch (NumberFormatException err) {
-            throw new ConfigurationNotValidException("Invalid integer value '" + property + "' for parameter '" + key + "'");
-        }
-    }
-
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
 
         this.maxConnectionsPerEndpoint = getInt("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint, properties);
@@ -200,19 +195,14 @@ public class RuntimeServerConfiguration {
         LOG.info("connectionsmanager.stuckrequesttimeout=" + stuckRequestTimeout);
         LOG.info("connectionsmanager.connecttimeout=" + connectTimeout);
 
-        this.mapperClassname = properties.getProperty("mapper.class", StandardEndpointMapper.class.getName());
+        this.mapperClassname = getClassname("mapper.class", StandardEndpointMapper.class.getName(), properties);
         LOG.log(Level.INFO, "mapper.class={0}", this.mapperClassname);
-        try {
-            Class.forName(this.mapperClassname, true, Thread.currentThread().getContextClassLoader());
-        } catch (ClassNotFoundException err) {
-            throw new ConfigurationNotValidException("Invalid mapper.class='" + mapperClassname + ": " + err);
-        }
-
+        
         this.cacheMaxSize = getLong("cache.maxsize", cacheMaxSize, properties);
         this.cacheMaxFileSize = getLong("cache.maxfilesize", cacheMaxFileSize, properties);
         LOG.info("cache.maxsize=" + cacheMaxSize);
         LOG.info("cache.maxfilesize=" + cacheMaxFileSize);
-        
+
         this.accessLogPath = properties.getProperty("accesslog.path", accessLogPath);
         this.accessLogTimestampFormat = properties.getProperty("accesslog.format.timestamp", accessLogTimestampFormat);
         this.accessLogFormat = properties.getProperty("accesslog.format", accessLogFormat);
@@ -227,12 +217,15 @@ public class RuntimeServerConfiguration {
             throw new ConfigurationNotValidException("Invalid accesslog.format.timestamp='" + accessLogTimestampFormat + ": " + err);
         }
         LOG.info("accesslog.path=" + accessLogPath);
-        LOG.info("accesslog.format.timestamp=" + accessLogTimestampFormat+" (example: "+tsFormatExample+")");
+        LOG.info("accesslog.format.timestamp=" + accessLogTimestampFormat + " (example: " + tsFormatExample + ")");
         LOG.info("accesslog.format=" + accessLogFormat);
         LOG.info("accesslog.queue.maxcapacity=" + accessLogMaxQueueCapacity);
         LOG.info("accesslog.flush.interval=" + accessLogFlushInterval);
         LOG.info("accesslog.failure.wait=" + accessLogWaitBetweenFailures);
-        
+
+        this.userRealmClassname = getClassname("userrealm.class", SimpleUserRealm.class.getName(), properties);
+        LOG.log(Level.INFO, "userrealm.class={0}", this.userRealmClassname);
+
         for (int i = 0; i < 100; i++) {
             tryConfigureCertificate(i, properties);
         }
@@ -283,9 +276,7 @@ public class RuntimeServerConfiguration {
         }
     }
 
-    private void tryConfigureFilter(int i,
-            ConfigurationStore properties
-    ) throws ConfigurationNotValidException {
+    private void tryConfigureFilter(int i, ConfigurationStore properties) throws ConfigurationNotValidException {
         String prefix = "filter." + i + ".";
         String type = properties.getProperty(prefix + "type", "").trim();
 
@@ -304,7 +295,7 @@ public class RuntimeServerConfiguration {
         this.addRequestFilter(config);
     }
 
-    public void addListener(NetworkListenerConfiguration listener) throws ConfigurationNotValidException {
+       public void addListener(NetworkListenerConfiguration listener) throws ConfigurationNotValidException {
         if (listener.isSsl() && !certificates.containsKey(listener.getDefaultCertificate())) {
             throw new ConfigurationNotValidException("listener " + listener.getHost() + ":" + listener.getPort() + ", ssl=" + listener.isSsl() + ", default certificate " + listener.getDefaultCertificate() + " not configured");
         }
