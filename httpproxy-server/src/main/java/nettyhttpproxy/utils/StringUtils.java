@@ -55,4 +55,11 @@ public class StringUtils {
         return htmlEncodeCharacters(s);
     }
 
+    public static String trimToNull(final String str) {
+        if (str == null || str.isEmpty()) {
+            return null;
+        }
+        return str.trim();
+    }
+
 }
