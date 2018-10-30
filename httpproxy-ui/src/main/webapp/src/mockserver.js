@@ -46,6 +46,7 @@ function mockRequest(url) {
             { type: "match-session-regexp", values: { "parameterName": "Parameter name", "compiledPattern" : "compiledPattern"} },
             { type: "match-user-regexp", values: { "parameterName": "Parameter name", "compiledPattern" : "compiledPattern"} },
         ]
+        case "/api/users/all": return ['admin', 'manager', 'guest']
         default:
             if (url.includes("/api/certificates/")) {
                 return {"*": {"id": "*", "hostname": "", "sslCertificateFile": "conf/localhost.p12"}};

@@ -19,29 +19,36 @@
  */
 package nettyhttpproxy.api;
 
-import java.util.Set;
-import javax.ws.rs.ApplicationPath;
-import javax.ws.rs.core.Application;
+import java.util.ArrayList;
+import java.util.Collection;
+import javax.servlet.ServletContext;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import nettyhttpproxy.server.HttpProxyServer;
+import nettyhttpproxy.user.UserRealm;
 
 /**
- * Configuration of the REST API
+ * Access the users API
  *
- * @author enrico.olivelli
+ * @author matteo.minardi
  */
-@ApplicationPath("api")
-public class ApplicationConfig extends Application {
+@Path("/users")
+@Produces("application/json")
+public class UserRealmResource {
 
-    @Override
-    public Set<Class<?>> getClasses() {
-        Set<Class<?>> resources = new java.util.HashSet<>();
-        resources.add(CacheResource.class);
-        resources.add(ServiceUpResource.class);
-        resources.add(BackendsResource.class);
-        resources.add(ConfigResource.class);
-        resources.add(ListenersResource.class);
-        resources.add(CertificatesResource.class);
-        resources.add(RequestFiltersResource.class);
-        resources.add(UserRealmResource.class);
-        return resources;
+    @javax.ws.rs.core.Context
+    ServletContext context;
+
+    @Path("/all")
+    @GET
+    public Collection<String> getAll() {
+        HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
+        UserRealm userRealm = server.getRealm();
+        if (userRealm == null) {
+            return new ArrayList<>();
+        }
+        return userRealm.listUsers();
     }
+
 }

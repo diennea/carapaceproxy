@@ -247,4 +247,28 @@ public class StartAPIServerTest extends UseAdminServer {
         }
     }
 
+    @Test
+    public void testUserRealm() throws Exception {
+        Properties properties = new Properties();
+
+        properties.put("userrealm.class", "nettyhttpproxy.utils.TestUserRealm");
+
+        properties.put("user.test", "test");
+        properties.put("user.test1", "test1");
+        properties.put("user.test2", "test2");
+
+        startAdmin(properties);
+        
+        RawHttpClient.BasicAuthCredentials c = new RawHttpClient.BasicAuthCredentials("test", "test");
+
+        // full list request
+        try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+            RawHttpClient.HttpResponse response = client.get("/api/users/all", c);
+            String json = response.getBodyString();
+
+            assertThat(json, containsString("test1"));
+            assertThat(json, containsString("test2"));
+        }
+    }
+
 }
