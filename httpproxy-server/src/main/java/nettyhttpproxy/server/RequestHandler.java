@@ -75,7 +75,7 @@ public class RequestHandler {
     private MapResult action;
     private ContentsCache.ContentReceiver cacheReceiver;
     private ContentsCache.ContentSender cacheSender;
-    private EndpointConnection connectionToEndpoint;
+    private volatile EndpointConnection connectionToEndpoint;
     private final ClientConnectionHandler connectionToClient;
     private final ChannelHandlerContext channelToClient;
     private final AtomicReference<Runnable> onRequestFinished;
@@ -92,7 +92,7 @@ public class RequestHandler {
     private UrlEncodedQueryString queryString;
 
     public RequestHandler(long id, HttpRequest request, List<RequestFilter> filters, StatsLogger logger,
-            ClientConnectionHandler parent, ChannelHandlerContext channelToClient, Runnable onRequestFinished, 
+            ClientConnectionHandler parent, ChannelHandlerContext channelToClient, Runnable onRequestFinished,
             BackendHealthManager backendHealthManager, RequestsLogger requestsLogger) {
         this.id = id;
         this.uri = request.uri();
@@ -105,7 +105,7 @@ public class RequestHandler {
         this.onRequestFinished = new AtomicReference<>(onRequestFinished);
         this.requestsLogger = requestsLogger;
     }
-    
+
     public long getId() {
         return id;
     }
@@ -125,7 +125,7 @@ public class RequestHandler {
     long getBackendStartTs() {
         return backendStartTs;
     }
-    
+
     long getLastActivity() {
         return lastActivity;
     }
@@ -141,7 +141,7 @@ public class RequestHandler {
     InetSocketAddress getLocalAddress() {
         return (InetSocketAddress) channelToClient.channel().localAddress();
     }
-    
+
     private void fireRequestFinished() {
         Runnable handler = onRequestFinished.getAndSet(null);
         if (handler != null) {
@@ -189,7 +189,9 @@ public class RequestHandler {
         }
         requestsPerUser.inc();
 
-        LOG.log(Level.FINER, "{0} Mapped {1} to {2}, userid {3}", new Object[]{this, uri, action, userId});
+        if (LOG.isLoggable(Level.FINER)) {
+            LOG.log(Level.FINER, "{0} Mapped {1} to {2}, userid {3}", new Object[]{this, uri, action, userId});        
+        }
         switch (action.action) {
             case NOTFOUND:
             case INTERNAL_ERROR:
@@ -239,6 +241,8 @@ public class RequestHandler {
         }
         switch (action.action) {
             case STATIC:
+            case INTERNAL_ERROR:
+            case NOTFOUND:
                 break;
             case SYSTEM:
                 continueDebugMessage(httpContent, httpContent);
@@ -247,13 +251,13 @@ public class RequestHandler {
             case CACHE:
                 EndpointConnection _connectionToEndpoint = connectionToEndpoint;
                 if (_connectionToEndpoint == null) {
-                    LOG.info(this + " swallow continued content " + httpContent + ". Not connected");
+                    LOG.log(Level.INFO, "{0} swallow continued content {1}. Not connected", new Object[]{this, httpContent});
                     return;
                 }
                 _connectionToEndpoint.continueRequest(httpContent.retain());
                 break;
             default:
-                throw new IllegalStateException("not yet implemented");
+                throw new IllegalStateException("not yet implemented action: " + action.action);
         }
     }
 

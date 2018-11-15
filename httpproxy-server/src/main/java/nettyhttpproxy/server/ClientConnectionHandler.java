@@ -116,6 +116,9 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             ctx.close();
             return;
         }
+        if (LOG.isLoggable(Level.FINEST)) {
+            LOG.log(Level.FINEST, "{0} channelRead0 {1}", new Object[]{this, msg});
+        }
         if (msg instanceof HttpRequest) {
             HttpRequest request = (HttpRequest) msg;
             RequestHandler currentRequest = new RequestHandler(requestIdGenerator.incrementAndGet(),
@@ -130,7 +133,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
                 totalRequests.inc();
                 runningRequests.inc();
             } catch (java.lang.ArrayIndexOutOfBoundsException noMorePendingRequests) {
-                LOG.info(this + " swallow " + msg + ", no more pending requests");
+                LOG.log(Level.INFO, "{0} swallow {1}, no more pending requests", new Object[]{this, msg});
                 refuseOtherRequests = true;
                 ctx.close();
             }

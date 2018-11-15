@@ -211,7 +211,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
             invalidate();
         }
         if (!valid) {
-            LOG.severe("continueRequest " + msg + " to " + contextToEndpoint + " . skip to invalid connection to endpoint " + this.key);
+            LOG.log(Level.SEVERE, "continueRequest {0} to {1} . skip to invalid connection to endpoint {2}", new Object[]{msg, contextToEndpoint, this.key});
             clientSidePeerHandler.errorSendingRequest(this, new IOException("endpoint died"));
             return;
         }
@@ -376,7 +376,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-            LOG.log(Level.SEVERE, "bad error", cause);
+            LOG.log(Level.SEVERE, "I/O error on endpoint " + key, cause);
             parent.backendHealthManager.reportBackendUnreachable(key.toBackendId(), System.currentTimeMillis(), "I/O error: " + cause);
             RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
             if (_clientSidePeerHandler != null) {
