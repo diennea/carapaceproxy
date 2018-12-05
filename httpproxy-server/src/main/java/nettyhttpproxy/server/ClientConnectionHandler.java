@@ -158,10 +158,10 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         return keepAlive;
     }
 
-    public void errorSendingRequest(RequestHandler request, EndpointConnectionImpl aThis, ChannelHandlerContext peerChannel, Throwable error) {
+    public void errorSendingRequest(RequestHandler request, EndpointConnectionImpl endpointConnection, ChannelHandlerContext peerChannel, Throwable error) {
         pendingRequests.remove(request);
-        mapper.endpointFailed(aThis.getKey(), error);
-        LOG.log(Level.INFO, error, () -> this + " errorSendingRequest " + aThis);
+        mapper.endpointFailed(endpointConnection.getKey(), error);
+        LOG.log(Level.INFO, error, () -> this + " errorSendingRequest " + endpointConnection);
     }
 
     public void lastHttpContentSent(RequestHandler requestHandler) {

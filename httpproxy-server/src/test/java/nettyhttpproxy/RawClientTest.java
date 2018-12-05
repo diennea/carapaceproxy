@@ -294,6 +294,50 @@ public class RawClientTest {
     }
 
     @Test
+    public void downloadSmallPayloadsTest() throws Exception {
+
+        stubFor(get(urlEqualTo("/index.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "1")
+                        .withBody("a")));
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
+            server.start();
+            int port = server.getLocalPort();
+
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+
+                for (int i = 0; i < 1000; i++) {
+                    String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
+//                    System.out.println("#" + i + " s:" + s);
+                    assertTrue(s.equals("a"));
+                }
+
+            }
+
+            stats = server.getConnectionsManager().getStats();
+            assertNotNull(stats.getEndpoints().get(key));
+        }
+
+        TestUtils.waitForCondition(() -> {
+            EndpointStats epstats = stats.getEndpointStats(key);
+            System.out.println("total con:" + epstats.getTotalConnections().intValue());
+            return epstats.getTotalConnections().intValue() >= 1
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
+        }, 100);
+
+        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+
+    }
+
+    @Test
     public void endpointKeyTest() throws Exception {
         {
             EndpointKey entryPoint = EndpointKey.make("localhost:8080");

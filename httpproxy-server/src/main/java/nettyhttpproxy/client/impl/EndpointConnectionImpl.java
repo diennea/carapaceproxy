@@ -26,8 +26,9 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.channel.epoll.EpollSocketChannel;
 import io.netty.channel.socket.SocketChannel;
-import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.http.DefaultHttpContent;
 import io.netty.handler.codec.http.DefaultHttpResponse;
 import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpContent;
@@ -38,12 +39,12 @@ import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
 import io.netty.util.concurrent.Future;
 import java.io.IOException;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import nettyhttpproxy.EndpointStats;
@@ -69,20 +70,33 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private int idleTimeout = 500_000;
 
     private final Channel channelToEndpoint;
-    private volatile ChannelHandlerContext contextToEndpoint;
+
+    private AtomicReference<ConnectionState> state = new AtomicReference<>(ConnectionState.IDLE);
     private volatile boolean valid;
     private volatile RequestHandler clientSidePeerHandler;
+
+    // stats
     private final StatsLogger endpointStatsLogger;
     private final OpStatsLogger connectionStats;
     private final Counter openConnectionsStats;
     private final Counter activeConnectionsStats;
     private final Counter requestsStats;
 
-    @Override
-    public void setIdleTimeout(int timeout) {
-        this.idleTimeout = timeout;
+    private static enum ConnectionState {
+        IDLE,
+        REQUEST_SENT,
+        RELEASABLE
     }
 
+    /**
+     * Creates and return always a "CONNECTED" connection. This constructor will
+     * block until the backend is connected
+     *
+     * @param key
+     * @param parent
+     * @param endpointstats
+     * @throws IOException
+     */
     public EndpointConnectionImpl(EndpointKey key, ConnectionsManagerImpl parent, EndpointStats endpointstats) throws IOException {
         this.endpointStatsLogger = parent.mainLogger.scope(key.getHost() + "_" + key.getPort());
         this.connectionStats = endpointStatsLogger.getOpStatsLogger("connections");
@@ -98,7 +112,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         long now = System.nanoTime();
         Bootstrap b = new Bootstrap();
         b.group(parent.getGroup())
-                .channel(NioSocketChannel.class)
+                .channel(EpollSocketChannel.class)
                 .option(ChannelOption.SO_KEEPALIVE, true)
                 .handler(new ChannelInitializer<SocketChannel>() {
                     @Override
@@ -120,7 +134,6 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 connectionStats.registerSuccessfulEvent(System.nanoTime() - now, TimeUnit.NANOSECONDS);
             } else {
                 connectionStats.registerFailedEvent(System.nanoTime() - now, TimeUnit.NANOSECONDS);
-                invalidate();
                 LOG.log(Level.INFO, "connect failed to " + key, future.cause());
                 parent.backendHealthManager.reportBackendUnreachable(key.toBackendId(), System.currentTimeMillis(), "connection failed");
             }
@@ -149,170 +162,160 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 .closeFuture()
                 .addListener((Future<? super Void> future) -> {
                     LOG.log(Level.FINE, "channel closed to {0}", key);
-                    invalidate();
+                    endpointstats.getOpenConnections().decrementAndGet();
+                    openConnectionsStats.dec();
                 });
 
     }
 
-    private void activityDone() {
-        endpointstats.getLastActivity().set(System.currentTimeMillis());
-    }
-
-    private void invalidate() {
-        valid = false;
-    }
-
     @Override
     public void sendRequest(HttpRequest request, RequestHandler clientSidePeerHandler) {
-        activateConnection(clientSidePeerHandler);
+        checkHandler(null);
+        if (!channelToEndpoint.isOpen() || !valid) {
+            LOG.log(Level.SEVERE, "sendRequest " + request.getClass() + " failed, choosen connection is not valid");
+            clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, new Exception("no more connected").fillInStackTrace());
+            return;
+        }
+        if (!active.compareAndSet(false, true)) {
+            throw new IllegalStateException("this connection is already active!");
+        }
+        if (!state.compareAndSet(ConnectionState.IDLE, ConnectionState.REQUEST_SENT)) {
+            LOG.log(Level.SEVERE, "bad status ! " + this + ", handler is " + clientSidePeerHandler);
+            throw new IllegalStateException("bad status ! " + this);
+        }
+
+        this.clientSidePeerHandler = clientSidePeerHandler;
+        endpointstats.getActiveConnections().incrementAndGet();
+        activeConnectionsStats.inc();
         endpointstats.getTotalRequests().incrementAndGet();
         requestsStats.inc();
 
-        if (!channelToEndpoint.isOpen()) {
-            LOG.log(Level.SEVERE, "sendRequest " + request.getClass() + " failed, choosen connection is not valid");
-            invalidate();
-            RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
-            if (_clientSidePeerHandler != null) {
-                _clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, new Exception("no more connected").fillInStackTrace());
-            }
-            return;
-        }
         parent.registerPendingRequest(clientSidePeerHandler);
 
+        // we are considering here (before writeAndFlush) that the
+        // request has been sent, because 'after' the writeAndFlush (on the listener)
+        // it will be too late and the response from the server
+        // may have already been received !        
+        clientSidePeerHandler.messageSentToBackend(EndpointConnectionImpl.this);
+        activityDone();
         channelToEndpoint
                 .writeAndFlush(request)
                 .addListener((Future<? super Void> future) -> {
-                    activityDone();
+                    // BEWARE THAT THE RESPONSE MAY ALREADY HAVE BEEN
+                    // RECEIVED                    
                     RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
                     if (!future.isSuccess()) {
-                        LOG.log(Level.SEVERE, "sendRequest " + request.getClass() + " failed", future.cause());
-                        if (_clientSidePeerHandler != null) {
-                            _clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
-                        }
-                        // send to unreachable state if we are not able to send a request on the wire
-                        parent.backendHealthManager.reportBackendUnreachable(key.toBackendId(), System.currentTimeMillis(), "write failed (" + future.cause() + ")");
-                    } else {
-                        if (_clientSidePeerHandler != null) {
-                            _clientSidePeerHandler.messageSentToBackend(EndpointConnectionImpl.this);
-                        }
-                        // back to reachable state at first request sent to the backend
-                        parent.backendHealthManager.reportBackendReachable(key.toBackendId());
-                    }
-                    if (!channelToEndpoint.isOpen()) {
+                        LOG.log(Level.INFO, this + " sendRequest " + request.getClass() + " failed", future.cause());
+                        state.compareAndSet(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE);
+                        _clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
                         invalidate();
                     }
                 });
     }
 
     @Override
-    public void continueRequest(HttpContent msg) {
-        Channel _channelToEndpoint = channelToEndpoint;
-        if (_channelToEndpoint == null || !_channelToEndpoint.isOpen()) {
+    public void sendChunk(HttpContent msg, RequestHandler clientSidePeerHandler) {
+        checkHandler(clientSidePeerHandler);
+        if (!channelToEndpoint.isOpen() || !valid) {
             invalidate();
-        }
-        if (!valid) {
-            LOG.log(Level.SEVERE, "continueRequest {0} to {1} . skip to invalid connection to endpoint {2}", new Object[]{msg, contextToEndpoint, this.key});
+            LOG.log(Level.SEVERE, "continueRequest {0} to {1} . skip to invalid connection to endpoint {2}", new Object[]{msg, channelToEndpoint, this.key});
             clientSidePeerHandler.errorSendingRequest(this, new IOException("endpoint died"));
             return;
         }
-        _channelToEndpoint.writeAndFlush(msg).addListener((Future<? super Void> future) -> {
-            activityDone();
-            RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
-            if (!future.isSuccess()) {
-                LOG.log(Level.SEVERE, "continueRequest " + msg.getClass() + " failed", future.cause());
-                if (_clientSidePeerHandler != null) {
-                    _clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
-                }
-                invalidate();
-            } else {
-                if (_clientSidePeerHandler != null) {
-                    _clientSidePeerHandler.messageSentToBackend(EndpointConnectionImpl.this);
-                }
-            }
-        });
+
+        // we are considering here (before writeAndFlush) that the
+        // chunk has been sent, because 'after' the writeAndFlush (on the listener)
+        // it will be too late and the response from the server
+        // may have already been received !
+        clientSidePeerHandler.messageSentToBackend(EndpointConnectionImpl.this);
+        activityDone();
+        channelToEndpoint
+                .writeAndFlush(msg)
+                .addListener((Future<? super Void> future) -> {
+                    if (!future.isSuccess()) {
+                        state.compareAndSet(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE);
+                        boolean done = clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
+                        if (done) {
+                            LOG.log(Level.SEVERE, this + " continueRequest " + msg.getClass() + " failed", future.cause());
+                            invalidate();
+                        }
+                    }
+                });
     }
 
     @Override
     public void sendLastHttpContent(LastHttpContent msg, RequestHandler clientSidePeerHandler) {
-        Channel _channelToEndpoint = channelToEndpoint;
-        if (_channelToEndpoint == null || !_channelToEndpoint.isOpen()) {
+        checkHandler(clientSidePeerHandler);
+        if (!channelToEndpoint.isOpen() || !valid) {
             invalidate();
-        }
-        if (!valid) {
-            LOG.log(Level.SEVERE, "sendLastHttpContent {0} to {1} . skip to invalid connection to endpoint {2}", new Object[]{msg, contextToEndpoint, this.key});
+            LOG.log(Level.SEVERE, "continueRequest {0} to {1} . skip to invalid connection to endpoint {2}", new Object[]{msg, channelToEndpoint, this.key});
+            state.compareAndSet(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE);
             clientSidePeerHandler.errorSendingRequest(this, new IOException("endpoint died"));
             return;
         }
+        // we are considering here (before writeAndFlush) that the
+        // chunk has been sent, because 'after' the writeAndFlush (on the listener)
+        // it will be too late and the response from the server
+        // may have already been received !
         activityDone();
-        ChannelHandlerContext _contextToEndpoint = contextToEndpoint;
-        _contextToEndpoint.writeAndFlush(msg).addListener((Future<? super Void> future) -> {
-            RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
-            if (!future.isSuccess()) {
-                LOG.log(Level.INFO, "sendLastHttpContent failed " + msg, future.cause());
-                if (_clientSidePeerHandler != null) {
-                    _clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
-                }
-            } else {
-                if (_clientSidePeerHandler != null) {
-                    _clientSidePeerHandler.lastHttpContentSent();
-                }
-            }
-//            LOG.log(Level.SEVERE, "sendLastHttpContent finished, now " + _contextToEndpoint + " is open ? " + _contextToEndpoint.channel().isOpen());
-            if (!_contextToEndpoint.channel().isOpen()) {
-                invalidate();
-
-            }
-        });
+        channelToEndpoint
+                .writeAndFlush(msg)
+                .addListener((Future<? super Void> future) -> {
+                    if (!future.isSuccess()) {
+                        LOG.log(Level.INFO, "sendLastHttpContent failed " + msg, future.cause());
+                        state.compareAndSet(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE);
+                        clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
+                        invalidate();
+                    } else {
+                        if (!state.compareAndSet(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE)) {
+                            // this may be a bug
+                            LOG.log(Level.SEVERE, "sendLastHttpContent finished without " + ConnectionState.REQUEST_SENT + " state");
+                        }
+                        clientSidePeerHandler.lastHttpContentSent();
+                    }
+                });
 
     }
 
-    private void detachFromClient() {
-//        LOG.info("detachFromClient");        
-        parent.unregisterPendingRequest(clientSidePeerHandler);
-        clientSidePeerHandler = null;
+    @Override
+    public void release(boolean close, RequestHandler clientSidePeerHandler) {
+        if (!state.compareAndSet(ConnectionState.RELEASABLE, ConnectionState.IDLE)) {
+            LOG.log(Level.SEVERE, "cannot release now " + this);
+            return;
+        }
+//        LOG.log(Level.SEVERE, "release " + close + " " + this);
+        checkHandler(clientSidePeerHandler);
+        connectionDeactivated();
+
+        if (close) {
+            destroy();
+        }
+        parent.returnConnection(this);
 
     }
 
     void destroy() {
-
+        invalidate();
         if (!closed.compareAndSet(false, true)) {
             return;
 
         }
-
-//        LOG.log(Level.INFO, "destroy {0}", this);
-        invalidate();
-        Channel _channel = channelToEndpoint;
-        if (_channel != null) {
-            _channel.close().addListener((future) -> {
-                //                    LOG.log(Level.INFO, "connection id " + id + " to " + key + " closed now");
-                endpointstats.getOpenConnections().decrementAndGet();
-                openConnectionsStats.dec();
-            });
-            _channel = null;
-        }
+        // note: close is async, we are not waiting for real close
+        channelToEndpoint.close();
     }
 
     boolean isValid() {
-        return valid && (System.currentTimeMillis() - endpointstats.getLastActivity().longValue() <= idleTimeout);
-    }
-
-    private void activateConnection(RequestHandler handler) {
-        if (!active.compareAndSet(false, true)) {
-            throw new IllegalStateException("this connection is already active!");
-
-        }
-        this.clientSidePeerHandler = handler;
-        endpointstats.getActiveConnections().incrementAndGet();
-        activeConnectionsStats.inc();
+        return valid
+                && (System.currentTimeMillis() - endpointstats.getLastActivity().longValue() <= idleTimeout)
+                && channelToEndpoint.isOpen();
     }
 
     private void connectionDeactivated() {
         if (active.compareAndSet(true, false)) {
             endpointstats.getActiveConnections().decrementAndGet();
             activeConnectionsStats.dec();
-            detachFromClient();
-
+            parent.unregisterPendingRequest(clientSidePeerHandler);
+            clientSidePeerHandler = null;
         } else {
             LOG.log(Level.SEVERE, "connectionDeactivated on a non active connection! {0}", this);
         }
@@ -320,12 +323,6 @@ public class EndpointConnectionImpl implements EndpointConnection {
     }
 
     private class ReadEndpointResponseHandler extends SimpleChannelInboundHandler<HttpObject> {
-
-        @Override
-        public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
-            contextToEndpoint = ctx;
-            super.handlerAdded(ctx);
-        }
 
         @Override
         public void channelRead0(ChannelHandlerContext ctx, HttpObject msg) {
@@ -336,38 +333,22 @@ public class EndpointConnectionImpl implements EndpointConnection {
             }
             if (msg instanceof HttpContent) {
                 HttpContent f = (HttpContent) msg;
-//                LOG.log(Level.INFO, "proxying HttpContent {0}: {1}", new Object[]{msg.getClass(), msg});
-                _clientSidePeerHandler.receivedFromRemote(f.copy());
+                _clientSidePeerHandler.receivedFromRemote(f.copy(),
+                        EndpointConnectionImpl.this);
             } else if (msg instanceof DefaultHttpResponse) {
                 DefaultHttpResponse f = (DefaultHttpResponse) msg;
-//                LOG.log(Level.INFO, "proxying DefaultHttpResponse {0}: headers: {1}", new Object[]{msg.getClass(), msg});
-//                f.headers().forEach((entry) -> {
-//                    LOG.log(Level.INFO, "proxying header " + entry.getKey() + ": " + entry.getValue());
-//                });
-                _clientSidePeerHandler.receivedFromRemote(new DefaultHttpResponse(f.protocolVersion(),
-                        f.status(), f.headers()));
+                // DefaultHttpResponse has no "copy" method
+                _clientSidePeerHandler.receivedFromRemote(
+                        new DefaultHttpResponse(f.protocolVersion(), f.status(), f.headers()),
+                        EndpointConnectionImpl.this);
             } else {
-                LOG.log(Level.SEVERE, "unknown message type " + msg.getClass(), new Exception("unknown message type " + msg.getClass())
-                        .fillInStackTrace());
+                LOG.log(Level.SEVERE, "unknown message type " + msg.getClass() + ": " + msg);
             }
 
         }
 
         @Override
-        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-//            LOG.log(Level.INFO, "channelRead " + msg + ", clientSidePeerHandler:" + clientSidePeerHandler);
-            super.channelRead(ctx, msg); //To change body of generated methods, choose Tools | Templates.
-        }
-
-        @Override
-        public boolean acceptInboundMessage(Object msg) throws Exception {
-//            LOG.log(Level.INFO, "acceptInboundMessage " + msg);
-            return super.acceptInboundMessage(msg);
-        }
-
-        @Override
         public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
-//            LOG.log(Level.INFO, "channelReadComplete {0}", ctx);
             RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
             if (_clientSidePeerHandler != null) {
                 _clientSidePeerHandler.readCompletedFromRemote();
@@ -379,6 +360,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
             LOG.log(Level.SEVERE, "I/O error on endpoint " + key, cause);
             parent.backendHealthManager.reportBackendUnreachable(key.toBackendId(), System.currentTimeMillis(), "I/O error: " + cause);
             RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
+
             if (_clientSidePeerHandler != null) {
                 _clientSidePeerHandler.badErrorOnRemote(cause);
             }
@@ -391,23 +373,31 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     @Override
     public String toString() {
-        return "{id=" + id + ", channel=" + channelToEndpoint + ", key=" + key + ", valid=" + valid + ", closed=" + closed + '}';
+        return "{id=" + id + ", " + state + ", channel=" + channelToEndpoint + ", key=" + key + ", valid=" + valid + ", closed=" + closed + '}';
     }
 
-    @Override
-    public void release(boolean close) {
-        connectionDeactivated();
-
-        if (close) {
-            destroy();
+    private void checkHandler(RequestHandler clientSidePeerHandler1) throws IllegalStateException {
+        if (this.clientSidePeerHandler != clientSidePeerHandler1) {
+            throw new IllegalStateException("connection is bound to " + this.clientSidePeerHandler + " cannot be managed by " + clientSidePeerHandler1);
         }
-        parent.returnConnection(this);
+    }
 
+    private void activityDone() {
+        endpointstats.getLastActivity().set(System.currentTimeMillis());
+    }
+
+    private void invalidate() {
+        valid = false;
     }
 
     @Override
     public EndpointKey getKey() {
         return key;
+    }
+
+    @Override
+    public void setIdleTimeout(int timeout) {
+        this.idleTimeout = timeout;
     }
 
 }

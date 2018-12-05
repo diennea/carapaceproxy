@@ -38,10 +38,10 @@ public interface EndpointConnection {
 
     public void sendRequest(HttpRequest request, RequestHandler handler);
 
-    public void release(boolean error);
+    public void release(boolean error, RequestHandler handler);
 
     public void sendLastHttpContent(LastHttpContent msg, RequestHandler handler);
 
-    public void continueRequest(HttpContent httpContent);
+    public void sendChunk(HttpContent httpContent, RequestHandler handler);
 
 }

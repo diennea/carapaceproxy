@@ -48,6 +48,7 @@ import io.netty.util.concurrent.GenericFutureListener;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -69,13 +70,14 @@ import org.apache.bookkeeper.stats.StatsLogger;
 public class RequestHandler {
 
     private static final Logger LOG = Logger.getLogger(RequestHandler.class.getName());
+    private static final AtomicLong TIME_TRACKER = new AtomicLong();
     private final long id;
     private final HttpRequest request;
     private final List<RequestFilter> filters;
     private MapResult action;
     private ContentsCache.ContentReceiver cacheReceiver;
     private ContentsCache.ContentSender cacheSender;
-    private volatile EndpointConnection connectionToEndpoint;
+    private AtomicReference<EndpointConnection> connectionToEndpoint = new AtomicReference<>();
     private final ClientConnectionHandler connectionToClient;
     private final ChannelHandlerContext channelToClient;
     private final AtomicReference<Runnable> onRequestFinished;
@@ -190,7 +192,7 @@ public class RequestHandler {
         requestsPerUser.inc();
 
         if (LOG.isLoggable(Level.FINER)) {
-            LOG.log(Level.FINER, "{0} Mapped {1} to {2}, userid {3}", new Object[]{this, uri, action, userId});        
+            LOG.log(Level.FINER, "{0} Mapped {1} to {2}, userid {3}", new Object[]{this, uri, action, userId});
         }
         switch (action.action) {
             case NOTFOUND:
@@ -200,8 +202,10 @@ public class RequestHandler {
                 return;
             case PROXY:
                 try {
-                    connectionToEndpoint = connectionToClient.connectionsManager.getConnection(new EndpointKey(action.host, action.port));
-                    connectionToEndpoint.sendRequest(request, this);
+//                    LOG.log(Level.SEVERE, "TIME"+TIME_TRACKER.incrementAndGet()+" start " + this + " thread " + Thread.currentThread().getName());
+                    EndpointConnection connection = connectionToClient.connectionsManager.getConnection(new EndpointKey(action.host, action.port));
+                    connectionToEndpoint.set(connection);
+                    connection.sendRequest(request, this);
                 } catch (EndpointNotAvailableException err) {
                     fireRequestFinished();
                     LOG.log(Level.INFO, "{0} error on endpoint {1}: {2}", new Object[]{this, action, err});
@@ -210,17 +214,19 @@ public class RequestHandler {
                 return;
             case CACHE:
                 try {
+//                    LOG.log(Level.SEVERE, "TIME"+TIME_TRACKER.incrementAndGet()+" startc " + this + " thread " + Thread.currentThread().getName());
                     cacheSender = connectionToClient.cache.serveFromCache(this);
                     if (cacheSender != null) {
                         return;
                     }
-                    connectionToEndpoint = connectionToClient.connectionsManager.getConnection(new EndpointKey(action.host, action.port));
+                    EndpointConnection connection = connectionToClient.connectionsManager.getConnection(new EndpointKey(action.host, action.port));
+                    connectionToEndpoint.set(connection);
                     cacheReceiver = connectionToClient.cache.startCachingResponse(request);
                     if (cacheReceiver != null) {
                         // https://tools.ietf.org/html/rfc7234#section-4.3.4
                         cleanRequestFromCacheValidators(request);
                     }
-                    connectionToEndpoint.sendRequest(request, this);
+                    connection.sendRequest(request, this);
                 } catch (EndpointNotAvailableException err) {
                     fireRequestFinished();
                     LOG.log(Level.INFO, "{0} error on endpoint {1}: {2}", new Object[]{this, action, err});
@@ -249,12 +255,12 @@ public class RequestHandler {
                 break;
             case PROXY:
             case CACHE:
-                EndpointConnection _connectionToEndpoint = connectionToEndpoint;
-                if (_connectionToEndpoint == null) {
+                EndpointConnection connection = connectionToEndpoint.get();
+                if (connection == null) {
                     LOG.log(Level.INFO, "{0} swallow continued content {1}. Not connected", new Object[]{this, httpContent});
                     return;
                 }
-                _connectionToEndpoint.continueRequest(httpContent.retain());
+                connection.sendChunk(httpContent.retain(), this);
                 break;
             default:
                 throw new IllegalStateException("not yet implemented action: " + action.action);
@@ -299,10 +305,11 @@ public class RequestHandler {
             }
             case CACHE:
             case PROXY: {
-                if (connectionToEndpoint == null) {
+                EndpointConnection connection = connectionToEndpoint.get();
+                if (connection == null) {
                     sendServiceNotAvailable();
                 } else {
-                    connectionToEndpoint.sendLastHttpContent(trailer.copy(), this);
+                    connection.sendLastHttpContent(trailer.copy(), this);
                 }
                 break;
             }
@@ -469,20 +476,19 @@ public class RequestHandler {
     }
 
     private void sendServiceNotAvailable() {
-//        LOG.info(this + " sendServiceNotAvailable due to " + cause + " to " + ctx);
+//        LOG.info(this + " sendServiceNotAvailable due to " + cause + " to " + ctx);        
         FullHttpResponse response
                 = connectionToClient.staticContentsManager.buildResponse(500, DEFAULT_INTERNAL_SERVER_ERROR);
-
         channelToClient.writeAndFlush(response).addListener(new GenericFutureListener<Future<? super Void>>() {
             @Override
             public void operationComplete(Future<? super Void> future) throws Exception {
                 LOG.log(Level.INFO, "{0} sendServiceNotAvailable result: {1}, cause {2}",
                         new Object[]{this, future.isSuccess(), future.cause()});
                 channelToClient.close();
-                releaseConnectionToEndpoint(false);
                 lastHttpContentSent();
             }
         });
+
     }
 
     public void lastHttpContentSent() {
@@ -517,23 +523,29 @@ public class RequestHandler {
     }
 
     public EndpointConnection getConnectionToEndpoint() {
-        return connectionToEndpoint;
+        return connectionToEndpoint.get();
     }
 
-    public void errorSendingRequest(EndpointConnectionImpl connectionToEndpoint, Throwable cause) {
-        connectionToClient.errorSendingRequest(this, connectionToEndpoint, channelToClient, cause);
-        sendServiceNotAvailable();
+    public boolean errorSendingRequest(EndpointConnectionImpl connection, Throwable cause) {        
+        boolean ok = releaseConnectionToEndpoint(true, connection);
+        if (ok) {
+            connectionToClient.errorSendingRequest(this, connection, channelToClient, cause);
+            sendServiceNotAvailable();            
+        }
+        return ok;
+
     }
 
-    public void receivedFromRemote(HttpObject msg) {
+    public void receivedFromRemote(HttpObject msg, EndpointConnection connection) {
         if (backendStartTs == 0) {
             backendStartTs = System.currentTimeMillis();
         }
         if (connectionToClient == null) {
+            // client no more connected
             if (cacheReceiver != null) {
                 cacheReceiver.abort();
             }
-            releaseConnectionToEndpoint(true);
+            releaseConnectionToEndpoint(true, connection);
             return;
         }
         if (cacheReceiver != null) {
@@ -569,25 +581,30 @@ public class RequestHandler {
                     }
                 }
             }
-            boolean keepAlive1 = connectionToClient.isKeepAlive();
+            boolean keepAlive1 = connectionToClient.isKeepAlive() && future.isSuccess();
             // LOG.log(Level.INFO, this + " returnConnection:" + returnConnection + ", keepAlive1:" + keepAlive1 + " connecton " + connectionToEndpoint);
             if (!keepAlive1 && msg instanceof LastHttpContent) {
                 connectionToClient.refuseOtherRequests = true;
                 channelToClient.close();
             }
             if (returnConnection) {
-                releaseConnectionToEndpoint(!keepAlive1);
+                releaseConnectionToEndpoint(!keepAlive1, connection);
             }
         });
     }
 
-    private void releaseConnectionToEndpoint(boolean forceClose) {
-        if (connectionToEndpoint != null) {
+    private boolean releaseConnectionToEndpoint(boolean forceClose, EndpointConnection current) {
+        if (connectionToEndpoint.compareAndSet(current, null)) {
+            fireRequestFinished();
+            if (current != null) {
+                // return the connection the pool
 //            LOG.log(Level.INFO, this + " release connection {0}, forceClose {1}", new Object[]{connectionToEndpoint, forceClose});
-            connectionToEndpoint.release(forceClose);
-            connectionToEndpoint = null;
+                current.release(forceClose, this);
+            }
+            return true;
+        } else {
+            return false;
         }
-        fireRequestFinished();
     }
 
     public void readCompletedFromRemote() {
@@ -708,7 +725,7 @@ public class RequestHandler {
         if (delta >= stuckRequestTimeout) {
             LOG.log(Level.INFO, this + " connection appears stuck " + connectionToEndpoint + ", on request " + uri + " for userId: " + userId);
             onStuck.run();
-            releaseConnectionToEndpoint(true);
+            releaseConnectionToEndpoint(true, connectionToEndpoint.get());
             serveInternalErrorMessage(true);
         }
     }
@@ -719,7 +736,7 @@ public class RequestHandler {
 
     public void badErrorOnRemote(Throwable cause) {
         LOG.log(Level.INFO, this + " badErrorOnRemote " + cause);
-        releaseConnectionToEndpoint(true);
+        releaseConnectionToEndpoint(true, connectionToEndpoint.get());
         serveInternalErrorMessage(true);
     }
 

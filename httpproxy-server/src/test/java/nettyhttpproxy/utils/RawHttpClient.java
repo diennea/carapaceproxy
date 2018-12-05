@@ -42,6 +42,8 @@ import javax.net.ssl.SSLSocketFactory;
  */
 public final class RawHttpClient implements AutoCloseable {
 
+    private static boolean DEBUG = false;
+
     private final Socket socket;
     private final String host;
     private final boolean ssl;
@@ -223,6 +225,12 @@ public final class RawHttpClient implements AutoCloseable {
 
     }
 
+    private static void println(Object msg) {
+        if (DEBUG) {
+            System.out.println(msg);
+        }
+    }
+
     private static HttpResponse consumeHttpResponseInput(final InputStream in) throws IOException {
 
         HttpResponse result = new HttpResponse();
@@ -230,7 +238,7 @@ public final class RawHttpClient implements AutoCloseable {
         BufferedStream firstLine = new BufferedStream(result.rawResponse);
         consumeLFEndedLine(in, firstLine, true);
         result.statusLine = firstLine.buffer.toString("utf-8");
-        System.out.println("[STATUSLINE] " + result.statusLine);
+        println("[STATUSLINE] " + result.statusLine);
 
         if (!result.statusLine.startsWith("HTTP/1.1 ")) {
             throw new IOException("bad response, does not start with HTTP/1.1. Received: " + result.statusLine);
@@ -241,9 +249,9 @@ public final class RawHttpClient implements AutoCloseable {
             BufferedStream counter = new BufferedStream(result.rawResponse);
             consumeLFEndedLine(in, counter, false);
             String line = counter.buffer.toString("utf-8");
-            System.out.println("READ HEADER " + line.trim() + " size " + counter.buffer.size());
+            println("READ HEADER " + line.trim() + " size " + counter.buffer.size());
             if (counter.buffer.size() <= 2) {
-                System.out.println("END OF HEADER");
+                println("END OF HEADER");
                 // end of header
                 break;
             } else {
@@ -251,7 +259,7 @@ public final class RawHttpClient implements AutoCloseable {
                 result.headerLines.add(line);
                 if (line.startsWith("Content-Length: ")) {
                     result.expectedContentLength = Integer.parseInt(line.substring("Content-Length: ".length()).trim());
-                    System.out.println("expectedContentLength:" + result.expectedContentLength);
+                    println("expectedContentLength:" + result.expectedContentLength);
                 }
                 if (line.startsWith("Transfer-Encoding: ")) {
                     result.transferEncoding = line.substring("Transfer-Encoding: ".length()).trim();
@@ -259,7 +267,7 @@ public final class RawHttpClient implements AutoCloseable {
             }
         }
         if (result.expectedContentLength == 0) {
-            System.out.println("END OF BODY content-len 0");
+            println("END OF BODY content-len 0");
             return result;
         }
         if (result.statusLine.startsWith("HTTP/1.1 304 ")) {
@@ -272,7 +280,7 @@ public final class RawHttpClient implements AutoCloseable {
             while (true) {
                 String line = readASCIILine(dataIn, true);
                 result.rawResponse.write(line.getBytes("ASCII"));
-                System.out.println("CHUNK SIZE " + line + "(hex)");
+                println("CHUNK SIZE " + line + "(hex)");
                 int size = Integer.parseInt(line.trim(), 16);
                 if (size == 0) {
                     // last chunk
@@ -289,7 +297,7 @@ public final class RawHttpClient implements AutoCloseable {
 
                 result.rawResponse.write(chunk);
                 result.body.write(chunk);
-                System.out.println("READ " + new String(chunk, "ASCII"));
+                println("READ " + new String(chunk, "ASCII"));
 
                 byte[] eol = new byte[2];
                 dataIn.readFully(eol);
@@ -306,7 +314,7 @@ public final class RawHttpClient implements AutoCloseable {
                 result.body.write(b);
 
                 if (result.expectedContentLength > 0 && result.body.size() == result.expectedContentLength) {
-                    System.out.println("END OF BODY content-len " + result.expectedContentLength);
+                    println("END OF BODY content-len " + result.expectedContentLength);
                     return result;
                 }
 
@@ -317,7 +325,7 @@ public final class RawHttpClient implements AutoCloseable {
             }
         }
 
-        System.out.println("END OF BODY");
+        println("END OF BODY");
         return result;
     }
 

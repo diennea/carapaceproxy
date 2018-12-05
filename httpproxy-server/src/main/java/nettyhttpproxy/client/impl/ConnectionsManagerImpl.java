@@ -21,7 +21,7 @@ package nettyhttpproxy.client.impl;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.epoll.EpollEventLoopGroup;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -96,16 +96,16 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
         @Override
         public void destroyObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) throws Exception {
-//            LOG.log(Level.INFO, "destroyObject {0} {1}", new Object[]{k, po.getObject()});
+            LOG.log(Level.INFO, "destroy con {0} {1}", new Object[]{k, po.getObject()});
             po.getObject().destroy();
         }
 
         @Override
         public boolean validateObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) {
             boolean valid = po.getObject().isValid();
-//            if (!valid) {
-//                LOG.log(Level.INFO, "validateObject {0} {1}-> {2}", new Object[]{k, po.getObject(), valid});
-//            }
+            if (!valid) {
+                LOG.log(Level.INFO, "validateObject {0} {1}-> {2}", new Object[]{k, po.getObject(), valid});
+            }
             return valid;
         }
 
@@ -197,7 +197,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         config.setTestOnBorrow(true);
         config.setTestWhileIdle(true);
         config.setBlockWhenExhausted(true);
-        group = new NioEventLoopGroup();
+        group = new EpollEventLoopGroup();
         connections = new GenericKeyedObjectPool<>(new ConnectionsFactory(), config);
         this.backendHealthManager = backendHealthManager;
         applyNewConfiguration(configuration);
