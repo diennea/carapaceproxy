@@ -68,6 +68,9 @@ public class RuntimeServerConfiguration {
     private int accessLogFlushInterval = 5000;
     private int accessLogWaitBetweenFailures = 10000;
     private String userRealmClassname;
+    private long dynamicCertificateManagerPeriod = 0;
+    private int dynamicCertificatesTTL = 0;
+
 
     public String getAccessLogPath() {
         return accessLogPath;
@@ -181,6 +184,14 @@ public class RuntimeServerConfiguration {
         this.cacheMaxFileSize = cacheMaxFileSize;
     }
 
+    public long getDynamicCertificateManagerPeriod() {
+        return dynamicCertificateManagerPeriod;
+    }
+
+    public int getDynamicCertificatesTTL() {
+        return dynamicCertificatesTTL;
+    }
+    
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
 
         this.maxConnectionsPerEndpoint = getInt("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint, properties);
@@ -235,6 +246,11 @@ public class RuntimeServerConfiguration {
         for (int i = 0; i < 100; i++) {
             tryConfigureFilter(i, properties);
         }
+
+        this.dynamicCertificateManagerPeriod = getLong("dynamiccertificatemanager.period", 0, properties);
+        LOG.info("dynamiccertificatemanager.period=" + dynamicCertificateManagerPeriod);
+        this.dynamicCertificatesTTL = getInt("dynamiccertificatemanager.certificatesttl", 0, properties);
+        LOG.info("dynamiccertificatemanager.certificatesttl=" + dynamicCertificatesTTL);
     }
 
     private void tryConfigureCertificate(int i, ConfigurationStore properties) throws ConfigurationNotValidException {
@@ -245,14 +261,13 @@ public class RuntimeServerConfiguration {
         if (!certificateHostname.isEmpty()) {
             String certificateFile = properties.getProperty(prefix + "sslcertfile", "");
             String certificatePassword = properties.getProperty(prefix + "sslcertfilepassword", "");
+            boolean isDynamic = properties.getProperty(prefix + "isdynamic", "false").equalsIgnoreCase("true");
             LOG.log(Level.INFO, "Configuring SSL certificate {0}hostname={1}, file: {2}", new Object[]{prefix, certificateHostname, certificateFile});
-
-            SSLCertificateConfiguration config
-                    = new SSLCertificateConfiguration(certificateHostname, certificateFile, certificatePassword);
+            
+            SSLCertificateConfiguration config = new SSLCertificateConfiguration(certificateHostname, certificateFile, certificatePassword, isDynamic);
             this.addCertificate(config);
 
         }
-
     }
 
     private void tryConfigureListener(int i, ConfigurationStore properties) throws ConfigurationNotValidException {

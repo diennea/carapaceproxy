@@ -77,6 +77,9 @@ public class StandardEndpointMapper extends EndpointMapper {
         addAction(new ActionConfiguration("cache-if-possible", ActionConfiguration.TYPE_CACHE, DirectorConfiguration.DEFAULT, null, -1));
         addAction(new ActionConfiguration("not-found", ActionConfiguration.TYPE_STATIC, DEFAULT_NOT_FOUND, null, 404));
         addAction(new ActionConfiguration("internal-error", ActionConfiguration.TYPE_STATIC, null, DEFAULT_INTERNAL_SERVER_ERROR, 500));
+        
+//        addAction(new ActionConfiguration("acme-challenge", ActionConfiguration.TYPE_ACME_CHALLENGE, null, null, -1));
+//        addRoute(new RouteConfiguration("acme-challenge", "acme-challenge", true, new URIRequestMatcher("/\\.well-known/acme-challenge/.*")));// fare un MapResult.ACME_CHALLENGE molto simile a SYSTEM
 
         this.defaultNotFoundAction = properties.getProperty("default.action.notfound", "not-found");
         LOG.info("configured default.action.notfound=" + defaultNotFoundAction);

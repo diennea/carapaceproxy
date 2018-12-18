@@ -20,7 +20,9 @@
 package nettyhttpproxy.server;
 
 import com.google.common.annotations.VisibleForTesting;
+import httpproxy.server.certiticates.DynamicCertificateManager;
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -68,6 +70,7 @@ public class HttpProxyServer implements AutoCloseable {
     private final File basePath;
     private final StaticContentsManager staticContentsManager = new StaticContentsManager();
     private final BackendHealthManager backendHealthManager;
+    private final DynamicCertificateManager dynamicCertificateManager;
     private final ConnectionsManager connectionsManager;
     private final PrometheusMetricsProvider statsProvider;
     private final PropertiesConfiguration statsProviderConfig = new PropertiesConfiguration();
@@ -89,7 +92,7 @@ public class HttpProxyServer implements AutoCloseable {
     private int adminServerPort = 8001;
     private String adminServerHost = "localhost";
 
-    public HttpProxyServer(EndpointMapper mapper, File basePath) {
+    public HttpProxyServer(EndpointMapper mapper, File basePath) throws Exception {
         this.mapper = mapper;
         this.basePath = basePath;
         this.statsProvider = new PrometheusMetricsProvider();
@@ -103,9 +106,10 @@ public class HttpProxyServer implements AutoCloseable {
         this.requestsLogger = new RequestsLogger(currentConfiguration);
         this.connectionsManager = new ConnectionsManagerImpl(currentConfiguration,
                 mainLogger, backendHealthManager);
+        this.dynamicCertificateManager = new DynamicCertificateManager(currentConfiguration, basePath);
     }
 
-    public static HttpProxyServer buildForTests(String host, int port, EndpointMapper mapper) throws ConfigurationNotValidException {
+    public static HttpProxyServer buildForTests(String host, int port, EndpointMapper mapper) throws ConfigurationNotValidException, Exception {
         HttpProxyServer res = new HttpProxyServer(mapper, new File(".").getAbsoluteFile());
         res.currentConfiguration.addListener(new NetworkListenerConfiguration(host, port));
         return res;
@@ -157,6 +161,7 @@ public class HttpProxyServer implements AutoCloseable {
             requestsLogger.start();
             listeners.start();
             backendHealthManager.start();
+            dynamicCertificateManager.start();
         } catch (RuntimeException err) {
             close();
             throw err;
@@ -175,6 +180,7 @@ public class HttpProxyServer implements AutoCloseable {
     @Override
     public void close() {
         backendHealthManager.stop();
+        dynamicCertificateManager.stop();
 
         if (adminserver != null) {
             try {
@@ -396,6 +402,7 @@ public class HttpProxyServer implements AutoCloseable {
             
             this.filters = buildFilters(newConfiguration);
             this.backendHealthManager.reloadConfiguration(newConfiguration);
+            this.dynamicCertificateManager.loadConfiguration(newConfiguration);
             this.listeners.reloadConfiguration(newConfiguration);
             this.cache.reloadConfiguration(newConfiguration);
             this.requestsLogger.reloadConfiguration(newConfiguration);
@@ -420,6 +427,10 @@ public class HttpProxyServer implements AutoCloseable {
     @VisibleForTesting
     public void setRealm(UserRealm realm) {
         this.realm = realm;
+    }
+
+    public DynamicCertificateManager getDynamicCertificateManager() {
+        return this.dynamicCertificateManager;
     }
 
 }

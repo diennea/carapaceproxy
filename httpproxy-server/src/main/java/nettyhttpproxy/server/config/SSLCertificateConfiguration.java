@@ -31,8 +31,9 @@ public class SSLCertificateConfiguration {
     private final String sslCertificateFile;
     private final String sslCertificatePassword;
     private final boolean wildcard;
-
-    public SSLCertificateConfiguration(String hostname, String sslCertificateFile, String sslCertificatePassword) {
+    private final boolean dynamic; // true for ACME certificates (p.e. issued by Let's Encrypt).    
+    
+    public SSLCertificateConfiguration(String hostname, String sslCertificateFile, String sslCertificatePassword, boolean dynamic) {
         this.id = hostname;
         if (hostname.equals("*")) {
             this.hostname = "";
@@ -46,6 +47,11 @@ public class SSLCertificateConfiguration {
         }
         this.sslCertificateFile = sslCertificateFile;
         this.sslCertificatePassword = sslCertificatePassword;
+        this.dynamic = dynamic;
+    }
+
+    public SSLCertificateConfiguration(String hostname, String sslCertificateFile, String sslCertificatePassword) {
+        this(hostname, sslCertificateFile, sslCertificatePassword, false);
     }
 
     public String getId() {
@@ -68,9 +74,13 @@ public class SSLCertificateConfiguration {
         return sslCertificatePassword;
     }
 
+    public boolean isDynamic() {
+        return this.dynamic;
+    }
+
     @Override
     public String toString() {
-        return "{" + id + '}';
+        return "SSLCertificateConfiguration{" + "id=" + id + '}';
     }
 
 }

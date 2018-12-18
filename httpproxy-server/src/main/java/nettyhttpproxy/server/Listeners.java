@@ -107,10 +107,20 @@ public class Listeners {
             trustStoreCertFile = trustStoreFile.startsWith("/") ? new File(trustStoreFile) : new File(basePath, trustStoreFile);
             trustStoreCertFile = trustStoreCertFile.getAbsoluteFile();
         }
-
-        String sslCertFilePassword = certificate.getSslCertificatePassword();
-        String certificateFile = certificate.getSslCertificateFile();
-        File sslCertFile = certificateFile.startsWith("/") ? new File(certificateFile) : new File(basePath, certificateFile);
+        String sslCertFilePassword;        
+        File sslCertFile;
+        if (certificate.isDynamic()) {
+            sslCertFilePassword = ""; // no password
+            sslCertFile = parent.getDynamicCertificateManager().getCertificateFile(certificate.getId());
+            if (sslCertFile == null) {
+                throw new ConfigurationNotValidException("Dynamic certificate for "+certificate.getId()+" is not available yet");
+            }
+        } else {            
+            sslCertFilePassword = certificate.getSslCertificatePassword();
+            String certificateFile = certificate.getSslCertificateFile();            
+            sslCertFile = certificateFile.startsWith("/") ? new File(certificateFile) : new File(basePath, certificateFile);
+        }
+        
         sslCertFile = sslCertFile.getAbsoluteFile();
 
         LOG.log(Level.SEVERE, "start SSL with certificate id " + certificate + ", on listener " + listener.getHost() + ":" + listener.getPort() + " file=" + sslCertFile + " OCPS " + listener.isOcps());
@@ -166,13 +176,13 @@ public class Listeners {
                         channel.pipeline().addLast(new HttpRequestDecoder());
                         channel.pipeline().addLast(new HttpResponseEncoder());
                         channel.pipeline().addLast(
-                            new ClientConnectionHandler(mainLogger, parent.getMapper(),
-                                parent.getConnectionsManager(),
-                                parent.getFilters(), parent.getCache(),
-                                channel.remoteAddress(), parent.getStaticContentsManager(),
-                                () -> currentClientConnections.dec(),
-                                parent.getBackendHealthManager(),
-                                parent.getRequestsLogger()));
+                                new ClientConnectionHandler(mainLogger, parent.getMapper(),
+                                        parent.getConnectionsManager(),
+                                        parent.getFilters(), parent.getCache(),
+                                        channel.remoteAddress(), parent.getStaticContentsManager(),
+                                        () -> currentClientConnections.dec(),
+                                        parent.getBackendHealthManager(),
+                                        parent.getRequestsLogger()));
 
                     }
                 })

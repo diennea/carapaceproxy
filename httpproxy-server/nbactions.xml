@@ -7,4 +7,12 @@
                 <goal>dependency:tree</goal>
             </goals>
         </action>
+        <action>
+            <actionName>CUSTOM-compile spotbugs:check</actionName>
+            <displayName>compile spotbugs:check</displayName>
+            <goals>
+                <goal>compile</goal>
+                <goal>spotbugs:check</goal>
+            </goals>
+        </action>
     </actions>
