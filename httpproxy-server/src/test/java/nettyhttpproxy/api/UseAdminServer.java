@@ -67,7 +67,7 @@ public class UseAdminServer {
         prop.putAll(properties);
 
         if (server != null) {
-            server.configure(new PropertiesConfigurationStore(prop));
+            server.configureAtBoot(new PropertiesConfigurationStore(prop));
 
             server.start();
             server.startAdminInterface();
@@ -81,7 +81,7 @@ public class UseAdminServer {
     public void changeDynamicConfiguration(Properties configuration) throws ConfigurationNotValidException, ConfigurationChangeInProgressException, InterruptedException {
         if (server != null) {
             PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
-            server.applyDynamicConfiguration(server.buildValidConfiguration(config), config);
+            server.applyDynamicConfiguration(config);
         }
     }
 

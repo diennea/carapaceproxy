@@ -28,6 +28,7 @@ import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ScheduledFuture;
 import nettyhttpproxy.client.impl.ConnectionsManagerImpl;
@@ -98,7 +99,7 @@ public class ApplyConfigurationTest {
             {
                 Properties configuration = new Properties();
                 configuration.put("mapper.class", StaticEndpointMapper.class.getName());
-                server.configure(new PropertiesConfigurationStore(configuration));
+                server.configureAtBoot(new PropertiesConfigurationStore(configuration));
             }
 
             // start without listeners
@@ -178,7 +179,7 @@ public class ApplyConfigurationTest {
 
             {
                 Properties configuration = new Properties();
-                server.configure(new PropertiesConfigurationStore(configuration));
+                server.configureAtBoot(new PropertiesConfigurationStore(configuration));
             }
             server.start();
 
@@ -248,7 +249,7 @@ public class ApplyConfigurationTest {
         try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
             {
                 Properties configuration = new Properties();
-                server.configure(new PropertiesConfigurationStore(configuration));
+                server.configureAtBoot(new PropertiesConfigurationStore(configuration));
             }
             server.start();
             {
@@ -299,7 +300,7 @@ public class ApplyConfigurationTest {
                 Properties configuration = new Properties();
                 configuration.put("connectionsmanager.connecttimeout", "9473");
                 configuration.put("connectionsmanager.idletimeout", "1000");
-                server.configure(new PropertiesConfigurationStore(configuration));
+                server.configureAtBoot(new PropertiesConfigurationStore(configuration));
             }
 
             {
@@ -356,7 +357,7 @@ public class ApplyConfigurationTest {
             {
                 Properties configuration = new Properties();
                 configuration.put("filter.1.type", "add-x-forwarded-for");
-                server.configure(new PropertiesConfigurationStore(configuration));
+                server.configureAtBoot(new PropertiesConfigurationStore(configuration));
             }
             server.start();
             assertEquals(1, server.getFilters().size());
@@ -395,7 +396,7 @@ public class ApplyConfigurationTest {
             {
                 Properties configuration = new Properties();
                 configuration.put("connectionsmanager.connecttimeout", "9479");
-                server.configure(new PropertiesConfigurationStore(configuration));
+                server.configureAtBoot(new PropertiesConfigurationStore(configuration));
             }
             server.start();
             assertEquals(9479, server.getBackendHealthManager().getConnectTimeout());
@@ -414,7 +415,7 @@ public class ApplyConfigurationTest {
 
     private void reloadConfiguration(Properties configuration, final HttpProxyServer server) throws ConfigurationNotValidException, ConfigurationChangeInProgressException, InterruptedException {
         PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
-        server.applyDynamicConfiguration(server.buildValidConfiguration(config), config);
+        server.applyDynamicConfiguration(config);
     }
 
     private void testIt(int port, boolean ok) throws URISyntaxException, IOException {

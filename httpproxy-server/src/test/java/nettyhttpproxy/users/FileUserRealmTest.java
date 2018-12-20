@@ -81,7 +81,7 @@ public class FileUserRealmTest {
 
             ConfigurationStore configStore = new PropertiesConfigurationStore(prop);
 
-            server.configure(configStore);
+            server.configureAtBoot(configStore);
             server.start();
             server.startAdminInterface();
 
@@ -117,7 +117,7 @@ public class FileUserRealmTest {
             prop.setProperty("userrealm.path", usersFile.getPath());
 
             ConfigurationStore configStore = new PropertiesConfigurationStore(prop);
-            server.configure(configStore);
+            server.configureAtBoot(configStore);
 
             server.start();
             server.startAdminInterface();
@@ -137,7 +137,7 @@ public class FileUserRealmTest {
             newProperties.setProperty("userrealm.path", newUserFile.getPath());
 
             ConfigurationStore newConfigStore = new PropertiesConfigurationStore(newProperties);
-            server.applyDynamicConfiguration(server.buildValidConfiguration(newConfigStore), newConfigStore);
+            server.applyDynamicConfiguration(newConfigStore);
 
             userRealm = server.getRealm();
             resultUsers = userRealm.listUsers();
@@ -169,16 +169,16 @@ public class FileUserRealmTest {
             prop.setProperty("userrealm.path", "target/" + userPropertiesFile.getName());
 
             ConfigurationStore configStore = new PropertiesConfigurationStore(prop);
-            server.configure(configStore);
+            server.configureAtBoot(configStore);
             server.start();
             server.startAdminInterface();
 
             UserRealm userRealm = server.getRealm();
             assertNotNull(userRealm.login("test1", "pass1"));
             assertNotNull(userRealm.login("test2", "pass2"));
-            
+
             assertNull(userRealm.login("test1", "wrongpass"));
-            
+
             userPropertiesFile.delete();
         }
     }

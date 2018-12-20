@@ -39,11 +39,14 @@
             <version>${bookkeeper.version}</version>
         </dependency>
         <dependency>
+            <groupId>org.herddb</groupId>
+            <artifactId>herddb-jdbc</artifactId>
+            <version>${libs.herddb}</version>
+        </dependency>        
+        <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-tcnative-boringssl-static</artifactId>
-            <version>${netty.ssl.version}</version>
-            <scope>compile</scope>
-            <classifier>linux-x86_64</classifier>
+            <version>${netty.ssl.version}</version>            
         </dependency>
         <dependency>
             <groupId>junit</groupId>
@@ -185,24 +188,6 @@
             <version>${project.version}</version>            
             <scope>runtime</scope>
             <type>war</type>
-        </dependency>
-        <dependency>
-            <groupId>org.seleniumhq.selenium</groupId>
-            <artifactId>selenium-java</artifactId>
-            <scope>test</scope>
-            <version>2.44.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.opera</groupId>
-            <artifactId>operadriver</artifactId>
-            <scope>test</scope>
-            <version>1.5</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.seleniumhq.selenium</groupId>
-                    <artifactId>selenium-remote-driver</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.shredzone.acme4j</groupId>

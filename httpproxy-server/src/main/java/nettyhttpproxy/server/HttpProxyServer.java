@@ -39,6 +39,7 @@ import nettyhttpproxy.api.ForceHeadersAPIRequestsFilter;
 import nettyhttpproxy.client.ConnectionsManager;
 import nettyhttpproxy.client.impl.ConnectionsManagerImpl;
 import nettyhttpproxy.configstore.ConfigurationStore;
+import nettyhttpproxy.configstore.HerdDBConfigurationStore;
 import nettyhttpproxy.server.backends.BackendHealthManager;
 import nettyhttpproxy.server.cache.ContentsCache;
 import nettyhttpproxy.server.config.ConfigurationChangeInProgressException;
@@ -77,6 +78,7 @@ public class HttpProxyServer implements AutoCloseable {
     private final RequestsLogger requestsLogger;
 
     private RuntimeServerConfiguration currentConfiguration;
+    private ConfigurationStore dynamicConfigurationStore;
     private EndpointMapper mapper;
     private UserRealm realm;
     private List<RequestFilter> filters;
@@ -176,7 +178,7 @@ public class HttpProxyServer implements AutoCloseable {
     public int getLocalPort() {
         return listeners.getLocalPort();
     }
-    
+
     @Override
     public void close() {
         backendHealthManager.stop();
@@ -205,6 +207,11 @@ public class HttpProxyServer implements AutoCloseable {
             cache.close();
         }
         staticContentsManager.close();
+
+        if (dynamicConfigurationStore != null) {
+            // this will also shutdown embedded database
+            dynamicConfigurationStore.close();
+        }
     }
 
     public ConnectionsManager getConnectionsManager() {
@@ -236,7 +243,7 @@ public class HttpProxyServer implements AutoCloseable {
             throw new RuntimeException(err);
         }
     }
-    
+
     private static UserRealm buildRealm(String className, ConfigurationStore properties) throws ConfigurationNotValidException {
         try {
             UserRealm res = (UserRealm) Class.forName(className).getConstructor().newInstance();
@@ -251,26 +258,33 @@ public class HttpProxyServer implements AutoCloseable {
         }
     }
 
-    /**
-     * Configure the service BEFORE starting it.
-     *
-     * @param properties
-     * @throws ConfigurationNotValidException
-     * @throws InterruptedException
-     * @see
-     * #applyDynamicConfiguration(nettyhttpproxy.server.RuntimeServerConfiguration,
-     * nettyhttpproxy.configstore.ConfigurationStore)
-     */
-    public void configure(ConfigurationStore properties) throws ConfigurationNotValidException, InterruptedException {
+    public void configureAtBoot(ConfigurationStore bootConfigurationStore) throws ConfigurationNotValidException, InterruptedException {
+
         if (started) {
             throw new IllegalStateException("server already started");
         }
-        applyStaticConfiguration(properties);
 
-        RuntimeServerConfiguration newConfiguration = buildValidConfiguration(properties);
+        String dynamicConfigurationType = bootConfigurationStore.getProperty("config.type", "file");
+        switch (dynamicConfigurationType) {
+            case "file":
+                // configuration is store on the same file
+                this.dynamicConfigurationStore = bootConfigurationStore;
+                break;
+            case "database":
+                this.dynamicConfigurationStore = new HerdDBConfigurationStore(bootConfigurationStore);
+                break;
+            default:
+                throw new ConfigurationNotValidException("invalid config.type='" + dynamicConfigurationType + "', only 'file' and 'database' are supported");
+        }
+
+        // "static" configuration cannot change without a reboot
+        applyStaticConfiguration(bootConfigurationStore);
 
         try {
-            applyDynamicConfiguration(newConfiguration, properties);
+            // apply configuration
+            // this can cause database configuration to be overwritten with
+            // configuration from service configuration file
+            applyDynamicConfiguration(null, true);
         } catch (ConfigurationChangeInProgressException impossible) {
             throw new IllegalStateException(impossible);
         }
@@ -343,7 +357,7 @@ public class HttpProxyServer implements AutoCloseable {
     public EndpointMapper getMapper() {
         return mapper;
     }
-    
+
     public UserRealm getRealm() {
         return realm;
     }
@@ -378,28 +392,40 @@ public class HttpProxyServer implements AutoCloseable {
         // creating a mapper validates the configuration
         buildMapper(newConfiguration.getMapperClassname(), simpleStore);
         buildRealm(newConfiguration.getUserRealmClassname(), simpleStore);
-        
+
         return newConfiguration;
     }
 
     /**
      * Apply a new configuration. The configuration MUST be valid
      *
-     * @param newConfiguration
-     * @param simpleStore
+     * @param newConfigurationStore
      * @throws InterruptedException
      * @see
      * #buildValidConfiguration(nettyhttpproxy.configstore.ConfigurationStore)
      */
-    public void applyDynamicConfiguration(RuntimeServerConfiguration newConfiguration, ConfigurationStore simpleStore)
-            throws InterruptedException, ConfigurationChangeInProgressException {
+    public void applyDynamicConfiguration(ConfigurationStore newConfigurationStore) throws InterruptedException, ConfigurationChangeInProgressException {
+        applyDynamicConfiguration(newConfigurationStore, false);
+    }
+
+    private void applyDynamicConfiguration(ConfigurationStore newConfigurationStore, boolean atBoot) throws InterruptedException, ConfigurationChangeInProgressException {
+        if (atBoot && newConfigurationStore != null) {
+            throw new IllegalStateException();
+        }
+        if (!atBoot && newConfigurationStore == null) {
+            throw new IllegalStateException();
+        }
+        // at boot we are constructing a configuration from the database
+        // if the system is already "up" we have to only apply the new config
+        ConfigurationStore storeWithConfig = atBoot ? dynamicConfigurationStore : newConfigurationStore;
         if (!configurationLock.tryLock()) {
             throw new ConfigurationChangeInProgressException();
         }
         try {
-            EndpointMapper newMapper = buildMapper(newConfiguration.getMapperClassname(), simpleStore);
-            UserRealm newRealm = buildRealm(newConfiguration.getUserRealmClassname(), simpleStore);
-            
+            RuntimeServerConfiguration newConfiguration = buildValidConfiguration(storeWithConfig);
+            EndpointMapper newMapper = buildMapper(newConfiguration.getMapperClassname(), storeWithConfig);
+            UserRealm newRealm = buildRealm(newConfiguration.getUserRealmClassname(), storeWithConfig);
+
             this.filters = buildFilters(newConfiguration);
             this.backendHealthManager.reloadConfiguration(newConfiguration);
             this.dynamicCertificateManager.loadConfiguration(newConfiguration);
@@ -407,10 +433,15 @@ public class HttpProxyServer implements AutoCloseable {
             this.cache.reloadConfiguration(newConfiguration);
             this.requestsLogger.reloadConfiguration(newConfiguration);
             this.connectionsManager.applyNewConfiguration(newConfiguration);
-            
+
             this.currentConfiguration = newConfiguration;
             this.mapper = newMapper;
             this.realm = newRealm;
+
+            if (!atBoot) {
+                dynamicConfigurationStore.commitConfiguration(newConfigurationStore);
+            }
+
         } catch (ConfigurationNotValidException err) {
             // impossible to have a non valid configuration here
             throw new IllegalStateException(err);
@@ -420,17 +451,24 @@ public class HttpProxyServer implements AutoCloseable {
     }
 
     @VisibleForTesting
-    public void setMapper(EndpointMapper mapper) {
+    public void setMapper(EndpointMapper mapper
+    ) {
         this.mapper = mapper;
     }
-    
+
     @VisibleForTesting
-    public void setRealm(UserRealm realm) {
+    public void setRealm(UserRealm realm
+    ) {
         this.realm = realm;
     }
 
     public DynamicCertificateManager getDynamicCertificateManager() {
         return this.dynamicCertificateManager;
+    }
+
+    @VisibleForTesting
+    public ConfigurationStore getDynamicConfigurationStore() {
+        return dynamicConfigurationStore;
     }
 
 }

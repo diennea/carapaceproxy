@@ -174,7 +174,7 @@ public class ServerMain implements AutoCloseable {
         pidFileLocker.lock();
 
         server = new HttpProxyServer(null, basePath);
-        server.configure(configuration);
+        server.configureAtBoot(configuration);
         server.start();
         server.startMetrics();
         server.startAdminInterface();

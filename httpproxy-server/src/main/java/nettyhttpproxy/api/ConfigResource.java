@@ -81,9 +81,8 @@ public class ConfigResource {
     public ConfigurationChangeResult apply(String newConfiguration) {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         try {
-            PropertiesConfigurationStore simpleStore = buildStore(newConfiguration);
-            RuntimeServerConfiguration validatedConfiguration = server.buildValidConfiguration(simpleStore);
-            server.applyDynamicConfiguration(validatedConfiguration, simpleStore);
+            PropertiesConfigurationStore simpleStore = buildStore(newConfiguration);            
+            server.applyDynamicConfiguration(simpleStore);
             return ConfigurationChangeResult.OK;
         } catch (ConfigurationNotValidException
                 | ConfigurationChangeInProgressException

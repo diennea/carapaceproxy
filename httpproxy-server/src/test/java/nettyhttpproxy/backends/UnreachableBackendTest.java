@@ -123,7 +123,7 @@ public class UnreachableBackendTest {
             properties.put("connectionsmanager.stuckrequesttimeout", "100"); // ms
             properties.put("connectionsmanager.idletimeout", "2000"); // ms
             // configure resets all listeners configurations
-            server.configure(new PropertiesConfigurationStore(properties));
+            server.configureAtBoot(new PropertiesConfigurationStore(properties));
             server.addListener(new NetworkListenerConfiguration("localhost", 0));
             server.setMapper(mapper);
             assertEquals(100, server.getCurrentConfiguration().getStuckRequestTimeout());
@@ -201,7 +201,7 @@ public class UnreachableBackendTest {
             Properties properties = new Properties();
             properties.put("connectionsmanager.stuckrequesttimeout", "100"); // ms
             properties.put("connectionsmanager.idletimeout", "2000"); // ms
-            server.configure(new PropertiesConfigurationStore(properties));
+            server.configureAtBoot(new PropertiesConfigurationStore(properties));
             server.addListener(new NetworkListenerConfiguration("localhost", 0));
             server.setMapper(mapper);
             assertEquals(100, server.getCurrentConfiguration().getStuckRequestTimeout());

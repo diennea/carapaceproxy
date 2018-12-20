@@ -41,7 +41,7 @@
         </plugins>            
     </build>
     <properties>
-        <bookkeeper.version>4.8.0</bookkeeper.version>
+        <bookkeeper.version>4.8.1</bookkeeper.version>
         <netty.version>4.1.32.Final</netty.version>
         <netty.ssl.version>2.0.20.Final</netty.ssl.version>
         <jetty.version>9.4.8.v20171121</jetty.version>
@@ -61,5 +61,6 @@
         <libs.javaxactivation.api>1.2.0</libs.javaxactivation.api>
         <libs.slf4j>1.7.25</libs.slf4j>
         <libs.stringtemplate>4.0.8</libs.stringtemplate>
+        <libs.herddb>0.7.1</libs.herddb>
     </properties>
 </project>

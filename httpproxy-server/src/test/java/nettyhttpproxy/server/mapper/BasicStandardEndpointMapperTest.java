@@ -195,7 +195,7 @@ public class BasicStandardEndpointMapperTest {
                 configuration.put("route.8.match", "regexp .*index.*");
                 configuration.put("route.8.action", "serve-static");
                 PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
-                server.applyDynamicConfiguration(server.buildValidConfiguration(config), config);
+                server.configureAtBoot(config);                
             }
 
             server.start();

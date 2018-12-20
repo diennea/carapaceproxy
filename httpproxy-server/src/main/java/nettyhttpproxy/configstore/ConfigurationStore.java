@@ -19,6 +19,7 @@
  */
 package nettyhttpproxy.configstore;
 
+import java.util.Properties;
 import java.util.function.BiConsumer;
 
 /**
@@ -26,12 +27,34 @@ import java.util.function.BiConsumer;
  *
  * @author enrico.olivelli
  */
-public interface ConfigurationStore {
+public interface ConfigurationStore extends AutoCloseable {
 
     public String getProperty(String key, String defaultValue);
-    
+
     public void forEach(BiConsumer<String, String> consumer);
-    
+
     public void forEach(String prefix, BiConsumer<String, String> consumer);
+
+    public default Properties asProperties(String prefix) {
+        Properties copy = new Properties();
+        this.forEach((k, v) -> {
+            if (k.startsWith(prefix)) {
+                copy.put(k.substring(prefix.length() + 1), v);
+            }
+        });
+        return copy;
+    }
+
+    @Override
+    public default void close() {
+    }
+
+    /**
+     * Persist (if supported) the new configuration
+     *
+     * @param newConfigurationStore
+     */
+    public default void commitConfiguration(ConfigurationStore newConfigurationStore) {
+    }
 
 }
