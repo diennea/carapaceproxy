@@ -19,6 +19,7 @@
  */
 package nettyhttpproxy;
 
+import httpproxy.server.certiticates.DynamicCertificatesManager;
 import io.netty.handler.codec.http.HttpRequest;
 import java.util.Map;
 import nettyhttpproxy.client.EndpointKey;
@@ -36,7 +37,7 @@ import nettyhttpproxy.server.config.ConfigurationNotValidException;
 public abstract class EndpointMapper {
 
     public abstract Map<String, BackendConfiguration> getBackends();
-    
+
     public abstract MapResult map(HttpRequest request, String userId, String sessionId, BackendHealthManager backendHealthManager, RequestHandler requestHandler);
 
     public MapResult mapDefaultInternalError(HttpRequest request, String routeid) {
@@ -49,8 +50,11 @@ public abstract class EndpointMapper {
 
     public void endpointFailed(EndpointKey key, Throwable error) {
     }
-    
+
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
+    }
+
+    public void setDynamicCertificateManager(DynamicCertificatesManager manager) {
     }
 
 }

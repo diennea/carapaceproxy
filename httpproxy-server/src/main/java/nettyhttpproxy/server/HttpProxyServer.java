@@ -20,9 +20,8 @@
 package nettyhttpproxy.server;
 
 import com.google.common.annotations.VisibleForTesting;
-import httpproxy.server.certiticates.DynamicCertificateManager;
+import httpproxy.server.certiticates.DynamicCertificatesManager;
 import java.io.File;
-import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -71,12 +70,12 @@ public class HttpProxyServer implements AutoCloseable {
     private final File basePath;
     private final StaticContentsManager staticContentsManager = new StaticContentsManager();
     private final BackendHealthManager backendHealthManager;
-    private final DynamicCertificateManager dynamicCertificateManager;
     private final ConnectionsManager connectionsManager;
     private final PrometheusMetricsProvider statsProvider;
     private final PropertiesConfiguration statsProviderConfig = new PropertiesConfiguration();
     private final RequestsLogger requestsLogger;
 
+    private DynamicCertificatesManager dynamicCertificateManager;
     private RuntimeServerConfiguration currentConfiguration;
     private ConfigurationStore dynamicConfigurationStore;
     private EndpointMapper mapper;
@@ -108,7 +107,10 @@ public class HttpProxyServer implements AutoCloseable {
         this.requestsLogger = new RequestsLogger(currentConfiguration);
         this.connectionsManager = new ConnectionsManagerImpl(currentConfiguration,
                 mainLogger, backendHealthManager);
-        this.dynamicCertificateManager = new DynamicCertificateManager(currentConfiguration, basePath);
+        this.dynamicCertificateManager = new DynamicCertificatesManager(currentConfiguration, basePath);
+        if (mapper != null) {
+            mapper.setDynamicCertificateManager(dynamicCertificateManager);
+        }
     }
 
     public static HttpProxyServer buildForTests(String host, int port, EndpointMapper mapper) throws ConfigurationNotValidException, Exception {
@@ -424,6 +426,7 @@ public class HttpProxyServer implements AutoCloseable {
         try {
             RuntimeServerConfiguration newConfiguration = buildValidConfiguration(storeWithConfig);
             EndpointMapper newMapper = buildMapper(newConfiguration.getMapperClassname(), storeWithConfig);
+            newMapper.setDynamicCertificateManager(this.dynamicCertificateManager);
             UserRealm newRealm = buildRealm(newConfiguration.getUserRealmClassname(), storeWithConfig);
 
             this.filters = buildFilters(newConfiguration);
@@ -451,19 +454,28 @@ public class HttpProxyServer implements AutoCloseable {
     }
 
     @VisibleForTesting
-    public void setMapper(EndpointMapper mapper
-    ) {
+    public void setMapper(EndpointMapper mapper) {
         this.mapper = mapper;
+        if (mapper != null) {
+            mapper.setDynamicCertificateManager(dynamicCertificateManager);
+        }
     }
 
     @VisibleForTesting
-    public void setRealm(UserRealm realm
-    ) {
+    public void setRealm(UserRealm realm) {
         this.realm = realm;
     }
 
-    public DynamicCertificateManager getDynamicCertificateManager() {
+    public DynamicCertificatesManager getDynamicCertificateManager() {
         return this.dynamicCertificateManager;
+    }
+
+    @VisibleForTesting
+    public void setDynamicCertificateManager(DynamicCertificatesManager dynamicCertificateManager) {
+        this.dynamicCertificateManager = dynamicCertificateManager;
+        if (mapper != null) {
+            mapper.setDynamicCertificateManager(dynamicCertificateManager);
+        }
     }
 
     @VisibleForTesting

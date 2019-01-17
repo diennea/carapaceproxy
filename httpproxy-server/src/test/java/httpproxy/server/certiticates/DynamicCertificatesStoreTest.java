@@ -19,9 +19,9 @@
  */
 package httpproxy.server.certiticates;
 
-import static httpproxy.server.certiticates.DynamicCertificateStore.KEYSTORE_CERT_ALIAS;
-import static httpproxy.server.certiticates.DynamicCertificateStore.KEYSTORE_FORMAT;
-import static httpproxy.server.certiticates.DynamicCertificateStore.KEYSTORE_PW;
+import static httpproxy.server.certiticates.DynamicCertificatesStore.KEYSTORE_CERT_ALIAS;
+import static httpproxy.server.certiticates.DynamicCertificatesStore.KEYSTORE_FORMAT;
+import static httpproxy.server.certiticates.DynamicCertificatesStore.KEYSTORE_PW;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -51,7 +51,7 @@ import org.junit.rules.TemporaryFolder;
  *
  * @author paolo.venturi
  */
-public class DynamicCertificateStoreTest {
+public class DynamicCertificatesStoreTest {
 
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
@@ -92,9 +92,9 @@ public class DynamicCertificateStoreTest {
             + "BESbPX6Doc0=";
 
     @Test
-    public void testCertificateStoring() throws ConfigurationNotValidException, DynamicCertificateStore.DynamicCertificateStoreException, IOException, CertificateException, KeyStoreException, NoSuchAlgorithmException, UnrecoverableKeyException {
+    public void testCertificateStoring() throws ConfigurationNotValidException, DynamicCertificatesStore.DynamicCertificateStoreException, IOException, CertificateException, KeyStoreException, NoSuchAlgorithmException, UnrecoverableKeyException {
         File basePath = folder.getRoot();
-        DynamicCertificateStore store = new DynamicCertificateStore(basePath);
+        DynamicCertificatesStore store = new DynamicCertificatesStore(basePath);
 
         Properties props = new Properties();
         String d2 = "site2-qapatch.informatica.it";

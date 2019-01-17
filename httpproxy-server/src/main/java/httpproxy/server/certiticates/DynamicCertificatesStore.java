@@ -40,9 +40,9 @@ import org.shredzone.acme4j.util.KeyPairUtils;
  * 
  * @author paolo.venturi
  */
-public class DynamicCertificateStore {
+public class DynamicCertificatesStore {
 
-    private static final java.util.logging.Logger LOG = java.util.logging.Logger.getLogger(DynamicCertificateStore.class.getName());
+    private static final java.util.logging.Logger LOG = java.util.logging.Logger.getLogger(DynamicCertificatesStore.class.getName());
 
     // File name of the User Key Pair
     public static final String USER_KEY_FILE = "acme_client.key";
@@ -57,7 +57,7 @@ public class DynamicCertificateStore {
 
     private final File basePath;
 
-    public DynamicCertificateStore(File basePath) {
+    public DynamicCertificatesStore(File basePath) {
         this.basePath = basePath;
     }
 

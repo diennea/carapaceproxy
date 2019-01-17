@@ -27,6 +27,7 @@ public class ActionConfiguration {
     public static final String TYPE_PROXY = "proxy";
     public static final String TYPE_CACHE = "cache";
     public static final String TYPE_STATIC = "static";
+    public static final String TYPE_ACME_CHALLENGE = "acme-challenge";
 
     private final String id;
     private final String type;

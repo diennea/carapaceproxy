@@ -199,6 +199,7 @@ public class RequestHandler {
             case INTERNAL_ERROR:
             case SYSTEM:
             case STATIC:
+            case ACME_CHALLENGE:
                 return;
             case PROXY:
                 try {
@@ -247,6 +248,7 @@ public class RequestHandler {
         }
         switch (action.action) {
             case STATIC:
+            case ACME_CHALLENGE:
             case INTERNAL_ERROR:
             case NOTFOUND:
                 break;
@@ -299,7 +301,8 @@ public class RequestHandler {
                 serveInternalErrorMessage(false);
                 break;
             }
-            case STATIC: {
+            case STATIC:
+            case ACME_CHALLENGE: {
                 serveStaticMessage();
                 break;
             }
@@ -476,7 +479,7 @@ public class RequestHandler {
     }
 
     private void sendServiceNotAvailable() {
-//        LOG.info(this + " sendServiceNotAvailable due to " + cause + " to " + ctx);        
+//        LOG.info(this + " sendServiceNotAvailable due to " + cause + " to " + ctx);
         FullHttpResponse response
                 = connectionToClient.staticContentsManager.buildResponse(500, DEFAULT_INTERNAL_SERVER_ERROR);
         channelToClient.writeAndFlush(response).addListener(new GenericFutureListener<Future<? super Void>>() {
@@ -526,11 +529,11 @@ public class RequestHandler {
         return connectionToEndpoint.get();
     }
 
-    public boolean errorSendingRequest(EndpointConnectionImpl connection, Throwable cause) {        
+    public boolean errorSendingRequest(EndpointConnectionImpl connection, Throwable cause) {
         boolean ok = releaseConnectionToEndpoint(true, connection);
         if (ok) {
             connectionToClient.errorSendingRequest(this, connection, channelToClient, cause);
-            sendServiceNotAvailable();            
+            sendServiceNotAvailable();
         }
         return ok;
 

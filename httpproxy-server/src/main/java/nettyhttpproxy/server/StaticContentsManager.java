@@ -39,8 +39,13 @@ import org.apache.commons.io.IOUtils;
  */
 public class StaticContentsManager {
 
-    public static final String DEFAULT_NOT_FOUND = "classpath:/default-error-pages/404_notfound.html";
-    public static final String DEFAULT_INTERNAL_SERVER_ERROR = "classpath:/default-error-pages/500_internalservererror.html";
+    // Loadable resource types
+    public static final String CLASSPATH_RESOURCE = "classpath:";
+    public static final String FILE_RESOURCE = "file:";
+    public static final String IN_MEMORY_RESOURCE = "mem:";
+
+    public static final String DEFAULT_NOT_FOUND = CLASSPATH_RESOURCE + "/default-error-pages/404_notfound.html";
+    public static final String DEFAULT_INTERNAL_SERVER_ERROR = CLASSPATH_RESOURCE + "/default-error-pages/500_internalservererror.html";
 
     private final ConcurrentHashMap<String, ByteBuf> contents = new ConcurrentHashMap<>();
 
@@ -73,19 +78,22 @@ public class StaticContentsManager {
 
     private static ByteBuf loadResource(String resource) {
         try {
-            if (resource.startsWith("classpath:")) {
-                resource = resource.substring("classpath:".length());
+            if (resource.startsWith(CLASSPATH_RESOURCE)) {
+                resource = resource.substring(CLASSPATH_RESOURCE.length());
                 try (InputStream resourceAsStream = StaticContentsManager.class.getResourceAsStream(resource);) {
                     if (resourceAsStream == null) {
                         throw new FileNotFoundException("no such resource " + resource + " on classpath");
                     }
                     return Unpooled.wrappedBuffer(IOUtils.toByteArray(resourceAsStream));
                 }
-            } else if (resource.startsWith("file:")) {
-                resource = resource.substring("file:".length());
+            } else if (resource.startsWith(FILE_RESOURCE)) {
+                resource = resource.substring(FILE_RESOURCE.length());
                 return Unpooled.wrappedBuffer(FileUtils.readFileToByteArray(new File(resource)));
+            } else if (resource.startsWith(IN_MEMORY_RESOURCE)) {
+                resource = resource.substring(IN_MEMORY_RESOURCE.length());
+                return Unpooled.wrappedBuffer(resource.getBytes("UTF-8"));
             } else {
-                throw new IOException("cannot load resource " + resource + ", path must start with file: or classpath:");
+                throw new IOException("cannot load resource " + resource + ", path must start with " + FILE_RESOURCE + " or " + CLASSPATH_RESOURCE);
             }
         } catch (IOException | NullPointerException err) {
             LOG.severe("Cannot load resource " + resource + ": " + err);

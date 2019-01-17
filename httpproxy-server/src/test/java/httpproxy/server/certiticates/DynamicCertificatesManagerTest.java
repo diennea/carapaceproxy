@@ -20,16 +20,16 @@
 package httpproxy.server.certiticates;
 
 import static httpproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.AVAILABLE;
+import static httpproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.EXPIRED;
 import static httpproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.ORDERING;
 import static httpproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.REQUEST_FAILED;
 import static httpproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.VERIFIED;
 import static httpproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.VERIFYING;
 import static httpproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.WAITING;
-import static httpproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.EXPIRED;
-import httpproxy.server.certiticates.DynamicCertificateStore.DynamicCertificateStoreException;
-import static httpproxy.server.certiticates.DynamicCertificateStore.KEYSTORE_CERT_ALIAS;
-import static httpproxy.server.certiticates.DynamicCertificateStore.KEYSTORE_FORMAT;
-import static httpproxy.server.certiticates.DynamicCertificateStore.KEYSTORE_PW;
+import httpproxy.server.certiticates.DynamicCertificatesStore.DynamicCertificateStoreException;
+import static httpproxy.server.certiticates.DynamicCertificatesStore.KEYSTORE_CERT_ALIAS;
+import static httpproxy.server.certiticates.DynamicCertificatesStore.KEYSTORE_FORMAT;
+import static httpproxy.server.certiticates.DynamicCertificatesStore.KEYSTORE_PW;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
@@ -50,8 +50,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import org.junit.Ignore;
-import org.junit.Test;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import static org.mockito.ArgumentMatchers.any;
@@ -65,12 +65,12 @@ import static org.shredzone.acme4j.Status.VALID;
 import org.shredzone.acme4j.challenge.Http01Challenge;
 
 /**
- * Test del DynamicCertificateManager sia con casi reali sia con mock.
+ * Test del DynamicCertificatesManager sia con casi reali sia con mock.
  *
  * @author paolo.venturi
  */
 @RunWith(JUnitParamsRunner.class)
-public class DynamicCertificateManagerTest {
+public class DynamicCertificatesManagerTest {
 
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
@@ -96,7 +96,7 @@ public class DynamicCertificateManagerTest {
 
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(new PropertiesConfigurationStore(props));
-        DynamicCertificateManager man = new DynamicCertificateManager(conf, basePath);
+        DynamicCertificatesManager man = new DynamicCertificatesManager(conf, basePath);
 
         TestUtils.waitForCondition(() -> {
             man.run();
@@ -154,12 +154,14 @@ public class DynamicCertificateManagerTest {
 
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(new PropertiesConfigurationStore(props));
-        DynamicCertificateManager man = new DynamicCertificateManager(conf, basePath);
+        DynamicCertificatesManager man = new DynamicCertificatesManager(conf, basePath);
 
         ACMEClient ac = mock(ACMEClient.class);
         Order o = mock(Order.class);
         when(ac.createOrderForDomain(any())).thenReturn(o);
         Http01Challenge c = mock(Http01Challenge.class);
+        when(c.getToken()).thenReturn("");
+        when(c.getAuthorization()).thenReturn("");
         when(ac.getHTTPChallengeForOrder(any())).thenReturn(runCase.equals("challenge_null") ? null : c);
         when(ac.checkResponseForChallenge(any())).thenReturn(runCase.equals("challenge_status_invalid") ? INVALID : VALID);
         when(ac.checkResponseForOrder(any())).thenReturn(runCase.equals("order_response_error") ? INVALID : VALID);
@@ -171,7 +173,7 @@ public class DynamicCertificateManagerTest {
         }
         when(ac.fetchCertificateForOrder(any())).thenReturn(cert);
 
-        DynamicCertificateStore s = mock(DynamicCertificateStore.class);
+        DynamicCertificatesStore s = mock(DynamicCertificatesStore.class);
         if (runCase.equals("storing_exception")) {
             doThrow(DynamicCertificateStoreException.class).when(s).saveCertificate(any());
         }

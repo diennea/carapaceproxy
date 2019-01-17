@@ -22,13 +22,13 @@ package httpproxy.server.certiticates;
 import com.google.common.annotations.VisibleForTesting;
 import httpproxy.server.certiticates.DynamicCertificate.DynamicCertificateState;
 import static httpproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.AVAILABLE;
+import static httpproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.EXPIRED;
 import static httpproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.ORDERING;
 import static httpproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.REQUEST_FAILED;
 import static httpproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.VERIFIED;
 import static httpproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.VERIFYING;
 import static httpproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.WAITING;
-import static httpproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.EXPIRED;
-import httpproxy.server.certiticates.DynamicCertificateStore.DynamicCertificateStoreException;
+import httpproxy.server.certiticates.DynamicCertificatesStore.DynamicCertificateStoreException;
 import java.io.File;
 import java.io.IOException;
 import java.security.KeyPair;
@@ -45,30 +45,32 @@ import nettyhttpproxy.server.config.SSLCertificateConfiguration;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
 import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.Status;
+import org.shredzone.acme4j.challenge.Challenge;
 import org.shredzone.acme4j.challenge.Http01Challenge;
 import org.shredzone.acme4j.exception.AcmeException;
 
 /**
  *
  * Manager for SSL certificates issued via ACME and Let's Encrypt
- * 
+ *
  * @author paolo.venturi
  */
-public final class DynamicCertificateManager implements Runnable {
+public class DynamicCertificatesManager implements Runnable {
 
-    private static final Logger LOG = Logger.getLogger(DynamicCertificateManager.class.getName());
+    private static final Logger LOG = Logger.getLogger(DynamicCertificatesManager.class.getName());
     private static final boolean TESTING_MODE = true;
-    public static final String THREAD_NAME = "dynamic-certifica-manager";
+    public static final String THREAD_NAME = "dynamic-certificates-manager";
 
     private Map<String, DynamicCertificate> certificates = new ConcurrentHashMap();
+    private Map<String, String> challengesTokens = new ConcurrentHashMap();
     private ACMEClient client; // Let's Encrypt client
-    private long period; // in seconds    
+    private long period; // in seconds
     private ScheduledExecutorService scheduler;
-    private DynamicCertificateStore store;
+    private DynamicCertificatesStore store;
 
-    public DynamicCertificateManager(RuntimeServerConfiguration initialConfiguration, File basePath) throws DynamicCertificateStoreException {
+    public DynamicCertificatesManager(RuntimeServerConfiguration initialConfiguration, File basePath) throws DynamicCertificateStoreException {
         loadConfiguration(initialConfiguration);
-        this.store = new DynamicCertificateStore(basePath);
+        this.store = new DynamicCertificatesStore(basePath);
         this.client = new ACMEClient(this.store.loadOrCreateUserKey(), TESTING_MODE);
     }
 
@@ -110,7 +112,7 @@ public final class DynamicCertificateManager implements Runnable {
         for (DynamicCertificate cert : certificates.values()) {
             try {
                 String domain = cert.getHostname();
-                DynamicCertificateState state = cert.getState();               
+                DynamicCertificateState state = cert.getState();
                 switch (state) {
                     case WAITING: // certificato che deve essere generato/rinnovato
                         LOG.info("Certificate issuing process for domain: " + domain + " started.");
@@ -120,21 +122,24 @@ public final class DynamicCertificateManager implements Runnable {
                         if (challenge == null) {
                             cert.setState(VERIFIED);
                         } else {
-                            executeChallengeForDomain(challenge, domain);
+                            triggerChallengeForDomain(challenge, domain);
                             cert.setPendingChallenge(challenge);
                             cert.setState(VERIFYING);
                         }
                         break;
 
                     case VERIFYING: // richiesta verifica challenge a LE
-                        Status status = client.checkResponseForChallenge(cert.getPendingChallenge());
+                        Challenge pendingChallenge = cert.getPendingChallenge();
+                        Status status = client.checkResponseForChallenge(pendingChallenge);
                         if (status == Status.VALID) {
                             cert.setState(VERIFIED);
+                            challengesTokens.remove(((Http01Challenge)pendingChallenge).getToken());
                         } else if (status == Status.INVALID) {
                             cert.setAvailable(false);
                             cert.setState(REQUEST_FAILED);
                         }
                         break;
+
 
                     case VERIFIED: // certificato verificato
                         KeyPair keys = this.store.loadOrCreateKeyForDomain(domain);
@@ -158,23 +163,23 @@ public final class DynamicCertificateManager implements Runnable {
                         }
                         break;
 
-                    case REQUEST_FAILED: // challenge/ordine falliti                        
+                    case REQUEST_FAILED: // challenge/ordine falliti
                         LOG.info("Certificate issuing for domain: " + domain + " failed.");
                         cert.setState(WAITING);
                         break;
 
-                    case AVAILABLE: // salvato/disponibile/non scaduto                        
+                    case AVAILABLE: // salvato/disponibile/non scaduto
                         if (cert.isExpired()) {
                             cert.setAvailable(false);
                             cert.setState(EXPIRED);
                         }
                         break;
 
-                    case EXPIRED:     // certificato scaduto                        
+                    case EXPIRED:     // certificato scaduto
                         LOG.info("Certificate for domain: " + domain + " exipired.");
                         cert.setState(WAITING);
                         break;
-                        
+
                     default:
                         throw new IllegalStateException();
                 }
@@ -204,16 +209,14 @@ public final class DynamicCertificateManager implements Runnable {
         return null;
     }
 
-    private void executeChallengeForDomain(Http01Challenge challenge, String domain) throws AcmeException {
-//        String challengeRequiredFileName = challenge.getToken();
-//        String challengeURL = String.format(
-//                "http://{}/.well-known/acme-challenge/{}",
-//                domain,
-//                challengeRequiredFileName
-//        );
-//        String challengeFileContent = challenge.getAuthorization();
-
-        //@todo routes setup for challenge response
+    private void triggerChallengeForDomain(Http01Challenge challenge, String domain) throws AcmeException {
+        challengesTokens.put(challenge.getToken(), challenge.getAuthorization());
         challenge.trigger();
     }
+
+    public String getChallengeToken(String tokenName) {
+        return challengesTokens.get(tokenName);
+    }
+
+
 }

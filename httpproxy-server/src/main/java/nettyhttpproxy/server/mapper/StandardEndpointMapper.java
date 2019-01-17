@@ -19,7 +19,9 @@
  */
 package nettyhttpproxy.server.mapper;
 
+import httpproxy.server.certiticates.DynamicCertificatesManager;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -33,17 +35,18 @@ import nettyhttpproxy.configstore.ConfigurationStore;
 import nettyhttpproxy.server.RequestHandler;
 import static nettyhttpproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
 import static nettyhttpproxy.server.StaticContentsManager.DEFAULT_NOT_FOUND;
+import static nettyhttpproxy.server.StaticContentsManager.IN_MEMORY_RESOURCE;
 import nettyhttpproxy.server.backends.BackendHealthManager;
 import nettyhttpproxy.server.config.ActionConfiguration;
 import nettyhttpproxy.server.config.BackendConfiguration;
 import nettyhttpproxy.server.config.BackendSelector;
 import nettyhttpproxy.server.config.ConfigurationNotValidException;
+import nettyhttpproxy.server.config.DirectorConfiguration;
+import static nettyhttpproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
 import nettyhttpproxy.server.config.MatchAllRequestMatcher;
 import nettyhttpproxy.server.config.RequestMatcher;
 import nettyhttpproxy.server.config.RouteConfiguration;
 import nettyhttpproxy.server.config.RoutingKey;
-import nettyhttpproxy.server.config.DirectorConfiguration;
-import static nettyhttpproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
 import nettyhttpproxy.server.config.URIRequestMatcher;
 import nettyhttpproxy.server.filters.UrlEncodedQueryString;
 
@@ -65,6 +68,8 @@ public class StandardEndpointMapper extends EndpointMapper {
 
     private static final int MAX_IDS = 200;
     private static final Logger LOG = Logger.getLogger(StandardEndpointMapper.class.getName());
+    private static final String ACME_CHALLENGE_URI_PATTERN = "/\\.well-known/acme-challenge/";
+    private DynamicCertificatesManager dynamicCertificateManger;
 
     public StandardEndpointMapper(BackendSelector backendSelector) {
         this.backendSelector = backendSelector;
@@ -77,9 +82,10 @@ public class StandardEndpointMapper extends EndpointMapper {
         addAction(new ActionConfiguration("cache-if-possible", ActionConfiguration.TYPE_CACHE, DirectorConfiguration.DEFAULT, null, -1));
         addAction(new ActionConfiguration("not-found", ActionConfiguration.TYPE_STATIC, DEFAULT_NOT_FOUND, null, 404));
         addAction(new ActionConfiguration("internal-error", ActionConfiguration.TYPE_STATIC, null, DEFAULT_INTERNAL_SERVER_ERROR, 500));
-        
-//        addAction(new ActionConfiguration("acme-challenge", ActionConfiguration.TYPE_ACME_CHALLENGE, null, null, -1));
-//        addRoute(new RouteConfiguration("acme-challenge", "acme-challenge", true, new URIRequestMatcher("/\\.well-known/acme-challenge/.*")));// fare un MapResult.ACME_CHALLENGE molto simile a SYSTEM
+
+        // Route+Action configuration for Let's Encrypt ACME challenging
+        addAction(new ActionConfiguration("acme-challenge", ActionConfiguration.TYPE_ACME_CHALLENGE, null, null, HttpResponseStatus.OK.code()));
+        addRoute(new RouteConfiguration("acme-challenge", "acme-challenge", true, new URIRequestMatcher(".*" + ACME_CHALLENGE_URI_PATTERN + ".*")));
 
         this.defaultNotFoundAction = properties.getProperty("default.action.notfound", "not-found");
         LOG.info("configured default.action.notfound=" + defaultNotFoundAction);
@@ -235,6 +241,11 @@ public class StandardEndpointMapper extends EndpointMapper {
     }
 
     @Override
+    public void setDynamicCertificateManager(DynamicCertificatesManager manager) {
+        this.dynamicCertificateManger = manager;
+    }
+
+    @Override
     public MapResult map(HttpRequest request, String userId, String sessionId, BackendHealthManager backendHealthManager, RequestHandler requestHandler) {
         boolean somethingMatched = false;
         for (RouteConfiguration route : routes) {
@@ -253,6 +264,20 @@ public class StandardEndpointMapper extends EndpointMapper {
                     return new MapResult(null, -1, MapResult.Action.STATIC, route.getId())
                             .setResource(action.getFile())
                             .setErrorcode(action.getErrorcode());
+                }
+                if (ActionConfiguration.TYPE_ACME_CHALLENGE.equals(action.getType())) {
+                    if (this.dynamicCertificateManger != null) {
+                        String tokenName = request.uri().replaceFirst(".*" + ACME_CHALLENGE_URI_PATTERN, "");
+                        String tokenData = dynamicCertificateManger.getChallengeToken(tokenName);
+                        if (tokenData == null) {
+                            return MapResult.NOT_FOUND(route.getId());
+                        }
+                        return new MapResult(null, -1, MapResult.Action.ACME_CHALLENGE, route.getId())
+                                .setResource(IN_MEMORY_RESOURCE + tokenData)
+                                .setErrorcode(action.getErrorcode());
+                    } else {
+                        return MapResult.INTERNAL_ERROR(route.getId());
+                    }
                 }
                 UrlEncodedQueryString queryString = requestHandler.getQueryString();
                 String director = action.getDirector();

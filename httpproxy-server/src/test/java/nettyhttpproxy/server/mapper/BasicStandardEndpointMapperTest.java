@@ -19,31 +19,37 @@ package nettyhttpproxy.server.mapper;
  under the License.
 
  */
-import nettyhttpproxy.utils.TestUtils;
-import nettyhttpproxy.server.HttpProxyServer;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import httpproxy.server.certiticates.DynamicCertificatesManager;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URL;
 import java.util.Properties;
 import nettyhttpproxy.client.ConnectionsManagerStats;
 import nettyhttpproxy.configstore.PropertiesConfigurationStore;
+import nettyhttpproxy.server.HttpProxyServer;
 import nettyhttpproxy.server.StaticContentsManager;
+import static nettyhttpproxy.server.StaticContentsManager.CLASSPATH_RESOURCE;
 import nettyhttpproxy.server.config.ActionConfiguration;
 import nettyhttpproxy.server.config.BackendConfiguration;
 import nettyhttpproxy.server.config.DirectorConfiguration;
 import nettyhttpproxy.server.config.RouteConfiguration;
 import nettyhttpproxy.server.config.URIRequestMatcher;
+import nettyhttpproxy.utils.TestUtils;
 import org.apache.commons.io.IOUtils;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import static org.mockito.ArgumentMatchers.matches;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  *
@@ -91,7 +97,7 @@ public class BasicStandardEndpointMapperTest {
 
         mapper.addAction(new ActionConfiguration("not-found-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_NOT_FOUND, 404));
         mapper.addAction(new ActionConfiguration("error-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR, 500));
-        mapper.addAction(new ActionConfiguration("static-custom", ActionConfiguration.TYPE_STATIC, null, "classpath:/test-static-page.html", 200));
+        mapper.addAction(new ActionConfiguration("static-custom", ActionConfiguration.TYPE_STATIC, null, CLASSPATH_RESOURCE + "/test-static-page.html", 200));
 
         mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new URIRequestMatcher(".*index.html.*")));
         mapper.addRoute(new RouteConfiguration("route-1b", "cache-1", true, new URIRequestMatcher(".*index2.html.*")));
@@ -100,7 +106,7 @@ public class BasicStandardEndpointMapperTest {
         mapper.addRoute(new RouteConfiguration("route-3-error", "error-custom", true, new URIRequestMatcher(".*error.html.*")));
         mapper.addRoute(new RouteConfiguration("route-4-static", "static-custom", true, new URIRequestMatcher(".*static.html.*")));
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
+        try ( HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
             server.start();
             int port = server.getLocalPort();
             stats = server.getConnectionsManager().getStats();
@@ -162,13 +168,13 @@ public class BasicStandardEndpointMapperTest {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try ( HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
 
             {
                 Properties configuration = new Properties();
                 configuration.put("backend.1.id", "foo");
                 configuration.put("backend.1.host", "localhost");
-                configuration.put("backend.1.port", backend1.port()+"");
+                configuration.put("backend.1.port", backend1.port() + "");
                 configuration.put("backend.1.enabled", "true");
 
                 configuration.put("director.1.id", "*");
@@ -188,14 +194,14 @@ public class BasicStandardEndpointMapperTest {
                 configuration.put("action.1.id", "serve-static");
                 configuration.put("action.1.enabled", "true");
                 configuration.put("action.1.type", "static");
-                configuration.put("action.1.file", "classpath:/test-static-page.html");
+                configuration.put("action.1.file", CLASSPATH_RESOURCE + "/test-static-page.html");
                 configuration.put("action.1.code", "200");
                 configuration.put("route.8.id", "static-page");
                 configuration.put("route.8.enabled", "true");
                 configuration.put("route.8.match", "regexp .*index.*");
                 configuration.put("route.8.action", "serve-static");
                 PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
-                server.configureAtBoot(config);                
+                server.configureAtBoot(config);
             }
 
             server.start();
@@ -204,12 +210,72 @@ public class BasicStandardEndpointMapperTest {
                 String url = "http://localhost:" + server.getLocalPort() + "/index.html";
                 String s = IOUtils.toString(new URL(url).toURI(), "utf-8");
                 assertEquals("Test static page", s);
-            } 
+            }
             {
 
                 String url = "http://localhost:" + server.getLocalPort() + "/seconda.html";
                 String s = IOUtils.toString(new URL(url).toURI(), "utf-8");
                 assertEquals("it <b>works</b> !!", s);
+            }
+
+        }
+    }
+
+    @Test
+    public void testServeACMEChallengeToken() throws Exception {
+        try ( HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+            final String tokenName = "test-token";
+            final String tokenData = "test-token-data-content";
+            DynamicCertificatesManager dynamicCertificateManager = mock(DynamicCertificatesManager.class);
+            when(dynamicCertificateManager.getChallengeToken(matches(tokenName))).thenReturn(tokenData);
+            server.setDynamicCertificateManager(dynamicCertificateManager);
+
+            Properties configuration = new Properties();
+            configuration.put("backend.1.id", "foo");
+            configuration.put("backend.1.host", "localhost");
+            configuration.put("backend.1.port", backend1.port() + "");
+            configuration.put("backend.1.enabled", "true");
+
+            configuration.put("director.1.id", "*");
+            configuration.put("director.1.backends", "*");
+            configuration.put("director.1.enabled", "true");
+
+            configuration.put("listener.1.host", "0.0.0.0");
+            configuration.put("listener.1.port", "1425");
+            configuration.put("listener.1.ssl", "false");
+            configuration.put("listener.1.enabled", "true");
+
+            configuration.put("route.10.id", "default");
+            configuration.put("route.10.enabled", "true");
+            configuration.put("route.10.match", "all");
+            configuration.put("route.10.action", "proxy-all");
+
+            configuration.put("action.1.id", "serve-static");
+            configuration.put("action.1.enabled", "true");
+            configuration.put("action.1.type", "static");
+            configuration.put("action.1.file", CLASSPATH_RESOURCE + "/test-static-page.html");
+            configuration.put("action.1.code", "200");
+            configuration.put("route.8.id", "static-page");
+            configuration.put("route.8.enabled", "true");
+            configuration.put("route.8.match", "regexp .*index.*");
+            configuration.put("route.8.action", "serve-static");
+            PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
+            server.configureAtBoot(config);
+
+            server.start();
+
+            // Test existent token
+            String url = "http://localhost:" + server.getLocalPort() + "/.well-known/acme-challenge/" + tokenName;
+            String s = IOUtils.toString(new URL(url).toURI(), "utf-8");
+            assertEquals(tokenData, s);
+
+            // Test not existent token
+            try {
+                url = "http://localhost:" + server.getLocalPort() + "/.well-known/acme-challenge/not-existent-token";
+                IOUtils.toString(new URL(url).toURI(), "utf-8");
+                fail();
+            } catch (Throwable t) {
+                assertTrue(t instanceof FileNotFoundException);
             }
 
         }

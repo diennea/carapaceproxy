@@ -22,13 +22,13 @@ package nettyhttpproxy;
 public class MapResult {
 
     public static final String NO_ROUTE = "-";
-    
+
     public final String host;
     public final int port;
     public final Action action;
     public final String routeid;
     public int errorcode;
-    public String resource;    
+    public String resource;
 
     public MapResult(String host, int port, Action action, String routeid) {
         this.host = host;
@@ -36,11 +36,11 @@ public class MapResult {
         this.action = action;
         this.routeid = routeid;
     }
-    
+
     public static MapResult NOT_FOUND(String routeid) {
         return new MapResult(null, 0, Action.NOTFOUND, routeid);
     }
-    
+
     public static MapResult INTERNAL_ERROR(String routeid) {
         return new MapResult(null, 0, Action.INTERNAL_ERROR, routeid);
     }
@@ -92,7 +92,11 @@ public class MapResult {
         /**
          * Answer with system info
          */
-        SYSTEM
+        SYSTEM,
+        /**
+         * Answer for ACME challenge verification
+         */
+        ACME_CHALLENGE
     }
 
 }
