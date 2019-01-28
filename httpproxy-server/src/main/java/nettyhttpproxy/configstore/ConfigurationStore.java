@@ -19,6 +19,7 @@
  */
 package nettyhttpproxy.configstore;
 
+import java.security.KeyPair;
 import java.util.Properties;
 import java.util.function.BiConsumer;
 
@@ -56,5 +57,17 @@ public interface ConfigurationStore extends AutoCloseable {
      */
     public default void commitConfiguration(ConfigurationStore newConfigurationStore) {
     }
+
+    public KeyPair loadAcmeUserKeyPair();
+
+    public void saveAcmeUserKey(KeyPair pair);
+
+    public KeyPair loadKeyPairForDomain(String domain);
+
+    public void saveKeyPairForDomain(KeyPair pair, String domain);
+
+    public CertificateData loadCertificateForDomain(String domain);
+
+    public void saveCertificate(CertificateData cert);
 
 }

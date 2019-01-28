@@ -19,18 +19,27 @@
  */
 package nettyhttpproxy.configstore;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import herddb.jdbc.HerdDBEmbeddedDataSource;
+import java.security.KeyPair;
+import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import static nettyhttpproxy.configstore.ConfigurationStoreUtils.base64DecodePrivateKey;
+import static nettyhttpproxy.configstore.ConfigurationStoreUtils.base64DecodePublicKey;
+import static nettyhttpproxy.configstore.ConfigurationStoreUtils.base64EncodeKey;
 import nettyhttpproxy.server.config.ConfigurationNotValidException;
 
 /**
@@ -39,14 +48,40 @@ import nettyhttpproxy.server.config.ConfigurationNotValidException;
  *
  * @author enrico.olivelli
  */
+@SuppressFBWarnings(value="OBL_UNSATISFIED_OBLIGATION", justification="https://github.com/spotbugs/spotbugs/issues/432")
 public class HerdDBConfigurationStore implements ConfigurationStore {
 
-    private static final String TABLE_NAME = "proxy_config";
-    private static final String CREATE_TABLE = "CREATE TABLE " + TABLE_NAME + "(pname nvarchar(2000) primary key, pvalue nvarchar(2000))";
-    private static final String SELECT_ALL = "SELECT pname,pvalue from " + TABLE_NAME;
-    private static final String UPDATE = "UPDATE " + TABLE_NAME + " set pvalue=? WHERE pname=?";
-    private static final String DELETE = "DELETE FROM " + TABLE_NAME + " WHERE pname=?";
-    private static final String INSERT = "INSERT INTO " + TABLE_NAME + "(pname,pvalue) values (?,?)";
+    public static final String ACME_USER_KEY = "_acmeuserkey";
+
+    // Main table
+    private static final String CONFIG_TABLE_NAME = "proxy_config";
+    private static final String CREATE_CONFIG_TABLE = "CREATE TABLE " + CONFIG_TABLE_NAME + "(pname string primary key, pvalue string)";
+    private static final String SELECT_ALL_FROM_CONFIG_TABLE = "SELECT pname,pvalue from " + CONFIG_TABLE_NAME;
+    private static final String UPDATE_CONFIG_TABLE = "UPDATE " + CONFIG_TABLE_NAME + " set pvalue=? WHERE pname=?";
+    private static final String DELETE_FROM_CONFIG_TABLE = "DELETE FROM " + CONFIG_TABLE_NAME + " WHERE pname=?";
+    private static final String INSERT_INTO_CONFIG_TABLE = "INSERT INTO " + CONFIG_TABLE_NAME + "(pname,pvalue) values (?,?)";
+
+    // Table for KeyPairs
+    private static final String KEYPAIR_TABLE_NAME = "keypairs";
+    private static final String CREATE_KEYPAIR_TABLE = "CREATE TABLE " + KEYPAIR_TABLE_NAME
+            + "(domain string primary key, privateKey string, publicKey string)";
+    private static final String SELECT_FROM_KEYPAIR_TABLE = "SELECT privateKey, publicKey FROM " + KEYPAIR_TABLE_NAME
+            + " WHERE domain=?";
+    private static final String UPDATE_KEYPAIR_TABLE = "UPDATE " + KEYPAIR_TABLE_NAME
+            + " SET privateKey=?, publicKey=? WHERE domain=?";
+    private static final String INSERT_INTO_KEYPAIR_TABLE = "INSERT INTO " + KEYPAIR_TABLE_NAME
+            + "(domain, privateKey, publicKey) values (?, ?, ?)";
+
+    // Table for ACME Certificates
+    private static final String DIGITAL_CERTIFICATES_TABLE_NAME = "digital_certificates";
+    private static final String CREATE_DIGITAL_CERTIFICATES_TABLE = "CREATE TABLE " + DIGITAL_CERTIFICATES_TABLE_NAME
+            + "(domain string primary key, privateKey string, chain string, available tinyint)";
+    private static final String SELECT_FROM_DIGITAL_CERTIFICATES_TABLE = "SELECT * from " + DIGITAL_CERTIFICATES_TABLE_NAME + " WHERE domain=?";
+    private static final String UPDATE_DIGITAL_CERTIFICATES_TABLE = "UPDATE " + DIGITAL_CERTIFICATES_TABLE_NAME
+            + " SET privateKey=?, chain=?, available=? WHERE domain=?";
+    private static final String INSERT_INTO_DIGITAL_CERTIFICATES_TABLE = "INSERT INTO " + DIGITAL_CERTIFICATES_TABLE_NAME
+            + "(domain, privateKey, chain, available) values (?, ?, ?, ?)";
+
     private static final Logger LOG = Logger.getLogger(HerdDBConfigurationStore.class.getName());
 
     private final Map<String, String> properties = new ConcurrentHashMap<>();
@@ -83,16 +118,18 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     }
 
     private void loadCurrentConfiguration() {
-        try (Connection con = datasource.getConnection();) {
-            try (PreparedStatement ps = con.prepareStatement(CREATE_TABLE);) {
-                ps.executeUpdate();
-                LOG.log(Level.INFO, "Created table " + TABLE_NAME);
-            } catch (SQLException err) {
-                LOG.log(Level.FINE, "Could not create table " + TABLE_NAME, err);
-            }
+        try ( Connection con = datasource.getConnection();) {
+            List<String> tablesDDL = Arrays.asList(CREATE_CONFIG_TABLE, CREATE_KEYPAIR_TABLE, CREATE_DIGITAL_CERTIFICATES_TABLE);
+            tablesDDL.forEach((tableDDL) -> {
+                try ( PreparedStatement ps = con.prepareStatement(tableDDL);) {
+                    ps.executeUpdate();
+                    LOG.log(Level.INFO, "Created table " + tableDDL);
+                } catch (SQLException err) {
+                    LOG.log(Level.FINE, "Could not create table " + tableDDL, err);
+                }
+            });
 
-            try (PreparedStatement ps = con.prepareStatement(SELECT_ALL);
-                    ResultSet rs = ps.executeQuery()) {
+            try ( PreparedStatement ps = con.prepareStatement(SELECT_ALL_FROM_CONFIG_TABLE);  ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     String pname = rs.getString(1);
                     String pvalue = rs.getString(2);
@@ -101,7 +138,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             }
         } catch (SQLException err) {
             LOG.log(Level.SEVERE, "Error while loading configuration from Database", err);
-            throw new RuntimeException(err);
+            throw new ConfigurationStoreException(err);
         }
 
     }
@@ -116,11 +153,9 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     @Override
     public void commitConfiguration(ConfigurationStore newConfigurationStore) {
         Set<String> currentKeys = new HashSet<>(this.properties.keySet());
-        try (Connection con = datasource.getConnection();) {
+        try ( Connection con = datasource.getConnection()) {
             con.setAutoCommit(false);
-            try (PreparedStatement psUpdate = con.prepareStatement(UPDATE);
-                    PreparedStatement psDelete = con.prepareStatement(DELETE);
-                    PreparedStatement psInsert = con.prepareStatement(INSERT);) {
+            try ( PreparedStatement psUpdate = con.prepareStatement(UPDATE_CONFIG_TABLE);  PreparedStatement psDelete = con.prepareStatement(DELETE_FROM_CONFIG_TABLE);  PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_CONFIG_TABLE);) {
                 newConfigurationStore.forEach((k, v) -> {
                     try {
                         LOG.log(Level.INFO, "Saving '" + k + "'='" + v + "'");
@@ -133,26 +168,151 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                             psInsert.executeUpdate();
                         }
                     } catch (SQLException err) {
-                        throw new RuntimeException(err);
+                        throw new ConfigurationStoreException(err);
                     }
                 });
                 currentKeys.forEach(k -> {
                     try {
-                        LOG.log(Level.INFO, "Deleting '" + k+"'");
+                        LOG.log(Level.INFO, "Deleting '" + k + "'");
                         psDelete.setString(1, k);
                         psDelete.executeUpdate();
                     } catch (SQLException err) {
-                        throw new RuntimeException(err);
+                        throw new ConfigurationStoreException(err);
                     }
                 });
             }
             con.commit();
         } catch (SQLException err) {
             LOG.log(Level.SEVERE, "Error while saving configuration from Database", err);
-            throw new RuntimeException(err);
-        } catch (RuntimeException err) {
-            LOG.log(Level.SEVERE, "Error while savingconfiguration from Database", err);
+            throw new ConfigurationStoreException(err);
+        } catch (ConfigurationStoreException err) {
+            LOG.log(Level.SEVERE, "Error while saving configuration from Database", err);
             throw err;
+        }
+    }
+
+    @Override
+    public KeyPair loadAcmeUserKeyPair() {
+        try {
+            return loadKeyPair(ACME_USER_KEY);
+        } catch (Exception err) {
+            LOG.log(Level.SEVERE, "Error while performing KeyPair loading for ACME user.", err);
+            throw new ConfigurationStoreException(err);
+        }
+    }
+
+    @Override
+    public void saveAcmeUserKey(KeyPair pair) {
+        try {
+            saveKeyPair(pair, ACME_USER_KEY);
+        } catch (Exception err) {
+            LOG.log(Level.SEVERE, "Error while performing KeyPar saving for ACME user.", err);
+            throw new ConfigurationStoreException(err);
+        }
+    }
+
+    @Override
+    public KeyPair loadKeyPairForDomain(String domain) {
+        try {
+            if (domain.equals(ACME_USER_KEY)) {
+                return null;
+            }
+            return loadKeyPair(domain);
+        } catch (Exception err) {
+            LOG.log(Level.SEVERE, "Error while performing KeyPair loading for domain " + domain + ".", err);
+            throw new ConfigurationStoreException(err);
+        }
+    }
+
+    @Override
+    public void saveKeyPairForDomain(KeyPair pair, String domain) {
+        try {
+            if (!domain.equals(ACME_USER_KEY)) {
+                saveKeyPair(pair, domain);
+            }
+        } catch (Exception err) {
+            LOG.log(Level.SEVERE, "Error while performing KeyPar saving for domain " + domain + ".", err);
+            throw new ConfigurationStoreException(err);
+        }
+    }
+
+    private KeyPair loadKeyPair(String pk) throws Exception {
+        try ( Connection con = datasource.getConnection();  PreparedStatement ps = con.prepareStatement(SELECT_FROM_KEYPAIR_TABLE)) {
+            ps.setString(1, pk);
+            try ( ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    PrivateKey privateKey = base64DecodePrivateKey(rs.getString(1));
+                    PublicKey publicKey = base64DecodePublicKey(rs.getString(2));
+                    return new KeyPair(publicKey, privateKey);
+                }
+            }
+            return null;
+        }
+    }
+
+    private void saveKeyPair(KeyPair pair, String pk) throws Exception {
+        try ( Connection con = datasource.getConnection();  PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_KEYPAIR_TABLE);  PreparedStatement psUpdate = con.prepareStatement(UPDATE_KEYPAIR_TABLE)) {
+            String privateKey = base64EncodeKey(pair.getPrivate());
+            String publicKey = base64EncodeKey(pair.getPublic());
+            psUpdate.setString(1, privateKey);
+            psUpdate.setString(2, publicKey);
+            psUpdate.setString(3, pk);
+            if (psUpdate.executeUpdate() == 0) {
+                psInsert.setString(1, pk);
+                psInsert.setString(2, privateKey);
+                psInsert.setString(3, publicKey);
+                psInsert.executeUpdate();
+            }
+        }
+    }
+
+    @Override
+    public CertificateData loadCertificateForDomain(String domain) {
+        if (domain.equals(ACME_USER_KEY)) {
+            return null;
+        }
+        try ( Connection con = datasource.getConnection()) {
+            try ( PreparedStatement ps = con.prepareStatement(SELECT_FROM_DIGITAL_CERTIFICATES_TABLE);) {
+                ps.setString(1, domain);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        String privateKey = rs.getString(2);
+                        String chain = rs.getString(3);
+                        boolean available = rs.getInt(4) == 1;
+                        return new CertificateData(domain, privateKey, chain, available);
+                    }
+                }
+                return null;
+            }
+        } catch (Exception err) {
+            LOG.log(Level.SEVERE, "Error while performing Certificate loading for domain " + domain + ".", err);
+            throw new ConfigurationStoreException(err);
+        }
+    }
+
+    @Override
+    public void saveCertificate(CertificateData cert) {
+        try ( Connection con = datasource.getConnection();  PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_DIGITAL_CERTIFICATES_TABLE);  PreparedStatement psUpdate = con.prepareStatement(UPDATE_DIGITAL_CERTIFICATES_TABLE)) {
+            String domain = cert.getDomain();
+            String privateKey = cert.getPrivateKey();
+            String chain = cert.getChain();
+            int available = cert.isAvailable() ? 1 : 0;
+
+            psUpdate.setString(1, privateKey);
+            psUpdate.setString(2, chain);
+            psUpdate.setInt(3, available);
+            psUpdate.setString(4, domain);
+            if (psUpdate.executeUpdate() == 0) {
+                psInsert.setString(1, domain);
+                psInsert.setString(2, privateKey);
+                psInsert.setString(3, chain);
+                psInsert.setInt(4, available);
+                psInsert.executeUpdate();
+            }
+
+        } catch (Exception err) {
+            LOG.log(Level.SEVERE, "Error while performing Certificate saving for domain " + cert.getDomain() + ".", err);
+            throw new ConfigurationStoreException(err);
         }
     }
 

@@ -21,6 +21,7 @@ package nettyhttpproxy.server;
 
 import com.google.common.annotations.VisibleForTesting;
 import httpproxy.server.certiticates.DynamicCertificatesManager;
+import static httpproxy.server.certiticates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.net.InetSocketAddress;
@@ -107,7 +108,7 @@ public class HttpProxyServer implements AutoCloseable {
         this.requestsLogger = new RequestsLogger(currentConfiguration);
         this.connectionsManager = new ConnectionsManagerImpl(currentConfiguration,
                 mainLogger, backendHealthManager);
-        this.dynamicCertificateManager = new DynamicCertificatesManager(currentConfiguration, basePath);
+        this.dynamicCertificateManager = new DynamicCertificatesManager();
         if (mapper != null) {
             mapper.setDynamicCertificateManager(dynamicCertificateManager);
         }
@@ -279,6 +280,8 @@ public class HttpProxyServer implements AutoCloseable {
                 throw new ConfigurationNotValidException("invalid config.type='" + dynamicConfigurationType + "', only 'file' and 'database' are supported");
         }
 
+        this.dynamicCertificateManager.setConfigurationStore(dynamicConfigurationStore);
+
         // "static" configuration cannot change without a reboot
         applyStaticConfiguration(bootConfigurationStore);
 
@@ -310,6 +313,13 @@ public class HttpProxyServer implements AutoCloseable {
         int healthProbePeriod = Integer.parseInt(properties.getProperty("healthmanager.period", "0"));
         LOG.info("healthmanager.period=" + healthProbePeriod);
         backendHealthManager.setPeriod(healthProbePeriod);
+
+        int dynamicCertificatesManagerPeriod = Integer.parseInt(properties.getProperty("dynamiccertificatesmanager.period", "0"));
+        LOG.info("dynamiccertificatesmanager.period=" + dynamicCertificatesManagerPeriod);
+        dynamicCertificateManager.setPeriod(dynamicCertificatesManagerPeriod);
+        int keyPairsSize = Integer.parseInt(properties.getProperty("dynamiccertificatesmanager.keypairssize", DEFAULT_KEYPAIRS_SIZE + ""));
+        LOG.info("dynamiccertificatesmanager.keypairssize=" + keyPairsSize);
+        dynamicCertificateManager.setKeyPairsSize(keyPairsSize);
     }
 
     private static List<RequestFilter> buildFilters(RuntimeServerConfiguration currentConfiguration) throws ConfigurationNotValidException {
@@ -431,7 +441,7 @@ public class HttpProxyServer implements AutoCloseable {
 
             this.filters = buildFilters(newConfiguration);
             this.backendHealthManager.reloadConfiguration(newConfiguration);
-            this.dynamicCertificateManager.loadConfiguration(newConfiguration);
+            this.dynamicCertificateManager.reloadConfiguration(newConfiguration);
             this.listeners.reloadConfiguration(newConfiguration);
             this.cache.reloadConfiguration(newConfiguration);
             this.requestsLogger.reloadConfiguration(newConfiguration);

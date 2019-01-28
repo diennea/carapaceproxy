@@ -19,7 +19,9 @@
  */
 package nettyhttpproxy.configstore;
 
+import java.security.KeyPair;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 
 /**
@@ -30,6 +32,9 @@ import java.util.function.BiConsumer;
 public class PropertiesConfigurationStore implements ConfigurationStore {
 
     private final Properties properties;
+    private final ConcurrentHashMap<String, CertificateData> certificates = new ConcurrentHashMap();
+    private final ConcurrentHashMap<String, KeyPair> domainsKeyPair = new ConcurrentHashMap();
+    private KeyPair acmeUserKey;
 
     public PropertiesConfigurationStore(Properties properties) {
         this.properties = properties;
@@ -54,6 +59,36 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
                 consumer.accept(k.toString().substring(prefix.length()), v.toString());
             }
         });
+    }
+
+    @Override
+    public KeyPair loadAcmeUserKeyPair() {
+        return acmeUserKey;
+    }
+
+    @Override
+    public void saveAcmeUserKey(KeyPair pair) {
+        acmeUserKey = pair;
+    }
+
+    @Override
+    public KeyPair loadKeyPairForDomain(String domain) {
+        return domainsKeyPair.get(domain);
+    }
+
+    @Override
+    public void saveKeyPairForDomain(KeyPair pair, String domain) {
+        domainsKeyPair.put(domain, pair);
+    }
+
+    @Override
+    public CertificateData loadCertificateForDomain(String domain) {
+        return certificates.get(domain);
+    }
+
+    @Override
+    public void saveCertificate(CertificateData cert) {
+        certificates.put(cert.getDomain(), cert);
     }
 
 }

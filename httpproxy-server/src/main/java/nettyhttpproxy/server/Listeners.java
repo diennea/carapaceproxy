@@ -20,6 +20,7 @@
 package nettyhttpproxy.server;
 
 import com.google.common.annotations.VisibleForTesting;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
@@ -37,6 +38,7 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.util.AsyncMapping;
 import io.netty.util.concurrent.Promise;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -66,6 +68,7 @@ import org.apache.bookkeeper.stats.StatsLogger;
  *
  * @author enrico.olivelli
  */
+@SuppressFBWarnings(value="OBL_UNSATISFIED_OBLIGATION", justification="https://github.com/spotbugs/spotbugs/issues/432")
 public class Listeners {
 
     private static final Logger LOG = Logger.getLogger(Listeners.class.getName());
@@ -107,25 +110,25 @@ public class Listeners {
             trustStoreCertFile = trustStoreFile.startsWith("/") ? new File(trustStoreFile) : new File(basePath, trustStoreFile);
             trustStoreCertFile = trustStoreCertFile.getAbsoluteFile();
         }
-        String sslCertFilePassword;        
-        File sslCertFile;
-        if (certificate.isDynamic()) {
-            sslCertFilePassword = ""; // no password
-            sslCertFile = parent.getDynamicCertificateManager().getCertificateFile(certificate.getId());
-            if (sslCertFile == null) {
-                throw new ConfigurationNotValidException("Dynamic certificate for "+certificate.getId()+" is not available yet");
-            }
-        } else {            
-            sslCertFilePassword = certificate.getSslCertificatePassword();
-            String certificateFile = certificate.getSslCertificateFile();            
-            sslCertFile = certificateFile.startsWith("/") ? new File(certificateFile) : new File(basePath, certificateFile);
-        }
-        
-        sslCertFile = sslCertFile.getAbsoluteFile();
 
-        LOG.log(Level.SEVERE, "start SSL with certificate id " + certificate + ", on listener " + listener.getHost() + ":" + listener.getPort() + " file=" + sslCertFile + " OCPS " + listener.isOcps());
         try {
-            KeyManagerFactory keyFactory = initKeyManagerFactory("PKCS12", sslCertFile, sslCertFilePassword);
+            KeyManagerFactory keyFactory;
+            if (certificate.isDynamic()) {
+                String domain = certificate.getHostname();
+                byte[] keystoreContent = parent.getDynamicCertificateManager().getCertificateForDomain(domain);
+                if (keystoreContent == null) {
+                    throw new ConfigurationNotValidException("Dynamic certificate for domain " + domain + " is not yet available.");
+                }
+                LOG.log(Level.SEVERE, "start SSL with dynamic certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + listener.getPort() + " OCPS " + listener.isOcps());
+                keyFactory = initKeyManagerFactory("PKCS12", keystoreContent, "");
+            } else {
+                String certificateFile = certificate.getSslCertificateFile();
+                File sslCertFile = certificateFile.startsWith("/") ? new File(certificateFile) : new File(basePath, certificateFile);
+                sslCertFile = sslCertFile.getAbsoluteFile();
+                LOG.log(Level.SEVERE, "start SSL with certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + listener.getPort() + " file=" + sslCertFile + " OCPS " + listener.isOcps());
+                keyFactory = initKeyManagerFactory("PKCS12", sslCertFile, certificate.getSslCertificatePassword());
+            }
+
             TrustManagerFactory trustManagerFactory = null;
             if (caFileConfigured) {
                 LOG.log(Level.SEVERE, "loading trustore from " + trustStoreCertFile);
@@ -206,6 +209,16 @@ public class Listeners {
         return kmf;
     }
 
+    private KeyManagerFactory initKeyManagerFactory(String keyStoreType, byte[] keyStoreData,
+            String keyStorePassword) throws SecurityException, KeyStoreException, NoSuchAlgorithmException,
+            CertificateException, IOException, UnrecoverableKeyException {
+        KeyStore ks = loadKeyStore(keyStoreType, keyStoreData, keyStorePassword);
+        KeyManagerFactory kmf = KeyManagerFactory
+                .getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        kmf.init(ks, keyStorePassword.toCharArray());
+        return kmf;
+    }
+
     private TrustManagerFactory initTrustManagerFactory(String trustStoreType, File trustStoreLocation,
             String trustStorePassword)
             throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException, SecurityException {
@@ -222,8 +235,17 @@ public class Listeners {
     private static KeyStore loadKeyStore(String keyStoreType, File keyStoreLocation, String keyStorePassword)
             throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException {
         KeyStore ks = KeyStore.getInstance(keyStoreType);
-        try (FileInputStream in = new FileInputStream(keyStoreLocation)) {
+        try ( FileInputStream in = new FileInputStream(keyStoreLocation)) {
             ks.load(in, keyStorePassword.trim().toCharArray());
+        }
+        return ks;
+    }
+
+    private static KeyStore loadKeyStore(String keyStoreType, byte[] keyStoreData, String keyStorePassword)
+            throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException {
+        KeyStore ks = KeyStore.getInstance(keyStoreType);
+        try ( ByteArrayInputStream is = new ByteArrayInputStream(keyStoreData)) {
+            ks.load(is, keyStorePassword.trim().toCharArray());
         }
         return ks;
     }
@@ -272,9 +294,7 @@ public class Listeners {
                     }
                     return bootSslContext(listener, choosen);
                 } catch (ConfigurationNotValidException err) {
-                    throw new RuntimeException(err
-                    );
-
+                    throw new RuntimeException(err);
                 }
             });
 
@@ -317,8 +337,7 @@ public class Listeners {
         return choosen;
     }
 
-    private boolean certificateMatches(String hostname, SSLCertificateConfiguration c, boolean exact
-    ) {
+    private boolean certificateMatches(String hostname, SSLCertificateConfiguration c, boolean exact) {
         if (exact) {
             return !c.isWildcard() && hostname.equals(c.getHostname());
         } else {
@@ -387,9 +406,7 @@ public class Listeners {
     private void stopListener(HostPort hostport) throws InterruptedException {
         Channel channel = listeningChannels.remove(hostport);
         if (channel != null) {
-            channel
-                    .close()
-                    .sync();
+            channel.close().sync();
         }
     }
 

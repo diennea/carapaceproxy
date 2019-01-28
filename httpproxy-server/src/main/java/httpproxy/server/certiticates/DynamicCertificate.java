@@ -19,24 +19,29 @@
  */
 package httpproxy.server.certiticates;
 
-import java.io.File;
+import static httpproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.AVAILABLE;
+import static httpproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.WAITING;
+import java.security.GeneralSecurityException;
 import java.security.KeyPair;
+import java.security.PrivateKey;
+import java.security.cert.Certificate;
 import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateNotYetValidException;
-import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.List;
-import nettyhttpproxy.server.config.SSLCertificateConfiguration;
+import nettyhttpproxy.configstore.CertificateData;
+import static nettyhttpproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
+import static nettyhttpproxy.configstore.ConfigurationStoreUtils.base64DecodePrivateKey;
 import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.challenge.Challenge;
 
 /**
  *
  * SSL certificate issued via ACME
- * 
+ *
  * @author paolo.venturi
  */
-public class DynamicCertificate {        
+public final class DynamicCertificate {
 
     public static enum DynamicCertificateState {
         WAITING, // certificato che deve essere generato/rinnovato
@@ -48,56 +53,46 @@ public class DynamicCertificate {
         EXPIRED     // certificato scaduto
     }
 
-    private final String id;
-    private final String hostname;
-    private final boolean wildcard;
-    private File sslCertificateFile;    
-
-    private DynamicCertificateState state = DynamicCertificateState.WAITING;
-    private boolean available = false;
+    private final String domain;
+    private volatile boolean available;
+    private volatile DynamicCertificateState state;
 
     private Order order;
     private Challenge challenge;
-    private List<X509Certificate> chain;
-    private KeyPair keys;
+    private Certificate[] chain;
+    private KeyPair keyPair;
 
-    public DynamicCertificate(SSLCertificateConfiguration configuration) {
-        this.id = configuration.getId();
-        this.hostname = configuration.getHostname();
-        this.sslCertificateFile = new File(configuration.getSslCertificateFile());
-        this.wildcard = configuration.isWildcard();        
+    public DynamicCertificate(String domain) {
+        this.domain = domain;
+        available = false;
+        state = WAITING;
     }
 
-    public String getId() {
-        return id;
+    public DynamicCertificate(CertificateData data) throws GeneralSecurityException {
+        domain = data.getDomain();
+        available = data.isAvailable();
+        state = available ? AVAILABLE : WAITING;
+        // Certificate decoding
+        this.chain = base64DecodeCertificateChain(data.getChain());
+        // Private key decoding + keypar generation
+        PrivateKey privateKey = base64DecodePrivateKey(data.getPrivateKey());
+        this.keyPair = new KeyPair(chain[0].getPublicKey(), privateKey);
     }
 
-    public String getHostname() {
-        return hostname;
-    }
-
-    public File getSslCertificateFile() {
-        return sslCertificateFile;
-    }
-
-    public void setSslCertificateFile(File sslCertificateFile) {
-        this.sslCertificateFile = sslCertificateFile;
-    }
-
-    public boolean isWildcard() {
-        return wildcard;
+    public String getDomain() {
+        return domain;
     }
 
     public DynamicCertificateState getState() {
         return state;
     }
 
-    public boolean isAvailable() {
-        return available;
-    }
-
     public void setState(DynamicCertificateState state) {
         this.state = state;
+    }
+
+    public boolean isAvailable() {
+        return available;
     }
 
     public void setAvailable(boolean available) {
@@ -121,17 +116,17 @@ public class DynamicCertificate {
     }
 
     public Certificate[] getChain() {
-        return this.chain.toArray(new Certificate[0]);
+        return this.chain.clone();
     }
 
     public void setChain(List<X509Certificate> chain) {
-        this.chain = chain;
+        this.chain = chain.toArray(new Certificate[0]);
     }
-    
-    public boolean isExpired() {        
+
+    public boolean isExpired() {
         try {
-            if (chain != null && !chain.isEmpty()) {
-               chain.get(0).checkValidity();
+            if (chain != null && chain.length > 0) {
+                ((X509Certificate) chain[0]).checkValidity();
             } else {
                 return true;
             }
@@ -141,17 +136,21 @@ public class DynamicCertificate {
         return false;
     }
 
-    public KeyPair getKeys() {
-        return keys;
+    public KeyPair getKeyPair() {
+        return keyPair;
     }
-    
-    void setKeys(KeyPair keys) {
-        this.keys = keys;
+
+    void setKeyPair(KeyPair keyPair) {
+        this.keyPair = keyPair;
     }
-    
+
+    public CertificateData getData() throws GeneralSecurityException {
+        return new CertificateData(this);
+    }
+
     @Override
     public String toString() {
-        return "DynamicCertificate{hostname=" + this.hostname + ", state=" + state + ", available=" + available + '}';
+        return "DynamicCertificate{hostname=" + this.domain + ", state=" + state + ", available=" + available + '}';
     }
 
 }

@@ -25,6 +25,8 @@ import java.io.InputStream;
 import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.Key;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import nettyhttpproxy.EndpointStats;
@@ -39,7 +41,7 @@ import static org.junit.Assert.assertTrue;
  * @author enrico.olivelli
  */
 public class TestUtils {
-    
+
     private static final int WAIT_FOR_CONDITION_DEFAULT_WAIT_SECONDS = 20;
 
     public static final Callable<Boolean> ALL_CONNECTIONS_CLOSED(ConnectionsManagerStats stats) {
@@ -126,4 +128,7 @@ public class TestUtils {
         }
     }
 
+    public static void assertEqualsKey(Key key1, Key key2) {
+        assertTrue(Arrays.equals(key1.getEncoded(), key2.getEncoded()));
+    }
 }
