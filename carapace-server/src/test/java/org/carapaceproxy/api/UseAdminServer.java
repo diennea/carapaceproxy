@@ -1,0 +1,88 @@
+/*
+ Licensed to Diennea S.r.l. under one
+ or more contributor license agreements. See the NOTICE file
+ distributed with this work for additional information
+ regarding copyright ownership. Diennea S.r.l. licenses this file
+ to you under the Apache License, Version 2.0 (the
+ "License"); you may not use this file except in compliance
+ with the License.  You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing,
+ software distributed under the License is distributed on an
+ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ KIND, either express or implied.  See the License for the
+ specific language governing permissions and limitations
+ under the License.
+
+ */
+package org.carapaceproxy.api;
+
+import java.util.Properties;
+import org.carapaceproxy.configstore.PropertiesConfigurationStore;
+import org.carapaceproxy.server.HttpProxyServer;
+import static org.carapaceproxy.server.HttpProxyServer.buildForTests;
+import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.carapaceproxy.utils.RawHttpClient;
+import org.carapaceproxy.utils.TestEndpointMapper;
+import org.junit.After;
+import org.junit.Before;
+
+/**
+ *
+ * @author matteo.minardi
+ */
+public class UseAdminServer {
+
+    public static final String DEFAULT_USERNAME = "admin";
+    public static final String DEFAULT_PASSWORD = "admin";
+
+    public static HttpProxyServer server;
+    public static RawHttpClient.BasicAuthCredentials credentials;
+
+    @Before
+    public void setupAdmin() throws Exception {
+        credentials = new RawHttpClient.BasicAuthCredentials(DEFAULT_USERNAME, DEFAULT_PASSWORD);
+        server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0));
+    }
+
+    @After
+    public void stopAdmin() throws Exception {
+        if (server != null) {
+            server.close();
+        }
+    }
+
+    public void startAdmin(Properties properties) throws Exception {
+        if (properties == null) {
+            properties = new Properties();
+        }
+
+        Properties prop = new Properties();
+        prop.setProperty("http.admin.enabled", "true");
+        prop.setProperty("http.admin.port", "8761");
+        prop.setProperty("http.admin.host", "localhost");
+        prop.putAll(properties);
+
+        if (server != null) {
+            server.configureAtBoot(new PropertiesConfigurationStore(prop));
+
+            server.start();
+            server.startAdminInterface();
+        }
+    }
+
+    public void startAdmin() throws Exception {
+        startAdmin(null);
+    }
+
+    public void changeDynamicConfiguration(Properties configuration) throws ConfigurationNotValidException, ConfigurationChangeInProgressException, InterruptedException {
+        if (server != null) {
+            PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
+            server.applyDynamicConfiguration(config);
+        }
+    }
+
+}
