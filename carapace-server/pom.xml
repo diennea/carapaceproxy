@@ -29,6 +29,11 @@
             <version>${netty.version}</version>
         </dependency>
         <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>${commons.lang3}</version>
+        </dependency>
+        <dependency>
             <groupId>org.apache.bookkeeper.stats</groupId>
             <artifactId>bookkeeper-stats-api</artifactId>
             <version>${bookkeeper.version}</version>

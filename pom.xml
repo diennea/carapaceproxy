@@ -42,6 +42,7 @@
     </build>
     <properties>
         <bookkeeper.version>4.8.1</bookkeeper.version>
+        <commons.lang3>3.8.1</commons.lang3>
         <netty.version>4.1.32.Final</netty.version>
         <netty.ssl.version>2.0.20.Final</netty.ssl.version>
         <jetty.version>9.4.8.v20171121</jetty.version>
