@@ -62,6 +62,6 @@
         <libs.javaxactivation.api>1.2.0</libs.javaxactivation.api>
         <libs.slf4j>1.7.25</libs.slf4j>
         <libs.stringtemplate>4.0.8</libs.stringtemplate>
-        <libs.herddb>0.7.1</libs.herddb>
+        <libs.herddb>0.8.1</libs.herddb>
     </properties>
 </project>
