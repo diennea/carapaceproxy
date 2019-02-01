@@ -45,7 +45,7 @@ public class AuthenticationAPIServerTest extends UseAdminServer {
         prop.put("user.test1", "pass1");
         prop.put("user.test2", "pass2");
 
-        startAdmin(prop);
+        startServer(prop);
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             BasicAuthCredentials credentials = new BasicAuthCredentials("test1", "pass1"); // valid credentials

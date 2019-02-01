@@ -28,6 +28,7 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.junit.After;
+import static org.junit.Assert.assertNull;
 import org.junit.Before;
 
 /**
@@ -39,23 +40,25 @@ public class UseAdminServer {
     public static final String DEFAULT_USERNAME = "admin";
     public static final String DEFAULT_PASSWORD = "admin";
 
-    public static HttpProxyServer server;
-    public static RawHttpClient.BasicAuthCredentials credentials;
+    public HttpProxyServer server;
+    public RawHttpClient.BasicAuthCredentials credentials;
 
     @Before
-    public void setupAdmin() throws Exception {
+    public void buildNewServer() throws Exception {
+        assertNull(server);
         credentials = new RawHttpClient.BasicAuthCredentials(DEFAULT_USERNAME, DEFAULT_PASSWORD);
         server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0));
     }
 
     @After
-    public void stopAdmin() throws Exception {
+    public void stopServer() throws Exception {
         if (server != null) {
             server.close();
+            server = null;
         }
     }
 
-    public void startAdmin(Properties properties) throws Exception {
+    public void startServer(Properties properties) throws Exception {
         if (properties == null) {
             properties = new Properties();
         }
@@ -75,7 +78,7 @@ public class UseAdminServer {
     }
 
     public void startAdmin() throws Exception {
-        startAdmin(null);
+        startServer(null);
     }
 
     public void changeDynamicConfiguration(Properties configuration) throws ConfigurationNotValidException, ConfigurationChangeInProgressException, InterruptedException {
