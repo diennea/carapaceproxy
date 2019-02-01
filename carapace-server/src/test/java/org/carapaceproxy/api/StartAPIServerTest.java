@@ -62,7 +62,7 @@ public class StartAPIServerTest extends UseAdminServer {
         properties.put("userrealm.class", "org.carapaceproxy.utils.TestUserRealm");
         properties.put("user.test", "test");
 
-        startAdmin(properties);
+        startServer(properties);
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/up", credentials);
@@ -123,7 +123,8 @@ public class StartAPIServerTest extends UseAdminServer {
         startAdmin();
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
-            String body = "connectionsmanager.maxconnectionsperendpoint=20";
+            String body = "#first line is a comment\n"
+                    + "connectionsmanager.maxconnectionsperendpoint=20";
             RawHttpClient.HttpResponse resp = client.executeRequest("POST /api/config/validate HTTP/1.1\r\n"
                     + "Host: localhost\r\n"
                     + "Content-Type: text/plain\r\n"
@@ -134,7 +135,7 @@ public class StartAPIServerTest extends UseAdminServer {
             String s = resp.getBodyString();
             System.out.println("s:" + s);
             // no backend configured
-            assertTrue(s.equals("{\"ok\":true,\"error\":null}"));
+            assertTrue(s.equals("{\"ok\":true,\"error\":\"\"}"));
 
         }
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
@@ -164,7 +165,7 @@ public class StartAPIServerTest extends UseAdminServer {
         properties.put("listener.2.host", "127.0.0.1");
         properties.put("listener.2.port", "9876");
 
-        startAdmin(properties);
+        startServer(properties);
 
         // simple request with 2 network listeners
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
@@ -192,7 +193,7 @@ public class StartAPIServerTest extends UseAdminServer {
         properties.put("certificate.2.sslcertfile", "conf/mock2.file");
         properties.put("certificate.2.sslcertfilepassword", "pass");
 
-        startAdmin(properties);
+        startServer(properties);
 
         // full list request
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
@@ -232,7 +233,7 @@ public class StartAPIServerTest extends UseAdminServer {
         properties.put("filter.2.regexp", "(.*)");
 
         properties.put("filter.3.type", "add-x-forwarded-for");
-        startAdmin(properties);
+        startServer(properties);
 
         // full list request
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
@@ -257,7 +258,7 @@ public class StartAPIServerTest extends UseAdminServer {
         properties.put("user.test1", "test1");
         properties.put("user.test2", "test2");
 
-        startAdmin(properties);
+        startServer(properties);
 
         RawHttpClient.BasicAuthCredentials c = new RawHttpClient.BasicAuthCredentials("test", "test");
 

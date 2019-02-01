@@ -24,6 +24,8 @@ import java.io.PrintWriter;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.Properties;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
@@ -44,6 +46,8 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
 @Produces("application/json")
 public class ConfigResource {
 
+    private static final Logger LOG = Logger.getLogger(ConfigResource.class.getName());
+
     @javax.ws.rs.core.Context
     ServletContext context;
 
@@ -51,9 +55,13 @@ public class ConfigResource {
     @Consumes(value = "text/plain")
     @POST
     public ConfigurationValidationResult validate(String newConfiguration) {
+        LOG.info("Validating configuration from API:");
+        LOG.info(newConfiguration);
+
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         try {
             PropertiesConfigurationStore simpleStore = buildStore(newConfiguration);
+            dumpAndValidateInputConfiguration(simpleStore);
             server.buildValidConfiguration(simpleStore);
             return ConfigurationValidationResult.OK;
         } catch (ConfigurationNotValidException | RuntimeException err) {
@@ -79,9 +87,13 @@ public class ConfigResource {
     @Consumes(value = "text/plain")
     @POST
     public ConfigurationChangeResult apply(String newConfiguration) {
+        LOG.info("Apply configuration from API:");
+        LOG.info(newConfiguration);
+        LOG.info("**");
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         try {
-            PropertiesConfigurationStore simpleStore = buildStore(newConfiguration);            
+            PropertiesConfigurationStore simpleStore = buildStore(newConfiguration);
+            dumpAndValidateInputConfiguration(simpleStore);
             server.applyDynamicConfiguration(simpleStore);
             return ConfigurationChangeResult.OK;
         } catch (ConfigurationNotValidException
@@ -94,12 +106,24 @@ public class ConfigResource {
         }
     }
 
+    private void dumpAndValidateInputConfiguration(PropertiesConfigurationStore simpleStore) throws ConfigurationNotValidException {
+        int[] count = new int[]{0};
+        simpleStore.forEach((k, v) -> {
+            LOG.log(Level.INFO, "{0} -> {1}", new Object[]{k, v});
+            count[0]++;
+        });
+        LOG.log(Level.INFO, "Number of entries: " + count[0]);
+        if (count[0] == 0) {
+            throw new ConfigurationNotValidException("No entries in the new configuration ?");
+        }
+    }
+
     public static final class ConfigurationValidationResult {
 
         private final boolean ok;
         private final String error;
 
-        public static final ConfigurationValidationResult OK = new ConfigurationValidationResult(true, null);
+        public static final ConfigurationValidationResult OK = new ConfigurationValidationResult(true, "");
 
         public static final ConfigurationValidationResult error(Throwable error) {
             StringWriter w = new StringWriter();
@@ -127,7 +151,7 @@ public class ConfigResource {
         private final boolean ok;
         private final String error;
 
-        public static final ConfigurationChangeResult OK = new ConfigurationChangeResult(true, null);
+        public static final ConfigurationChangeResult OK = new ConfigurationChangeResult(true, "");
 
         public static final ConfigurationChangeResult error(Throwable error) {
             StringWriter w = new StringWriter();
