@@ -26,9 +26,14 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollEventLoopGroup;
 import io.netty.channel.epoll.EpollServerSocketChannel;
+import io.netty.channel.epoll.EpollSocketChannel;
+import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.HttpRequestDecoder;
 import io.netty.handler.codec.http.HttpResponseEncoder;
 import io.netty.handler.ssl.OpenSsl;
@@ -68,7 +73,7 @@ import org.apache.bookkeeper.stats.StatsLogger;
  *
  * @author enrico.olivelli
  */
-@SuppressFBWarnings(value="OBL_UNSATISFIED_OBLIGATION", justification="https://github.com/spotbugs/spotbugs/issues/432")
+@SuppressFBWarnings(value = "OBL_UNSATISFIED_OBLIGATION", justification = "https://github.com/spotbugs/spotbugs/issues/432")
 public class Listeners {
 
     private static final Logger LOG = Logger.getLogger(Listeners.class.getName());
@@ -90,8 +95,13 @@ public class Listeners {
         this.currentClientConnections = mainLogger.getCounter("clients");
         this.currentConfiguration = parent.getCurrentConfiguration();
         this.basePath = parent.getBasePath();
-        this.bossGroup = new EpollEventLoopGroup();
-        this.workerGroup = new EpollEventLoopGroup();
+        if (Epoll.isAvailable()) {
+            this.bossGroup = new EpollEventLoopGroup();
+            this.workerGroup = new EpollEventLoopGroup();
+        } else { // For windows devs
+            this.bossGroup = new NioEventLoopGroup();
+            this.workerGroup = new NioEventLoopGroup();
+        }
     }
 
     public void start() throws InterruptedException, ConfigurationNotValidException {
@@ -167,7 +177,7 @@ public class Listeners {
         };
         ServerBootstrap b = new ServerBootstrap();
         b.group(bossGroup, workerGroup)
-                .channel(EpollServerSocketChannel.class)
+                .channel(Epoll.isAvailable() ? EpollServerSocketChannel.class : NioServerSocketChannel.class)
                 .childHandler(new ChannelInitializer<SocketChannel>() {
                     @Override
                     public void initChannel(SocketChannel channel) throws Exception {

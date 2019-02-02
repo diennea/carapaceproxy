@@ -21,7 +21,9 @@ package org.carapaceproxy.client.impl;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -197,7 +199,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         config.setTestOnBorrow(true);
         config.setTestWhileIdle(true);
         config.setBlockWhenExhausted(true);
-        group = new EpollEventLoopGroup();
+        group = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
         connections = new GenericKeyedObjectPool<>(new ConnectionsFactory(), config);
         this.backendHealthManager = backendHealthManager;
         applyNewConfiguration(configuration);
