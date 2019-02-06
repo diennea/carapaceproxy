@@ -167,6 +167,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                             psInsert.setString(2, v);
                             psInsert.executeUpdate();
                         }
+                        properties.put(k, v);
                     } catch (SQLException err) {
                         throw new ConfigurationStoreException(err);
                     }
@@ -176,6 +177,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                         LOG.log(Level.INFO, "Deleting '" + k + "'");
                         psDelete.setString(1, k);
                         psDelete.executeUpdate();
+                        properties.remove(k);
                     } catch (SQLException err) {
                         throw new ConfigurationStoreException(err);
                     }
