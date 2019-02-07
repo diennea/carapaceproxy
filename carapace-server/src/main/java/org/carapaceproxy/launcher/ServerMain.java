@@ -84,7 +84,7 @@ public class ServerMain implements AutoCloseable {
             boolean configFileFromParameter = false;
             for (int i = 0; i < args.length; i++) {
                 String arg = args[i];
-                if (!arg.startsWith("-")) {
+                if (!arg.isEmpty()) {
                     File configFile = new File(args[i]).getAbsoluteFile();
                     LOG.severe("Reading configuration from " + configFile);
                     try (InputStreamReader reader = new InputStreamReader(new FileInputStream(configFile), StandardCharsets.UTF_8)) {
@@ -92,18 +92,6 @@ public class ServerMain implements AutoCloseable {
                     }
                     basePath = configFile.getParentFile().getParentFile();
                     configFileFromParameter = true;
-                } else if (arg.equals("--use-env")) {
-                    System.getenv().forEach((key, value) -> {
-                        System.out.println("Considering env as system property " + key + " -> " + value);
-                        System.setProperty(key, value);
-                    });
-                } else if (arg.startsWith("-D")) {
-                    int equals = arg.indexOf('=');
-                    if (equals > 0) {
-                        String key = arg.substring(2, equals);
-                        String value = arg.substring(equals + 1);
-                        System.setProperty(key, value);
-                    }
                 }
             }
             if (!configFileFromParameter) {
@@ -116,13 +104,6 @@ public class ServerMain implements AutoCloseable {
                     basePath = configFile.getParentFile().getParentFile();
                 }
             }
-
-            System.getProperties().forEach((k, v) -> {
-                String key = k + "";
-                if (!key.startsWith("java") && !key.startsWith("user")) {
-                    configuration.put(k, v);
-                }
-            });
 
             LogManager.getLogManager().readConfiguration();
 
