@@ -24,16 +24,19 @@ import java.io.PrintWriter;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.Properties;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.HttpProxyServer;
-import org.carapaceproxy.server.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 
@@ -50,6 +53,24 @@ public class ConfigResource {
 
     @javax.ws.rs.core.Context
     ServletContext context;
+
+    @GET
+    @Produces("text/plain")
+    public String dump() {
+        LOG.info("Dumping current configuration from API");
+        HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
+        ConfigurationStore configStore = server.getDynamicConfigurationStore();
+        Set<String> props = new TreeSet();
+        configStore.forEach((k, v) -> {
+            props.add(k + "=" + v);
+        });
+        StringBuilder builder = new StringBuilder();
+        props.forEach(p -> {
+            builder.append(p);
+            builder.append("\n");
+        });
+        return builder.toString();
+    }
 
     @Path("/validate")
     @Consumes(value = "text/plain")

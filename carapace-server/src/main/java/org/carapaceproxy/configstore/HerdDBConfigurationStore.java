@@ -29,6 +29,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -153,6 +154,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     @Override
     public void commitConfiguration(ConfigurationStore newConfigurationStore) {
         Set<String> currentKeys = new HashSet<>(this.properties.keySet());
+        Map<String,String> newProperties = new HashMap();
         try ( Connection con = datasource.getConnection()) {
             con.setAutoCommit(false);
             try ( PreparedStatement psUpdate = con.prepareStatement(UPDATE_CONFIG_TABLE);  PreparedStatement psDelete = con.prepareStatement(DELETE_FROM_CONFIG_TABLE);  PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_CONFIG_TABLE);) {
@@ -160,6 +162,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                     try {
                         LOG.log(Level.INFO, "Saving '" + k + "'='" + v + "'");
                         currentKeys.remove(k);
+                        newProperties.put(k, v);
                         psUpdate.setString(1, v);
                         psUpdate.setString(2, k);
                         if (psUpdate.executeUpdate() == 0) {
@@ -182,6 +185,12 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 });
             }
             con.commit();
+
+            // Local cached properties updating
+            currentKeys.forEach(k -> {
+                properties.remove(k);
+            });
+            properties.putAll(newProperties);
         } catch (SQLException err) {
             LOG.log(Level.SEVERE, "Error while saving configuration from Database", err);
             throw new ConfigurationStoreException(err);
