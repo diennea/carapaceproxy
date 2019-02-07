@@ -26,23 +26,36 @@ import junitparams.Parameters;
 import static org.carapaceproxy.server.certiticates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import static org.carapaceproxy.utils.TestUtils.assertEqualsKey;
+import org.junit.After;
 import static org.junit.Assert.assertEquals;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.shredzone.acme4j.util.KeyPairUtils;
 
 /**
- * Test for {@link KeyPair}s and ACME certificates (i.e.
- * {@link DynamicCertificate}) storing.
+ * Test for {@link PropertiesConfigurationStore} and {@link HerdDBConfigurationStore}.
  *
  * @author paolo.venturi
  */
 @RunWith(JUnitParamsRunner.class)
 public class ConfigurationStoreTest {
 
+    @Rule
+    public TemporaryFolder tmpDir = new TemporaryFolder();
+
     private ConfigurationStore store;
     private static final String d1 = "localhost1";
     private static final String d2 = "localhost2";
+    private static final String d3 = "localhost3";
+
+    @After
+    public void after() {
+        if (store != null) {
+            store.close();
+        }
+    }
 
     @Test
     @Parameters({"in-memory", "db"})
@@ -52,6 +65,8 @@ public class ConfigurationStoreTest {
         props.setProperty("certificate.0.isdynamic", "true");
         props.setProperty("certificate.1.hostname", d2);
         props.setProperty("certificate.1.isdynamic", "true");
+        props.put("db.jdbc.url", "jdbc:herddb:localhost");
+        props.put("db.server.base.dir", tmpDir.getRoot().getAbsolutePath());
 
         store = new PropertiesConfigurationStore(props);
         if (type.equals("db")) {
@@ -60,7 +75,6 @@ public class ConfigurationStoreTest {
 
         testKeyPairOperations();
         testCertificateOperations();
-
     }
 
     private void testKeyPairOperations() {
@@ -96,5 +110,67 @@ public class ConfigurationStoreTest {
         // Certificates loading
         assertEquals(cert1, store.loadCertificateForDomain(d1));
         assertEquals(cert2, store.loadCertificateForDomain(d2));
+    }
+
+    @Test
+    public void testPersistentConfiguration() throws ConfigurationNotValidException {
+        Properties props = new Properties();
+        props.setProperty("certificate.0.hostname", d1);
+        props.setProperty("certificate.0.isdynamic", "true");
+        props.setProperty("certificate.1.hostname", d2);
+        props.setProperty("certificate.1.isdynamic", "true");
+        props.put("db.jdbc.url", "jdbc:herddb:localhost");
+        props.put("db.server.base.dir", tmpDir.getRoot().getAbsolutePath());
+        PropertiesConfigurationStore propertiesConfigurationStore = new PropertiesConfigurationStore(props);
+
+        store = new HerdDBConfigurationStore(propertiesConfigurationStore);
+
+        // Check applied configuration (loaded from empty db NB: passed configuration is ignored)
+        assertEquals("", store.getProperty("certificate.0.hostname", ""));
+        assertEquals("", store.getProperty("certificate.0.isdynamic", ""));
+        assertEquals("", store.getProperty("certificate.1.hostname", ""));
+        assertEquals("", store.getProperty("certificate.1.isdynamic", ""));
+
+        // Apply first configuration
+        store.commitConfiguration(propertiesConfigurationStore);
+
+        // Check cached applied configuration
+        assertEquals(d1, store.getProperty("certificate.0.hostname", ""));
+        assertEquals("true", store.getProperty("certificate.0.isdynamic", ""));
+        assertEquals(d2, store.getProperty("certificate.1.hostname", ""));
+        assertEquals("true", store.getProperty("certificate.1.isdynamic", ""));
+
+        // New configuration to apply
+        props = new Properties();
+        // no more certificate.0.*
+        props.setProperty("certificate.1.hostname", d1); // changed from d2 ("localhost2")
+        props.setProperty("certificate.1.isdynamic", "false"); // changed from "true"
+        props.setProperty("certificate.3.hostname", d3); // new
+        props.setProperty("certificate.3.isdynamic", "true"); // new
+        propertiesConfigurationStore = new PropertiesConfigurationStore(props);
+
+        store.commitConfiguration(propertiesConfigurationStore);
+
+        // check new configuration has been applied successfully
+        checkConfiguration();
+        store.close();
+
+        // Loading stored configuration
+        props = new Properties();
+        props.put("db.jdbc.url", "jdbc:herddb:localhost");
+        props.put("db.server.base.dir", tmpDir.getRoot().getAbsolutePath());
+        propertiesConfigurationStore = new PropertiesConfigurationStore(props);
+        store = new HerdDBConfigurationStore(propertiesConfigurationStore);
+        checkConfiguration();
+    }
+
+    private void checkConfiguration() {
+        // check new configuration has been applied successfully
+        assertEquals("", store.getProperty("certificate.0.hostname", ""));
+        assertEquals("", store.getProperty("certificate.0.isdynamic", ""));
+        assertEquals(d1, store.getProperty("certificate.1.hostname", ""));
+        assertEquals("false", store.getProperty("certificate.1.isdynamic", ""));
+        assertEquals(d3, store.getProperty("certificate.3.hostname", ""));
+        assertEquals("true", store.getProperty("certificate.3.isdynamic", ""));
     }
 }

@@ -34,10 +34,6 @@ import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
-import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.StreamingOutput;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.HttpProxyServer;
@@ -54,38 +50,26 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
 public class ConfigResource {
 
     private static final Logger LOG = Logger.getLogger(ConfigResource.class.getName());
-    private static final String CONFIGURATION_DUMPING_FILENAME = "server.dynamic.config";
 
     @javax.ws.rs.core.Context
     ServletContext context;
 
     @GET
-    public Response dump() {
-        StreamingOutput configStream = (output) -> {
-            try {
-                HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-                ConfigurationStore configStore = server.getDynamicConfigurationStore();
-                String lineSeparator = configStore.getProperty("line.separator", "\n");
-                Set<String> props = new TreeSet();
-                configStore.forEach((k, v) -> {
-                    props.add (k + "=" + v);
-                });
-                StringBuilder builder = new StringBuilder();
-                props.forEach(p -> {
-                    builder.append(p);
-                    builder.append(lineSeparator);
-                });
-                byte[] data = builder.toString().getBytes("UTF-8");
-                output.write(data);
-                output.flush();
-            } catch (Exception e) {
-                throw new WebApplicationException("Unable to dump current configuration.");
-            }
-        };
-        LOG.info("Dumped current configuration from API");
-        return Response.ok(configStream, MediaType.APPLICATION_OCTET_STREAM)
-                .header("content-disposition", "attachment; filename = " + CONFIGURATION_DUMPING_FILENAME)
-                .build();
+    @Produces("text/plain")
+    public String dump() {
+        LOG.info("Dumping current configuration from API");
+        HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
+        ConfigurationStore configStore = server.getDynamicConfigurationStore();
+        Set<String> props = new TreeSet();
+        configStore.forEach((k, v) -> {
+            props.add(k + "=" + v);
+        });
+        StringBuilder builder = new StringBuilder();
+        props.forEach(p -> {
+            builder.append(p);
+            builder.append("\n");
+        });
+        return builder.toString();
     }
 
     @Path("/validate")
