@@ -313,13 +313,6 @@ public class HttpProxyServer implements AutoCloseable {
         int healthProbePeriod = Integer.parseInt(properties.getProperty("healthmanager.period", "0"));
         LOG.info("healthmanager.period=" + healthProbePeriod);
         backendHealthManager.setPeriod(healthProbePeriod);
-
-        int dynamicCertificatesManagerPeriod = Integer.parseInt(properties.getProperty("dynamiccertificatesmanager.period", "0"));
-        LOG.info("dynamiccertificatesmanager.period=" + dynamicCertificatesManagerPeriod);
-        dynamicCertificateManager.setPeriod(dynamicCertificatesManagerPeriod);
-        int keyPairsSize = Integer.parseInt(properties.getProperty("dynamiccertificatesmanager.keypairssize", DEFAULT_KEYPAIRS_SIZE + ""));
-        LOG.info("dynamiccertificatesmanager.keypairssize=" + keyPairsSize);
-        dynamicCertificateManager.setKeyPairsSize(keyPairsSize);
     }
 
     private static List<RequestFilter> buildFilters(RuntimeServerConfiguration currentConfiguration) throws ConfigurationNotValidException {
