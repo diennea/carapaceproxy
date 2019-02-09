@@ -24,6 +24,7 @@ import org.carapaceproxy.client.impl.ConnectionsManagerImpl;
 import org.carapaceproxy.utils.RawHttpClient;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import org.junit.Rule;
@@ -41,6 +42,7 @@ public class ConfigResourceTest extends UseAdminServer {
     public TemporaryFolder tmpDir = new TemporaryFolder();
 
     @Test
+    // 0) Dumping of start-up configuration
     // 1) applying of dynamic configuration
     // 2) dumping of the current configuration
     // 3) updating+applying dumped configuration
@@ -50,16 +52,26 @@ public class ConfigResourceTest extends UseAdminServer {
         configuration.put("config.type", "database");
         configuration.put("db.jdbc.url", "jdbc:herddb:localhost");
         configuration.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
+        configuration.put("dynamiccertificatesmanager.period", 25); // will be ignore due to db-mode
         startServer(configuration);
+
         try ( RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+            // 0) Dumping + check
+            String dumpedToReApply;
+            RawHttpClient.HttpResponse resp = client.get("/api/config", credentials);
+            dumpedToReApply = resp.getBodyString();
+            System.out.println("CONFIG:" + dumpedToReApply);
+            assertFalse(dumpedToReApply.contains("dynamiccertificatesmanager"));
+
             // 1) Applying
-            String body = "listener.2.defaultcertificate=*\n"
+            String body = "dynamiccertificatesmanager.period=45\n"
+                    + "listener.2.defaultcertificate=*\n"
                     + "listener.2.enabled=true\n"
                     + "listener.2.host=0.0.0.0\n"
                     + "listener.2.ocps=true\n"
                     + "listener.2.port=4089\n"
                     + "listener.2.ssl=false";
-            RawHttpClient.HttpResponse resp = client.executeRequest("POST /api/config/apply HTTP/1.1\r\n"
+            resp = client.executeRequest("POST /api/config/apply HTTP/1.1\r\n"
                     + "Host: localhost\r\n"
                     + "Content-Type: text/plain\r\n"
                     + "Content-Length: " + body.length() + "\r\n"
@@ -71,14 +83,13 @@ public class ConfigResourceTest extends UseAdminServer {
             assertTrue(s.equals("{\"ok\":true,\"error\":\"\"}"));
 
             // 2) Dumping + check
-            String dumpedToReApply;
-
             resp = client.get("/api/config", credentials);
             dumpedToReApply = resp.getBodyString();
             System.out.println("CONFIG:" + dumpedToReApply);
             assertThat(dumpedToReApply, containsString(body));
 
             // 3) Update config file + re-Applying
+            dumpedToReApply = dumpedToReApply.replace("dynamiccertificatesmanager.period=45", "dynamiccertificatesmanager.period=30");
             dumpedToReApply += "listener.3.enabled=true\n"
                     + "listener.3.host=0.0.0.1\n"
                     + "listener.3.ocps=true\n"

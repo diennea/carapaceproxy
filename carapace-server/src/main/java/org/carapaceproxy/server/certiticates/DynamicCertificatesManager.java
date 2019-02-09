@@ -71,31 +71,31 @@ public class DynamicCertificatesManager implements Runnable {
     private Map<String, DynamicCertificate> certificates = new ConcurrentHashMap();
     private Map<String, String> challengesTokens = new ConcurrentHashMap();
     private ACMEClient client; // Let's Encrypt client
-    private int period = 0; // in seconds
     private ScheduledExecutorService scheduler;
     private ConfigurationStore store;
-    private int keyPairsSize = 0;
-
-    public void setPeriod(int period) {
-        this.period = period;
-    }
-
-    public void setKeyPairsSize(int size) {
-        keyPairsSize = size;
-    }
+    private int period = 0; // in seconds
+    private int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
 
     public void setConfigurationStore(ConfigurationStore configStore) {
         this.store = configStore;
     }
 
-    public void reloadConfiguration(RuntimeServerConfiguration configuration) {
+    public void reloadConfiguration(RuntimeServerConfiguration configuration) {       
         if (store == null) {
             throw new DynamicCertificatesManagerException("ConfigurationStore not set.");
         }
         if (client == null) {
             client = new ACMEClient(loadOrCreateAcmeUserKeyPair(), TESTING_MODE);
         }
-        loadCertificates(configuration.getCertificates());
+        if (scheduler != null) {
+            scheduler.shutdown();           
+        }
+        period = configuration.getDynamicCertificateManagerPeriod();
+        keyPairsSize = configuration.getKeyPairsSize();
+        loadCertificates(configuration.getCertificates());        
+        if (scheduler != null) {
+            start();
+        }        
     }
 
     private KeyPair loadOrCreateAcmeUserKeyPair() {

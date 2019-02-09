@@ -31,6 +31,7 @@ import org.carapaceproxy.configstore.ConfigurationStore;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.getClassname;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.getInt;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.getLong;
+import static org.carapaceproxy.server.certiticates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;
@@ -68,8 +69,8 @@ public class RuntimeServerConfiguration {
     private int accessLogFlushInterval = 5000;
     private int accessLogWaitBetweenFailures = 10000;
     private String userRealmClassname;
-    private long dynamicCertificateManagerPeriod = 0;
-    private int dynamicCertificatesTTL = 0;
+    private int dynamicCertificatesManagerPeriod = 0;    
+    private int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
 
 
     public String getAccessLogPath() {
@@ -184,12 +185,12 @@ public class RuntimeServerConfiguration {
         this.cacheMaxFileSize = cacheMaxFileSize;
     }
 
-    public long getDynamicCertificateManagerPeriod() {
-        return dynamicCertificateManagerPeriod;
+    public int getDynamicCertificateManagerPeriod() {
+        return dynamicCertificatesManagerPeriod;
     }
 
-    public int getDynamicCertificatesTTL() {
-        return dynamicCertificatesTTL;
+    public int getKeyPairsSize() {
+        return keyPairsSize;
     }
     
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
@@ -246,11 +247,11 @@ public class RuntimeServerConfiguration {
         for (int i = 0; i < 100; i++) {
             tryConfigureFilter(i, properties);
         }
-
-        this.dynamicCertificateManagerPeriod = getLong("dynamiccertificatemanager.period", 0, properties);
-        LOG.info("dynamiccertificatemanager.period=" + dynamicCertificateManagerPeriod);
-        this.dynamicCertificatesTTL = getInt("dynamiccertificatemanager.certificatesttl", 0, properties);
-        LOG.info("dynamiccertificatemanager.certificatesttl=" + dynamicCertificatesTTL);
+                                
+        dynamicCertificatesManagerPeriod = getInt("dynamiccertificatesmanager.period", 0, properties);
+        LOG.info("dynamiccertificatesmanager.period=" + dynamicCertificatesManagerPeriod);        
+        keyPairsSize = getInt("dynamiccertificatesmanager.keypairssize", DEFAULT_KEYPAIRS_SIZE, properties);
+        LOG.info("dynamiccertificatesmanager.keypairssize=" + keyPairsSize);        
     }
 
     private void tryConfigureCertificate(int i, ConfigurationStore properties) throws ConfigurationNotValidException {
