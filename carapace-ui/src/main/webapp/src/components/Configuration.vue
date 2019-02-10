@@ -33,35 +33,31 @@
         methods: {
             save: function () {
                 var self = this
-                axios.post('/api/config/apply', this.configuration, this.axiosParams).then(function (response) {
+                this.$http.post('/api/config/apply', this.configuration, this.axiosParams).then(function (response) {
                     var data = response.data
                     self.opSuccess = data.ok
-                    self.opMessage = data.ok ? "Configuration saved successfully." : "Error on configuration saving: " + data.error
-                    console.log(response)
+                    self.opMessage = data.ok ? "Configuration saved successfully." : "Error on configuration saving: " + data.error                    
                 }).catch(function (error) {
                     self.opSuccess = false
-                    self.opMessage = "Error on configuration saving: " + error
-                    console.log(error)
+                    self.opMessage = "Error on configuration saving: " + error                    
                 })
             },
             reload: function () {
                 var self = this
-                axios.get('/api/config', this.axiosParams).then(function (response) {
+                this.$http.get('/api/config', this.axiosParams).then(function (response) {
                     self.configuration = response.data
                     self.opSuccess = true
-                    self.opMessage = "Configuration reloaded successfully."
-                    console.log(response)
+                    self.opMessage = "Configuration reloaded successfully."                    
                 }).catch(function (error) {
                     self.opSuccess = false
-                    self.opMessage = "Error on reloading current configuration:" + error
-                    console.log(error)
+                    self.opMessage = "Error on reloading current configuration:" + error                    
                 })
             }
         }
     }
 </script>
 
-<style>
+<style scoped>
     #edit-config {
         width: 100%;
         overflow-y: scroll;
