@@ -13,16 +13,13 @@
 </template>
 
 <script>
+    import { doGet } from './../mockserver'
+    import { doPost } from './../mockserver'    
     export default {
         name: 'Configuration',
         data: function () {
             return {
-                configuration: "",
-                axiosParams: {
-                    headers: {
-                        'Content-Type': 'text/plain'
-                    }
-                },
+                configuration: "",                
                 opSuccess: false,
                 opMessage: ""
             }
@@ -32,23 +29,22 @@
         },
         methods: {
             save: function () {
-                var self = this
-                this.$http.post('/api/config/apply', this.configuration, this.axiosParams).then(function (response) {
-                    var data = response.data
+                var self = this               
+                doPost('/api/config/apply', this.configuration, data => {                    
                     self.opSuccess = data.ok
-                    self.opMessage = data.ok ? "Configuration saved successfully." : "Error on configuration saving: " + data.error                    
-                }).catch(function (error) {
+                    self.opMessage = data.ok ? "Configuration saved successfully." : "Error on configuration saving: " + data.error
+                }, error => {
                     self.opSuccess = false
                     self.opMessage = "Error on configuration saving: " + error                    
                 })
             },
             reload: function () {
                 var self = this
-                this.$http.get('/api/config', this.axiosParams).then(function (response) {
-                    self.configuration = response.data
+                doGet('/api/config', conf => {
+                    self.configuration = conf
                     self.opSuccess = true
                     self.opMessage = "Configuration reloaded successfully."                    
-                }).catch(function (error) {
+                }, error => {
                     self.opSuccess = false
                     self.opMessage = "Error on reloading current configuration:" + error                    
                 })

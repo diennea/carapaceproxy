@@ -1,10 +1,46 @@
-function doRequest(url, opt, callback) {
-    if (process.env.NODE_ENV !== "production") {
-        callback(mockRequest(url));
-    } else {
-        fetch(url, opt.options || {}).then(r => r.json()).then(callback);
-    }
+function doGet(url, okCallback, failCallback, options) {    
+    options = options || {}
+    options.method = 'GET'     
+    doRequest(url, {options}, okCallback, failCallback)
+}
 
+function doPost(url, data, okCallback, failCallback, options) {
+    options = options || {}
+    options.method = 'POST'
+    options.body = data    
+    doRequest(url, {options}, okCallback, failCallback)
+}
+
+function doRequest(url, opt, okCallback, failCallback) {
+    if (process.env.NODE_ENV !== "production") {
+        okCallback(mockRequest(url));
+    } else {
+        fetch(url, opt.options || {}).then( r => {
+            if (!r.ok) {
+                throw new TypeError("Request failed");
+            }
+            var contentType = r.headers.get("content-type");            
+            if(contentType && contentType.includes("application/json")) {
+                return r.json();
+            } else if(contentType && contentType.includes("text/plain")) {
+                return r.text();
+            } else {
+                throw new TypeError("Response Content-Type not supported");
+            }            
+        }).then(data => {
+            if (okCallback) {
+                okCallback(data)
+            } else {
+                console.log(data)
+            }
+        }).catch(e => {
+              if (failCallback) {
+                failCallback(e)
+              } else {
+                console.log(e)
+              }
+            })
+    }
 }
 
 function mockRequest(url) {
@@ -55,4 +91,4 @@ function mockRequest(url) {
     return {};
 }
 
-export { doRequest };
+export { doRequest, doGet, doPost };
