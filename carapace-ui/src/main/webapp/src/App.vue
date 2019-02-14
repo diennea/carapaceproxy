@@ -27,6 +27,9 @@
           <li>
             <router-link to="/users">Users</router-link>
           </li>
+          <li>
+            <router-link to="/configuration">Configuration</router-link>
+          </li>
         </ul>
       </div>
       <div id="page-content-wrapper">
