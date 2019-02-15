@@ -62,9 +62,9 @@ public class ConfigurationStoreTest {
     public void testConfigurationStore(String type) throws ConfigurationNotValidException {
         Properties props = new Properties();
         props.setProperty("certificate.0.hostname", d1);
-        props.setProperty("certificate.0.isdynamic", "true");
+        props.setProperty("certificate.0.dynamic", "true");
         props.setProperty("certificate.1.hostname", d2);
-        props.setProperty("certificate.1.isdynamic", "true");
+        props.setProperty("certificate.1.dynamic", "true");
         props.put("db.jdbc.url", "jdbc:herddb:localhost");
         props.put("db.server.base.dir", tmpDir.getRoot().getAbsolutePath());
 
@@ -116,9 +116,9 @@ public class ConfigurationStoreTest {
     public void testPersistentConfiguration() throws ConfigurationNotValidException {
         Properties props = new Properties();
         props.setProperty("certificate.0.hostname", d1);
-        props.setProperty("certificate.0.isdynamic", "true");
+        props.setProperty("certificate.0.dynamic", "true");
         props.setProperty("certificate.1.hostname", d2);
-        props.setProperty("certificate.1.isdynamic", "true");
+        props.setProperty("certificate.1.dynamic", "true");
         props.put("db.jdbc.url", "jdbc:herddb:localhost");
         props.put("db.server.base.dir", tmpDir.getRoot().getAbsolutePath());
         PropertiesConfigurationStore propertiesConfigurationStore = new PropertiesConfigurationStore(props);
@@ -127,26 +127,26 @@ public class ConfigurationStoreTest {
 
         // Check applied configuration (loaded from empty db NB: passed configuration is ignored)
         assertEquals("", store.getProperty("certificate.0.hostname", ""));
-        assertEquals("", store.getProperty("certificate.0.isdynamic", ""));
+        assertEquals("", store.getProperty("certificate.0.dynamic", ""));
         assertEquals("", store.getProperty("certificate.1.hostname", ""));
-        assertEquals("", store.getProperty("certificate.1.isdynamic", ""));
+        assertEquals("", store.getProperty("certificate.1.dynamic", ""));
 
         // Apply first configuration
         store.commitConfiguration(propertiesConfigurationStore);
 
         // Check cached applied configuration
         assertEquals(d1, store.getProperty("certificate.0.hostname", ""));
-        assertEquals("true", store.getProperty("certificate.0.isdynamic", ""));
+        assertEquals("true", store.getProperty("certificate.0.dynamic", ""));
         assertEquals(d2, store.getProperty("certificate.1.hostname", ""));
-        assertEquals("true", store.getProperty("certificate.1.isdynamic", ""));
+        assertEquals("true", store.getProperty("certificate.1.dynamic", ""));
 
         // New configuration to apply
         props = new Properties();
         // no more certificate.0.*
         props.setProperty("certificate.1.hostname", d1); // changed from d2 ("localhost2")
-        props.setProperty("certificate.1.isdynamic", "false"); // changed from "true"
+        props.setProperty("certificate.1.dynamic", "false"); // changed from "true"
         props.setProperty("certificate.3.hostname", d3); // new
-        props.setProperty("certificate.3.isdynamic", "true"); // new
+        props.setProperty("certificate.3.dynamic", "true"); // new
         propertiesConfigurationStore = new PropertiesConfigurationStore(props);
 
         store.commitConfiguration(propertiesConfigurationStore);
@@ -167,10 +167,10 @@ public class ConfigurationStoreTest {
     private void checkConfiguration() {
         // check new configuration has been applied successfully
         assertEquals("", store.getProperty("certificate.0.hostname", ""));
-        assertEquals("", store.getProperty("certificate.0.isdynamic", ""));
+        assertEquals("", store.getProperty("certificate.0.dynamic", ""));
         assertEquals(d1, store.getProperty("certificate.1.hostname", ""));
-        assertEquals("false", store.getProperty("certificate.1.isdynamic", ""));
+        assertEquals("false", store.getProperty("certificate.1.dynamic", ""));
         assertEquals(d3, store.getProperty("certificate.3.hostname", ""));
-        assertEquals("true", store.getProperty("certificate.3.isdynamic", ""));
+        assertEquals("true", store.getProperty("certificate.3.dynamic", ""));
     }
 }

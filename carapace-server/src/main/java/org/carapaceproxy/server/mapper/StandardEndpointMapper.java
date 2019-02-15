@@ -253,6 +253,9 @@ public class StandardEndpointMapper extends EndpointMapper {
                 continue;
             }
             RoutingKey matchResult = route.matches(request);
+            if (LOG.isLoggable(Level.FINER)) {
+                LOG.finer("route " + route.getId() + ", map " + request.uri() + " -> " + matchResult);
+            }
             if (matchResult != null) {
                 ActionConfiguration action = actions.get(route.getAction());
                 if (action == null) {

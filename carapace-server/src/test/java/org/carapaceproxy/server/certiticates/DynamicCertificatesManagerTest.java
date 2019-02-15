@@ -103,7 +103,7 @@ public class DynamicCertificatesManagerTest {
         Properties props = new Properties();
         String d = "localhost";
         props.setProperty("certificate.0.hostname", d);
-        props.setProperty("certificate.0.isdynamic", "true");
+        props.setProperty("certificate.0.dynamic", "true");
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(configStore);

@@ -245,7 +245,7 @@ public class Listeners {
     private static KeyStore loadKeyStore(String keyStoreType, File keyStoreLocation, String keyStorePassword)
             throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException {
         KeyStore ks = KeyStore.getInstance(keyStoreType);
-        try ( FileInputStream in = new FileInputStream(keyStoreLocation)) {
+        try (FileInputStream in = new FileInputStream(keyStoreLocation)) {
             ks.load(in, keyStorePassword.trim().toCharArray());
         }
         return ks;
@@ -254,7 +254,7 @@ public class Listeners {
     private static KeyStore loadKeyStore(String keyStoreType, byte[] keyStoreData, String keyStorePassword)
             throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException {
         KeyStore ks = KeyStore.getInstance(keyStoreType);
-        try ( ByteArrayInputStream is = new ByteArrayInputStream(keyStoreData)) {
+        try (ByteArrayInputStream is = new ByteArrayInputStream(keyStoreData)) {
             ks.load(is, keyStorePassword.trim().toCharArray());
         }
         return ks;
@@ -288,7 +288,9 @@ public class Listeners {
 
     private SslContext resolveSslContext(NetworkListenerConfiguration listener, String sniHostname) throws ConfigurationNotValidException {
         String key = listener.getHost() + ":" + listener.getPort() + "+" + sniHostname;
-
+        if (LOG.isLoggable(Level.FINER)) {
+            LOG.log(Level.FINER, "resolve SNI mapping " + sniHostname + ", key: " + key);
+        }
         try {
             return sslContexts.computeIfAbsent(key, (k) -> {
                 try {

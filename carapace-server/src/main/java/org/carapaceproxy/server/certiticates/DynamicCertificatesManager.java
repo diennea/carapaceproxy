@@ -66,7 +66,7 @@ public class DynamicCertificatesManager implements Runnable {
     // RSA key size of generated key pairs
     public static final int DEFAULT_KEYPAIRS_SIZE = 2048;
     private static final Logger LOG = Logger.getLogger(DynamicCertificatesManager.class.getName());
-    private static final boolean TESTING_MODE = true;
+    private static final boolean TESTING_MODE = Boolean.getBoolean("carapace.acme.testmode");
 
     private Map<String, DynamicCertificate> certificates = new ConcurrentHashMap();
     private Map<String, String> challengesTokens = new ConcurrentHashMap();
@@ -80,7 +80,7 @@ public class DynamicCertificatesManager implements Runnable {
         this.store = configStore;
     }
 
-    public void reloadConfiguration(RuntimeServerConfiguration configuration) {       
+    public void reloadConfiguration(RuntimeServerConfiguration configuration) {
         if (store == null) {
             throw new DynamicCertificatesManagerException("ConfigurationStore not set.");
         }
@@ -88,14 +88,14 @@ public class DynamicCertificatesManager implements Runnable {
             client = new ACMEClient(loadOrCreateAcmeUserKeyPair(), TESTING_MODE);
         }
         if (scheduler != null) {
-            scheduler.shutdown();           
+            scheduler.shutdown();
         }
         period = configuration.getDynamicCertificateManagerPeriod();
         keyPairsSize = configuration.getKeyPairsSize();
-        loadCertificates(configuration.getCertificates());        
+        loadCertificates(configuration.getCertificates());
         if (scheduler != null) {
             start();
-        }        
+        }
     }
 
     private KeyPair loadOrCreateAcmeUserKeyPair() {
@@ -276,13 +276,21 @@ public class DynamicCertificatesManager implements Runnable {
      */
     public byte[] getCertificateForDomain(String domain) {
         DynamicCertificate c = certificates.get(domain);
-        if (c != null && c.isAvailable()) {
-            CertificateData data = store.loadCertificateForDomain(domain);
-            if (data != null) {
-                return Base64.getDecoder().decode(data.getChain());
-            }
+        if (c == null) {
+            LOG.log(Level.SEVERE, "No dynamic certificate for domain {0}", domain);
+            return null;
         }
-        return null;
+        if (!c.isAvailable()) {
+            LOG.log(Level.SEVERE, "Dynamic certificate for domain {0} is not available yet: {1}", new Object[]{domain, c});
+            return null;
+        }
+
+        CertificateData data = store.loadCertificateForDomain(domain);
+        if (data == null) {
+            LOG.log(Level.SEVERE, "Dynamic certificate for domain {0} is not available but without data: {1}", new Object[]{domain, c});
+            return null;
+        }
+        return Base64.getDecoder().decode(data.getChain());
     }
 
 }

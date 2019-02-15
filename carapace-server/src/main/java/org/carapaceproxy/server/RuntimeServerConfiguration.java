@@ -262,7 +262,7 @@ public class RuntimeServerConfiguration {
         if (!certificateHostname.isEmpty()) {
             String certificateFile = properties.getProperty(prefix + "sslcertfile", "");
             String certificatePassword = properties.getProperty(prefix + "sslcertfilepassword", "");
-            boolean isDynamic = properties.getProperty(prefix + "isdynamic", "false").equalsIgnoreCase("true");
+            boolean isDynamic = properties.getProperty(prefix + "dynamic", "false").equalsIgnoreCase("true");
             LOG.log(Level.INFO, "Configuring SSL certificate {0}hostname={1}, file: {2}", new Object[]{prefix, certificateHostname, certificateFile});
             
             SSLCertificateConfiguration config = new SSLCertificateConfiguration(certificateHostname, certificateFile, certificatePassword, isDynamic);
