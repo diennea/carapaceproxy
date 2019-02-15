@@ -41,13 +41,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 
+ *
  * A simple Let's Encrypt ACME client for automatic ssl certificate issuing.
- * 
+ *
  * @author paolo.venturi
- * 
+ *
  */
-public class ACMEClient {               
+public class ACMEClient {
 
     private static final Logger LOG = LoggerFactory.getLogger(ACMEClient.class);
 
@@ -57,7 +57,7 @@ public class ACMEClient {
     // For testing server use
     public static final String TESTING_CA = "https://acme-staging-v02.api.letsencrypt.org/directory"; //"acme://letsencrypt.org/staging";
 
-    private boolean testingModeOn;    
+    private boolean testingModeOn;
     private final KeyPair userKey;
 
     public enum ChallengeType {
@@ -65,11 +65,11 @@ public class ACMEClient {
     }
 
     public ACMEClient(KeyPair userKey, boolean testingMode) {
-        Security.addProvider(new BouncyCastleProvider());       
+        Security.addProvider(new BouncyCastleProvider());
         this.userKey = userKey;
-        this.testingModeOn = testingMode;        
-    }    
-    
+        this.testingModeOn = testingMode;
+    }
+
     /**
      * Finds your {@link Account} at the ACME server.It will be found by your
      * user's public key.If your key is not known to the server yet, a new
@@ -85,7 +85,7 @@ public class ACMEClient {
      * @throws org.shredzone.acme4j.exception.AcmeException
      */
     public Login getLogin() throws IOException, AcmeException {
-        Session session = new Session(testingModeOn ? TESTING_CA : PRODUCTION_CA);        
+        Session session = new Session(testingModeOn ? TESTING_CA : PRODUCTION_CA);
 
         return new AccountBuilder()
                 .agreeToTermsOfService()
@@ -104,7 +104,7 @@ public class ACMEClient {
         // Order the certificate
         return acct.newOrder().domains(domains).create();
     }
-    
+
     public Http01Challenge getHTTPChallengeForOrder(Order order) throws AcmeException {
         Authorization auth = order.getAuthorizations().get(0);
         String domain = auth.getIdentifier().getDomain();
@@ -125,10 +125,10 @@ public class ACMEClient {
         if (challenge.getStatus() == Status.VALID) {
             return null;
         }
-        
+
         return challenge;
     }
-    
+
     /**
      * Prepares a HTTP challenge.
      * <p>
@@ -151,39 +151,11 @@ public class ACMEClient {
         }
 
         // Output the challenge, wait for acknowledge...
-        LOG.info("Please create a file in your web server's base directory.");
         LOG.info("It must be reachable at: http://{}/.well-known/acme-challenge/{}",
                 auth.getIdentifier().getDomain(), challenge.getToken());
-        LOG.info("File name: {}", challenge.getToken());
-        LOG.info("Content: {}", challenge.getAuthorization());
-        LOG.info("The file must not contain any leading or trailing whitespaces or line breaks!");
-        LOG.info("If you're ready, dismiss the dialog...");
-
-        StringBuilder message = new StringBuilder();
-        message.append("Please create a file in your web server's base directory.\n\n");
-        message.append("http://")
-                .append(auth.getIdentifier().getDomain())
-                .append("/.well-known/acme-challenge/")
-                .append(challenge.getToken())
-                .append("\n\n");
-        message.append("Content:\n\n");
-        message.append(challenge.getAuthorization());
-
-        // for user-interaction
-        acceptChallenge(message.toString());
 
         return challenge;
-    }   
-
-    private void acceptChallenge(String message) throws AcmeException {
-        int option = JOptionPane.showConfirmDialog(null,
-                message,
-                "Prepare Challenge",
-                JOptionPane.OK_CANCEL_OPTION);
-        if (option == JOptionPane.CANCEL_OPTION) {
-            throw new AcmeException("User cancelled the challenge");
-        }
-    }    
+    }
 
     public Status checkResponseForChallenge(Challenge challenge) throws AcmeException, IOException {
         Status status = challenge.getStatus();
@@ -191,34 +163,25 @@ public class ACMEClient {
         // The authorization is already valid. No need to process a challenge.
         // or the challenge is already verified, there's no need to execute it again.
         if (status == Status.VALID) {
-            LOG.info("Challenge has been completed. Remember to remove the validation resource.");
-            completeChallenge("Challenge has been completed.\nYou can remove the resource again now.");
+
         } else if (status != Status.INVALID) {
             challenge.update();
         }
 
         return status;
     }
-    
-    private void completeChallenge(String message) throws AcmeException {
-        JOptionPane.showMessageDialog(null,
-                message,
-                "Complete Challenge",
-                JOptionPane.INFORMATION_MESSAGE);
-    }
 
     /**
-     * Orders the certificate specified in the passed order with passed
-     * domain key.
+     * Orders the certificate specified in the passed order with passed domain
+     * key.
      *
      * @param order
      * @param domainKeyPair
      * @throws IOException
      * @throws AcmeException
-     */    
-    
+     */
     public void orderCertificate(Order order, KeyPair domainKeyPair) throws IOException, AcmeException {
-        String domain = order.getIdentifiers().get(0).getDomain();        
+        String domain = order.getIdentifiers().get(0).getDomain();
 
         // Generate a CSR (Certificate signing request) for all of the domains, and sign it with the domain key pair.
         CSRBuilder csrb = new CSRBuilder();
@@ -231,7 +194,6 @@ public class ACMEClient {
 //        try (Writer out = new OutputStreamWriter(new FileOutputStream(file), "UTF-8")) {
 //            csrb.write(out);
 //        }
-
         // Order the certificate
         LOG.info("Certificate ordering for domain {}", domain);
         order.execute(csrb.getEncoded());
@@ -243,7 +205,6 @@ public class ACMEClient {
 
         if (status == Status.VALID) {
             LOG.info("Order has been completed.");
-            completeChallenge("Order has been completed.");
         } else if (status != Status.INVALID) {
             order.update();
         }
@@ -254,13 +215,13 @@ public class ACMEClient {
     public Certificate fetchCertificateForOrder(Order order) throws AcmeException, IOException {
         // Get the certificate        
         Certificate certificate = order.getCertificate();
-        String domain = order.getIdentifiers().get(0).getDomain();        
+        String domain = order.getIdentifiers().get(0).getDomain();
         if (certificate == null) {
             throw new AcmeException("Certificate not fetched");
         }
         LOG.info("Success! The certificate for domain {} has been generated!", domain);
         LOG.info("Certificate URL: {}", certificate.getLocation());
-        
+
         return certificate;
     }
 }
