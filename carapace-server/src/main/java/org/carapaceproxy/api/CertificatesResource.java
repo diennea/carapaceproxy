@@ -19,6 +19,9 @@
  */
 package org.carapaceproxy.api;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import javax.servlet.ServletContext;
@@ -26,8 +29,14 @@ import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import org.carapaceproxy.configstore.CertificateData;
+import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
+import org.carapaceproxy.server.certiticates.DynamicCertificate;
+import org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState;
+import static org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.AVAILABLE;
+import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 
 /**
@@ -46,11 +55,14 @@ public class CertificatesResource {
 
         private final String id;
         private final String hostname;
+        private final boolean dynamic;
+        private DynamicCertificateState status;
         private final String sslCertificateFile;
 
-        public CertificateBean(String id, String hostname, String sslCertificateFile) {
+        public CertificateBean(String id, String hostname, boolean dynamic, String sslCertificateFile) {
             this.id = id;
             this.hostname = hostname;
+            this.dynamic = dynamic;
             this.sslCertificateFile = sslCertificateFile;
         }
 
@@ -60,6 +72,18 @@ public class CertificatesResource {
 
         public String getHostname() {
             return hostname;
+        }
+
+        public boolean isDynamic() {
+            return dynamic;
+        }
+
+        public DynamicCertificateState getStatus() {
+            return status;
+        }
+
+        public void setStatus(DynamicCertificateState status) {
+            this.status = status;
         }
 
         public String getSslCertificateFile() {
@@ -73,15 +97,20 @@ public class CertificatesResource {
     public Map<String, CertificateBean> getAllCertificates() {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         RuntimeServerConfiguration conf = server.getCurrentConfiguration();
-
+        DynamicCertificatesManager dynamicCertificateManager = server.getDynamicCertificateManager();
         Map<String, CertificateBean> res = new HashMap<>();
         for (Map.Entry<String, SSLCertificateConfiguration> certificateEntry : conf.getCertificates().entrySet()) {
             SSLCertificateConfiguration certificate = certificateEntry.getValue();
             CertificateBean certBean = new CertificateBean(
                     certificate.getId(),
                     certificate.getHostname(),
+                    certificate.isDynamic(),
                     certificate.getSslCertificateFile()
             );
+
+            if (certBean.isDynamic()) {
+                certBean.setStatus(dynamicCertificateManager.getStateOfCertificate(certBean.getId()));
+            }
             res.put(certificateEntry.getKey(), certBean);
         }
 
@@ -93,8 +122,8 @@ public class CertificatesResource {
     public Map<String, CertificateBean> getCertificateById(@PathParam("certId") String certId) {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         RuntimeServerConfiguration conf = server.getCurrentConfiguration();
-
         Map<String, SSLCertificateConfiguration> certificateList = conf.getCertificates();
+        DynamicCertificatesManager dynamicCertificateManager = server.getDynamicCertificateManager();
 
         Map<String, CertificateBean> res = new HashMap<>();
         if (certificateList.containsKey(certId)) {
@@ -102,8 +131,13 @@ public class CertificatesResource {
             CertificateBean certBean = new CertificateBean(
                     certificate.getId(),
                     certificate.getHostname(),
+                    certificate.isDynamic(),
                     certificate.getSslCertificateFile()
             );
+
+            if (certBean.isDynamic()) {
+                certBean.setStatus(dynamicCertificateManager.getStateOfCertificate(certBean.getId()));
+            }
             res.put(certId, certBean);
         }
 
