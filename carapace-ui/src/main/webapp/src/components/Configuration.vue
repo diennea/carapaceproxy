@@ -5,8 +5,9 @@
             <textarea id="edit-config" rows="32" v-model="configuration"></textarea>
         </div>
         <div>
+            <button @click="validate">Validate</button>
             <button @click="save">Save</button>
-            <button @click="reload">Reload</button>
+            <button @click="fetch">Fetch</button>
             <span :class="[opSuccess ? 'success' : 'error']">{{opMessage}}</span>
         </div>
     </div>
@@ -14,39 +15,49 @@
 
 <script>
     import { doGet } from './../mockserver'
-    import { doPost } from './../mockserver'    
+    import { doPost } from './../mockserver'
     export default {
         name: 'Configuration',
         data: function () {
             return {
-                configuration: "",                
+                configuration: "",
                 opSuccess: false,
                 opMessage: ""
             }
         },
         created: function () {
-            this.reload()
+            this.fetch()
         },
         methods: {
             save: function () {
-                var self = this               
-                doPost('/api/config/apply', this.configuration, data => {                    
+                var self = this
+                doPost('/api/config/apply', this.configuration, data => {
                     self.opSuccess = data.ok
-                    self.opMessage = data.ok ? "Configuration saved successfully." : "Error on configuration saving: " + data.error
+                    self.opMessage = data.ok ? "Configuration saved successfully." : "Error: unable to save the configuration."
                 }, error => {
                     self.opSuccess = false
-                    self.opMessage = "Error on configuration saving: " + error                    
+                    self.opMessage = "Error: unable to save the configuration (" + error + ")."
                 })
             },
-            reload: function () {
+            fetch: function () {
                 var self = this
                 doGet('/api/config', conf => {
                     self.configuration = conf
                     self.opSuccess = true
-                    self.opMessage = "Configuration reloaded successfully."                    
+                    self.opMessage = ""
                 }, error => {
                     self.opSuccess = false
-                    self.opMessage = "Error on reloading current configuration:" + error                    
+                    self.opMessage = "Error: unable to fetch current configuration (" + error + ")."
+                })
+            },
+            validate: function () {
+                var self = this
+                doPost('/api/config/validate', this.configuration, data => {
+                    self.opSuccess = data.ok
+                    self.opMessage = data.ok ? "Configuration is ok." : "Error: configuration contains some errors, check it out before save it."
+                }, error => {
+                    self.opSuccess = false
+                    self.opMessage = "Error: unable to validate the configuration (" + error + ")."
                 })
             }
         }
