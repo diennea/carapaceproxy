@@ -17,8 +17,8 @@
                 <tr v-for="item of listeners" :key="item.id">
                     <td>{{item.host}}</td>
                     <td>{{item.port}}</td>
-                    <td>{{item.ssl}}</td>
-                    <td>{{item.ssl ? item.ocps : ""}}</td>
+                    <td>{{item.ssl | symbolize}}</td>
+                    <td>{{item.ssl ? (item.ocps | symbolize) : ""}}</td>
                     <td>{{item.ssl ? item.sslCiphers : ""}}</td>
                     <td>
                         <router-link :to="{ name: 'Certificate', params: { id: item.defaultCertificate }}"

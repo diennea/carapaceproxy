@@ -28,6 +28,8 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
+import org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState;
+import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 
 /**
@@ -46,11 +48,14 @@ public class CertificatesResource {
 
         private final String id;
         private final String hostname;
+        private final boolean dynamic;
+        private String status;
         private final String sslCertificateFile;
 
-        public CertificateBean(String id, String hostname, String sslCertificateFile) {
+        public CertificateBean(String id, String hostname, boolean dynamic, String sslCertificateFile) {
             this.id = id;
             this.hostname = hostname;
+            this.dynamic = dynamic;
             this.sslCertificateFile = sslCertificateFile;
         }
 
@@ -62,10 +67,21 @@ public class CertificatesResource {
             return hostname;
         }
 
+        public boolean isDynamic() {
+            return dynamic;
+        }
+
+        public String getStatus() {
+            return status;
+        }
+
+        public void setStatus(String status) {
+            this.status = status;
+        }
+
         public String getSslCertificateFile() {
             return sslCertificateFile;
         }
-
     }
 
     @GET
@@ -73,15 +89,21 @@ public class CertificatesResource {
     public Map<String, CertificateBean> getAllCertificates() {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         RuntimeServerConfiguration conf = server.getCurrentConfiguration();
-
+        DynamicCertificatesManager dynamicCertificateManager = server.getDynamicCertificateManager();
         Map<String, CertificateBean> res = new HashMap<>();
         for (Map.Entry<String, SSLCertificateConfiguration> certificateEntry : conf.getCertificates().entrySet()) {
             SSLCertificateConfiguration certificate = certificateEntry.getValue();
             CertificateBean certBean = new CertificateBean(
                     certificate.getId(),
                     certificate.getHostname(),
+                    certificate.isDynamic(),
                     certificate.getSslCertificateFile()
             );
+
+            if (certificate.isDynamic()) {
+                DynamicCertificateState state = dynamicCertificateManager.getStateOfCertificate(certBean.getId());
+                certBean.setStatus(stateToStatusString(state));
+            }
             res.put(certificateEntry.getKey(), certBean);
         }
 
@@ -93,8 +115,8 @@ public class CertificatesResource {
     public Map<String, CertificateBean> getCertificateById(@PathParam("certId") String certId) {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         RuntimeServerConfiguration conf = server.getCurrentConfiguration();
-
         Map<String, SSLCertificateConfiguration> certificateList = conf.getCertificates();
+        DynamicCertificatesManager dynamicCertificateManager = server.getDynamicCertificateManager();
 
         Map<String, CertificateBean> res = new HashMap<>();
         if (certificateList.containsKey(certId)) {
@@ -102,11 +124,38 @@ public class CertificatesResource {
             CertificateBean certBean = new CertificateBean(
                     certificate.getId(),
                     certificate.getHostname(),
+                    certificate.isDynamic(),
                     certificate.getSslCertificateFile()
             );
+
+            if (certificate.isDynamic()) {
+                DynamicCertificateState state = dynamicCertificateManager.getStateOfCertificate(certBean.getId());
+                certBean.setStatus(stateToStatusString(state));
+            }
             res.put(certId, certBean);
         }
 
         return res;
+    }
+
+    static String stateToStatusString(DynamicCertificateState state) {
+        switch (state) {
+            case WAITING:
+                return "waiting"; // certificate waiting for issuing/renews
+            case VERIFYING:
+                return "verifying"; // challenge verification by LE pending
+            case VERIFIED:
+                return "verified"; // challenge succeded
+            case ORDERING:
+                return "ordering"; // certificate order pending
+            case REQUEST_FAILED:
+                return "request failed"; // challenge/order failed
+            case AVAILABLE:
+                return "available";// certificate available(saved) and not expired
+            case EXPIRED:     // certificate expired
+                return "expired";
+            default:
+                return "unknown";
+        }
     }
 }

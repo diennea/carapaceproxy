@@ -10,6 +10,8 @@
                         <ul class="list-group">
                             <li class="list-group-item"><strong>Certificate id</strong> {{certificate.id}}</li>
                             <li class="list-group-item"><strong>Hostname:</strong> {{certificate.hostname}}</li>
+                            <li class="list-group-item"><strong>Dynamic:</strong> {{certificate.dynamic | symbolize}}</li>
+                            <li class="list-group-item"><strong>Status:</strong> {{certificate.status}}</li>
                             <li class="list-group-item"><strong>SSL Certificate file:</strong> {{certificate.sslCertificateFile}}</li>
                         </ul>
                     </div>
@@ -38,7 +40,7 @@
         created: function () {
             var d = this;
             var url = "/api/certificates/" + (d.$route.params.id || 0);
-            doRequest(url, {}, function (response) {  
+            doRequest(url, {}, function (response) {
                 d.certificate = response[(d.$route.params.id || 0)];
                 if (!d.certificate) {
                     d.found = false;

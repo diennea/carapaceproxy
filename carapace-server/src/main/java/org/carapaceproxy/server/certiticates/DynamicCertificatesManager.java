@@ -260,13 +260,19 @@ public class DynamicCertificatesManager implements Runnable {
         return pair;
     }
 
-    @VisibleForTesting
     public DynamicCertificateState getStateOfCertificate(String id) {
         DynamicCertificate c = certificates.get(id);
         if (c != null) {
             return c.getState();
         }
         return DynamicCertificateState.WAITING;
+    }
+
+    public void setStateOfCertificate(String id, DynamicCertificateState state) {
+        DynamicCertificate c = certificates.get(id);
+        if (c != null) {
+            c.setState(state);
+        }
     }
 
     /**

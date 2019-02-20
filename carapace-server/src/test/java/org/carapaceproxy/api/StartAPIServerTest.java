@@ -21,6 +21,10 @@ package org.carapaceproxy.api;
 
 import java.util.Properties;
 import javax.servlet.http.HttpServletResponse;
+import static org.carapaceproxy.api.CertificatesResource.stateToStatusString;
+import org.carapaceproxy.server.certiticates.DynamicCertificate;
+import org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState;
+import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
 import org.carapaceproxy.server.filters.RegexpMapSessionIdFilter;
 import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;
 import org.carapaceproxy.server.filters.XForwardedForRequestFilter;
@@ -183,6 +187,7 @@ public class StartAPIServerTest extends UseAdminServer {
 
     @Test
     public void testCertificates() throws Exception {
+        final String dynDomain = "prova.diennea.com";
         Properties properties = new Properties();
 
         properties.put("certificate.1.hostname", "localhost");
@@ -193,30 +198,72 @@ public class StartAPIServerTest extends UseAdminServer {
         properties.put("certificate.2.sslcertfile", "conf/mock2.file");
         properties.put("certificate.2.sslcertfilepassword", "pass");
 
+        // Dynamic certificate
+        properties.put("certificate.3.hostname", dynDomain);
+        properties.put("certificate.3.dynamic", "true");
+
         startServer(properties);
 
-        // full list request
+        // Static certificates
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+
+            // full list request
             RawHttpClient.HttpResponse response = client.get("/api/certificates", credentials);
             String json = response.getBodyString();
 
             assertThat(json, containsString("localhost"));
+            assertThat(json, containsString("\"dynamic\":false"));
+            assertThat(json, containsString("\"status\":null"));
             assertThat(json, containsString("conf/mock1.file"));
 
             assertThat(json, containsString("127.0.0.1"));
+            assertThat(json, containsString("\"dynamic\":false"));
+            assertThat(json, containsString("\"status\":null"));
             assertThat(json, containsString("conf/mock2.file"));
+
+            // single cert request to /{certId}
+            response = client.get("/api/certificates/127.0.0.1", credentials);
+            json = response.getBodyString();
+            assertThat(json, not(containsString("localhost")));
+            assertThat(json, containsString("\"dynamic\":false"));
+            assertThat(json, containsString("\"status\":null"));
+            assertThat(json, not(containsString("conf/mock1.file")));
         }
 
-        // single cert request to /{certId}
+        // Dynamic certificate
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
-            RawHttpClient.HttpResponse response = client.get("/api/certificates/127.0.0.1", credentials);
+
+            // full list request
+            RawHttpClient.HttpResponse response = client.get("/api/certificates", credentials);
             String json = response.getBodyString();
 
-            assertThat(json, not(containsString("localhost")));
-            assertThat(json, not(containsString("conf/mock1.file")));
+            assertThat(json, containsString(dynDomain));
+            assertThat(json, containsString("\"dynamic\":true"));
+            assertThat(json, containsString("\"status\":\"waiting\""));
 
-            assertThat(json, containsString("127.0.0.1"));
-            assertThat(json, containsString("conf/mock2.file"));
+            // single cert request to /{certId}
+            response = client.get("/api/certificates/" + dynDomain, credentials);
+            json = response.getBodyString();
+            assertThat(json, containsString(dynDomain));
+            assertThat(json, containsString("\"dynamic\":true"));
+            assertThat(json, containsString("\"status\":\"waiting\""));
+
+            // Changing dynamic certificate state
+            DynamicCertificatesManager man = server.getDynamicCertificateManager();
+            for (DynamicCertificateState state: DynamicCertificate.DynamicCertificateState.values()) {
+                man.setStateOfCertificate(dynDomain, state);
+                response = client.get("/api/certificates", credentials);
+                json = response.getBodyString();
+                assertThat(json, containsString(dynDomain));
+                assertThat(json, containsString("\"dynamic\":true"));
+                assertThat(json, containsString("\"status\":\"" + stateToStatusString(state) + "\""));
+
+                response = client.get("/api/certificates/" + dynDomain, credentials);
+                json = response.getBodyString();
+                assertThat(json, containsString(dynDomain));
+                assertThat(json, containsString("\"dynamic\":true"));
+                assertThat(json, containsString("\"status\":\"" + stateToStatusString(state) + "\""));
+            }
         }
     }
 
