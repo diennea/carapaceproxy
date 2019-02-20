@@ -21,6 +21,7 @@ package org.carapaceproxy.api;
 
 import java.util.Properties;
 import javax.servlet.http.HttpServletResponse;
+import static org.carapaceproxy.api.CertificatesResource.stateToStatusString;
 import org.carapaceproxy.server.certiticates.DynamicCertificate;
 import org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState;
 import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
@@ -238,14 +239,14 @@ public class StartAPIServerTest extends UseAdminServer {
 
             assertThat(json, containsString(dynDomain));
             assertThat(json, containsString("\"dynamic\":true"));
-            assertThat(json, containsString("\"status\":\"WAITING\""));
+            assertThat(json, containsString("\"status\":\"waiting\""));
 
             // single cert request to /{certId}
             response = client.get("/api/certificates/" + dynDomain, credentials);
             json = response.getBodyString();
             assertThat(json, containsString(dynDomain));
             assertThat(json, containsString("\"dynamic\":true"));
-            assertThat(json, containsString("\"status\":\"WAITING\""));
+            assertThat(json, containsString("\"status\":\"waiting\""));
 
             // Changing dynamic certificate state
             DynamicCertificatesManager man = server.getDynamicCertificateManager();
@@ -255,13 +256,13 @@ public class StartAPIServerTest extends UseAdminServer {
                 json = response.getBodyString();
                 assertThat(json, containsString(dynDomain));
                 assertThat(json, containsString("\"dynamic\":true"));
-                assertThat(json, containsString("\"status\":\"" + state.toString() + "\""));
+                assertThat(json, containsString("\"status\":\"" + stateToStatusString(state) + "\""));
 
                 response = client.get("/api/certificates/" + dynDomain, credentials);
                 json = response.getBodyString();
                 assertThat(json, containsString(dynDomain));
                 assertThat(json, containsString("\"dynamic\":true"));
-                assertThat(json, containsString("\"status\":\"" + state.toString() + "\""));
+                assertThat(json, containsString("\"status\":\"" + stateToStatusString(state) + "\""));
             }
         }
     }

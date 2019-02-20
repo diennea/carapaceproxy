@@ -28,6 +28,7 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
+import org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState;
 import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 
@@ -99,8 +100,9 @@ public class CertificatesResource {
                     certificate.getSslCertificateFile()
             );
 
-            if (certBean.isDynamic()) {
-                certBean.setStatus(dynamicCertificateManager.getStateOfCertificate(certBean.getId()).toString());
+            if (certificate.isDynamic()) {
+                DynamicCertificateState state = dynamicCertificateManager.getStateOfCertificate(certBean.getId());
+                certBean.setStatus(stateToStatusString(state));
             }
             res.put(certificateEntry.getKey(), certBean);
         }
@@ -126,12 +128,34 @@ public class CertificatesResource {
                     certificate.getSslCertificateFile()
             );
 
-            if (certBean.isDynamic()) {
-                certBean.setStatus(dynamicCertificateManager.getStateOfCertificate(certBean.getId()).toString());
+            if (certificate.isDynamic()) {
+                DynamicCertificateState state = dynamicCertificateManager.getStateOfCertificate(certBean.getId());
+                certBean.setStatus(stateToStatusString(state));
             }
             res.put(certId, certBean);
         }
 
         return res;
+    }
+
+    static String stateToStatusString(DynamicCertificateState state) {
+        switch (state) {
+            case WAITING:
+                return "waiting"; // certificate waiting for issuing/renews
+            case VERIFYING:
+                return "verifying"; // challenge verification by LE pending
+            case VERIFIED:
+                return "verified"; // challenge succeded
+            case ORDERING:
+                return "ordering"; // certificate order pending
+            case REQUEST_FAILED:
+                return "request failed"; // challenge/order failed
+            case AVAILABLE:
+                return "available";// certificate available(saved) and not expired
+            case EXPIRED:     // certificate expired
+                return "expired";
+            default:
+                return "unknown";
+        }
     }
 }
