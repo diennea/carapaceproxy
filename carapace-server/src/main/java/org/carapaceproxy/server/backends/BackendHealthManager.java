@@ -31,11 +31,11 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.apache.bookkeeper.stats.Gauge;
+import org.apache.bookkeeper.stats.StatsLogger;
 import org.carapaceproxy.EndpointMapper;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
-import org.apache.bookkeeper.stats.Gauge;
-import org.apache.bookkeeper.stats.StatsLogger;
 
 /**
  * Keeps status about backends
@@ -46,7 +46,7 @@ public class BackendHealthManager implements Runnable {
 
     private static final Logger LOG = Logger.getLogger(BackendHealthManager.class.getName());
 
-    private final EndpointMapper mapper;
+    private EndpointMapper mapper;
     private final StatsLogger mainLogger;
 
     private ScheduledExecutorService timer;
@@ -61,7 +61,7 @@ public class BackendHealthManager implements Runnable {
 
     public BackendHealthManager(RuntimeServerConfiguration conf, EndpointMapper mapper, StatsLogger logger) {
 
-        this.mapper = mapper;
+        this.mapper = mapper; // may be null
         this.mainLogger = logger.scope("health");
 
         // will be overridden before start
@@ -107,6 +107,9 @@ public class BackendHealthManager implements Runnable {
 
     @Override
     public void run() {
+        if (mapper == null) {
+            return;
+        }
         Collection<BackendConfiguration> backendConfigurations = mapper.getBackends().values();
         for (BackendConfiguration bconf : backendConfigurations) {
             String backendId = bconf.getHostPort();
@@ -197,11 +200,12 @@ public class BackendHealthManager implements Runnable {
         return backend != null && backend.isAvailable();
     }
 
-    public void reloadConfiguration(RuntimeServerConfiguration newConfiguration) {
+    public void reloadConfiguration(RuntimeServerConfiguration newConfiguration, EndpointMapper mapper) {
         if (this.connectTimeout != newConfiguration.getConnectTimeout()) {
             this.connectTimeout = newConfiguration.getConnectTimeout();
             LOG.info("Applying new connect timeout " + this.connectTimeout + " ms");
         }
+        this.mapper = mapper;
     }
 
     @VisibleForTesting

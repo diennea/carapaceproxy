@@ -51,6 +51,11 @@ public class URIRequestMatcher implements RequestMatcher {
     private static final Logger LOG = Logger.getLogger(URIRequestMatcher.class.getName());
 
     @Override
+    public String appliedPattern() {
+        return this.expression.toString();
+    }
+
+    @Override
     public String toString() {
         return "URIRequestMatcher{" + "regexp='" + expression + "'}";
     }

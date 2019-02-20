@@ -20,20 +20,28 @@ package org.carapaceproxy.utils;
 
  */
 import io.netty.handler.codec.http.HttpRequest;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import org.carapaceproxy.EndpointMapper;
 import org.carapaceproxy.MapResult;
 import org.carapaceproxy.server.RequestHandler;
 import org.carapaceproxy.server.backends.BackendHealthManager;
+import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
+import org.carapaceproxy.server.config.DirectorConfiguration;
+import org.carapaceproxy.server.config.RouteConfiguration;
 
 public class TestEndpointMapper extends EndpointMapper {
 
     private final String host;
     private final int port;
     private final boolean cacheAll;
-    private final Map<String, BackendConfiguration> backends; 
+    private final Map<String, BackendConfiguration> backends;
+    private final List<RouteConfiguration> routes = new ArrayList();
+    private final List<ActionConfiguration> actions = new ArrayList();
+    private final List<DirectorConfiguration> directors = new ArrayList();
 
     public TestEndpointMapper(String host, int port) {
         this(host, port, false);
@@ -42,7 +50,7 @@ public class TestEndpointMapper extends EndpointMapper {
     public TestEndpointMapper(String host, int port, boolean cacheAll) {
         this(host, port, cacheAll, Collections.EMPTY_MAP);
     }
-        
+
     public TestEndpointMapper(String host, int port, boolean cacheAll, Map<String, BackendConfiguration> backends) {
         this.host = host;
         this.port = port;
@@ -67,5 +75,20 @@ public class TestEndpointMapper extends EndpointMapper {
     @Override
     public Map<String, BackendConfiguration> getBackends() {
         return backends;
+    }
+
+    @Override
+    public List<RouteConfiguration> getRoutes() {
+        return routes;
+    }
+
+    @Override
+    public List<ActionConfiguration> getActions() {
+        return actions;
+    }
+
+    @Override
+    public List<DirectorConfiguration> getDirectors() {
+        return directors;
     }
 }

@@ -19,7 +19,6 @@
  */
 package org.carapaceproxy.server.certiticates;
 
-import com.google.common.annotations.VisibleForTesting;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;

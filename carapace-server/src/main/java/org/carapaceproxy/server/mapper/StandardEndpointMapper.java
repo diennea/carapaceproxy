@@ -19,7 +19,6 @@
  */
 package org.carapaceproxy.server.mapper;
 
-import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import java.util.ArrayList;
@@ -37,6 +36,7 @@ import static org.carapaceproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SE
 import static org.carapaceproxy.server.StaticContentsManager.DEFAULT_NOT_FOUND;
 import static org.carapaceproxy.server.StaticContentsManager.IN_MEMORY_RESOURCE;
 import org.carapaceproxy.server.backends.BackendHealthManager;
+import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.BackendSelector;
@@ -143,7 +143,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                         if (!backendId.equals(DirectorConfiguration.ALL_BACKENDS) && !this.backends.containsKey(backendId)) {
                             throw new ConfigurationNotValidException("while configuring director '" + id + "': backend '" + backendId + "' does not exist");
                         }
-                        config.addBackend(id);
+                        config.addBackend(backendId);
                     }
                     addDirector(config);
                 }
@@ -238,6 +238,21 @@ public class StandardEndpointMapper extends EndpointMapper {
     @Override
     public Map<String, BackendConfiguration> getBackends() {
         return backends;
+    }
+
+    @Override
+    public List<RouteConfiguration> getRoutes() {
+        return routes;
+    }
+
+    @Override
+    public List<ActionConfiguration> getActions() {
+        return new ArrayList(actions.values());
+    }
+
+    @Override
+    public List<DirectorConfiguration> getDirectors() {
+        return new ArrayList(directors.values());
     }
 
     @Override

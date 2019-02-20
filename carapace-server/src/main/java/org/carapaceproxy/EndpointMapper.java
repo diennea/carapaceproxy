@@ -19,15 +19,19 @@
  */
 package org.carapaceproxy;
 
-import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
 import io.netty.handler.codec.http.HttpRequest;
+import java.util.List;
 import java.util.Map;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.RequestHandler;
 import org.carapaceproxy.server.backends.BackendHealthManager;
+import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
+import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.carapaceproxy.server.config.DirectorConfiguration;
+import org.carapaceproxy.server.config.RouteConfiguration;
 
 /**
  * Maps requests to a remote HTTP server
@@ -37,6 +41,12 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
 public abstract class EndpointMapper {
 
     public abstract Map<String, BackendConfiguration> getBackends();
+
+    public abstract List<RouteConfiguration> getRoutes();
+
+    public abstract List<ActionConfiguration> getActions();
+
+    public abstract List<DirectorConfiguration> getDirectors();
 
     public abstract MapResult map(HttpRequest request, String userId, String sessionId, BackendHealthManager backendHealthManager, RequestHandler requestHandler);
 

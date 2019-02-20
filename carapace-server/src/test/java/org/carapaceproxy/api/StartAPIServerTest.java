@@ -116,9 +116,74 @@ public class StartAPIServerTest extends UseAdminServer {
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/backends", credentials);
             String s = resp.getBodyString();
-            System.out.println("s:" + s);
             // no backend configured
             assertTrue(s.equals("{}"));
+        }
+    }
+
+    @Test
+    public void testRoutes() throws Exception {
+        Properties properties = new Properties();
+        properties.put("route.0.id", "id0");
+        properties.put("route.0.action", "id-action");
+        properties.put("route.0.enabled", "true");
+        properties.put("route.0.match", "all");
+
+        startServer(properties);
+
+        try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+            RawHttpClient.HttpResponse resp = client.get("/api/routes", credentials);
+            String s = resp.getBodyString();
+            assertTrue(s.contains("id0"));
+            assertTrue(s.contains("id-action"));
+            assertTrue(s.contains("true"));
+            assertTrue(s.contains("MatchAll"));
+        }
+    }
+
+    @Test
+    public void testActions() throws Exception {
+        startAdmin();
+
+        try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+            RawHttpClient.HttpResponse resp = client.get("/api/actions", credentials);
+            String s = resp.getBodyString();
+            // Default actions
+            assertTrue(s.contains("\"not-found\",\"type\":\"static\""));
+            assertTrue(s.contains("\"cache-if-possible\",\"type\":\"cache\""));
+            assertTrue(s.contains("\"internal-error\",\"type\":\"static\""));
+            assertTrue(s.contains("\"acme-challenge\",\"type\":\"acme-challenge\""));
+            assertTrue(s.contains("\"proxy-all\",\"type\":\"proxy\""));
+        }
+    }
+
+    @Test
+    public void testDirectors() throws Exception {
+        Properties properties = new Properties();
+        properties.put("director.1.backends", "*");
+        properties.put("director.1.enabled", "false");
+        properties.put("director.1.id", "*");
+
+
+        properties.put("backend.0.id", "localhost:8086");
+        properties.put("backend.0.host", "localhost");
+        properties.put("backend.0.port", "8086");
+        properties.put("backend.0.enabled", "true");
+        properties.put("backend.1.id", "localhost:8087");
+        properties.put("backend.1.host", "localhost");
+        properties.put("backend.1.port", "8087");
+        properties.put("backend.1.enabled", "true");
+
+        properties.put("director.2.backends", "localhost:8086,localhost:8087");
+        properties.put("director.2.enabled", "true");
+        properties.put("director.2.id", "iddirector2");
+
+        startServer(properties);
+
+        try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+            RawHttpClient.HttpResponse resp = client.get("/api/directors", credentials);
+            String s = resp.getBodyString();
+            assertTrue(s.contains("\"id\":\"iddirector2\",\"backends\":[\"localhost:8086\",\"localhost:8087\"]"));
         }
     }
 

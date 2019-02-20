@@ -87,7 +87,7 @@ public class ServerMain implements AutoCloseable {
                 if (!arg.isEmpty()) {
                     File configFile = new File(args[i]).getAbsoluteFile();
                     LOG.severe("Reading configuration from " + configFile);
-                    try (InputStreamReader reader = new InputStreamReader(new FileInputStream(configFile), StandardCharsets.UTF_8)) {
+                    try ( InputStreamReader reader = new InputStreamReader(new FileInputStream(configFile), StandardCharsets.UTF_8)) {
                         configuration.load(reader);
                     }
                     basePath = configFile.getParentFile().getParentFile();
@@ -98,7 +98,7 @@ public class ServerMain implements AutoCloseable {
                 File configFile = new File("conf/server.properties").getAbsoluteFile();
                 System.out.println("Reading configuration from " + configFile);
                 if (configFile.isFile()) {
-                    try (InputStreamReader reader = new InputStreamReader(new FileInputStream(configFile), StandardCharsets.UTF_8)) {
+                    try ( InputStreamReader reader = new InputStreamReader(new FileInputStream(configFile), StandardCharsets.UTF_8)) {
                         configuration.load(reader);
                     }
                     basePath = configFile.getParentFile().getParentFile();
@@ -106,6 +106,13 @@ public class ServerMain implements AutoCloseable {
             }
 
             LogManager.getLogManager().readConfiguration();
+
+            Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+                @Override
+                public void uncaughtException(Thread arg0, Throwable arg1) {
+                    LOG.log(Level.SEVERE, "Uncaught error, thread " + arg0, arg1);
+                }
+            });
 
             Runtime.getRuntime().addShutdownHook(new Thread("ctrlc-hook") {
 
