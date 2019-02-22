@@ -2,6 +2,9 @@ import Vue from 'vue'
 import Router from 'vue-router'
 
 import Backends from './components/Backends'
+import Routes from './components/Routes'
+import Actions from './components/Actions'
+import Directors from './components/Directors'
 import CacheStatus from './components/CacheStatus'
 import ListenersStatus from './components/ListenersStatus'
 import UserRealmStatus from './components/UserRealmStatus'
@@ -10,8 +13,12 @@ import CertificatesStatus from './components/CertificatesStatus'
 import Certificate from './components/Certificate'
 import DatatableList from './components/DatatableList'
 import Configuration from './components/Configuration'
+import Metrics from './components/Metrics'
 
 Vue.component('backends-status', Backends)
+Vue.component('routes', Routes)
+Vue.component('actions', Actions)
+Vue.component('directors', Directors)
 Vue.component('cache-status', CacheStatus)
 Vue.component('listeners-status', ListenersStatus)
 Vue.component('userrealm-status', UserRealmStatus)
@@ -19,6 +26,7 @@ Vue.component('requestfilters-status', RequestFiltersStatus)
 Vue.component('certificates-status', CertificatesStatus)
 Vue.component('datatable-list', DatatableList)
 Vue.component('configuration', Configuration)
+Vue.component('metrics', Metrics)
 
 Vue.use(Router)
 
@@ -28,6 +36,21 @@ export default new Router({
       path: '/',
       name: 'Root',
       component: Backends
+    },
+    {
+      path: '/routes',
+      name: 'Routes',
+      component: Routes
+    },
+    {
+      path: '/actions',
+      name: 'Actions',
+      component: Actions
+    },
+    {
+      path: '/directors',
+      name: 'Directors',
+      component: Directors
     },
     {
       path: '/cache',
@@ -63,6 +86,11 @@ export default new Router({
       path: '/configuration',
       name: 'Configuration',
       component: Configuration
+    },
+    {
+        path: '/metrics',
+        name: 'Metrics',
+        component: Metrics
     }
   ]
 })

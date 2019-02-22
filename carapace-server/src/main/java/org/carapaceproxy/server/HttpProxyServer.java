@@ -20,8 +20,6 @@
 package org.carapaceproxy.server;
 
 import com.google.common.annotations.VisibleForTesting;
-import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
-import static org.carapaceproxy.server.certiticates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.net.InetSocketAddress;
@@ -32,6 +30,10 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.servlet.DispatcherType;
+import org.apache.bookkeeper.stats.*;
+import org.apache.bookkeeper.stats.prometheus.*;
+import org.apache.commons.configuration.ConfigurationException;
+import org.apache.commons.configuration.PropertiesConfiguration;
 import org.carapaceproxy.EndpointMapper;
 import org.carapaceproxy.api.ApplicationConfig;
 import org.carapaceproxy.api.AuthAPIRequestsFilter;
@@ -42,6 +44,7 @@ import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.cache.ContentsCache;
+import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -49,10 +52,6 @@ import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
 import org.carapaceproxy.user.UserRealm;
-import org.apache.bookkeeper.stats.*;
-import org.apache.bookkeeper.stats.prometheus.*;
-import org.apache.commons.configuration.ConfigurationException;
-import org.apache.commons.configuration.PropertiesConfiguration;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.handler.ContextHandlerCollection;
 import org.eclipse.jetty.servlet.ServletContextHandler;
@@ -93,6 +92,7 @@ public class HttpProxyServer implements AutoCloseable {
     private boolean adminServerEnabled;
     private int adminServerPort = 8001;
     private String adminServerHost = "localhost";
+    private String metricsUrl;
 
     public HttpProxyServer(EndpointMapper mapper, File basePath) throws Exception {
         this.mapper = mapper;
@@ -151,7 +151,7 @@ public class HttpProxyServer implements AutoCloseable {
         adminserver.start();
         String apiUrl = "http://" + adminServerHost + ":" + adminServerPort + "/api";
         String uiUrl = "http://" + adminServerHost + ":" + adminServerPort + "/ui";
-        String metricsUrl = "http://" + adminServerHost + ":" + adminServerPort + "/metrics";
+        metricsUrl = "http://" + adminServerHost + ":" + adminServerPort + "/metrics";
         LOG.info("Base Admin UI url: " + uiUrl);
         LOG.info("Base Admin/API url: " + apiUrl);
         LOG.info("Prometheus Metrics url: " + metricsUrl);
@@ -176,6 +176,10 @@ public class HttpProxyServer implements AutoCloseable {
 
     public void startMetrics() throws ConfigurationException {
         statsProvider.start(statsProviderConfig);
+    }
+
+    public String getMetricsUrl() {
+        return metricsUrl;
     }
 
     public int getLocalPort() {
@@ -433,7 +437,7 @@ public class HttpProxyServer implements AutoCloseable {
             UserRealm newRealm = buildRealm(newConfiguration.getUserRealmClassname(), storeWithConfig);
 
             this.filters = buildFilters(newConfiguration);
-            this.backendHealthManager.reloadConfiguration(newConfiguration);
+            this.backendHealthManager.reloadConfiguration(newConfiguration, newMapper);
             this.dynamicCertificateManager.reloadConfiguration(newConfiguration);
             this.listeners.reloadConfiguration(newConfiguration);
             this.cache.reloadConfiguration(newConfiguration);

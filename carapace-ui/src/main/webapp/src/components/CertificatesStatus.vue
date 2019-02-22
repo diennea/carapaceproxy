@@ -27,7 +27,7 @@
 
                     <td>{{(item.id)}}</td>
                     <td>{{(item.hostname)}}</td>
-                    <td>{{(item.dynamic) | symbolize}}</td>
+                    <td>{{(item.dynamic) | symbolFormat}}</td>
                     <td>{{(item.status)}}</td>
                     <td>{{(item.sslCertificateFile)}}</td>
                 </router-link>

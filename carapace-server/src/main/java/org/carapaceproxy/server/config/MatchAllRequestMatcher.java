@@ -29,6 +29,11 @@ public class MatchAllRequestMatcher implements RequestMatcher {
     }
 
     @Override
+    public String getDescription() {
+        return "Matching to all requests";
+    }
+
+    @Override
     public String toString() {
         return "MatchAll";
     }

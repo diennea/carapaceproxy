@@ -17,19 +17,32 @@
  under the License.
 
  */
-package org.carapaceproxy.server.config;
+package org.carapaceproxy.api;
 
-import io.netty.handler.codec.http.HttpRequest;
+import javax.servlet.ServletContext;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import org.carapaceproxy.server.HttpProxyServer;
 
 /**
- * Generic criteria to apply a route to a request
+ * Access the metrics API
+ *
+ * @author paolo.venturi
  */
-public interface RequestMatcher {
+@Path("/metrics")
+@Produces("application/json")
+public class MetricsResource {
 
-    RoutingKey matches(HttpRequest request);
+    @javax.ws.rs.core.Context
+    ServletContext context;
 
-    /**
-     * @return description of the matcher (used by UI).
-     */
-    String getDescription();
+    @GET
+    @Path("url")
+    @Produces("text/plain")
+    public String getPath() {
+        HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
+        return server.getMetricsUrl();
+    }
+
 }
