@@ -29,6 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.bookkeeper.stats.Gauge;
@@ -50,11 +51,11 @@ public class BackendHealthManager implements Runnable {
     private final StatsLogger mainLogger;
 
     private ScheduledExecutorService timer;
-    // configured only at start
-    private int period;
 
     // can change at runtime
-    private volatile int connectTimeout = 60000;
+    private volatile AtomicInteger period = new AtomicInteger(0);
+    // can change at runtime
+    private volatile AtomicInteger connectTimeout = new AtomicInteger(60000);
 
     private final ConcurrentHashMap<String, BackendHealthStatus> backends = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Gauge> gauges = new ConcurrentHashMap<>();
@@ -65,26 +66,27 @@ public class BackendHealthManager implements Runnable {
         this.mainLogger = logger.scope("health");
 
         // will be overridden before start
-        this.period = 60000;
-        this.connectTimeout = conf.getConnectTimeout();
+        this.period.set(60000);
+        this.connectTimeout.set(conf.getConnectTimeout());
 
     }
 
     public int getPeriod() {
-        return period;
+        return period.get();
     }
 
     public void setPeriod(int period) {
-        this.period = period;
+        this.period.set(period);
     }
 
     public void start() {
-        if (period <= 0) {
+        int _period = period.get();
+        if (_period <= 0) {
             return;
         }
-        LOG.info("Starting BackendHealthManager, period: " + period + " seconds");
+        LOG.info("Starting BackendHealthManager, period: " + _period + " seconds");
         timer = Executors.newSingleThreadScheduledExecutor();
-        timer.scheduleAtFixedRate(this, period, period, TimeUnit.SECONDS);
+        timer.scheduleAtFixedRate(this, _period, _period, TimeUnit.SECONDS);
     }
 
     private void ensureGauge(String key, BackendHealthStatus status) {
@@ -117,7 +119,7 @@ public class BackendHealthManager implements Runnable {
             ensureGauge("backend_" + status.getId().replace(":", "_") + "_up", status);
 
             BackendHealthCheck checkResult = BackendHealthCheck.check(
-                    bconf.getHost(), bconf.getPort(), bconf.getProbePath(), connectTimeout);
+                    bconf.getHost(), bconf.getPort(), bconf.getProbePath(), connectTimeout.get());
 
             if (checkResult.isOk()) {
                 if (status.isReportedAsUnreachable()) {
@@ -167,6 +169,7 @@ public class BackendHealthManager implements Runnable {
             timer.shutdown();
             try {
                 timer.awaitTermination(10, TimeUnit.SECONDS);
+                timer = null;
             } catch (InterruptedException err) {
                 Thread.currentThread().interrupt();
             }
@@ -201,16 +204,30 @@ public class BackendHealthManager implements Runnable {
     }
 
     public void reloadConfiguration(RuntimeServerConfiguration newConfiguration, EndpointMapper mapper) {
-        if (this.connectTimeout != newConfiguration.getConnectTimeout()) {
-            this.connectTimeout = newConfiguration.getConnectTimeout();
+        int newPeriod = newConfiguration.getHealthProbePeriod();
+
+        if (timer != null) {
+            timer.shutdown();
+        }
+
+        if (this.connectTimeout.get() != newConfiguration.getConnectTimeout()) {
+            this.connectTimeout.set(newConfiguration.getConnectTimeout());
             LOG.info("Applying new connect timeout " + this.connectTimeout + " ms");
         }
+
         this.mapper = mapper;
+
+        this.period.set(newPeriod);
+        LOG.info("Applying health probe period " + newPeriod + " ms");
+
+        if (timer != null) {
+            start();
+        }
     }
 
     @VisibleForTesting
     public int getConnectTimeout() {
-        return connectTimeout;
+        return connectTimeout.get();
     }
 
 }

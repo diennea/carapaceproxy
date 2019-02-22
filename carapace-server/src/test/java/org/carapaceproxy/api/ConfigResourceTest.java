@@ -125,7 +125,8 @@ public class ConfigResourceTest extends UseAdminServer {
         startServer(configuration);
 
         try ( RawHttpClient client = new RawHttpClient("localhost", 8761)) {
-            String body = "connectionsmanager.connecttimeout=8000";
+            String body = "connectionsmanager.connecttimeout=8000\n"
+                    + "healthmanager.period=25";
             RawHttpClient.HttpResponse resp = client.executeRequest("POST /api/config/apply HTTP/1.1\r\n"
                     + "Host: localhost\r\n"
                     + "Content-Type: text/plain\r\n"
@@ -145,9 +146,11 @@ public class ConfigResourceTest extends UseAdminServer {
         startServer(configuration);
         ConnectionsManagerImpl impl = (ConnectionsManagerImpl) server.getConnectionsManager();
         assertEquals(8000, impl.getConnectTimeout());
+        assertEquals(25, server.getBackendHealthManager().getPeriod());
 
         try ( RawHttpClient client = new RawHttpClient("localhost", 8761)) {
-            String body = "connectionsmanager.connecttimeout=9000";
+            String body = "connectionsmanager.connecttimeout=9000\n"
+                    + "healthmanager.period=30";
             RawHttpClient.HttpResponse resp = client.executeRequest("POST /api/config/apply HTTP/1.1\r\n"
                     + "Host: localhost\r\n"
                     + "Content-Type: text/plain\r\n"
@@ -161,12 +164,14 @@ public class ConfigResourceTest extends UseAdminServer {
 
         }
         assertEquals(9000, impl.getConnectTimeout());
+        assertEquals(30, server.getBackendHealthManager().getPeriod());
         // restart, same "static" confguration
         stopServer();
         buildNewServer();
         startServer(configuration);
         impl = (ConnectionsManagerImpl) server.getConnectionsManager();
         assertEquals(9000, impl.getConnectTimeout());
+        assertEquals(30, server.getBackendHealthManager().getPeriod());
     }
 
 }

@@ -69,7 +69,8 @@ public class RuntimeServerConfiguration {
     private int accessLogFlushInterval = 5000;
     private int accessLogWaitBetweenFailures = 10000;
     private String userRealmClassname;
-    private int dynamicCertificatesManagerPeriod = 0;    
+    private int healthProbePeriod = 0;
+    private int dynamicCertificatesManagerPeriod = 0;
     private int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
 
 
@@ -136,7 +137,7 @@ public class RuntimeServerConfiguration {
     public void setUserRealmClassname(String userRealmClassname) {
         this.userRealmClassname = userRealmClassname;
     }
-    
+
     public int getMaxConnectionsPerEndpoint() {
         return maxConnectionsPerEndpoint;
     }
@@ -185,14 +186,18 @@ public class RuntimeServerConfiguration {
         this.cacheMaxFileSize = cacheMaxFileSize;
     }
 
-    public int getDynamicCertificateManagerPeriod() {
+    public int getHealthProbePeriod() {
+        return healthProbePeriod;
+    }
+
+    public int getDynamicCertificatesManagerPeriod() {
         return dynamicCertificatesManagerPeriod;
     }
 
     public int getKeyPairsSize() {
         return keyPairsSize;
     }
-    
+
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
 
         this.maxConnectionsPerEndpoint = getInt("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint, properties);
@@ -209,7 +214,7 @@ public class RuntimeServerConfiguration {
 
         this.mapperClassname = getClassname("mapper.class", StandardEndpointMapper.class.getName(), properties);
         LOG.log(Level.INFO, "mapper.class={0}", this.mapperClassname);
-        
+
         this.cacheMaxSize = getLong("cache.maxsize", cacheMaxSize, properties);
         this.cacheMaxFileSize = getLong("cache.maxfilesize", cacheMaxFileSize, properties);
         LOG.info("cache.maxsize=" + cacheMaxSize);
@@ -247,11 +252,14 @@ public class RuntimeServerConfiguration {
         for (int i = 0; i < 100; i++) {
             tryConfigureFilter(i, properties);
         }
-                                
+
+        healthProbePeriod = getInt("healthmanager.period", 0, properties);
+        LOG.info("healthmanager.period=" + healthProbePeriod);
+
         dynamicCertificatesManagerPeriod = getInt("dynamiccertificatesmanager.period", 0, properties);
-        LOG.info("dynamiccertificatesmanager.period=" + dynamicCertificatesManagerPeriod);        
+        LOG.info("dynamiccertificatesmanager.period=" + dynamicCertificatesManagerPeriod);
         keyPairsSize = getInt("dynamiccertificatesmanager.keypairssize", DEFAULT_KEYPAIRS_SIZE, properties);
-        LOG.info("dynamiccertificatesmanager.keypairssize=" + keyPairsSize);        
+        LOG.info("dynamiccertificatesmanager.keypairssize=" + keyPairsSize);
     }
 
     private void tryConfigureCertificate(int i, ConfigurationStore properties) throws ConfigurationNotValidException {
@@ -264,7 +272,7 @@ public class RuntimeServerConfiguration {
             String certificatePassword = properties.getProperty(prefix + "sslcertfilepassword", "");
             boolean isDynamic = properties.getProperty(prefix + "dynamic", "false").equalsIgnoreCase("true");
             LOG.log(Level.INFO, "Configuring SSL certificate {0}hostname={1}, file: {2}", new Object[]{prefix, certificateHostname, certificateFile});
-            
+
             SSLCertificateConfiguration config = new SSLCertificateConfiguration(certificateHostname, certificateFile, certificatePassword, isDynamic);
             this.addCertificate(config);
 
