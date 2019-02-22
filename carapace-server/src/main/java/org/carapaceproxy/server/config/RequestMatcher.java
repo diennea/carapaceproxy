@@ -28,5 +28,8 @@ public interface RequestMatcher {
 
     RoutingKey matches(HttpRequest request);
 
-    String appliedPattern();
+    /**
+     * @return description of the matcher (used by UI).
+     */
+    String getDescription();
 }

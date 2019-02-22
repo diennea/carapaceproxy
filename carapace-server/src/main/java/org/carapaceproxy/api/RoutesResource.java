@@ -74,7 +74,7 @@ public class RoutesResource {
         final List<RouteBean> routes = new ArrayList();
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         server.getMapper().getRoutes().forEach(route -> {
-            routes.add(new RouteBean(route.getId(), route.getAction(), route.isEnabled(), route.getMatcher().appliedPattern()));
+            routes.add(new RouteBean(route.getId(), route.getAction(), route.isEnabled(), route.getMatcher().getDescription()));
         });
 
         return routes;

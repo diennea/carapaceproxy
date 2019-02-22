@@ -23,22 +23,19 @@ import io.netty.handler.codec.http.HttpRequest;
 
 public class MatchAllRequestMatcher implements RequestMatcher {
 
-    private static final String PATTERN = "MatchAll";
-
     @Override
     public RoutingKey matches(HttpRequest request) {
         return AttributesRoutingKey.EMPTY;
     }
 
     @Override
-    public String appliedPattern() {
-        return PATTERN;
+    public String getDescription() {
+        return "Matching to all requests";
     }
-
 
     @Override
     public String toString() {
-        return appliedPattern();
+        return "MatchAll";
     }
 
 }

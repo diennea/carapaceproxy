@@ -22,7 +22,6 @@ package org.carapaceproxy.server.config;
 import io.netty.handler.codec.http.HttpRequest;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -48,11 +47,10 @@ public class URIRequestMatcher implements RequestMatcher {
             return null;
         }
     }
-    private static final Logger LOG = Logger.getLogger(URIRequestMatcher.class.getName());
 
     @Override
-    public String appliedPattern() {
-        return this.expression.toString();
+    public String getDescription() {
+        return "Matchig by RegEx: " + this.expression.toString();
     }
 
     @Override

@@ -2,7 +2,7 @@
     <div>
         <h2>Prometheus Metrics</h2>
         <div>
-            <p>Prometheus Metrics at path:  <a :href="metricsPath">{{metricsPath}}</a></p>
+            <p>Prometheus Metrics at:  <a :href="metricsPath">{{metricsPath}}</a></p>
         </div>
     </div>
 </template>
@@ -17,10 +17,9 @@
             }
         },
         created: function () {
-            var url = "/api/metrics/path";
+            var url = "/api/metrics/url";
             var self = this;
             doGet(url, data => {
-                console.log(data)
                 self.metricsPath = data
             })
         }

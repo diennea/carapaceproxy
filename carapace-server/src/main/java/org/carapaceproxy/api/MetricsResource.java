@@ -38,7 +38,7 @@ public class MetricsResource {
     ServletContext context;
 
     @GET
-    @Path("path")
+    @Path("url")
     @Produces("text/plain")
     public String getPath() {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
