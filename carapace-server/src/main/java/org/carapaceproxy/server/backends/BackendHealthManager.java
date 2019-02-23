@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
@@ -51,6 +52,7 @@ public class BackendHealthManager implements Runnable {
     private final StatsLogger mainLogger;
 
     private ScheduledExecutorService timer;
+    private ScheduledFuture<?> scheduledFuture;
 
     // can change at runtime
     private volatile AtomicInteger period = new AtomicInteger(0);
@@ -79,14 +81,51 @@ public class BackendHealthManager implements Runnable {
         this.period.set(period);
     }
 
-    public void start() {
+    public synchronized void start() {
         int _period = period.get();
         if (_period <= 0) {
             return;
         }
+        if (timer == null) {
+            timer = Executors.newSingleThreadScheduledExecutor();
+        }
         LOG.info("Starting BackendHealthManager, period: " + _period + " seconds");
-        timer = Executors.newSingleThreadScheduledExecutor();
-        timer.scheduleAtFixedRate(this, _period, _period, TimeUnit.SECONDS);
+        scheduledFuture = timer.scheduleAtFixedRate(this, _period, _period, TimeUnit.SECONDS);
+    }
+
+    public synchronized void stop() {
+        if (timer != null) {
+            timer.shutdown();
+            try {
+                timer.awaitTermination(10, TimeUnit.SECONDS);
+                timer = null;
+                scheduledFuture = null;
+            } catch (InterruptedException err) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    public synchronized void reloadConfiguration(RuntimeServerConfiguration newConfiguration, EndpointMapper mapper) {
+        int newPeriod = newConfiguration.getHealthProbePeriod();
+
+        if (scheduledFuture != null) {
+            scheduledFuture.cancel(true);
+        }
+
+        if (this.connectTimeout.get() != newConfiguration.getConnectTimeout()) {
+            this.connectTimeout.set(newConfiguration.getConnectTimeout());
+            LOG.info("Applying new connect timeout " + this.connectTimeout + " ms");
+        }
+
+        this.mapper = mapper;
+
+        this.period.set(newPeriod);
+        LOG.info("Applying health probe period " + newPeriod + " s");
+
+        if (scheduledFuture != null) {
+            start();
+        }
     }
 
     private void ensureGauge(String key, BackendHealthStatus status) {
@@ -164,18 +203,6 @@ public class BackendHealthManager implements Runnable {
         }
     }
 
-    public void stop() {
-        if (timer != null) {
-            timer.shutdown();
-            try {
-                timer.awaitTermination(10, TimeUnit.SECONDS);
-                timer = null;
-            } catch (InterruptedException err) {
-                Thread.currentThread().interrupt();
-            }
-        }
-    }
-
     public void reportBackendUnreachable(String id, long timestamp, String cause) {
         BackendHealthStatus backend = getBackendStatus(id);
         backend.reportAsUnreachable(timestamp);
@@ -201,28 +228,6 @@ public class BackendHealthManager implements Runnable {
     public boolean isAvailable(String id) {
         BackendHealthStatus backend = getBackendStatus(id);
         return backend != null && backend.isAvailable();
-    }
-
-    public void reloadConfiguration(RuntimeServerConfiguration newConfiguration, EndpointMapper mapper) {
-        int newPeriod = newConfiguration.getHealthProbePeriod();
-
-        if (timer != null) {
-            timer.shutdown();
-        }
-
-        if (this.connectTimeout.get() != newConfiguration.getConnectTimeout()) {
-            this.connectTimeout.set(newConfiguration.getConnectTimeout());
-            LOG.info("Applying new connect timeout " + this.connectTimeout + " ms");
-        }
-
-        this.mapper = mapper;
-
-        this.period.set(newPeriod);
-        LOG.info("Applying health probe period " + newPeriod + " ms");
-
-        if (timer != null) {
-            start();
-        }
     }
 
     @VisibleForTesting
