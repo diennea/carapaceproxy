@@ -28,7 +28,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.bookkeeper.stats.Gauge;
@@ -50,11 +52,12 @@ public class BackendHealthManager implements Runnable {
     private final StatsLogger mainLogger;
 
     private ScheduledExecutorService timer;
-    // configured only at start
-    private int period;
+    private ScheduledFuture<?> scheduledFuture;
 
     // can change at runtime
-    private volatile int connectTimeout = 60000;
+    private volatile int period;
+    // can change at runtime
+    private volatile int connectTimeout;
 
     private final ConcurrentHashMap<String, BackendHealthStatus> backends = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Gauge> gauges = new ConcurrentHashMap<>();
@@ -78,13 +81,54 @@ public class BackendHealthManager implements Runnable {
         this.period = period;
     }
 
-    public void start() {
+    public synchronized void start() {
         if (period <= 0) {
             return;
         }
+        if (timer == null) {
+            timer = Executors.newSingleThreadScheduledExecutor();
+        }
         LOG.info("Starting BackendHealthManager, period: " + period + " seconds");
-        timer = Executors.newSingleThreadScheduledExecutor();
-        timer.scheduleAtFixedRate(this, period, period, TimeUnit.SECONDS);
+        scheduledFuture = timer.scheduleAtFixedRate(this, period, period, TimeUnit.SECONDS);
+    }
+
+    public synchronized void stop() {
+        if (timer != null) {
+            timer.shutdown();
+            try {
+                timer.awaitTermination(10, TimeUnit.SECONDS);
+                timer = null;
+                scheduledFuture = null;
+            } catch (InterruptedException err) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    public synchronized void reloadConfiguration(RuntimeServerConfiguration newConfiguration, EndpointMapper mapper) {
+        int newPeriod = newConfiguration.getHealthProbePeriod();
+        boolean changePeriod = period != newPeriod;
+        boolean restart = scheduledFuture != null && changePeriod;
+
+        if (restart) {
+            scheduledFuture.cancel(true);
+        }
+
+        if (changePeriod) {
+            period = newPeriod;
+            LOG.info("Applying health probe period " + period + " s");
+        }
+
+        if (this.connectTimeout != newConfiguration.getConnectTimeout()) {
+            this.connectTimeout = newConfiguration.getConnectTimeout();
+            LOG.info("Applying new connect timeout " + this.connectTimeout + " ms");
+        }
+
+        this.mapper = mapper;
+
+        if (restart) {
+            start();
+        }
     }
 
     private void ensureGauge(String key, BackendHealthStatus status) {
@@ -162,17 +206,6 @@ public class BackendHealthManager implements Runnable {
         }
     }
 
-    public void stop() {
-        if (timer != null) {
-            timer.shutdown();
-            try {
-                timer.awaitTermination(10, TimeUnit.SECONDS);
-            } catch (InterruptedException err) {
-                Thread.currentThread().interrupt();
-            }
-        }
-    }
-
     public void reportBackendUnreachable(String id, long timestamp, String cause) {
         BackendHealthStatus backend = getBackendStatus(id);
         backend.reportAsUnreachable(timestamp);
@@ -198,14 +231,6 @@ public class BackendHealthManager implements Runnable {
     public boolean isAvailable(String id) {
         BackendHealthStatus backend = getBackendStatus(id);
         return backend != null && backend.isAvailable();
-    }
-
-    public void reloadConfiguration(RuntimeServerConfiguration newConfiguration, EndpointMapper mapper) {
-        if (this.connectTimeout != newConfiguration.getConnectTimeout()) {
-            this.connectTimeout = newConfiguration.getConnectTimeout();
-            LOG.info("Applying new connect timeout " + this.connectTimeout + " ms");
-        }
-        this.mapper = mapper;
     }
 
     @VisibleForTesting

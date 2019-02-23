@@ -313,10 +313,6 @@ public class HttpProxyServer implements AutoCloseable {
         LOG.info("http.admin.enabled=" + adminServerEnabled);
         LOG.info("http.admin.port=" + adminServerPort);
         LOG.info("http.admin.host=" + adminServerHost);
-
-        int healthProbePeriod = Integer.parseInt(properties.getProperty("healthmanager.period", "0"));
-        LOG.info("healthmanager.period=" + healthProbePeriod);
-        backendHealthManager.setPeriod(healthProbePeriod);
     }
 
     private static List<RequestFilter> buildFilters(RuntimeServerConfiguration currentConfiguration) throws ConfigurationNotValidException {

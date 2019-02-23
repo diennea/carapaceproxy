@@ -89,7 +89,7 @@ public class DynamicCertificatesManager implements Runnable {
         if (scheduler != null) {
             scheduler.shutdown();
         }
-        period = configuration.getDynamicCertificateManagerPeriod();
+        period = configuration.getDynamicCertificatesManagerPeriod();
         keyPairsSize = configuration.getKeyPairsSize();
         loadCertificates(configuration.getCertificates());
         if (scheduler != null) {
