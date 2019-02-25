@@ -30,7 +30,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.bookkeeper.stats.Gauge;
@@ -58,6 +57,7 @@ public class BackendHealthManager implements Runnable {
     private volatile int period;
     // can change at runtime
     private volatile int connectTimeout;
+    private volatile boolean started; // keep track of start() calling
 
     private final ConcurrentHashMap<String, BackendHealthStatus> backends = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Gauge> gauges = new ConcurrentHashMap<>();
@@ -82,6 +82,7 @@ public class BackendHealthManager implements Runnable {
     }
 
     public synchronized void start() {
+        started = true;
         if (period <= 0) {
             return;
         }
@@ -93,6 +94,7 @@ public class BackendHealthManager implements Runnable {
     }
 
     public synchronized void stop() {
+        started = false;
         if (timer != null) {
             timer.shutdown();
             try {
@@ -126,7 +128,7 @@ public class BackendHealthManager implements Runnable {
 
         this.mapper = mapper;
 
-        if (restart) {
+        if (restart || started) {
             start();
         }
     }

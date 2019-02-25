@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.server.certiticates;
 
+import com.google.common.annotations.VisibleForTesting;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
@@ -28,6 +29,7 @@ import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -68,31 +70,46 @@ public class DynamicCertificatesManager implements Runnable {
     private static final boolean TESTING_MODE = Boolean.getBoolean("carapace.acme.testmode");
 
     private Map<String, DynamicCertificate> certificates = new ConcurrentHashMap();
-    private Map<String, String> challengesTokens = new ConcurrentHashMap();
+    final private Map<String, String> challengesTokens = new ConcurrentHashMap();
     private ACMEClient client; // Let's Encrypt client
+
     private ScheduledExecutorService scheduler;
+    private ScheduledFuture<?> scheduledFuture;
+    private volatile boolean started; // keep track of start() calling
+
     private ConfigurationStore store;
-    private int period = 0; // in seconds
-    private int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
+    private volatile int period = 0; // in seconds
+    private volatile int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
 
     public void setConfigurationStore(ConfigurationStore configStore) {
         this.store = configStore;
     }
 
-    public void reloadConfiguration(RuntimeServerConfiguration configuration) {
+    @VisibleForTesting
+    public int getPeriod() {
+        return period;
+    }
+
+    @VisibleForTesting
+    public void setPeriod(int period) {
+        this.period = period;
+    }
+
+    public synchronized void reloadConfiguration(RuntimeServerConfiguration configuration) {
         if (store == null) {
             throw new DynamicCertificatesManagerException("ConfigurationStore not set.");
         }
         if (client == null) {
             client = new ACMEClient(loadOrCreateAcmeUserKeyPair(), TESTING_MODE);
         }
-        if (scheduler != null) {
-            scheduler.shutdown();
+
+        if (scheduledFuture != null) {
+            scheduledFuture.cancel(true);
         }
         period = configuration.getDynamicCertificatesManagerPeriod();
         keyPairsSize = configuration.getKeyPairsSize();
         loadCertificates(configuration.getCertificates());
-        if (scheduler != null) {
+        if (scheduledFuture != null || started) {
             start();
         }
     }
@@ -136,17 +153,30 @@ public class DynamicCertificatesManager implements Runnable {
 
     }
 
-    public void start() {
-        if (period > 0) {
-            scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat(THREAD_NAME).build());
-            scheduler.scheduleWithFixedDelay(this, 0, period, TimeUnit.SECONDS);
+    public synchronized void start() {
+        started = true;
+        if (period <= 0) {
+            return;
         }
+        if (scheduler == null) {
+            scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat(THREAD_NAME).build());
+        }
+
+        LOG.info("Starting DynamicCertificatesManager, period: " + period + " seconds");
+        scheduledFuture = scheduler.scheduleWithFixedDelay(this, 0, period, TimeUnit.SECONDS);
     }
 
-    public void stop() {
+    public synchronized void stop() {
+        started = false;
         if (scheduler != null) {
             scheduler.shutdown();
-            scheduler = null;
+            try {
+                scheduler.awaitTermination(10, TimeUnit.SECONDS);
+                scheduler = null;
+                scheduledFuture = null;
+            } catch (InterruptedException err) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 

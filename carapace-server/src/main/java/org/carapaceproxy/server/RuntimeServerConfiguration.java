@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.server;
 
+import com.google.common.annotations.VisibleForTesting;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -190,8 +191,18 @@ public class RuntimeServerConfiguration {
         return healthProbePeriod;
     }
 
+    @VisibleForTesting
+    public void setHealthProbePeriod(int healthProbePeriod) {
+        this.healthProbePeriod = healthProbePeriod;
+    }
+
     public int getDynamicCertificatesManagerPeriod() {
         return dynamicCertificatesManagerPeriod;
+    }
+
+    @VisibleForTesting
+    public void setDynamicCertificatesManagerPeriod(int dynamicCertificatesManagerPeriod) {
+        this.dynamicCertificatesManagerPeriod = dynamicCertificatesManagerPeriod;
     }
 
     public int getKeyPairsSize() {
