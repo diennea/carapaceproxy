@@ -26,6 +26,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import org.carapaceproxy.utils.IOUtils;
 
 /**
@@ -33,11 +34,11 @@ import org.carapaceproxy.utils.IOUtils;
  * @author francesco.caliumi
  */
 public class BackendHealthCheck {
-    
+
     public final static int RESULT_SUCCESS = 1;
     public final static int RESULT_FAILURE_CONNECTION = 2;
     public final static int RESULT_FAILURE_STATUS = 3;
-    
+
     private final long startTs;
     private final long endTs;
     private final int result;
@@ -62,7 +63,7 @@ public class BackendHealthCheck {
     public long getEndTs() {
         return endTs;
     }
-    
+
     public long getResponseTime() {
         return endTs - startTs;
     }
@@ -74,17 +75,17 @@ public class BackendHealthCheck {
     public String getResultStr() {
         return resultStr;
     }
-    
+
     public boolean isOk() {
         return result == RESULT_SUCCESS;
     }
-    
+
     public static BackendHealthCheck check(String host, int port, String path, int timeoutMillis) {
-       
+
         if (path == null || path.isEmpty()) {
             long now = System.currentTimeMillis();
             return new BackendHealthCheck(now, now, RESULT_SUCCESS, "MOCK OK");
-        
+
         } else {
             long startts = System.currentTimeMillis();
             URL url;
@@ -95,56 +96,54 @@ public class BackendHealthCheck {
                 conn.setConnectTimeout(timeoutMillis);
                 conn.setReadTimeout(timeoutMillis);
                 conn.setUseCaches(false);
-                
+
                 if (!(conn instanceof HttpURLConnection)) {
                     throw new IllegalStateException("Only HttpURLConnection is supported");
                 }
                 httpConn = (HttpURLConnection) conn;
                 httpConn.setRequestMethod("GET");
                 httpConn.setInstanceFollowRedirects(true);
-                
+
                 try (InputStream is = httpConn.getInputStream();) {
                     int httpCode = httpConn.getResponseCode();
-                    String httpBody = IOUtils.toString(is, StandardCharsets.UTF_8);
-                    if (httpCode >= 200 && httpCode <= 299) {
-                        return new BackendHealthCheck(startts, System.currentTimeMillis(), RESULT_SUCCESS, httpBody);
-                    } else {
-                        return new BackendHealthCheck(
-                            startts, System.currentTimeMillis(), RESULT_FAILURE_STATUS, 
-                                "HttpCode="+httpCode+", HttpMessage="+httpConn.getResponseMessage()+", HttpBody="+httpBody);
-                    }
+                    String httpMsg = Objects.toString(httpConn.getResponseMessage(), "");
+                    return new BackendHealthCheck(
+                            startts, System.currentTimeMillis(),
+                            httpCode >= 200 && httpCode <= 299 ? RESULT_SUCCESS : RESULT_FAILURE_STATUS,
+                            "HttpCode="+httpCode+", HttpMessage="+httpMsg
+                    );
                 }
 
             } catch (MalformedURLException ex) {
                 throw new RuntimeException(ex);
-                
+
             } catch (IOException | RuntimeException ex) {
                 int httpCode = 0;
                 String httpMsg = null;
                 String httpErrorBody = null;
-                
+
                 if (httpConn != null) {
                     try {
                         httpCode = httpConn.getResponseCode();
-                        httpMsg = httpConn.getResponseMessage();
+                        httpMsg = Objects.toString(httpConn.getResponseMessage(), "");
                     } catch (IOException ex2) {
                         // Ignore
                     }
-                    
+
                     try {
                         httpErrorBody = IOUtils.toString(httpConn.getErrorStream(), StandardCharsets.UTF_8);
                     } catch (IOException ex2) {
                         // Ignore
                     }
                 }
-                
+
                 if (httpCode > 0) {
                     return new BackendHealthCheck(
                         startts, System.currentTimeMillis(), RESULT_FAILURE_STATUS,
                             "HttpCode="+httpCode+", HttpMsg="+httpMsg+", httpErrorBody="+httpErrorBody);
                 } else {
                     return new BackendHealthCheck(
-                        startts, System.currentTimeMillis(), RESULT_FAILURE_CONNECTION, 
+                        startts, System.currentTimeMillis(), RESULT_FAILURE_CONNECTION,
                             ex.getMessage());
                 }
             }
