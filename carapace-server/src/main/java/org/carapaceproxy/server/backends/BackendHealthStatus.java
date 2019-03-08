@@ -36,9 +36,7 @@ public class BackendHealthStatus {
     private volatile boolean reportedAsUnreachable;
     private long reportedAsUnreachableTs;
 
-    private long lastProbeTs;
-    private boolean lastProbeSuccess;
-    private String lastProbeResult;
+    private BackendHealthCheck lastProbe;
 
     public BackendHealthStatus(String id) {
         this.id = id;
@@ -48,28 +46,12 @@ public class BackendHealthStatus {
         return id;
     }
 
-    public boolean isLastProbeSuccess() {
-        return lastProbeSuccess;
+    public BackendHealthCheck getLastProbe() {
+        return lastProbe;
     }
 
-    public void setLastProbeSuccess(boolean lastProbeSuccess) {
-        this.lastProbeSuccess = lastProbeSuccess;
-    }
-
-    public long getLastProbeTs() {
-        return lastProbeTs;
-    }
-
-    public void setLastProbeTs(long lastProbeTs) {
-        this.lastProbeTs = lastProbeTs;
-    }
-
-    public String getLastProbeResult() {
-        return lastProbeResult;
-    }
-
-    public void setLastProbeResult(String lastProbeResult) {
-        this.lastProbeResult = lastProbeResult;
+    public void setLastProbe(BackendHealthCheck lastProbe) {
+        this.lastProbe = lastProbe;
     }
 
     public boolean isReportedAsUnreachable() {
@@ -105,7 +87,7 @@ public class BackendHealthStatus {
 
     @Override
     public String toString() {
-        return "BackendHealthStatus{" + "id=" + id + ", reportedAsUnreachable=" + reportedAsUnreachable + ", reportedAsUnreachableTs=" + reportedAsUnreachableTs + ", lastProbeTs=" + lastProbeTs + ", lastProbeSuccess=" + lastProbeSuccess + ", lastProbeResult=" + lastProbeResult + '}';
+        return "BackendHealthStatus{" + "id=" + id + ", reportedAsUnreachable=" + reportedAsUnreachable + ", reportedAsUnreachableTs=" + reportedAsUnreachableTs + '}';
     }
 
 }

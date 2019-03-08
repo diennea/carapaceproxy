@@ -30,6 +30,7 @@ import org.apache.bookkeeper.stats.NullStatsLogger;
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.carapaceproxy.EndpointMapper;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
+import org.carapaceproxy.server.backends.BackendHealthCheck;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.backends.BackendHealthStatus;
 import org.carapaceproxy.server.config.BackendConfiguration;
@@ -71,7 +72,7 @@ public class HealthCheckTest {
             stubFor(get(urlEqualTo("/status.html"))
                     .willReturn(aResponse()
                             .withStatus(200)
-                            .withBody("Ok"))
+                            .withBody("Ok..."))
             );
 
             long startTs = System.currentTimeMillis();
@@ -81,20 +82,27 @@ public class HealthCheckTest {
             Map<String, BackendHealthStatus> status = hman.getBackendsSnapshot();
             System.out.println("status=" + status);
             assertThat(status.size(), is(1));
-            assertThat(status.get(b1conf.getHostPort()), is(not(nullValue())));
-            assertThat(status.get(b1conf.getHostPort()).getId(), is(b1conf.getHostPort()));
+
             BackendConfiguration bconf = mapper.getBackends().get(b1conf.getHostPort());
             assertThat(bconf.getId(), is("myid"));
             assertThat(bconf.getHost(), is("localhost"));
             assertThat(bconf.getPort(), is(wireMockRule.port()));
             assertThat(bconf.getProbePath(), is("/status.html"));
-            assertThat(status.get(b1conf.getHostPort()).getLastProbeTs() >= startTs, is(true));
-            assertThat(status.get(b1conf.getHostPort()).getLastProbeTs() <= endTs, is(true));
-            assertThat(status.get(b1conf.getHostPort()).isAvailable(), is(true));
-            assertThat(status.get(b1conf.getHostPort()).isLastProbeSuccess(), is(true));
-            assertThat(status.get(b1conf.getHostPort()).isReportedAsUnreachable(), is(false));
-            assertThat(status.get(b1conf.getHostPort()).getReportedAsUnreachableTs(), is(0L));
-            assertThat(status.get(b1conf.getHostPort()).getLastProbeResult(), is("Ok"));
+
+            BackendHealthStatus _status = status.get(b1conf.getHostPort());
+            assertThat(_status, is(not(nullValue())));
+            assertThat(_status.getId(), is(b1conf.getHostPort()));
+            assertThat(_status.isAvailable(), is(true));
+            assertThat(_status.isReportedAsUnreachable(), is(false));
+            assertThat(_status.getReportedAsUnreachableTs(), is(0L));
+
+            BackendHealthCheck lastProbe = _status.getLastProbe();
+            assertThat(lastProbe.getPath(), is("/status.html"));
+            assertThat(lastProbe.getEndTs() >= startTs, is(true));
+            assertThat(lastProbe.getEndTs() <= endTs, is(true));
+            assertThat(lastProbe.isOk(), is(true));
+            assertThat(lastProbe.getHttpResponse(), is("200 OK"));
+            assertThat(lastProbe.getHttpBody(), is("Ok..."));
         }
 
         long reportedAsUnreachableTs;
@@ -112,23 +120,31 @@ public class HealthCheckTest {
             Map<String, BackendHealthStatus> status = hman.getBackendsSnapshot();
             System.out.println("status=" + status);
             assertThat(status.size(), is(1));
-            assertThat(status.get(b1conf.getHostPort()), is(not(nullValue())));
-            assertThat(status.get(b1conf.getHostPort()).getId(), is(b1conf.getHostPort()));
+
             BackendConfiguration bconf = mapper.getBackends().get(b1conf.getHostPort());
             assertThat(bconf.getId(), is("myid"));
             assertThat(bconf.getHost(), is("localhost"));
             assertThat(bconf.getPort(), is(wireMockRule.port()));
             assertThat(bconf.getProbePath(), is("/status.html"));
-            assertThat(status.get(b1conf.getHostPort()).getLastProbeTs() >= startTs, is(true));
-            assertThat(status.get(b1conf.getHostPort()).getLastProbeTs() <= endTs, is(true));
-            assertThat(status.get(b1conf.getHostPort()).isAvailable(), is(false));
-            assertThat(status.get(b1conf.getHostPort()).isLastProbeSuccess(), is(false));
-            assertThat(status.get(b1conf.getHostPort()).isReportedAsUnreachable(), is(true));
-            assertThat(status.get(b1conf.getHostPort()).getReportedAsUnreachableTs() >= startTs, is(true));
-            assertThat(status.get(b1conf.getHostPort()).getReportedAsUnreachableTs() <= endTs, is(true));
-            assertThat(status.get(b1conf.getHostPort()).getLastProbeResult(), is("HttpCode=500, HttpMsg=Server Error, httpErrorBody=ERROR"));
 
-            reportedAsUnreachableTs = status.get(b1conf.getHostPort()).getReportedAsUnreachableTs();
+            BackendHealthStatus _status = status.get(b1conf.getHostPort());
+            assertThat(_status, is(not(nullValue())));
+            assertThat(_status.getId(), is(b1conf.getHostPort()));
+            assertThat(_status.isAvailable(), is(false));
+            assertThat(_status.isReportedAsUnreachable(), is(true));
+            assertThat(_status.getReportedAsUnreachableTs() >= startTs, is(true));
+            assertThat(_status.getReportedAsUnreachableTs() <= endTs, is(true));
+            reportedAsUnreachableTs =_status.getReportedAsUnreachableTs();
+
+            BackendHealthCheck lastProbe = _status.getLastProbe();
+            assertThat(lastProbe.getPath(), is("/status.html"));
+            assertThat(lastProbe.getEndTs() >= startTs, is(true));
+            assertThat(lastProbe.getEndTs() <= endTs, is(true));
+            assertThat(lastProbe.isOk(), is(false));
+            System.out.println("HTTP MESSAGE: " + lastProbe.getHttpResponse());
+            System.out.println("STATUS INFO: " + lastProbe.getHttpBody());
+            assertThat(lastProbe.getHttpResponse(), is("500 Server Error"));
+            assertThat(lastProbe.getHttpBody(), is("ERROR"));
         }
 
         {
@@ -145,20 +161,29 @@ public class HealthCheckTest {
             Map<String, BackendHealthStatus> status = hman.getBackendsSnapshot();
             System.out.println("status=" + status);
             assertThat(status.size(), is(1));
-            assertThat(status.get(b1conf.getHostPort()), is(not(nullValue())));
-            assertThat(status.get(b1conf.getHostPort()).getId(), is(b1conf.getHostPort()));
+
             BackendConfiguration bconf = mapper.getBackends().get(b1conf.getHostPort());
             assertThat(bconf.getId(), is("myid"));
             assertThat(bconf.getHost(), is("localhost"));
             assertThat(bconf.getPort(), is(wireMockRule.port()));
             assertThat(bconf.getProbePath(), is("/status.html"));
-            assertThat(status.get(b1conf.getHostPort()).getLastProbeTs() >= startTs, is(true));
-            assertThat(status.get(b1conf.getHostPort()).getLastProbeTs() <= endTs, is(true));
-            assertThat(status.get(b1conf.getHostPort()).isAvailable(), is(false));
-            assertThat(status.get(b1conf.getHostPort()).isLastProbeSuccess(), is(false));
-            assertThat(status.get(b1conf.getHostPort()).isReportedAsUnreachable(), is(true));
-            assertThat(status.get(b1conf.getHostPort()).getReportedAsUnreachableTs(), is(reportedAsUnreachableTs));
-            assertThat(status.get(b1conf.getHostPort()).getLastProbeResult(), is("HttpCode=500, HttpMsg=Server Error, httpErrorBody=ERROR"));
+
+            BackendHealthStatus _status = status.get(b1conf.getHostPort());
+            assertThat(_status, is(not(nullValue())));
+            assertThat(_status.getId(), is(b1conf.getHostPort()));
+            assertThat(_status.isAvailable(), is(false));
+            assertThat(_status.isReportedAsUnreachable(), is(true));
+            assertThat(_status.getReportedAsUnreachableTs(), is(reportedAsUnreachableTs));
+
+            BackendHealthCheck lastProbe = _status.getLastProbe();
+            assertThat(lastProbe.getPath(), is("/status.html"));
+            assertThat(lastProbe.getEndTs() >= startTs, is(true));
+            assertThat(lastProbe.getEndTs() <= endTs, is(true));
+            assertThat(lastProbe.isOk(), is(false));
+            System.out.println("HTTP MESSAGE: " + lastProbe.getHttpResponse());
+            System.out.println("STATUS INFO: " + lastProbe.getHttpBody());
+            assertThat(lastProbe.getHttpResponse(), is("500 Server Error"));
+            assertThat(lastProbe.getHttpBody(), is("ERROR"));
         }
 
         {
@@ -175,20 +200,29 @@ public class HealthCheckTest {
             Map<String, BackendHealthStatus> status = hman.getBackendsSnapshot();
             System.out.println("status=" + status);
             assertThat(status.size(), is(1));
-            assertThat(status.get(b1conf.getHostPort()), is(not(nullValue())));
-            assertThat(status.get(b1conf.getHostPort()).getId(), is(b1conf.getHostPort()));
+
             BackendConfiguration bconf = mapper.getBackends().get(b1conf.getHostPort());
             assertThat(bconf.getId(), is("myid"));
             assertThat(bconf.getHost(), is("localhost"));
             assertThat(bconf.getPort(), is(wireMockRule.port()));
             assertThat(bconf.getProbePath(), is("/status.html"));
-            assertThat(status.get(b1conf.getHostPort()).getLastProbeTs() >= startTs, is(true));
-            assertThat(status.get(b1conf.getHostPort()).getLastProbeTs() <= endTs, is(true));
-            assertThat(status.get(b1conf.getHostPort()).isAvailable(), is(true));
-            assertThat(status.get(b1conf.getHostPort()).isLastProbeSuccess(), is(true));
-            assertThat(status.get(b1conf.getHostPort()).isReportedAsUnreachable(), is(false));
-            assertThat(status.get(b1conf.getHostPort()).getReportedAsUnreachableTs(), is(0L));
-            assertThat(status.get(b1conf.getHostPort()).getLastProbeResult(), is("Ok..."));
+
+            BackendHealthStatus _status = status.get(b1conf.getHostPort());
+            assertThat(_status, is(not(nullValue())));
+            assertThat(_status.getId(), is(b1conf.getHostPort()));
+            assertThat(_status.isAvailable(), is(true));
+            assertThat(_status.isReportedAsUnreachable(), is(false));
+            assertThat(_status.getReportedAsUnreachableTs(), is(0L));
+
+            BackendHealthCheck lastProbe = _status.getLastProbe();
+            assertThat(lastProbe.getPath(), is("/status.html"));
+            assertThat(lastProbe.getEndTs() >= startTs, is(true));
+            assertThat(lastProbe.getEndTs() <= endTs, is(true));
+            assertThat(lastProbe.isOk(), is(true));
+            System.out.println("HTTP MESSAGE: " + lastProbe.getHttpResponse());
+            System.out.println("STATUS INFO: " + lastProbe.getHttpBody());
+            assertThat(lastProbe.getHttpResponse(), is("201 Created"));
+            assertThat(lastProbe.getHttpBody(), is("Ok..."));
         }
 
     }

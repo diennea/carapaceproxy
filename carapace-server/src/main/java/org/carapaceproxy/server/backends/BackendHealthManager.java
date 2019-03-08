@@ -174,20 +174,15 @@ public class BackendHealthManager implements Runnable {
                     LOG.log(Level.INFO, "backend {0} seems reachable. Response time {1}ms",
                             new Object[]{status.getId(), checkResult.getEndTs() - checkResult.getStartTs()});
                 }
-                status.setLastProbeSuccess(true);
-
             } else {
                 if (status.isReportedAsUnreachable()) {
-                    LOG.log(Level.INFO, "backend {0} still unreachable. Cause: {1}", new Object[]{status.getId(), checkResult.getResultStr()});
+                    LOG.log(Level.INFO, "backend {0} still unreachable. Cause: {1}", new Object[]{status.getId(), checkResult.getHttpResponse()});
                 } else {
-                    LOG.log(Level.WARNING, "backend {0} became unreachable. Cause: {1}", new Object[]{status.getId(), checkResult.getResultStr()});
-                    reportBackendUnreachable(status.getId(), checkResult.getEndTs(), checkResult.getResultStr());
+                    LOG.log(Level.WARNING, "backend {0} became unreachable. Cause: {1}", new Object[]{status.getId(), checkResult.getHttpResponse()});
+                    reportBackendUnreachable(status.getId(), checkResult.getEndTs(), checkResult.getHttpResponse());
                 }
-                status.setLastProbeSuccess(false);
             }
-
-            status.setLastProbeResult(checkResult.getResultStr());
-            status.setLastProbeTs(checkResult.getEndTs());
+            status.setLastProbe(checkResult);
         }
         List<String> toRemove = new ArrayList<>();
         for (String key : backends.keySet()) {

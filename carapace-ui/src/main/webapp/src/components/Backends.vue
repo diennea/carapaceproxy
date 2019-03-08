@@ -40,45 +40,69 @@
                     <th scope="col">Status</th>
                     <th scope="col">Reported as Unreachable</th>
                     <th scope="col">Reported as Unreachable (Timestamp)</th>
-                    <th scope="col">Last probe success</th>
-                    <th scope="col">Last probe success (Timestamp)</th>
-                    <th scope="col">Last probe result</th>
+                    <th scope="col">Probe path</th>
+                    <th scope="col">Last probe (Status)</th>
+                    <th scope="col">Last probe (Timestamp)</th>
+                    <th scope="col">Last probe (Result)</th>
                 </tr>
             </thead>
             <tbody>
                 <tr v-for="item of backends" :key="item.id">
+                    <td>
+                        <div class="label">
+                            {{item.host}}:{{item.port}}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="label">
+                            {{item.openConnections}}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="label">
+                            {{item.totalRequests}}
+                        </div>
+                    </td>
                     <td><div class="label">
-                        {{item.host}}:{{item.port}}
-                    </div></td>
-                    <td><div class="label">
-                        {{item.openConnections}}
-                    </div></td>
-                    <td><div class="label">
-                        {{item.totalRequests}}
-                    </div></td>
-                    <td><div class="label">
-                        {{item.lastActivityTs | dateFormat}}
-                    </div></td>
-                    <td><div class="label" :class="[item.isAvailable ? 'label-success' : 'label-error']">
-                        {{item.isAvailable | backendStatusFormat}}
-                    </div></td>
+                            {{item.lastActivityTs | dateFormat}}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="label" :class="[item.isAvailable ? 'label-success' : 'label-error']">
+                            {{item.isAvailable | backendStatusFormat}}
+                        </div>
+                    </td>
                     <td>
                         <div v-if="item.reportedAsUnreachableTs && item.reportedAsUnreachable" class="label label-error">
                             {{item.reportedAsUnreachable | unreachableFormat}}
                         </div>
                     </td>
-                    <td><div class="label">
-                        {{item.reportedAsUnreachableTs | dateFormat}}
-                    </div></td>
+                    <td>
+                        <div class="label">
+                            {{item.reportedAsUnreachableTs | dateFormat}}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="label">
+                            {{item.lastProbePath}}
+                        </div>
+                    </td>
                     <td>
                         <div v-if="item.lastProbeTs" class="label" :class="[item.lastProbeSuccess ? 'label-success' : 'label-error']">
                             {{item.lastProbeSuccess | probeSuccessFormat}}
                         </div>
                     </td>
-                    <td><div class="label">
-                        {{item.lastProbeTs | dateFormat}}
-                    </div></td>
-                    <td><div class="label" v-html="item.lastProbeResult"></div></td>
+                    <td>
+                        <div class="label">
+                            {{item.lastProbeTs | dateFormat}}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="label">
+                            <b>{{item.httpResponse}}</b><br>
+                            <a href="#" @click="openDetail(item.httpBody)">Open probe page</a>
+                        </div>
+                    </td>
                 </tr>
             </tbody>
         </table>
@@ -99,7 +123,7 @@
             var d = this
             doGet(url, response => {
                 d.backends = [];
-                Object.keys(response).forEach(function(key) {
+                Object.keys(response).forEach(function (key) {
                     d.backends.push(response[key])
                 })
             })
@@ -122,6 +146,11 @@
                     return "SUCCESS"
                 }
                 return "ERROR"
+            }
+        },
+        methods: {
+            openDetail(detail) {
+                window.open("", "", "width=900,height=600").document.write(detail)
             }
         }
     }

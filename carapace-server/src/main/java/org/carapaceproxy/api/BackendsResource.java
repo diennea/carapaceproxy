@@ -29,6 +29,7 @@ import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.server.backends.BackendHealthCheck;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.backends.BackendHealthStatus;
 import org.carapaceproxy.utils.StringUtils;
@@ -56,9 +57,11 @@ public class BackendsResource {
         private boolean isAvailable;
         private boolean reportedAsUnreachable;
         private long reportedAsUnreachableTs;
+        private String lastProbePath;
         private long lastProbeTs;
         private boolean lastProbeSuccess;
-        private String lastProbeResult;
+        private String httpResponse;
+        private String httpBody;
 
         public BackendBean(String host, int port) {
             this.host = host;
@@ -97,16 +100,24 @@ public class BackendsResource {
             return reportedAsUnreachableTs;
         }
 
+        public String getLastProbePath() {
+            return lastProbePath;
+        }
+
         public long getLastProbeTs() {
             return lastProbeTs;
         }
 
-        public boolean getLastProbeSuccess() {
+        public boolean isLastProbeSuccess() {
             return lastProbeSuccess;
         }
 
-        public String getLastProbeResult() {
-            return lastProbeResult;
+        public String getHttpResponse() {
+            return httpResponse;
+        }
+
+        public String getHttpBody() {
+            return httpBody;
         }
 
     }
@@ -134,14 +145,13 @@ public class BackendsResource {
                 bean.isAvailable = bhs.isAvailable();
                 bean.reportedAsUnreachable = bhs.isReportedAsUnreachable();
                 bean.reportedAsUnreachableTs = bhs.getReportedAsUnreachableTs();
-                bean.lastProbeTs = bhs.getLastProbeTs();
-                bean.lastProbeSuccess = bhs.isLastProbeSuccess();
-
-                if (bhs.getLastProbeResult() != null) {
-                    String result = bhs.getLastProbeResult().replaceAll("(\r\n|\n)", "<br>");
-                    bean.lastProbeResult = StringUtils.htmlEncode(result);
-                } else {
-                    bean.lastProbeResult = "";
+                BackendHealthCheck lastProbe = bhs.getLastProbe();
+                if (lastProbe != null) {
+                    bean.lastProbePath = lastProbe.getPath();
+                    bean.lastProbeTs = lastProbe.getEndTs();
+                    bean.lastProbeSuccess = lastProbe.isOk();
+                    bean.httpResponse = lastProbe.getHttpResponse();
+                    bean.httpBody = lastProbe.getHttpBody();
                 }
             }
             res.put(bb.getKey(), bean);
