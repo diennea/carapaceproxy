@@ -26,6 +26,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import org.carapaceproxy.utils.IOUtils;
 
 /**
@@ -33,26 +34,34 @@ import org.carapaceproxy.utils.IOUtils;
  * @author francesco.caliumi
  */
 public class BackendHealthCheck {
-    
+
     public final static int RESULT_SUCCESS = 1;
     public final static int RESULT_FAILURE_CONNECTION = 2;
     public final static int RESULT_FAILURE_STATUS = 3;
-    
+
+    private final String path;
     private final long startTs;
     private final long endTs;
     private final int result;
-    private final String resultStr;
+    private final String httpResponse;
+    private final String httpBody;
 
-    private BackendHealthCheck(long startTs, long endTs, int result, String resultStr) {
+    public BackendHealthCheck(String path, long startTs, long endTs, int result, String httpResponse, String httpBody) {
+        this.path = path;
         this.startTs = startTs;
         this.endTs = endTs;
         this.result = result;
-        this.resultStr = resultStr;
+        this.httpResponse = httpResponse;
+        this.httpBody = httpBody;
     }
 
     @Override
     public String toString() {
-        return "BackendHealtCheck{" + "startTs=" + startTs + ", endTs=" + endTs + ", responseTime=" + getResponseTime() + ", result=" + result + ", resultStr=" + resultStr + '}';
+        return "BackendHealthCheck{" + "path=" + path + ", startTs=" + startTs + ", endTs=" + endTs + ", result=" + result + ", httpResponse=" + httpResponse + ", httpBody=" + httpBody + '}';
+    }
+
+    public String getPath() {
+        return path;
     }
 
     public long getStartTs() {
@@ -62,7 +71,7 @@ public class BackendHealthCheck {
     public long getEndTs() {
         return endTs;
     }
-    
+
     public long getResponseTime() {
         return endTs - startTs;
     }
@@ -71,20 +80,23 @@ public class BackendHealthCheck {
         return result;
     }
 
-    public String getResultStr() {
-        return resultStr;
+    public String getHttpResponse() {
+        return httpResponse;
     }
-    
+
+    public String getHttpBody() {
+        return httpBody;
+    }
+
     public boolean isOk() {
         return result == RESULT_SUCCESS;
     }
-    
+
     public static BackendHealthCheck check(String host, int port, String path, int timeoutMillis) {
-       
+
         if (path == null || path.isEmpty()) {
             long now = System.currentTimeMillis();
-            return new BackendHealthCheck(now, now, RESULT_SUCCESS, "MOCK OK");
-        
+            return new BackendHealthCheck(path, now, now, RESULT_SUCCESS, "OK", "MOCK OK");
         } else {
             long startts = System.currentTimeMillis();
             URL url;
@@ -95,58 +107,64 @@ public class BackendHealthCheck {
                 conn.setConnectTimeout(timeoutMillis);
                 conn.setReadTimeout(timeoutMillis);
                 conn.setUseCaches(false);
-                
+
                 if (!(conn instanceof HttpURLConnection)) {
                     throw new IllegalStateException("Only HttpURLConnection is supported");
                 }
                 httpConn = (HttpURLConnection) conn;
                 httpConn.setRequestMethod("GET");
                 httpConn.setInstanceFollowRedirects(true);
-                
-                try (InputStream is = httpConn.getInputStream();) {
+
+                try ( InputStream is = httpConn.getInputStream()) {
                     int httpCode = httpConn.getResponseCode();
+                    String httpResponse = httpCode + " " + Objects.toString(httpConn.getResponseMessage(), "");
                     String httpBody = IOUtils.toString(is, StandardCharsets.UTF_8);
-                    if (httpCode >= 200 && httpCode <= 299) {
-                        return new BackendHealthCheck(startts, System.currentTimeMillis(), RESULT_SUCCESS, httpBody);
-                    } else {
-                        return new BackendHealthCheck(
-                            startts, System.currentTimeMillis(), RESULT_FAILURE_STATUS, 
-                                "HttpCode="+httpCode+", HttpMessage="+httpConn.getResponseMessage()+", HttpBody="+httpBody);
-                    }
+                    return new BackendHealthCheck(
+                            path,
+                            startts,
+                            System.currentTimeMillis(),
+                            httpCode >= 200 && httpCode <= 299 ? RESULT_SUCCESS : RESULT_FAILURE_STATUS,
+                            httpResponse,
+                            httpBody
+                    );
                 }
 
             } catch (MalformedURLException ex) {
                 throw new RuntimeException(ex);
-                
+
             } catch (IOException | RuntimeException ex) {
+                int result = RESULT_FAILURE_STATUS;
                 int httpCode = 0;
-                String httpMsg = null;
-                String httpErrorBody = null;
-                
+                String httpResponse = "";
+                String httpErrorBody = "";
+
                 if (httpConn != null) {
                     try {
                         httpCode = httpConn.getResponseCode();
-                        httpMsg = httpConn.getResponseMessage();
+                        httpResponse = httpCode + " " + Objects.toString(httpConn.getResponseMessage(), "");
                     } catch (IOException ex2) {
                         // Ignore
                     }
-                    
+
                     try {
                         httpErrorBody = IOUtils.toString(httpConn.getErrorStream(), StandardCharsets.UTF_8);
                     } catch (IOException ex2) {
                         // Ignore
                     }
                 }
-                
-                if (httpCode > 0) {
-                    return new BackendHealthCheck(
-                        startts, System.currentTimeMillis(), RESULT_FAILURE_STATUS,
-                            "HttpCode="+httpCode+", HttpMsg="+httpMsg+", httpErrorBody="+httpErrorBody);
-                } else {
-                    return new BackendHealthCheck(
-                        startts, System.currentTimeMillis(), RESULT_FAILURE_CONNECTION, 
-                            ex.getMessage());
+
+                if (httpCode <= 0) {
+                    result = RESULT_FAILURE_CONNECTION;
+                    httpResponse = ex.getMessage();
                 }
+                return new BackendHealthCheck(
+                        path,
+                        startts,
+                        System.currentTimeMillis(),
+                        result,
+                        httpResponse,
+                        httpErrorBody
+                );
             }
         }
     }
