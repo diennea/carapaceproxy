@@ -168,7 +168,7 @@ public class HttpProxyServer implements AutoCloseable {
     public void start() throws InterruptedException, ConfigurationNotValidException {
         try {
             started = true;
-            groupMembershipHandler.start(peerId);
+            groupMembershipHandler.start();
             connectionsManager.start();
             cache.start();
             requestsLogger.start();
@@ -503,7 +503,7 @@ public class HttpProxyServer implements AutoCloseable {
                 String zkAddress = staticConfiguration.getProperty("zkAddress", "localhost:2181");
                 int zkTimeout = Integer.parseInt(staticConfiguration.getProperty("zkTimeout", "40000"));
                 LOG.log(Level.INFO, "mode=cluster, zkAddress=''{0}'',zkTimeout={1}, peer.id=''{2}''", new Object[]{zkAddress, zkTimeout, peerId});
-                this.groupMembershipHandler = new ZooKeeperGroupMembershipHandler(zkAddress, zkTimeout);
+                this.groupMembershipHandler = new ZooKeeperGroupMembershipHandler(zkAddress, zkTimeout, peerId);
             case "standalone":
                 this.groupMembershipHandler = new NullGroupMembershipHandler();
             default:

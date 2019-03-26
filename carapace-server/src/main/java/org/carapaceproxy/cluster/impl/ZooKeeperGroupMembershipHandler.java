@@ -21,21 +21,28 @@ package org.carapaceproxy.cluster.impl;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.apache.bookkeeper.zookeeper.ExponentialBackoffRetryPolicy;
 import org.apache.curator.ensemble.fixed.FixedEnsembleProvider;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
-import org.apache.curator.framework.api.CuratorWatcher;
+import org.apache.curator.framework.recipes.cache.PathChildrenCache;
+import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent;
+import org.apache.curator.framework.recipes.cache.PathChildrenCacheListener;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.CreateMode;
-import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.data.Stat;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 
 /**
- * Implementation based on ZooKeeper
+ * Implementation based on ZooKeeper.
+ * This class is very simple, we are not expecting heavy traffic on ZooKeeper.
+ * We have two systems:
+ * <ul>
+ * <li>Peer discovery
+ * <li>Configuration changes event broadcast
+ * </ul>
  *
  * @author eolivelli
  */
@@ -44,8 +51,10 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     private static final Logger LOG = Logger.getLogger(ZooKeeperGroupMembershipHandler.class.getName());
 
     private final CuratorFramework client;
+    private final String peerId;
+    private CopyOnWriteArrayList<PathChildrenCache> watchedEvents = new CopyOnWriteArrayList<>();
 
-    public ZooKeeperGroupMembershipHandler(String zkAddress, int zkTimeout) {
+    public ZooKeeperGroupMembershipHandler(String zkAddress, int zkTimeout, String peerId) {
         client = CuratorFrameworkFactory
                 .builder()
                 .sessionTimeoutMs(zkTimeout)
@@ -53,19 +62,34 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
                 .retryPolicy(new ExponentialBackoffRetry(1000, 2))
                 .ensembleProvider(new FixedEnsembleProvider(zkAddress, true))
                 .build();
+        this.peerId = peerId;
     }
 
     @Override
-    public void start(String peerID) {
+    public void start() {
         try {
             client.start();
-            Stat exists = client.checkExists().creatingParentsIfNeeded()
-                    .forPath("/proxy/peers/" + peerID);
-            if (exists == null) {
-                client.create()
-                        .creatingParentsIfNeeded()
-                        .withMode(CreateMode.EPHEMERAL) // auto delete on close
-                        .forPath("/proxy/peers/" + peerID);
+            client.blockUntilConnected();
+            {
+                Stat exists = client.checkExists().creatingParentsIfNeeded()
+                        .forPath("/proxy/peers/" + peerId);
+                if (exists == null) {
+                    client.create()
+                            .creatingParentsIfNeeded()
+                            .withMode(CreateMode.EPHEMERAL) // auto delete on close
+                            .forPath("/proxy/peers/" + peerId);
+                }
+            }
+            {
+                final String path = "/proxy/events";
+                Stat exists = client.checkExists().creatingParentsIfNeeded()
+                        .forPath(path);
+                if (exists == null) {
+                    client.create()
+                            .creatingParentsIfNeeded()
+                            .withMode(CreateMode.PERSISTENT)
+                            .forPath(path);
+                }
             }
         } catch (Exception ex) {
             throw new RuntimeException(ex);
@@ -75,19 +99,18 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     @Override
     public void watchEvent(String eventId, EventCallback callback) {
         try {
-            final String path = "/proxy/events/" + eventId;
+            final String path = "/proxy/events";
 
-            client.create()
-                    .creatingParentsIfNeeded()
-                    .forPath(path);
+            LOG.info("watching " + path);
+            PathChildrenCache cache = new PathChildrenCache(client, path, true);
+            // hold a strong reference to the PathChildrenCache
+            watchedEvents.add(cache);
+            cache.getListenable().addListener((PathChildrenCacheListener) (CuratorFramework cf, PathChildrenCacheEvent pcce) -> {
+                LOG.log(Level.INFO, "ZK event {0} at {1}", new Object[]{pcce, path});
+                callback.eventFired(eventId);
+            });
+            cache.start(PathChildrenCache.StartMode.BUILD_INITIAL_CACHE);
 
-            client.getData().usingWatcher(new CuratorWatcher() {
-                @Override
-                public void process(WatchedEvent we) throws Exception {
-                    LOG.log(Level.INFO, "ZK event {0} at {1}", new Object[]{we, path});
-                    callback.eventFired(eventId);
-                }
-            }).forPath(path);
         } catch (Exception ex) {
             throw new RuntimeException(ex);
         }
@@ -98,7 +121,16 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
 
         try {
             final String path = "/proxy/events/" + eventId;
+            Stat exists = client.checkExists().creatingParentsIfNeeded()
+                    .forPath(path);
+            if (exists == null) {
+                client.create()
+                        .creatingParentsIfNeeded()
+                        .withMode(CreateMode.PERSISTENT)
+                        .forPath(path);
+            }
             LOG.log(Level.INFO, "Fire event {0}", path);
+            // perform a write
             client.setData()
                     .forPath(path);
         } catch (Exception ex) {

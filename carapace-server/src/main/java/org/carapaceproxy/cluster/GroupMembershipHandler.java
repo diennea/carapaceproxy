@@ -33,7 +33,7 @@ public interface GroupMembershipHandler {
      *
      * @param peerID
      */
-    void start(String peerID);
+    void start();
 
     /**
      * Register a callback to be called when a particular event is fired.

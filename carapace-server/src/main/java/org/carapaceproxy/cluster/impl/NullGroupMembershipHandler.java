@@ -31,7 +31,7 @@ import org.carapaceproxy.cluster.GroupMembershipHandler;
 public class NullGroupMembershipHandler implements GroupMembershipHandler {
 
     @Override
-    public void start(String peerID) {
+    public void start() {
     }
 
     @Override
