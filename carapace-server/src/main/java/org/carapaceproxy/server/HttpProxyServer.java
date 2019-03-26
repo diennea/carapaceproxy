@@ -22,7 +22,9 @@ package org.carapaceproxy.server;
 import com.google.common.annotations.VisibleForTesting;
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -40,6 +42,9 @@ import org.carapaceproxy.api.AuthAPIRequestsFilter;
 import org.carapaceproxy.api.ForceHeadersAPIRequestsFilter;
 import org.carapaceproxy.client.ConnectionsManager;
 import org.carapaceproxy.client.impl.ConnectionsManagerImpl;
+import org.carapaceproxy.cluster.GroupMembershipHandler;
+import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
+import org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
 import org.carapaceproxy.server.backends.BackendHealthManager;
@@ -75,6 +80,8 @@ public class HttpProxyServer implements AutoCloseable {
     private final PropertiesConfiguration statsProviderConfig = new PropertiesConfiguration();
     private final RequestsLogger requestsLogger;
 
+    private String peerId = "localhost";
+    private GroupMembershipHandler groupMembershipHandler = new NullGroupMembershipHandler();
     private DynamicCertificatesManager dynamicCertificateManager;
     private RuntimeServerConfiguration currentConfiguration;
     private ConfigurationStore dynamicConfigurationStore;
@@ -161,6 +168,7 @@ public class HttpProxyServer implements AutoCloseable {
     public void start() throws InterruptedException, ConfigurationNotValidException {
         try {
             started = true;
+            groupMembershipHandler.start(peerId);
             connectionsManager.start();
             cache.start();
             requestsLogger.start();
@@ -171,7 +179,6 @@ public class HttpProxyServer implements AutoCloseable {
             close();
             throw err;
         }
-
     }
 
     public void startMetrics() throws ConfigurationException {
@@ -188,6 +195,7 @@ public class HttpProxyServer implements AutoCloseable {
 
     @Override
     public void close() {
+        groupMembershipHandler.stop();
         backendHealthManager.stop();
         dynamicCertificateManager.stop();
 
@@ -299,7 +307,7 @@ public class HttpProxyServer implements AutoCloseable {
         }
     }
 
-    private void applyStaticConfiguration(ConfigurationStore properties) throws NumberFormatException {
+    private void applyStaticConfiguration(ConfigurationStore properties) throws NumberFormatException, ConfigurationNotValidException {
         if (started) {
             throw new IllegalStateException("server already started");
         }
@@ -310,6 +318,7 @@ public class HttpProxyServer implements AutoCloseable {
         adminServerEnabled = Boolean.parseBoolean(properties.getProperty("http.admin.enabled", "false"));
         adminServerPort = Integer.parseInt(properties.getProperty("http.admin.port", adminServerPort + ""));
         adminServerHost = properties.getProperty("http.admin.host", adminServerHost);
+        initGroupMembership(properties);
         LOG.info("http.admin.enabled=" + adminServerEnabled);
         LOG.info("http.admin.port=" + adminServerPort);
         LOG.info("http.admin.host=" + adminServerHost);
@@ -484,6 +493,32 @@ public class HttpProxyServer implements AutoCloseable {
     @VisibleForTesting
     public ConfigurationStore getDynamicConfigurationStore() {
         return dynamicConfigurationStore;
+    }
+
+    private void initGroupMembership(ConfigurationStore staticConfiguration) throws ConfigurationNotValidException {
+        String mode = staticConfiguration.getProperty("mode", "standalone");
+        switch (mode) {
+            case "cluster":
+                peerId = staticConfiguration.getProperty("peer.id", computeDefaultPeerId());
+                String zkAddress = staticConfiguration.getProperty("zkAddress", "localhost:2181");
+                int zkTimeout = Integer.parseInt(staticConfiguration.getProperty("zkTimeout", "40000"));
+                LOG.log(Level.INFO, "mode=cluster, zkAddress=''{0}'',zkTimeout={1}, peer.id=''{2}''", new Object[]{zkAddress, zkTimeout, peerId});
+                this.groupMembershipHandler = new ZooKeeperGroupMembershipHandler(zkAddress, zkTimeout);
+            case "standalone":
+                this.groupMembershipHandler = new NullGroupMembershipHandler();
+            default:
+                throw new ConfigurationNotValidException("Invalid mode '" + mode + "', only 'cluster' or 'standalone'");
+
+        }
+    }
+
+    private static String computeDefaultPeerId() {
+        try {
+            return InetAddress.getLocalHost().getCanonicalHostName();
+        } catch (UnknownHostException err) {
+            // this should not happen on a reverse-proxy
+            throw new RuntimeException(err);
+        }
     }
 
 }
