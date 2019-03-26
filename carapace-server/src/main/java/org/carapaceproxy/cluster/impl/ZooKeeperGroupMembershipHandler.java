@@ -36,9 +36,8 @@ import org.apache.zookeeper.data.Stat;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 
 /**
- * Implementation based on ZooKeeper.
- * This class is very simple, we are not expecting heavy traffic on ZooKeeper.
- * We have two systems:
+ * Implementation based on ZooKeeper. This class is very simple, we are not
+ * expecting heavy traffic on ZooKeeper. We have two systems:
  * <ul>
  * <li>Peer discovery
  * <li>Configuration changes event broadcast
@@ -100,7 +99,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     public void watchEvent(String eventId, EventCallback callback) {
         try {
             final String path = "/proxy/events";
-            final String eventpath = "/proxy/events/"+eventId;
+            final String eventpath = "/proxy/events/" + eventId;
 
             LOG.info("watching " + path);
             PathChildrenCache cache = new PathChildrenCache(client, path, true);
@@ -109,8 +108,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
             cache.getListenable().addListener((PathChildrenCacheListener) (CuratorFramework cf, PathChildrenCacheEvent pcce) -> {
                 LOG.log(Level.INFO, "ZK event {0} at {1}", new Object[]{pcce, path});
                 if (eventpath.equals(pcce.getData().getPath())
-                        && (pcce.getType() == PathChildrenCacheEvent.Type.CHILD_UPDATED
-                        || pcce.getType() == PathChildrenCacheEvent.Type.CONNECTION_RECONNECTED)) {
+                        || pcce.getType() == PathChildrenCacheEvent.Type.CONNECTION_RECONNECTED) {                    
                     callback.eventFired(eventId);
                 }
             });
