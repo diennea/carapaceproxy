@@ -100,6 +100,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     public void watchEvent(String eventId, EventCallback callback) {
         try {
             final String path = "/proxy/events";
+            final String eventpath = "/proxy/events/"+eventId;
 
             LOG.info("watching " + path);
             PathChildrenCache cache = new PathChildrenCache(client, path, true);
@@ -107,7 +108,9 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
             watchedEvents.add(cache);
             cache.getListenable().addListener((PathChildrenCacheListener) (CuratorFramework cf, PathChildrenCacheEvent pcce) -> {
                 LOG.log(Level.INFO, "ZK event {0} at {1}", new Object[]{pcce, path});
-                callback.eventFired(eventId);
+                if (eventpath.equals(pcce.getData().getPath())) {
+                    callback.eventFired(eventId);
+                }
             });
             cache.start(PathChildrenCache.StartMode.BUILD_INITIAL_CACHE);
 

@@ -504,8 +504,10 @@ public class HttpProxyServer implements AutoCloseable {
                 int zkTimeout = Integer.parseInt(staticConfiguration.getProperty("zkTimeout", "40000"));
                 LOG.log(Level.INFO, "mode=cluster, zkAddress=''{0}'',zkTimeout={1}, peer.id=''{2}''", new Object[]{zkAddress, zkTimeout, peerId});
                 this.groupMembershipHandler = new ZooKeeperGroupMembershipHandler(zkAddress, zkTimeout, peerId);
+                break;
             case "standalone":
                 this.groupMembershipHandler = new NullGroupMembershipHandler();
+                break;
             default:
                 throw new ConfigurationNotValidException("Invalid mode '" + mode + "', only 'cluster' or 'standalone'");
 
