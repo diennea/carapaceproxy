@@ -33,6 +33,7 @@ public class ZooKeeperGroupMembershipHandlerTest {
 
     String peerId1 = "p1";
     String peerId2 = "p2";
+    String peerId3 = "p3";
 
     @Test
     public void testPeerDiscovery() throws Exception {
@@ -48,6 +49,24 @@ public class ZooKeeperGroupMembershipHandlerTest {
                 List<String> peersFrom2 = peer2.getPeers();
                 assertEquals(Arrays.asList(peerId1, peerId2), peersFrom1);
                 assertEquals(Arrays.asList(peerId1, peerId2), peersFrom2);
+
+                try (ZooKeeperGroupMembershipHandler peer3 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
+                        6000);) {
+                    peer3.start(peerId3);
+                    peersFrom1 = peer1.getPeers();
+                    peersFrom2 = peer2.getPeers();
+                    List<String> peersFrom3 = peer3.getPeers();
+                    assertEquals(Arrays.asList(peerId1, peerId2, peerId3), peersFrom1);
+                    assertEquals(Arrays.asList(peerId1, peerId2, peerId3), peersFrom2);
+                    assertEquals(Arrays.asList(peerId1, peerId2, peerId3), peersFrom3);
+                }
+
+                // peer3 exits
+                peersFrom1 = peer1.getPeers();
+                peersFrom2 = peer2.getPeers();
+                assertEquals(Arrays.asList(peerId1, peerId2), peersFrom1);
+                assertEquals(Arrays.asList(peerId1, peerId2), peersFrom2);
+
             }
         }
     }

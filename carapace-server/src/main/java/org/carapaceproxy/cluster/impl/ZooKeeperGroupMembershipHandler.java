@@ -29,6 +29,7 @@ import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.api.CuratorWatcher;
 import org.apache.curator.retry.ExponentialBackoffRetry;
+import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.data.Stat;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
@@ -63,6 +64,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
             if (exists == null) {
                 client.create()
                         .creatingParentsIfNeeded()
+                        .withMode(CreateMode.EPHEMERAL) // auto delete on close
                         .forPath("/proxy/peers/" + peerID);
             }
         } catch (Exception ex) {
