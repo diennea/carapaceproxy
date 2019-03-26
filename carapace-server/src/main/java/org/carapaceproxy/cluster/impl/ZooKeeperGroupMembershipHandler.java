@@ -108,7 +108,9 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
             watchedEvents.add(cache);
             cache.getListenable().addListener((PathChildrenCacheListener) (CuratorFramework cf, PathChildrenCacheEvent pcce) -> {
                 LOG.log(Level.INFO, "ZK event {0} at {1}", new Object[]{pcce, path});
-                if (eventpath.equals(pcce.getData().getPath())) {
+                if (eventpath.equals(pcce.getData().getPath())
+                        && (pcce.getType() == PathChildrenCacheEvent.Type.CHILD_UPDATED
+                        || pcce.getType() == PathChildrenCacheEvent.Type.CONNECTION_RECONNECTED)) {
                     callback.eventFired(eventId);
                 }
             });
@@ -133,7 +135,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
                         .forPath(path);
             }
             LOG.log(Level.INFO, "Fire event {0}", path);
-            // perform a write
+            // perform an update
             client.setData()
                     .forPath(path);
         } catch (Exception ex) {
