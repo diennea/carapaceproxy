@@ -41,6 +41,8 @@
         </plugins>
     </build>
     <properties>
+        <curator.version>4.2.0</curator.version>
+        <zookkeeper.version>3.5.4-beta</zookkeeper.version>
         <bookkeeper.version>4.8.1</bookkeeper.version>
         <commons.lang3>3.8.1</commons.lang3>
         <netty.version>4.1.32.Final</netty.version>
