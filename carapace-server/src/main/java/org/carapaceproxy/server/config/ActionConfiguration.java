@@ -65,7 +65,7 @@ public class ActionConfiguration {
 
     @Override
     public String toString() {
-        return "ActionConfiguration{" + "id=" + id + ", type=" + type + ", file=" + file + ", errorcode=" + errorcode + '}';
+        return "ActionConfiguration{" + "id=" + id + ", type=" + type + ", file=" + file + ", director=" + director + ", errorcode=" + errorcode + '}';
     }
 
 }

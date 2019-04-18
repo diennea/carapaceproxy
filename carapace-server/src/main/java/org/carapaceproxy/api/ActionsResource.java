@@ -40,13 +40,14 @@ public class ActionsResource {
     ServletContext context;
 
     public static final class ActionBean {
+
         private final String id;
         private final String type;
-        private final String file;
         private final String director;
+        private final String file;
         private final int errorcode;
 
-        public ActionBean(String id, String type, String file, String director, int errorcode) {
+        public ActionBean(String id, String type, String director, String file, int errorcode) {
             this.id = id;
             this.type = type;
             this.file = file;
@@ -62,12 +63,12 @@ public class ActionsResource {
             return type;
         }
 
-        public String getFile() {
-            return file;
-        }
-
         public String getDirector() {
             return director;
+        }
+
+        public String getFile() {
+            return file;
         }
 
         public int getErrorcode() {
