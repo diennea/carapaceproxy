@@ -80,7 +80,7 @@ public class StandardEndpointMapper extends EndpointMapper {
 
         addAction(new ActionConfiguration("proxy-all", ActionConfiguration.TYPE_PROXY, DirectorConfiguration.DEFAULT, null, -1));
         addAction(new ActionConfiguration("cache-if-possible", ActionConfiguration.TYPE_CACHE, DirectorConfiguration.DEFAULT, null, -1));
-        addAction(new ActionConfiguration("not-found", ActionConfiguration.TYPE_STATIC, DEFAULT_NOT_FOUND, null, 404));
+        addAction(new ActionConfiguration("not-found", ActionConfiguration.TYPE_STATIC, null, DEFAULT_NOT_FOUND, 404));
         addAction(new ActionConfiguration("internal-error", ActionConfiguration.TYPE_STATIC, null, DEFAULT_INTERNAL_SERVER_ERROR, 500));
 
         // Route+Action configuration for Let's Encrypt ACME challenging
