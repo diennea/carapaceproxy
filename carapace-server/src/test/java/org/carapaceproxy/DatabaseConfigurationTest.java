@@ -79,7 +79,7 @@ public class DatabaseConfigurationTest {
 
             Properties newConfig = new Properties();
             newConfig.put("filter.1.type", "add-x-forwarded-for");
-            server.applyDynamicConfiguration(new PropertiesConfigurationStore(newConfig));
+            server.applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(newConfig));
 
             assertThat(server.getDynamicConfigurationStore(), instanceOf(HerdDBConfigurationStore.class));
             assertEquals(1, server.getFilters().size());
@@ -89,7 +89,7 @@ public class DatabaseConfigurationTest {
             Properties configuration = new Properties();
             configuration.put("filter.1.type", "add-x-forwarded-for");
             configuration.put("filter.2.type", "match-user-regexp");
-            server.applyDynamicConfiguration(new PropertiesConfigurationStore(configuration));
+            server.applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(configuration));
 
             // verify configuration is applied
             assertEquals(2, server.getFilters().size());
@@ -113,7 +113,7 @@ public class DatabaseConfigurationTest {
             // remove one filter
             Properties configuration = new Properties();
             configuration.put("filter.2.type", "match-user-regexp");
-            server.applyDynamicConfiguration(new PropertiesConfigurationStore(configuration));
+            server.applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(configuration));
 
         }
         // reboot, new configuration MUST be kept

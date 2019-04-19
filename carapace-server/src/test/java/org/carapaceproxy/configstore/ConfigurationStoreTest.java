@@ -23,6 +23,7 @@ import java.security.KeyPair;
 import java.util.Properties;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
+import org.apache.bookkeeper.stats.NullStatsLogger;
 import static org.carapaceproxy.server.certiticates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import static org.carapaceproxy.utils.TestUtils.assertEqualsKey;
@@ -35,7 +36,8 @@ import org.junit.runner.RunWith;
 import org.shredzone.acme4j.util.KeyPairUtils;
 
 /**
- * Test for {@link PropertiesConfigurationStore} and {@link HerdDBConfigurationStore}.
+ * Test for {@link PropertiesConfigurationStore} and
+ * {@link HerdDBConfigurationStore}.
  *
  * @author paolo.venturi
  */
@@ -66,11 +68,10 @@ public class ConfigurationStoreTest {
         props.setProperty("certificate.1.hostname", d2);
         props.setProperty("certificate.1.dynamic", "true");
         props.put("db.jdbc.url", "jdbc:herddb:localhost");
-        props.put("db.server.base.dir", tmpDir.getRoot().getAbsolutePath());
 
         store = new PropertiesConfigurationStore(props);
         if (type.equals("db")) {
-            store = new HerdDBConfigurationStore(store);
+            store = new HerdDBConfigurationStore(store, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
         }
 
         testKeyPairOperations();
@@ -120,10 +121,10 @@ public class ConfigurationStoreTest {
         props.setProperty("certificate.1.hostname", d2);
         props.setProperty("certificate.1.dynamic", "true");
         props.put("db.jdbc.url", "jdbc:herddb:localhost");
-        props.put("db.server.base.dir", tmpDir.getRoot().getAbsolutePath());
+
         PropertiesConfigurationStore propertiesConfigurationStore = new PropertiesConfigurationStore(props);
 
-        store = new HerdDBConfigurationStore(propertiesConfigurationStore);
+        store = new HerdDBConfigurationStore(propertiesConfigurationStore, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
 
         // Check applied configuration (loaded from empty db NB: passed configuration is ignored)
         assertEquals("", store.getProperty("certificate.0.hostname", ""));
@@ -158,9 +159,8 @@ public class ConfigurationStoreTest {
         // Loading stored configuration
         props = new Properties();
         props.put("db.jdbc.url", "jdbc:herddb:localhost");
-        props.put("db.server.base.dir", tmpDir.getRoot().getAbsolutePath());
         propertiesConfigurationStore = new PropertiesConfigurationStore(props);
-        store = new HerdDBConfigurationStore(propertiesConfigurationStore);
+        store = new HerdDBConfigurationStore(propertiesConfigurationStore, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
         checkConfiguration();
     }
 

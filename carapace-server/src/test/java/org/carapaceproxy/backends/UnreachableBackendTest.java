@@ -85,7 +85,7 @@ public class UnreachableBackendTest {
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             stats = server.getConnectionsManager().getStats();
             int port = server.getLocalPort();
@@ -163,7 +163,7 @@ public class UnreachableBackendTest {
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             stats = server.getConnectionsManager().getStats();
             int port = server.getLocalPort();

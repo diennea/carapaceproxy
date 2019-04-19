@@ -78,7 +78,7 @@ public class RestartEndpointTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
 
@@ -120,7 +120,7 @@ public class RestartEndpointTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
 
@@ -167,7 +167,7 @@ public class RestartEndpointTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
 

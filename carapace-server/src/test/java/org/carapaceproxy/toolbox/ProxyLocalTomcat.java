@@ -48,7 +48,7 @@ public class ProxyLocalTomcat {
         EndpointKey key = new EndpointKey("localhost", 8086);
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
 

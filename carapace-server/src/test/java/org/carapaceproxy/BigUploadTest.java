@@ -181,7 +181,7 @@ public class BigUploadTest {
             int size = 20_000_000;
 
             ConnectionsManagerStats stats;
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.start();
                 int port = server.getLocalPort();
                 URL url = new URL("http://localhost:" + port + "/index.html");
@@ -237,7 +237,7 @@ public class BigUploadTest {
             EndpointKey key = new EndpointKey("localhost", mockServer.getPort());
 
             ConnectionsManagerStats stats;
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.start();
                 int port = server.getLocalPort();
                 URL url = new URL("http://localhost:" + port + "/index.html");

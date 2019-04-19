@@ -64,6 +64,23 @@
         <libs.javaxactivation.api>1.2.0</libs.javaxactivation.api>
         <libs.slf4j>1.7.25</libs.slf4j>
         <libs.stringtemplate>4.0.8</libs.stringtemplate>
-        <libs.herddb>0.8.1</libs.herddb>
+        <libs.herddb>0.10.0-SNAPSHOT</libs.herddb>
     </properties>
+     <repositories>
+        <repository>
+            <id>apache-snapshots</id>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+            <url>https://repository.apache.org/snapshots/</url>
+        </repository>
+        <repository>
+            <id>dev.majordodo.org.snapshots</id>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+            <url>https://dev.majordodo.org/nexus/content/repositories/snapshots/</url>
+        </repository>
+    </repositories>
+
 </project>

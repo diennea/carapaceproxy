@@ -37,28 +37,31 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 public class ConnectionPoolTest {
 
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
 
+    @Rule
+    public TemporaryFolder tmpDir = new TemporaryFolder();
+
     @Test
-//    @Ignore
     public void test() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withHeader("Content-Length", "2")
-                .withBody("ok")));
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "2")
+                        .withBody("ok")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
             stats = server.getConnectionsManager().getStats();

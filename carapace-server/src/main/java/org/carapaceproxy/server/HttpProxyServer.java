@@ -81,6 +81,9 @@ public class HttpProxyServer implements AutoCloseable {
     private final RequestsLogger requestsLogger;
 
     private String peerId = "localhost";
+    private String zkAddress;
+    private int zkTimeout;
+    private boolean cluster;
     private GroupMembershipHandler groupMembershipHandler = new NullGroupMembershipHandler();
     private DynamicCertificatesManager dynamicCertificateManager;
     private RuntimeServerConfiguration currentConfiguration;
@@ -121,8 +124,8 @@ public class HttpProxyServer implements AutoCloseable {
         }
     }
 
-    public static HttpProxyServer buildForTests(String host, int port, EndpointMapper mapper) throws ConfigurationNotValidException, Exception {
-        HttpProxyServer res = new HttpProxyServer(mapper, new File(".").getAbsoluteFile());
+    public static HttpProxyServer buildForTests(String host, int port, EndpointMapper mapper, File baseDir) throws ConfigurationNotValidException, Exception {
+        HttpProxyServer res = new HttpProxyServer(mapper, baseDir.getAbsoluteFile());
         res.currentConfiguration.addListener(new NetworkListenerConfiguration(host, port));
         return res;
     }
@@ -175,6 +178,7 @@ public class HttpProxyServer implements AutoCloseable {
             listeners.start();
             backendHealthManager.start();
             dynamicCertificateManager.start();
+            groupMembershipHandler.watchEvent("configurationChange", new ConfigurationChangeCallback());
         } catch (RuntimeException err) {
             close();
             throw err;
@@ -278,15 +282,19 @@ public class HttpProxyServer implements AutoCloseable {
         if (started) {
             throw new IllegalStateException("server already started");
         }
+        initGroupMembership(bootConfigurationStore);
 
-        String dynamicConfigurationType = bootConfigurationStore.getProperty("config.type", "file");
+        String dynamicConfigurationType = bootConfigurationStore.getProperty("config.type", cluster ? "database" : "file");
         switch (dynamicConfigurationType) {
             case "file":
                 // configuration is store on the same file
                 this.dynamicConfigurationStore = bootConfigurationStore;
+                if (cluster) {
+                    throw new IllegalStateException("Cannot use file based configuration in cluster mode");
+                }
                 break;
             case "database":
-                this.dynamicConfigurationStore = new HerdDBConfigurationStore(bootConfigurationStore);
+                this.dynamicConfigurationStore = new HerdDBConfigurationStore(bootConfigurationStore, cluster, zkAddress, basePath, mainLogger);
                 break;
             default:
                 throw new ConfigurationNotValidException("invalid config.type='" + dynamicConfigurationType + "', only 'file' and 'database' are supported");
@@ -318,7 +326,7 @@ public class HttpProxyServer implements AutoCloseable {
         adminServerEnabled = Boolean.parseBoolean(properties.getProperty("http.admin.enabled", "false"));
         adminServerPort = Integer.parseInt(properties.getProperty("http.admin.port", adminServerPort + ""));
         adminServerHost = properties.getProperty("http.admin.host", adminServerHost);
-        initGroupMembership(properties);
+
         LOG.info("http.admin.enabled=" + adminServerEnabled);
         LOG.info("http.admin.port=" + adminServerPort);
         LOG.info("http.admin.host=" + adminServerHost);
@@ -418,8 +426,11 @@ public class HttpProxyServer implements AutoCloseable {
      * @see
      * #buildValidConfiguration(org.carapaceproxy.configstore.ConfigurationStore)
      */
-    public void applyDynamicConfiguration(ConfigurationStore newConfigurationStore) throws InterruptedException, ConfigurationChangeInProgressException {
+    public void applyDynamicConfigurationFromAPI(ConfigurationStore newConfigurationStore) throws InterruptedException, ConfigurationChangeInProgressException {
         applyDynamicConfiguration(newConfigurationStore, false);
+
+        // this will trigger a reload on other peers
+        groupMembershipHandler.fireEvent("configurationChange");
     }
 
     private void applyDynamicConfiguration(ConfigurationStore newConfigurationStore, boolean atBoot) throws InterruptedException, ConfigurationChangeInProgressException {
@@ -499,13 +510,15 @@ public class HttpProxyServer implements AutoCloseable {
         String mode = staticConfiguration.getProperty("mode", "standalone");
         switch (mode) {
             case "cluster":
+                cluster = true;
                 peerId = staticConfiguration.getProperty("peer.id", computeDefaultPeerId());
-                String zkAddress = staticConfiguration.getProperty("zkAddress", "localhost:2181");
-                int zkTimeout = Integer.parseInt(staticConfiguration.getProperty("zkTimeout", "40000"));
+                zkAddress = staticConfiguration.getProperty("zkAddress", "localhost:2181");
+                zkTimeout = Integer.parseInt(staticConfiguration.getProperty("zkTimeout", "40000"));
                 LOG.log(Level.INFO, "mode=cluster, zkAddress=''{0}'',zkTimeout={1}, peer.id=''{2}''", new Object[]{zkAddress, zkTimeout, peerId});
                 this.groupMembershipHandler = new ZooKeeperGroupMembershipHandler(zkAddress, zkTimeout, peerId);
                 break;
             case "standalone":
+                cluster = false;
                 this.groupMembershipHandler = new NullGroupMembershipHandler();
                 break;
             default:
@@ -521,6 +534,30 @@ public class HttpProxyServer implements AutoCloseable {
             // this should not happen on a reverse-proxy
             throw new RuntimeException(err);
         }
+    }
+
+    private class ConfigurationChangeCallback implements GroupMembershipHandler.EventCallback {
+
+        @Override
+        public void eventFired(String eventId) {
+            LOG.log(Level.INFO, "Configuration changed");
+            try {
+                applyDynamicConfiguration(null, true);
+            } catch (Exception err) {
+                LOG.log(Level.SEVERE, "Cannot apply new configuration");
+            }
+        }
+
+        @Override
+        public void reconnected() {
+            LOG.log(Level.INFO, "Configuration listener - reloading configuration after ZK reconnection");
+            try {
+                applyDynamicConfiguration(null, true);
+            } catch (Exception err) {
+                LOG.log(Level.SEVERE, "Cannot apply new configuration");
+            }
+        }
+
     }
 
 }

@@ -39,12 +39,16 @@ import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertEquals;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 /**
  *
  * @author enrico.olivelli
  */
 public class ForceBackendTest {
+
+    @Rule
+    public TemporaryFolder tmpDir = new TemporaryFolder();
 
     @Rule
     public WireMockRule backend1 = new WireMockRule(0);
@@ -82,7 +86,7 @@ public class ForceBackendTest {
         mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new URIRequestMatcher(".*index.html.*")));
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
             stats = server.getConnectionsManager().getStats();

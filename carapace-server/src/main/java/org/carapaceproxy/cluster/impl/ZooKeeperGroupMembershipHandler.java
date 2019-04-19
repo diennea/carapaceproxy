@@ -19,9 +19,16 @@
  */
 package org.carapaceproxy.cluster.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.curator.ensemble.fixed.FixedEnsembleProvider;
@@ -48,10 +55,12 @@ import org.carapaceproxy.cluster.GroupMembershipHandler;
 public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, AutoCloseable {
 
     private static final Logger LOG = Logger.getLogger(ZooKeeperGroupMembershipHandler.class.getName());
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final CuratorFramework client;
     private final String peerId;
-    private CopyOnWriteArrayList<PathChildrenCache> watchedEvents = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<PathChildrenCache> watchedEvents = new CopyOnWriteArrayList<>();
+    private final ExecutorService callbacksExecutor = Executors.newSingleThreadExecutor();
 
     public ZooKeeperGroupMembershipHandler(String zkAddress, int zkTimeout, String peerId) {
         client = CuratorFrameworkFactory
@@ -107,11 +116,23 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
             watchedEvents.add(cache);
             cache.getListenable().addListener((PathChildrenCacheListener) (CuratorFramework cf, PathChildrenCacheEvent pcce) -> {
                 LOG.log(Level.INFO, "ZK event {0} at {1}", new Object[]{pcce, path});
-                if (eventpath.equals(pcce.getData().getPath())
-                        || pcce.getType() == PathChildrenCacheEvent.Type.CONNECTION_RECONNECTED) {                    
-                    callback.eventFired(eventId);
+                if (eventpath.equals(pcce.getData().getPath())) {
+                    byte[] content = pcce.getData().getData();
+                    LOG.log(Level.INFO, "ZK event content {0}", new Object[]{new String(content, StandardCharsets.UTF_8)});
+                    if (content != null) {
+                        Map<String, String> info = MAPPER.readValue(new ByteArrayInputStream(content), Map.class);
+                        String origin = info.get("origin");
+                        if (peerId.equals(origin)) {
+                            LOG.log(Level.INFO, "discard self originated event " + info);
+                        } else {
+                            LOG.log(Level.INFO, "handle event " + info);
+                            callback.eventFired(eventId);
+                        }
+                    }
+                } else if (pcce.getType() == PathChildrenCacheEvent.Type.CONNECTION_RECONNECTED) {
+                    callback.reconnected();
                 }
-            });
+            }, callbacksExecutor);
             cache.start(PathChildrenCache.StartMode.BUILD_INITIAL_CACHE);
 
         } catch (Exception ex) {
@@ -133,9 +154,12 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
                         .forPath(path);
             }
             LOG.log(Level.INFO, "Fire event {0}", path);
+            Map<String, String> info = new HashMap<>();
+            info.put("origin", peerId);
+            byte[] content = MAPPER.writeValueAsBytes(info);
             // perform an update
             client.setData()
-                    .forPath(path);
+                    .forPath(path, content);
         } catch (Exception ex) {
             LOG.log(Level.SEVERE, "Cannot fire event " + eventId, ex);
         }
@@ -160,6 +184,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     @Override
     public void stop() {
         client.close();
+        callbacksExecutor.shutdown();
     }
 
     @Override

@@ -115,7 +115,7 @@ public class CacheContentLengthLimitTest {
         {
             ConnectionsManagerStats stats;
 
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(0);
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
                 server.start();
@@ -143,7 +143,7 @@ public class CacheContentLengthLimitTest {
         {
             ConnectionsManagerStats stats;
 
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(body.length());
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
                 server.start();
@@ -171,7 +171,7 @@ public class CacheContentLengthLimitTest {
         {
             ConnectionsManagerStats stats;
 
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(body.length() - 1);
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
                 server.start();
