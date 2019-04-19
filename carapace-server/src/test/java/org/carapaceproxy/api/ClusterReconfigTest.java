@@ -38,6 +38,7 @@ public class ClusterReconfigTest extends UseAdminServer {
             configuration.put("config.type", "database");
             configuration.put("mode", "cluster");
             configuration.put("zkAddress", testingServer.getConnectString());
+            configuration.put("db.bookie.allowLoopback", "true");
 
             startServer(configuration);
 
