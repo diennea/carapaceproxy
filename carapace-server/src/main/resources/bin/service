@@ -95,6 +95,9 @@ fi
 ### Set working directory
 cd "$BASE_DIR"
 
+### Set db configuration
+DB_CONFIG_FILE="$BASE_DIR/conf/server.db.properties"
+
 ###
 ### Service commands
 ###
@@ -113,7 +116,7 @@ start() {
     fi
   fi
 
-  $PRERUN "$BASE_DIR/bin/java-utils.sh -daemon $SERVICE -Dpidfile=$PIDFILENAME $MAINCLASS $OTHERPARAMS"
+  $PRERUN "$BASE_DIR/bin/java-utils.sh -daemon $SERVICE -Dpidfile=$PIDFILENAME $MAINCLASS $OTHERPARAMS $DB_CONFIG_FILE"
   RETVAL=$?
   return
 }
@@ -132,7 +135,7 @@ console() {
     fi
   fi
 
-  $PRERUN "$BASE_DIR/bin/java-utils.sh $SERVICE -Dpidfile=$PIDFILENAME $MAINCLASS $OTHERPARAMS"
+  $PRERUN "$BASE_DIR/bin/java-utils.sh $SERVICE -Dpidfile=$PIDFILENAME $MAINCLASS $OTHERPARAMS $DB_CONFIG_FILE"
   RETVAL=$?
   return
 }
