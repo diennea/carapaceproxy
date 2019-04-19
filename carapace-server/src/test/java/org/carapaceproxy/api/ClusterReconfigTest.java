@@ -64,7 +64,6 @@ public class ClusterReconfigTest extends UseAdminServer {
             ConnectionsManagerImpl impl = (ConnectionsManagerImpl) server.getConnectionsManager();
             assertEquals(8000, impl.getConnectTimeout());
             assertEquals(25, server.getBackendHealthManager().getPeriod());
-            System.out.println("QUIIIIIIIIII");
             try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
                 String body = "connectionsmanager.connecttimeout=9000\n"
                         + "healthmanager.period=30";
