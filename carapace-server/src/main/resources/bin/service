@@ -95,9 +95,6 @@ fi
 ### Set working directory
 cd "$BASE_DIR"
 
-### Set db configuration
-DB_CONFIG_FILE="$BASE_DIR/conf/server.db.properties"
-
 ###
 ### Service commands
 ###
