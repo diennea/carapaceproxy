@@ -50,6 +50,10 @@ case "$SERVICE" in
   server)
     MAINCLASS=org.carapaceproxy.launcher.ServerMain
     ;;
+
+  zookeeper)
+    MAINCLASS=org.carapaceproxy.launcher.ZooKeeperMainWrapper
+    ;;
       
   *)
     echo $"Usage: $0 server|zookeeper {start|stop|restart|console|kill|stacktrace|status}"
