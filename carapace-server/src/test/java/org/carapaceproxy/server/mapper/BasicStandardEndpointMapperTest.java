@@ -106,7 +106,7 @@ public class BasicStandardEndpointMapperTest {
         mapper.addRoute(new RouteConfiguration("route-3-error", "error-custom", true, new URIRequestMatcher(".*error.html.*")));
         mapper.addRoute(new RouteConfiguration("route-4-static", "static-custom", true, new URIRequestMatcher(".*static.html.*")));
         ConnectionsManagerStats stats;
-        try ( HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
+        try ( HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
             stats = server.getConnectionsManager().getStats();

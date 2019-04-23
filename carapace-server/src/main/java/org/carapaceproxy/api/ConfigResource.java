@@ -115,7 +115,7 @@ public class ConfigResource {
         try {
             PropertiesConfigurationStore simpleStore = buildStore(newConfiguration);
             dumpAndValidateInputConfiguration(simpleStore);
-            server.applyDynamicConfiguration(simpleStore);
+            server.applyDynamicConfigurationFromAPI(simpleStore);
             return ConfigurationChangeResult.OK;
         } catch (ConfigurationNotValidException
                 | ConfigurationChangeInProgressException

@@ -414,7 +414,7 @@ public class ApplyConfigurationTest {
 
     private void reloadConfiguration(Properties configuration, final HttpProxyServer server) throws ConfigurationNotValidException, ConfigurationChangeInProgressException, InterruptedException {
         PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
-        server.applyDynamicConfiguration(config);
+        server.applyDynamicConfigurationFromAPI(config);
     }
 
     private void testIt(int port, boolean ok) throws URISyntaxException, IOException {

@@ -32,6 +32,7 @@ import org.carapaceproxy.utils.TestEndpointMapper;
 import static org.junit.Assert.assertEquals;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 /**
  *
@@ -41,6 +42,9 @@ public class MultiListeningEndpointTest {
 
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
+
+    @Rule
+    public TemporaryFolder tmpDir = new TemporaryFolder();
 
     @Test
     public void test() throws Exception {
@@ -55,7 +59,7 @@ public class MultiListeningEndpointTest {
         int port2 = 1235;
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", port, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", port, mapper, tmpDir.newFolder());) {
             server.addListener(new NetworkListenerConfiguration("localhost", port2));
             server.start();
 

@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.api;
 
+import java.io.File;
 import java.util.Properties;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.HttpProxyServer;
@@ -30,6 +31,8 @@ import org.carapaceproxy.utils.TestEndpointMapper;
 import org.junit.After;
 import static org.junit.Assert.assertNull;
 import org.junit.Before;
+import org.junit.Rule;
+import org.junit.rules.TemporaryFolder;
 
 /**
  *
@@ -40,6 +43,9 @@ public class UseAdminServer {
     public static final String DEFAULT_USERNAME = "admin";
     public static final String DEFAULT_PASSWORD = "admin";
 
+    @Rule
+    public TemporaryFolder tmpDir = new TemporaryFolder();
+
     public HttpProxyServer server;
     public RawHttpClient.BasicAuthCredentials credentials;
 
@@ -47,7 +53,8 @@ public class UseAdminServer {
     public void buildNewServer() throws Exception {
         assertNull(server);
         credentials = new RawHttpClient.BasicAuthCredentials(DEFAULT_USERNAME, DEFAULT_PASSWORD);
-        server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0));
+        File serverRoot = tmpDir.getRoot(); // at every reboot we must keep the same directory
+        server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), serverRoot);
     }
 
     @After
@@ -84,7 +91,7 @@ public class UseAdminServer {
     public void changeDynamicConfiguration(Properties configuration) throws ConfigurationNotValidException, ConfigurationChangeInProgressException, InterruptedException {
         if (server != null) {
             PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
-            server.applyDynamicConfiguration(config);
+            server.applyDynamicConfigurationFromAPI(config);
         }
     }
 

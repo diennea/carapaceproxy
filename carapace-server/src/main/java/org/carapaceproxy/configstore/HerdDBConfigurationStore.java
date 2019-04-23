@@ -20,7 +20,10 @@
 package org.carapaceproxy.configstore;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import herddb.client.ClientConfiguration;
 import herddb.jdbc.HerdDBEmbeddedDataSource;
+import herddb.server.ServerConfiguration;
+import java.io.File;
 import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.PublicKey;
@@ -33,11 +36,13 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.apache.bookkeeper.stats.StatsLogger;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePrivateKey;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePublicKey;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeKey;
@@ -49,7 +54,7 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
  *
  * @author enrico.olivelli
  */
-@SuppressFBWarnings(value="OBL_UNSATISFIED_OBLIGATION", justification="https://github.com/spotbugs/spotbugs/issues/432")
+@SuppressFBWarnings(value = "OBL_UNSATISFIED_OBLIGATION", justification = "https://github.com/spotbugs/spotbugs/issues/432")
 public class HerdDBConfigurationStore implements ConfigurationStore {
 
     public static final String ACME_USER_KEY = "_acmeuserkey";
@@ -88,8 +93,9 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     private final Map<String, String> properties = new ConcurrentHashMap<>();
     private final HerdDBEmbeddedDataSource datasource;
 
-    public HerdDBConfigurationStore(ConfigurationStore staticConfiguration) throws ConfigurationNotValidException {
-        this.datasource = buildDatasource(staticConfiguration);
+    public HerdDBConfigurationStore(ConfigurationStore staticConfiguration,
+            boolean cluster, String zkAddress, File baseDir, StatsLogger statsLogger) throws ConfigurationNotValidException {
+        this.datasource = buildDatasource(staticConfiguration, cluster, zkAddress, baseDir, statsLogger);
         loadCurrentConfiguration();
     }
 
@@ -114,15 +120,44 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         });
     }
 
-    private HerdDBEmbeddedDataSource buildDatasource(ConfigurationStore staticConfiguration) {
-        return new HerdDBEmbeddedDataSource(staticConfiguration.asProperties("db"));
+    private HerdDBEmbeddedDataSource buildDatasource(ConfigurationStore staticConfiguration,
+            boolean cluster, String zkAddress, File baseDir, StatsLogger statsLogger) {
+        Properties props = new Properties();
+
+        if (cluster) {
+            int replicationFactor = Integer.parseInt(staticConfiguration.getProperty("replication.factor", "1"));
+            props.setProperty(ServerConfiguration.PROPERTY_MODE, ServerConfiguration.PROPERTY_MODE_CLUSTER);
+            props.setProperty(ServerConfiguration.PROPERTY_ZOOKEEPER_ADDRESS, zkAddress);
+            props.setProperty(ServerConfiguration.PROPERTY_BOOKKEEPER_START, "true");
+
+            String replication = replicationFactor + "";
+            props.setProperty(ServerConfiguration.PROPERTY_BOOKKEEPER_ACKQUORUMSIZE, replication);
+            props.setProperty(ServerConfiguration.PROPERTY_BOOKKEEPER_ENSEMBLE, replication);
+            props.setProperty(ServerConfiguration.PROPERTY_BOOKKEEPER_WRITEQUORUMSIZE, replication);
+
+            props.setProperty(ClientConfiguration.PROPERTY_MODE, ClientConfiguration.PROPERTY_MODE_CLUSTER);
+            props.setProperty(ClientConfiguration.PROPERTY_ZOOKEEPER_ADDRESS, zkAddress);
+        }
+
+        props.setProperty(ServerConfiguration.PROPERTY_BASEDIR, baseDir.getAbsolutePath());
+
+        // config file can override all of the configuration properties
+        props.putAll(staticConfiguration.asProperties("db"));
+
+        LOG.log(Level.INFO, "HerdDB datasource configuration: " + props);
+        HerdDBEmbeddedDataSource ds = new HerdDBEmbeddedDataSource(props);
+        ds.setStatsLogger(statsLogger);
+        if (cluster) {
+            ds.setStartServer(true);
+        }
+        return ds;
     }
 
     private void loadCurrentConfiguration() {
-        try ( Connection con = datasource.getConnection();) {
+        try (Connection con = datasource.getConnection();) {
             List<String> tablesDDL = Arrays.asList(CREATE_CONFIG_TABLE, CREATE_KEYPAIR_TABLE, CREATE_DIGITAL_CERTIFICATES_TABLE);
             tablesDDL.forEach((tableDDL) -> {
-                try ( PreparedStatement ps = con.prepareStatement(tableDDL);) {
+                try (PreparedStatement ps = con.prepareStatement(tableDDL);) {
                     ps.executeUpdate();
                     LOG.log(Level.INFO, "Created table " + tableDDL);
                 } catch (SQLException err) {
@@ -130,7 +165,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 }
             });
 
-            try ( PreparedStatement ps = con.prepareStatement(SELECT_ALL_FROM_CONFIG_TABLE);  ResultSet rs = ps.executeQuery()) {
+            try (PreparedStatement ps = con.prepareStatement(SELECT_ALL_FROM_CONFIG_TABLE); ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     String pname = rs.getString(1);
                     String pvalue = rs.getString(2);
@@ -154,10 +189,10 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     @Override
     public void commitConfiguration(ConfigurationStore newConfigurationStore) {
         Set<String> currentKeys = new HashSet<>(this.properties.keySet());
-        Map<String,String> newProperties = new HashMap();
-        try ( Connection con = datasource.getConnection()) {
+        Map<String, String> newProperties = new HashMap();
+        try (Connection con = datasource.getConnection()) {
             con.setAutoCommit(false);
-            try ( PreparedStatement psUpdate = con.prepareStatement(UPDATE_CONFIG_TABLE);  PreparedStatement psDelete = con.prepareStatement(DELETE_FROM_CONFIG_TABLE);  PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_CONFIG_TABLE);) {
+            try (PreparedStatement psUpdate = con.prepareStatement(UPDATE_CONFIG_TABLE); PreparedStatement psDelete = con.prepareStatement(DELETE_FROM_CONFIG_TABLE); PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_CONFIG_TABLE);) {
                 newConfigurationStore.forEach((k, v) -> {
                     try {
                         LOG.log(Level.INFO, "Saving '" + k + "'='" + v + "'");
@@ -246,9 +281,9 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     }
 
     private KeyPair loadKeyPair(String pk) throws Exception {
-        try ( Connection con = datasource.getConnection();  PreparedStatement ps = con.prepareStatement(SELECT_FROM_KEYPAIR_TABLE)) {
+        try (Connection con = datasource.getConnection(); PreparedStatement ps = con.prepareStatement(SELECT_FROM_KEYPAIR_TABLE)) {
             ps.setString(1, pk);
-            try ( ResultSet rs = ps.executeQuery()) {
+            try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     PrivateKey privateKey = base64DecodePrivateKey(rs.getString(1));
                     PublicKey publicKey = base64DecodePublicKey(rs.getString(2));
@@ -260,7 +295,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     }
 
     private void saveKeyPair(KeyPair pair, String pk) throws Exception {
-        try ( Connection con = datasource.getConnection();  PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_KEYPAIR_TABLE);  PreparedStatement psUpdate = con.prepareStatement(UPDATE_KEYPAIR_TABLE)) {
+        try (Connection con = datasource.getConnection(); PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_KEYPAIR_TABLE); PreparedStatement psUpdate = con.prepareStatement(UPDATE_KEYPAIR_TABLE)) {
             String privateKey = base64EncodeKey(pair.getPrivate());
             String publicKey = base64EncodeKey(pair.getPublic());
             psUpdate.setString(1, privateKey);
@@ -280,8 +315,8 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         if (domain.equals(ACME_USER_KEY)) {
             return null;
         }
-        try ( Connection con = datasource.getConnection()) {
-            try ( PreparedStatement ps = con.prepareStatement(SELECT_FROM_DIGITAL_CERTIFICATES_TABLE);) {
+        try (Connection con = datasource.getConnection()) {
+            try (PreparedStatement ps = con.prepareStatement(SELECT_FROM_DIGITAL_CERTIFICATES_TABLE);) {
                 ps.setString(1, domain);
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
@@ -301,7 +336,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
 
     @Override
     public void saveCertificate(CertificateData cert) {
-        try ( Connection con = datasource.getConnection();  PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_DIGITAL_CERTIFICATES_TABLE);  PreparedStatement psUpdate = con.prepareStatement(UPDATE_DIGITAL_CERTIFICATES_TABLE)) {
+        try (Connection con = datasource.getConnection(); PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_DIGITAL_CERTIFICATES_TABLE); PreparedStatement psUpdate = con.prepareStatement(UPDATE_DIGITAL_CERTIFICATES_TABLE)) {
             String domain = cert.getDomain();
             String privateKey = cert.getPrivateKey();
             String chain = cert.getChain();

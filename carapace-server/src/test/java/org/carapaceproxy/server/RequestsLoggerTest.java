@@ -485,7 +485,7 @@ public class RequestsLoggerTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper);) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.getCurrentConfiguration().setAccessLogPath(tmpDir.getRoot().getAbsolutePath()+"/access.log");
             server.start();
             int port = server.getLocalPort();

@@ -81,5 +81,10 @@ public interface GroupMembershipHandler {
          * @param eventId
          */
         void eventFired(String eventId);
+
+        /**
+         * Called whenever ZK connection has been re-established.
+         */
+        void reconnected();
     }
 }

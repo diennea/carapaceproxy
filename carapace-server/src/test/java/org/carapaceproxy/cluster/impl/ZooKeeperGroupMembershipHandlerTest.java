@@ -25,23 +25,24 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.curator.test.TestingServer;
+import org.carapaceproxy.cluster.GroupMembershipHandler;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
-/**
- *
- * @author eolivelli
- */
 public class ZooKeeperGroupMembershipHandlerTest {
 
+    @Rule
+    public TemporaryFolder tmpDir = new TemporaryFolder();
     String peerId1 = "p1";
     String peerId2 = "p2";
     String peerId3 = "p3";
 
     @Test
     public void testPeerDiscovery() throws Exception {
-        try (TestingServer testingServer = new TestingServer(2181);) {
+        try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder());) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
                     6000, peerId1);
@@ -77,7 +78,7 @@ public class ZooKeeperGroupMembershipHandlerTest {
 
     @Test
     public void testWatchEvent() throws Exception {
-        try (TestingServer testingServer = new TestingServer(2181);) {
+        try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder());) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
                     6000, peerId1);
@@ -91,8 +92,16 @@ public class ZooKeeperGroupMembershipHandlerTest {
                 assertEquals(Arrays.asList(peerId1, peerId2), peersFrom2);
 
                 AtomicInteger eventFired2 = new AtomicInteger();;
-                peer2.watchEvent("foo", (eventID) -> {
-                    eventFired2.incrementAndGet();
+                peer2.watchEvent("foo", new GroupMembershipHandler.EventCallback() {
+                    @Override
+                    public void eventFired(String eventId) {
+                        eventFired2.incrementAndGet();
+                    }
+
+                    @Override
+                    public void reconnected() {
+
+                    }
                 });
 
                 peer1.fireEvent("foo");
@@ -111,8 +120,16 @@ public class ZooKeeperGroupMembershipHandlerTest {
                     peer3.start();
 
                     AtomicInteger eventFired3 = new AtomicInteger();
-                    peer3.watchEvent("foo", (eventID) -> {
-                        eventFired3.incrementAndGet();
+                    peer3.watchEvent("foo", new GroupMembershipHandler.EventCallback() {
+                        @Override
+                        public void eventFired(String eventId) {
+                            eventFired3.incrementAndGet();
+                        }
+
+                        @Override
+                        public void reconnected() {
+
+                        }
                     });
 
                     peer1.fireEvent("foo");
@@ -139,7 +156,7 @@ public class ZooKeeperGroupMembershipHandlerTest {
                         }
                         Thread.sleep(100);
                     }
-                    assertTrue(eventFired3.get() > 0);
+                    assertTrue(eventFired3.get() == 0); // self events are not fired
                     assertTrue(eventFired2.get() > 0);
 
                 }

@@ -38,9 +38,6 @@ import org.junit.rules.TemporaryFolder;
  */
 public class ConfigResourceTest extends UseAdminServer {
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
-
     @Test
     // 0) Dumping of start-up configuration
     // 1) applying of dynamic configuration
@@ -55,7 +52,7 @@ public class ConfigResourceTest extends UseAdminServer {
         configuration.put("dynamiccertificatesmanager.period", 25); // will be ignore due to db-mode
         startServer(configuration);
 
-        try ( RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+        try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             // 0) Dumping + check
             String dumpedToReApply;
             RawHttpClient.HttpResponse resp = client.get("/api/config", credentials);
@@ -124,7 +121,7 @@ public class ConfigResourceTest extends UseAdminServer {
         configuration.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
         startServer(configuration);
 
-        try ( RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+        try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             String body = "connectionsmanager.connecttimeout=8000\n"
                     + "healthmanager.period=25";
             RawHttpClient.HttpResponse resp = client.executeRequest("POST /api/config/apply HTTP/1.1\r\n"
@@ -148,7 +145,7 @@ public class ConfigResourceTest extends UseAdminServer {
         assertEquals(8000, impl.getConnectTimeout());
         assertEquals(25, server.getBackendHealthManager().getPeriod());
 
-        try ( RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+        try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             String body = "connectionsmanager.connecttimeout=9000\n"
                     + "healthmanager.period=30";
             RawHttpClient.HttpResponse resp = client.executeRequest("POST /api/config/apply HTTP/1.1\r\n"
