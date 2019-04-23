@@ -27,6 +27,7 @@ import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URL;
+import java.net.URLConnection;
 import java.util.Properties;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.client.ConnectionsManagerStats;
@@ -168,7 +169,7 @@ public class BasicStandardEndpointMapperTest {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        try ( HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
 
             {
                 Properties configuration = new Properties();
@@ -223,7 +224,7 @@ public class BasicStandardEndpointMapperTest {
 
     @Test
     public void testServeACMEChallengeToken() throws Exception {
-        try ( HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
             final String tokenName = "test-token";
             final String tokenData = "test-token-data-content";
             DynamicCertificatesManager dynamicCertificateManager = mock(DynamicCertificatesManager.class);
@@ -278,6 +279,82 @@ public class BasicStandardEndpointMapperTest {
                 assertTrue(t instanceof FileNotFoundException);
             }
 
+        }
+    }
+
+    @Test
+    public void testCustomHeaders() throws Exception {
+        stubFor(get(urlEqualTo("/index.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
+        
+        stubFor(get(urlEqualTo("/index2.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
+
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+            Properties configuration = new Properties();
+            configuration.put("backend.1.id", "foo");
+            configuration.put("backend.1.host", "localhost");
+            configuration.put("backend.1.port", backend1.port() + "");
+            configuration.put("backend.1.enabled", "true");
+
+            configuration.put("director.1.id", "*");
+            configuration.put("director.1.backends", "*");
+            configuration.put("director.1.enabled", "true");
+
+            configuration.put("listener.1.host", "0.0.0.0");
+            configuration.put("listener.1.port", "1425");
+            configuration.put("listener.1.ssl", "false");
+            configuration.put("listener.1.enabled", "true");
+
+            configuration.put("route.1.id", "r1");
+            configuration.put("route.1.enabled", "true");
+            configuration.put("route.1.match", "regexp .*index\\.html");
+            configuration.put("route.1.action", "addHeaders");
+
+            configuration.put("action.1.id", "addHeaders");
+            configuration.put("action.1.enabled", "true");
+            configuration.put("action.1.type", "cache");
+            configuration.put("action.1.headers", "h1,h2");
+
+            configuration.put("route.2.id", "r2");
+            configuration.put("route.2.enabled", "true");
+            configuration.put("route.2.match", "regexp .*index2\\.html");
+            configuration.put("route.2.action", "addHeader2");
+
+            configuration.put("action.2.id", "addHeader2");
+            configuration.put("action.2.enabled", "true");
+            configuration.put("action.2.type", "proxy");
+            configuration.put("action.2.headers", "h2");
+
+            // Custom headers
+            configuration.put("header.1.id", "h1");
+            configuration.put("header.1.name", "custom-header-1");
+            configuration.put("header.1.value", "header-1-value; header-1-value2;header-1-value3");
+            configuration.put("header.2.id", "h2");
+            configuration.put("header.2.name", "custom-header-2");
+            configuration.put("header.2.value", "header-2-value");
+
+            PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
+            server.configureAtBoot(config);
+            server.start();
+
+            int port = server.getLocalPort();
+            {
+                URLConnection conn = new URL("http://localhost:" + port + "/index.html").openConnection();                
+                assertEquals("header-1-value; header-1-value2;header-1-value3", conn.getHeaderField("custom-header-1"));
+                assertEquals("header-2-value", conn.getHeaderField("custom-header-2"));
+            }
+            {
+                URLConnection conn = new URL("http://localhost:" + port + "/index2.html").openConnection();                
+                assertEquals(null, conn.getHeaderField("custom-header-1"));
+                assertEquals("header-2-value", conn.getHeaderField("custom-header-2"));
+            }
         }
     }
 }

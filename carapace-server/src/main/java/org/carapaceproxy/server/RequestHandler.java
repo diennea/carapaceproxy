@@ -558,6 +558,12 @@ public class RequestHandler {
                 cleanResponseForCachedData(httpMessage);
             }
         }
+
+        // Custom response Headers
+        if (msg instanceof HttpResponse && action != null && action.responseHeaders != null) {
+            ((HttpResponse) msg).headers().add(action.responseHeaders);
+        }
+
         channelToClient.writeAndFlush(msg).addListener((Future<? super Void> future) -> {
             boolean returnConnection = false;
             if (future.isSuccess()) {

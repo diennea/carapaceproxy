@@ -19,6 +19,9 @@
  */
 package org.carapaceproxy.server.config;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Action
  */
@@ -34,6 +37,7 @@ public class ActionConfiguration {
     private final String file;
     private final String director;
     private final int errorcode;
+    private final List<String> headers = new ArrayList();
 
     public ActionConfiguration(String id, String type, String director, String file, int errorcode) {
         this.id = id;
@@ -63,9 +67,20 @@ public class ActionConfiguration {
         return type;
     }
 
+    public List<String> getHeaders() {
+        return headers;
+    }
+
+    public ActionConfiguration addHeader(String id) {
+        if (!headers.contains(id)) {
+            headers.add(id);
+        }
+        return this;
+    }
+
     @Override
     public String toString() {
-        return "ActionConfiguration{" + "id=" + id + ", type=" + type + ", file=" + file + ", director=" + director + ", errorcode=" + errorcode + '}';
+        return "ActionConfiguration{" + "id=" + id + ", type=" + type + ", file=" + file + ", director=" + director + ", errorcode=" + errorcode + ", headers=" + headers + '}';
     }
 
 }

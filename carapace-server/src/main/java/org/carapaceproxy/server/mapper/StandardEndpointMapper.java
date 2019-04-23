@@ -19,6 +19,8 @@
  */
 package org.carapaceproxy.server.mapper;
 
+import io.netty.handler.codec.http.DefaultHttpHeaders;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import java.util.ArrayList;
@@ -60,6 +62,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     private final List<String> allbackendids = new ArrayList<>();
     private final List<RouteConfiguration> routes = new ArrayList<>();
     private final Map<String, ActionConfiguration> actions = new HashMap<>();
+    private final Map<String, HttpHeaders> headers = new HashMap<>();
     private final BackendSelector backendSelector;
     private String defaultNotFoundAction = "not-found";
     private String defaultInternalErrorAction = "internal-error";
@@ -97,19 +100,38 @@ public class StandardEndpointMapper extends EndpointMapper {
         LOG.info("configured mapper.forcebackend.parameter=" + forceBackendParameter);
 
         for (int i = 0; i < MAX_IDS; i++) {
+            String prefix = "header." + i + ".";
+            String id = properties.getProperty(prefix + "id", "");
+            String name = properties.getProperty(prefix + "name", "");
+            if (!id.isEmpty() && !name.isEmpty()) {
+                String value = properties.getProperty(prefix + "value", "");
+                addHeader(id, name, value);
+                LOG.info("configured header " + id + " name:" + name + ", value:" + value);
+            }
+        }
+
+        for (int i = 0; i < MAX_IDS; i++) {
             String prefix = "action." + i + ".";
             String id = properties.getProperty(prefix + "id", "");
-            if (!id.isEmpty()) {
-                boolean enabled = Boolean.parseBoolean(properties.getProperty(prefix + "enabled", "false"));
+            boolean enabled = Boolean.parseBoolean(properties.getProperty(prefix + "enabled", "false"));
+            if (!id.isEmpty() && enabled) {
                 String action = properties.getProperty(prefix + "type", "proxy");
                 String file = properties.getProperty(prefix + "file", "");
                 String director = properties.getProperty(prefix + "director", DirectorConfiguration.DEFAULT);
                 int code = Integer.parseInt(properties.getProperty(prefix + "code", "-1"));
-                LOG.info("configured action " + id + " type=" + action + " enabled:" + enabled);
-                if (enabled) {
-                    ActionConfiguration config = new ActionConfiguration(id, action, director, file, code);
-                    addAction(config);
+                ActionConfiguration config = new ActionConfiguration(id, action, director, file, code);
+                String _headers = properties.getProperty(prefix + "headers", "");
+                if (!_headers.isEmpty()) {
+                    String[] _headersids = _headers.split(",");
+                    for (String headerId : _headersids) {
+                        if (!this.headers.containsKey(headerId)) {
+                            throw new ConfigurationNotValidException("while configuring action '" + id + "': header '" + headerId + "' does not exist");
+                        }
+                        config.addHeader(headerId);
+                    }
                 }
+                addAction(config);
+                LOG.info("configured action " + id + " type=" + action + " enabled:" + enabled);                    
             }
         }
 
@@ -209,6 +231,14 @@ public class StandardEndpointMapper extends EndpointMapper {
         this.backendSelector = new RandomBackendSelector();
     }
 
+    public void addHeader(String id, String name, String value) throws ConfigurationNotValidException {
+        HttpHeaders header = new DefaultHttpHeaders();
+        header.add(name, value);
+        if (headers.put(id, header) != null) {
+            throw new ConfigurationNotValidException("header " + id + " is already configured");
+        }
+    }
+
     public void addDirector(DirectorConfiguration service) throws ConfigurationNotValidException {
         if (directors.put(service.getId(), service) != null) {
             throw new ConfigurationNotValidException("service " + service.getId() + " is already configured");
@@ -279,7 +309,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                 }
 
                 if (ActionConfiguration.TYPE_STATIC.equals(action.getType())) {
-                    return new MapResult(null, -1, MapResult.Action.STATIC, route.getId())
+                    return new MapResult(null, -1, MapResult.Action.STATIC, route.getId(), null)
                             .setResource(action.getFile())
                             .setErrorcode(action.getErrorcode());
                 }
@@ -290,7 +320,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                         if (tokenData == null) {
                             return MapResult.NOT_FOUND(route.getId());
                         }
-                        return new MapResult(null, -1, MapResult.Action.ACME_CHALLENGE, route.getId())
+                        return new MapResult(null, -1, MapResult.Action.ACME_CHALLENGE, route.getId(), null)
                                 .setResource(IN_MEMORY_RESOURCE + tokenData)
                                 .setErrorcode(action.getErrorcode());
                     } else {
@@ -320,14 +350,26 @@ public class StandardEndpointMapper extends EndpointMapper {
                         case ActionConfiguration.TYPE_PROXY: {
                             BackendConfiguration backend = this.backends.get(backendId);
                             if (backend != null && backendHealthManager.isAvailable(backendId)) {
-                                return new MapResult(backend.getHost(), backend.getPort(), MapResult.Action.PROXY, route.getId());
+                                return new MapResult(
+                                        backend.getHost(),
+                                        backend.getPort(),
+                                        MapResult.Action.PROXY,
+                                        route.getId(),
+                                        headersForAction(action)
+                                );
                             }
                             break;
                         }
                         case ActionConfiguration.TYPE_CACHE:
                             BackendConfiguration backend = this.backends.get(backendId);
                             if (backend != null && backendHealthManager.isAvailable(backendId)) {
-                                return new MapResult(backend.getHost(), backend.getPort(), MapResult.Action.CACHE, route.getId());
+                                return new MapResult(
+                                        backend.getHost(),
+                                        backend.getPort(),
+                                        MapResult.Action.CACHE,
+                                        route.getId(),
+                                        headersForAction(action)
+                                );
                             }
                             break;
                         default:
@@ -341,6 +383,18 @@ public class StandardEndpointMapper extends EndpointMapper {
         } else {
             return MapResult.NOT_FOUND(MapResult.NO_ROUTE);
         }
+    }
+
+    private HttpHeaders headersForAction(ActionConfiguration action) {
+        HttpHeaders _headers = new DefaultHttpHeaders();
+        action.getHeaders().forEach(h -> {
+            HttpHeaders header = headers.get(h);
+            if (header != null) {
+                _headers.add(header);
+            }
+        });
+
+        return _headers;
     }
 
     public String getDefaultNotFoundAction() {
