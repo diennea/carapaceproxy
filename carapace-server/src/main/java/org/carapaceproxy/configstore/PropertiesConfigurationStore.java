@@ -91,4 +91,8 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
         certificates.put(cert.getDomain(), cert);
     }
 
+    @Override
+    public void reload() {
+    }
+
 }

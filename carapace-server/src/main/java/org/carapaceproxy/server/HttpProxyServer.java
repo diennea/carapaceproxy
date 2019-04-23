@@ -542,6 +542,7 @@ public class HttpProxyServer implements AutoCloseable {
         public void eventFired(String eventId) {
             LOG.log(Level.INFO, "Configuration changed");
             try {
+                dynamicConfigurationStore.reload();
                 applyDynamicConfiguration(null, true);
             } catch (Exception err) {
                 LOG.log(Level.SEVERE, "Cannot apply new configuration");

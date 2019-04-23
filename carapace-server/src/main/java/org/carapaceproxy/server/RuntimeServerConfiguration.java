@@ -74,7 +74,6 @@ public class RuntimeServerConfiguration {
     private int dynamicCertificatesManagerPeriod = 0;
     private int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
 
-
     public String getAccessLogPath() {
         return accessLogPath;
     }
@@ -210,7 +209,7 @@ public class RuntimeServerConfiguration {
     }
 
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
-
+        LOG.log(Level.INFO, "configuring from " + properties);
         this.maxConnectionsPerEndpoint = getInt("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint, properties);
         this.idleTimeout = getInt("connectionsmanager.idletimeout", idleTimeout, properties);
         if (this.idleTimeout <= 0) {
@@ -330,7 +329,7 @@ public class RuntimeServerConfiguration {
         this.addRequestFilter(config);
     }
 
-       public void addListener(NetworkListenerConfiguration listener) throws ConfigurationNotValidException {
+    public void addListener(NetworkListenerConfiguration listener) throws ConfigurationNotValidException {
         if (listener.isSsl() && !certificates.containsKey(listener.getDefaultCertificate())) {
             throw new ConfigurationNotValidException("listener " + listener.getHost() + ":" + listener.getPort() + ", ssl=" + listener.isSsl() + ", default certificate " + listener.getDefaultCertificate() + " not configured");
         }
