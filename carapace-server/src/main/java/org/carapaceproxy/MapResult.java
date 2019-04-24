@@ -20,7 +20,7 @@
 package org.carapaceproxy;
 
 import java.util.List;
-import org.carapaceproxy.server.mapper.StandardEndpointMapper.CustomHeader;
+import org.carapaceproxy.server.mapper.CustomHeader;
 
 public class MapResult {
 

@@ -63,9 +63,9 @@ import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import org.apache.bookkeeper.stats.Counter;
 import org.apache.bookkeeper.stats.StatsLogger;
-import static org.carapaceproxy.server.mapper.StandardEndpointMapper.HeaderMode.HEADER_MODE_ADD;
-import static org.carapaceproxy.server.mapper.StandardEndpointMapper.HeaderMode.HEADER_MODE_REMOVE;
-import static org.carapaceproxy.server.mapper.StandardEndpointMapper.HeaderMode.HEADER_MODE_SET;
+import static org.carapaceproxy.server.mapper.CustomHeader.HeaderMode.HEADER_MODE_ADD;
+import static org.carapaceproxy.server.mapper.CustomHeader.HeaderMode.HEADER_MODE_REMOVE;
+import static org.carapaceproxy.server.mapper.CustomHeader.HeaderMode.HEADER_MODE_SET;
 
 /**
  * Keeps state for a single HttpRequest.

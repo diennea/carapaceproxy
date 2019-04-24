@@ -21,7 +21,7 @@ package org.carapaceproxy.server.config;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.carapaceproxy.server.mapper.StandardEndpointMapper.CustomHeader;
+import org.carapaceproxy.server.mapper.CustomHeader;
 
 /**
  * Action

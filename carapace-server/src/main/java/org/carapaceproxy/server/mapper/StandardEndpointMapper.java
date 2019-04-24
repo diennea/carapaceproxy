@@ -51,6 +51,7 @@ import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.config.RoutingKey;
 import org.carapaceproxy.server.config.URIRequestMatcher;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
+import org.carapaceproxy.server.mapper.CustomHeader.HeaderMode;
 
 /**
  * Standard Endpoint mapping
@@ -140,7 +141,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                     }
                 }
                 addAction(config);
-                LOG.info("configured action " + id + " type=" + action + " enabled:" + enabled);
+                LOG.info("configured action " + id + " type=" + action + " enabled:" + enabled + " headers:" + headersIds);
             }
         }
 
@@ -253,7 +254,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                 _mode = HeaderMode.HEADER_MODE_REMOVE;
                 break;
             default:
-                throw new ConfigurationNotValidException("invalid value of mode for header " + id);
+                throw new ConfigurationNotValidException("invalid value of mode " + mode + " for header " + id);
         }
 
         if (headers.put(id, new CustomHeader(name, value, _mode)) != null) {
@@ -422,34 +423,5 @@ public class StandardEndpointMapper extends EndpointMapper {
     public String getForceBackendParameter() {
         return forceBackendParameter;
     }
-
-    public static enum HeaderMode {
-        HEADER_MODE_ADD, HEADER_MODE_SET, HEADER_MODE_REMOVE
-    }
-
-    public static final class CustomHeader {
-
-        private final String name;
-        private final String value;
-        private final HeaderMode mode;
-
-        public CustomHeader(String name, String value, HeaderMode mode) {
-            this.name = name;
-            this.value = value;
-            this.mode = mode;
-        }
-
-        public String getName() {
-            return name;
-        }
-
-        public String getValue() {
-            return value;
-        }
-
-        public HeaderMode getMode() {
-            return mode;
-        }
-    }
-
+    
 }
