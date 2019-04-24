@@ -41,6 +41,7 @@ import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.config.URIRequestMatcher;
+import static org.carapaceproxy.server.mapper.StandardEndpointMapper.DEBUGGING_HEADER_ROUTING_PATH;
 import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -286,7 +287,7 @@ public class BasicStandardEndpointMapperTest {
     }
 
     @Test
-    public void testCustomHeaders() throws Exception {
+    public void testCustomAndDebbugingHeaders() throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -307,14 +308,21 @@ public class BasicStandardEndpointMapperTest {
 
         try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
             Properties configuration = new Properties();
-            configuration.put("backend.1.id", "foo");
+            configuration.put("backend.1.id", "b1");
             configuration.put("backend.1.host", "localhost");
             configuration.put("backend.1.port", backend1.port() + "");
             configuration.put("backend.1.enabled", "true");
+            configuration.put("backend.2.id", "b2");
+            configuration.put("backend.2.host", "localhost");
+            configuration.put("backend.2.port", backend1.port() + "");
+            configuration.put("backend.2.enabled", "true");
 
-            configuration.put("director.1.id", "*");
-            configuration.put("director.1.backends", "*");
+            configuration.put("director.1.id", "d1");
+            configuration.put("director.1.backends", "b1");
             configuration.put("director.1.enabled", "true");
+            configuration.put("director.2.id", "d2");
+            configuration.put("director.2.backends", "b2");
+            configuration.put("director.2.enabled", "true");
 
             configuration.put("listener.1.host", "0.0.0.0");
             configuration.put("listener.1.port", "1425");
@@ -329,6 +337,7 @@ public class BasicStandardEndpointMapperTest {
             configuration.put("action.1.id", "addHeaders");
             configuration.put("action.1.enabled", "true");
             configuration.put("action.1.type", "cache");
+            configuration.put("action.1.director", "d1");
             configuration.put("action.1.headers", "h1,h2,h5,h6");
 
             configuration.put("route.2.id", "r2");
@@ -339,6 +348,7 @@ public class BasicStandardEndpointMapperTest {
             configuration.put("action.2.id", "addHeader2");
             configuration.put("action.2.enabled", "true");
             configuration.put("action.2.type", "proxy");
+            configuration.put("action.2.director", "d2");
             configuration.put("action.2.headers", "h2,h3,h4");
 
             configuration.put("route.3.id", "r3");
@@ -374,6 +384,9 @@ public class BasicStandardEndpointMapperTest {
             configuration.put("header.6.name", "Transfer-Encoding"); // test remove headers
             configuration.put("header.6.mode", "remove");
 
+            // To enable debugging header "Mapping-Path"
+            configuration.put("mapper.debuggingheader.enable", "true");
+
             PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
             server.configureAtBoot(config);
             server.start();
@@ -388,10 +401,15 @@ public class BasicStandardEndpointMapperTest {
                 assertFalse(conn.getHeaderFields().toString().contains("text/html"));
                 // header mode-remove: for this action doesn't exist
                 assertNull(conn.getHeaderField("Transfer-Encoding"));
+
+                // debugging header "Routing-Path"
+                assertEquals(
+                        "Route-id: r1; Action-id: addHeaders; Director-id: d1; Backend-id: b1",
+                        conn.getHeaderField(DEBUGGING_HEADER_ROUTING_PATH)
+                );
             }
             {
                 URLConnection conn = new URL("http://localhost:" + port + "/index2.html").openConnection();
-                System.out.println("HEADERS2: " + conn.getHeaderFields());
                 assertNull(conn.getHeaderField("custom-header-1"));
                 assertEquals("header-2-value", conn.getHeaderField("custom-header-2"));
                 // in this action is text/html as normal
@@ -401,6 +419,12 @@ public class BasicStandardEndpointMapperTest {
                 assertTrue(conn.getHeaderFields().toString().contains("header-3-overridden-value"));
                 // in this action still exists
                 assertNotNull(conn.getHeaderField("Transfer-Encoding"));
+
+                // debugging header "Routing-Path"
+                assertEquals(
+                        "Route-id: r2; Action-id: addHeader2; Director-id: d2; Backend-id: b2",
+                        conn.getHeaderField(DEBUGGING_HEADER_ROUTING_PATH)
+                );
             }
             {
                 URLConnection conn = new URL("http://localhost:" + port + "/index3.html").openConnection();
