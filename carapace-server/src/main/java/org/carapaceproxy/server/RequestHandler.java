@@ -63,6 +63,9 @@ import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import org.apache.bookkeeper.stats.Counter;
 import org.apache.bookkeeper.stats.StatsLogger;
+import static org.carapaceproxy.server.mapper.StandardEndpointMapper.HeaderMode.HEADER_MODE_ADD;
+import static org.carapaceproxy.server.mapper.StandardEndpointMapper.HeaderMode.HEADER_MODE_REMOVE;
+import static org.carapaceproxy.server.mapper.StandardEndpointMapper.HeaderMode.HEADER_MODE_SET;
 
 /**
  * Keeps state for a single HttpRequest.
@@ -338,8 +341,7 @@ public class RequestHandler {
             code = 404;
         }
 
-        FullHttpResponse response = connectionToClient.staticContentsManager.buildResponse(code, resource);
-
+        FullHttpResponse response = connectionToClient.staticContentsManager.buildResponse(code, resource);        
         if (!writeSimpleResponse(response)) {
             forceCloseChannelToClient();
         }
@@ -366,6 +368,7 @@ public class RequestHandler {
         }
 
         FullHttpResponse response = connectionToClient.staticContentsManager.buildResponse(code, resource);
+        addCustomResponseHeaders(response);
 
         if (!writeSimpleResponse(response) || forceClose) {
             // If keep-alive is off, close the connection once the content is fully written.
@@ -376,6 +379,7 @@ public class RequestHandler {
     private void serveStaticMessage() {
         FullHttpResponse response
                 = connectionToClient.staticContentsManager.buildResponse(action.errorcode, action.resource);
+        addCustomResponseHeaders(response);
         if (!writeSimpleResponse(response)) {
             // If keep-alive is off, close the connection once the content is fully written.
             forceCloseChannelToClient();
@@ -552,6 +556,7 @@ public class RequestHandler {
             return;
         }
         if (cacheReceiver != null) {
+            // msg object won't be cached as-is but the cache will retain a clone of it
             cacheReceiver.receivedFromRemote(msg);
             if (msg instanceof HttpResponse) {
                 HttpResponse httpMessage = (HttpResponse) msg;
@@ -559,10 +564,7 @@ public class RequestHandler {
             }
         }
 
-        // Custom response Headers
-        if (msg instanceof HttpResponse && action != null && action.responseHeaders != null) {
-            ((HttpResponse) msg).headers().add(action.responseHeaders);
-        }
+        addCustomResponseHeaders(msg);
 
         channelToClient.writeAndFlush(msg).addListener((Future<? super Void> future) -> {
             boolean returnConnection = false;
@@ -600,6 +602,23 @@ public class RequestHandler {
                 releaseConnectionToEndpoint(!keepAlive1, connection);
             }
         });
+    }
+
+    private void addCustomResponseHeaders(HttpObject msg) {
+        // Custom response Headers
+        if (msg instanceof HttpResponse && action != null && action.customHeaders != null) {
+            HttpHeaders headers = ((HttpResponse) msg).headers();
+            action.customHeaders.forEach(customHeader -> {
+                if (HEADER_MODE_SET.equals(customHeader.getMode()) ||
+                        HEADER_MODE_REMOVE.equals(customHeader.getMode())) {
+                    headers.remove(customHeader.getName());
+                }
+                if (HEADER_MODE_SET.equals(customHeader.getMode()) ||
+                        HEADER_MODE_ADD.equals(customHeader.getMode())) {
+                    headers.add(customHeader.getName(), customHeader.getValue());
+                }
+            });
+        }
     }
 
     private boolean releaseConnectionToEndpoint(boolean forceClose, EndpointConnection current) {

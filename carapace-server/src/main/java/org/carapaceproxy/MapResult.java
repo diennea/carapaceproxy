@@ -19,7 +19,8 @@
  */
 package org.carapaceproxy;
 
-import io.netty.handler.codec.http.HttpHeaders;
+import java.util.List;
+import org.carapaceproxy.server.mapper.StandardEndpointMapper.CustomHeader;
 
 public class MapResult {
 
@@ -30,15 +31,15 @@ public class MapResult {
     public final Action action;
     public final String routeid;
     public int errorcode;
-    public String resource;
-    public final HttpHeaders responseHeaders;
+    public String resource;    
+    public final List<CustomHeader> customHeaders;
 
-    public MapResult(String host, int port, Action action, String routeid, HttpHeaders headers) {
+    public MapResult(String host, int port, Action action, String routeid, List<CustomHeader> customHeaders) {
         this.host = host;
         this.port = port;
         this.action = action;
         this.routeid = routeid;
-        this.responseHeaders = headers;
+        this.customHeaders = customHeaders;
     }
 
     public static MapResult NOT_FOUND(String routeid) {
@@ -69,7 +70,7 @@ public class MapResult {
 
     @Override
     public String toString() {
-        return "MapResult{" + "host=" + host + ", port=" + port + ", action=" + action + ", routeid=" + routeid + ", errorcode=" + errorcode + ", resource=" + resource + ", responseHeaders=" + responseHeaders + '}';
+        return "MapResult{" + "host=" + host + ", port=" + port + ", action=" + action + ", routeid=" + routeid + ", errorcode=" + errorcode + ", resource=" + resource + ", customHeaders=" + customHeaders + '}';
     }
 
     public static enum Action {

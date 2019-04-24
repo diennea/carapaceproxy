@@ -21,6 +21,7 @@ package org.carapaceproxy.server.config;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.carapaceproxy.server.mapper.StandardEndpointMapper.CustomHeader;
 
 /**
  * Action
@@ -36,8 +37,8 @@ public class ActionConfiguration {
     private final String type;
     private final String file;
     private final String director;
-    private final int errorcode;
-    private final List<String> headers = new ArrayList();
+    private final int errorcode;    
+    private final List<CustomHeader> customHeaders = new ArrayList(); // it's a list to keep ordering
 
     public ActionConfiguration(String id, String type, String director, String file, int errorcode) {
         this.id = id;
@@ -67,20 +68,17 @@ public class ActionConfiguration {
         return type;
     }
 
-    public List<String> getHeaders() {
-        return headers;
+    public List<CustomHeader> getCustomHeaders() {
+        return customHeaders;
     }
 
-    public ActionConfiguration addHeader(String id) {
-        if (!headers.contains(id)) {
-            headers.add(id);
-        }
-        return this;
+    public void addCustomHeader(CustomHeader header) {
+        customHeaders.add(header);
     }
 
     @Override
     public String toString() {
-        return "ActionConfiguration{" + "id=" + id + ", type=" + type + ", file=" + file + ", director=" + director + ", errorcode=" + errorcode + ", headers=" + headers + '}';
+        return "ActionConfiguration{" + "id=" + id + ", type=" + type + ", file=" + file + ", director=" + director + ", errorcode=" + errorcode + ", customHeaders=" + customHeaders + '}';
     }
 
 }

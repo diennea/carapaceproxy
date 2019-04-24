@@ -19,15 +19,15 @@
  */
 package org.carapaceproxy.server.mapper;
 
-import io.netty.handler.codec.http.DefaultHttpHeaders;
-import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.carapaceproxy.EndpointMapper;
@@ -62,7 +62,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     private final List<String> allbackendids = new ArrayList<>();
     private final List<RouteConfiguration> routes = new ArrayList<>();
     private final Map<String, ActionConfiguration> actions = new HashMap<>();
-    private final Map<String, HttpHeaders> headers = new HashMap<>();
+    public final Map<String, CustomHeader> headers = new HashMap();
     private final BackendSelector backendSelector;
     private String defaultNotFoundAction = "not-found";
     private String defaultInternalErrorAction = "internal-error";
@@ -105,7 +105,8 @@ public class StandardEndpointMapper extends EndpointMapper {
             String name = properties.getProperty(prefix + "name", "");
             if (!id.isEmpty() && !name.isEmpty()) {
                 String value = properties.getProperty(prefix + "value", "");
-                addHeader(id, name, value);
+                String mode = properties.getProperty(prefix + "mode", "add").toLowerCase().trim();
+                addHeader(id, name, value, mode);
                 LOG.info("configured header " + id + " name:" + name + ", value:" + value);
             }
         }
@@ -120,18 +121,26 @@ public class StandardEndpointMapper extends EndpointMapper {
                 String director = properties.getProperty(prefix + "director", DirectorConfiguration.DEFAULT);
                 int code = Integer.parseInt(properties.getProperty(prefix + "code", "-1"));
                 ActionConfiguration config = new ActionConfiguration(id, action, director, file, code);
-                String _headers = properties.getProperty(prefix + "headers", "");
-                if (!_headers.isEmpty()) {
-                    String[] _headersids = _headers.split(",");
-                    for (String headerId : _headersids) {
-                        if (!this.headers.containsKey(headerId)) {
-                            throw new ConfigurationNotValidException("while configuring action '" + id + "': header '" + headerId + "' does not exist");
+                String headersIds = properties.getProperty(prefix + "headers", "").trim();
+                if (!headersIds.isEmpty()) {
+                    String[] _headersIds = headersIds.split(",");
+                    Set<String> usedIds = new HashSet();
+                    for (String headerId : _headersIds) {
+                        if (usedIds.contains(headerId)) {
+                            throw new ConfigurationNotValidException("while configuring action '" + id + "': header '" + headerId + "' duplicated");
+                        } else {
+                            usedIds.add(headerId);
+                            CustomHeader header = headers.get(headerId);
+                            if (header != null) {
+                                config.addCustomHeader(header);
+                            } else {
+                                throw new ConfigurationNotValidException("while configuring action '" + id + "': header '" + headerId + "' does not exist");
+                            }
                         }
-                        config.addHeader(headerId);
                     }
                 }
                 addAction(config);
-                LOG.info("configured action " + id + " type=" + action + " enabled:" + enabled);                    
+                LOG.info("configured action " + id + " type=" + action + " enabled:" + enabled);
             }
         }
 
@@ -231,10 +240,23 @@ public class StandardEndpointMapper extends EndpointMapper {
         this.backendSelector = new RandomBackendSelector();
     }
 
-    public void addHeader(String id, String name, String value) throws ConfigurationNotValidException {
-        HttpHeaders header = new DefaultHttpHeaders();
-        header.add(name, value);
-        if (headers.put(id, header) != null) {
+    private void addHeader(String id, String name, String value, String mode) throws ConfigurationNotValidException {
+        HeaderMode _mode = HeaderMode.HEADER_MODE_ADD;
+        switch (mode) {
+            case "set":
+                _mode = HeaderMode.HEADER_MODE_SET;
+                break;
+            case "add":
+                _mode = HeaderMode.HEADER_MODE_ADD;
+                break;
+            case "remove":
+                _mode = HeaderMode.HEADER_MODE_REMOVE;
+                break;
+            default:
+                throw new ConfigurationNotValidException("invalid value of mode for header " + id);
+        }
+
+        if (headers.put(id, new CustomHeader(name, value, _mode)) != null) {
             throw new ConfigurationNotValidException("header " + id + " is already configured");
         }
     }
@@ -309,7 +331,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                 }
 
                 if (ActionConfiguration.TYPE_STATIC.equals(action.getType())) {
-                    return new MapResult(null, -1, MapResult.Action.STATIC, route.getId(), null)
+                    return new MapResult(null, -1, MapResult.Action.STATIC, route.getId(), action.getCustomHeaders())
                             .setResource(action.getFile())
                             .setErrorcode(action.getErrorcode());
                 }
@@ -355,7 +377,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                                         backend.getPort(),
                                         MapResult.Action.PROXY,
                                         route.getId(),
-                                        headersForAction(action)
+                                        action.getCustomHeaders()
                                 );
                             }
                             break;
@@ -368,7 +390,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                                         backend.getPort(),
                                         MapResult.Action.CACHE,
                                         route.getId(),
-                                        headersForAction(action)
+                                        action.getCustomHeaders()
                                 );
                             }
                             break;
@@ -385,18 +407,6 @@ public class StandardEndpointMapper extends EndpointMapper {
         }
     }
 
-    private HttpHeaders headersForAction(ActionConfiguration action) {
-        HttpHeaders _headers = new DefaultHttpHeaders();
-        action.getHeaders().forEach(h -> {
-            HttpHeaders header = headers.get(h);
-            if (header != null) {
-                _headers.add(header);
-            }
-        });
-
-        return _headers;
-    }
-
     public String getDefaultNotFoundAction() {
         return defaultNotFoundAction;
     }
@@ -411,6 +421,35 @@ public class StandardEndpointMapper extends EndpointMapper {
 
     public String getForceBackendParameter() {
         return forceBackendParameter;
+    }
+
+    public static enum HeaderMode {
+        HEADER_MODE_ADD, HEADER_MODE_SET, HEADER_MODE_REMOVE
+    }
+
+    public static final class CustomHeader {
+
+        private final String name;
+        private final String value;
+        private final HeaderMode mode;
+
+        public CustomHeader(String name, String value, HeaderMode mode) {
+            this.name = name;
+            this.value = value;
+            this.mode = mode;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public String getValue() {
+            return value;
+        }
+
+        public HeaderMode getMode() {
+            return mode;
+        }
     }
 
 }

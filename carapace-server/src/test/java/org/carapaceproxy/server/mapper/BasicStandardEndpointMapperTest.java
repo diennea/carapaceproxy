@@ -43,6 +43,9 @@ import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.config.URIRequestMatcher;
 import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import org.junit.Rule;
@@ -107,7 +110,7 @@ public class BasicStandardEndpointMapperTest {
         mapper.addRoute(new RouteConfiguration("route-3-error", "error-custom", true, new URIRequestMatcher(".*error.html.*")));
         mapper.addRoute(new RouteConfiguration("route-4-static", "static-custom", true, new URIRequestMatcher(".*static.html.*")));
         ConnectionsManagerStats stats;
-        try ( HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
             stats = server.getConnectionsManager().getStats();
@@ -289,8 +292,14 @@ public class BasicStandardEndpointMapperTest {
                         .withStatus(200)
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
-        
+
         stubFor(get(urlEqualTo("/index2.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
+
+        stubFor(get(urlEqualTo("/index3.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "text/html")
@@ -320,7 +329,7 @@ public class BasicStandardEndpointMapperTest {
             configuration.put("action.1.id", "addHeaders");
             configuration.put("action.1.enabled", "true");
             configuration.put("action.1.type", "cache");
-            configuration.put("action.1.headers", "h1,h2");
+            configuration.put("action.1.headers", "h1,h2,h5,h6");
 
             configuration.put("route.2.id", "r2");
             configuration.put("route.2.enabled", "true");
@@ -330,7 +339,19 @@ public class BasicStandardEndpointMapperTest {
             configuration.put("action.2.id", "addHeader2");
             configuration.put("action.2.enabled", "true");
             configuration.put("action.2.type", "proxy");
-            configuration.put("action.2.headers", "h2");
+            configuration.put("action.2.headers", "h2,h3,h4");
+
+            configuration.put("route.3.id", "r3");
+            configuration.put("route.3.enabled", "true");
+            configuration.put("route.3.match", "regexp .*index3\\.html");
+            configuration.put("route.3.action", "serve-static");
+
+            configuration.put("action.3.id", "serve-static");
+            configuration.put("action.3.enabled", "true");
+            configuration.put("action.3.type", "static");
+            configuration.put("action.3.file", CLASSPATH_RESOURCE + "/test-static-page.html");
+            configuration.put("action.3.code", "200");
+            configuration.put("action.3.headers", "h1");
 
             // Custom headers
             configuration.put("header.1.id", "h1");
@@ -339,6 +360,19 @@ public class BasicStandardEndpointMapperTest {
             configuration.put("header.2.id", "h2");
             configuration.put("header.2.name", "custom-header-2");
             configuration.put("header.2.value", "header-2-value");
+            configuration.put("header.3.id", "h3");
+            configuration.put("header.3.name", "custom-header-3"); // test headers merge (default add-mode)
+            configuration.put("header.3.value", "header-3-overridden-value");
+            configuration.put("header.4.id", "h4");
+            configuration.put("header.4.name", "custom-header-3"); // test headers merge
+            configuration.put("header.4.value", "header-4-overridden-value");
+            configuration.put("header.5.id", "h5");
+            configuration.put("header.5.name", "Content-Type"); // test reset headers
+            configuration.put("header.5.value", "text/custom-text");
+            configuration.put("header.5.mode", "set");
+            configuration.put("header.6.id", "h6");
+            configuration.put("header.6.name", "Transfer-Encoding"); // test remove headers
+            configuration.put("header.6.mode", "remove");
 
             PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
             server.configureAtBoot(config);
@@ -346,14 +380,31 @@ public class BasicStandardEndpointMapperTest {
 
             int port = server.getLocalPort();
             {
-                URLConnection conn = new URL("http://localhost:" + port + "/index.html").openConnection();                
+                URLConnection conn = new URL("http://localhost:" + port + "/index.html").openConnection();
                 assertEquals("header-1-value; header-1-value2;header-1-value3", conn.getHeaderField("custom-header-1"));
                 assertEquals("header-2-value", conn.getHeaderField("custom-header-2"));
+                // header mode-set
+                assertEquals("text/custom-text", conn.getHeaderField("Content-Type"));
+                assertFalse(conn.getHeaderFields().toString().contains("text/html"));
+                // header mode-remove: for this action doesn't exist
+                assertNull(conn.getHeaderField("Transfer-Encoding"));
             }
             {
-                URLConnection conn = new URL("http://localhost:" + port + "/index2.html").openConnection();                
-                assertEquals(null, conn.getHeaderField("custom-header-1"));
+                URLConnection conn = new URL("http://localhost:" + port + "/index2.html").openConnection();
+                System.out.println("HEADERS2: " + conn.getHeaderFields());
+                assertNull(conn.getHeaderField("custom-header-1"));
                 assertEquals("header-2-value", conn.getHeaderField("custom-header-2"));
+                // in this action is text/html as normal
+                assertTrue(conn.getHeaderFields().toString().contains("text/html"));
+                // custom-header-3 values have been merged (default mode-add)
+                assertTrue(conn.getHeaderFields().toString().contains("header-4-overridden-value"));
+                assertTrue(conn.getHeaderFields().toString().contains("header-3-overridden-value"));
+                // in this action still exists
+                assertNotNull(conn.getHeaderField("Transfer-Encoding"));
+            }
+            {
+                URLConnection conn = new URL("http://localhost:" + port + "/index3.html").openConnection();
+                assertEquals("header-1-value; header-1-value2;header-1-value3", conn.getHeaderField("custom-header-1"));
             }
         }
     }
