@@ -144,7 +144,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         // config file can override all of the configuration properties
         props.putAll(staticConfiguration.asProperties("db"));
 
-        LOG.log(Level.INFO, "HerdDB datasource configuration: " + props);
+        LOG.log(Level.INFO, "HerdDB datasource configuration: {0}", props);
         HerdDBEmbeddedDataSource ds = new HerdDBEmbeddedDataSource(props);
         ds.setStatsLogger(statsLogger);
         if (cluster) {
@@ -153,7 +153,21 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         return ds;
     }
 
-    private void loadCurrentConfiguration() {
+    @Override
+    public void reload() {
+        LOG.log(Level.INFO, "reloading configuration from Database");
+        Set<String> currentKeys = new HashSet<>(this.properties.keySet());
+
+        Set<String> loaded = loadCurrentConfiguration();
+        currentKeys.forEach(name -> {
+            if (!loaded.contains(name)) {
+                properties.remove(name);
+            }
+        });
+    }
+
+    private Set<String> loadCurrentConfiguration() {
+        Set<String> loaded = new HashSet<>();
         try (Connection con = datasource.getConnection();) {
             List<String> tablesDDL = Arrays.asList(CREATE_CONFIG_TABLE, CREATE_KEYPAIR_TABLE, CREATE_DIGITAL_CERTIFICATES_TABLE);
             tablesDDL.forEach((tableDDL) -> {
@@ -170,8 +184,10 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                     String pname = rs.getString(1);
                     String pvalue = rs.getString(2);
                     properties.put(pname, pvalue);
+                    loaded.add(pname);
                 }
             }
+            return loaded;
         } catch (SQLException err) {
             LOG.log(Level.SEVERE, "Error while loading configuration from Database", err);
             throw new ConfigurationStoreException(err);

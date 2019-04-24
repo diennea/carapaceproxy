@@ -70,4 +70,6 @@ public interface ConfigurationStore extends AutoCloseable {
 
     public void saveCertificate(CertificateData cert);
 
+    public void reload();
+
 }
