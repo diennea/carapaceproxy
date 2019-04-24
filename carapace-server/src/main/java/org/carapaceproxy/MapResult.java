@@ -19,6 +19,9 @@
  */
 package org.carapaceproxy;
 
+import java.util.List;
+import org.carapaceproxy.server.mapper.CustomHeader;
+
 public class MapResult {
 
     public static final String NO_ROUTE = "-";
@@ -28,21 +31,23 @@ public class MapResult {
     public final Action action;
     public final String routeid;
     public int errorcode;
-    public String resource;
+    public String resource;    
+    public final List<CustomHeader> customHeaders;
 
-    public MapResult(String host, int port, Action action, String routeid) {
+    public MapResult(String host, int port, Action action, String routeid, List<CustomHeader> customHeaders) {
         this.host = host;
         this.port = port;
         this.action = action;
         this.routeid = routeid;
+        this.customHeaders = customHeaders;
     }
 
     public static MapResult NOT_FOUND(String routeid) {
-        return new MapResult(null, 0, Action.NOTFOUND, routeid);
+        return new MapResult(null, 0, Action.NOTFOUND, routeid, null);
     }
 
     public static MapResult INTERNAL_ERROR(String routeid) {
-        return new MapResult(null, 0, Action.INTERNAL_ERROR, routeid);
+        return new MapResult(null, 0, Action.INTERNAL_ERROR, routeid, null);
     }
 
     public int getErrorcode() {
@@ -65,7 +70,7 @@ public class MapResult {
 
     @Override
     public String toString() {
-        return "MapResult{" + "host=" + host + ", port=" + port + ", action=" + action + ", errorcode=" + errorcode + ", resource=" + resource + '}';
+        return "MapResult{" + "host=" + host + ", port=" + port + ", action=" + action + ", routeid=" + routeid + ", errorcode=" + errorcode + ", resource=" + resource + ", customHeaders=" + customHeaders + '}';
     }
 
     public static enum Action {
