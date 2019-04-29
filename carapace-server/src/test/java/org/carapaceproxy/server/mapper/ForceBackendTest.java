@@ -25,6 +25,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.net.URL;
+import java.util.Collections;
 import java.util.Properties;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.client.ConnectionsManagerStats;
@@ -81,7 +82,7 @@ public class ForceBackendTest {
         mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
         mapper.addDirector(new DirectorConfiguration("director-2").addBackend("backend-b"));
 
-        mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1));
+        mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1, Collections.emptyList()));
 
         mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new URIRequestMatcher(".*index.html.*")));
 

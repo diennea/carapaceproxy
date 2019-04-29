@@ -87,13 +87,23 @@ public class StandardEndpointMapper extends EndpointMapper {
     @Override
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
 
-        addAction(new ActionConfiguration("proxy-all", ActionConfiguration.TYPE_PROXY, DirectorConfiguration.DEFAULT, null, -1));
-        addAction(new ActionConfiguration("cache-if-possible", ActionConfiguration.TYPE_CACHE, DirectorConfiguration.DEFAULT, null, -1));
-        addAction(new ActionConfiguration("not-found", ActionConfiguration.TYPE_STATIC, null, DEFAULT_NOT_FOUND, 404));
-        addAction(new ActionConfiguration("internal-error", ActionConfiguration.TYPE_STATIC, null, DEFAULT_INTERNAL_SERVER_ERROR, 500));
+        addAction(new ActionConfiguration(
+                "proxy-all", ActionConfiguration.TYPE_PROXY, DirectorConfiguration.DEFAULT, null, -1, Collections.emptyList()
+        ));
+        addAction(new ActionConfiguration(
+                "cache-if-possible", ActionConfiguration.TYPE_CACHE, DirectorConfiguration.DEFAULT, null, -1, Collections.emptyList()
+        ));
+        addAction(new ActionConfiguration(
+                "not-found", ActionConfiguration.TYPE_STATIC, null, DEFAULT_NOT_FOUND, 404, Collections.emptyList()
+        ));
+        addAction(new ActionConfiguration(
+                "internal-error", ActionConfiguration.TYPE_STATIC, null, DEFAULT_INTERNAL_SERVER_ERROR, 500, Collections.emptyList()
+        ));
 
         // Route+Action configuration for Let's Encrypt ACME challenging
-        addAction(new ActionConfiguration("acme-challenge", ActionConfiguration.TYPE_ACME_CHALLENGE, null, null, HttpResponseStatus.OK.code()));
+        addAction(new ActionConfiguration(
+                "acme-challenge", ActionConfiguration.TYPE_ACME_CHALLENGE, null, null, HttpResponseStatus.OK.code(), Collections.emptyList()
+        ));
         addRoute(new RouteConfiguration("acme-challenge", "acme-challenge", true, new URIRequestMatcher(".*" + ACME_CHALLENGE_URI_PATTERN + ".*")));
 
         this.defaultNotFoundAction = properties.getProperty("default.action.notfound", "not-found");
@@ -131,8 +141,8 @@ public class StandardEndpointMapper extends EndpointMapper {
                 String file = properties.getProperty(prefix + "file", "");
                 String director = properties.getProperty(prefix + "director", DirectorConfiguration.DEFAULT);
                 int code = Integer.parseInt(properties.getProperty(prefix + "code", "-1"));
-                ActionConfiguration config = new ActionConfiguration(id, action, director, file, code);
                 String headersIds = properties.getProperty(prefix + "headers", "").trim();
+                List<CustomHeader> customHeaders = new ArrayList();
                 if (!headersIds.isEmpty()) {
                     String[] _headersIds = headersIds.split(",");
                     Set<String> usedIds = new HashSet();
@@ -143,14 +153,14 @@ public class StandardEndpointMapper extends EndpointMapper {
                             usedIds.add(headerId);
                             CustomHeader header = headers.get(headerId);
                             if (header != null) {
-                                config.addCustomHeader(header);
+                                customHeaders.add(header);
                             } else {
                                 throw new ConfigurationNotValidException("while configuring action '" + id + "': header '" + headerId + "' does not exist");
                             }
                         }
                     }
                 }
-                addAction(config);
+                addAction(new ActionConfiguration(id, action, director, file, code, customHeaders));
                 LOG.info("configured action " + id + " type=" + action + " enabled:" + enabled + " headers:" + headersIds);
             }
         }

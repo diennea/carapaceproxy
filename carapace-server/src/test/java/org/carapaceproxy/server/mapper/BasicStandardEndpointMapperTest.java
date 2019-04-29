@@ -28,6 +28,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.util.Collections;
 import java.util.Properties;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.client.ConnectionsManagerStats;
@@ -95,13 +96,25 @@ public class BasicStandardEndpointMapperTest {
         mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
         mapper.addDirector(new DirectorConfiguration("director-2").addBackend("backend-b"));
         mapper.addDirector(new DirectorConfiguration("director-all").addBackend("*")); // all of the known backends
-        mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1));
-        mapper.addAction(new ActionConfiguration("cache-1", ActionConfiguration.TYPE_CACHE, "director-2", null, -1));
-        mapper.addAction(new ActionConfiguration("all-1", ActionConfiguration.TYPE_CACHE, "director-all", null, -1));
+        mapper.addAction(new ActionConfiguration(
+                "proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1, Collections.emptyList()
+        ));
+        mapper.addAction(new ActionConfiguration(
+                "cache-1", ActionConfiguration.TYPE_CACHE, "director-2", null, -1, Collections.emptyList()
+        ));
+        mapper.addAction(new ActionConfiguration(
+                "all-1", ActionConfiguration.TYPE_CACHE, "director-all", null, -1, Collections.emptyList()
+        ));
 
-        mapper.addAction(new ActionConfiguration("not-found-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_NOT_FOUND, 404));
-        mapper.addAction(new ActionConfiguration("error-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR, 500));
-        mapper.addAction(new ActionConfiguration("static-custom", ActionConfiguration.TYPE_STATIC, null, CLASSPATH_RESOURCE + "/test-static-page.html", 200));
+        mapper.addAction(new ActionConfiguration(
+                "not-found-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_NOT_FOUND, 404, Collections.emptyList()
+        ));
+        mapper.addAction(new ActionConfiguration(
+                "error-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR, 500, Collections.emptyList()
+        ));
+        mapper.addAction(new ActionConfiguration(
+                "static-custom", ActionConfiguration.TYPE_STATIC, null, CLASSPATH_RESOURCE + "/test-static-page.html", 200, Collections.emptyList()
+        ));
 
         mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new URIRequestMatcher(".*index.html.*")));
         mapper.addRoute(new RouteConfiguration("route-1b", "cache-1", true, new URIRequestMatcher(".*index2.html.*")));

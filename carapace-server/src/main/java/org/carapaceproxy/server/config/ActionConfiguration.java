@@ -39,15 +39,17 @@ public class ActionConfiguration {
     private final String file;
     private final String director;
     private final int errorcode;    
-    private final List<CustomHeader> customHeaders = new ArrayList(); // it's a list to keep ordering
+    private final List<CustomHeader> customHeaders; // it's a list to keep ordering
 
-    public ActionConfiguration(String id, String type, String director, String file, int errorcode) {
+    public ActionConfiguration(String id, String type, String director, String file, int errorcode, List<CustomHeader> customHeaders) {
         this.id = id;
         this.type = type;
         this.director = director;
         this.file = file;
-        this.errorcode = errorcode;
+        this.errorcode = errorcode;        
+        this.customHeaders = Collections.unmodifiableList(customHeaders == null ? new ArrayList() : customHeaders);
     }
+
 
     public String getDirector() {
         return director;
@@ -70,11 +72,7 @@ public class ActionConfiguration {
     }
 
     public List<CustomHeader> getCustomHeaders() {
-        return Collections.unmodifiableList(customHeaders);
-    }
-
-    public void addCustomHeader(CustomHeader header) {
-        customHeaders.add(header);
+        return customHeaders;
     }
 
     @Override
