@@ -28,6 +28,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.util.Collections;
 import java.util.Properties;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.client.ConnectionsManagerStats;
@@ -95,13 +96,25 @@ public class BasicStandardEndpointMapperTest {
         mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
         mapper.addDirector(new DirectorConfiguration("director-2").addBackend("backend-b"));
         mapper.addDirector(new DirectorConfiguration("director-all").addBackend("*")); // all of the known backends
-        mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1));
-        mapper.addAction(new ActionConfiguration("cache-1", ActionConfiguration.TYPE_CACHE, "director-2", null, -1));
-        mapper.addAction(new ActionConfiguration("all-1", ActionConfiguration.TYPE_CACHE, "director-all", null, -1));
+        mapper.addAction(new ActionConfiguration(
+                "proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1, Collections.emptyList()
+        ));
+        mapper.addAction(new ActionConfiguration(
+                "cache-1", ActionConfiguration.TYPE_CACHE, "director-2", null, -1, Collections.emptyList()
+        ));
+        mapper.addAction(new ActionConfiguration(
+                "all-1", ActionConfiguration.TYPE_CACHE, "director-all", null, -1, Collections.emptyList()
+        ));
 
-        mapper.addAction(new ActionConfiguration("not-found-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_NOT_FOUND, 404));
-        mapper.addAction(new ActionConfiguration("error-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR, 500));
-        mapper.addAction(new ActionConfiguration("static-custom", ActionConfiguration.TYPE_STATIC, null, CLASSPATH_RESOURCE + "/test-static-page.html", 200));
+        mapper.addAction(new ActionConfiguration(
+                "not-found-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_NOT_FOUND, 404, Collections.emptyList()
+        ));
+        mapper.addAction(new ActionConfiguration(
+                "error-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR, 500, Collections.emptyList()
+        ));
+        mapper.addAction(new ActionConfiguration(
+                "static-custom", ActionConfiguration.TYPE_STATIC, null, CLASSPATH_RESOURCE + "/test-static-page.html", 200, Collections.emptyList()
+        ));
 
         mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new URIRequestMatcher(".*index.html.*")));
         mapper.addRoute(new RouteConfiguration("route-1b", "cache-1", true, new URIRequestMatcher(".*index2.html.*")));
@@ -286,7 +299,7 @@ public class BasicStandardEndpointMapperTest {
     }
 
     @Test
-    public void testCustomHeaders() throws Exception {
+    public void testCustomAndDebbugingHeaders() throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -307,14 +320,21 @@ public class BasicStandardEndpointMapperTest {
 
         try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
             Properties configuration = new Properties();
-            configuration.put("backend.1.id", "foo");
+            configuration.put("backend.1.id", "b1");
             configuration.put("backend.1.host", "localhost");
             configuration.put("backend.1.port", backend1.port() + "");
             configuration.put("backend.1.enabled", "true");
+            configuration.put("backend.2.id", "b2");
+            configuration.put("backend.2.host", "localhost");
+            configuration.put("backend.2.port", backend1.port() + "");
+            configuration.put("backend.2.enabled", "true");
 
-            configuration.put("director.1.id", "*");
-            configuration.put("director.1.backends", "*");
+            configuration.put("director.1.id", "d1");
+            configuration.put("director.1.backends", "b1");
             configuration.put("director.1.enabled", "true");
+            configuration.put("director.2.id", "d2");
+            configuration.put("director.2.backends", "b2");
+            configuration.put("director.2.enabled", "true");
 
             configuration.put("listener.1.host", "0.0.0.0");
             configuration.put("listener.1.port", "1425");
@@ -329,6 +349,7 @@ public class BasicStandardEndpointMapperTest {
             configuration.put("action.1.id", "addHeaders");
             configuration.put("action.1.enabled", "true");
             configuration.put("action.1.type", "cache");
+            configuration.put("action.1.director", "d1");
             configuration.put("action.1.headers", "h1,h2,h5,h6");
 
             configuration.put("route.2.id", "r2");
@@ -339,6 +360,7 @@ public class BasicStandardEndpointMapperTest {
             configuration.put("action.2.id", "addHeader2");
             configuration.put("action.2.enabled", "true");
             configuration.put("action.2.type", "proxy");
+            configuration.put("action.2.director", "d2");
             configuration.put("action.2.headers", "h2,h3,h4");
 
             configuration.put("route.3.id", "r3");
@@ -374,6 +396,10 @@ public class BasicStandardEndpointMapperTest {
             configuration.put("header.6.name", "Transfer-Encoding"); // test remove headers
             configuration.put("header.6.mode", "remove");
 
+            // To enable debugging header "Mapping-Path"
+            configuration.put("mapper.debug", "true");
+            configuration.put("mapper.debug.name", "DebugHeaderCustomName");
+
             PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
             server.configureAtBoot(config);
             server.start();
@@ -388,10 +414,12 @@ public class BasicStandardEndpointMapperTest {
                 assertFalse(conn.getHeaderFields().toString().contains("text/html"));
                 // header mode-remove: for this action doesn't exist
                 assertNull(conn.getHeaderField("Transfer-Encoding"));
+
+                // debugging header "Routing-Path"
+                assertEquals("r1;addHeaders;d1;b1", conn.getHeaderField("DebugHeaderCustomName"));
             }
             {
                 URLConnection conn = new URL("http://localhost:" + port + "/index2.html").openConnection();
-                System.out.println("HEADERS2: " + conn.getHeaderFields());
                 assertNull(conn.getHeaderField("custom-header-1"));
                 assertEquals("header-2-value", conn.getHeaderField("custom-header-2"));
                 // in this action is text/html as normal
@@ -401,6 +429,9 @@ public class BasicStandardEndpointMapperTest {
                 assertTrue(conn.getHeaderFields().toString().contains("header-3-overridden-value"));
                 // in this action still exists
                 assertNotNull(conn.getHeaderField("Transfer-Encoding"));
+
+                // debugging header "Routing-Path"
+                assertEquals("r2;addHeader2;d2;b2", conn.getHeaderField("DebugHeaderCustomName"));
             }
             {
                 URLConnection conn = new URL("http://localhost:" + port + "/index3.html").openConnection();
