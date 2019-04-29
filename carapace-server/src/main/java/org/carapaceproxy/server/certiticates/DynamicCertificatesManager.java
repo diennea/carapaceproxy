@@ -162,7 +162,7 @@ public class DynamicCertificatesManager implements Runnable {
             scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat(THREAD_NAME).build());
         }
 
-        LOG.info("Starting DynamicCertificatesManager, period: " + period + " seconds");
+        LOG.info("Starting DynamicCertificatesManager, period: " + period + " seconds" + (TESTING_MODE ? " (TESTING_MODE)" : ""));
         scheduledFuture = scheduler.scheduleWithFixedDelay(this, 0, period, TimeUnit.SECONDS);
     }
 
@@ -301,6 +301,7 @@ public class DynamicCertificatesManager implements Runnable {
         DynamicCertificate c = certificates.get(id);
         if (c != null) {
             c.setState(state);
+            c.setAvailable(DynamicCertificateState.AVAILABLE.equals(state));
         }
     }
 

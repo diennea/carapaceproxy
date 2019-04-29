@@ -8,11 +8,17 @@
                 <div class="panel panel-info">
                     <div class="panel-body">
                         <ul class="list-group">
-                            <li class="list-group-item"><strong>Certificate id</strong> {{certificate.id}}</li>
+                            <li class="list-group-item"><strong>Certificate id:</strong> {{certificate.id}}</li>
                             <li class="list-group-item"><strong>Hostname:</strong> {{certificate.hostname}}</li>
                             <li class="list-group-item"><strong>Dynamic:</strong> {{certificate.dynamic | symbolFormat}}</li>
-                            <li class="list-group-item"><strong>Status:</strong> {{certificate.status}}</li>
-                            <li class="list-group-item"><strong>SSL Certificate file:</strong> {{certificate.sslCertificateFile}}</li>
+                            <li class="list-group-item"><strong>Status:</strong> {{certificate.status}}</li>                            
+                            <li class="list-group-item">
+                                <strong>SSL Certificate file: </strong>
+                                <span v-if="certificate.dynamic">
+                                    <a :href="'/api/certificates/' + certificate.id + '/download'">download here</a>
+                                </span>
+                                <span v-else>{{certificate.sslCertificateFile}}</span>
+                            </li>
                         </ul>
                     </div>
                 </div>
@@ -28,7 +34,7 @@
 </template>
 
 <script>
-    import { doRequest } from './../mockserver'
+    import { doGet } from './../mockserver'
     export default {
         name: 'Certificate',
         data: function () {
@@ -38,14 +44,13 @@
             }
         },
         created: function () {
-            var d = this;
-            var url = "/api/certificates/" + (d.$route.params.id || 0);
-            doRequest(url, {}, function (response) {
-                d.certificate = response[(d.$route.params.id || 0)];
-                if (!d.certificate) {
-                    d.found = false;
+            var self = this
+            var url = "/api/certificates/" + (self.$route.params.id || 0)
+            doGet(url, data => {                
+                self.certificate = data
+                if (!data) {
+                    self.found = false
                 }
-
             })
         }
     }

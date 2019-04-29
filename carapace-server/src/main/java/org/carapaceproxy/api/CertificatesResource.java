@@ -26,6 +26,8 @@ import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
 import org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState;
@@ -112,13 +114,32 @@ public class CertificatesResource {
 
     @GET
     @Path("{certId}")
-    public Map<String, CertificateBean> getCertificateById(@PathParam("certId") String certId) {
+    public CertificateBean getCertificateById(@PathParam("certId") String certId) {
+        return findCertificateById(certId);
+    }
+
+    @GET
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
+    @Path("{certId}/download")
+    public Response downloadCertificateById(@PathParam("certId") String certId) {
+        CertificateBean cert = findCertificateById(certId);
+        byte[] data = new byte[0];
+        if (cert != null && cert.isDynamic()) {
+            HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");            
+            DynamicCertificatesManager dynamicCertificateManager = server.getDynamicCertificateManager();
+            data = dynamicCertificateManager.getCertificateForDomain(cert.hostname);
+        }
+
+        return Response
+                .ok(data, MediaType.APPLICATION_OCTET_STREAM)
+                .header("content-disposition","attachment; filename = " + cert.hostname + ".p12")
+                .build();
+    }
+
+    private CertificateBean findCertificateById(String certId) {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         RuntimeServerConfiguration conf = server.getCurrentConfiguration();
         Map<String, SSLCertificateConfiguration> certificateList = conf.getCertificates();
-        DynamicCertificatesManager dynamicCertificateManager = server.getDynamicCertificateManager();
-
-        Map<String, CertificateBean> res = new HashMap<>();
         if (certificateList.containsKey(certId)) {
             SSLCertificateConfiguration certificate = certificateList.get(certId);
             CertificateBean certBean = new CertificateBean(
@@ -129,13 +150,13 @@ public class CertificatesResource {
             );
 
             if (certificate.isDynamic()) {
-                DynamicCertificateState state = dynamicCertificateManager.getStateOfCertificate(certBean.getId());
+                DynamicCertificateState state = server.getDynamicCertificateManager().getStateOfCertificate(certBean.getId());
                 certBean.setStatus(stateToStatusString(state));
             }
-            res.put(certId, certBean);
+            return certBean;
         }
 
-        return res;
+        return null;
     }
 
     static String stateToStatusString(DynamicCertificateState state) {
