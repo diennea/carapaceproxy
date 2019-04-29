@@ -76,7 +76,8 @@ public class StandardEndpointMapper extends EndpointMapper {
     private static final String ACME_CHALLENGE_URI_PATTERN = "/\\.well-known/acme-challenge/";
     private DynamicCertificatesManager dynamicCertificateManger;
 
-    public static final String DEBUGGING_HEADER_ROUTING_PATH = "Routing-Path";
+    public static final String DEBUGGING_HEADER_DEFAULT_NAME = "Routing-Path";
+    private String debuggingHeaderName = DEBUGGING_HEADER_DEFAULT_NAME;
     private boolean debuggingHeaderEnabled = false;
 
     public StandardEndpointMapper(BackendSelector backendSelector) {
@@ -103,8 +104,11 @@ public class StandardEndpointMapper extends EndpointMapper {
         LOG.info("configured mapper.forcedirector.parameter=" + forceDirectorParameter);
         this.forceBackendParameter = properties.getProperty("mapper.forcebackend.parameter", forceBackendParameter);
         LOG.info("configured mapper.forcebackend.parameter=" + forceBackendParameter);
-        this.debuggingHeaderEnabled = Boolean.parseBoolean(properties.getProperty("mapper.debuggingheader.enable", "false"));
-        LOG.info("configured mapper.debuggingheader.enable=" + debuggingHeaderEnabled);
+        // To add custom debugging header for request choosen mapping-path
+        this.debuggingHeaderEnabled = Boolean.parseBoolean(properties.getProperty("mapper.debug", "false"));
+        LOG.info("configured mapper.debug=" + debuggingHeaderEnabled);
+        this.debuggingHeaderName = "X-" + properties.getProperty("mapper.debug.name", DEBUGGING_HEADER_DEFAULT_NAME);
+        LOG.info("configured mapper.debug.name=" + debuggingHeaderName);
 
         for (int i = 0; i < MAX_IDS; i++) {
             String prefix = "header." + i + ".";
@@ -390,19 +394,20 @@ public class StandardEndpointMapper extends EndpointMapper {
 
                     BackendConfiguration backend = this.backends.get(backendId);
                     if (backend != null && backendHealthManager.isAvailable(backendId)) {
+                        List<CustomHeader> customHeaders = new ArrayList(action.getCustomHeaders());
                         if (this.debuggingHeaderEnabled) {
-                            String routingPath = "Route-id: " + route.getId() + "; ";
-                            routingPath += "Action-id: " + action.getId() + "; ";
-                            routingPath += "Director-id: " + action.getDirector() + "; ";
-                            routingPath += "Backend-id: " + backendId;
-                            action.addCustomHeader(new CustomHeader(DEBUGGING_HEADER_ROUTING_PATH, routingPath, HeaderMode.HEADER_MODE_ADD));
+                            String routingPath = route.getId() + ";"
+                                    + action.getId() + ";"
+                                    + action.getDirector() + ";"
+                                    + backendId;
+                            customHeaders.add(new CustomHeader(debuggingHeaderName, routingPath, HeaderMode.HEADER_MODE_ADD));
                         }
                         return new MapResult(
                                 backend.getHost(),
                                 backend.getPort(),
                                 selectedAction,
                                 route.getId(),
-                                action.getCustomHeaders()
+                                customHeaders
                         );
                     }
                 }
