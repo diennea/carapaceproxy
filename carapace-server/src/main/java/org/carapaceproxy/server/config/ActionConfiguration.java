@@ -20,6 +20,7 @@
 package org.carapaceproxy.server.config;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.carapaceproxy.server.mapper.CustomHeader;
 
@@ -69,7 +70,7 @@ public class ActionConfiguration {
     }
 
     public List<CustomHeader> getCustomHeaders() {
-        return customHeaders;
+        return Collections.unmodifiableList(customHeaders);
     }
 
     public void addCustomHeader(CustomHeader header) {

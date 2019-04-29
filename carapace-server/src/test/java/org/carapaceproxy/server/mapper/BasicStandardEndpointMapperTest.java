@@ -403,7 +403,7 @@ public class BasicStandardEndpointMapperTest {
                 assertNull(conn.getHeaderField("Transfer-Encoding"));
 
                 // debugging header "Routing-Path"
-                assertEquals("r1;addHeaders;d1;b1", conn.getHeaderField("X-DebugHeaderCustomName"));
+                assertEquals("r1;addHeaders;d1;b1", conn.getHeaderField("DebugHeaderCustomName"));
             }
             {
                 URLConnection conn = new URL("http://localhost:" + port + "/index2.html").openConnection();
@@ -418,7 +418,7 @@ public class BasicStandardEndpointMapperTest {
                 assertNotNull(conn.getHeaderField("Transfer-Encoding"));
 
                 // debugging header "Routing-Path"
-                assertEquals("r2;addHeader2;d2;b2", conn.getHeaderField("X-DebugHeaderCustomName"));
+                assertEquals("r2;addHeader2;d2;b2", conn.getHeaderField("DebugHeaderCustomName"));
             }
             {
                 URLConnection conn = new URL("http://localhost:" + port + "/index3.html").openConnection();

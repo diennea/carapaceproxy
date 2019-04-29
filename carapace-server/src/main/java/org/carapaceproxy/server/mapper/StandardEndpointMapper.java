@@ -76,7 +76,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     private static final String ACME_CHALLENGE_URI_PATTERN = "/\\.well-known/acme-challenge/";
     private DynamicCertificatesManager dynamicCertificateManger;
 
-    public static final String DEBUGGING_HEADER_DEFAULT_NAME = "Routing-Path";
+    public static final String DEBUGGING_HEADER_DEFAULT_NAME = "X-Proxy-Path";
     private String debuggingHeaderName = DEBUGGING_HEADER_DEFAULT_NAME;
     private boolean debuggingHeaderEnabled = false;
 
@@ -107,7 +107,7 @@ public class StandardEndpointMapper extends EndpointMapper {
         // To add custom debugging header for request choosen mapping-path
         this.debuggingHeaderEnabled = Boolean.parseBoolean(properties.getProperty("mapper.debug", "false"));
         LOG.info("configured mapper.debug=" + debuggingHeaderEnabled);
-        this.debuggingHeaderName = "X-" + properties.getProperty("mapper.debug.name", DEBUGGING_HEADER_DEFAULT_NAME);
+        this.debuggingHeaderName = properties.getProperty("mapper.debug.name", DEBUGGING_HEADER_DEFAULT_NAME);
         LOG.info("configured mapper.debug.name=" + debuggingHeaderName);
 
         for (int i = 0; i < MAX_IDS; i++) {
@@ -394,8 +394,9 @@ public class StandardEndpointMapper extends EndpointMapper {
 
                     BackendConfiguration backend = this.backends.get(backendId);
                     if (backend != null && backendHealthManager.isAvailable(backendId)) {
-                        List<CustomHeader> customHeaders = new ArrayList(action.getCustomHeaders());
+                        List<CustomHeader> customHeaders = action.getCustomHeaders();
                         if (this.debuggingHeaderEnabled) {
+                            customHeaders = new ArrayList(customHeaders);
                             String routingPath = route.getId() + ";"
                                     + action.getId() + ";"
                                     + action.getDirector() + ";"
