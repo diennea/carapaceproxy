@@ -19,9 +19,13 @@
  */
 package org.carapaceproxy.api;
 
+import java.util.Base64;
 import java.util.Properties;
 import javax.servlet.http.HttpServletResponse;
 import static org.carapaceproxy.api.CertificatesResource.stateToStatusString;
+import org.carapaceproxy.configstore.CertificateData;
+import org.carapaceproxy.configstore.ConfigurationStore;
+import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.certiticates.DynamicCertificate;
 import org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState;
 import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
@@ -33,6 +37,7 @@ import org.carapaceproxy.utils.RawHttpClient;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
@@ -164,7 +169,6 @@ public class StartAPIServerTest extends UseAdminServer {
         properties.put("director.1.backends", "*");
         properties.put("director.1.enabled", "false");
         properties.put("director.1.id", "*");
-
 
         properties.put("backend.0.id", "localhost:8086");
         properties.put("backend.0.host", "localhost");
@@ -330,6 +334,16 @@ public class StartAPIServerTest extends UseAdminServer {
                 assertThat(json, containsString("\"dynamic\":true"));
                 assertThat(json, containsString("\"status\":\"" + stateToStatusString(state) + "\""));
             }
+
+            // Downloading
+            ConfigurationStore store = new PropertiesConfigurationStore(properties);
+            String base64Chain = Base64.getEncoder().encodeToString("CHAIN".getBytes());
+            CertificateData certData = new CertificateData(dynDomain, "", base64Chain, true);
+            store.saveCertificate(certData);
+            man.setConfigurationStore(store);
+            man.setStateOfCertificate(dynDomain, DynamicCertificate.DynamicCertificateState.AVAILABLE);
+            response = client.get("/api/certificates/" + dynDomain + "/download", credentials);
+            assertEquals("CHAIN", response.getBodyString());
         }
     }
 
