@@ -96,7 +96,7 @@ public class ConfigResource {
         }
         Properties properties = new Properties();
         try {
-            properties.load(new StringReader(newConfiguration));
+            properties.load(new StringReader(newConfiguration.replace("\\", "\\\\"))); // to preserve backslashes
         } catch (IOException err) {
             throw new ConfigurationNotValidException("Invalid properties file: " + err.getMessage());
         }
