@@ -195,7 +195,11 @@ public class Listeners {
                                         channel.remoteAddress(), parent.getStaticContentsManager(),
                                         () -> currentClientConnections.dec(),
                                         parent.getBackendHealthManager(),
-                                        parent.getRequestsLogger()));
+                                        parent.getRequestsLogger(),
+                                        listener.getHost(),
+                                        listener.getPort()
+                                )
+                        );
 
                     }
                 })

@@ -50,6 +50,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     final StatsLogger mainLogger;
     final Counter totalRequests;
     final Counter runningRequests;
+    final Counter listenerRequests;
     final BackendHealthManager backendHealthManager;
     final ConnectionsManager connectionsManager;
     final List<RequestFilter> filters;
@@ -73,10 +74,13 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             StaticContentsManager staticContentsManager,
             Runnable onClientDisconnected,
             BackendHealthManager backendHealthManager,
-            RequestsLogger requestsLogger) {
+            RequestsLogger requestsLogger,
+            String listenerHost,
+            int listenerPort) {
         this.mainLogger = mainLogger;
         this.totalRequests = mainLogger.getCounter("totalrequests");
         this.runningRequests = mainLogger.getCounter("runningrequests");
+        this.listenerRequests = mainLogger.getCounter("listener_" + listenerHost + "_" + listenerPort +"_requests");
         this.staticContentsManager = staticContentsManager;
         this.cache = cache;
         this.mapper = mapper;
@@ -132,6 +136,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
                 currentRequest.clientRequestFinished(trailer);
                 totalRequests.inc();
                 runningRequests.inc();
+                listenerRequests.inc();
             } catch (java.lang.ArrayIndexOutOfBoundsException noMorePendingRequests) {
                 LOG.log(Level.INFO, "{0} swallow {1}, no more pending requests", new Object[]{this, msg});
                 refuseOtherRequests = true;
