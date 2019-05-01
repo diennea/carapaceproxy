@@ -1,4 +1,4 @@
-<template>
+    <template>
     <div>
         <h2>Listeners</h2>
         <table class="table table-striped">
@@ -9,8 +9,8 @@
                     <th scope="col">SSL</th>
                     <th scope="col">OCPS</th>
                     <th scope="col">SSLCiphers</th>
+                    <th scope="col">Total requests</th>
                     <th scope="col">Default certificate</th>
-
                 </tr>
             </thead>
             <tbody>
@@ -20,6 +20,7 @@
                     <td>{{item.ssl | symbolFormat}}</td>
                     <td>{{item.ssl ? (item.ocps | symbolFormat) : ""}}</td>
                     <td>{{item.ssl ? item.sslCiphers : ""}}</td>
+                    <td>{{item.totalRequests}}</td>
                     <td>
                         <router-link :to="{ name: 'Certificate', params: { id: item.defaultCertificate }}"
                                      v-if="item.ssl">

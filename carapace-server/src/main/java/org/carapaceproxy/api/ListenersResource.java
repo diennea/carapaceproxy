@@ -50,14 +50,16 @@ public class ListenersResource {
         private final boolean ocps;
         private final String sslCiphers;
         private final String defaultCertificate;
+        private final long totalRequests;
 
-        public ListenerBean(String host, int port, boolean ssl, boolean ocps, String sslCiphers, String defaultCertificate) {
+        public ListenerBean(String host, int port, boolean ssl, boolean ocps, String sslCiphers, String defaultCertificate, long totalRequests) {
             this.host = host;
             this.port = port;
             this.ssl = ssl;
             this.ocps = ocps;
             this.sslCiphers = sslCiphers;
             this.defaultCertificate = defaultCertificate;
+            this.totalRequests = totalRequests;
         }
 
         public String getHost() {
@@ -84,6 +86,10 @@ public class ListenersResource {
             return defaultCertificate;
         }
 
+        public long getTotalRequests() {
+            return totalRequests;
+        }
+
     }
 
     @GET
@@ -99,7 +105,8 @@ public class ListenersResource {
                     listener.isSsl(),
                     listener.isOcps(),
                     listener.getSslCiphers(),
-                    listener.getDefaultCertificate()
+                    listener.getDefaultCertificate(),
+                    server.getMainLogger().getCounter("listener_" + listener.getHost() + "_" + listener.getPort() +"_requests").get()
             );
             EndpointKey ek = EndpointKey.make(listener.getHost(), listener.getPort());
             res.put(ek.toBackendId(), lisBean);
