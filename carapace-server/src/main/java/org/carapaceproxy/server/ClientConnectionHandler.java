@@ -63,6 +63,8 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     volatile boolean refuseOtherRequests;
     private final List<RequestHandler> pendingRequests = new CopyOnWriteArrayList<>();
     final Runnable onClientDisconnected;
+    private final String listenerHost;
+    private final int listenerPort;
 
     public ClientConnectionHandler(
             StatsLogger mainLogger,
@@ -91,10 +93,20 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         this.onClientDisconnected = onClientDisconnected;
         this.backendHealthManager = backendHealthManager;
         this.requestsLogger = requestsLogger;
+        this.listenerHost = listenerHost;
+        this.listenerPort = listenerPort;
     }
 
     public SocketAddress getClientAddress() {
         return clientAddress;
+    }
+
+    public String getListenerHost() {
+        return listenerHost;
+    }
+
+    public int getListenerPort() {
+        return listenerPort;
     }
 
     @Override

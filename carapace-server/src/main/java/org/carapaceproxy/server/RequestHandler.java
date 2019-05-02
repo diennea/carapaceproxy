@@ -40,6 +40,7 @@ import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static io.netty.handler.codec.http.HttpStatusClass.SUCCESS;
 import io.netty.handler.codec.http.HttpUtil;
+import io.netty.handler.codec.http.HttpVersion;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.CharsetUtil;
@@ -203,6 +204,7 @@ public class RequestHandler {
             case SYSTEM:
             case STATIC:
             case ACME_CHALLENGE:
+            case REDIRECT:
                 return;
             case PROXY:
                 try {
@@ -254,6 +256,7 @@ public class RequestHandler {
             case ACME_CHALLENGE:
             case INTERNAL_ERROR:
             case NOTFOUND:
+            case REDIRECT:
                 break;
             case SYSTEM:
                 continueDebugMessage(httpContent, httpContent);
@@ -319,6 +322,9 @@ public class RequestHandler {
                 }
                 break;
             }
+            case REDIRECT:
+                serveRedirect();
+                break;
             default:
                 throw new IllegalStateException("not yet implemented");
         }
@@ -341,7 +347,7 @@ public class RequestHandler {
             code = 404;
         }
 
-        FullHttpResponse response = connectionToClient.staticContentsManager.buildResponse(code, resource);        
+        FullHttpResponse response = connectionToClient.staticContentsManager.buildResponse(code, resource);
         if (!writeSimpleResponse(response)) {
             forceCloseChannelToClient();
         }
@@ -384,6 +390,42 @@ public class RequestHandler {
             // If keep-alive is off, close the connection once the content is fully written.
             forceCloseChannelToClient();
         }
+    }
+
+    private void serveRedirect() {
+        DefaultFullHttpResponse res = new DefaultFullHttpResponse(
+                HttpVersion.HTTP_1_1,
+                HttpResponseStatus.valueOf(action.errorcode < 0 ? 302 : action.errorcode) // redirect: 3XX
+        );
+        addCustomResponseHeaders(res);
+        res.headers().set(HttpHeaderNames.CACHE_CONTROL, "no-cache");
+
+        String location = action.redirectLocation;
+        String host = this.connectionToClient.getListenerHost();
+        int port = this.connectionToClient.getListenerPort();
+        String path = this.uri;
+        if (location == null || location.isEmpty()) {
+            if (!action.host.isEmpty()) {
+                host = action.host;
+            }           
+            if (action.port > 0) {
+                port = action.port;
+            } else if ("https".equals(action.redirectProto)) {
+                port = 443;
+            }
+            if (!action.redirectPath.isEmpty()) {
+                path = action.redirectPath;
+            }
+            location = host + ":" + port + path; // - custom redirection
+        } else if (location.startsWith("/")) {
+            location = host + ":" + port + location; // - relative redirection
+        } // else: implicit absolute redirection
+
+        // - redirect to https
+        location = ("https".equals(action.redirectProto) ? "https://" : "http://") + location.replaceFirst("http.?:\\/\\/", "");
+
+        res.headers().set(HttpHeaderNames.LOCATION, location);
+        writeSimpleResponse(res);
     }
 
     private void serveDebugMessage(HttpContent httpContent, Object msg, LastHttpContent trailer) {
@@ -609,12 +651,12 @@ public class RequestHandler {
         if (msg instanceof HttpResponse && action != null && action.customHeaders != null) {
             HttpHeaders headers = ((HttpResponse) msg).headers();
             action.customHeaders.forEach(customHeader -> {
-                if (HEADER_MODE_SET.equals(customHeader.getMode()) ||
-                        HEADER_MODE_REMOVE.equals(customHeader.getMode())) {
+                if (HEADER_MODE_SET.equals(customHeader.getMode())
+                        || HEADER_MODE_REMOVE.equals(customHeader.getMode())) {
                     headers.remove(customHeader.getName());
                 }
-                if (HEADER_MODE_SET.equals(customHeader.getMode()) ||
-                        HEADER_MODE_ADD.equals(customHeader.getMode())) {
+                if (HEADER_MODE_SET.equals(customHeader.getMode())
+                        || HEADER_MODE_ADD.equals(customHeader.getMode())) {
                     headers.add(customHeader.getName(), customHeader.getValue());
                 }
             });

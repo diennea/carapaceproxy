@@ -26,9 +26,9 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
-import java.util.Collections;
 import java.util.Properties;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.client.ConnectionsManagerStats;
@@ -96,25 +96,13 @@ public class BasicStandardEndpointMapperTest {
         mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
         mapper.addDirector(new DirectorConfiguration("director-2").addBackend("backend-b"));
         mapper.addDirector(new DirectorConfiguration("director-all").addBackend("*")); // all of the known backends
-        mapper.addAction(new ActionConfiguration(
-                "proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1, Collections.emptyList()
-        ));
-        mapper.addAction(new ActionConfiguration(
-                "cache-1", ActionConfiguration.TYPE_CACHE, "director-2", null, -1, Collections.emptyList()
-        ));
-        mapper.addAction(new ActionConfiguration(
-                "all-1", ActionConfiguration.TYPE_CACHE, "director-all", null, -1, Collections.emptyList()
-        ));
+        mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1));
+        mapper.addAction(new ActionConfiguration("cache-1", ActionConfiguration.TYPE_CACHE, "director-2", null, -1));
+        mapper.addAction(new ActionConfiguration("all-1", ActionConfiguration.TYPE_CACHE, "director-all", null, -1));
 
-        mapper.addAction(new ActionConfiguration(
-                "not-found-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_NOT_FOUND, 404, Collections.emptyList()
-        ));
-        mapper.addAction(new ActionConfiguration(
-                "error-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR, 500, Collections.emptyList()
-        ));
-        mapper.addAction(new ActionConfiguration(
-                "static-custom", ActionConfiguration.TYPE_STATIC, null, CLASSPATH_RESOURCE + "/test-static-page.html", 200, Collections.emptyList()
-        ));
+        mapper.addAction(new ActionConfiguration("not-found-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_NOT_FOUND, 404));
+        mapper.addAction(new ActionConfiguration("error-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR, 500));
+        mapper.addAction(new ActionConfiguration("static-custom", ActionConfiguration.TYPE_STATIC, null, CLASSPATH_RESOURCE + "/test-static-page.html", 200));
 
         mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new URIRequestMatcher(".*index.html.*")));
         mapper.addRoute(new RouteConfiguration("route-1b", "cache-1", true, new URIRequestMatcher(".*index2.html.*")));
@@ -436,6 +424,103 @@ public class BasicStandardEndpointMapperTest {
             {
                 URLConnection conn = new URL("http://localhost:" + port + "/index3.html").openConnection();
                 assertEquals("header-1-value; header-1-value2;header-1-value3", conn.getHeaderField("custom-header-1"));
+            }
+        }
+    }
+
+    @Test
+    public void testActionRedirect() throws Exception {
+
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+            Properties configuration = new Properties();
+            configuration.put("listener.1.host", "0.0.0.0");
+            configuration.put("listener.1.port", "1425");
+            configuration.put("listener.1.ssl", "false");
+            configuration.put("listener.1.enabled", "true");
+
+            // redirect to same domain/uri but with https
+            configuration.put("route.1.id", "r1");
+            configuration.put("route.1.enabled", "true");
+            configuration.put("route.1.match", "regexp .*index\\.html");
+            configuration.put("route.1.action", "a1");
+            configuration.put("action.1.id", "a1");
+            configuration.put("action.1.enabled", "true");
+            configuration.put("action.1.type", "redirect");
+            configuration.put("action.1.code", "301");
+            configuration.put("action.1.redirect.proto", "https");
+
+            // redirect to absolute domain/uri
+            configuration.put("route.2.id", "r2");
+            configuration.put("route.2.enabled", "true");
+            configuration.put("route.2.match", "regexp .*index2\\.html");
+            configuration.put("route.2.action", "a2");
+            configuration.put("action.2.id", "a2");
+            configuration.put("action.2.enabled", "true");
+            configuration.put("action.2.type", "redirect"); // default 302 redirect code
+            configuration.put("action.2.redirect.location", "http://foo/index0.html");
+
+            // relative redirect (same domain, different uri)
+            configuration.put("route.3.id", "r3");
+            configuration.put("route.3.enabled", "true");
+            configuration.put("route.3.match", "regexp .*index3\\.html");
+            configuration.put("route.3.action", "a3");
+            configuration.put("action.3.id", "a3");
+            configuration.put("action.3.enabled", "true");
+            configuration.put("action.3.type", "redirect");
+            configuration.put("action.3.code", "303");
+            configuration.put("action.3.redirect.location", "/index0.html");
+
+            // redirect custom
+            configuration.put("route.4.id", "r4");
+            configuration.put("route.4.enabled", "true");
+            configuration.put("route.4.match", "regexp .*index4\\.html");
+            configuration.put("route.4.action", "a4");
+            configuration.put("action.4.id", "a4");
+            configuration.put("action.4.enabled", "true");
+            configuration.put("action.4.type", "redirect");
+            configuration.put("action.4.code", "307");
+            configuration.put("action.4.redirect.proto", "https");
+            configuration.put("action.4.redirect.host", "192.0.0.1");
+            configuration.put("action.4.redirect.port", "1234");
+            configuration.put("action.4.redirect.path", "/indexX.html");
+
+            PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
+            server.configureAtBoot(config);
+            server.start();
+
+            int port = server.getLocalPort();
+
+            {
+                // redirect to same host/uri but with https (default port)
+                HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + port + "/index.html").openConnection();
+                conn.setInstanceFollowRedirects(false);
+                assertEquals("https://0.0.0.0:443/index.html", conn.getHeaderField("Location"));
+                assertTrue(conn.getHeaderFields().toString().contains("301 Moved Permanently"));
+            }
+
+            {
+                // redirect to absolute host:port/uri
+                HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + port + "/index2.html").openConnection();
+                conn.setInstanceFollowRedirects(false);
+                System.out.println("HEADERS: " + conn.getHeaderFields().toString());
+                assertEquals("http://foo/index0.html", conn.getHeaderField("Location"));
+                assertTrue(conn.getHeaderFields().toString().contains("302 Found"));
+            }
+            {
+                // relative redirect (same host:port, different uri)
+                HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + port + "/index3.html").openConnection();
+                conn.setInstanceFollowRedirects(false);
+                System.out.println("HEADERS: " + conn.getHeaderFields().toString());
+                assertEquals("http://0.0.0.0:" + port + "/index0.html", conn.getHeaderField("Location"));
+                assertTrue(conn.getHeaderFields().toString().contains("303 See Other"));
+            }
+            {
+                // redirect custom
+                HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + port + "/index4.html").openConnection();
+                conn.setInstanceFollowRedirects(false);
+                System.out.println("HEADERS: " + conn.getHeaderFields().toString());
+                assertEquals("https://192.0.0.1:1234/indexX.html", conn.getHeaderField("Location"));
+                assertTrue(conn.getHeaderFields().toString().contains("307 Temporary Redirect"));
             }
         }
     }

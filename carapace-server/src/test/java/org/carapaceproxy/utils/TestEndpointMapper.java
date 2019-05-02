@@ -64,11 +64,11 @@ public class TestEndpointMapper extends EndpointMapper {
         if (uri.contains("not-found")) {
             return MapResult.NOT_FOUND(MapResult.NO_ROUTE);
         } else if (uri.contains("debug")) {
-            return new MapResult(null, 0, MapResult.Action.SYSTEM, MapResult.NO_ROUTE,null);
+            return new MapResult(null, 0, MapResult.Action.SYSTEM, MapResult.NO_ROUTE);
         } else if (cacheAll) {
-            return new MapResult(host, port, MapResult.Action.CACHE, MapResult.NO_ROUTE, null);
+            return new MapResult(host, port, MapResult.Action.CACHE, MapResult.NO_ROUTE);
         } else {
-            return new MapResult(host, port, MapResult.Action.PROXY, MapResult.NO_ROUTE, null);
+            return new MapResult(host, port, MapResult.Action.PROXY, MapResult.NO_ROUTE);
         }
     }
 
