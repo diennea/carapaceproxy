@@ -58,12 +58,12 @@ import org.carapaceproxy.client.EndpointConnection;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.client.EndpointNotAvailableException;
 import org.carapaceproxy.client.impl.EndpointConnectionImpl;
-import static org.carapaceproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import org.apache.bookkeeper.stats.Counter;
 import org.apache.bookkeeper.stats.StatsLogger;
+import static org.carapaceproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
 import static org.carapaceproxy.server.mapper.CustomHeader.HeaderMode.HEADER_MODE_ADD;
 import static org.carapaceproxy.server.mapper.CustomHeader.HeaderMode.HEADER_MODE_REMOVE;
 import static org.carapaceproxy.server.mapper.CustomHeader.HeaderMode.HEADER_MODE_SET;
@@ -75,6 +75,9 @@ public class RequestHandler {
 
     private static final Logger LOG = Logger.getLogger(RequestHandler.class.getName());
     private static final AtomicLong TIME_TRACKER = new AtomicLong();
+    private static final String PROTO_HTTPS = "https";
+    private static final String PROTO_HTTP = "http";
+    private static final String PROTO_HTTP_DEFAULT_PORT = "443";
     private final long id;
     private final HttpRequest request;
     private final List<RequestFilter> filters;
@@ -401,28 +404,30 @@ public class RequestHandler {
         res.headers().set(HttpHeaderNames.CACHE_CONTROL, "no-cache");
 
         String location = action.redirectLocation;
-        String host = this.connectionToClient.getListenerHost();
-        int port = this.connectionToClient.getListenerPort();
+
+        String host = request.headers().get(HttpHeaderNames.HOST, "localhost");
+        String port = host.contains(":") ? host.replaceFirst(".*:", ":") : "";
+        host = host.split(":")[0];
         String path = this.uri;
         if (location == null || location.isEmpty()) {
             if (!action.host.isEmpty()) {
                 host = action.host;
-            }           
+            }
             if (action.port > 0) {
-                port = action.port;
-            } else if ("https".equals(action.redirectProto)) {
-                port = 443;
+                port = ":" + action.port;
+            } else if (PROTO_HTTPS.equals(action.redirectProto)) {
+                port = ":" + PROTO_HTTP_DEFAULT_PORT;
             }
             if (!action.redirectPath.isEmpty()) {
                 path = action.redirectPath;
             }
-            location = host + ":" + port + path; // - custom redirection
+            location = host + port + path; // - custom redirection
         } else if (location.startsWith("/")) {
-            location = host + ":" + port + location; // - relative redirection
+            location = host + port + location; // - relative redirection
         } // else: implicit absolute redirection
 
         // - redirect to https
-        location = ("https".equals(action.redirectProto) ? "https://" : "http://") + location.replaceFirst("http.?:\\/\\/", "");
+        location = (PROTO_HTTPS.equals(action.redirectProto) ? PROTO_HTTPS : PROTO_HTTP) + "://" + location.replaceFirst("http.?:\\/\\/", "");
 
         res.headers().set(HttpHeaderNames.LOCATION, location);
         writeSimpleResponse(res);

@@ -160,6 +160,12 @@ public class StandardEndpointMapper extends EndpointMapper {
                     _action.setRedirectHost(properties.getProperty(prefix + "redirect.host", ""));
                     _action.setRedirectPort(Integer.parseInt(properties.getProperty(prefix + "redirect.port", "-1")));
                     _action.setRedirectPath(properties.getProperty(prefix + "redirect.path", ""));
+                    if (action.equals("redirect") && _action.getRedirectProto().isEmpty() && _action.getRedirectHost().isEmpty()
+                            && _action.getRedirectPort() == -1 && _action.getRedirectPath().isEmpty()) {
+                        throw new ConfigurationNotValidException("while configuring action '" + id
+                                + "': at least redirect.location or redirect.proto|.host|.port|.path have to be defined"
+                        );
+                    }
                 }
 
                 addAction(_action);

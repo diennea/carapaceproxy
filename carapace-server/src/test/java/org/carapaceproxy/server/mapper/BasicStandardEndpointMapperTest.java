@@ -494,31 +494,27 @@ public class BasicStandardEndpointMapperTest {
                 // redirect to same host/uri but with https (default port)
                 HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + port + "/index.html").openConnection();
                 conn.setInstanceFollowRedirects(false);
-                assertEquals("https://0.0.0.0:443/index.html", conn.getHeaderField("Location"));
+                assertEquals("https://localhost:443/index.html", conn.getHeaderField("Location"));
                 assertTrue(conn.getHeaderFields().toString().contains("301 Moved Permanently"));
             }
-
             {
                 // redirect to absolute host:port/uri
                 HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + port + "/index2.html").openConnection();
-                conn.setInstanceFollowRedirects(false);
-                System.out.println("HEADERS: " + conn.getHeaderFields().toString());
+                conn.setInstanceFollowRedirects(false);               
                 assertEquals("http://foo/index0.html", conn.getHeaderField("Location"));
                 assertTrue(conn.getHeaderFields().toString().contains("302 Found"));
             }
             {
                 // relative redirect (same host:port, different uri)
                 HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + port + "/index3.html").openConnection();
-                conn.setInstanceFollowRedirects(false);
-                System.out.println("HEADERS: " + conn.getHeaderFields().toString());
-                assertEquals("http://0.0.0.0:" + port + "/index0.html", conn.getHeaderField("Location"));
+                conn.setInstanceFollowRedirects(false);                
+                assertEquals("http://localhost:" + port + "/index0.html", conn.getHeaderField("Location"));
                 assertTrue(conn.getHeaderFields().toString().contains("303 See Other"));
             }
             {
                 // redirect custom
                 HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + port + "/index4.html").openConnection();
-                conn.setInstanceFollowRedirects(false);
-                System.out.println("HEADERS: " + conn.getHeaderFields().toString());
+                conn.setInstanceFollowRedirects(false);                
                 assertEquals("https://192.0.0.1:1234/indexX.html", conn.getHeaderField("Location"));
                 assertTrue(conn.getHeaderFields().toString().contains("307 Temporary Redirect"));
             }
