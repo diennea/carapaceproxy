@@ -494,7 +494,7 @@ public class BasicStandardEndpointMapperTest {
                 // redirect to same host/uri but with https (default port)
                 HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + port + "/index.html").openConnection();
                 conn.setInstanceFollowRedirects(false);
-                assertEquals("https://localhost:443/index.html", conn.getHeaderField("Location"));
+                assertEquals("https://localhost/index.html", conn.getHeaderField("Location"));
                 assertTrue(conn.getHeaderFields().toString().contains("301 Moved Permanently"));
             }
             {
@@ -518,6 +518,6 @@ public class BasicStandardEndpointMapperTest {
                 assertEquals("https://192.0.0.1:1234/indexX.html", conn.getHeaderField("Location"));
                 assertTrue(conn.getHeaderFields().toString().contains("307 Temporary Redirect"));
             }
+            }
         }
     }
-}

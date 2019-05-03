@@ -127,7 +127,7 @@ public class StandardEndpointMapper extends EndpointMapper {
             String id = properties.getProperty(prefix + "id", "");
             boolean enabled = Boolean.parseBoolean(properties.getProperty(prefix + "enabled", "false"));
             if (!id.isEmpty() && enabled) {
-                String action = properties.getProperty(prefix + "type", "proxy");
+                String action = properties.getProperty(prefix + "type", ActionConfiguration.TYPE_PROXY);
                 String file = properties.getProperty(prefix + "file", "");
                 String director = properties.getProperty(prefix + "director", DirectorConfiguration.DEFAULT);
                 int code = Integer.parseInt(properties.getProperty(prefix + "code", "-1"));
@@ -160,7 +160,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                     _action.setRedirectHost(properties.getProperty(prefix + "redirect.host", ""));
                     _action.setRedirectPort(Integer.parseInt(properties.getProperty(prefix + "redirect.port", "-1")));
                     _action.setRedirectPath(properties.getProperty(prefix + "redirect.path", ""));
-                    if (action.equals("redirect") && _action.getRedirectProto().isEmpty() && _action.getRedirectHost().isEmpty()
+                    if (action.equals(ActionConfiguration.TYPE_REDIRECT) && _action.getRedirectProto().isEmpty() && _action.getRedirectHost().isEmpty()
                             && _action.getRedirectPort() == -1 && _action.getRedirectPath().isEmpty()) {
                         throw new ConfigurationNotValidException("while configuring action '" + id
                                 + "': at least redirect.location or redirect.proto|.host|.port|.path have to be defined"

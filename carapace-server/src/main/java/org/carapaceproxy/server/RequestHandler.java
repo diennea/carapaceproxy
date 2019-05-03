@@ -76,8 +76,7 @@ public class RequestHandler {
     private static final Logger LOG = Logger.getLogger(RequestHandler.class.getName());
     private static final AtomicLong TIME_TRACKER = new AtomicLong();
     private static final String PROTO_HTTPS = "https";
-    private static final String PROTO_HTTP = "http";
-    private static final String PROTO_HTTP_DEFAULT_PORT = "443";
+    private static final String PROTO_HTTP = "http";    
     private final long id;
     private final HttpRequest request;
     private final List<RequestFilter> filters;
@@ -416,7 +415,7 @@ public class RequestHandler {
             if (action.port > 0) {
                 port = ":" + action.port;
             } else if (PROTO_HTTPS.equals(action.redirectProto)) {
-                port = ":" + PROTO_HTTP_DEFAULT_PORT;
+                port = ""; // default https port
             }
             if (!action.redirectPath.isEmpty()) {
                 path = action.redirectPath;
