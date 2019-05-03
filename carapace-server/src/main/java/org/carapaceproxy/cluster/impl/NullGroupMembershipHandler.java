@@ -21,6 +21,7 @@ package org.carapaceproxy.cluster.impl;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 
 /**
@@ -29,6 +30,8 @@ import org.carapaceproxy.cluster.GroupMembershipHandler;
  * @author eolivelli
  */
 public class NullGroupMembershipHandler implements GroupMembershipHandler {
+
+    private Map<String, String> peerInfo;
 
     @Override
     public void start() {
@@ -61,6 +64,21 @@ public class NullGroupMembershipHandler implements GroupMembershipHandler {
     @Override
     public void executeInMutex(String lockId, int timeout, Runnable runnable) {
         runnable.run();
+    }
+
+    @Override
+    public String getCurrentPeer() {
+        return "only-one";
+    }
+
+    @Override
+    public void storeInfoForPeer(String id, Map<String, String> info) {
+        peerInfo = info;
+    }
+
+    @Override
+    public Map<String, String> loadInfoForPeer(String id) {
+        return peerInfo;
     }
 
 }

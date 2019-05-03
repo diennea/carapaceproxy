@@ -20,13 +20,16 @@
 package org.carapaceproxy.cluster.impl;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.curator.test.TestingServer;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import org.junit.Rule;
 import org.junit.Test;
@@ -42,12 +45,12 @@ public class ZooKeeperGroupMembershipHandlerTest {
 
     @Test
     public void testPeerDiscovery() throws Exception {
-        try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder());) {
+        try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder())) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
-                    6000, peerId1);
+                    6000, peerId1, Collections.EMPTY_MAP);
                     ZooKeeperGroupMembershipHandler peer2 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
-                            6000, peerId2);) {
+                    6000, peerId2, Collections.EMPTY_MAP)) {
                 peer1.start();
                 peer2.start();
                 List<String> peersFrom1 = peer1.getPeers();
@@ -56,7 +59,7 @@ public class ZooKeeperGroupMembershipHandlerTest {
                 assertEquals(Arrays.asList(peerId1, peerId2), peersFrom2);
 
                 try (ZooKeeperGroupMembershipHandler peer3 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
-                        6000, peerId3);) {
+                        6000, peerId3, Collections.EMPTY_MAP)) {
                     peer3.start();
                     peersFrom1 = peer1.getPeers();
                     peersFrom2 = peer2.getPeers();
@@ -81,9 +84,9 @@ public class ZooKeeperGroupMembershipHandlerTest {
         try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder());) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
-                    6000, peerId1);
+                    6000, peerId1, Collections.EMPTY_MAP);
                     ZooKeeperGroupMembershipHandler peer2 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
-                            6000, peerId2);) {
+                    6000, peerId2, Collections.EMPTY_MAP)) {
                 peer1.start();
                 peer2.start();
                 List<String> peersFrom1 = peer1.getPeers();
@@ -116,7 +119,7 @@ public class ZooKeeperGroupMembershipHandlerTest {
                 eventFired2.set(0);
 
                 try (ZooKeeperGroupMembershipHandler peer3 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
-                        6000, peerId3);) {
+                        6000, peerId3, Collections.EMPTY_MAP)) {
                     peer3.start();
 
                     AtomicInteger eventFired3 = new AtomicInteger();
@@ -161,6 +164,58 @@ public class ZooKeeperGroupMembershipHandlerTest {
 
                 }
 
+            }
+        }
+    }
+
+    @Test
+    public void testPeerInfo() throws Exception {
+        try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder());) {
+            testingServer.start();
+            try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
+                    6000, peerId1, Map.of("name", "peer1"));
+                    ZooKeeperGroupMembershipHandler peer2 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
+                    6000, peerId2, Map.of("name", "peer2"))) {
+                peer1.start();
+                peer2.start();
+
+                // OP on peer1
+                {
+                    Map<String, String> info = peer1.loadInfoForPeer(peerId1);
+                    assertEquals("peer1", info.get("name"));
+                    info = peer1.loadInfoForPeer(peerId2);
+                    assertEquals("peer2", info.get("name"));
+
+                    peer1.storeInfoForPeer(peerId1, Map.of("name", "newpeer1", "address", "localhost"));
+                    peer1.storeInfoForPeer(peerId2, Map.of("name", "newpeer2", "address", "localhost:8080"));
+
+                    info = peer1.loadInfoForPeer(peerId1);
+                    assertEquals("newpeer1", info.get("name"));
+                    assertEquals("localhost", info.get("address"));
+                    info = peer1.loadInfoForPeer(peerId2);
+                    assertEquals("newpeer2", info.get("name"));
+                    assertEquals("localhost:8080", info.get("address"));
+
+                    peer1.storeInfoForPeer(peerId1, Collections.EMPTY_MAP);
+                    peer1.storeInfoForPeer(peerId2, Map.of("port", "8080"));
+                    info = peer1.loadInfoForPeer(peerId1);
+                    assertTrue(info.isEmpty());
+                    info = peer1.loadInfoForPeer(peerId2);
+                    assertNull(info.get("name"));
+                }
+
+                // OP on peer2
+                {
+                    peer2.storeInfoForPeer(peerId2, Map.of("name", "peer2", "address", "localhost:8080"));
+                    peer2.storeInfoForPeer(peerId1, Map.of("name", "peer1", "address", "localhost"));
+
+                    Map<String, String> info = peer2.loadInfoForPeer(peerId2);
+                    assertEquals("peer2", info.get("name"));
+                    assertEquals("localhost:8080", info.get("address"));
+                    info = peer2.loadInfoForPeer(peerId1);
+                    assertEquals("peer1", info.get("name"));
+                    assertEquals("localhost", info.get("address"));
+                }
             }
         }
     }

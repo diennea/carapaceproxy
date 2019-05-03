@@ -27,7 +27,9 @@ import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -45,6 +47,8 @@ import org.carapaceproxy.client.impl.ConnectionsManagerImpl;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
 import org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler;
+import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_HOST;
+import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_PORT;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
 import org.carapaceproxy.server.backends.BackendHealthManager;
@@ -291,7 +295,6 @@ public class HttpProxyServer implements AutoCloseable {
         if (started) {
             throw new IllegalStateException("server already started");
         }
-        initGroupMembership(bootConfigurationStore);
 
         String dynamicConfigurationType = bootConfigurationStore.getProperty("config.type", cluster ? "database" : "file");
         switch (dynamicConfigurationType) {
@@ -313,6 +316,8 @@ public class HttpProxyServer implements AutoCloseable {
 
         // "static" configuration cannot change without a reboot
         applyStaticConfiguration(bootConfigurationStore);
+        // need to be done after static configuration loading in order to know peer info
+        initGroupMembership(bootConfigurationStore);
 
         try {
             // apply configuration
@@ -434,8 +439,7 @@ public class HttpProxyServer implements AutoCloseable {
      *
      * @param newConfigurationStore
      * @throws InterruptedException
-     * @see
-     * #buildValidConfiguration(org.carapaceproxy.configstore.ConfigurationStore)
+     * @see #buildValidConfiguration(org.carapaceproxy.configstore.ConfigurationStore)
      */
     public void applyDynamicConfigurationFromAPI(ConfigurationStore newConfigurationStore) throws InterruptedException, ConfigurationChangeInProgressException {
         applyDynamicConfiguration(newConfigurationStore, false);
@@ -517,6 +521,10 @@ public class HttpProxyServer implements AutoCloseable {
         return dynamicConfigurationStore;
     }
 
+    public GroupMembershipHandler getGroupMembershipHandler() {
+        return this.groupMembershipHandler;
+    }
+
     private void initGroupMembership(ConfigurationStore staticConfiguration) throws ConfigurationNotValidException {
         String mode = staticConfiguration.getProperty("mode", "standalone");
         switch (mode) {
@@ -526,7 +534,10 @@ public class HttpProxyServer implements AutoCloseable {
                 zkAddress = staticConfiguration.getProperty("zkAddress", "localhost:2181");
                 zkTimeout = Integer.parseInt(staticConfiguration.getProperty("zkTimeout", "40000"));
                 LOG.log(Level.INFO, "mode=cluster, zkAddress=''{0}'',zkTimeout={1}, peer.id=''{2}''", new Object[]{zkAddress, zkTimeout, peerId});
-                this.groupMembershipHandler = new ZooKeeperGroupMembershipHandler(zkAddress, zkTimeout, peerId);
+                Map<String, String> peerInfo = new HashMap();
+                peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HOST, adminServerHost);
+                peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_PORT, adminServerPort + "");
+                this.groupMembershipHandler = new ZooKeeperGroupMembershipHandler(zkAddress, zkTimeout, peerId, peerInfo);
                 break;
             case "standalone":
                 cluster = false;
@@ -535,7 +546,7 @@ public class HttpProxyServer implements AutoCloseable {
             default:
                 throw new ConfigurationNotValidException("Invalid mode '" + mode + "', only 'cluster' or 'standalone'");
 
-        }        
+        }
     }
 
     private static String computeDefaultPeerId() {
