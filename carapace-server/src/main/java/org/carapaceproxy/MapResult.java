@@ -31,24 +31,26 @@ public class MapResult {
     public final Action action;
     public final String routeid;
     public int errorcode;
-    public String resource;    
-    public final List<CustomHeader> customHeaders;
+    public String resource;
+    public List<CustomHeader> customHeaders;
+    public String redirectLocation;
+    public String redirectProto;
+    public String redirectPath;
 
-    public MapResult(String host, int port, Action action, String routeid, List<CustomHeader> customHeaders) {
+    public MapResult(String host, int port, Action action, String routeid) {
         this.host = host;
         this.port = port;
         this.action = action;
         this.routeid = routeid;
-        this.customHeaders = customHeaders;
     }
 
     public static MapResult NOT_FOUND(String routeid) {
-        return new MapResult(null, 0, Action.NOTFOUND, routeid, null);
+        return new MapResult(null, 0, Action.NOTFOUND, routeid);
     }
 
     public static MapResult INTERNAL_ERROR(String routeid) {
-        return new MapResult(null, 0, Action.INTERNAL_ERROR, routeid, null);
-    }
+        return new MapResult(null, 0, Action.INTERNAL_ERROR, routeid);
+    }    
 
     public int getErrorcode() {
         return errorcode;
@@ -68,9 +70,29 @@ public class MapResult {
         return this;
     }
 
+    public MapResult setCustomHeaders(List<CustomHeader> customHeaders) {
+        this.customHeaders = customHeaders;
+        return this;
+    }
+
+    public MapResult setRedirectLocation(String redirectLocation) {
+        this.redirectLocation = redirectLocation;
+        return this;
+    }
+
+    public MapResult setRedirectProto(String proto) {
+        this.redirectProto = proto;
+        return this;
+    }
+    
+    public MapResult setRedirectPath(String path) {
+        this.redirectPath = path;
+        return this;
+    }    
+
     @Override
     public String toString() {
-        return "MapResult{" + "host=" + host + ", port=" + port + ", action=" + action + ", routeid=" + routeid + ", errorcode=" + errorcode + ", resource=" + resource + ", customHeaders=" + customHeaders + '}';
+        return "MapResult{" + "host=" + host + ", port=" + port + ", action=" + action + ", routeid=" + routeid + ", errorcode=" + errorcode + ", resource=" + resource + ", customHeaders=" + customHeaders + ", redirectLocation=" + redirectLocation + ", redirectProto=" + redirectProto + ", redirectPath=" + redirectPath + '}';
     }
 
     public static enum Action {
@@ -101,7 +123,11 @@ public class MapResult {
         /**
          * Answer for ACME challenge verification
          */
-        ACME_CHALLENGE
+        ACME_CHALLENGE,
+        /**
+         * Redirect the request
+         */
+        REDIRECT
     }
 
 }

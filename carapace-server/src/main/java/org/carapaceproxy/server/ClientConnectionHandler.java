@@ -62,7 +62,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     volatile Boolean keepAlive;
     volatile boolean refuseOtherRequests;
     private final List<RequestHandler> pendingRequests = new CopyOnWriteArrayList<>();
-    final Runnable onClientDisconnected;
+    final Runnable onClientDisconnected;  
 
     public ClientConnectionHandler(
             StatsLogger mainLogger,
@@ -90,7 +90,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         this.connectionStartsTs = System.nanoTime();
         this.onClientDisconnected = onClientDisconnected;
         this.backendHealthManager = backendHealthManager;
-        this.requestsLogger = requestsLogger;
+        this.requestsLogger = requestsLogger; 
     }
 
     public SocketAddress getClientAddress() {

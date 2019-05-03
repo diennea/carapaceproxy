@@ -87,23 +87,13 @@ public class StandardEndpointMapper extends EndpointMapper {
     @Override
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
 
-        addAction(new ActionConfiguration(
-                "proxy-all", ActionConfiguration.TYPE_PROXY, DirectorConfiguration.DEFAULT, null, -1, Collections.emptyList()
-        ));
-        addAction(new ActionConfiguration(
-                "cache-if-possible", ActionConfiguration.TYPE_CACHE, DirectorConfiguration.DEFAULT, null, -1, Collections.emptyList()
-        ));
-        addAction(new ActionConfiguration(
-                "not-found", ActionConfiguration.TYPE_STATIC, null, DEFAULT_NOT_FOUND, 404, Collections.emptyList()
-        ));
-        addAction(new ActionConfiguration(
-                "internal-error", ActionConfiguration.TYPE_STATIC, null, DEFAULT_INTERNAL_SERVER_ERROR, 500, Collections.emptyList()
-        ));
+        addAction(new ActionConfiguration("proxy-all", ActionConfiguration.TYPE_PROXY, DirectorConfiguration.DEFAULT, null, -1));
+        addAction(new ActionConfiguration("cache-if-possible", ActionConfiguration.TYPE_CACHE, DirectorConfiguration.DEFAULT, null, -1));
+        addAction(new ActionConfiguration("not-found", ActionConfiguration.TYPE_STATIC, null, DEFAULT_NOT_FOUND, 404));
+        addAction(new ActionConfiguration("internal-error", ActionConfiguration.TYPE_STATIC, null, DEFAULT_INTERNAL_SERVER_ERROR, 500));
 
         // Route+Action configuration for Let's Encrypt ACME challenging
-        addAction(new ActionConfiguration(
-                "acme-challenge", ActionConfiguration.TYPE_ACME_CHALLENGE, null, null, HttpResponseStatus.OK.code(), Collections.emptyList()
-        ));
+        addAction(new ActionConfiguration("acme-challenge", ActionConfiguration.TYPE_ACME_CHALLENGE, null, null, HttpResponseStatus.OK.code()));
         addRoute(new RouteConfiguration("acme-challenge", "acme-challenge", true, new URIRequestMatcher(".*" + ACME_CHALLENGE_URI_PATTERN + ".*")));
 
         this.defaultNotFoundAction = properties.getProperty("default.action.notfound", "not-found");
@@ -137,7 +127,7 @@ public class StandardEndpointMapper extends EndpointMapper {
             String id = properties.getProperty(prefix + "id", "");
             boolean enabled = Boolean.parseBoolean(properties.getProperty(prefix + "enabled", "false"));
             if (!id.isEmpty() && enabled) {
-                String action = properties.getProperty(prefix + "type", "proxy");
+                String action = properties.getProperty(prefix + "type", ActionConfiguration.TYPE_PROXY);
                 String file = properties.getProperty(prefix + "file", "");
                 String director = properties.getProperty(prefix + "director", DirectorConfiguration.DEFAULT);
                 int code = Integer.parseInt(properties.getProperty(prefix + "code", "-1"));
@@ -160,8 +150,30 @@ public class StandardEndpointMapper extends EndpointMapper {
                         }
                     }
                 }
-                addAction(new ActionConfiguration(id, action, director, file, code, customHeaders));
-                LOG.info("configured action " + id + " type=" + action + " enabled:" + enabled + " headers:" + headersIds);
+
+                ActionConfiguration _action = new ActionConfiguration(id, action, director, file, code)
+                        .setCustomHeaders(customHeaders);
+                String redirectLocation = properties.getProperty(prefix + "redirect.location", "");
+                _action.setRedirectLocation(redirectLocation);
+                if (redirectLocation.isEmpty()) {
+                    _action.setRedirectProto(properties.getProperty(prefix + "redirect.proto", ""));
+                    _action.setRedirectHost(properties.getProperty(prefix + "redirect.host", ""));
+                    _action.setRedirectPort(Integer.parseInt(properties.getProperty(prefix + "redirect.port", "-1")));
+                    _action.setRedirectPath(properties.getProperty(prefix + "redirect.path", ""));
+                    if (action.equals(ActionConfiguration.TYPE_REDIRECT) && _action.getRedirectProto().isEmpty() && _action.getRedirectHost().isEmpty()
+                            && _action.getRedirectPort() == -1 && _action.getRedirectPath().isEmpty()) {
+                        throw new ConfigurationNotValidException("while configuring action '" + id
+                                + "': at least redirect.location or redirect.proto|.host|.port|.path have to be defined"
+                        );
+                    }
+                }
+
+                addAction(_action);
+                LOG.info("configured action " + id + " type=" + action + " enabled:" + enabled + " headers:" + headersIds
+                        + " redirect location:" + redirectLocation + " redirect proto:" + _action.getRedirectProto()
+                        + " redirect host:" + _action.getRedirectHost() + " redirect port:" + _action.getRedirectPort()
+                        + " redirect path:" + _action.getRedirectPath()
+                );
             }
         }
 
@@ -351,10 +363,19 @@ public class StandardEndpointMapper extends EndpointMapper {
                     return MapResult.NOT_FOUND(route.getId());
                 }
 
+                if (ActionConfiguration.TYPE_REDIRECT.equals(action.getType())) {
+                    return new MapResult(action.getRedirectHost(), action.getRedirectPort(), MapResult.Action.REDIRECT, route.getId())
+                            .setRedirectLocation(action.getRedirectLocation())
+                            .setRedirectProto(action.getRedirectProto())
+                            .setRedirectPath(action.getRedirectPath())
+                            .setErrorcode(action.getErrorcode())
+                            .setCustomHeaders(action.getCustomHeaders());
+                }
                 if (ActionConfiguration.TYPE_STATIC.equals(action.getType())) {
-                    return new MapResult(null, -1, MapResult.Action.STATIC, route.getId(), action.getCustomHeaders())
+                    return new MapResult(null, -1, MapResult.Action.STATIC, route.getId())
                             .setResource(action.getFile())
-                            .setErrorcode(action.getErrorcode());
+                            .setErrorcode(action.getErrorcode())
+                            .setCustomHeaders(action.getCustomHeaders());
                 }
                 if (ActionConfiguration.TYPE_ACME_CHALLENGE.equals(action.getType())) {
                     if (this.dynamicCertificateManger != null) {
@@ -363,7 +384,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                         if (tokenData == null) {
                             return MapResult.NOT_FOUND(route.getId());
                         }
-                        return new MapResult(null, -1, MapResult.Action.ACME_CHALLENGE, route.getId(), null)
+                        return new MapResult(null, -1, MapResult.Action.ACME_CHALLENGE, route.getId())
                                 .setResource(IN_MEMORY_RESOURCE + tokenData)
                                 .setErrorcode(action.getErrorcode());
                     } else {
@@ -413,13 +434,8 @@ public class StandardEndpointMapper extends EndpointMapper {
                                     + backendId;
                             customHeaders.add(new CustomHeader(debuggingHeaderName, routingPath, HeaderMode.HEADER_MODE_ADD));
                         }
-                        return new MapResult(
-                                backend.getHost(),
-                                backend.getPort(),
-                                selectedAction,
-                                route.getId(),
-                                customHeaders
-                        );
+                        return new MapResult(backend.getHost(), backend.getPort(), selectedAction, route.getId())
+                                .setCustomHeaders(customHeaders);
                     }
                 }
             }
