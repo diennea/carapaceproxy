@@ -1,0 +1,129 @@
+options {
+    STATIC = false;
+    IGNORE_CASE = true;
+    UNICODE_INPUT = true;    
+}
+
+PARSER_BEGIN(RequestMatcher)
+
+package org.carapaceproxy.server.mapper.requestmatcher;
+
+import io.netty.handler.codec.http.HttpRequest;
+import java.io.IOException;
+import java.io.Reader;
+import java.io.StringReader;
+import java.util.regex.Pattern;
+import org.carapaceproxy.server.RequestHandler;
+
+public class RequestMatcher {       
+    private static final RequestMatcher matcher = new RequestMatcher(new StringReader(""));
+    private HttpRequest request;
+
+    /* Main method to call to check request matching over a matchingCondition:
+    *   - all
+    *   - https
+    *   - regexp '.*index.*'
+    *   - regexp '.*index.*' and not https
+    */
+    public static boolean matches(HttpRequest request, String matchingCondition) throws ParseException, IOException {
+        matcher.request = request;
+        Reader reader = new StringReader(matchingCondition);
+        try {
+            matcher.ReInit(reader);
+            return matcher.parse();
+        } finally {
+            reader.close();
+        }
+    }
+}
+
+
+PARSER_END(RequestMatcher)
+
+SKIP :
+{
+    " " |
+    "\t" |
+    "\n" |
+    "\r"
+}
+
+TOKEN :
+{
+    < ALL: "all" > |
+    < REGEXP_DEF: "regexp" > |
+    < AND: "and" > |
+    < OR: "or" > |
+    < NOT: "not" > |
+    < HTTPS: "https" > |
+    < O_BRACKET: "(" > |
+    < C_BRACKET: ")" > |
+    < REGEXP: "'" (~["'"])* "'" >
+}
+
+/** Top level production. */
+boolean parse() :
+{
+    String regexp;
+    boolean cond;
+    boolean expr;    
+}
+{
+    <ALL> { return true; } |
+    cond = expression() { return cond; } |
+    (
+        <REGEXP_DEF> regexp = <REGEXP>.image
+        {
+            regexp = regexp.substring(1, regexp.length() - 1);
+            cond = Pattern.compile(regexp).matcher(this.request.uri()).matches();
+        }
+        (
+            <AND> expr = expression() { cond &= expr; } |
+            <OR> expr = expression() { cond |= expr; }
+        )?
+        { return cond; }
+    )
+}
+
+boolean expression() :
+{
+    boolean term;    
+}
+{
+    term = term()
+    (
+        <OR> { term |= term(); }
+    )*
+    { return term; }
+}
+
+boolean term() :
+{
+    boolean factor;    
+}
+{
+    factor = factor()
+    (
+        <AND> { factor &= factor(); }
+    )*
+    { return factor; }
+}
+
+boolean factor() :
+{
+    boolean value;
+}
+{
+    value = value() { return value; } |
+    <NOT> value = factor() { return !value; } |
+    (
+        <O_BRACKET> value = expression() <C_BRACKET>
+    )
+    { return value; }
+}
+
+boolean value() :
+{}
+{
+    <HTTPS> { return RequestHandler.PROTO_HTTPS.equals(this.request.headers().get(RequestHandler.HEADER_X_FORWARDED_PROTO, "")); }
+}

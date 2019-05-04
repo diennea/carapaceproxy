@@ -41,7 +41,6 @@ import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
-import org.carapaceproxy.server.config.URIRequestMatcher;
 import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -104,12 +103,12 @@ public class BasicStandardEndpointMapperTest {
         mapper.addAction(new ActionConfiguration("error-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR, 500));
         mapper.addAction(new ActionConfiguration("static-custom", ActionConfiguration.TYPE_STATIC, null, CLASSPATH_RESOURCE + "/test-static-page.html", 200));
 
-        mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new URIRequestMatcher(".*index.html.*")));
-        mapper.addRoute(new RouteConfiguration("route-1b", "cache-1", true, new URIRequestMatcher(".*index2.html.*")));
-        mapper.addRoute(new RouteConfiguration("route-1c", "all-1", true, new URIRequestMatcher(".*index3.html.*")));
-        mapper.addRoute(new RouteConfiguration("route-2-not-found", "not-found-custom", true, new URIRequestMatcher(".*notfound.html.*")));
-        mapper.addRoute(new RouteConfiguration("route-3-error", "error-custom", true, new URIRequestMatcher(".*error.html.*")));
-        mapper.addRoute(new RouteConfiguration("route-4-static", "static-custom", true, new URIRequestMatcher(".*static.html.*")));
+        mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, "regexp '.*index.html.*'"));
+        mapper.addRoute(new RouteConfiguration("route-1b", "cache-1", true, "regexp '.*index2.html.*'"));
+        mapper.addRoute(new RouteConfiguration("route-1c", "all-1", true, "regexp '.*index3.html.*'"));
+        mapper.addRoute(new RouteConfiguration("route-2-not-found", "not-found-custom", true, "regexp '.*notfound.html.*'"));
+        mapper.addRoute(new RouteConfiguration("route-3-error", "error-custom", true, "regexp '.*error.html.*'"));
+        mapper.addRoute(new RouteConfiguration("route-4-static", "static-custom", true, "regexp '.*static.html.*'"));
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
@@ -203,7 +202,7 @@ public class BasicStandardEndpointMapperTest {
                 configuration.put("action.1.code", "200");
                 configuration.put("route.8.id", "static-page");
                 configuration.put("route.8.enabled", "true");
-                configuration.put("route.8.match", "regexp .*index.*");
+                configuration.put("route.8.match", "regexp '.*index.*'");
                 configuration.put("route.8.action", "serve-static");
                 PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
                 server.configureAtBoot(config);
@@ -262,7 +261,7 @@ public class BasicStandardEndpointMapperTest {
             configuration.put("action.1.code", "200");
             configuration.put("route.8.id", "static-page");
             configuration.put("route.8.enabled", "true");
-            configuration.put("route.8.match", "regexp .*index.*");
+            configuration.put("route.8.match", "regexp '.*index.*'");
             configuration.put("route.8.action", "serve-static");
             PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
             server.configureAtBoot(config);
@@ -331,7 +330,7 @@ public class BasicStandardEndpointMapperTest {
 
             configuration.put("route.1.id", "r1");
             configuration.put("route.1.enabled", "true");
-            configuration.put("route.1.match", "regexp .*index\\.html");
+            configuration.put("route.1.match", "regexp '.*index\\.html'");
             configuration.put("route.1.action", "addHeaders");
 
             configuration.put("action.1.id", "addHeaders");
@@ -342,7 +341,7 @@ public class BasicStandardEndpointMapperTest {
 
             configuration.put("route.2.id", "r2");
             configuration.put("route.2.enabled", "true");
-            configuration.put("route.2.match", "regexp .*index2\\.html");
+            configuration.put("route.2.match", "regexp '.*index2\\.html'");
             configuration.put("route.2.action", "addHeader2");
 
             configuration.put("action.2.id", "addHeader2");
@@ -353,7 +352,7 @@ public class BasicStandardEndpointMapperTest {
 
             configuration.put("route.3.id", "r3");
             configuration.put("route.3.enabled", "true");
-            configuration.put("route.3.match", "regexp .*index3\\.html");
+            configuration.put("route.3.match", "regexp '.*index3\\.html'");
             configuration.put("route.3.action", "serve-static");
 
             configuration.put("action.3.id", "serve-static");
@@ -441,7 +440,7 @@ public class BasicStandardEndpointMapperTest {
             // redirect to same domain/uri but with https
             configuration.put("route.1.id", "r1");
             configuration.put("route.1.enabled", "true");
-            configuration.put("route.1.match", "regexp .*index\\.html");
+            configuration.put("route.1.match", "regexp '.*index\\.html'");
             configuration.put("route.1.action", "a1");
             configuration.put("action.1.id", "a1");
             configuration.put("action.1.enabled", "true");
@@ -452,7 +451,7 @@ public class BasicStandardEndpointMapperTest {
             // redirect to absolute domain/uri
             configuration.put("route.2.id", "r2");
             configuration.put("route.2.enabled", "true");
-            configuration.put("route.2.match", "regexp .*index2\\.html");
+            configuration.put("route.2.match", "regexp '.*index2\\.html'");
             configuration.put("route.2.action", "a2");
             configuration.put("action.2.id", "a2");
             configuration.put("action.2.enabled", "true");
@@ -462,7 +461,7 @@ public class BasicStandardEndpointMapperTest {
             // relative redirect (same domain, different uri)
             configuration.put("route.3.id", "r3");
             configuration.put("route.3.enabled", "true");
-            configuration.put("route.3.match", "regexp .*index3\\.html");
+            configuration.put("route.3.match", "regexp '.*index3\\.html'");
             configuration.put("route.3.action", "a3");
             configuration.put("action.3.id", "a3");
             configuration.put("action.3.enabled", "true");
@@ -473,7 +472,7 @@ public class BasicStandardEndpointMapperTest {
             // redirect custom
             configuration.put("route.4.id", "r4");
             configuration.put("route.4.enabled", "true");
-            configuration.put("route.4.match", "regexp .*index4\\.html");
+            configuration.put("route.4.match", "regexp '.*index4\\.html'");
             configuration.put("route.4.action", "a4");
             configuration.put("action.4.id", "a4");
             configuration.put("action.4.enabled", "true");
@@ -500,24 +499,24 @@ public class BasicStandardEndpointMapperTest {
             {
                 // redirect to absolute host:port/uri
                 HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + port + "/index2.html").openConnection();
-                conn.setInstanceFollowRedirects(false);               
+                conn.setInstanceFollowRedirects(false);
                 assertEquals("http://foo/index0.html", conn.getHeaderField("Location"));
                 assertTrue(conn.getHeaderFields().toString().contains("302 Found"));
             }
             {
                 // relative redirect (same host:port, different uri)
                 HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + port + "/index3.html").openConnection();
-                conn.setInstanceFollowRedirects(false);                
+                conn.setInstanceFollowRedirects(false);
                 assertEquals("http://localhost:" + port + "/index0.html", conn.getHeaderField("Location"));
                 assertTrue(conn.getHeaderFields().toString().contains("303 See Other"));
             }
             {
                 // redirect custom
                 HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + port + "/index4.html").openConnection();
-                conn.setInstanceFollowRedirects(false);                
+                conn.setInstanceFollowRedirects(false);
                 assertEquals("https://192.0.0.1:1234/indexX.html", conn.getHeaderField("Location"));
                 assertTrue(conn.getHeaderFields().toString().contains("307 Temporary Redirect"));
             }
-            }
         }
     }
+}

@@ -7,7 +7,7 @@
                     <th scope="col">Route ID</th>
                     <th scope="col">Action</th>
                     <th scope="col">Enabled</th>
-                    <th scope="col">Request matcher</th>
+                    <th scope="col">Matching Condition</th>
                 </tr>
             </thead>
             <tbody>
@@ -22,7 +22,7 @@
                         <div class="label">{{route.enabled | symbolFormat}}</div>
                     </td>
                     <td>
-                        <div class="label">{{route.matcher}}</div>
+                        <div class="label">{{route.matchingCondition}}</div>
                     </td>
                 </tr>
             </tbody>

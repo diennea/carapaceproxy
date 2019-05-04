@@ -29,7 +29,6 @@ import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.certiticates.DynamicCertificate;
 import org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState;
 import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
-import org.carapaceproxy.server.config.MatchAllRequestMatcher;
 import org.carapaceproxy.server.filters.RegexpMapSessionIdFilter;
 import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;
 import org.carapaceproxy.server.filters.XForwardedForRequestFilter;
@@ -143,7 +142,7 @@ public class StartAPIServerTest extends UseAdminServer {
             assertTrue(s.contains("id0"));
             assertTrue(s.contains("id-action"));
             assertTrue(s.contains("true"));
-            assertTrue(s.contains(new MatchAllRequestMatcher().getDescription()));
+            assertTrue(s.contains("all"));
         }
     }
 
