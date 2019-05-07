@@ -9,31 +9,26 @@ PARSER_BEGIN(RequestMatcher)
 package org.carapaceproxy.server.mapper.requestmatcher;
 
 import io.netty.handler.codec.http.HttpRequest;
-import java.io.IOException;
-import java.io.Reader;
 import java.io.StringReader;
 import java.util.regex.Pattern;
 import org.carapaceproxy.server.RequestHandler;
 
-public class RequestMatcher {       
-    private static final RequestMatcher matcher = new RequestMatcher(new StringReader(""));
+/**
+ * Criteria to apply a route to a request
+ */
+public class RequestMatcher {           
     private HttpRequest request;
+    private String matchingCondition;
 
-    /* Main method to call to check request matching over a matchingCondition:
-    *   - all
-    *   - https
-    *   - regexp '.*index.*'
-    *   - regexp '.*index.*' and not https
-    */
-    public static boolean matches(HttpRequest request, String matchingCondition) throws ParseException, IOException {
-        matcher.request = request;
-        Reader reader = new StringReader(matchingCondition);
-        try {
-            matcher.ReInit(reader);
-            return matcher.parse();
-        } finally {
-            reader.close();
-        }
+    public RequestMatcher(HttpRequest request, String matchingCondition) {
+        this(new StringReader(matchingCondition));
+        this.matchingCondition = matchingCondition;
+        this.request = request;
+    }
+
+    @Override
+    public String toString() {
+        return "RequestMatcher{" + "request=" + request + ", matchingCondition=" + matchingCondition + '}';
     }
 }
 
@@ -61,8 +56,13 @@ TOKEN :
     < REGEXP: "'" (~["'"])* "'" >
 }
 
-/** Top level production. */
-boolean parse() :
+/* Main method to call to check request matching over a matchingCondition:
+    *   - all
+    *   - https
+    *   - regexp '.*index.*'
+    *   - regexp '.*index.*' and not https
+    */
+boolean matches() :
 {
     String regexp;
     boolean cond;

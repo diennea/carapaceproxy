@@ -8,3 +8,5 @@
 dependency-reduced-pom.xml
 **/nbproject/
 **/access.log
+**/carapaceproxy/server/mapper/requestmatcher/*.java
+
