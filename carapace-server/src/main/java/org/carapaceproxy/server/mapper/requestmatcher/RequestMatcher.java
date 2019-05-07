@@ -20,14 +20,13 @@
 package org.carapaceproxy.server.mapper.requestmatcher;
 
 import io.netty.handler.codec.http.HttpRequest;
-import org.carapaceproxy.server.config.RoutingKey;
 
 /**
  * Generic criteria to apply a route to a request
  */
 public interface RequestMatcher {
 
-    RoutingKey matches(HttpRequest request);
+    boolean matches(HttpRequest request);
 
     /**
      * @return description of the matcher (used by UI).

@@ -55,9 +55,9 @@ public class RouteConfiguration {
         return matcher;
     }
 
-    public RoutingKey matches(HttpRequest request) {
+    public boolean matches(HttpRequest request) {
         if (!enabled) {
-            return null;
+            return false;
         }
         return matcher.matches(request);
     }

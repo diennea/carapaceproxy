@@ -21,26 +21,23 @@ package org.carapaceproxy.server.mapper.requestmatcher;
 
 import io.netty.handler.codec.http.HttpRequest;
 import org.carapaceproxy.server.RequestHandler;
-import org.carapaceproxy.server.config.AttributesRoutingKey;
-import org.carapaceproxy.server.config.RoutingKey;
 
 /**
  *
+ * Matcher for HTTPS request
+ * 
  * @author paolo.venturi
  */
 public class HttpsRequestMatcher implements RequestMatcher {
 
     @Override
-    public RoutingKey matches(HttpRequest request) {
-        if (RequestHandler.PROTO_HTTPS.equals(request.headers().get(RequestHandler.HEADER_X_FORWARDED_PROTO, ""))) {
-            return AttributesRoutingKey.EMPTY;
-        }
-        return null;
+    public boolean matches(HttpRequest request) {
+        return RequestHandler.PROTO_HTTPS.equals(request.headers().get(RequestHandler.HEADER_X_FORWARDED_PROTO, ""));
     }
 
     @Override
     public String getDescription() {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        return "HTTPS request";
     }
 
 }

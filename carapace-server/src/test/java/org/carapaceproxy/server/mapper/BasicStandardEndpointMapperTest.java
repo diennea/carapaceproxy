@@ -203,7 +203,7 @@ public class BasicStandardEndpointMapperTest {
                 configuration.put("action.1.code", "200");
                 configuration.put("route.8.id", "static-page");
                 configuration.put("route.8.enabled", "true");
-                configuration.put("route.8.match", "regexp .*index.*");
+                configuration.put("route.8.match", "regexp '.*index.*'");
                 configuration.put("route.8.action", "serve-static");
                 PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
                 server.configureAtBoot(config);
@@ -262,7 +262,7 @@ public class BasicStandardEndpointMapperTest {
             configuration.put("action.1.code", "200");
             configuration.put("route.8.id", "static-page");
             configuration.put("route.8.enabled", "true");
-            configuration.put("route.8.match", "regexp .*index.*");
+            configuration.put("route.8.match", "regexp '.*index.*'");
             configuration.put("route.8.action", "serve-static");
             PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
             server.configureAtBoot(config);
@@ -331,7 +331,7 @@ public class BasicStandardEndpointMapperTest {
 
             configuration.put("route.1.id", "r1");
             configuration.put("route.1.enabled", "true");
-            configuration.put("route.1.match", "regexp .*index\\.html");
+            configuration.put("route.1.match", "regexp '.*index\\.html'");
             configuration.put("route.1.action", "addHeaders");
 
             configuration.put("action.1.id", "addHeaders");
@@ -342,7 +342,7 @@ public class BasicStandardEndpointMapperTest {
 
             configuration.put("route.2.id", "r2");
             configuration.put("route.2.enabled", "true");
-            configuration.put("route.2.match", "regexp .*index2\\.html");
+            configuration.put("route.2.match", "regexp '.*index2\\.html'");
             configuration.put("route.2.action", "addHeader2");
 
             configuration.put("action.2.id", "addHeader2");
@@ -353,7 +353,7 @@ public class BasicStandardEndpointMapperTest {
 
             configuration.put("route.3.id", "r3");
             configuration.put("route.3.enabled", "true");
-            configuration.put("route.3.match", "regexp .*index3\\.html");
+            configuration.put("route.3.match", "regexp '.*index3\\.html'");
             configuration.put("route.3.action", "serve-static");
 
             configuration.put("action.3.id", "serve-static");
@@ -441,7 +441,7 @@ public class BasicStandardEndpointMapperTest {
             // redirect to same domain/uri but with https
             configuration.put("route.1.id", "r1");
             configuration.put("route.1.enabled", "true");
-            configuration.put("route.1.match", "regexp .*index\\.html");
+            configuration.put("route.1.match", "regexp '.*index\\.html'");
             configuration.put("route.1.action", "a1");
             configuration.put("action.1.id", "a1");
             configuration.put("action.1.enabled", "true");
@@ -452,7 +452,7 @@ public class BasicStandardEndpointMapperTest {
             // redirect to absolute domain/uri
             configuration.put("route.2.id", "r2");
             configuration.put("route.2.enabled", "true");
-            configuration.put("route.2.match", "regexp .*index2\\.html");
+            configuration.put("route.2.match", "regexp '.*index2\\.html'");
             configuration.put("route.2.action", "a2");
             configuration.put("action.2.id", "a2");
             configuration.put("action.2.enabled", "true");
@@ -462,7 +462,7 @@ public class BasicStandardEndpointMapperTest {
             // relative redirect (same domain, different uri)
             configuration.put("route.3.id", "r3");
             configuration.put("route.3.enabled", "true");
-            configuration.put("route.3.match", "regexp .*index3\\.html");
+            configuration.put("route.3.match", "regexp '.*index3\\.html'");
             configuration.put("route.3.action", "a3");
             configuration.put("action.3.id", "a3");
             configuration.put("action.3.enabled", "true");
@@ -473,7 +473,7 @@ public class BasicStandardEndpointMapperTest {
             // redirect custom
             configuration.put("route.4.id", "r4");
             configuration.put("route.4.enabled", "true");
-            configuration.put("route.4.match", "regexp .*index4\\.html");
+            configuration.put("route.4.match", "regexp '.*index4\\.html'");
             configuration.put("route.4.action", "a4");
             configuration.put("action.4.id", "a4");
             configuration.put("action.4.enabled", "true");

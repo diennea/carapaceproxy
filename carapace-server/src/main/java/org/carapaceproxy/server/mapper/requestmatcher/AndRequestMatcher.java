@@ -20,14 +20,13 @@
 package org.carapaceproxy.server.mapper.requestmatcher;
 
 import io.netty.handler.codec.http.HttpRequest;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import org.carapaceproxy.server.config.AttributesRoutingKey;
-import org.carapaceproxy.server.config.RoutingKey;
+import java.util.stream.Collectors;
 
 /**
  *
+ * Matcher for composing AND expressions with other matchers.
+ * 
  * @author paolo.venturi
  */
 public class AndRequestMatcher implements RequestMatcher {
@@ -39,25 +38,21 @@ public class AndRequestMatcher implements RequestMatcher {
     }
 
     @Override
-    public RoutingKey matches(HttpRequest request) {
-        Map<String, String> routingResultKeyAttributes = null;
-        for (RequestMatcher matcher: matchers) {
-            RoutingKey result = matcher.matches(request);
-            if (result != null) {
-                if (routingResultKeyAttributes == null) {
-                    routingResultKeyAttributes = new HashMap();
-                }
-                routingResultKeyAttributes.putAll(result.getAttributes());
-            } else {
-                return null;
+    public boolean matches(HttpRequest request) {        
+        for (RequestMatcher matcher: matchers) {            
+            if (!matcher.matches(request)) {
+                return false;
             }
         }
-        return routingResultKeyAttributes == null ? null : new AttributesRoutingKey(routingResultKeyAttributes);
+        return true;
     }
 
     @Override
     public String getDescription() {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        return "(" + matchers.stream()
+                    .map(RequestMatcher::getDescription)
+                    .collect(Collectors.joining(" and "))
+                + ")";
     }
 
 }

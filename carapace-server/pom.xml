@@ -299,16 +299,15 @@
                 <executions>
                     <execution>
                         <id>javacc</id>
+                        <phase>generate-sources</phase>
                         <goals>
                             <goal>javacc</goal>
                         </goals>
                         <configuration>
-                            <sourceDirectory>src/main/java</sourceDirectory>                            
-                            <outputDirectory>src/main/java</outputDirectory>
+                            <sourceDirectory>src/main/javacc</sourceDirectory>
                             <includes>
                                 <include>**/*Parser.jj</include>
                             </includes>                            
-                            <isStatic>false</isStatic>
                         </configuration>
                     </execution>
                 </executions>

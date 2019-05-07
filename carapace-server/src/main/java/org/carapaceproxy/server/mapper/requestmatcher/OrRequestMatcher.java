@@ -21,10 +21,12 @@ package org.carapaceproxy.server.mapper.requestmatcher;
 
 import io.netty.handler.codec.http.HttpRequest;
 import java.util.List;
-import org.carapaceproxy.server.config.RoutingKey;
+import java.util.stream.Collectors;
 
 /**
  *
+ * Matcher for composing OR expressions with other matchers.
+ * 
  * @author paolo.venturi
  */
 public class OrRequestMatcher implements RequestMatcher {
@@ -36,19 +38,21 @@ public class OrRequestMatcher implements RequestMatcher {
     }
 
     @Override
-    public RoutingKey matches(HttpRequest request) {        
-        for (RequestMatcher matcher: matchers) {
-            RoutingKey result = matcher.matches(request);
-            if (result != null) {
-                return result;
+    public boolean matches(HttpRequest request) {
+        for (RequestMatcher matcher : matchers) {            
+            if (matcher.matches(request)) {
+                return true;
             }
         }
-        return null;
+        return false;
     }
 
     @Override
     public String getDescription() {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        return "(" + matchers.stream()
+                    .map(RequestMatcher::getDescription)
+                    .collect(Collectors.joining(" or "))
+                + ")";
     }
 
 }

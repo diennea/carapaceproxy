@@ -6,12 +6,20 @@ options {
 
 PARSER_BEGIN(RequestMatchParser)
 
-package org.carapaceproxy.server.mapper.requestmatcher;
+package org.carapaceproxy.server.mapper.requestmatcher.parser;
 
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import org.carapaceproxy.server.mapper.requestmatcher.AndRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.HttpsRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.MatchAllRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.NotRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.OrRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.URIRequestMatcher;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
 
 /**
  * Criteria to apply a route to a request
@@ -30,7 +38,7 @@ public class RequestMatchParser {
 }
 
 
-PARSER_END(RequestMatchParser)
+PARSER_END(RequestMatchParser)   
 
 SKIP :
 {
@@ -59,20 +67,20 @@ TOKEN :
     *   - regexp '.*index.*'
     *   - regexp '.*index.*' and not https
     */
-RequestMatcher parse() :
+RequestMatcher parse() throws ConfigurationNotValidException:
 {        
     RequestMatcher matcher;
     String regexp;
 }
 {
-    <ALL> { return new MatchAllRequestMatcher(); } |    
+    <ALL> <EOF> { return new MatchAllRequestMatcher(); } |
     (
         <REGEXP_DEF> regexp = <REGEXP>.image { matcher = new URIRequestMatcher(regexp.substring(1, regexp.length() - 1)); }
         (
             <AND> { matcher = new AndRequestMatcher(Arrays.asList(matcher, andExpression())); } |
             <OR> { matcher = new OrRequestMatcher(Arrays.asList(matcher, orExpression())); }
         )?
-        { return matcher; }
+        <EOF> { return matcher; }
     ) |
     { return orExpression(); }
 }
@@ -86,7 +94,7 @@ RequestMatcher orExpression() :
     (
         <OR> { matchers.add(andExpression()); }
     )*
-    { return new OrRequestMatcher(matchers); }
+    { return new OrRequestMatcher(matchers); }    
 }
 
 RequestMatcher andExpression() :

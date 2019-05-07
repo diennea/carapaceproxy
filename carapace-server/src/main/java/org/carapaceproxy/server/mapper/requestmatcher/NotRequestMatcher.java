@@ -20,10 +20,9 @@
 package org.carapaceproxy.server.mapper.requestmatcher;
 
 import io.netty.handler.codec.http.HttpRequest;
-import org.carapaceproxy.server.config.AttributesRoutingKey;
-import org.carapaceproxy.server.config.RoutingKey;
 
 /**
+ * Matcher for composing NOT expressions with another matcher.
  *
  * @author paolo.venturi
  */
@@ -36,14 +35,13 @@ public class NotRequestMatcher implements RequestMatcher {
     }
 
     @Override
-    public RoutingKey matches(HttpRequest request) {
-        RoutingKey result = matcher.matches(request);
-        return result == null ? AttributesRoutingKey.EMPTY : null;
+    public boolean matches(HttpRequest request) {
+        return !matcher.matches(request);
     }
 
     @Override
     public String getDescription() {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        return "not " + matcher.getDescription();
     }
 
 }
