@@ -75,8 +75,9 @@ public class RequestHandler {
 
     private static final Logger LOG = Logger.getLogger(RequestHandler.class.getName());
     private static final AtomicLong TIME_TRACKER = new AtomicLong();
-    private static final String PROTO_HTTPS = "https";
-    private static final String PROTO_HTTP = "http";    
+    public static final String PROTO_HTTPS = "https";
+    public static final String PROTO_HTTP = "http";
+    public static final String HEADER_X_FORWARDED_PROTO = "X-Forwarded-Proto";
     private final long id;
     private final HttpRequest request;
     private final List<RequestFilter> filters;

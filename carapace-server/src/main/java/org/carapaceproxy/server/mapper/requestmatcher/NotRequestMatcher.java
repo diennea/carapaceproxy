@@ -17,34 +17,31 @@
  under the License.
 
  */
-package org.carapaceproxy.server.config;
+package org.carapaceproxy.server.mapper.requestmatcher;
 
-import java.util.Collections;
-import java.util.Map;
+import io.netty.handler.codec.http.HttpRequest;
 
-public class AttributesRoutingKey implements RoutingKey {
+/**
+ * Matcher for composing NOT expressions with another matcher.
+ *
+ * @author paolo.venturi
+ */
+public class NotRequestMatcher implements RequestMatcher {
 
-    private final Map<String, String> attributes;
+    private final RequestMatcher matcher;
 
-    public static final AttributesRoutingKey EMPTY = new AttributesRoutingKey(Collections.emptyMap());
-
-    public AttributesRoutingKey(Map<String, String> attributes) {
-        this.attributes = Collections.unmodifiableMap(attributes);
+    public NotRequestMatcher(RequestMatcher matcher) {
+        this.matcher = matcher;
     }
 
     @Override
-    public String getAttribute(String key) {
-        return attributes.get(key);
+    public boolean matches(HttpRequest request) {
+        return !matcher.matches(request);
     }
 
     @Override
-    public Map<String, String> getAttributes() {
-        return attributes;
-    }
-
-    @Override
-    public String toString() {
-        return "{" + attributes + '}';
+    public String getDescription() {
+        return "not " + matcher.getDescription();
     }
 
 }

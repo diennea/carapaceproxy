@@ -29,7 +29,7 @@ import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.certiticates.DynamicCertificate;
 import org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState;
 import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
-import org.carapaceproxy.server.config.MatchAllRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.MatchAllRequestMatcher;
 import org.carapaceproxy.server.filters.RegexpMapSessionIdFilter;
 import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;
 import org.carapaceproxy.server.filters.XForwardedForRequestFilter;

@@ -17,35 +17,33 @@
  under the License.
 
  */
-package org.carapaceproxy.server.config;
+package org.carapaceproxy.server.mapper.requestmatcher;
 
 import io.netty.handler.codec.http.HttpRequest;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
 
+/**
+ * Matcher by Regular Expression to requests URI
+ *
+ * @author paolo.venturi
+ */
 public class URIRequestMatcher implements RequestMatcher {
 
     private final Pattern expression;
 
-    public URIRequestMatcher(String expression) {
-        this.expression = Pattern.compile(expression);
+    public URIRequestMatcher(String expression) throws ConfigurationNotValidException {
+        try {
+            this.expression = Pattern.compile(expression);
+        } catch (PatternSyntaxException err) {
+            throw new ConfigurationNotValidException(err);
+        }
     }
 
     @Override
-    public RoutingKey matches(HttpRequest request) {
-        Matcher matcher = expression.matcher(request.uri());
-        if (matcher.matches()) {
-            int groups = matcher.groupCount();
-            Map<String, String> attributes = new HashMap<>();
-            for (int i = 0; i <= groups; i++) {
-                attributes.put(i + "", matcher.group(i));
-            }
-            return new AttributesRoutingKey(attributes);
-        } else {
-            return null;
-        }
+    public boolean matches(HttpRequest request) {
+        return expression.matcher(request.uri()).matches();
     }
 
     @Override

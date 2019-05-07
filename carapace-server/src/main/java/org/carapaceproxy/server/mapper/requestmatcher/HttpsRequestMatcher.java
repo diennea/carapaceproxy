@@ -17,13 +17,27 @@
  under the License.
 
  */
-package org.carapaceproxy.server.config;
+package org.carapaceproxy.server.mapper.requestmatcher;
 
-import java.util.Map;
+import io.netty.handler.codec.http.HttpRequest;
+import org.carapaceproxy.server.RequestHandler;
 
-public interface RoutingKey {
+/**
+ *
+ * Matcher for HTTPS request
+ * 
+ * @author paolo.venturi
+ */
+public class HttpsRequestMatcher implements RequestMatcher {
 
-    public String getAttribute(String key);
+    @Override
+    public boolean matches(HttpRequest request) {
+        return RequestHandler.PROTO_HTTPS.equals(request.headers().get(RequestHandler.HEADER_X_FORWARDED_PROTO, ""));
+    }
 
-    public Map<String, String> getAttributes();
+    @Override
+    public String getDescription() {
+        return "HTTPS request";
+    }
+
 }

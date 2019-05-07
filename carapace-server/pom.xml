@@ -292,7 +292,27 @@
                     </dependency>
                 </dependencies>
             </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>javacc-maven-plugin</artifactId>
+                <version>${javacc-maven-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>javacc</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>javacc</goal>
+                        </goals>
+                        <configuration>
+                            <sourceDirectory>src/main/javacc</sourceDirectory>
+                            <includes>
+                                <include>**/*Parser.jj</include>
+                            </includes>                            
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
-
+    
 </project>

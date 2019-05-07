@@ -46,13 +46,13 @@ import org.carapaceproxy.server.config.BackendSelector;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import static org.carapaceproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
-import org.carapaceproxy.server.config.MatchAllRequestMatcher;
-import org.carapaceproxy.server.config.RequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 import org.carapaceproxy.server.config.RouteConfiguration;
-import org.carapaceproxy.server.config.RoutingKey;
-import org.carapaceproxy.server.config.URIRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.URIRequestMatcher;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import org.carapaceproxy.server.mapper.CustomHeader.HeaderMode;
+import org.carapaceproxy.server.mapper.requestmatcher.parser.ParseException;
+import org.carapaceproxy.server.mapper.requestmatcher.parser.RequestMatchParser;
 
 /**
  * Standard Endpoint mapping
@@ -219,28 +219,17 @@ public class StandardEndpointMapper extends EndpointMapper {
             if (!id.isEmpty()) {
                 String action = properties.getProperty(prefix + "action", "");
                 boolean enabled = Boolean.parseBoolean(properties.getProperty(prefix + "enabled", "false"));
-                String match = properties.getProperty(prefix + "match", "all").trim();
-                int space = match.indexOf(' ');
-                String matchType = match;
-                if (space >= 0) {
-                    matchType = match.substring(0, space);
-                    match = match.substring(space + 1);
+                String matchingCondition = properties.getProperty(prefix + "match", "all").trim();
+                try {
+                    RequestMatcher matcher = new RequestMatchParser(matchingCondition).parse();
+                    LOG.log(Level.INFO, "configured route {0} action: {1} enabled: {2} matcher: {3}", new Object[]{id, action, enabled, matcher});
+                    RouteConfiguration config = new RouteConfiguration(id, action, enabled, matcher);
+                    addRoute(config);
+                } catch (ParseException | ConfigurationNotValidException ex) {
+                    throw new ConfigurationNotValidException(
+                            prefix + " unable to parse matching condition \"" + matchingCondition + "\" due to: " + ex
+                    );
                 }
-                RequestMatcher matcher;
-                switch (matchType) {
-                    case "all":
-                        matcher = new MatchAllRequestMatcher();
-                        break;
-                    case "regexp":
-                        matcher = new URIRequestMatcher(match);
-                        break;
-                    default:
-                        throw new ConfigurationNotValidException(prefix + "match can be only 'all' and 'regexp' at the moment");
-
-                }
-                LOG.log(Level.INFO, "configured route {0} action: {1} enabled: {2} matcher: {3}", new Object[]{id, action, enabled, matcher});
-                RouteConfiguration config = new RouteConfiguration(id, action, enabled, matcher);
-                addRoute(config);
             }
         }
     }
@@ -248,10 +237,10 @@ public class StandardEndpointMapper extends EndpointMapper {
     private final class RandomBackendSelector implements BackendSelector {
 
         @Override
-        public List<String> selectBackends(String userId, String sessionId, String director, RoutingKey key) {
+        public List<String> selectBackends(String userId, String sessionId, String director) {
             DirectorConfiguration directorConfig = directors.get(director);
             if (directorConfig == null) {
-                LOG.log(Level.SEVERE, "Director '" + director + "' not configured, while handling request key=" + key + " userId=" + userId + " sessionId=" + sessionId);
+                LOG.log(Level.SEVERE, "Director '" + director + "' not configured, while handling request  + userId=" + userId + " sessionId=" + sessionId);
                 return Collections.emptyList();
             }
             if (directorConfig.getBackends().contains(ALL_BACKENDS)) {
@@ -352,11 +341,11 @@ public class StandardEndpointMapper extends EndpointMapper {
             if (!route.isEnabled()) {
                 continue;
             }
-            RoutingKey matchResult = route.matches(request);
+            boolean matchResult = route.matches(request);
             if (LOG.isLoggable(Level.FINER)) {
                 LOG.finer("route " + route.getId() + ", map " + request.uri() + " -> " + matchResult);
             }
-            if (matchResult != null) {
+            if (matchResult) {
                 ActionConfiguration action = actions.get(route.getAction());
                 if (action == null) {
                     LOG.info("no action '" + route.getAction() + "' -> not-found for " + request.uri() + ", valid " + actions.keySet());
@@ -405,7 +394,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                         director = forceDirectorParameterValue;
                         LOG.log(Level.INFO, "forcing director = {0} for {1}", new Object[]{director, request.uri()});
                     }
-                    selectedBackends = backendSelector.selectBackends(userId, sessionId, director, matchResult);
+                    selectedBackends = backendSelector.selectBackends(userId, sessionId, director);
                 }
                 somethingMatched = somethingMatched | !selectedBackends.isEmpty();
 

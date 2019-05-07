@@ -1,0 +1,129 @@
+options {
+    STATIC = false;
+    IGNORE_CASE = true;
+    UNICODE_INPUT = true;    
+}
+
+PARSER_BEGIN(RequestMatchParser)
+
+package org.carapaceproxy.server.mapper.requestmatcher.parser;
+
+import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import org.carapaceproxy.server.mapper.requestmatcher.AndRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.HttpsRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.MatchAllRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.NotRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.OrRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.URIRequestMatcher;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
+
+/**
+ * Criteria to apply a route to a request
+ */
+public class RequestMatchParser {
+    private String matchingCondition;   
+
+    public RequestMatchParser(String matchingCondition) {
+        this(new StringReader(matchingCondition));
+        this.matchingCondition = matchingCondition;
+    }
+
+    public String getMatchingCondition() {
+        return matchingCondition;
+    }
+}
+
+
+PARSER_END(RequestMatchParser)   
+
+SKIP :
+{
+    " " |
+    "\t" |
+    "\n" |
+    "\r"
+}
+
+TOKEN :
+{
+    < ALL: "all" > |
+    < REGEXP_DEF: "regexp" > |
+    < AND: "and" > |
+    < OR: "or" > |
+    < NOT: "not" > |
+    < HTTPS: "https" > |
+    < O_BRACKET: "(" > |
+    < C_BRACKET: ")" > |
+    < REGEXP: "'" (~["'"])* "'" >
+}
+
+/* Main method to call to build a proper RequestMatcher over given matchingCondition
+    *   - all
+    *   - https
+    *   - regexp '.*index.*'
+    *   - regexp '.*index.*' and not https
+    */
+RequestMatcher parse() throws ConfigurationNotValidException:
+{        
+    RequestMatcher matcher;
+    String regexp;
+}
+{
+    <ALL> <EOF> { return new MatchAllRequestMatcher(); } |
+    (
+        <REGEXP_DEF> regexp = <REGEXP>.image { matcher = new URIRequestMatcher(regexp.substring(1, regexp.length() - 1)); }
+        (
+            <AND> { matcher = new AndRequestMatcher(Arrays.asList(matcher, andExpression())); } |
+            <OR> { matcher = new OrRequestMatcher(Arrays.asList(matcher, orExpression())); }
+        )?
+        <EOF> { return matcher; }
+    ) |
+    { return orExpression(); }
+}
+
+RequestMatcher orExpression() :
+{    
+    List<RequestMatcher> matchers = new ArrayList();
+}
+{
+    { matchers.add(andExpression()); }
+    (
+        <OR> { matchers.add(andExpression()); }
+    )*
+    { return new OrRequestMatcher(matchers); }    
+}
+
+RequestMatcher andExpression() :
+{
+    List<RequestMatcher> matchers = new ArrayList();
+}
+{
+    { matchers.add(basicExpression()); }
+    (
+        <AND> { matchers.add(basicExpression()); }
+    )*
+    { return new AndRequestMatcher(matchers); }
+}
+
+RequestMatcher basicExpression() :
+{
+    RequestMatcher basicMatcher;
+}
+{
+    basicMatcher = basicMatcher() { return basicMatcher; } |
+    <NOT> basicMatcher = basicExpression() { return new NotRequestMatcher(basicMatcher); } |
+    (
+        <O_BRACKET> basicMatcher = orExpression() <C_BRACKET>
+    )
+    { return basicMatcher; }
+}
+
+RequestMatcher basicMatcher() :
+{}
+{
+    <HTTPS> { return new HttpsRequestMatcher(); }
+}

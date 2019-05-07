@@ -34,7 +34,7 @@ import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
-import org.carapaceproxy.server.config.URIRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.URIRequestMatcher;
 import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertEquals;
 import org.junit.Rule;

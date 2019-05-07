@@ -15,4 +15,12 @@
                 <goal>spotbugs:check</goal>
             </goals>
         </action>
+        <action>
+            <actionName>CUSTOM-clean generate-sources</actionName>
+            <displayName>clean generate-sources</displayName>
+            <goals>
+                <goal>clean</goal>
+                <goal>generate-sources</goal>
+            </goals>
+        </action>
     </actions>

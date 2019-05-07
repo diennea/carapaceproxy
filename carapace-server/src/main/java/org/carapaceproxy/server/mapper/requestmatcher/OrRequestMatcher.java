@@ -17,49 +17,42 @@
  under the License.
 
  */
-package org.carapaceproxy.server.config;
+package org.carapaceproxy.server.mapper.requestmatcher;
 
-import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 import io.netty.handler.codec.http.HttpRequest;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
- * Route
+ *
+ * Matcher for composing OR expressions with other matchers.
+ * 
+ * @author paolo.venturi
  */
-public class RouteConfiguration {
+public class OrRequestMatcher implements RequestMatcher {
 
-    private final String id;
-    private final String action;
-    private final boolean enabled;
-    private final RequestMatcher matcher;
+    private final List<RequestMatcher> matchers;
 
-    public RouteConfiguration(String id, String action, boolean enabled, RequestMatcher matcher) {
-        this.id = id;
-        this.action = action;
-        this.enabled = enabled;
-        this.matcher = matcher;
+    public OrRequestMatcher(List<RequestMatcher> matchers) {
+        this.matchers = matchers;
     }
 
-    public String getId() {
-        return id;
-    }
-
-    public String getAction() {
-        return action;
-    }
-
-    public boolean isEnabled() {
-        return enabled;
-    }
-
-    public RequestMatcher getMatcher() {
-        return matcher;
-    }
-
+    @Override
     public boolean matches(HttpRequest request) {
-        if (!enabled) {
-            return false;
+        for (RequestMatcher matcher : matchers) {            
+            if (matcher.matches(request)) {
+                return true;
+            }
         }
-        return matcher.matches(request);
+        return false;
+    }
+
+    @Override
+    public String getDescription() {
+        return "(" + matchers.stream()
+                    .map(RequestMatcher::getDescription)
+                    .collect(Collectors.joining(" or "))
+                + ")";
     }
 
 }

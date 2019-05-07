@@ -17,25 +17,19 @@
  under the License.
 
  */
-package org.carapaceproxy.server.config;
+package org.carapaceproxy.server.mapper.requestmatcher;
 
 import io.netty.handler.codec.http.HttpRequest;
 
-public class MatchAllRequestMatcher implements RequestMatcher {
+/**
+ * Generic criteria to apply a route to a request
+ */
+public interface RequestMatcher {
 
-    @Override
-    public RoutingKey matches(HttpRequest request) {
-        return AttributesRoutingKey.EMPTY;
-    }
+    boolean matches(HttpRequest request);
 
-    @Override
-    public String getDescription() {
-        return "Matching to all requests";
-    }
-
-    @Override
-    public String toString() {
-        return "MatchAll";
-    }
-
+    /**
+     * @return description of the matcher (used by UI).
+     */
+    String getDescription();
 }
