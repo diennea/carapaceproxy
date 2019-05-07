@@ -20,17 +20,24 @@
 package org.carapaceproxy.server.mapper.requestmatcher;
 
 import io.netty.handler.codec.http.HttpRequest;
+import org.carapaceproxy.server.config.AttributesRoutingKey;
 import org.carapaceproxy.server.config.RoutingKey;
 
-/**
- * Generic criteria to apply a route to a request
- */
-public interface RequestMatcher {
+public class MatchAllRequestMatcher implements RequestMatcher {
 
-    RoutingKey matches(HttpRequest request);
+    @Override
+    public RoutingKey matches(HttpRequest request) {
+        return AttributesRoutingKey.EMPTY;
+    }
 
-    /**
-     * @return description of the matcher (used by UI).
-     */
-    String getDescription();
+    @Override
+    public String getDescription() {
+        return "Matching to all requests";
+    }
+
+    @Override
+    public String toString() {
+        return "MatchAll";
+    }
+
 }

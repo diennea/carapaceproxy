@@ -43,13 +43,13 @@ public class RoutesResource {
         private final String id;
         private final String action;
         private final boolean enabled;
-        private final String matchingCondition;
+        private final String matcher;
 
-        public RouteBean(String id, String action, boolean enabled, String matchingCondition) {
+        public RouteBean(String id, String action, boolean enabled, String matcher) {
             this.id = id;
             this.action = action;
             this.enabled = enabled;
-            this.matchingCondition = matchingCondition;
+            this.matcher = matcher;
         }
 
         public String getId() {
@@ -64,8 +64,8 @@ public class RoutesResource {
             return enabled;
         }
 
-        public String getMatchingCondition() {
-            return matchingCondition;
+        public String getMatcher() {
+            return matcher;
         }
     }
 
@@ -74,7 +74,7 @@ public class RoutesResource {
         final List<RouteBean> routes = new ArrayList();
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         server.getMapper().getRoutes().forEach(route -> {
-            routes.add(new RouteBean(route.getId(), route.getAction(), route.isEnabled(), route.getMatchingCondition()));
+            routes.add(new RouteBean(route.getId(), route.getAction(), route.isEnabled(), route.getMatcher().getDescription()));
         });
 
         return routes;

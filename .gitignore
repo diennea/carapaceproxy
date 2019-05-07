@@ -8,5 +8,11 @@
 dependency-reduced-pom.xml
 **/nbproject/
 **/access.log
-**/carapaceproxy/server/mapper/requestmatcher/*.java
 
+/carapace-server/src/main/java/org/carapaceproxy/server/mapper/requestmatcher/RequestMatchParserTokenManager.java
+/carapace-server/src/main/java/org/carapaceproxy/server/mapper/requestmatcher/RequestMatchParser.java
+/carapace-server/src/main/java/org/carapaceproxy/server/mapper/requestmatcher/ParseException.java
+/carapace-server/src/main/java/org/carapaceproxy/server/mapper/requestmatcher/SimpleCharStream.java
+/carapace-server/src/main/java/org/carapaceproxy/server/mapper/requestmatcher/RequestMatchParserConstants.java
+/carapace-server/src/main/java/org/carapaceproxy/server/mapper/requestmatcher/Token.java
+/carapace-server/src/main/java/org/carapaceproxy/server/mapper/requestmatcher/TokenMgrError.java

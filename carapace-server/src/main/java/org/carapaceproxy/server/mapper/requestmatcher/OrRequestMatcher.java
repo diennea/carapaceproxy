@@ -20,17 +20,35 @@
 package org.carapaceproxy.server.mapper.requestmatcher;
 
 import io.netty.handler.codec.http.HttpRequest;
+import java.util.List;
 import org.carapaceproxy.server.config.RoutingKey;
 
 /**
- * Generic criteria to apply a route to a request
+ *
+ * @author paolo.venturi
  */
-public interface RequestMatcher {
+public class OrRequestMatcher implements RequestMatcher {
 
-    RoutingKey matches(HttpRequest request);
+    private final List<RequestMatcher> matchers;
 
-    /**
-     * @return description of the matcher (used by UI).
-     */
-    String getDescription();
+    public OrRequestMatcher(List<RequestMatcher> matchers) {
+        this.matchers = matchers;
+    }
+
+    @Override
+    public RoutingKey matches(HttpRequest request) {        
+        for (RequestMatcher matcher: matchers) {
+            RoutingKey result = matcher.matches(request);
+            if (result != null) {
+                return result;
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public String getDescription() {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
 }

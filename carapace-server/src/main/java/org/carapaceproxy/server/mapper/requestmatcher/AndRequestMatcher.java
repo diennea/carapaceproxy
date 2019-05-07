@@ -1,0 +1,63 @@
+/*
+ Licensed to Diennea S.r.l. under one
+ or more contributor license agreements. See the NOTICE file
+ distributed with this work for additional information
+ regarding copyright ownership. Diennea S.r.l. licenses this file
+ to you under the Apache License, Version 2.0 (the
+ "License"); you may not use this file except in compliance
+ with the License.  You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing,
+ software distributed under the License is distributed on an
+ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ KIND, either express or implied.  See the License for the
+ specific language governing permissions and limitations
+ under the License.
+
+ */
+package org.carapaceproxy.server.mapper.requestmatcher;
+
+import io.netty.handler.codec.http.HttpRequest;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import org.carapaceproxy.server.config.AttributesRoutingKey;
+import org.carapaceproxy.server.config.RoutingKey;
+
+/**
+ *
+ * @author paolo.venturi
+ */
+public class AndRequestMatcher implements RequestMatcher {
+   
+    private final List<RequestMatcher> matchers;
+
+    public AndRequestMatcher(List<RequestMatcher> matchers) {
+        this.matchers = matchers;
+    }
+
+    @Override
+    public RoutingKey matches(HttpRequest request) {
+        Map<String, String> routingResultKeyAttributes = null;
+        for (RequestMatcher matcher: matchers) {
+            RoutingKey result = matcher.matches(request);
+            if (result != null) {
+                if (routingResultKeyAttributes == null) {
+                    routingResultKeyAttributes = new HashMap();
+                }
+                routingResultKeyAttributes.putAll(result.getAttributes());
+            } else {
+                return null;
+            }
+        }
+        return routingResultKeyAttributes == null ? null : new AttributesRoutingKey(routingResultKeyAttributes);
+    }
+
+    @Override
+    public String getDescription() {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
+}

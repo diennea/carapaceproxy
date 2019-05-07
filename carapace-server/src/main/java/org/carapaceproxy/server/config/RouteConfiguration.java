@@ -19,12 +19,8 @@
  */
 package org.carapaceproxy.server.config;
 
-import io.netty.handler.codec.http.HttpRequest;
-import java.io.IOException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import org.carapaceproxy.server.mapper.requestmatcher.ParseException;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
+import io.netty.handler.codec.http.HttpRequest;
 
 /**
  * Route
@@ -34,13 +30,13 @@ public class RouteConfiguration {
     private final String id;
     private final String action;
     private final boolean enabled;
-    private final String matchingCondition;
+    private final RequestMatcher matcher;
 
-    public RouteConfiguration(String id, String action, boolean enabled, String matchingCondition) {
+    public RouteConfiguration(String id, String action, boolean enabled, RequestMatcher matcher) {
         this.id = id;
         this.action = action;
         this.enabled = enabled;
-        this.matchingCondition = matchingCondition;
+        this.matcher = matcher;
     }
 
     public String getId() {
@@ -55,19 +51,15 @@ public class RouteConfiguration {
         return enabled;
     }
 
-    public String getMatchingCondition() {
-        return matchingCondition;
+    public RequestMatcher getMatcher() {
+        return matcher;
     }
 
-    public boolean matches(HttpRequest request) {
-        if (enabled) {
-            try {
-                return RequestMatcher.matches(request, matchingCondition);
-            } catch (ParseException | IOException ex) {
-                Logger.getLogger(RouteConfiguration.class.getName()).log(Level.SEVERE, null, ex);
-            }
+    public RoutingKey matches(HttpRequest request) {
+        if (!enabled) {
+            return null;
         }
-        return false;
+        return matcher.matches(request);
     }
 
 }
