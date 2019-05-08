@@ -21,6 +21,7 @@ package org.carapaceproxy.server.certiticates;
 
 import com.google.common.annotations.VisibleForTesting;
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.util.Base64;
@@ -33,6 +34,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.ConfigurationStoreException;
@@ -49,7 +51,6 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
 import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.Status;
-import org.shredzone.acme4j.challenge.Challenge;
 import org.shredzone.acme4j.challenge.Http01Challenge;
 import org.shredzone.acme4j.exception.AcmeException;
 import org.shredzone.acme4j.util.KeyPairUtils;
@@ -68,9 +69,9 @@ public class DynamicCertificatesManager implements Runnable {
     public static final int DEFAULT_KEYPAIRS_SIZE = 2048;
     private static final Logger LOG = Logger.getLogger(DynamicCertificatesManager.class.getName());
     private static final boolean TESTING_MODE = Boolean.getBoolean("carapace.acme.testmode");
+    private static final String EVENT_CERT_AVAIL_CHANGED = "certAvailChanged";
 
     private Map<String, DynamicCertificate> certificates = new ConcurrentHashMap();
-    final private Map<String, String> challengesTokens = new ConcurrentHashMap();
     private ACMEClient client; // Let's Encrypt client
 
     private ScheduledExecutorService scheduler;
@@ -80,9 +81,15 @@ public class DynamicCertificatesManager implements Runnable {
     private ConfigurationStore store;
     private volatile int period = 0; // in seconds
     private volatile int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
+    private GroupMembershipHandler groupMembershipHandler;
 
     public void setConfigurationStore(ConfigurationStore configStore) {
         this.store = configStore;
+    }
+
+    public void setGroupMembershipHandler(GroupMembershipHandler groupMembershipHandler) {
+        this.groupMembershipHandler = groupMembershipHandler;
+        groupMembershipHandler.watchEvent(EVENT_CERT_AVAIL_CHANGED, new CertAvailChangeCallback());
     }
 
     @VisibleForTesting
@@ -99,16 +106,15 @@ public class DynamicCertificatesManager implements Runnable {
         if (store == null) {
             throw new DynamicCertificatesManagerException("ConfigurationStore not set.");
         }
+        keyPairsSize = configuration.getKeyPairsSize();
         if (client == null) {
             client = new ACMEClient(loadOrCreateAcmeUserKeyPair(), TESTING_MODE);
         }
-
+        loadCertificates(configuration.getCertificates());
+        period = configuration.getDynamicCertificatesManagerPeriod();
         if (scheduledFuture != null) {
             scheduledFuture.cancel(true);
         }
-        period = configuration.getDynamicCertificatesManagerPeriod();
-        keyPairsSize = configuration.getKeyPairsSize();
-        loadCertificates(configuration.getCertificates());
         if (scheduledFuture != null || started) {
             start();
         }
@@ -118,7 +124,9 @@ public class DynamicCertificatesManager implements Runnable {
         KeyPair pair = store.loadAcmeUserKeyPair();
         if (pair == null) {
             pair = KeyPairUtils.createKeyPair(keyPairsSize > 0 ? keyPairsSize : DEFAULT_KEYPAIRS_SIZE);
-            store.saveAcmeUserKey(pair);
+            if (!store.saveAcmeUserKey(pair)) {
+                pair = store.loadAcmeUserKeyPair(); // load key created concurrently by another peer
+            }
         }
 
         return pair;
@@ -131,27 +139,25 @@ public class DynamicCertificatesManager implements Runnable {
                 SSLCertificateConfiguration config = e.getValue();
                 if (config.isDynamic()) {
                     String domain = config.getHostname();
-                    DynamicCertificate dc;
-                    if (this.certificates.containsKey(domain)) { // Service up: new configuration with yet managed domain loaded
-                        dc = this.certificates.get(domain);
-                    } else {
-                        // Service restarted: database lookup for existing managed certificate
-                        CertificateData data = store.loadCertificateForDomain(domain);
-                        if (data != null) {
-                            dc = new DynamicCertificate(data);
-                        } else { // New domain to manage
-                            dc = new DynamicCertificate(domain);
-                        }
-                    }
-                    _certificates.put(domain, dc);
+                    _certificates.put(domain, loadOrCreateDynamicCertificateForDomain(domain));
                 }
             }
-            this.certificates = _certificates;
-        } catch (GeneralSecurityException e) {
+            this.certificates = _certificates; // only certificates/domains specified in the config have to be managed.
+        } catch (GeneralSecurityException | MalformedURLException e) {
             throw new DynamicCertificatesManagerException("Unable to load dynamic certificates configuration.", e);
         }
-
     }
+
+    private DynamicCertificate loadOrCreateDynamicCertificateForDomain(String domain) throws GeneralSecurityException, MalformedURLException {
+        DynamicCertificate dc;
+        CertificateData data = store.loadCertificateForDomain(domain);
+        if (data != null) {
+            dc = new DynamicCertificate(data);
+        } else { // New domain to manage
+            dc = new DynamicCertificate(domain);
+        }
+        return dc;
+    }   
 
     public synchronized void start() {
         started = true;
@@ -182,59 +188,65 @@ public class DynamicCertificatesManager implements Runnable {
 
     @Override
     public void run() {
-        for (DynamicCertificate cert : certificates.values()) {
+        try {
+            groupMembershipHandler.executeInMutex(THREAD_NAME, () -> {
+                // Only one node of the cluser execute this (until death)
+                certificatesLifecycle();
+            });
+        } catch (Exception e) {
+            LOG.log(Level.SEVERE, null, e);
+        }
+    }
+
+    private void certificatesLifecycle() {
+        boolean updateDB = true;
+        boolean notifyCertAvailChanged = false;
+        for (String domain : certificates.keySet()) {
             try {
-                String domain = cert.getDomain();
-                DynamicCertificateState state = cert.getState();
-                switch (state) {
+                DynamicCertificate cert = new DynamicCertificate(store.loadCertificateForDomain(domain));
+                switch (cert.getState()) {
                     case WAITING: // certificate waiting to be issues/renew
                         LOG.info("Certificate issuing process for domain: " + domain + " started.");
                         Order order = client.createOrderForDomain(domain);
-                        cert.setPendingOrder(order);
+                        cert.setPendingOrder(order.getLocation());
                         Http01Challenge challenge = client.getHTTPChallengeForOrder(order);
                         if (challenge == null) {
                             cert.setState(VERIFIED);
                         } else {
                             triggerChallenge(challenge);
-                            cert.setPendingChallenge(challenge);
+                            cert.setPendingChallenge(challenge.getJSON());
                             cert.setState(VERIFYING);
                         }
                         break;
 
                     case VERIFYING: // challenge verification by LE pending
-                        Challenge pendingChallenge = cert.getPendingChallenge();
+                        Http01Challenge pendingChallenge = new Http01Challenge(client.getLogin(), cert.getPendingChallenge());
                         Status status = client.checkResponseForChallenge(pendingChallenge);
                         if (status == Status.VALID) {
                             cert.setState(VERIFIED);
-                            challengesTokens.remove(((Http01Challenge) pendingChallenge).getToken());
+                            store.deleteAcmeChallengeToken(pendingChallenge.getToken());
                         } else if (status == Status.INVALID) {
-                            cert.setAvailable(false);
                             cert.setState(REQUEST_FAILED);
                         }
                         break;
 
                     case VERIFIED: // challenge succeded
-                        KeyPair keys = cert.getKeyPair(); // service up and certificate to renew
-                        if (keys == null) {
-                            keys = loadOrCreateKeyPairForDomain(domain); // new certificate or service restarted: key generation v/s load from db
-                        }
-                        cert.setKeyPair(keys);
-                        client.orderCertificate(cert.getPendingOrder(), keys);
+                        Order pendingOrder = client.getLogin().bindOrder(cert.getPendingOrder());
+                        KeyPair keys = loadOrCreateKeyPairForDomain(domain);
+                        client.orderCertificate(pendingOrder, keys);
                         cert.setState(ORDERING);
                         break;
 
                     case ORDERING: // certificate ordering
-                        Order _order = cert.getPendingOrder();
+                        Order _order = client.getLogin().bindOrder(cert.getPendingOrder());
                         Status _status = client.checkResponseForOrder(_order);
                         if (_status == Status.VALID) {
                             cert.setChain(client.fetchCertificateForOrder(_order).getCertificateChain());
                             cert.setAvailable(true);
                             cert.setState(AVAILABLE);
-                            CertificateData data = cert.getData();
-                            store.saveCertificate(data);
+                            notifyCertAvailChanged = true; // all other peers need to know that this cert is available.
                             LOG.info("Certificate issuing for domain: " + domain + " succeed.");
                         } else if (_status == Status.INVALID) {
-                            cert.setAvailable(false);
                             cert.setState(REQUEST_FAILED);
                         }
                         break;
@@ -248,8 +260,9 @@ public class DynamicCertificatesManager implements Runnable {
                         if (cert.isExpired()) {
                             cert.setAvailable(false);
                             cert.setState(EXPIRED);
-                            CertificateData data = cert.getData();
-                            store.saveCertificate(data);
+                            notifyCertAvailChanged = true; // all other peers need to know that this cert is expired.
+                        } else {
+                            updateDB = false;
                         }
                         break;
 
@@ -261,47 +274,57 @@ public class DynamicCertificatesManager implements Runnable {
                     default:
                         throw new IllegalStateException();
                 }
-
-            } catch (AcmeException | IOException | GeneralSecurityException | ConfigurationStoreException ex) {
+                if (updateDB) {
+                    store.saveCertificate(cert.getData());
+                }
+                if (notifyCertAvailChanged) {
+                    groupMembershipHandler.fireEvent(EVENT_CERT_AVAIL_CHANGED);
+                }
+            } catch (AcmeException | IOException | ConfigurationStoreException | GeneralSecurityException ex) {
                 LOG.log(Level.SEVERE, null, ex);
-                cert.setAvailable(false);
-                cert.setState(REQUEST_FAILED);
             }
         }
     }
 
     private void triggerChallenge(Http01Challenge challenge) throws AcmeException {
-        challengesTokens.put(challenge.getToken(), challenge.getAuthorization());
+        store.saveAcmeChallengeToken(challenge.getToken(), challenge.getAuthorization());
         challenge.trigger();
     }
 
     public String getChallengeToken(String tokenName) {
-        return challengesTokens.get(tokenName);
+        return store.loadAcmeChallengeToken(tokenName);
     }
 
     private KeyPair loadOrCreateKeyPairForDomain(String domain) {
         KeyPair pair = store.loadKeyPairForDomain(domain);
         if (pair == null) {
             pair = KeyPairUtils.createKeyPair(keyPairsSize > 0 ? keyPairsSize : DEFAULT_KEYPAIRS_SIZE);
-            store.saveKeyPairForDomain(pair, domain);
+            if (!store.saveKeyPairForDomain(pair, domain, false)) {
+                pair = store.loadAcmeUserKeyPair(); // load key created by another peer concurrently
+            }
         }
 
         return pair;
     }
 
     public DynamicCertificateState getStateOfCertificate(String id) {
-        DynamicCertificate c = certificates.get(id);
-        if (c != null) {
-            return c.getState();
+        CertificateData cert = store.loadCertificateForDomain(id);
+        if (cert != null) {
+            return DynamicCertificateState.valueOf(cert.getState());
         }
         return DynamicCertificateState.WAITING;
     }
 
     public void setStateOfCertificate(String id, DynamicCertificateState state) {
-        DynamicCertificate c = certificates.get(id);
-        if (c != null) {
-            c.setState(state);
-            c.setAvailable(DynamicCertificateState.AVAILABLE.equals(state));
+        CertificateData cert = store.loadCertificateForDomain(id);
+        if (cert != null) {
+            boolean prevAvail = cert.isAvailable();
+            cert.setState(state.name());
+            cert.setAvailable(DynamicCertificateState.AVAILABLE.equals(state));
+            store.saveCertificate(cert);
+            if (prevAvail != cert.isAvailable()) {
+                groupMembershipHandler.fireEvent(EVENT_CERT_AVAIL_CHANGED);                
+            }
         }
     }
 
@@ -310,23 +333,52 @@ public class DynamicCertificatesManager implements Runnable {
      * @param domain
      * @return PKCS12 Keystore content
      */
-    public byte[] getCertificateForDomain(String domain) {
-        DynamicCertificate c = certificates.get(domain);
-        if (c == null) {
+    public byte[] getCertificateForDomain(String domain) throws GeneralSecurityException {
+        DynamicCertificate cert = certificates.get(domain); // certs always retrived from cache
+        if (cert == null) {
             LOG.log(Level.SEVERE, "No dynamic certificate for domain {0}", domain);
             return null;
         }
-        if (!c.isAvailable()) {
-            LOG.log(Level.SEVERE, "Dynamic certificate for domain {0} is not available yet: {1}", new Object[]{domain, c});
+        if (!cert.isAvailable()) {
+            LOG.log(Level.SEVERE, "Dynamic certificate for domain {0} is not available: {1}", new Object[]{domain, cert});
             return null;
+        }
+        return Base64.getDecoder().decode(cert.getData().getChain());
+    }
+
+    private class CertAvailChangeCallback implements GroupMembershipHandler.EventCallback {
+
+        @Override
+        public void eventFired(String eventId) {
+            LOG.log(Level.INFO, "Certificate availability changed");
+            try {
+                reloadCertificatesFromDB();
+            } catch (Exception err) {
+                LOG.log(Level.SEVERE, "Cannot apply new configuration");
+            }
         }
 
-        CertificateData data = store.loadCertificateForDomain(domain);
-        if (data == null) {
-            LOG.log(Level.SEVERE, "Dynamic certificate for domain {0} is not available but without data: {1}", new Object[]{domain, c});
-            return null;
+        @Override
+        public void reconnected() {
+            LOG.log(Level.INFO, "Configuration listener - reloading configuration after ZK reconnection");
+            try {
+                reloadCertificatesFromDB();
+            } catch (Exception err) {
+                LOG.log(Level.SEVERE, "Cannot apply new configuration");
+            }
         }
-        return Base64.getDecoder().decode(data.getChain());
     }
+
+    private void reloadCertificatesFromDB() {
+        try {
+            ConcurrentHashMap _certificates = new ConcurrentHashMap();
+            for (String domain : certificates.keySet()) {
+                _certificates.put(domain, loadOrCreateDynamicCertificateForDomain(domain));
+            }
+            this.certificates = _certificates; // only certificates/domains specified in the config have to be managed.
+        } catch (GeneralSecurityException | MalformedURLException e) {
+            throw new DynamicCertificatesManagerException("Unable to load dynamic certificates from db.", e);
+        }
+    } 
 
 }

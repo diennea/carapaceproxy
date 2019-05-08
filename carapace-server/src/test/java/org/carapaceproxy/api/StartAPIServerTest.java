@@ -320,7 +320,7 @@ public class StartAPIServerTest extends UseAdminServer {
 
             // Changing dynamic certificate state
             DynamicCertificatesManager man = server.getDynamicCertificateManager();
-            for (DynamicCertificateState state: DynamicCertificate.DynamicCertificateState.values()) {
+            for (DynamicCertificateState state : DynamicCertificate.DynamicCertificateState.values()) {
                 man.setStateOfCertificate(dynDomain, state);
                 response = client.get("/api/certificates", credentials);
                 json = response.getBodyString();
@@ -338,10 +338,13 @@ public class StartAPIServerTest extends UseAdminServer {
             // Downloading
             ConfigurationStore store = new PropertiesConfigurationStore(properties);
             String base64Chain = Base64.getEncoder().encodeToString("CHAIN".getBytes());
-            CertificateData certData = new CertificateData(dynDomain, "", base64Chain, true);
+
+            CertificateData certData = new CertificateData(
+                    dynDomain, "", base64Chain, DynamicCertificateState.AVAILABLE.name(), "", "", true
+            );
             store.saveCertificate(certData);
             man.setConfigurationStore(store);
-            man.setStateOfCertificate(dynDomain, DynamicCertificate.DynamicCertificateState.AVAILABLE);
+            man.setStateOfCertificate(dynDomain, DynamicCertificateState.AVAILABLE);
             response = client.get("/api/certificates/" + dynDomain + "/download", credentials);
             assertEquals("CHAIN", response.getBodyString());
         }

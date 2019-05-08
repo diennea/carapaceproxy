@@ -30,13 +30,13 @@ import java.util.function.BiConsumer;
  */
 public interface ConfigurationStore extends AutoCloseable {
 
-    public String getProperty(String key, String defaultValue);
+    String getProperty(String key, String defaultValue);
 
-    public void forEach(BiConsumer<String, String> consumer);
+    void forEach(BiConsumer<String, String> consumer);
 
-    public void forEach(String prefix, BiConsumer<String, String> consumer);
+    void forEach(String prefix, BiConsumer<String, String> consumer);
 
-    public default Properties asProperties(String prefix) {
+    default Properties asProperties(String prefix) {
         Properties copy = new Properties();
         this.forEach((k, v) -> {
             if (k.startsWith(prefix)) {
@@ -47,7 +47,7 @@ public interface ConfigurationStore extends AutoCloseable {
     }
 
     @Override
-    public default void close() {
+    default void close() {
     }
 
     /**
@@ -55,21 +55,27 @@ public interface ConfigurationStore extends AutoCloseable {
      *
      * @param newConfigurationStore
      */
-    public default void commitConfiguration(ConfigurationStore newConfigurationStore) {
+    default void commitConfiguration(ConfigurationStore newConfigurationStore) {
     }
 
-    public KeyPair loadAcmeUserKeyPair();
+    KeyPair loadAcmeUserKeyPair();
 
-    public void saveAcmeUserKey(KeyPair pair);
+    boolean saveAcmeUserKey(KeyPair pair);
 
-    public KeyPair loadKeyPairForDomain(String domain);
+    KeyPair loadKeyPairForDomain(String domain);
+    
+    boolean saveKeyPairForDomain(KeyPair pair, String domain, boolean update);
 
-    public void saveKeyPairForDomain(KeyPair pair, String domain);
+    CertificateData loadCertificateForDomain(String domain);
 
-    public CertificateData loadCertificateForDomain(String domain);
+    void saveCertificate(CertificateData cert);
 
-    public void saveCertificate(CertificateData cert);
+    void reload();
 
-    public void reload();
+    void saveAcmeChallengeToken(String id, String data);
+
+    String loadAcmeChallengeToken(String id);
+
+    void deleteAcmeChallengeToken(String id);
 
 }

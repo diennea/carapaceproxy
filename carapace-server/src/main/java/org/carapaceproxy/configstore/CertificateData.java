@@ -38,17 +38,27 @@ public class CertificateData {
     private String domain;
     private String privateKey; // base64 encoded string.
     private String chain; // base64 encoded string of the KeyStore.
+    private String state;
+    private String pendingOrderLocation;
+    private String pendingChallengeData;
     private boolean available;
 
-    public CertificateData(String domain, String privateKey, String chain, boolean available) {
+    public CertificateData(String domain, String privateKey, String chain, String state,
+            String orderLocation, String challengeData, boolean available) {
         this.domain = domain;
         this.privateKey = privateKey;
         this.chain = chain;
+        this.state = state;
+        this.pendingOrderLocation = orderLocation;
+        this.pendingChallengeData = challengeData;
         this.available = available;
     }
 
     public CertificateData(DynamicCertificate certificate) throws GeneralSecurityException {
         this.domain = certificate.getDomain();
+        this.state = certificate.getState().name();
+        this.pendingOrderLocation = certificate.getPendingOrder().toString();
+        this.pendingChallengeData = certificate.getPendingChallenge().toString();
         this.available = certificate.isAvailable();
         PrivateKey _privateKey = certificate.getKeyPair().getPrivate();
         this.privateKey = base64EncodeKey(_privateKey);
@@ -67,6 +77,18 @@ public class CertificateData {
         return chain;
     }
 
+    public String getState() {
+        return state;
+    }
+
+    public String getPendingOrderLocation() {
+        return pendingOrderLocation;
+    }
+
+    public String getPendingChallengeData() {
+        return pendingChallengeData;
+    }
+
     public boolean isAvailable() {
         return available;
     }
@@ -83,13 +105,32 @@ public class CertificateData {
         this.chain = chain;
     }
 
+    public void setState(String state) {
+        this.state = state;
+    }
+
     public void setAvailable(boolean available) {
         this.available = available;
     }
 
+    public void setPendingOrderLocation(String orderLocation) {
+        this.pendingOrderLocation = orderLocation;
+    }
+
+    public void setPendingChallengeData(String challengeData) {
+        this.pendingChallengeData = challengeData;
+    }
+
     @Override
     public int hashCode() {
-        int hash = 3;
+        int hash = 5;
+        hash = 59 * hash + Objects.hashCode(this.domain);
+        hash = 59 * hash + Objects.hashCode(this.privateKey);
+        hash = 59 * hash + Objects.hashCode(this.chain);
+        hash = 59 * hash + Objects.hashCode(this.state);
+        hash = 59 * hash + Objects.hashCode(this.pendingOrderLocation);
+        hash = 59 * hash + Objects.hashCode(this.pendingChallengeData);
+        hash = 59 * hash + (this.available ? 1 : 0);
         return hash;
     }
 
@@ -117,7 +158,17 @@ public class CertificateData {
         if (!Objects.equals(this.chain, other.chain)) {
             return false;
         }
+        if (!Objects.equals(this.state, other.state)) {
+            return false;
+        }
+        if (!Objects.equals(this.pendingOrderLocation, other.pendingOrderLocation)) {
+            return false;
+        }
+        if (!Objects.equals(this.pendingChallengeData, other.pendingChallengeData)) {
+            return false;
+        }
         return true;
     }
+
 
 }

@@ -525,6 +525,7 @@ public class HttpProxyServer implements AutoCloseable {
                 throw new ConfigurationNotValidException("Invalid mode '" + mode + "', only 'cluster' or 'standalone'");
 
         }
+        dynamicCertificateManager.setGroupMembershipHandler(groupMembershipHandler);
     }
 
     private static String computeDefaultPeerId() {

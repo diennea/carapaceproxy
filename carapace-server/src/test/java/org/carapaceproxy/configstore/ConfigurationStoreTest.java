@@ -19,25 +19,29 @@
  */
 package org.carapaceproxy.configstore;
 
+import java.net.URL;
 import java.security.KeyPair;
 import java.util.Properties;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
 import org.apache.bookkeeper.stats.NullStatsLogger;
+import org.carapaceproxy.server.certiticates.DynamicCertificate;
+import org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState;
 import static org.carapaceproxy.server.certiticates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import static org.carapaceproxy.utils.TestUtils.assertEqualsKey;
 import org.junit.After;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
+import org.shredzone.acme4j.toolbox.JSON;
 import org.shredzone.acme4j.util.KeyPairUtils;
 
 /**
- * Test for {@link PropertiesConfigurationStore} and
- * {@link HerdDBConfigurationStore}.
+ * Test for {@link PropertiesConfigurationStore} and {@link HerdDBConfigurationStore}.
  *
  * @author paolo.venturi
  */
@@ -61,7 +65,7 @@ public class ConfigurationStoreTest {
 
     @Test
     @Parameters({"in-memory", "db"})
-    public void testConfigurationStore(String type) throws ConfigurationNotValidException {
+    public void testConfigurationStore(String type) throws Exception {
         Properties props = new Properties();
         props.setProperty("certificate.0.hostname", d1);
         props.setProperty("certificate.0.dynamic", "true");
@@ -76,16 +80,22 @@ public class ConfigurationStoreTest {
 
         testKeyPairOperations();
         testCertificateOperations();
+        testAcmeChallengeTokens();
     }
 
     private void testKeyPairOperations() {
         // KeyPairs generation + saving
         KeyPair acmePair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         store.saveAcmeUserKey(acmePair);
+        store.saveAcmeUserKey(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE)); // key not overwritten
+
+        store.saveKeyPairForDomain(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), d1, true);
         KeyPair domain1Pair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
-        store.saveKeyPairForDomain(domain1Pair, d1);
+        store.saveKeyPairForDomain(domain1Pair, d1, true); // key overwritten
+
         KeyPair domain2Pair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
-        store.saveKeyPairForDomain(domain2Pair, d2);
+        store.saveKeyPairForDomain(domain2Pair, d2, false);
+        store.saveKeyPairForDomain(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), d2, false); // key not overwritten
 
         // KeyPairs loading
         KeyPair loadedPair = store.loadAcmeUserKeyPair();
@@ -101,16 +111,36 @@ public class ConfigurationStoreTest {
         assertEqualsKey(domain2Pair.getPublic(), loadedPair.getPublic());
     }
 
-    private void testCertificateOperations() {
+    private void testCertificateOperations() throws Exception {
+        String order = new URL("http://localhost/order").toString();
+        String challenge = JSON.parse("{\"challenge\": \"data\"}").toString();
         // Certificates saving
-        CertificateData cert1 = new CertificateData(d1, "privateKey1", "chain1", true);
-        CertificateData cert2 = new CertificateData(d2, "privateKey2", "chain2", false);
+        CertificateData cert1 = new CertificateData(
+                d1, "privateKey1", "chain1", DynamicCertificateState.AVAILABLE.name(), order, challenge, true
+        );
+        assertEquals(cert1, new DynamicCertificate(cert1).getData());
         store.saveCertificate(cert1);
+
+        CertificateData cert2 = new CertificateData(
+                d2, "privateKey2", "chain2", DynamicCertificateState.WAITING.name(), null, null, false
+        );
+        assertEquals(cert1, new DynamicCertificate(cert1).getData());
         store.saveCertificate(cert2);
 
         // Certificates loading
         assertEquals(cert1, store.loadCertificateForDomain(d1));
         assertEquals(cert2, store.loadCertificateForDomain(d2));
+    }
+
+    private void testAcmeChallengeTokens() {
+        store.saveAcmeChallengeToken("token-id", "token-data");
+        store.saveAcmeChallengeToken("token-id2", "token-data2");
+        assertEquals("token-data", store.loadAcmeChallengeToken("token-id"));
+        assertEquals("token-data2", store.loadAcmeChallengeToken("token-id2"));
+        store.deleteAcmeChallengeToken("token-id");
+        assertNull(store.loadAcmeChallengeToken("token-id"));
+        store.deleteAcmeChallengeToken("token-id2");
+        assertNull(store.loadAcmeChallengeToken("token-id2"));
     }
 
     @Test

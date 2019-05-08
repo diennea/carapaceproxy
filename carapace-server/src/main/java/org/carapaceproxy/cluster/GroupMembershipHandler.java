@@ -70,6 +70,15 @@ public interface GroupMembershipHandler {
      */
     void stop();
 
+    /**
+     * To execute code in mutual exclusion to other peers.
+     * 
+     * @param lockId
+     * @param runnable
+     * @throws java.lang.Exception
+     */
+    void executeInMutex(String lockId, Runnable runnable) throws Exception;
+
     interface EventCallback {
 
         /**

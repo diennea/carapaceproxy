@@ -56,4 +56,9 @@ public class NullGroupMembershipHandler implements GroupMembershipHandler {
     public void stop() {
     }
 
+    @Override
+    public void executeInMutex(String lockId, Runnable runnable) throws Exception {
+        runnable.run();
+    }
+
 }

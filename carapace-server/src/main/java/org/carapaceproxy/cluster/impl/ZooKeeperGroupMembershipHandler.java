@@ -37,14 +37,15 @@ import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.recipes.cache.PathChildrenCache;
 import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent;
 import org.apache.curator.framework.recipes.cache.PathChildrenCacheListener;
+import org.apache.curator.framework.recipes.locks.InterProcessMutex;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.data.Stat;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 
 /**
- * Implementation based on ZooKeeper. This class is very simple, we are not
- * expecting heavy traffic on ZooKeeper. We have two systems:
+ * Implementation based on ZooKeeper. This class is very simple, we are not expecting heavy traffic on ZooKeeper. We
+ * have two systems:
  * <ul>
  * <li>Peer discovery
  * <li>Configuration changes event broadcast
@@ -60,7 +61,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     private final CuratorFramework client;
     private final String peerId;
     private final CopyOnWriteArrayList<PathChildrenCache> watchedEvents = new CopyOnWriteArrayList<>();
-    private final ExecutorService callbacksExecutor = Executors.newSingleThreadExecutor();
+    private final ExecutorService callbacksExecutor = Executors.newSingleThreadExecutor();    
 
     public ZooKeeperGroupMembershipHandler(String zkAddress, int zkTimeout, String peerId) {
         client = CuratorFrameworkFactory
@@ -185,6 +186,17 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     public void stop() {
         client.close();
         callbacksExecutor.shutdown();
+    }
+
+    @Override
+    public void executeInMutex(String mutexId, Runnable runnable) throws Exception {        
+        InterProcessMutex mutex = new InterProcessMutex(client, "/proxy/mutex/" + mutexId);
+        try {
+            mutex.acquire();
+            runnable.run();
+        } finally {
+            mutex.release();
+        }
     }
 
     @Override

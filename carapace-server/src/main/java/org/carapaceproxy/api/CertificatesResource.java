@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.api;
 
+import java.security.GeneralSecurityException;
 import java.util.HashMap;
 import java.util.Map;
 import javax.servlet.ServletContext;
@@ -121,7 +122,7 @@ public class CertificatesResource {
     @GET
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @Path("{certId}/download")
-    public Response downloadCertificateById(@PathParam("certId") String certId) {
+    public Response downloadCertificateById(@PathParam("certId") String certId) throws GeneralSecurityException {
         CertificateBean cert = findCertificateById(certId);
         byte[] data = new byte[0];
         if (cert != null && cert.isDynamic()) {

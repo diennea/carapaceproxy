@@ -19,6 +19,8 @@
  */
 package org.carapaceproxy.server.certiticates;
 
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.PrivateKey;
@@ -30,10 +32,8 @@ import java.util.List;
 import org.carapaceproxy.configstore.CertificateData;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePrivateKey;
-import static org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.AVAILABLE;
 import static org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.WAITING;
-import org.shredzone.acme4j.Order;
-import org.shredzone.acme4j.challenge.Challenge;
+import org.shredzone.acme4j.toolbox.JSON;
 
 /**
  *
@@ -57,8 +57,8 @@ public final class DynamicCertificate {
     private volatile boolean available;
     private volatile DynamicCertificateState state;
 
-    private Order order;
-    private Challenge challenge;
+    private URL pendingOrderLocation;
+    private JSON pendingChallengeData;
     private Certificate[] chain;
     private KeyPair keyPair;
 
@@ -68,10 +68,12 @@ public final class DynamicCertificate {
         state = WAITING;
     }
 
-    public DynamicCertificate(CertificateData data) throws GeneralSecurityException {
+    public DynamicCertificate(CertificateData data) throws GeneralSecurityException, MalformedURLException {
         domain = data.getDomain();
         available = data.isAvailable();
-        state = available ? AVAILABLE : WAITING;
+        state = DynamicCertificateState.valueOf(data.getState());
+        pendingOrderLocation = new URL(data.getPendingOrderLocation());
+        pendingChallengeData = JSON.parse(data.getPendingChallengeData());
         // Certificate decoding
         this.chain = base64DecodeCertificateChain(data.getChain());
         // Private key decoding + keypar generation
@@ -99,20 +101,20 @@ public final class DynamicCertificate {
         this.available = available;
     }
 
-    public Order getPendingOrder() {
-        return order;
+    public URL getPendingOrder() {
+        return pendingOrderLocation;
     }
 
-    public void setPendingOrder(Order order) {
-        this.order = order;
+    public void setPendingOrder(URL order) {
+        this.pendingOrderLocation = order;
     }
 
-    public Challenge getPendingChallenge() {
-        return challenge;
+    public JSON getPendingChallenge() {
+        return pendingChallengeData;
     }
 
-    public void setPendingChallenge(Challenge challenge) {
-        this.challenge = challenge;
+    public void setPendingChallenge(JSON challenge) {
+        this.pendingChallengeData = challenge;
     }
 
     public Certificate[] getChain() {

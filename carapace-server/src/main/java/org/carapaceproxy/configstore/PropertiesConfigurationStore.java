@@ -34,6 +34,7 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
     private final Properties properties;
     private final ConcurrentHashMap<String, CertificateData> certificates = new ConcurrentHashMap();
     private final ConcurrentHashMap<String, KeyPair> domainsKeyPair = new ConcurrentHashMap();
+    private final ConcurrentHashMap<String, String> acmeChallengeTokens = new ConcurrentHashMap();
     private KeyPair acmeUserKey;
 
     public PropertiesConfigurationStore(Properties properties) {
@@ -67,8 +68,12 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
     }
 
     @Override
-    public void saveAcmeUserKey(KeyPair pair) {
-        acmeUserKey = pair;
+    public boolean saveAcmeUserKey(KeyPair pair) {
+        if (acmeUserKey == null) {
+            acmeUserKey = pair;
+            return true;
+        }
+        return false;
     }
 
     @Override
@@ -77,8 +82,12 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
     }
 
     @Override
-    public void saveKeyPairForDomain(KeyPair pair, String domain) {
-        domainsKeyPair.put(domain, pair);
+    public boolean saveKeyPairForDomain(KeyPair pair, String domain, boolean update) {
+        if (update || !domainsKeyPair.containsKey(domain)) {
+            domainsKeyPair.put(domain, pair);
+            return true;
+        }
+        return false;
     }
 
     @Override
@@ -93,6 +102,21 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
 
     @Override
     public void reload() {
+    }
+
+    @Override
+    public void saveAcmeChallengeToken(String id, String data) {
+        acmeChallengeTokens.put(id, data);
+    }
+
+    @Override
+    public String loadAcmeChallengeToken(String id) {
+        return acmeChallengeTokens.get(id);
+    }
+
+    @Override
+    public void deleteAcmeChallengeToken(String id) {
+        acmeChallengeTokens.remove(id);
     }
 
 }

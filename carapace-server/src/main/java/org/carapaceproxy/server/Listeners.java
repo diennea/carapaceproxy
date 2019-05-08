@@ -29,11 +29,9 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollEventLoopGroup;
 import io.netty.channel.epoll.EpollServerSocketChannel;
-import io.netty.channel.epoll.EpollSocketChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
-import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.HttpRequestDecoder;
 import io.netty.handler.codec.http.HttpResponseEncoder;
 import io.netty.handler.ssl.OpenSsl;
@@ -48,6 +46,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -156,8 +155,7 @@ public class Listeners {
                     .trustManager(trustManagerFactory)
                     .sslProvider(SslProvider.OPENSSL)
                     .ciphers(ciphers).build();
-        } catch (CertificateException | IOException | KeyStoreException | SecurityException
-                | NoSuchAlgorithmException | UnrecoverableKeyException err) {
+        } catch (IOException | GeneralSecurityException err) {
             throw new ConfigurationNotValidException(err);
         }
 
