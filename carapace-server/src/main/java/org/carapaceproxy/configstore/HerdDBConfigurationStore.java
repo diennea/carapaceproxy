@@ -57,6 +57,8 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
 @SuppressFBWarnings(value = "OBL_UNSATISFIED_OBLIGATION", justification = "https://github.com/spotbugs/spotbugs/issues/432")
 public class HerdDBConfigurationStore implements ConfigurationStore {
 
+    private static final int TIMEOUT_WAIT_FOR_TABLE_SPACE = Integer.getInteger("herd.waitfortablespace.timeout", 1000 * 60 * 5); // default 5 min
+    
     public static final String ACME_USER_KEY = "_acmeuserkey";
 
     // Main table
@@ -82,7 +84,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     private static final String DIGITAL_CERTIFICATES_TABLE_NAME = "digital_certificates";
     private static final String CREATE_DIGITAL_CERTIFICATES_TABLE = "CREATE TABLE " + DIGITAL_CERTIFICATES_TABLE_NAME
             + "(domain string primary key, privateKey string, chain string, "
-            + "state string, pendingOrder string, pendingChallenge String, available tinyint)";
+            + "state string, pendingOrder string, pendingChallenge string, available tinyint)";
     private static final String SELECT_FROM_DIGITAL_CERTIFICATES_TABLE = "SELECT * from " + DIGITAL_CERTIFICATES_TABLE_NAME + " WHERE domain=?";
     private static final String UPDATE_DIGITAL_CERTIFICATES_TABLE = "UPDATE " + DIGITAL_CERTIFICATES_TABLE_NAME
             + " SET privateKey=?, chain=?, state=?, pendingOrder=?, pendingChallenge=?, available=? WHERE domain=?";
@@ -93,7 +95,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     private static final String ACME_CHALLENGE_TOKENS_TABLE_NAME = "acme_challenge_tokens";
     private static final String CREATE_ACME_CHALLENGE_TOKENS_TABLE = "CREATE TABLE " + ACME_CHALLENGE_TOKENS_TABLE_NAME
             + "(id string primary key, data string)";
-    private static final String SELECT_FROM_ACME_CHALLENGE_TOKENS_TABLE = "SELECT * from " + ACME_CHALLENGE_TOKENS_TABLE_NAME + " WHERE id=?";
+    private static final String SELECT_FROM_ACME_CHALLENGE_TOKENS_TABLE = "SELECT data from " + ACME_CHALLENGE_TOKENS_TABLE_NAME + " WHERE id=?";
     private static final String INSERT_INTO_ACME_CHALLENGE_TOKENS_TABLE = "INSERT INTO " + ACME_CHALLENGE_TOKENS_TABLE_NAME
             + "(id, data) values (?, ?)";
     private static final String DELETE_FROM_ACME_CHALLENGE_TOKENS_TABLE = "DELETE from " + ACME_CHALLENGE_TOKENS_TABLE_NAME
@@ -147,7 +149,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             props.setProperty(ServerConfiguration.PROPERTY_BOOKKEEPER_WRITEQUORUMSIZE, replication);
 
             props.setProperty(ClientConfiguration.PROPERTY_MODE, ClientConfiguration.PROPERTY_MODE_CLUSTER);
-            props.setProperty(ClientConfiguration.PROPERTY_ZOOKEEPER_ADDRESS, zkAddress);
+            props.setProperty(ClientConfiguration.PROPERTY_ZOOKEEPER_ADDRESS, zkAddress);            
         }
 
         props.setProperty(ServerConfiguration.PROPERTY_BASEDIR, baseDir.getAbsolutePath());
@@ -159,6 +161,8 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         HerdDBEmbeddedDataSource ds = new HerdDBEmbeddedDataSource(props);
         ds.setStatsLogger(statsLogger);
         if (cluster) {
+            ds.setWaitForTableSpace("herd");
+            ds.setWaitForTableSpaceTimeout(TIMEOUT_WAIT_FOR_TABLE_SPACE);
             ds.setStartServer(true);
         }
         return ds;
@@ -404,8 +408,8 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 psInsert.setString(2, privateKey);
                 psInsert.setString(3, chain);
                 psInsert.setString(4, state);
-                psUpdate.setString(5, pendingOrder);
-                psUpdate.setString(6, pendigChallenge);
+                psInsert.setString(5, pendingOrder);
+                psInsert.setString(6, pendigChallenge);
                 psInsert.setInt(7, available);
                 psInsert.executeUpdate();
             }
@@ -436,7 +440,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 ps.setString(1, id);
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
-                        return rs.getString(2);
+                        return rs.getString(1);
                     }
                 }
                 return null;

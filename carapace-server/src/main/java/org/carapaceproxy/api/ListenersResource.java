@@ -99,14 +99,15 @@ public class ListenersResource {
 
         Map<String, ListenerBean> res = new HashMap<>();
         for (NetworkListenerConfiguration listener : conf.getListeners()) {
+            int port = listener.getPort() + server.getListenersOffsetPort();
             ListenerBean lisBean = new ListenerBean(
                     listener.getHost(),
-                    listener.getPort(),
+                    port,
                     listener.isSsl(),
                     listener.isOcps(),
                     listener.getSslCiphers(),
                     listener.getDefaultCertificate(),
-                    server.getMainLogger().getCounter("listener_" + listener.getHost() + "_" + listener.getPort() +"_requests").get()
+                    server.getMainLogger().getCounter("listener_" + listener.getHost() + "_" + port +"_requests").get()
             );
             EndpointKey ek = EndpointKey.make(listener.getHost(), listener.getPort());
             res.put(ek.toBackendId(), lisBean);

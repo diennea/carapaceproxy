@@ -31,7 +31,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
-import org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState;
+import org.carapaceproxy.server.certiticates.DynamicCertificateState;
 import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 

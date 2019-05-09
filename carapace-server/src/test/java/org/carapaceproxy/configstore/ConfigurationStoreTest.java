@@ -25,8 +25,7 @@ import java.util.Properties;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
 import org.apache.bookkeeper.stats.NullStatsLogger;
-import org.carapaceproxy.server.certiticates.DynamicCertificate;
-import org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState;
+import org.carapaceproxy.server.certiticates.DynamicCertificateState;
 import static org.carapaceproxy.server.certiticates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import static org.carapaceproxy.utils.TestUtils.assertEqualsKey;
@@ -111,25 +110,32 @@ public class ConfigurationStoreTest {
         assertEqualsKey(domain2Pair.getPublic(), loadedPair.getPublic());
     }
 
-    private void testCertificateOperations() throws Exception {
-        String order = new URL("http://localhost/order").toString();
+    private void testCertificateOperations() throws Exception {        
+        String order = new URL("http://locallhost/order").toString();
         String challenge = JSON.parse("{\"challenge\": \"data\"}").toString();
+
         // Certificates saving
         CertificateData cert1 = new CertificateData(
-                d1, "privateKey1", "chain1", DynamicCertificateState.AVAILABLE.name(), order, challenge, true
+                d1, "encodedPK1", "encodedChain1", DynamicCertificateState.AVAILABLE.name(), order, challenge, true
         );
-        assertEquals(cert1, new DynamicCertificate(cert1).getData());
         store.saveCertificate(cert1);
 
         CertificateData cert2 = new CertificateData(
-                d2, "privateKey2", "chain2", DynamicCertificateState.WAITING.name(), null, null, false
-        );
-        assertEquals(cert1, new DynamicCertificate(cert1).getData());
+                d2, "encodedPK2", "encodedChain2", DynamicCertificateState.WAITING.name(), null, null, false
+        );        
         store.saveCertificate(cert2);
 
         // Certificates loading
         assertEquals(cert1, store.loadCertificateForDomain(d1));
         assertEquals(cert2, store.loadCertificateForDomain(d2));
+
+        // Cert Updating
+        cert1.setAvailable(false);
+        cert1.setState(DynamicCertificateState.WAITING.name());
+        cert1.setPendingOrderLocation(new URL("http://locallhost/updatedorder").toString());
+        cert1.setPendingChallengeData(JSON.parse("{\"challenge\": \"updateddata\"}").toString());
+        store.saveCertificate(cert1);
+        assertEquals(cert1, store.loadCertificateForDomain(d1));
     }
 
     private void testAcmeChallengeTokens() {

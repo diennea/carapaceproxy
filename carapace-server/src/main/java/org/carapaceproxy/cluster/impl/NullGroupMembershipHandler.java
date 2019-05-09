@@ -36,10 +36,12 @@ public class NullGroupMembershipHandler implements GroupMembershipHandler {
 
     @Override
     public void watchEvent(String eventId, EventCallback callback) {
+        // nothing to do, 'cause self events have to be ignored.
     }
 
     @Override
     public void fireEvent(String eventId) {
+        // nothing to do, 'cause self events have to be ignored.
     }
 
     @Override
@@ -57,7 +59,7 @@ public class NullGroupMembershipHandler implements GroupMembershipHandler {
     }
 
     @Override
-    public void executeInMutex(String lockId, Runnable runnable) throws Exception {
+    public void executeInMutex(String lockId, int timeout, Runnable runnable) {
         runnable.run();
     }
 

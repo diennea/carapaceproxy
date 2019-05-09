@@ -94,7 +94,7 @@ public final class ConfigurationStoreUtils {
     }
 
     public static String base64EncodeCertificateChain(Certificate[] chain, PrivateKey key) throws GeneralSecurityException {
-        try ( ByteArrayOutputStream os = new ByteArrayOutputStream()) {
+        try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
             KeyStore keyStore = KeyStore.getInstance(KEYSTORE_FORMAT);
             keyStore.load(null, KEYSTORE_PW);
             keyStore.setKeyEntry(KEYSTORE_CERT_ALIAS, key, KEYSTORE_PW, chain);
@@ -107,7 +107,7 @@ public final class ConfigurationStoreUtils {
 
     public static Certificate[] base64DecodeCertificateChain(String chain) throws GeneralSecurityException {
         byte[] data = Base64.getDecoder().decode(chain);
-        try ( ByteArrayInputStream is = new ByteArrayInputStream(data)) {
+        try (ByteArrayInputStream is = new ByteArrayInputStream(data)) {
             KeyStore keyStore = KeyStore.getInstance(KEYSTORE_FORMAT);
             keyStore.load(is, KEYSTORE_PW);
             return keyStore.getCertificateChain(KEYSTORE_CERT_ALIAS);

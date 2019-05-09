@@ -19,17 +19,14 @@
  */
 package org.carapaceproxy.configstore;
 
-import org.carapaceproxy.server.certiticates.DynamicCertificate;
-import java.security.GeneralSecurityException;
-import java.security.PrivateKey;
+import java.net.URL;
 import java.util.Objects;
-import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
-import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeKey;
+import org.carapaceproxy.server.certiticates.DynamicCertificateState;
+import org.shredzone.acme4j.toolbox.JSON;
 
 /**
  *
- * Bean for ACME Certificates ({@link DynamicCertificate}) data stored in
- * database.
+ * Bean for ACME Certificates ({@link DynamicCertificate}) data stored in database.
  *
  * @author paolo.venturi
  */
@@ -52,17 +49,6 @@ public class CertificateData {
         this.pendingOrderLocation = orderLocation;
         this.pendingChallengeData = challengeData;
         this.available = available;
-    }
-
-    public CertificateData(DynamicCertificate certificate) throws GeneralSecurityException {
-        this.domain = certificate.getDomain();
-        this.state = certificate.getState().name();
-        this.pendingOrderLocation = certificate.getPendingOrder().toString();
-        this.pendingChallengeData = certificate.getPendingChallenge().toString();
-        this.available = certificate.isAvailable();
-        PrivateKey _privateKey = certificate.getKeyPair().getPrivate();
-        this.privateKey = base64EncodeKey(_privateKey);
-        this.chain = base64EncodeCertificateChain(certificate.getChain(), _privateKey);
     }
 
     public String getDomain() {
@@ -103,10 +89,14 @@ public class CertificateData {
 
     public void setChain(String chain) {
         this.chain = chain;
-    }
+    }   
 
     public void setState(String state) {
         this.state = state;
+    }
+
+    public void setState(DynamicCertificateState state) {
+        this.state = state.name();
     }
 
     public void setAvailable(boolean available) {
@@ -117,8 +107,16 @@ public class CertificateData {
         this.pendingOrderLocation = orderLocation;
     }
 
+    public void setPendingOrderLocation(URL orderLocation) {
+        this.pendingOrderLocation = orderLocation.toString();
+    }
+
     public void setPendingChallengeData(String challengeData) {
         this.pendingChallengeData = challengeData;
+    }
+
+    public void setPendingChallengeData(JSON challengeData) {
+        this.pendingChallengeData = challengeData.toString();
     }
 
     @Override
@@ -169,6 +167,5 @@ public class CertificateData {
         }
         return true;
     }
-
 
 }

@@ -26,9 +26,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.curator.ensemble.fixed.FixedEnsembleProvider;
@@ -61,7 +63,8 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     private final CuratorFramework client;
     private final String peerId;
     private final CopyOnWriteArrayList<PathChildrenCache> watchedEvents = new CopyOnWriteArrayList<>();
-    private final ExecutorService callbacksExecutor = Executors.newSingleThreadExecutor();    
+    private final ConcurrentHashMap<String, InterProcessMutex> mutexes = new ConcurrentHashMap<>();
+    private final ExecutorService callbacksExecutor = Executors.newSingleThreadExecutor();
 
     public ZooKeeperGroupMembershipHandler(String zkAddress, int zkTimeout, String peerId) {
         client = CuratorFrameworkFactory
@@ -189,19 +192,32 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     }
 
     @Override
-    public void executeInMutex(String mutexId, Runnable runnable) throws Exception {        
-        InterProcessMutex mutex = new InterProcessMutex(client, "/proxy/mutex/" + mutexId);
+    public void executeInMutex(String mutexId, int timeout, Runnable runnable) {
+        InterProcessMutex mutex = mutexes.computeIfAbsent(mutexId, (mId) -> {
+            return new InterProcessMutex(client, "/proxy/mutex/" + mutexId);
+        });
         try {
-            mutex.acquire();
+            boolean acquired = mutex.acquire(timeout, TimeUnit.SECONDS);
+            if (!acquired) {
+                LOG.log(Level.INFO, "Failed to acquire lock for executeInMutex (mutexId: " + mutexId + ", peerId: " + peerId + ")");
+                return;
+            }
             runnable.run();
+        } catch (Exception e) {
+            LOG.log(Level.SEVERE, "Failed to acquire lock for executeInMutex (mutexId: " + mutexId + ", peerId: " + peerId + ")", e);
         } finally {
-            mutex.release();
+            try {
+                mutex.release();
+            } catch (Exception e) {
+                LOG.log(Level.SEVERE, "Failed to release lock for executeInMutex (mutexId: " + mutexId + ", peerId: " + peerId + ")", e);
+            }
         }
     }
 
     @Override
     public void close() {
         stop();
+        mutexes.clear();
     }
 
 }
