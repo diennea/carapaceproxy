@@ -70,13 +70,21 @@ public interface GroupMembershipHandler {
      */
     void stop();
 
+    /**
+     * To execute code in mutual exclusion to other peers.
+     *
+     * Whether the peer fails to acquire/release the mutex code passed will be skipped and no exceptions will be thrown.
+     *
+     * @param lockId
+     * @param runnable
+     */
+    void executeInMutex(String lockId, int acquireTimeout, Runnable runnable);
+
     interface EventCallback {
 
         /**
-         * Called whenever an event is fired. This method should not access
-         * external resources and it must not be expensive. Inside this method
-         * you cannot call other methods of the same
-         * {@link GroupMembershipHandler}.
+         * Called whenever an event is fired. This method should not access external resources and it must not be
+         * expensive. Inside this method you cannot call other methods of the same {@link GroupMembershipHandler}.
          *
          * @param eventId
          */

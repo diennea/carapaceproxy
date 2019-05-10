@@ -26,9 +26,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.curator.ensemble.fixed.FixedEnsembleProvider;
@@ -37,14 +39,15 @@ import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.recipes.cache.PathChildrenCache;
 import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent;
 import org.apache.curator.framework.recipes.cache.PathChildrenCacheListener;
+import org.apache.curator.framework.recipes.locks.InterProcessMutex;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.data.Stat;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 
 /**
- * Implementation based on ZooKeeper. This class is very simple, we are not
- * expecting heavy traffic on ZooKeeper. We have two systems:
+ * Implementation based on ZooKeeper. This class is very simple, we are not expecting heavy traffic on ZooKeeper. We
+ * have two systems:
  * <ul>
  * <li>Peer discovery
  * <li>Configuration changes event broadcast
@@ -60,6 +63,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     private final CuratorFramework client;
     private final String peerId;
     private final CopyOnWriteArrayList<PathChildrenCache> watchedEvents = new CopyOnWriteArrayList<>();
+    private final ConcurrentHashMap<String, InterProcessMutex> mutexes = new ConcurrentHashMap<>();
     private final ExecutorService callbacksExecutor = Executors.newSingleThreadExecutor();
 
     public ZooKeeperGroupMembershipHandler(String zkAddress, int zkTimeout, String peerId) {
@@ -188,8 +192,32 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     }
 
     @Override
+    public void executeInMutex(String mutexId, int timeout, Runnable runnable) {
+        InterProcessMutex mutex = mutexes.computeIfAbsent(mutexId, (mId) -> {
+            return new InterProcessMutex(client, "/proxy/mutex/" + mutexId);
+        });
+        try {
+            boolean acquired = mutex.acquire(timeout, TimeUnit.SECONDS);
+            if (!acquired) {
+                LOG.log(Level.INFO, "Failed to acquire lock for executeInMutex (mutexId: " + mutexId + ", peerId: " + peerId + ")");
+                return;
+            }
+            runnable.run();
+        } catch (Exception e) {
+            LOG.log(Level.SEVERE, "Failed to acquire lock for executeInMutex (mutexId: " + mutexId + ", peerId: " + peerId + ")", e);
+        } finally {
+            try {
+                mutex.release();
+            } catch (Exception e) {
+                LOG.log(Level.SEVERE, "Failed to release lock for executeInMutex (mutexId: " + mutexId + ", peerId: " + peerId + ")", e);
+            }
+        }
+    }
+
+    @Override
     public void close() {
         stop();
+        mutexes.clear();
     }
 
 }

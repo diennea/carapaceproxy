@@ -25,9 +25,8 @@ import javax.servlet.http.HttpServletResponse;
 import static org.carapaceproxy.api.CertificatesResource.stateToStatusString;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
-import org.carapaceproxy.configstore.PropertiesConfigurationStore;
-import org.carapaceproxy.server.certiticates.DynamicCertificate;
-import org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState;
+import org.carapaceproxy.server.certiticates.DynamicCertificateState;
+import static org.carapaceproxy.server.certiticates.DynamicCertificateState.WAITING;
 import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchAllRequestMatcher;
 import org.carapaceproxy.server.filters.RegexpMapSessionIdFilter;
@@ -274,6 +273,10 @@ public class StartAPIServerTest extends UseAdminServer {
 
         startServer(properties);
 
+        ConfigurationStore store = server.getDynamicConfigurationStore();
+        // need to explicitly add 'cause DynamicCertificatesManager never run
+        store.saveCertificate(new CertificateData(dynDomain, "", "", WAITING.name(), "", "", false));
+
         // Static certificates
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
 
@@ -320,7 +323,7 @@ public class StartAPIServerTest extends UseAdminServer {
 
             // Changing dynamic certificate state
             DynamicCertificatesManager man = server.getDynamicCertificateManager();
-            for (DynamicCertificateState state: DynamicCertificate.DynamicCertificateState.values()) {
+            for (DynamicCertificateState state : DynamicCertificateState.values()) {
                 man.setStateOfCertificate(dynDomain, state);
                 response = client.get("/api/certificates", credentials);
                 json = response.getBodyString();
@@ -335,13 +338,11 @@ public class StartAPIServerTest extends UseAdminServer {
                 assertThat(json, containsString("\"status\":\"" + stateToStatusString(state) + "\""));
             }
 
-            // Downloading
-            ConfigurationStore store = new PropertiesConfigurationStore(properties);
-            String base64Chain = Base64.getEncoder().encodeToString("CHAIN".getBytes());
-            CertificateData certData = new CertificateData(dynDomain, "", base64Chain, true);
-            store.saveCertificate(certData);
-            man.setConfigurationStore(store);
-            man.setStateOfCertificate(dynDomain, DynamicCertificate.DynamicCertificateState.AVAILABLE);
+            // Downloading            
+            CertificateData cert = store.loadCertificateForDomain(dynDomain);
+            cert.setChain(Base64.getEncoder().encodeToString("CHAIN".getBytes()));
+            store.saveCertificate(cert);
+            man.setStateOfCertificate(dynDomain, DynamicCertificateState.AVAILABLE);
             response = client.get("/api/certificates/" + dynDomain + "/download", credentials);
             assertEquals("CHAIN", response.getBodyString());
         }

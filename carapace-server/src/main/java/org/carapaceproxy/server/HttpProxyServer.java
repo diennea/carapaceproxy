@@ -103,6 +103,10 @@ public class HttpProxyServer implements AutoCloseable {
     private int adminServerPort = 8001;
     private String adminServerHost = "localhost";
     private String metricsUrl;
+    /**
+     * This is only for testing cluster mode with a single machine
+     */
+    private int listenersOffsetPort = 0;
 
     public HttpProxyServer(EndpointMapper mapper, File basePath) throws Exception {
         this.mapper = mapper;
@@ -177,6 +181,7 @@ public class HttpProxyServer implements AutoCloseable {
             requestsLogger.start();
             listeners.start();
             backendHealthManager.start();
+            dynamicCertificateManager.attachGroupMembershipHandler(groupMembershipHandler);
             dynamicCertificateManager.start();
             groupMembershipHandler.watchEvent("configurationChange", new ConfigurationChangeCallback());
         } catch (RuntimeException err) {
@@ -195,6 +200,10 @@ public class HttpProxyServer implements AutoCloseable {
 
     public int getLocalPort() {
         return listeners.getLocalPort();
+    }
+
+    public int getListenersOffsetPort() {
+        return listenersOffsetPort;
     }
 
     @Override
@@ -326,10 +335,12 @@ public class HttpProxyServer implements AutoCloseable {
         adminServerEnabled = Boolean.parseBoolean(properties.getProperty("http.admin.enabled", "false"));
         adminServerPort = Integer.parseInt(properties.getProperty("http.admin.port", adminServerPort + ""));
         adminServerHost = properties.getProperty("http.admin.host", adminServerHost);
+        listenersOffsetPort = Integer.parseInt(properties.getProperty("listener.offset.port", listenersOffsetPort + ""));
 
         LOG.info("http.admin.enabled=" + adminServerEnabled);
         LOG.info("http.admin.port=" + adminServerPort);
         LOG.info("http.admin.host=" + adminServerHost);
+        LOG.info("listener.offset.port=" + listenersOffsetPort);
     }
 
     private static List<RequestFilter> buildFilters(RuntimeServerConfiguration currentConfiguration) throws ConfigurationNotValidException {
@@ -524,7 +535,7 @@ public class HttpProxyServer implements AutoCloseable {
             default:
                 throw new ConfigurationNotValidException("Invalid mode '" + mode + "', only 'cluster' or 'standalone'");
 
-        }
+        }        
     }
 
     private static String computeDefaultPeerId() {
@@ -544,8 +555,8 @@ public class HttpProxyServer implements AutoCloseable {
             try {
                 dynamicConfigurationStore.reload();
                 applyDynamicConfiguration(null, true);
-            } catch (Exception err) {
-                LOG.log(Level.SEVERE, "Cannot apply new configuration");
+            } catch (Throwable err) {
+                LOG.log(Level.SEVERE, "Cannot apply new configuration", err);
             }
         }
 
@@ -554,8 +565,8 @@ public class HttpProxyServer implements AutoCloseable {
             LOG.log(Level.INFO, "Configuration listener - reloading configuration after ZK reconnection");
             try {
                 applyDynamicConfiguration(null, true);
-            } catch (Exception err) {
-                LOG.log(Level.SEVERE, "Cannot apply new configuration");
+            } catch (Throwable err) {
+                LOG.log(Level.SEVERE, "Cannot apply new configuration", err);
             }
         }
 

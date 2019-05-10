@@ -29,11 +29,9 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollEventLoopGroup;
 import io.netty.channel.epoll.EpollServerSocketChannel;
-import io.netty.channel.epoll.EpollSocketChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
-import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.HttpRequestDecoder;
 import io.netty.handler.codec.http.HttpResponseEncoder;
 import io.netty.handler.ssl.OpenSsl;
@@ -48,6 +46,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -110,6 +109,7 @@ public class Listeners {
     }
 
     private SslContext bootSslContext(NetworkListenerConfiguration listener, SSLCertificateConfiguration certificate) throws ConfigurationNotValidException {
+        int port = listener.getPort() + parent.getListenersOffsetPort();
         String sslCiphers = listener.getSslCiphers();
 
         String trustStrorePassword = listener.getSslTrustorePassword();
@@ -129,13 +129,13 @@ public class Listeners {
                 if (keystoreContent == null) {
                     throw new ConfigurationNotValidException("Dynamic certificate for domain " + domain + " is not yet available.");
                 }
-                LOG.log(Level.SEVERE, "start SSL with dynamic certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + listener.getPort() + " OCPS " + listener.isOcps());
+                LOG.log(Level.SEVERE, "start SSL with dynamic certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + port + " OCPS " + listener.isOcps());
                 keyFactory = initKeyManagerFactory("PKCS12", keystoreContent, "");
             } else {
                 String certificateFile = certificate.getSslCertificateFile();
                 File sslCertFile = certificateFile.startsWith("/") ? new File(certificateFile) : new File(basePath, certificateFile);
                 sslCertFile = sslCertFile.getAbsoluteFile();
-                LOG.log(Level.SEVERE, "start SSL with certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + listener.getPort() + " file=" + sslCertFile + " OCPS " + listener.isOcps());
+                LOG.log(Level.SEVERE, "start SSL with certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + port + " file=" + sslCertFile + " OCPS " + listener.isOcps());
                 keyFactory = initKeyManagerFactory("PKCS12", sslCertFile, certificate.getSslCertificatePassword());
             }
 
@@ -156,15 +156,15 @@ public class Listeners {
                     .trustManager(trustManagerFactory)
                     .sslProvider(SslProvider.OPENSSL)
                     .ciphers(ciphers).build();
-        } catch (CertificateException | IOException | KeyStoreException | SecurityException
-                | NoSuchAlgorithmException | UnrecoverableKeyException err) {
+        } catch (IOException | GeneralSecurityException err) {
             throw new ConfigurationNotValidException(err);
         }
 
     }
 
     private void bootListener(NetworkListenerConfiguration listener) throws InterruptedException {
-        LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{listener.getHost(), listener.getPort(), listener.isSsl()});
+        int port = listener.getPort() + parent.getListenersOffsetPort();
+        LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{listener.getHost(), port, listener.isSsl()});
 
         AsyncMapping<String, SslContext> sniMappings = (String sniHostname, Promise<SslContext> promise) -> {
             try {
@@ -197,7 +197,7 @@ public class Listeners {
                                         parent.getBackendHealthManager(),
                                         parent.getRequestsLogger(),
                                         listener.getHost(),
-                                        listener.getPort()
+                                        port
                                 )
                         );
 
@@ -205,8 +205,8 @@ public class Listeners {
                 })
                 .option(ChannelOption.SO_BACKLOG, 128)
                 .childOption(ChannelOption.SO_KEEPALIVE, true);
-        HostPort key = new HostPort(listener.getHost(), listener.getPort());
-        Channel channel = b.bind(listener.getHost(), listener.getPort()).sync().channel();
+        HostPort key = new HostPort(listener.getHost(), port);
+        Channel channel = b.bind(listener.getHost(), port).sync().channel();
 
         listeningChannels.put(key, channel);
         LOG.log(Level.INFO, "started listener at {0}: {1}", new Object[]{key, channel});
@@ -291,7 +291,8 @@ public class Listeners {
     }
 
     private SslContext resolveSslContext(NetworkListenerConfiguration listener, String sniHostname) throws ConfigurationNotValidException {
-        String key = listener.getHost() + ":" + listener.getPort() + "+" + sniHostname;
+        int port = listener.getPort() + parent.getListenersOffsetPort();
+        String key = listener.getHost() + ":" + port + "+" + sniHostname;
         if (LOG.isLoggable(Level.FINER)) {
             LOG.log(Level.FINER, "resolve SNI mapping " + sniHostname + ", key: " + key);
         }

@@ -23,7 +23,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.security.KeyPair;
 import java.security.Security;
-import javax.swing.JOptionPane;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.shredzone.acme4j.Account;
 import org.shredzone.acme4j.AccountBuilder;
@@ -71,14 +70,12 @@ public class ACMEClient {
     }
 
     /**
-     * Finds your {@link Account} at the ACME server.It will be found by your
-     * user's public key.If your key is not known to the server yet, a new
-     * account will be created.<p>
-     * This is a simple way of finding your {@link Account}. A better way is to
-     * get the URL and KeyIdentifier of your new account with {@link Account#getLocation()}
-     * {@link Session#getKeyIdentifier()} and store it somewhere. If you need to
-     * get access to your account later, reconnect to it via
-     * {@link Account#bind(Session, URI)} by using the stored location.
+     * Finds your {@link Account} at the ACME server.It will be found by your user's public key.If your key is not known
+     * to the server yet, a new account will be created.<p>
+     * This is a simple way of finding your {@link Account}. A better way is to get the URL and KeyIdentifier of your
+     * new account with {@link Account#getLocation()}
+     * {@link Session#getKeyIdentifier()} and store it somewhere. If you need to get access to your account later,
+     * reconnect to it via {@link Account#bind(Session, URI)} by using the stored location.
      *
      * @return
      * @throws java.io.IOException
@@ -132,12 +129,11 @@ public class ACMEClient {
     /**
      * Prepares a HTTP challenge.
      * <p>
-     * The verification of this challenge expects a file with a certain content
-     * to be reachable at a given path under the domain to be tested.
+     * The verification of this challenge expects a file with a certain content to be reachable at a given path under
+     * the domain to be tested.
      * <p>
-     * This example outputs instructions that need to be executed manually. In a
-     * production environment, you would rather generate this file
-     * automatically, or maybe use a servlet that returns
+     * This example outputs instructions that need to be executed manually. In a production environment, you would
+     * rather generate this file automatically, or maybe use a servlet that returns
      * {@link Http01Challenge#getAuthorization()}.
      *
      * @param auth {@link Authorization} to find the challenge in
@@ -172,8 +168,7 @@ public class ACMEClient {
     }
 
     /**
-     * Orders the certificate specified in the passed order with passed domain
-     * key.
+     * Orders the certificate specified in the passed order with passed domain key.
      *
      * @param order
      * @param domainKeyPair

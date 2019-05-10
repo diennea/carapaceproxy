@@ -20,35 +20,42 @@
 package org.carapaceproxy.server.certiticates;
 
 import java.lang.reflect.Field;
-import java.security.cert.CertificateExpiredException;
+import java.net.URL;
+import java.security.KeyPair;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Properties;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
+import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
+import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
-import org.carapaceproxy.configstore.ConfigurationStoreException;
+import static org.carapaceproxy.configstore.ConfigurationStoreUtilsTest.generateSampleChain;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
-import static org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.AVAILABLE;
-import static org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.EXPIRED;
-import static org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.ORDERING;
-import static org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.REQUEST_FAILED;
-import static org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.VERIFIED;
-import static org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.VERIFYING;
-import static org.carapaceproxy.server.certiticates.DynamicCertificate.DynamicCertificateState.WAITING;
+import static org.carapaceproxy.server.certiticates.DynamicCertificateState.AVAILABLE;
+import static org.carapaceproxy.server.certiticates.DynamicCertificateState.EXPIRED;
+import static org.carapaceproxy.server.certiticates.DynamicCertificateState.ORDERING;
+import static org.carapaceproxy.server.certiticates.DynamicCertificateState.REQUEST_FAILED;
+import static org.carapaceproxy.server.certiticates.DynamicCertificateState.VERIFIED;
+import static org.carapaceproxy.server.certiticates.DynamicCertificateState.VERIFYING;
+import static org.carapaceproxy.server.certiticates.DynamicCertificateState.WAITING;
+import static org.carapaceproxy.server.certiticates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.junit.Assert.*;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import org.shredzone.acme4j.Certificate;
+import org.shredzone.acme4j.Login;
 import org.shredzone.acme4j.Order;
 import static org.shredzone.acme4j.Status.INVALID;
 import static org.shredzone.acme4j.Status.VALID;
 import org.shredzone.acme4j.challenge.Http01Challenge;
+import org.shredzone.acme4j.toolbox.JSON;
+import org.shredzone.acme4j.util.KeyPairUtils;
 
 /**
  * Test for DynamicCertificatesManager.
@@ -63,7 +70,6 @@ public class DynamicCertificatesManagerTest {
         "challenge_null",
         "challenge_status_invalid",
         "order_response_error",
-        "storing_exception",
         "available_to_expired",
         "all_ok"
     })
@@ -71,20 +77,23 @@ public class DynamicCertificatesManagerTest {
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
         Order o = mock(Order.class);
+        when(o.getLocation()).thenReturn(new URL("https://localhost/index"));
+        when(ac.getLogin()).thenReturn(mock(Login.class));
         when(ac.createOrderForDomain(any())).thenReturn(o);
         Http01Challenge c = mock(Http01Challenge.class);
         when(c.getToken()).thenReturn("");
+        when(c.getJSON()).thenReturn(JSON.parse(
+                "{\"url\": \"https://localhost/index\", \"type\": \"http-01\", \"token\": \"mytoken\"}"
+        ));
         when(c.getAuthorization()).thenReturn("");
         when(ac.getHTTPChallengeForOrder(any())).thenReturn(runCase.equals("challenge_null") ? null : c);
         when(ac.checkResponseForChallenge(any())).thenReturn(runCase.equals("challenge_status_invalid") ? INVALID : VALID);
         when(ac.checkResponseForOrder(any())).thenReturn(runCase.equals("order_response_error") ? INVALID : VALID);
+
+        KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         Certificate cert = mock(Certificate.class);
-        X509Certificate _cert = mock(X509Certificate.class);
+        X509Certificate _cert = (X509Certificate) generateSampleChain(keyPair, runCase.equals("available_to_expired"))[0];
         when(cert.getCertificateChain()).thenReturn(Arrays.asList(_cert));
-        when(_cert.getEncoded()).thenReturn(new byte[0]);
-        if (runCase.equals("available_to_expired")) {
-            doThrow(CertificateExpiredException.class).when(_cert).checkValidity();
-        }
         when(ac.fetchCertificateForOrder(any())).thenReturn(cert);
 
         DynamicCertificatesManager man = new DynamicCertificatesManager();
@@ -92,22 +101,25 @@ public class DynamicCertificatesManagerTest {
         client.setAccessible(true);
         client.set(man, ac);
 
+        String d = "localhost";
         // Store mocking
-        ConfigurationStore s = mock(ConfigurationStore.class);
-        if (runCase.equals("storing_exception")) {
-            doThrow(ConfigurationStoreException.class).when(s).saveCertificate(any());
-        }
+        ConfigurationStore s = mock(ConfigurationStore.class);       
+
+        final CertificateData certData = new CertificateData(d, "", "", WAITING.name(), "", "", false);
+        when(s.loadCertificateForDomain(anyString())).thenReturn(certData);
+        when(s.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
         man.setConfigurationStore(s);
 
         // Manager setup
         Properties props = new Properties();
-        String d = "localhost";
-        props.setProperty("certificate.0.hostname", d);
+        props.setProperty("certificate.0.hostname", "localhost");
         props.setProperty("certificate.0.dynamic", "true");
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(configStore);
         man.reloadConfiguration(conf);
+
+        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
 
         // WAITING
         assertEquals(WAITING, man.getStateOfCertificate(d));
@@ -124,9 +136,9 @@ public class DynamicCertificatesManagerTest {
         // ORDERING
         if (!runCase.equals("challenge_status_invalid")) {
             man.run();
-            assertEquals(runCase.equals("order_response_error") || runCase.equals("storing_exception") ? REQUEST_FAILED : AVAILABLE, man.getStateOfCertificate(d));
+            assertEquals(runCase.equals("order_response_error") ? REQUEST_FAILED : AVAILABLE, man.getStateOfCertificate(d));
             man.run();
-            if (runCase.equals("order_response_error") || runCase.equals("storing_exception")) { // REQUEST_FAILED
+            if (runCase.equals("order_response_error")) { // REQUEST_FAILED
                 assertEquals(WAITING, man.getStateOfCertificate(d));
             } else { // AVAILABLE
                 assertEquals(runCase.equals("available_to_expired") ? EXPIRED : AVAILABLE, man.getStateOfCertificate(d));

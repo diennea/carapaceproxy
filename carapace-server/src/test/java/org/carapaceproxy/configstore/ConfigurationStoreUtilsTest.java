@@ -56,9 +56,7 @@ import static org.shredzone.acme4j.util.KeyPairUtils.createKeyPair;
  *
  * @author paolo.venturi
  */
-public class ConfigurationStoreUtilsTest {
-
-    private PrivateKey endUserPrivateKey;
+public class ConfigurationStoreUtilsTest {    
 
     @Test
     public void testBase64EncodeDecodeKeys() throws Exception {
@@ -77,8 +75,9 @@ public class ConfigurationStoreUtilsTest {
 
     @Test
     public void testBase64EncodeEncodeCertificateChain() throws Exception {
-        Certificate[] originalChain = generateSampleChain();
-        String encodedChain = base64EncodeCertificateChain(originalChain, endUserPrivateKey);
+        KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        Certificate[] originalChain = generateSampleChain(endUserKeyPair, false);
+        String encodedChain = base64EncodeCertificateChain(originalChain, endUserKeyPair.getPrivate());
         Certificate[] decodedChain = base64DecodeCertificateChain(encodedChain);
 
         assertNotNull(decodedChain);
@@ -90,7 +89,7 @@ public class ConfigurationStoreUtilsTest {
         }
     }
 
-    private Certificate[] generateSampleChain() throws Exception {
+    public static Certificate[] generateSampleChain(KeyPair endUserKeypair, boolean expired) throws Exception {
         Security.addProvider(new BouncyCastleProvider());
 
         // Create self signed Root CA certificate
@@ -132,14 +131,14 @@ public class ConfigurationStoreUtilsTest {
                         build(rootCAKeyPair.getPrivate())));// private key of signing authority , here it is signed by rootCA
 
         //create end user cert signed by Intermediate CA
-        KeyPair endUserCertKeyPair = createKeyPair(DEFAULT_KEYPAIRS_SIZE);
-        endUserPrivateKey = endUserCertKeyPair.getPrivate();
+        int offset = 1000 * 60 * 60 * 24; // yesterday/tomorrow
+        Date expiringDate = new Date(System.currentTimeMillis() + (expired ? - offset : + offset));
         builder = new JcaX509v3CertificateBuilder(
                 intermediateCA, //here intermedCA is issuer authority
                 BigInteger.valueOf(new Random().nextInt()),
-                new Date(),
-                new Date(),
-                new X500Name("CN=endUserCert"), endUserCertKeyPair.getPublic());
+                new Date(System.currentTimeMillis() - offset),
+                expiringDate,
+                new X500Name("CN=endUserCert"), endUserKeypair.getPublic());
 
         // Key usage restrictions
         builder.addExtension(Extension.keyUsage, true, new KeyUsage(KeyUsage.digitalSignature));
@@ -150,12 +149,11 @@ public class ConfigurationStoreUtilsTest {
                 .build(new JcaContentSignerBuilder("SHA256withRSA").setProvider("BC").
                         build(intermedCAKeyPair.getPrivate())));// private key of signing authority , here it is signed by intermedCA
 
-        X509Certificate[] chain = new X509Certificate[3];
-        chain[0] = endUserCert;
-        chain[1] = intermediateCA;
-        chain[2] = rootCA;
-
-        return chain;
+        return new X509Certificate [] {
+            endUserCert,
+            intermediateCA,
+            rootCA,
+        };        
     }
 
 }
