@@ -19,7 +19,6 @@
  */
 package org.carapaceproxy.server.mapper.requestmatcher;
 
-import io.netty.handler.codec.http.HttpRequest;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -38,9 +37,9 @@ public class OrRequestMatcher implements RequestMatcher {
     }
 
     @Override
-    public boolean matches(HttpRequest request) {
+    public boolean matches(MatchingContext context) throws MatchingException {
         for (RequestMatcher matcher : matchers) {            
-            if (matcher.matches(request)) {
+            if (matcher.matches(context)) {
                 return true;
             }
         }

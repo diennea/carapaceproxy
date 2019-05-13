@@ -20,7 +20,8 @@
 package org.carapaceproxy.server.config;
 
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
-import io.netty.handler.codec.http.HttpRequest;
+import org.carapaceproxy.server.RequestHandler;
+import org.carapaceproxy.server.mapper.requestmatcher.MatchingException;
 
 /**
  * Route
@@ -55,11 +56,11 @@ public class RouteConfiguration {
         return matcher;
     }
 
-    public boolean matches(HttpRequest request) {
+    public boolean matches(RequestHandler handler) throws MatchingException {
         if (!enabled) {
             return false;
         }
-        return matcher.matches(request);
+        return matcher.matches(new RequestMatchingContext(handler));
     }
 
 }

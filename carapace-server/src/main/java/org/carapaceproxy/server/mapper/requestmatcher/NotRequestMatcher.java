@@ -19,8 +19,6 @@
  */
 package org.carapaceproxy.server.mapper.requestmatcher;
 
-import io.netty.handler.codec.http.HttpRequest;
-
 /**
  * Matcher for composing NOT expressions with another matcher.
  *
@@ -35,8 +33,8 @@ public class NotRequestMatcher implements RequestMatcher {
     }
 
     @Override
-    public boolean matches(HttpRequest request) {
-        return !matcher.matches(request);
+    public boolean matches(MatchingContext context) throws MatchingException {
+        return !matcher.matches(context);
     }
 
     @Override

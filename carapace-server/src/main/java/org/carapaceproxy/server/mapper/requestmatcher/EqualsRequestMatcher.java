@@ -20,20 +20,28 @@
 package org.carapaceproxy.server.mapper.requestmatcher;
 
 /**
- * Generic criteria to apply a route to a request
+ *
+ * Matcher for composing EQUALS expressions give a property-key and the expected value.
+ *
+ * @author paolo.venturi
  */
-public interface RequestMatcher {
+public class EqualsRequestMatcher implements RequestMatcher {
 
-    /**
-     *
-     * @param context
-     * @return
-     * @throws MatchingException
-     */
-    boolean matches(MatchingContext context) throws MatchingException;
+    private final String name;
+    private final String value;
 
-    /**
-     * @return description of the matcher (used by UI).
-     */
-    String getDescription();
+    public EqualsRequestMatcher(String key, String value) {
+        this.name = key.toLowerCase();
+        this.value = value;
+    }
+
+    @Override
+    public boolean matches(MatchingContext context) throws MatchingException {
+        return context.getProperty(name).equals(value);
+    }
+
+    public String getDescription() {
+        return "(" + name + " = " + value + ")";
+    }
+
 }

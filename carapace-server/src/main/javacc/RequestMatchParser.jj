@@ -18,7 +18,8 @@ import org.carapaceproxy.server.mapper.requestmatcher.MatchAllRequestMatcher;
 import org.carapaceproxy.server.mapper.requestmatcher.NotRequestMatcher;
 import org.carapaceproxy.server.mapper.requestmatcher.OrRequestMatcher;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
-import org.carapaceproxy.server.mapper.requestmatcher.URIRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.EqualsRequestMatcher;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 
 /**
@@ -51,79 +52,88 @@ SKIP :
 TOKEN :
 {
     < ALL: "all" > |
-    < REGEXP_DEF: "regexp" > |
+    < HTTPS: "https" > |
     < AND: "and" > |
     < OR: "or" > |
     < NOT: "not" > |
-    < HTTPS: "https" > |
     < O_BRACKET: "(" > |
     < C_BRACKET: ")" > |
-    < REGEXP: "'" (~["'"])* "'" >
+    < EQUALS: "=" > |
+    < REGEXP_DEF: "~" > |
+    < STRING: "\"" (~["\""])* "\"" > { matchedToken.image = matchedToken.image.substring(1, matchedToken.image.length() - 1);} |
+    < NAME: (["a"-"z","A"-"Z","_"])(["a"-"z","A"-"Z","0"-"9","-","_","."])* >
 }
 
 /* Main method to call to build a proper RequestMatcher over given matchingCondition
     *   - all
     *   - https
-    *   - regexp '.*index.*'
-    *   - regexp '.*index.*' and not https
+    *   - request.uri ~ ".*index.*"
+    *   - request.uri ~ ".*index.*" and not https
+    *   - request.PROPERTY_NAME = VALUE and https
     */
 RequestMatcher parse() throws ConfigurationNotValidException:
 {        
-    RequestMatcher matcher;
-    String regexp;
+    RequestMatcher matcher;    
 }
 {
-    <ALL> <EOF> { return new MatchAllRequestMatcher(); } |
-    (
-        <REGEXP_DEF> regexp = <REGEXP>.image { matcher = new URIRequestMatcher(regexp.substring(1, regexp.length() - 1)); }
-        (
-            <AND> { matcher = new AndRequestMatcher(Arrays.asList(matcher, andExpression())); } |
-            <OR> { matcher = new OrRequestMatcher(Arrays.asList(matcher, orExpression())); }
-        )?
-        <EOF> { return matcher; }
-    ) |
+    <ALL> <EOF> { return new MatchAllRequestMatcher(); } |                
     { return orExpression(); }
 }
 
-RequestMatcher orExpression() :
+RequestMatcher orExpression() throws ConfigurationNotValidException:
 {    
     List<RequestMatcher> matchers = new ArrayList();
 }
 {
     { matchers.add(andExpression()); }
     (
-        <OR> { matchers.add(andExpression()); }
+            <OR> { matchers.add(andExpression()); }
     )*
     { return new OrRequestMatcher(matchers); }    
 }
 
-RequestMatcher andExpression() :
+RequestMatcher andExpression() throws ConfigurationNotValidException:
 {
     List<RequestMatcher> matchers = new ArrayList();
 }
 {
     { matchers.add(basicExpression()); }
     (
-        <AND> { matchers.add(basicExpression()); }
+            <AND> { matchers.add(basicExpression()); }
     )*
     { return new AndRequestMatcher(matchers); }
 }
 
-RequestMatcher basicExpression() :
+RequestMatcher basicExpression() throws ConfigurationNotValidException:
 {
     RequestMatcher basicMatcher;
 }
 {
-    basicMatcher = basicMatcher() { return basicMatcher; } |
-    <NOT> basicMatcher = basicExpression() { return new NotRequestMatcher(basicMatcher); } |
     (
-        <O_BRACKET> basicMatcher = orExpression() <C_BRACKET>
+        <NOT> basicMatcher = basicExpression() { return new NotRequestMatcher(basicMatcher); } |
+    
+        <O_BRACKET> basicMatcher = orExpression() <C_BRACKET> |
+    
+        basicMatcher = basicMatcher()
     )
     { return basicMatcher; }
 }
 
-RequestMatcher basicMatcher() :
+RequestMatcher basicMatcher() throws ConfigurationNotValidException:
 {}
 {
-    <HTTPS> { return new HttpsRequestMatcher(); }
+    <HTTPS> { return new HttpsRequestMatcher(); } |
+    { return compareMatcher(); }
+}
+
+RequestMatcher compareMatcher() throws ConfigurationNotValidException:
+{
+    String name; // property to compare
+    String value;
+}
+{
+    name = <NAME>.image (
+        <REGEXP_DEF> value = <STRING>.image { return new RegexpRequestMatcher(name, value); } |
+        <EQUALS> value = <STRING>.image { return new EqualsRequestMatcher(name, value); }
+    )
 }

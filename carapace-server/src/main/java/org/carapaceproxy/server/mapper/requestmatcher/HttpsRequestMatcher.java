@@ -19,8 +19,7 @@
  */
 package org.carapaceproxy.server.mapper.requestmatcher;
 
-import io.netty.handler.codec.http.HttpRequest;
-import org.carapaceproxy.server.RequestHandler;
+import static org.carapaceproxy.server.config.RequestMatchingContext.PROPERTY_HTTPS;
 
 /**
  *
@@ -31,8 +30,8 @@ import org.carapaceproxy.server.RequestHandler;
 public class HttpsRequestMatcher implements RequestMatcher {
 
     @Override
-    public boolean matches(HttpRequest request) {
-        return RequestHandler.PROTO_HTTPS.equals(request.headers().get(RequestHandler.HEADER_X_FORWARDED_PROTO, ""));
+    public boolean matches(MatchingContext context) throws MatchingException {
+        return (boolean) context.getProperty(PROPERTY_HTTPS);
     }
 
     @Override

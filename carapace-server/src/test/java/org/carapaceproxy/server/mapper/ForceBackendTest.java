@@ -33,8 +33,9 @@ import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.DirectorConfiguration;
+import static org.carapaceproxy.server.config.RequestMatchingContext.PROPERTY_URI;
 import org.carapaceproxy.server.config.RouteConfiguration;
-import org.carapaceproxy.server.mapper.requestmatcher.URIRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
 import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertEquals;
 import org.junit.Rule;
@@ -83,7 +84,7 @@ public class ForceBackendTest {
 
         mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1));
 
-        mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new URIRequestMatcher(".*index.html.*")));
+        mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index.html.*")));
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {

@@ -20,20 +20,16 @@
 package org.carapaceproxy.server.mapper.requestmatcher;
 
 /**
- * Generic criteria to apply a route to a request
+ *
+ * @author paolo.venturi
  */
-public interface RequestMatcher {
+public interface MatchingContext {
 
     /**
      *
-     * @param context
-     * @return
-     * @throws MatchingException
+     * @param name
+     * @return property value
+     * @throws MatchingException whether the property does not exist.
      */
-    boolean matches(MatchingContext context) throws MatchingException;
-
-    /**
-     * @return description of the matcher (used by UI).
-     */
-    String getDescription();
+    Object getProperty(String name) throws MatchingException;
 }

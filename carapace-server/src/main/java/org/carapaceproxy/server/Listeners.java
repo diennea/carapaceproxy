@@ -197,7 +197,8 @@ public class Listeners {
                                         parent.getBackendHealthManager(),
                                         parent.getRequestsLogger(),
                                         listener.getHost(),
-                                        port
+                                        port,
+                                        listener.isSsl()
                                 )
                         );
 

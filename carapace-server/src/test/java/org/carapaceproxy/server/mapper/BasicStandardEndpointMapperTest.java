@@ -40,8 +40,9 @@ import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.DirectorConfiguration;
+import static org.carapaceproxy.server.config.RequestMatchingContext.PROPERTY_URI;
 import org.carapaceproxy.server.config.RouteConfiguration;
-import org.carapaceproxy.server.mapper.requestmatcher.URIRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
 import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -104,12 +105,12 @@ public class BasicStandardEndpointMapperTest {
         mapper.addAction(new ActionConfiguration("error-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR, 500));
         mapper.addAction(new ActionConfiguration("static-custom", ActionConfiguration.TYPE_STATIC, null, CLASSPATH_RESOURCE + "/test-static-page.html", 200));
 
-        mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new URIRequestMatcher(".*index.html.*")));
-        mapper.addRoute(new RouteConfiguration("route-1b", "cache-1", true, new URIRequestMatcher(".*index2.html.*")));
-        mapper.addRoute(new RouteConfiguration("route-1c", "all-1", true, new URIRequestMatcher(".*index3.html.*")));
-        mapper.addRoute(new RouteConfiguration("route-2-not-found", "not-found-custom", true, new URIRequestMatcher(".*notfound.html.*")));
-        mapper.addRoute(new RouteConfiguration("route-3-error", "error-custom", true, new URIRequestMatcher(".*error.html.*")));
-        mapper.addRoute(new RouteConfiguration("route-4-static", "static-custom", true, new URIRequestMatcher(".*static.html.*")));
+        mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index.html.*")));
+        mapper.addRoute(new RouteConfiguration("route-1b", "cache-1", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index2.html.*")));
+        mapper.addRoute(new RouteConfiguration("route-1c", "all-1", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index3.html.*")));
+        mapper.addRoute(new RouteConfiguration("route-2-not-found", "not-found-custom", true, new RegexpRequestMatcher(PROPERTY_URI, ".*notfound.html.*")));
+        mapper.addRoute(new RouteConfiguration("route-3-error", "error-custom", true, new RegexpRequestMatcher(PROPERTY_URI, ".*error.html.*")));
+        mapper.addRoute(new RouteConfiguration("route-4-static", "static-custom", true, new RegexpRequestMatcher(PROPERTY_URI, ".*static.html.*")));
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();

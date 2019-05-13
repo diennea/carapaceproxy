@@ -76,8 +76,7 @@ public class RequestHandler {
     private static final Logger LOG = Logger.getLogger(RequestHandler.class.getName());
     private static final AtomicLong TIME_TRACKER = new AtomicLong();
     public static final String PROTO_HTTPS = "https";
-    public static final String PROTO_HTTP = "http";
-    public static final String HEADER_X_FORWARDED_PROTO = "X-Forwarded-Proto";
+    public static final String PROTO_HTTP = "http";    
     private final long id;
     private final HttpRequest request;
     private final List<RequestFilter> filters;
@@ -156,6 +155,10 @@ public class RequestHandler {
         if (handler != null) {
             handler.run();
         }
+    }
+
+    public ClientConnectionHandler getClientConnectionHandler() {
+        return connectionToClient;
     }
 
     private static final UrlEncodedQueryString EMPTY = UrlEncodedQueryString.create();

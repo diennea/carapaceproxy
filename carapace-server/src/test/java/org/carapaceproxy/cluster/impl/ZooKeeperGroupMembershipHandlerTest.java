@@ -159,7 +159,6 @@ public class ZooKeeperGroupMembershipHandlerTest {
                     }
                     assertTrue(eventFired3.get() == 0); // self events are not fired
                     assertTrue(eventFired2.get() > 0);
-
                 }
 
             }
