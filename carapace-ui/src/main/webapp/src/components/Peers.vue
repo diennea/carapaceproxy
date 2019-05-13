@@ -20,18 +20,14 @@
                         <div class="label">
                             {{item.description}}
                         </div>
-                    </td>
+                    </td>                    
                     <td>
                         <div class="label">
-                            {{item.info['peer_admin_server_host']}}:{{item.info['peer_admin_server_port']}}
+                            <a :href="'http://' + item.info['peer_admin_server_host'] + ':' + item.info['peer_admin_server_port'] + '/ui/#/'" >
+                                {{item.info['peer_admin_server_host']}} : {{item.info['peer_admin_server_port']}}
+                            </a>
                         </div>
                     </td>
-<!--                    <td>
-                        <div class="label">
-                            <b>{{item.httpResponse}}</b><br>
-                            <a href="#" @click="openDetail(item.httpBody)">Open probe page</a>
-                        </div>
-                    </td>-->
                 </tr>
             </tbody>
         </table>
@@ -48,7 +44,7 @@
             }
         },
         created: function () {
-            var url = "/api/peers"
+            var url = "/api/cluster/peers"
             var d = this
             doGet(url, response => {
                 d.peers = [];
@@ -61,31 +57,5 @@
     }
 </script>
 
-<style scoped>
-    table th,
-    table tr td .label {
-        font-size: 13px;
-    }
-    table tr td .label-error{
-        background-color: #f44336;
-        border-radius: 2px;
-
-        text-transform: uppercase;
-        text-align: center;
-        font-weight: bold;
-        color: white;
-
-        padding: 10px;
-    }
-    table tr td .label-success{
-        background-color: #4CAF50;
-        border-radius: 2px;
-
-        text-transform: uppercase;
-        font-weight: bold;
-        text-align: center;
-        color: white;
-
-        padding: 10px;
-    }
+<style scoped>   
 </style>

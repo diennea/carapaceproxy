@@ -64,8 +64,8 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final CuratorFramework client;
-    private final String peerId;
-    private final Map<String, String> peerInfo;
+    private final String peerId; // of the local one
+    private final Map<String, String> peerInfo; // of the local one
     private final CopyOnWriteArrayList<PathChildrenCache> watchedEvents = new CopyOnWriteArrayList<>();
     private final ConcurrentHashMap<String, InterProcessMutex> mutexes = new ConcurrentHashMap<>();
     private final ExecutorService callbacksExecutor = Executors.newSingleThreadExecutor();
@@ -96,8 +96,8 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
                             .withMode(CreateMode.EPHEMERAL) // auto delete on close
                             .forPath("/proxy/peers/" + peerId);
                 }
-                // Setting up peer info
-                storeInfoForPeer(peerId, peerInfo);
+                // Setting up local peer info
+                storeLocalPeerInfo(peerInfo);
             }
             {
                 final String path = "/proxy/events";
@@ -116,16 +116,13 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     }
 
     @Override
-    public void storeInfoForPeer(String id, Map<String, String> info) {
+    public void storeLocalPeerInfo(Map<String, String> info) {
         try {
-            String path = "/proxy/peers/" + id;
-            Stat exists = client.checkExists().creatingParentsIfNeeded().forPath(path);
-            if (info != null && exists != null) {
-                byte[] data = MAPPER.writeValueAsBytes(info);
-                client.setData().forPath(path, data);
-            }
+            String path = "/proxy/peers/" + peerId;
+            byte[] data = MAPPER.writeValueAsBytes(info);
+            client.setData().forPath(path, data);
         } catch (Exception ex) {
-            LOG.log(Level.SEVERE, "Cannot store info for peer " + id, ex);
+            LOG.log(Level.SEVERE, "Cannot store info for peer " + peerId, ex);
         }
     }
 
@@ -135,7 +132,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
             String path = "/proxy/peers/" + id;
             Stat exists = client.checkExists().creatingParentsIfNeeded().forPath(path);
             if (exists != null) {
-                byte[] data = client.getData().forPath(path);
+                byte[] data = client.getData().forPath(path); // Should be at least an empty Map.
                 if (data != null) {
                     return MAPPER.readValue(new ByteArrayInputStream(data), Map.class);
                 }
@@ -143,7 +140,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
         } catch (Exception ex) {
             LOG.log(Level.SEVERE, "Cannot load info for peer " + id, ex);
         }
-        return Collections.EMPTY_MAP;
+        return null;
     }
 
     @Override
@@ -221,7 +218,10 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     @Override
     public String describePeer(String peerId) {
         Map<String, String> info = loadInfoForPeer(peerId);
-        return peerId + " at: " + info.getOrDefault(PROPERTY_PEER_ADMIN_SERVER_HOST, "");
+        if (info != null) {
+            return peerId + " at: " + info.getOrDefault(PROPERTY_PEER_ADMIN_SERVER_HOST, "");
+        }
+        return peerId;
     }
 
     @Override
@@ -260,7 +260,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     }
 
     @Override
-    public String getCurrentPeer() {
+    public String getLocalPeer() {
         return peerId;
     }
 

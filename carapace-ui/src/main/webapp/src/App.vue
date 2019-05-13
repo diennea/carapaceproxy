@@ -6,7 +6,7 @@
                 <ul class="sidebar-nav">
                     <li class="sidebar-brand">
                         <a href="#">
-                            Carapace ({{peerId}})
+                            Carapace Admin ({{peerId}})
                         </a>
                     </li>
                     <li>
@@ -67,6 +67,7 @@
 </template>
 
 <script>
+    import { doGet } from './mockserver'
     export default {
         name: 'app',
         data: function () {
@@ -75,12 +76,12 @@
             }
         },
         created: function () {
-            var url = "/api/cluster/peers/current"
+            var url = "/api/cluster/localpeer"
             var d = this
-            doGet(url, response => {
-                d.peerId = response.id;
+            doGet(url, response => {            
+                d.peerId = response.id
+                document.title += ' (' + d.peerId + ')'
             })
-
         },
     }
 </script>

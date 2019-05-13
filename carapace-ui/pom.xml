@@ -111,6 +111,9 @@
                                 <goals>
                                     <goal>yarn</goal>
                                 </goals>
+                                <configuration>
+                                    <arguments>install</arguments>
+                                </configuration>
                             </execution>
                             <execution>
                                 <id>yarn build</id>
@@ -118,6 +121,9 @@
                                 <goals>
                                     <goal>yarn</goal>
                                 </goals>
+                                <configuration>
+                                    <arguments>build</arguments>
+                                </configuration>
                             </execution>
                         </executions>
                     </plugin>

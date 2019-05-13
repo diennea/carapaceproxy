@@ -23,8 +23,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.curator.test.TestingServer;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
@@ -186,36 +184,31 @@ public class ZooKeeperGroupMembershipHandlerTest {
                     info = peer1.loadInfoForPeer(peerId2);
                     assertEquals("peer2", info.get("name"));
 
-                    peer1.storeInfoForPeer(peerId1, Map.of("name", "newpeer1", "address", "localhost"));
-                    peer1.storeInfoForPeer(peerId2, Map.of("name", "newpeer2", "address", "localhost:8080"));
-
+                    peer1.storeLocalPeerInfo(Map.of("name", "newpeer1", "address", "localhost"));
                     info = peer1.loadInfoForPeer(peerId1);
                     assertEquals("newpeer1", info.get("name"));
-                    assertEquals("localhost", info.get("address"));
-                    info = peer1.loadInfoForPeer(peerId2);
-                    assertEquals("newpeer2", info.get("name"));
-                    assertEquals("localhost:8080", info.get("address"));
+                    assertEquals("localhost", info.get("address"));                    
 
-                    peer1.storeInfoForPeer(peerId1, Collections.EMPTY_MAP);
-                    peer1.storeInfoForPeer(peerId2, Map.of("port", "8080"));
+                    peer1.storeLocalPeerInfo(Collections.EMPTY_MAP);
                     info = peer1.loadInfoForPeer(peerId1);
                     assertTrue(info.isEmpty());
-                    info = peer1.loadInfoForPeer(peerId2);
+                    peer1.storeLocalPeerInfo(Map.of("port", "8080"));
+                    info = peer1.loadInfoForPeer(peerId1);
                     assertNull(info.get("name"));
+                    peer1.storeLocalPeerInfo(null); // discarded
+                    info = peer1.loadInfoForPeer(peerId1);
+                    assertNull(info);
                 }
 
                 // OP on peer2
                 {
-                    peer2.storeInfoForPeer(peerId2, Map.of("name", "peer2", "address", "localhost:8080"));
-                    peer2.storeInfoForPeer(peerId1, Map.of("name", "peer1", "address", "localhost"));
-
+                    peer2.storeLocalPeerInfo(Map.of("name", "peer2", "address", "localhost:8080"));
                     Map<String, String> info = peer2.loadInfoForPeer(peerId2);
                     assertEquals("peer2", info.get("name"));
                     assertEquals("localhost:8080", info.get("address"));
                     info = peer2.loadInfoForPeer(peerId1);
-                    assertEquals("peer1", info.get("name"));
-                    assertEquals("localhost", info.get("address"));
-                }
+                    assertNull(info);
+                }              
             }
         }
     }

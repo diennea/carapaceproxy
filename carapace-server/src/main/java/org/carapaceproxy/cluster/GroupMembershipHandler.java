@@ -19,11 +19,8 @@
  */
 package org.carapaceproxy.cluster;
 
-import java.io.ByteArrayInputStream;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Level;
 
 /**
  * Handle group membership: peer discovery and configuration changes.
@@ -71,9 +68,9 @@ public interface GroupMembershipHandler {
 
     /**
      *
-     * @return id of the current peer.
+     * @return id of the local peer.
      */
-    String getCurrentPeer();
+    String getLocalPeer();
 
     /**
      * List current peers
@@ -92,11 +89,10 @@ public interface GroupMembershipHandler {
 
 
     /**
-     * To store some key-value info for a peer.
-     * @param id
+     * To store some key-value info for the local peer.     
      * @param info properties of the peer.
      */
-    void storeInfoForPeer(String id, Map<String, String> info);
+    void storeLocalPeerInfo(Map<String, String> info);
 
     /**
      * To load info associated to the peer.

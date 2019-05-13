@@ -48,9 +48,9 @@ public class ClusterResource {
         private final String description;
         private final Map<String, String> info;
 
-        public PeerBean(String id, String descrption, Map<String, String> info) {
+        public PeerBean(String id, String description, Map<String, String> info) {
             this.id = id;
-            this.description = descrption;
+            this.description = description;
             this.info = info;
         }
 
@@ -58,7 +58,7 @@ public class ClusterResource {
             return id;
         }
 
-        public String getDescrption() {
+        public String getDescription() {
             return description;
         }
 
@@ -68,7 +68,20 @@ public class ClusterResource {
     }
 
     private PeerBean getPeer(String peerId, GroupMembershipHandler handler) {
-        return new PeerBean(peerId, handler.describePeer(peerId), handler.loadInfoForPeer(peerId));
+        Map<String, String> info = handler.loadInfoForPeer(peerId);
+        if (info != null) {
+            return new PeerBean(peerId, handler.describePeer(peerId), info);
+        }
+        return null;
+    }
+
+    @GET
+    @Path("localpeer")
+    public PeerBean getLocalPeer() {
+        HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
+        GroupMembershipHandler handler = server.getGroupMembershipHandler();
+
+        return getPeer(handler.getLocalPeer(), handler);
     }
 
     @GET
@@ -80,15 +93,6 @@ public class ClusterResource {
         handler.getPeers().forEach(p-> peers.add(getPeer(p, handler)));
 
         return peers;
-    }
-
-    @GET
-    @Path("peers/current")
-    public PeerBean getCurrentPeer() {
-        HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-        GroupMembershipHandler handler = server.getGroupMembershipHandler();
-
-        return getPeer(handler.getCurrentPeer(), handler);
     }
 
     @GET
