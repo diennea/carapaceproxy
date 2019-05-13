@@ -14,6 +14,7 @@ import Certificate from './components/Certificate'
 import DatatableList from './components/DatatableList'
 import Configuration from './components/Configuration'
 import Metrics from './components/Metrics'
+import Peers from './components/Peers'
 
 Vue.component('backends-status', Backends)
 Vue.component('routes', Routes)
@@ -27,6 +28,7 @@ Vue.component('certificates-status', CertificatesStatus)
 Vue.component('datatable-list', DatatableList)
 Vue.component('configuration', Configuration)
 Vue.component('metrics', Metrics)
+Vue.component('peers', Peers)
 
 Vue.use(Router)
 
@@ -91,6 +93,11 @@ export default new Router({
         path: '/metrics',
         name: 'Metrics',
         component: Metrics
+    },
+    {
+        path: '/peers',
+        name: 'Peers',
+        component: Peers
     }
   ]
 })

@@ -6,7 +6,7 @@
                 <ul class="sidebar-nav">
                     <li class="sidebar-brand">
                         <a href="#">
-                            Http Proxy
+                            Carapace Admin ({{peerId}})
                         </a>
                     </li>
                     <li>
@@ -46,6 +46,9 @@
                     <li>
                     <router-link to="/metrics">Prometheus Metrics</router-link>
                     </li>
+                    <li>
+                    <router-link to="/peers">Cluster peers</router-link>
+                    </li>
 
                     <hr>
 
@@ -64,8 +67,22 @@
 </template>
 
 <script>
+    import { doGet } from './mockserver'
     export default {
         name: 'app',
+        data: function () {
+            return {
+                peerId: ""
+            }
+        },
+        created: function () {
+            var url = "/api/cluster/localpeer"
+            var d = this
+            doGet(url, response => {            
+                d.peerId = response.id
+                document.title += ' (' + d.peerId + ')'
+            })
+        },
     }
 </script>
 

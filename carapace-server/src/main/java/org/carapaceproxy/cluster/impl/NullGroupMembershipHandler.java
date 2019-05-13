@@ -20,7 +20,9 @@
 package org.carapaceproxy.cluster.impl;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 
 /**
@@ -29,6 +31,9 @@ import org.carapaceproxy.cluster.GroupMembershipHandler;
  * @author eolivelli
  */
 public class NullGroupMembershipHandler implements GroupMembershipHandler {
+
+    private Map<String, String> peerInfo = Map.of("address", "localhost");
+    private final String peerId = "local";
 
     @Override
     public void start() {
@@ -50,8 +55,11 @@ public class NullGroupMembershipHandler implements GroupMembershipHandler {
     }
 
     @Override
-    public String describePeer(String peerId) {
-        return "";
+    public String describePeer(String id) {
+       if (peerId.equals(id)) {
+            return peerId;
+        }
+        return null;
     }
 
     @Override
@@ -61,6 +69,24 @@ public class NullGroupMembershipHandler implements GroupMembershipHandler {
     @Override
     public void executeInMutex(String lockId, int timeout, Runnable runnable) {
         runnable.run();
+    }
+
+    @Override
+    public String getLocalPeer() {
+        return peerId;
+    }
+
+    @Override
+    public void storeLocalPeerInfo(Map<String, String> info) {
+        peerInfo = new HashMap(info);
+    }
+
+    @Override
+    public Map<String, String> loadInfoForPeer(String id) {
+        if (peerId.equals(id)) {
+            return peerInfo;
+        }
+        return null;
     }
 
 }

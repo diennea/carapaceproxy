@@ -57,16 +57,20 @@ import org.carapaceproxy.cluster.GroupMembershipHandler;
  */
 public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, AutoCloseable {
 
+    public static final String PROPERTY_PEER_ADMIN_SERVER_HOST = "peer_admin_server_host"; // host of the Admin UI/API
+    public static final String PROPERTY_PEER_ADMIN_SERVER_PORT = "peer_admin_server_port"; // port of the Admin UI/API
+
     private static final Logger LOG = Logger.getLogger(ZooKeeperGroupMembershipHandler.class.getName());
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final CuratorFramework client;
-    private final String peerId;
+    private final String peerId; // of the local one
+    private final Map<String, String> peerInfo; // of the local one
     private final CopyOnWriteArrayList<PathChildrenCache> watchedEvents = new CopyOnWriteArrayList<>();
     private final ConcurrentHashMap<String, InterProcessMutex> mutexes = new ConcurrentHashMap<>();
     private final ExecutorService callbacksExecutor = Executors.newSingleThreadExecutor();
 
-    public ZooKeeperGroupMembershipHandler(String zkAddress, int zkTimeout, String peerId) {
+    public ZooKeeperGroupMembershipHandler(String zkAddress, int zkTimeout, String peerId, Map<String, String> peerInfo) {
         client = CuratorFrameworkFactory
                 .builder()
                 .sessionTimeoutMs(zkTimeout)
@@ -75,6 +79,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
                 .ensembleProvider(new FixedEnsembleProvider(zkAddress, true))
                 .build();
         this.peerId = peerId;
+        this.peerInfo = peerInfo;
     }
 
     @Override
@@ -91,6 +96,8 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
                             .withMode(CreateMode.EPHEMERAL) // auto delete on close
                             .forPath("/proxy/peers/" + peerId);
                 }
+                // Setting up local peer info
+                storeLocalPeerInfo(peerInfo);
             }
             {
                 final String path = "/proxy/events";
@@ -106,6 +113,34 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
         } catch (Exception ex) {
             throw new RuntimeException(ex);
         }
+    }
+
+    @Override
+    public void storeLocalPeerInfo(Map<String, String> info) {
+        try {
+            String path = "/proxy/peers/" + peerId;
+            byte[] data = MAPPER.writeValueAsBytes(info);
+            client.setData().forPath(path, data);
+        } catch (Exception ex) {
+            LOG.log(Level.SEVERE, "Cannot store info for peer " + peerId, ex);
+        }
+    }
+
+    @Override
+    public Map<String, String> loadInfoForPeer(String id) {
+        try {
+            String path = "/proxy/peers/" + id;
+            Stat exists = client.checkExists().creatingParentsIfNeeded().forPath(path);
+            if (exists != null) {
+                byte[] data = client.getData().forPath(path); // Should be at least an empty Map.
+                if (data != null) {
+                    return MAPPER.readValue(new ByteArrayInputStream(data), Map.class);
+                }
+            }
+        } catch (Exception ex) {
+            LOG.log(Level.SEVERE, "Cannot load info for peer " + id, ex);
+        }
+        return null;
     }
 
     @Override
@@ -182,6 +217,10 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
 
     @Override
     public String describePeer(String peerId) {
+        Map<String, String> info = loadInfoForPeer(peerId);
+        if (info != null) {
+            return peerId + " at: " + info.getOrDefault(PROPERTY_PEER_ADMIN_SERVER_HOST, "");
+        }
         return peerId;
     }
 
@@ -218,6 +257,11 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     public void close() {
         stop();
         mutexes.clear();
+    }
+
+    @Override
+    public String getLocalPeer() {
+        return peerId;
     }
 
 }

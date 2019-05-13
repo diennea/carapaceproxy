@@ -20,6 +20,7 @@
 package org.carapaceproxy.cluster;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Handle group membership: peer discovery and configuration changes.
@@ -36,6 +37,11 @@ public interface GroupMembershipHandler {
     void start();
 
     /**
+     * Unregister from the network, events won't be notified anymore.
+     */
+    void stop();
+
+    /**
      * Register a callback to be called when a particular event is fired.
      *
      * @param eventId
@@ -49,6 +55,22 @@ public interface GroupMembershipHandler {
      * @param eventId
      */
     void fireEvent(String eventId);
+
+     /**
+     * To execute code in mutual exclusion to other peers.
+     *
+     * Whether the peer fails to acquire/release the mutex code passed will be skipped and no exceptions will be thrown.
+     *
+     * @param lockId
+     * @param runnable
+     */
+    void executeInMutex(String lockId, int acquireTimeout, Runnable runnable);
+
+    /**
+     *
+     * @return id of the local peer.
+     */
+    String getLocalPeer();
 
     /**
      * List current peers
@@ -65,20 +87,19 @@ public interface GroupMembershipHandler {
      */
     String describePeer(String peerId);
 
-    /**
-     * Unregister from the network, events won't be notified anymore.
-     */
-    void stop();
 
     /**
-     * To execute code in mutual exclusion to other peers.
-     *
-     * Whether the peer fails to acquire/release the mutex code passed will be skipped and no exceptions will be thrown.
-     *
-     * @param lockId
-     * @param runnable
+     * To store some key-value info for the local peer.     
+     * @param info properties of the peer.
      */
-    void executeInMutex(String lockId, int acquireTimeout, Runnable runnable);
+    void storeLocalPeerInfo(Map<String, String> info);
+
+    /**
+     * To load info associated to the peer.
+     * @param id
+     * @return properties of the peer
+     */
+    Map<String, String> loadInfoForPeer(String id);
 
     interface EventCallback {
 
