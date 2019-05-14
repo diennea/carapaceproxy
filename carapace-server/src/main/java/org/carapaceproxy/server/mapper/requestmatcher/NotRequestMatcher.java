@@ -33,7 +33,7 @@ public class NotRequestMatcher implements RequestMatcher {
     }
 
     @Override
-    public boolean matches(MatchingContext context) throws MatchingException {
+    public boolean matches(MatchingContext context) {
         return !matcher.matches(context);
     }
 

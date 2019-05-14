@@ -37,7 +37,7 @@ public class OrRequestMatcher implements RequestMatcher {
     }
 
     @Override
-    public boolean matches(MatchingContext context) throws MatchingException {
+    public boolean matches(MatchingContext context) {
         for (RequestMatcher matcher : matchers) {            
             if (matcher.matches(context)) {
                 return true;

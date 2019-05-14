@@ -27,10 +27,9 @@ public interface RequestMatcher {
     /**
      * Checks request appliance to defined criteria.
      * @param context over the request appliance is checked.
-     * @return
-     * @throws MatchingException whether there are troubles in context inspection.
+     * @return     
      */
-    boolean matches(MatchingContext context) throws MatchingException;
+    boolean matches(MatchingContext context);
 
     /**
      * @return description of the matcher (used by UI).

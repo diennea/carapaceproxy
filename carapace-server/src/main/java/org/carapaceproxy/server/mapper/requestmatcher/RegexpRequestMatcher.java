@@ -43,7 +43,7 @@ public class RegexpRequestMatcher implements RequestMatcher {
     }
 
     @Override
-    public boolean matches(MatchingContext context) throws MatchingException {
+    public boolean matches(MatchingContext context) {
         return expression.matcher(context.getProperty(name)).matches();
     }
 

@@ -28,7 +28,7 @@ package org.carapaceproxy.server.mapper.requestmatcher;
 public class SecureRequestMatcher implements RequestMatcher {
 
     @Override
-    public boolean matches(MatchingContext context) throws MatchingException {
+    public boolean matches(MatchingContext context) {
         return context.isSecure();
     }
 

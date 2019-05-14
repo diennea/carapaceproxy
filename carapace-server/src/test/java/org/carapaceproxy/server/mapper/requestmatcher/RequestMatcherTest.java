@@ -130,11 +130,13 @@ public class RequestMatcherTest {
             assertTrue(matcher.matches(handler));
         }
 
-        // Broken one: property name does not exist
-        TestUtils.assertThrows(MatchingException.class, () -> {
+        // property name does not exist -> empty
+        {
             RequestMatcher matcher = new RequestMatchParser("request.notex ~\".*test.*\"").parse();
-            matcher.matches(handler);
-        });
+            assertFalse(matcher.matches(handler));
+            matcher = new RequestMatchParser("request.notex = \"\"").parse();
+            assertTrue(matcher.matches(handler));
+        }
         // Broken one: invalid regexp syntax
         TestUtils.assertThrows(TokenMgrError.class, () -> {
             RequestMatcher matcher = new RequestMatchParser("request.uri ~'.*test.*'").parse();
@@ -172,11 +174,11 @@ public class RequestMatcherTest {
     }
 
     @Test
-    public void test2() throws MatchingException, ParseException, ConfigurationNotValidException {
+    public void test2() throws ParseException, ConfigurationNotValidException {
         DefaultHttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/test.html");
         request.headers().add(HttpHeaders.COOKIE, "test-cookie");
         request.headers().add(HttpHeaders.CONTENT_DISPOSITION, "inline");
-        request.headers().add(HttpHeaders.CONTENT_TYPE, "text/html");        
+        request.headers().add(HttpHeaders.CONTENT_TYPE, "text/html");
 
         ClientConnectionHandler cch = mock(ClientConnectionHandler.class);
         when(cch.isSecure()).thenReturn(false);

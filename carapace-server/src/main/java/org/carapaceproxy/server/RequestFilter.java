@@ -20,7 +20,6 @@
 package org.carapaceproxy.server;
 
 import io.netty.handler.codec.http.HttpRequest;
-import org.carapaceproxy.server.mapper.requestmatcher.MatchingException;
 
 /**
  * Modify a request, for instance a filter can add/drop headers.
@@ -30,8 +29,7 @@ public interface RequestFilter {
     /**
      * Apply modifications to the given request.
      *
-     * @param request
-     * @throws org.carapaceproxy.server.mapper.requestmatcher.MatchingException whether the request cannot be properly matched.
+     * @param request     
      */
-    void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler) throws MatchingException;
+    void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler);
 }

@@ -67,7 +67,6 @@ import static org.carapaceproxy.server.mapper.CustomHeader.HeaderMode.HEADER_MOD
 import static org.carapaceproxy.server.mapper.CustomHeader.HeaderMode.HEADER_MODE_REMOVE;
 import static org.carapaceproxy.server.mapper.CustomHeader.HeaderMode.HEADER_MODE_SET;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchingContext;
-import org.carapaceproxy.server.mapper.requestmatcher.MatchingException;
 
 /**
  * Keeps state for a single HttpRequest.
@@ -185,11 +184,7 @@ public class RequestHandler implements MatchingContext {
         startTs = System.currentTimeMillis();
         lastActivity = startTs;
         for (RequestFilter filter : filters) {
-            try {
-                filter.apply(request, connectionToClient, this);
-            } catch (MatchingException e) {
-                LOG.severe("Error while applying a filter: " + e);
-            }
+            filter.apply(request, connectionToClient, this);
         }
         action = connectionToClient.mapper.map(request, userId, sessionId, backendHealthManager, this);
         if (action == null) {
@@ -834,7 +829,7 @@ public class RequestHandler implements MatchingContext {
     public static final String PROPERTY_LISTENER_ADDRESS = "listener.address";
 
     @Override
-    public String getProperty(String name) throws MatchingException {
+    public String getProperty(String name) {
         if (name.startsWith(PROPERTY_HEADERS)) {
             // In case of multiple headers with same name, the first one is returned.            
             return request.headers().get(name.substring(HEADERS_SUBSTRING_INDEX, name.length()), "");
@@ -849,8 +844,10 @@ public class RequestHandler implements MatchingContext {
                 case PROPERTY_LISTENER_ADDRESS: {
                     return connectionToClient.getListenerHost() + ":" + connectionToClient.getListenerPort();
                 }
-                default:
-                    throw new MatchingException("Property name " + name + " does not exists.");
+                default: {
+                    LOG.log(Level.SEVERE, "Property name {0} does not exists.", name);
+                    return "";
+                }
             }
         }
     }

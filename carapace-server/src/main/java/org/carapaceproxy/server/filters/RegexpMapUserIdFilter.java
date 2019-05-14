@@ -24,12 +24,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.carapaceproxy.server.ClientConnectionHandler;
 import org.carapaceproxy.server.RequestHandler;
-import org.carapaceproxy.server.mapper.requestmatcher.MatchingException;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 
 /**
- * Maps a parameter of the querystring to the tenant, using simple pattern
- * matching
+ * Maps a parameter of the querystring to the tenant, using simple pattern matching
  *
  * @author enrico.olivelli
  */
@@ -55,23 +53,24 @@ public class RegexpMapUserIdFilter extends BasicRequestFilter {
     }
 
     @Override
-    public void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler) throws MatchingException {
-        if (checkRequestMatching(requestHandler)) {
-            UrlEncodedQueryString queryString = requestHandler.getQueryString();
-            String value = queryString.get(parameterName);
-            if (value == null) {
-                return;
-            }
-            Matcher matcher = compiledPattern.matcher(value);
-            if (!matcher.find()) {
-                return;
-            }
-            if (matcher.groupCount() <= 0) {
-                return;
-            }
-            String group = matcher.group(1);
-            requestHandler.setUserId(group);
+    public void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler) {
+        if (!checkRequestMatching(requestHandler)) {
+            return;
         }
+        UrlEncodedQueryString queryString = requestHandler.getQueryString();
+        String value = queryString.get(parameterName);
+        if (value == null) {
+            return;
+        }
+        Matcher matcher = compiledPattern.matcher(value);
+        if (!matcher.find()) {
+            return;
+        }
+        if (matcher.groupCount() <= 0) {
+            return;
+        }
+        String group = matcher.group(1);
+        requestHandler.setUserId(group);
     }
 
 }

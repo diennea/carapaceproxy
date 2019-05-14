@@ -29,10 +29,9 @@ public interface MatchingContext {
     /**
      *
      * @param name it's expected to be lowercase.
-     * @return property value
-     * @throws MatchingException whether the property does not exist.
+     * @return property value or empty string whether not exists.
      */
-    String getProperty(String name) throws MatchingException;
+    String getProperty(String name);
 
     /**
      *

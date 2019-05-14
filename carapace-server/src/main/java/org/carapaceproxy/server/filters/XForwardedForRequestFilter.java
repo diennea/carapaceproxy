@@ -23,7 +23,6 @@ import io.netty.handler.codec.http.HttpRequest;
 import java.net.InetSocketAddress;
 import org.carapaceproxy.server.ClientConnectionHandler;
 import org.carapaceproxy.server.RequestHandler;
-import org.carapaceproxy.server.mapper.requestmatcher.MatchingException;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 
 /**
@@ -38,13 +37,14 @@ public class XForwardedForRequestFilter extends BasicRequestFilter {
     }
 
     @Override
-    public void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler) throws MatchingException {
-        if (checkRequestMatching(requestHandler)) {
-            request.headers().remove("X-Forwarded-For");
-            if (client.getClientAddress() instanceof InetSocketAddress) {
-                InetSocketAddress address = (InetSocketAddress) client.getClientAddress();
-                request.headers().add("X-Forwarded-For", address.getAddress().getHostAddress());
-            }
+    public void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler) {
+        if (!checkRequestMatching(requestHandler)) {
+            return;
+        }
+        request.headers().remove("X-Forwarded-For");
+        if (client.getClientAddress() instanceof InetSocketAddress) {
+            InetSocketAddress address = (InetSocketAddress) client.getClientAddress();
+            request.headers().add("X-Forwarded-For", address.getAddress().getHostAddress());
         }
     }
 

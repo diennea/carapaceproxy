@@ -52,7 +52,6 @@ import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import org.carapaceproxy.server.mapper.CustomHeader.HeaderMode;
-import org.carapaceproxy.server.mapper.requestmatcher.MatchingException;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.ParseException;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.RequestMatchParser;
 
@@ -343,13 +342,7 @@ public class StandardEndpointMapper extends EndpointMapper {
             if (!route.isEnabled()) {
                 continue;
             }
-            boolean matchResult;
-            try {
-                matchResult = route.matches(requestHandler);
-            } catch (MatchingException e ) {
-                LOG.severe("route " + route.getId() + ", map " + request.uri() + " -> ERROR: " + e);
-                return MapResult.INTERNAL_ERROR(MapResult.NO_ROUTE);
-            }
+            boolean matchResult = route.matches(requestHandler);
             if (LOG.isLoggable(Level.FINER)) {
                 LOG.finer("route " + route.getId() + ", map " + request.uri() + " -> " + matchResult);
             }

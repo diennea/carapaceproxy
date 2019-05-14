@@ -24,7 +24,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.carapaceproxy.server.ClientConnectionHandler;
 import org.carapaceproxy.server.RequestHandler;
-import org.carapaceproxy.server.mapper.requestmatcher.MatchingException;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 
 /**
@@ -54,23 +53,23 @@ public class RegexpMapSessionIdFilter extends BasicRequestFilter {
     }
 
     @Override
-    public void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler) throws MatchingException {
-        if (checkRequestMatching(requestHandler)) {
-            UrlEncodedQueryString queryString = requestHandler.getQueryString();
-            String value = queryString.get(parameterName);
-            if (value == null) {
-                return;
-            }
-            Matcher _matcher = compiledPattern.matcher(value);
-            if (!_matcher.find()) {
-                return;
-            }
-            if (_matcher.groupCount() <= 0) {
-                return;
-            }
-            String group = _matcher.group(1);
-            requestHandler.setSessionId(group);
+    public void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler) {
+        if (!checkRequestMatching(requestHandler)) {
+            return;
         }
+        UrlEncodedQueryString queryString = requestHandler.getQueryString();
+        String value = queryString.get(parameterName);
+        if (value == null) {
+            return;
+        }
+        Matcher _matcher = compiledPattern.matcher(value);
+        if (!_matcher.find()) {
+            return;
+        }
+        if (_matcher.groupCount() <= 0) {
+            return;
+        }
+        String group = _matcher.group(1);
+        requestHandler.setSessionId(group);
     }
-
 }

@@ -21,7 +21,6 @@ package org.carapaceproxy.server.config;
 
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 import org.carapaceproxy.server.RequestHandler;
-import org.carapaceproxy.server.mapper.requestmatcher.MatchingException;
 
 /**
  * Route
@@ -56,7 +55,7 @@ public class RouteConfiguration {
         return matcher;
     }
 
-    public boolean matches(RequestHandler handler) throws MatchingException {
+    public boolean matches(RequestHandler handler) {
         if (!enabled) {
             return false;
         }

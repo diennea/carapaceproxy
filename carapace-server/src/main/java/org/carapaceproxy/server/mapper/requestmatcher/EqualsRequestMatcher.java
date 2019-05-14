@@ -35,7 +35,7 @@ public class EqualsRequestMatcher implements RequestMatcher {
     }
 
     @Override
-    public boolean matches(MatchingContext context) throws MatchingException {
+    public boolean matches(MatchingContext context) {
         return context.getProperty(name).equals(value);
     }
 
