@@ -35,6 +35,7 @@ import org.carapaceproxy.MapResult;
 import org.carapaceproxy.MapResult.Action;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.RequestHandler;
+import static org.carapaceproxy.server.RequestHandler.PROPERTY_URI;
 import static org.carapaceproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
 import static org.carapaceproxy.server.StaticContentsManager.DEFAULT_NOT_FOUND;
 import static org.carapaceproxy.server.StaticContentsManager.IN_MEMORY_RESOURCE;
@@ -48,7 +49,7 @@ import org.carapaceproxy.server.config.DirectorConfiguration;
 import static org.carapaceproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 import org.carapaceproxy.server.config.RouteConfiguration;
-import org.carapaceproxy.server.mapper.requestmatcher.URIRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import org.carapaceproxy.server.mapper.CustomHeader.HeaderMode;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.ParseException;
@@ -94,7 +95,7 @@ public class StandardEndpointMapper extends EndpointMapper {
 
         // Route+Action configuration for Let's Encrypt ACME challenging
         addAction(new ActionConfiguration("acme-challenge", ActionConfiguration.TYPE_ACME_CHALLENGE, null, null, HttpResponseStatus.OK.code()));
-        addRoute(new RouteConfiguration("acme-challenge", "acme-challenge", true, new URIRequestMatcher(".*" + ACME_CHALLENGE_URI_PATTERN + ".*")));
+        addRoute(new RouteConfiguration("acme-challenge", "acme-challenge", true, new RegexpRequestMatcher(PROPERTY_URI, ".*" + ACME_CHALLENGE_URI_PATTERN + ".*")));
 
         this.defaultNotFoundAction = properties.getProperty("default.action.notfound", "not-found");
         LOG.info("configured default.action.notfound=" + defaultNotFoundAction);
@@ -341,7 +342,7 @@ public class StandardEndpointMapper extends EndpointMapper {
             if (!route.isEnabled()) {
                 continue;
             }
-            boolean matchResult = route.matches(request);
+            boolean matchResult = route.matches(requestHandler);
             if (LOG.isLoggable(Level.FINER)) {
                 LOG.finer("route " + route.getId() + ", map " + request.uri() + " -> " + matchResult);
             }

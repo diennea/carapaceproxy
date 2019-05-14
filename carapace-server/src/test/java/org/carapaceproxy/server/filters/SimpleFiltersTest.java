@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.carapaceproxy.server.ClientConnectionHandler;
 import org.carapaceproxy.server.RequestHandler;
+import org.carapaceproxy.server.mapper.requestmatcher.MatchAllRequestMatcher;
 import org.junit.Test;
 import org.mockito.ArgumentMatchers;
 import static org.mockito.ArgumentMatchers.eq;
@@ -57,7 +58,7 @@ public class SimpleFiltersTest {
             when(request.uri()).thenReturn(uri);
             when(requestHandler.getQueryString()).thenReturn(queryString);
 
-            RegexpMapUserIdFilter instance = new RegexpMapUserIdFilter("sSID", "([\\w\\d]+)([*])");
+            RegexpMapUserIdFilter instance = new RegexpMapUserIdFilter("sSID", "([\\w\\d]+)([*])", new MatchAllRequestMatcher());
             instance.apply(request, client, requestHandler);
             if (userId != null) {
                 verify(requestHandler, times(1)).setUserId(eq(userId));
@@ -91,7 +92,7 @@ public class SimpleFiltersTest {
             when(request.uri()).thenReturn(uri);
             when(requestHandler.getQueryString()).thenReturn(queryString);
 
-            RegexpMapSessionIdFilter instance = new RegexpMapSessionIdFilter("sSID", "(.+)");
+            RegexpMapSessionIdFilter instance = new RegexpMapSessionIdFilter("sSID", "(.+)", new MatchAllRequestMatcher());
             instance.apply(request, client, requestHandler);
             if (sessionId != null) {
                 verify(requestHandler, times(1)).setSessionId(eq(sessionId));

@@ -19,39 +19,28 @@
  */
 package org.carapaceproxy.server.mapper.requestmatcher;
 
-import java.util.List;
-import java.util.stream.Collectors;
-
-/**
+/** 
+ * Matcher for composing EQUALS expressions give a property-key and the expected value.
  *
- * Matcher for composing OR expressions with other matchers.
- * 
  * @author paolo.venturi
  */
-public class OrRequestMatcher implements RequestMatcher {
+public class EqualsRequestMatcher implements RequestMatcher {
 
-    private final List<RequestMatcher> matchers;
+    private final String name;
+    private final String value;
 
-    public OrRequestMatcher(List<RequestMatcher> matchers) {
-        this.matchers = matchers;
+    public EqualsRequestMatcher(String key, String value) {
+        this.name = key.toLowerCase();
+        this.value = value;
     }
 
     @Override
     public boolean matches(MatchingContext context) {
-        for (RequestMatcher matcher : matchers) {            
-            if (matcher.matches(context)) {
-                return true;
-            }
-        }
-        return false;
+        return context.getProperty(name).equals(value);
     }
 
-    @Override
     public String getDescription() {
-        return "(" + matchers.stream()
-                    .map(RequestMatcher::getDescription)
-                    .collect(Collectors.joining(" or "))
-                + ")";
+        return "(" + name + " = " + value + ")";
     }
 
 }

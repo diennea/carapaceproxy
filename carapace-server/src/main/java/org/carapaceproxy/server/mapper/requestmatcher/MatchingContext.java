@@ -19,39 +19,23 @@
  */
 package org.carapaceproxy.server.mapper.requestmatcher;
 
-import java.util.List;
-import java.util.stream.Collectors;
-
 /**
- *
- * Matcher for composing OR expressions with other matchers.
+ * Context used to check matching conditions over a request.
  * 
  * @author paolo.venturi
  */
-public class OrRequestMatcher implements RequestMatcher {
+public interface MatchingContext {
 
-    private final List<RequestMatcher> matchers;
+    /**
+     *
+     * @param name it's expected to be lowercase.
+     * @return property value or empty string whether not exists.
+     */
+    String getProperty(String name);
 
-    public OrRequestMatcher(List<RequestMatcher> matchers) {
-        this.matchers = matchers;
-    }
-
-    @Override
-    public boolean matches(MatchingContext context) {
-        for (RequestMatcher matcher : matchers) {            
-            if (matcher.matches(context)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    @Override
-    public String getDescription() {
-        return "(" + matchers.stream()
-                    .map(RequestMatcher::getDescription)
-                    .collect(Collectors.joining(" or "))
-                + ")";
-    }
-
+    /**
+     *
+     * @return true whether HTTPS is used.
+     */
+    boolean isSecure();
 }

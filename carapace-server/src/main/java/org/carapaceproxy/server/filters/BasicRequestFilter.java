@@ -17,27 +17,28 @@
  under the License.
 
  */
-package org.carapaceproxy.server.mapper.requestmatcher;
+package org.carapaceproxy.server.filters;
 
-import io.netty.handler.codec.http.HttpRequest;
+import org.carapaceproxy.server.RequestFilter;
 import org.carapaceproxy.server.RequestHandler;
+import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 
 /**
  *
- * Matcher for HTTPS request
+ * Root class for all RequestFilters
  * 
  * @author paolo.venturi
  */
-public class HttpsRequestMatcher implements RequestMatcher {
+public abstract class BasicRequestFilter implements RequestFilter {
 
-    @Override
-    public boolean matches(HttpRequest request) {
-        return RequestHandler.PROTO_HTTPS.equals(request.headers().get(RequestHandler.HEADER_X_FORWARDED_PROTO, ""));
+    private final RequestMatcher matcher;
+
+    public BasicRequestFilter(RequestMatcher matcher) {
+        this.matcher = matcher;
     }
 
-    @Override
-    public String getDescription() {
-        return "HTTPS request";
+    boolean checkRequestMatching(RequestHandler handler) {
+        return matcher.matches(handler);
     }
 
 }

@@ -19,8 +19,6 @@
  */
 package org.carapaceproxy.server.mapper.requestmatcher;
 
-import io.netty.handler.codec.http.HttpRequest;
-
 /**
  * Matcher to all request
  * 
@@ -29,7 +27,7 @@ import io.netty.handler.codec.http.HttpRequest;
 public class MatchAllRequestMatcher implements RequestMatcher {
 
     @Override
-    public boolean matches(HttpRequest request) {
+    public boolean matches(MatchingContext context) {
         return true;
     }
 

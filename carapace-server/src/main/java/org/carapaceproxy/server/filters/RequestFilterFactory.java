@@ -23,6 +23,9 @@ import java.util.Map;
 import org.carapaceproxy.server.RequestFilter;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;
+import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.parser.ParseException;
+import org.carapaceproxy.server.mapper.requestmatcher.parser.RequestMatchParser;
 
 /**
  * Factory for all filters.
@@ -34,18 +37,25 @@ public class RequestFilterFactory {
     public static RequestFilter buildRequestFilter(RequestFilterConfiguration config) throws ConfigurationNotValidException {
         String type = config.getType();
         Map<String, String> filterConfig = config.getFilterConfig();
+
+        RequestMatcher matcher;
+        try {
+            matcher = new RequestMatchParser(filterConfig.getOrDefault("match", "all").trim()).parse();
+        } catch (ParseException e) {
+            throw new ConfigurationNotValidException(e);
+        }
         switch (type) {
             case XForwardedForRequestFilter.TYPE:
-                return new XForwardedForRequestFilter();
+                return new XForwardedForRequestFilter(matcher);
             case RegexpMapUserIdFilter.TYPE: {
                 String param = filterConfig.getOrDefault("param", "userid").trim();
                 String regexp = filterConfig.getOrDefault("regexp", "(.*)").trim();
-                return new RegexpMapUserIdFilter(param, regexp);
+                return new RegexpMapUserIdFilter(param, regexp, matcher);
             }
             case RegexpMapSessionIdFilter.TYPE: {
                 String param = filterConfig.getOrDefault("param", "sid").trim();
                 String regexp = filterConfig.getOrDefault("regexp", "(.*)").trim();
-                return new RegexpMapSessionIdFilter(param, regexp);
+                return new RegexpMapSessionIdFilter(param, regexp, matcher);
             }
             default:
                 throw new ConfigurationNotValidException("bad filter type '" + type

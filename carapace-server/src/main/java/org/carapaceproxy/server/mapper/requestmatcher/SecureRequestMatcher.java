@@ -19,39 +19,22 @@
  */
 package org.carapaceproxy.server.mapper.requestmatcher;
 
-import java.util.List;
-import java.util.stream.Collectors;
-
 /**
  *
- * Matcher for composing OR expressions with other matchers.
+ * Matcher for Secure request (HTTPS)
  * 
  * @author paolo.venturi
  */
-public class OrRequestMatcher implements RequestMatcher {
-
-    private final List<RequestMatcher> matchers;
-
-    public OrRequestMatcher(List<RequestMatcher> matchers) {
-        this.matchers = matchers;
-    }
+public class SecureRequestMatcher implements RequestMatcher {
 
     @Override
     public boolean matches(MatchingContext context) {
-        for (RequestMatcher matcher : matchers) {            
-            if (matcher.matches(context)) {
-                return true;
-            }
-        }
-        return false;
+        return context.isSecure();
     }
 
     @Override
     public String getDescription() {
-        return "(" + matchers.stream()
-                    .map(RequestMatcher::getDescription)
-                    .collect(Collectors.joining(" or "))
-                + ")";
+        return "Secure request";
     }
 
 }

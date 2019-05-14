@@ -29,7 +29,7 @@ public interface RequestFilter {
     /**
      * Apply modifications to the given request.
      *
-     * @param request
+     * @param request     
      */
     void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler);
 }

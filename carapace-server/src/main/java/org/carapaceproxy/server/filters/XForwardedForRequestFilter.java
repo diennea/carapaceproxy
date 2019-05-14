@@ -22,18 +22,25 @@ package org.carapaceproxy.server.filters;
 import io.netty.handler.codec.http.HttpRequest;
 import java.net.InetSocketAddress;
 import org.carapaceproxy.server.ClientConnectionHandler;
-import org.carapaceproxy.server.RequestFilter;
 import org.carapaceproxy.server.RequestHandler;
+import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 
 /**
  * Add a X-Forwarded-For Header
  */
-public class XForwardedForRequestFilter implements RequestFilter {
+public class XForwardedForRequestFilter extends BasicRequestFilter {
 
     public static final String TYPE = "add-x-forwarded-for";
 
+    public XForwardedForRequestFilter(RequestMatcher matcher) {
+        super(matcher);
+    }
+
     @Override
     public void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler) {
+        if (!checkRequestMatching(requestHandler)) {
+            return;
+        }
         request.headers().remove("X-Forwarded-For");
         if (client.getClientAddress() instanceof InetSocketAddress) {
             InetSocketAddress address = (InetSocketAddress) client.getClientAddress();

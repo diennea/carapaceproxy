@@ -19,14 +19,17 @@
  */
 package org.carapaceproxy.server.mapper.requestmatcher;
 
-import io.netty.handler.codec.http.HttpRequest;
-
 /**
  * Generic criteria to apply a route to a request
  */
 public interface RequestMatcher {
 
-    boolean matches(HttpRequest request);
+    /**
+     * Checks request appliance to defined criteria.
+     * @param context over the request appliance is checked.
+     * @return     
+     */
+    boolean matches(MatchingContext context);
 
     /**
      * @return description of the matcher (used by UI).

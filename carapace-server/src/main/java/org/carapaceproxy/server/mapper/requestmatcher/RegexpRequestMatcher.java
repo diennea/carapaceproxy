@@ -19,21 +19,22 @@
  */
 package org.carapaceproxy.server.mapper.requestmatcher;
 
-import io.netty.handler.codec.http.HttpRequest;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 
 /**
- * Matcher by Regular Expression to requests URI
+ * Matcher by Regular Expression
  *
  * @author paolo.venturi
  */
-public class URIRequestMatcher implements RequestMatcher {
+public class RegexpRequestMatcher implements RequestMatcher {
 
+    private final String name;
     private final Pattern expression;
 
-    public URIRequestMatcher(String expression) throws ConfigurationNotValidException {
+    public RegexpRequestMatcher(String name, String expression) throws ConfigurationNotValidException {
+        this.name = name;
         try {
             this.expression = Pattern.compile(expression);
         } catch (PatternSyntaxException err) {
@@ -42,8 +43,8 @@ public class URIRequestMatcher implements RequestMatcher {
     }
 
     @Override
-    public boolean matches(HttpRequest request) {
-        return expression.matcher(request.uri()).matches();
+    public boolean matches(MatchingContext context) {
+        return expression.matcher(context.getProperty(name)).matches();
     }
 
     @Override
@@ -53,7 +54,7 @@ public class URIRequestMatcher implements RequestMatcher {
 
     @Override
     public String toString() {
-        return "URIRequestMatcher{" + "regexp='" + expression + "'}";
+        return "RegexRequestMatcher{" + "regexp='" + expression + "'}";
     }
 
 }
