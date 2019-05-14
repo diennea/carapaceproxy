@@ -17,21 +17,30 @@
  under the License.
 
  */
-package org.carapaceproxy.server;
+package org.carapaceproxy.server.filters;
 
-import io.netty.handler.codec.http.HttpRequest;
+import org.carapaceproxy.server.RequestFilter;
+import org.carapaceproxy.server.RequestHandler;
+import org.carapaceproxy.server.config.RequestMatchingContext;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchingException;
+import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 
 /**
- * Modify a request, for instance a filter can add/drop headers.
+ *
+ * Root class for all RequestFilters
+ * 
+ * @author paolo.venturi
  */
-public interface RequestFilter {
+public abstract class BasicRequestFilter implements RequestFilter {
 
-    /**
-     * Apply modifications to the given request.
-     *
-     * @param request
-     * @throws org.carapaceproxy.server.mapper.requestmatcher.MatchingException whether the request cannot be properly matched.
-     */
-    void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler) throws MatchingException;
+    private final RequestMatcher matcher;
+
+    public BasicRequestFilter(RequestMatcher matcher) {
+        this.matcher = matcher;
+    }
+
+    boolean checkRequestMatching(RequestHandler handler) throws MatchingException {
+        return matcher.matches(new RequestMatchingContext(handler));
+    }
+
 }

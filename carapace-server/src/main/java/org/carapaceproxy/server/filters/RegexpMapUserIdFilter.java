@@ -23,8 +23,9 @@ import io.netty.handler.codec.http.HttpRequest;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.carapaceproxy.server.ClientConnectionHandler;
-import org.carapaceproxy.server.RequestFilter;
 import org.carapaceproxy.server.RequestHandler;
+import org.carapaceproxy.server.mapper.requestmatcher.MatchingException;
+import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 
 /**
  * Maps a parameter of the querystring to the tenant, using simple pattern
@@ -32,14 +33,15 @@ import org.carapaceproxy.server.RequestHandler;
  *
  * @author enrico.olivelli
  */
-public class RegexpMapUserIdFilter implements RequestFilter {
+public class RegexpMapUserIdFilter extends BasicRequestFilter {
 
     public static final String TYPE = "match-user-regexp";
 
     private final String parameterName;
     private final Pattern compiledPattern;
 
-    public RegexpMapUserIdFilter(String parameterName, String pattern) {
+    public RegexpMapUserIdFilter(String parameterName, String pattern, RequestMatcher matcher) {
+        super(matcher);
         this.parameterName = parameterName;
         this.compiledPattern = Pattern.compile(pattern);
     }
@@ -53,22 +55,23 @@ public class RegexpMapUserIdFilter implements RequestFilter {
     }
 
     @Override
-    public void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler) {
-
-        UrlEncodedQueryString queryString = requestHandler.getQueryString();
-        String value = queryString.get(parameterName);
-        if (value == null) {
-            return;
+    public void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler) throws MatchingException {
+        if (checkRequestMatching(requestHandler)) {
+            UrlEncodedQueryString queryString = requestHandler.getQueryString();
+            String value = queryString.get(parameterName);
+            if (value == null) {
+                return;
+            }
+            Matcher matcher = compiledPattern.matcher(value);
+            if (!matcher.find()) {
+                return;
+            }
+            if (matcher.groupCount() <= 0) {
+                return;
+            }
+            String group = matcher.group(1);
+            requestHandler.setUserId(group);
         }
-        Matcher matcher = compiledPattern.matcher(value);
-        if (!matcher.find()) {
-            return;
-        }
-        if (matcher.groupCount() <= 0) {
-            return;
-        }
-        String group = matcher.group(1);
-        requestHandler.setUserId(group);
     }
 
 }
