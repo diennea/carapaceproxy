@@ -21,7 +21,6 @@ package org.carapaceproxy.server.filters;
 
 import org.carapaceproxy.server.RequestFilter;
 import org.carapaceproxy.server.RequestHandler;
-import org.carapaceproxy.server.config.RequestMatchingContext;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchingException;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 
@@ -40,7 +39,7 @@ public abstract class BasicRequestFilter implements RequestFilter {
     }
 
     boolean checkRequestMatching(RequestHandler handler) throws MatchingException {
-        return matcher.matches(new RequestMatchingContext(handler));
+        return matcher.matches(handler);
     }
 
 }

@@ -20,16 +20,23 @@
 package org.carapaceproxy.server.mapper.requestmatcher;
 
 /**
- *
+ * Context used to check matching conditions over a request.
+ * 
  * @author paolo.venturi
  */
 public interface MatchingContext {
 
     /**
      *
-     * @param name
+     * @param name it's expected to be lowercase.
      * @return property value
      * @throws MatchingException whether the property does not exist.
      */
-    Object getProperty(String name) throws MatchingException;
+    String getProperty(String name) throws MatchingException;
+
+    /**
+     *
+     * @return true whether HTTPS is used.
+     */
+    boolean isSecure();
 }

@@ -19,24 +19,22 @@
  */
 package org.carapaceproxy.server.mapper.requestmatcher;
 
-import static org.carapaceproxy.server.config.RequestMatchingContext.PROPERTY_HTTPS;
-
 /**
  *
- * Matcher for HTTPS request
+ * Matcher for Secure request (HTTPS)
  * 
  * @author paolo.venturi
  */
-public class HttpsRequestMatcher implements RequestMatcher {
+public class SecureRequestMatcher implements RequestMatcher {
 
     @Override
     public boolean matches(MatchingContext context) throws MatchingException {
-        return (boolean) context.getProperty(PROPERTY_HTTPS);
+        return context.isSecure();
     }
 
     @Override
     public String getDescription() {
-        return "HTTPS request";
+        return "Secure request";
     }
 
 }

@@ -27,7 +27,6 @@ import javax.ws.rs.core.HttpHeaders;
 import org.carapaceproxy.server.ClientConnectionHandler;
 import org.carapaceproxy.server.RequestHandler;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
-import org.carapaceproxy.server.config.RequestMatchingContext;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.ParseException;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.RequestMatchParser;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.TokenMgrError;
@@ -45,105 +44,105 @@ public class RequestMatcherTest {
 
     @Test
     public void test() throws Exception {
-        RequestHandler handler = mock(RequestHandler.class);
-        when(handler.getUri()).thenReturn("test.html");
 
         ClientConnectionHandler cch = mock(ClientConnectionHandler.class);
         when(cch.isSecure()).thenReturn(true);
-        when(handler.getClientConnectionHandler()).thenReturn(cch);
 
-        MatchingContext context = new RequestMatchingContext(handler);
+        DefaultHttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/test.html");
+
+        RequestHandler handler = new RequestHandler(0, request, null, null, cch, null, null, null, null);
+
         {
             RequestMatcher matcher = new RequestMatchParser("all").parse();
-            assertTrue(matcher.matches(context));
+            assertTrue(matcher.matches(handler));
         }
         {
             RequestMatcher matcher = new RequestMatchParser("request.uri ~ \".*test.*\"").parse();
-            assertTrue(matcher.matches(context));
+            assertTrue(matcher.matches(handler));
         }
         {
             RequestMatcher matcher = new RequestMatchParser("request.uri ~ \".*testio.*\"").parse();
-            assertFalse(matcher.matches(context));
+            assertFalse(matcher.matches(handler));
         }
         {
-            RequestMatcher matcher = new RequestMatchParser("https").parse();
-            assertTrue(matcher.matches(context));
+            RequestMatcher matcher = new RequestMatchParser("secure").parse();
+            assertTrue(matcher.matches(handler));
         }
         {
-            RequestMatcher matcher = new RequestMatchParser("not https").parse();
-            assertFalse(matcher.matches(context));
+            RequestMatcher matcher = new RequestMatchParser("not secure").parse();
+            assertFalse(matcher.matches(handler));
         }
         {
-            RequestMatcher matcher = new RequestMatchParser("request.uri ~ \".*test\\.html\" and https").parse();
-            assertTrue(matcher.matches(context));
+            RequestMatcher matcher = new RequestMatchParser("request.uri ~ \".*test\\.html\" and secure").parse();
+            assertTrue(matcher.matches(handler));
         }
         {
             // spaces ignored
-            RequestMatcher matcher = new RequestMatchParser("request.uri   ~   \".*test.*\" and not https").parse();
-            assertFalse(matcher.matches(context));
+            RequestMatcher matcher = new RequestMatchParser("request.uri   ~   \".*test.*\" and not secure").parse();
+            assertFalse(matcher.matches(handler));
         }
         {
-            RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" or not https").parse();
-            assertTrue(matcher.matches(context));
+            RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" or not secure").parse();
+            assertTrue(matcher.matches(handler));
         }
         {
-            RequestMatcher matcher = new RequestMatchParser("not https or request.uri ~\".*test.*\"").parse();
-            assertTrue(matcher.matches(context));
+            RequestMatcher matcher = new RequestMatchParser("not secure or request.uri ~\".*test.*\"").parse();
+            assertTrue(matcher.matches(handler));
         }
         {
-            RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" and (not https or https)").parse();
-            assertTrue(matcher.matches(context));
+            RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" and (not secure or secure)").parse();
+            assertTrue(matcher.matches(handler));
         }
         {
-            RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" and (not https or not https)").parse();
-            assertFalse(matcher.matches(context));
+            RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" and (not secure or not secure)").parse();
+            assertFalse(matcher.matches(handler));
         }
         {
-            RequestMatcher matcher = new RequestMatchParser("not (not https or not https) and request.uri ~\".*test.*\"").parse();
-            assertTrue(matcher.matches(context));
+            RequestMatcher matcher = new RequestMatchParser("not (not secure or not secure) and request.uri ~\".*test.*\"").parse();
+            assertTrue(matcher.matches(handler));
         }
         {
-            RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" and (not (not https or not https) or (not https or not https))").parse();
-            assertTrue(matcher.matches(context));
+            RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" and (not (not secure or not secure) or (not secure or not secure))").parse();
+            assertTrue(matcher.matches(handler));
         }
         {
-            RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" and (not (not https or not https) and (not https or not https)) and request.uri ~\".*test.html\"").parse();
-            assertFalse(matcher.matches(context));
+            RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" and (not (not secure or not secure) and (not secure or not secure)) and request.uri ~\".*test.html\"").parse();
+            assertFalse(matcher.matches(handler));
         }
         {
-            RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" and (not (not https or not https) and (not https or not https)) or not request.uri ~\".*\\.css\"").parse();
-            assertTrue(matcher.matches(context));
+            RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" and (not (not secure or not secure) and (not secure or not secure)) or not request.uri ~\".*\\.css\"").parse();
+            assertTrue(matcher.matches(handler));
         }
         {
             RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*\\.css*\" or request.uri ~\".*\\.html\"").parse();
-            assertTrue(matcher.matches(context));
+            assertTrue(matcher.matches(handler));
         }
         {
             RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*\\.css*\" and request.uri ~\".*\\.html\"").parse();
-            assertFalse(matcher.matches(context));
+            assertFalse(matcher.matches(handler));
         }
         {
             RequestMatcher matcher = new RequestMatchParser("not (not request.uri ~\".*\\.html\")").parse();
-            assertTrue(matcher.matches(context));
+            assertTrue(matcher.matches(handler));
         }
         {
             RequestMatcher matcher = new RequestMatchParser("not request.uri ~\".*\\.css*\" and not (not request.uri ~\".*\\.html\")").parse();
-            assertTrue(matcher.matches(context));
+            assertTrue(matcher.matches(handler));
         }
 
         // Broken one: property name does not exist
         TestUtils.assertThrows(MatchingException.class, () -> {
             RequestMatcher matcher = new RequestMatchParser("request.notex ~\".*test.*\"").parse();
-            matcher.matches(context);
+            matcher.matches(handler);
         });
         // Broken one: invalid regexp syntax
         TestUtils.assertThrows(TokenMgrError.class, () -> {
             RequestMatcher matcher = new RequestMatchParser("request.uri ~'.*test.*'").parse();
-            matcher.matches(context);
+            matcher.matches(handler);
         });
         TestUtils.assertThrows(TokenMgrError.class, () -> {
             RequestMatcher matcher = new RequestMatchParser("request.uri '.*test.*'").parse();
-            matcher.matches(context);
+            matcher.matches(handler);
         });
 
         // Broken ones: all not alone
@@ -154,104 +153,98 @@ public class RequestMatcherTest {
             RequestMatcher matcher = new RequestMatchParser("all request.uri").parse();
         });
         TestUtils.assertThrows(ParseException.class, () -> {
-            RequestMatcher matcher = new RequestMatchParser("all https").parse();
+            RequestMatcher matcher = new RequestMatchParser("all secure").parse();
         });
         TestUtils.assertThrows(ParseException.class, () -> {
-            RequestMatcher matcher = new RequestMatchParser("all not https").parse();
+            RequestMatcher matcher = new RequestMatchParser("all not secure").parse();
         });
         TestUtils.assertThrows(ParseException.class, () -> {
-            RequestMatcher matcher = new RequestMatchParser("not https or all").parse();
+            RequestMatcher matcher = new RequestMatchParser("not secure or all").parse();
         });
         TestUtils.assertThrows(ParseException.class, () -> {
             RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" and all").parse();
         });
 
         // Fist one condition considered
-        assertFalse(new RequestMatchParser("not https all").parse().matches(context));
-        assertFalse(new RequestMatchParser("not https request.uri ~\".*test.*\"").parse().matches(context));
-        assertTrue(new RequestMatchParser("request.uri ~\".*test.*\" all").parse().matches(context));
+        assertFalse(new RequestMatchParser("not secure all").parse().matches(handler));
+        assertFalse(new RequestMatchParser("not secure request.uri ~\".*test.*\"").parse().matches(handler));
+        assertTrue(new RequestMatchParser("request.uri ~\".*test.*\" all").parse().matches(handler));
     }
 
     @Test
     public void test2() throws MatchingException, ParseException, ConfigurationNotValidException {
-        RequestHandler handler = mock(RequestHandler.class);
-        when(handler.getUri()).thenReturn("t/est.html");
-
-
         DefaultHttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/test.html");
         request.headers().add(HttpHeaders.COOKIE, "test-cookie");
         request.headers().add(HttpHeaders.CONTENT_DISPOSITION, "inline");
-        request.headers().add(HttpHeaders.CONTENT_TYPE, "text/html");
-        when(handler.getRequest()).thenReturn(request);
+        request.headers().add(HttpHeaders.CONTENT_TYPE, "text/html");        
 
         ClientConnectionHandler cch = mock(ClientConnectionHandler.class);
         when(cch.isSecure()).thenReturn(false);
-        when(handler.getClientConnectionHandler()).thenReturn(cch);
-
         when(cch.getListenerHost()).thenReturn("localhost");
         when(cch.getListenerPort()).thenReturn(8080);
 
-        MatchingContext context = new RequestMatchingContext(handler);
+        RequestHandler handler = new RequestHandler(0, request, null, null, cch, null, null, null, null);
+
         // Test headers
         {
             RequestMatcher matcher = new RequestMatchParser(
                     "request.headers." + HttpHeaders.COOKIE + " = \"test-cookie\""
                     + " and request.headers." + HttpHeaders.CONTENT_DISPOSITION + " = \"inline\""
                     + " and (not request.headers." + HttpHeaders.USER_AGENT + " = \"chrome\"" // user agent not set
-                    + " and not https)"
+                    + " and not secure)"
             ).parse();
-            assertTrue(matcher.matches(context));
+            assertTrue(matcher.matches(handler));
 
             matcher = new RequestMatchParser(
                     "request.headers." + HttpHeaders.USER_AGENT + " = \"\"" // user agent not set
             ).parse();
-            assertTrue(matcher.matches(context));
+            assertTrue(matcher.matches(handler));
 
             matcher = new RequestMatchParser(
                     "request.headers." + HttpHeaders.USER_AGENT + " = \"\""
                     + // user agent not set
                     " and request.headers." + HttpHeaders.ACCEPT + " = \"\"" // not set
             ).parse();
-            assertTrue(matcher.matches(context));
+            assertTrue(matcher.matches(handler));
         }
         // Test content-type
         {
             RequestMatcher matcher = new RequestMatchParser("request.content-type = \"text/html\"").parse();
-            assertTrue(matcher.matches(context));
+            assertTrue(matcher.matches(handler));
             matcher = new RequestMatchParser("request.content-type = \"application/octet-stream\"").parse();
-            assertFalse(matcher.matches(context));
+            assertFalse(matcher.matches(handler));
             matcher = new RequestMatchParser(
                     "not request.content-type ~ \".*test.*\""
                     + " or request.content-type = \"application/octet-stream\""
                     + " or request.content-type ~ \".*html\""
             ).parse();
-            assertTrue(matcher.matches(context));
+            assertTrue(matcher.matches(handler));
         }
         // Test method
         {
             RequestMatcher matcher = new RequestMatchParser("request.method = \"GET\"").parse();
-            assertTrue(matcher.matches(context));
+            assertTrue(matcher.matches(handler));
             matcher = new RequestMatchParser("request.method = \"POST\"").parse();
-            assertFalse(matcher.matches(context));
+            assertFalse(matcher.matches(handler));
             matcher = new RequestMatchParser("not request.method = \"POST\" and request.method = \"GET\"").parse();
-            assertTrue(matcher.matches(context));
+            assertTrue(matcher.matches(handler));
         }
         // Test listener.address
         {
             RequestMatcher matcher = new RequestMatchParser("listener.address = \"localhost:8080\"").parse();
-            assertTrue(matcher.matches(context));
+            assertTrue(matcher.matches(handler));
 
             matcher = new RequestMatchParser("listener.address ~ \"localhost:.*\"").parse();
-            assertTrue(matcher.matches(context));
+            assertTrue(matcher.matches(handler));
 
             matcher = new RequestMatchParser("listener.address ~ \".*:8080\"").parse();
-            assertTrue(matcher.matches(context));
+            assertTrue(matcher.matches(handler));
 
             matcher = new RequestMatchParser("listener.address ~ \"loc.*:80.*\"").parse();
-            assertTrue(matcher.matches(context));
+            assertTrue(matcher.matches(handler));
 
             matcher = new RequestMatchParser("listener.address ~ \"some.*:8050\"").parse();
-            assertFalse(matcher.matches(context));
+            assertFalse(matcher.matches(handler));
         }
     }
 }

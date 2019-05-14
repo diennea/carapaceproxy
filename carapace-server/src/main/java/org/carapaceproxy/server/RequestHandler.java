@@ -49,7 +49,6 @@ import io.netty.util.concurrent.GenericFutureListener;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -67,16 +66,17 @@ import static org.carapaceproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SE
 import static org.carapaceproxy.server.mapper.CustomHeader.HeaderMode.HEADER_MODE_ADD;
 import static org.carapaceproxy.server.mapper.CustomHeader.HeaderMode.HEADER_MODE_REMOVE;
 import static org.carapaceproxy.server.mapper.CustomHeader.HeaderMode.HEADER_MODE_SET;
+import org.carapaceproxy.server.mapper.requestmatcher.MatchingContext;
+import org.carapaceproxy.server.mapper.requestmatcher.MatchingException;
 
 /**
  * Keeps state for a single HttpRequest.
  */
-public class RequestHandler {
+public class RequestHandler implements MatchingContext {
 
     private static final Logger LOG = Logger.getLogger(RequestHandler.class.getName());
-    private static final AtomicLong TIME_TRACKER = new AtomicLong();
     public static final String PROTO_HTTPS = "https";
-    public static final String PROTO_HTTP = "http";    
+    public static final String PROTO_HTTP = "http";
     private final long id;
     private final HttpRequest request;
     private final List<RequestFilter> filters;
@@ -185,7 +185,11 @@ public class RequestHandler {
         startTs = System.currentTimeMillis();
         lastActivity = startTs;
         for (RequestFilter filter : filters) {
-            filter.apply(request, connectionToClient, this);
+            try {
+                filter.apply(request, connectionToClient, this);
+            } catch (MatchingException e) {
+                LOG.severe("Error while applying a filter: " + e);
+            }
         }
         action = connectionToClient.mapper.map(request, userId, sessionId, backendHealthManager, this);
         if (action == null) {
@@ -816,6 +820,44 @@ public class RequestHandler {
         LOG.log(Level.INFO, this + " badErrorOnRemote " + cause);
         releaseConnectionToEndpoint(true, connectionToEndpoint.get());
         serveInternalErrorMessage(true);
+    }
+
+    /**
+     * RequestHandler as MatchingContext
+     */
+    // All properties name have been converted to lowercase during parsing.    
+    public static final String PROPERTY_URI = "request.uri";
+    public static final String PROPERTY_METHOD = "request.method";
+    public static final String PROPERTY_CONTENT_TYPE = "request.content-type";
+    public static final String PROPERTY_HEADERS = "request.headers.";
+    private static final int HEADERS_SUBSTRING_INDEX = PROPERTY_HEADERS.length();
+    public static final String PROPERTY_LISTENER_ADDRESS = "listener.address";
+
+    @Override
+    public String getProperty(String name) throws MatchingException {
+        if (name.startsWith(PROPERTY_HEADERS)) {
+            // In case of multiple headers with same name, the first one is returned.            
+            return request.headers().get(name.substring(HEADERS_SUBSTRING_INDEX, name.length()), "");
+        } else {
+            switch (name) {
+                case PROPERTY_URI:
+                    return uri;
+                case PROPERTY_METHOD:
+                    return request.method().name();
+                case PROPERTY_CONTENT_TYPE:
+                    return request.headers().get(javax.ws.rs.core.HttpHeaders.CONTENT_TYPE, "");
+                case PROPERTY_LISTENER_ADDRESS: {
+                    return connectionToClient.getListenerHost() + ":" + connectionToClient.getListenerPort();
+                }
+                default:
+                    throw new MatchingException("Property name " + name + " does not exists.");
+            }
+        }
+    }
+
+    @Override
+    public boolean isSecure() {
+        return connectionToClient.isSecure();
     }
 
 }

@@ -13,7 +13,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import org.carapaceproxy.server.mapper.requestmatcher.AndRequestMatcher;
-import org.carapaceproxy.server.mapper.requestmatcher.HttpsRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.SecureRequestMatcher;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchAllRequestMatcher;
 import org.carapaceproxy.server.mapper.requestmatcher.NotRequestMatcher;
 import org.carapaceproxy.server.mapper.requestmatcher.OrRequestMatcher;
@@ -52,7 +52,7 @@ SKIP :
 TOKEN :
 {
     < ALL: "all" > |
-    < HTTPS: "https" > |
+    < SECURE: "secure" > |
     < AND: "and" > |
     < OR: "or" > |
     < NOT: "not" > |
@@ -66,10 +66,10 @@ TOKEN :
 
 /* Main method to call to build a proper RequestMatcher over given matchingCondition
     *   - all
-    *   - https
+    *   - secure
     *   - request.uri ~ ".*index.*"
-    *   - request.uri ~ ".*index.*" and not https
-    *   - request.PROPERTY_NAME = VALUE and https
+    *   - request.uri ~ ".*index.*" and not secure
+    *   - request.PROPERTY_NAME = VALUE and secure
     */
 RequestMatcher parse() throws ConfigurationNotValidException:
 {        
@@ -122,7 +122,7 @@ RequestMatcher basicExpression() throws ConfigurationNotValidException:
 RequestMatcher basicMatcher() throws ConfigurationNotValidException:
 {}
 {
-    <HTTPS> { return new HttpsRequestMatcher(); } |
+    <SECURE> { return new SecureRequestMatcher(); } |
     { return compareMatcher(); }
 }
 

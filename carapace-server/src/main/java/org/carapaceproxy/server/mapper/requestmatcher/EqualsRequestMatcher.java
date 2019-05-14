@@ -19,8 +19,7 @@
  */
 package org.carapaceproxy.server.mapper.requestmatcher;
 
-/**
- *
+/** 
  * Matcher for composing EQUALS expressions give a property-key and the expected value.
  *
  * @author paolo.venturi

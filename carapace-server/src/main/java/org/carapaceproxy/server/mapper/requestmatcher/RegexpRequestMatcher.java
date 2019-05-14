@@ -44,7 +44,7 @@ public class RegexpRequestMatcher implements RequestMatcher {
 
     @Override
     public boolean matches(MatchingContext context) throws MatchingException {
-        return expression.matcher((String) context.getProperty(name)).matches();
+        return expression.matcher(context.getProperty(name)).matches();
     }
 
     @Override

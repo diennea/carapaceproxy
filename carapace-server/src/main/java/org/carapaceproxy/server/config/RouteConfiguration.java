@@ -60,7 +60,7 @@ public class RouteConfiguration {
         if (!enabled) {
             return false;
         }
-        return matcher.matches(new RequestMatchingContext(handler));
+        return matcher.matches(handler);
     }
 
 }

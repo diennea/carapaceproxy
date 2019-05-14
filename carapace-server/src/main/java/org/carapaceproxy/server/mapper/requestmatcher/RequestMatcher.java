@@ -25,10 +25,10 @@ package org.carapaceproxy.server.mapper.requestmatcher;
 public interface RequestMatcher {
 
     /**
-     *
-     * @param context
+     * Checks request appliance to defined criteria.
+     * @param context over the request appliance is checked.
      * @return
-     * @throws MatchingException
+     * @throws MatchingException whether there are troubles in context inspection.
      */
     boolean matches(MatchingContext context) throws MatchingException;
 

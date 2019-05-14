@@ -34,11 +34,16 @@ import org.carapaceproxy.server.mapper.requestmatcher.parser.RequestMatchParser;
  */
 public class RequestFilterFactory {
 
-    public static RequestFilter buildRequestFilter(RequestFilterConfiguration config) throws ConfigurationNotValidException, ParseException {
+    public static RequestFilter buildRequestFilter(RequestFilterConfiguration config) throws ConfigurationNotValidException {
         String type = config.getType();
         Map<String, String> filterConfig = config.getFilterConfig();
 
-        RequestMatcher matcher = new RequestMatchParser(filterConfig.getOrDefault("match", "all").trim()).parse();
+        RequestMatcher matcher;
+        try {
+            matcher = new RequestMatchParser(filterConfig.getOrDefault("match", "all").trim()).parse();
+        } catch (ParseException e) {
+            throw new ConfigurationNotValidException(e);
+        }
         switch (type) {
             case XForwardedForRequestFilter.TYPE:
                 return new XForwardedForRequestFilter(matcher);

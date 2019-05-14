@@ -22,8 +22,13 @@ package org.carapaceproxy.server.filters;
 import io.netty.handler.codec.http.HttpRequest;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.carapaceproxy.server.ClientConnectionHandler;
 import org.carapaceproxy.server.RequestHandler;
+import org.carapaceproxy.server.mapper.requestmatcher.MatchAllRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.MatchingException;
+import static org.junit.Assert.fail;
 import org.junit.Test;
 import org.mockito.ArgumentMatchers;
 import static org.mockito.ArgumentMatchers.eq;
@@ -57,12 +62,17 @@ public class SimpleFiltersTest {
             when(request.uri()).thenReturn(uri);
             when(requestHandler.getQueryString()).thenReturn(queryString);
 
-            RegexpMapUserIdFilter instance = new RegexpMapUserIdFilter("sSID", "([\\w\\d]+)([*])");
-            instance.apply(request, client, requestHandler);
-            if (userId != null) {
-                verify(requestHandler, times(1)).setUserId(eq(userId));
-            } else {
-                verify(requestHandler, times(0)).setUserId(ArgumentMatchers.anyString());
+            RegexpMapUserIdFilter instance = new RegexpMapUserIdFilter("sSID", "([\\w\\d]+)([*])", new MatchAllRequestMatcher());
+            try {
+                instance.apply(request, client, requestHandler);
+                if (userId != null) {
+                    verify(requestHandler, times(1)).setUserId(eq(userId));
+                } else {
+                    verify(requestHandler, times(0)).setUserId(ArgumentMatchers.anyString());
+                }
+            } catch (MatchingException ex) {
+                Logger.getLogger(SimpleFiltersTest.class.getName()).log(Level.SEVERE, null, ex);
+                fail();
             }
         });
 
@@ -91,12 +101,17 @@ public class SimpleFiltersTest {
             when(request.uri()).thenReturn(uri);
             when(requestHandler.getQueryString()).thenReturn(queryString);
 
-            RegexpMapSessionIdFilter instance = new RegexpMapSessionIdFilter("sSID", "(.+)");
-            instance.apply(request, client, requestHandler);
-            if (sessionId != null) {
-                verify(requestHandler, times(1)).setSessionId(eq(sessionId));
-            } else {
-                verify(requestHandler, times(0)).setSessionId(ArgumentMatchers.anyString());
+            RegexpMapSessionIdFilter instance = new RegexpMapSessionIdFilter("sSID", "(.+)", new MatchAllRequestMatcher());
+            try {
+                instance.apply(request, client, requestHandler);
+                if (sessionId != null) {
+                    verify(requestHandler, times(1)).setSessionId(eq(sessionId));
+                } else {
+                    verify(requestHandler, times(0)).setSessionId(ArgumentMatchers.anyString());
+                }
+            } catch (MatchingException ex) {
+                Logger.getLogger(SimpleFiltersTest.class.getName()).log(Level.SEVERE, null, ex);
+                fail();
             }
         });
 
