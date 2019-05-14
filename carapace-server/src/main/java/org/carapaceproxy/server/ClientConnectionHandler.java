@@ -65,7 +65,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     final Runnable onClientDisconnected;
     private final String listenerHost;
     private final int listenerPort;
-    private final boolean isSecure; // connection bind to https
+    private final boolean secure; // connection bind to https
 
     public ClientConnectionHandler(
             StatsLogger mainLogger,
@@ -80,7 +80,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             RequestsLogger requestsLogger,
             String listenerHost,
             int listenerPort,
-            boolean isSecure) {
+            boolean secure) {
         this.mainLogger = mainLogger;
         this.totalRequests = mainLogger.getCounter("totalrequests");
         this.runningRequests = mainLogger.getCounter("runningrequests");
@@ -97,7 +97,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         this.requestsLogger = requestsLogger;
         this.listenerHost = listenerHost;
         this.listenerPort = listenerPort;
-        this.isSecure = isSecure;
+        this.secure = secure;
     }
 
     public SocketAddress getClientAddress() {
@@ -179,7 +179,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     }
     
     public boolean isSecure() {
-        return isSecure;
+        return secure;
     }
 
     public void errorSendingRequest(RequestHandler request, EndpointConnectionImpl endpointConnection, ChannelHandlerContext peerChannel, Throwable error) {
