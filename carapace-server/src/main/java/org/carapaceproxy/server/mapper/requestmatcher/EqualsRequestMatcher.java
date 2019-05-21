@@ -40,7 +40,7 @@ public class EqualsRequestMatcher implements RequestMatcher {
     }
 
     public String getDescription() {
-        return "(" + name + " = " + value + ")";
+        return name + " = " + value;
     }
 
 }

@@ -77,10 +77,10 @@ RequestMatcher parse() throws ConfigurationNotValidException:
 }
 {
     <ALL> <EOF> { return new MatchAllRequestMatcher(); } |                
-    { return orExpression(); }
+    { return orExpression(false); }
 }
 
-RequestMatcher orExpression() throws ConfigurationNotValidException:
+RequestMatcher orExpression(boolean wrap) throws ConfigurationNotValidException:
 {    
     List<RequestMatcher> matchers = new ArrayList();
 }
@@ -89,7 +89,7 @@ RequestMatcher orExpression() throws ConfigurationNotValidException:
     (
             <OR> { matchers.add(andExpression()); }
     )*
-    { return new OrRequestMatcher(matchers); }    
+    { return new OrRequestMatcher(matchers, wrap); }
 }
 
 RequestMatcher andExpression() throws ConfigurationNotValidException:
@@ -112,7 +112,7 @@ RequestMatcher basicExpression() throws ConfigurationNotValidException:
     (
         <NOT> basicMatcher = basicExpression() { return new NotRequestMatcher(basicMatcher); } |
     
-        <O_BRACKET> basicMatcher = orExpression() <C_BRACKET> |
+        <O_BRACKET> basicMatcher = orExpression(true) <C_BRACKET> |
     
         basicMatcher = basicMatcher()
     )
