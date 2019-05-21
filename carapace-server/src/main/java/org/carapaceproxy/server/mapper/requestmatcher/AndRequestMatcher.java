@@ -25,11 +25,11 @@ import java.util.stream.Collectors;
 /**
  *
  * Matcher for composing AND expressions with other matchers.
- * 
+ *
  * @author paolo.venturi
  */
 public class AndRequestMatcher implements RequestMatcher {
-   
+
     private final List<RequestMatcher> matchers;
 
     public AndRequestMatcher(List<RequestMatcher> matchers) {
@@ -38,7 +38,7 @@ public class AndRequestMatcher implements RequestMatcher {
 
     @Override
     public boolean matches(MatchingContext context) {
-        for (RequestMatcher matcher: matchers) {            
+        for (RequestMatcher matcher : matchers) {
             if (!matcher.matches(context)) {
                 return false;
             }
@@ -48,10 +48,9 @@ public class AndRequestMatcher implements RequestMatcher {
 
     @Override
     public String getDescription() {
-        return "(" + matchers.stream()
-                    .map(RequestMatcher::getDescription)
-                    .collect(Collectors.joining(" and "))
-                + ")";
+        return matchers.stream()
+                .map(RequestMatcher::getDescription)
+                .collect(Collectors.joining(" and "));
     }
 
 }

@@ -31,9 +31,11 @@ import java.util.stream.Collectors;
 public class OrRequestMatcher implements RequestMatcher {
 
     private final List<RequestMatcher> matchers;
+    private final boolean wrap;
 
-    public OrRequestMatcher(List<RequestMatcher> matchers) {
+    public OrRequestMatcher(List<RequestMatcher> matchers, boolean wrap) {
         this.matchers = matchers;
+        this.wrap = wrap;
     }
 
     @Override
@@ -48,10 +50,13 @@ public class OrRequestMatcher implements RequestMatcher {
 
     @Override
     public String getDescription() {
-        return "(" + matchers.stream()
+        String desc = wrap ? "(" : "";
+        desc += matchers.stream()
                     .map(RequestMatcher::getDescription)
-                    .collect(Collectors.joining(" or "))
-                + ")";
+                    .collect(Collectors.joining(" or "));
+        desc += wrap ? ")" : "";
+        
+        return desc;
     }
 
 }

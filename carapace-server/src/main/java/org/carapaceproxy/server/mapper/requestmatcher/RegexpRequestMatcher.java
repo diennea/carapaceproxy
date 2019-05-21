@@ -49,7 +49,7 @@ public class RegexpRequestMatcher implements RequestMatcher {
 
     @Override
     public String getDescription() {
-        return "Matchig by RegEx: " + this.expression.toString();
+        return name + " ~ \"" + this.expression.toString() + "\"";
     }
 
     @Override
