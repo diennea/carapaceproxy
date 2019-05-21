@@ -33,7 +33,7 @@ public class MatchAllRequestMatcher implements RequestMatcher {
 
     @Override
     public String getDescription() {
-        return "Matching to all requests";
+        return "all requests";
     }
 
     @Override

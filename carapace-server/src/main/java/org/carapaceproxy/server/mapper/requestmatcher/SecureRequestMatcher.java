@@ -34,7 +34,7 @@ public class SecureRequestMatcher implements RequestMatcher {
 
     @Override
     public String getDescription() {
-        return "Secure request";
+        return "secure request";
     }
 
 }

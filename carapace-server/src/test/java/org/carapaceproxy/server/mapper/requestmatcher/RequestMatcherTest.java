@@ -30,6 +30,7 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.ParseException;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.RequestMatchParser;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.TokenMgrError;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
@@ -55,87 +56,119 @@ public class RequestMatcherTest {
         {
             RequestMatcher matcher = new RequestMatchParser("all").parse();
             assertTrue(matcher.matches(handler));
+            assertEquals("all requests", matcher.getDescription());
         }
         {
             RequestMatcher matcher = new RequestMatchParser("request.uri ~ \".*test.*\"").parse();
             assertTrue(matcher.matches(handler));
+            assertEquals("request.uri ~ \".*test.*\"", matcher.getDescription());
         }
         {
             RequestMatcher matcher = new RequestMatchParser("request.uri ~ \".*testio.*\"").parse();
             assertFalse(matcher.matches(handler));
+            assertEquals("request.uri ~ \".*testio.*\"", matcher.getDescription());
         }
         {
             RequestMatcher matcher = new RequestMatchParser("secure").parse();
             assertTrue(matcher.matches(handler));
+            assertEquals("secure request", matcher.getDescription());
         }
         {
             RequestMatcher matcher = new RequestMatchParser("not secure").parse();
             assertFalse(matcher.matches(handler));
+            assertEquals("not secure request", matcher.getDescription());
         }
         {
             RequestMatcher matcher = new RequestMatchParser("request.uri ~ \".*test\\.html\" and secure").parse();
             assertTrue(matcher.matches(handler));
+            assertEquals("request.uri ~ \".*test\\.html\" and secure request", matcher.getDescription());
         }
         {
             // spaces ignored
             RequestMatcher matcher = new RequestMatchParser("request.uri   ~   \".*test.*\" and not secure").parse();
             assertFalse(matcher.matches(handler));
+            assertEquals("request.uri ~ \".*test.*\" and not secure request", matcher.getDescription());
         }
         {
             RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" or not secure").parse();
             assertTrue(matcher.matches(handler));
+            assertEquals("request.uri ~ \".*test.*\" or not secure request", matcher.getDescription());
         }
         {
             RequestMatcher matcher = new RequestMatchParser("not secure or request.uri ~\".*test.*\"").parse();
             assertTrue(matcher.matches(handler));
+            assertEquals("not secure request or request.uri ~ \".*test.*\"", matcher.getDescription());
         }
         {
             RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" and (not secure or secure)").parse();
             assertTrue(matcher.matches(handler));
+            assertEquals("request.uri ~ \".*test.*\" and (not secure request or secure request)", matcher.getDescription());
         }
         {
             RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" and (not secure or not secure)").parse();
             assertFalse(matcher.matches(handler));
+            assertEquals("request.uri ~ \".*test.*\" and (not secure request or not secure request)", matcher.getDescription());
         }
         {
             RequestMatcher matcher = new RequestMatchParser("not (not secure or not secure) and request.uri ~\".*test.*\"").parse();
             assertTrue(matcher.matches(handler));
+            assertEquals("not (not secure request or not secure request) and request.uri ~ \".*test.*\"", matcher.getDescription());
         }
         {
-            RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" and (not (not secure or not secure) or (not secure or not secure))").parse();
+            RequestMatcher matcher = new RequestMatchParser(
+                    "request.uri ~\".*test.*\" and (not (not secure or not secure) or (not secure or not secure))"
+            ).parse();
             assertTrue(matcher.matches(handler));
+            assertEquals(
+                    "request.uri ~ \".*test.*\" and (not (not secure request or not secure request) or "
+                    + "(not secure request or not secure request))", matcher.getDescription()
+            );
         }
         {
-            RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" and (not (not secure or not secure) and (not secure or not secure)) and request.uri ~\".*test.html\"").parse();
+            RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" and (not (not secure or not secure) "
+                    + "and (not secure or not secure)) and request.uri ~\".*test.html\"").parse();
             assertFalse(matcher.matches(handler));
+            assertEquals("request.uri ~ \".*test.*\" and (not (not secure request or not secure request) "
+                    + "and (not secure request or not secure request)) and request.uri ~ \".*test.html\"", matcher.getDescription()
+            );
         }
         {
-            RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" and (not (not secure or not secure) and (not secure or not secure)) or not request.uri ~\".*\\.css\"").parse();
+            RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" and (not (not secure or not secure) "
+                    + "and (not secure or not secure)) or not request.uri ~\".*\\.css\"").parse();
             assertTrue(matcher.matches(handler));
+            assertEquals("request.uri ~ \".*test.*\" and (not (not secure request or not secure request) "
+                    + "and (not secure request or not secure request)) or not request.uri ~ \".*\\.css\"", matcher.getDescription()
+            );
         }
         {
             RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*\\.css*\" or request.uri ~\".*\\.html\"").parse();
             assertTrue(matcher.matches(handler));
+            assertEquals("request.uri ~ \".*\\.css*\" or request.uri ~ \".*\\.html\"", matcher.getDescription());
         }
         {
             RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*\\.css*\" and request.uri ~\".*\\.html\"").parse();
             assertFalse(matcher.matches(handler));
+            assertEquals("request.uri ~ \".*\\.css*\" and request.uri ~ \".*\\.html\"", matcher.getDescription());
         }
         {
             RequestMatcher matcher = new RequestMatchParser("not (not request.uri ~\".*\\.html\")").parse();
             assertTrue(matcher.matches(handler));
+            assertEquals("not (not request.uri ~ \".*\\.html\")", matcher.getDescription());
         }
         {
             RequestMatcher matcher = new RequestMatchParser("not request.uri ~\".*\\.css*\" and not (not request.uri ~\".*\\.html\")").parse();
             assertTrue(matcher.matches(handler));
+            assertEquals("not request.uri ~ \".*\\.css*\" and not (not request.uri ~ \".*\\.html\")", matcher.getDescription());
         }
 
         // property name does not exist -> empty
         {
             RequestMatcher matcher = new RequestMatchParser("request.notex ~\".*test.*\"").parse();
             assertFalse(matcher.matches(handler));
+            assertEquals("request.notex ~ \".*test.*\"", matcher.getDescription());
             matcher = new RequestMatchParser("request.notex = \"\"").parse();
             assertTrue(matcher.matches(handler));
+            assertEquals("request.notex = ", matcher.getDescription());
         }
         // Broken one: invalid regexp syntax
         TestUtils.assertThrows(TokenMgrError.class, () -> {
@@ -168,9 +201,21 @@ public class RequestMatcherTest {
         });
 
         // Fist one condition considered
-        assertFalse(new RequestMatchParser("not secure all").parse().matches(handler));
-        assertFalse(new RequestMatchParser("not secure request.uri ~\".*test.*\"").parse().matches(handler));
-        assertTrue(new RequestMatchParser("request.uri ~\".*test.*\" all").parse().matches(handler));
+        {
+            RequestMatcher matcher = new RequestMatchParser("not secure all").parse();
+            assertFalse(matcher.matches(handler));
+            assertEquals("not secure request", matcher.getDescription());
+        }
+        {            
+            RequestMatcher matcher = new RequestMatchParser("not secure request.uri ~\".*test.*\"").parse();
+            assertFalse(matcher.matches(handler));
+            assertEquals("not secure request", matcher.getDescription());
+        }
+        {            
+            RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" all").parse();
+            assertTrue(matcher.matches(handler));
+            assertEquals("request.uri ~ \".*test.*\"", matcher.getDescription());
+        }        
     }
 
     @Test
