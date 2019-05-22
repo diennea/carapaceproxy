@@ -24,7 +24,7 @@
                     <td>
                         <div class="label">
                             <a :href="'http://' + item.info['peer_admin_server_host'] + ':' + item.info['peer_admin_server_port'] + '/ui/#/'" >
-                                {{item.info['peer_admin_server_host']}} : {{item.info['peer_admin_server_port']}}
+                                {{item.info['peer_admin_server_host']}}:{{item.info['peer_admin_server_port']}}
                             </a>
                         </div>
                     </td>
