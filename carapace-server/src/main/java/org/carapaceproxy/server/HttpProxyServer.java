@@ -535,7 +535,13 @@ public class HttpProxyServer implements AutoCloseable {
                 zkTimeout = Integer.parseInt(staticConfiguration.getProperty("zkTimeout", "40000"));
                 LOG.log(Level.INFO, "mode=cluster, zkAddress=''{0}'',zkTimeout={1}, peer.id=''{2}''", new Object[]{zkAddress, zkTimeout, peerId});
                 Map<String, String> peerInfo = new HashMap();
-                peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HOST, adminServerHost);
+                String adminHost = adminServerHost;
+                try {
+                    adminHost = InetAddress.getLocalHost().getHostName();
+                } catch (UnknownHostException ex) {
+                    LOG.log(Level.INFO, "Unable to resolve Admin Server Hostname for peer " + peerId + ". Using " + adminServerHost);
+                }
+                peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HOST, adminHost);
                 peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_PORT, adminServerPort + "");
                 this.groupMembershipHandler = new ZooKeeperGroupMembershipHandler(zkAddress, zkTimeout, peerId, peerInfo);
                 break;
