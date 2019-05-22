@@ -82,7 +82,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     static final Counter stuckRequestsStat = Counter.build()
             .namespace("outbound")
             .name("stuckrequests")
-            .help("stuck requests, this request will be killed")
+            .help("stuck requests, this requests will be killed")
             .register();
 
     void returnConnection(EndpointConnectionImpl con) {
