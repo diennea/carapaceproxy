@@ -547,7 +547,8 @@ public class HttpProxyServer implements AutoCloseable {
      *
      * @param newConfigurationStore
      * @throws InterruptedException
-     * @see #buildValidConfiguration(org.carapaceproxy.configstore.ConfigurationStore)
+     * @see
+     * #buildValidConfiguration(org.carapaceproxy.configstore.ConfigurationStore)
      */
     public void applyDynamicConfigurationFromAPI(ConfigurationStore newConfigurationStore) throws InterruptedException, ConfigurationChangeInProgressException {
         applyDynamicConfiguration(newConfigurationStore, false);
@@ -640,8 +641,25 @@ public class HttpProxyServer implements AutoCloseable {
                 cluster = true;
                 peerId = staticConfiguration.getProperty("peer.id", computeDefaultPeerId());
                 zkAddress = staticConfiguration.getProperty("zkAddress", "localhost:2181");
+                boolean zkSecure = Boolean.parseBoolean(staticConfiguration.getProperty("zkSecure", "false"));
                 zkTimeout = Integer.parseInt(staticConfiguration.getProperty("zkTimeout", "40000"));
+<<<<<<< HEAD
                 LOG.log(Level.INFO, "mode=cluster, zkAddress=''{0}'',zkTimeout={1}, peer.id=''{2}''", new Object[]{zkAddress, zkTimeout, peerId});
+=======
+                LOG.log(Level.INFO, "mode=cluster, zkAddress=''{0}'',zkTimeout={1}, peer.id=''{2}'', zkSecure: {3}", new Object[]{zkAddress, zkTimeout, peerId, zkSecure});
+                Map<String, String> peerInfo = new HashMap();
+                String adminHost = adminServerHost;
+                try {
+                    adminHost = InetAddress.getLocalHost().getHostName();
+                } catch (UnknownHostException ex) {
+                    LOG.log(Level.INFO, "Unable to resolve Admin Server Hostname for peer " + peerId + ". Using " + adminServerHost);
+                }
+                peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HOST, adminHost);
+                peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_PORT, adminServerPort + "");
+
+                this.groupMembershipHandler = new ZooKeeperGroupMembershipHandler(zkAddress, zkTimeout, zkSecure,
+                        peerId, peerInfo, staticConfiguration.asProperties("zookeeper."));
+>>>>>>> Enable ZK Configuration and ACL
                 break;
             case "standalone":
                 cluster = false;
