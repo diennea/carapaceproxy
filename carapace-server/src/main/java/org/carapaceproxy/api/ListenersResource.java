@@ -109,8 +109,8 @@ public class ListenersResource {
                     listener.getDefaultCertificate(),
                     server.getMainLogger().getCounter("listener_" + listener.getHost() + "_" + port +"_requests").get()
             );
-            EndpointKey ek = EndpointKey.make(listener.getHost(), listener.getPort());
-            res.put(ek.toBackendId(), lisBean);
+            EndpointKey key = EndpointKey.make(listener.getHost(), listener.getPort());
+            res.put(key.getHostPort(), lisBean);
         }
 
         return res;

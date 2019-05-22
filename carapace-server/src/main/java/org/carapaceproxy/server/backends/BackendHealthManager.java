@@ -59,7 +59,7 @@ public class BackendHealthManager implements Runnable {
     private volatile int connectTimeout;
     private volatile boolean started; // keep track of start() calling
 
-    private final ConcurrentHashMap<String, BackendHealthStatus> backends = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, BackendHealthStatus> backends = new ConcurrentHashMap<>(); // host:port -> status
     private final ConcurrentHashMap<String, Gauge> gauges = new ConcurrentHashMap<>();
 
     public BackendHealthManager(RuntimeServerConfiguration conf, EndpointMapper mapper, StatsLogger logger) {
@@ -158,9 +158,9 @@ public class BackendHealthManager implements Runnable {
         }
         Collection<BackendConfiguration> backendConfigurations = mapper.getBackends().values();
         for (BackendConfiguration bconf : backendConfigurations) {
-            String backendId = bconf.getHostPort();
-            BackendHealthStatus status = backends.computeIfAbsent(backendId, (id) -> new BackendHealthStatus(id));
-            ensureGauge("backend_" + status.getId().replace(":", "_") + "_up", status);
+            String hostPort = bconf.getHostPort();
+            BackendHealthStatus status = backends.computeIfAbsent(hostPort, (_hostPort) -> new BackendHealthStatus(_hostPort));
+            ensureGauge("backend_" + status.getHostPort().replace(":", "_") + "_up", status);
 
             BackendHealthCheck checkResult = BackendHealthCheck.check(
                     bconf.getHost(), bconf.getPort(), bconf.getProbePath(), connectTimeout);
@@ -168,18 +168,18 @@ public class BackendHealthManager implements Runnable {
             if (checkResult.isOk()) {
                 if (status.isReportedAsUnreachable()) {
                     LOG.log(Level.WARNING, "backend {0} was unreachable, setting again to reachable. Response time {1}ms",
-                            new Object[]{status.getId(), checkResult.getEndTs() - checkResult.getStartTs()});
-                    reportBackendReachable(status.getId());
+                            new Object[]{status.getHostPort(), checkResult.getEndTs() - checkResult.getStartTs()});
+                    reportBackendReachable(status.getHostPort());
                 } else {
                     LOG.log(Level.INFO, "backend {0} seems reachable. Response time {1}ms",
-                            new Object[]{status.getId(), checkResult.getEndTs() - checkResult.getStartTs()});
+                            new Object[]{status.getHostPort(), checkResult.getEndTs() - checkResult.getStartTs()});
                 }
             } else {
                 if (status.isReportedAsUnreachable()) {
-                    LOG.log(Level.INFO, "backend {0} still unreachable. Cause: {1}", new Object[]{status.getId(), checkResult.getHttpResponse()});
+                    LOG.log(Level.INFO, "backend {0} still unreachable. Cause: {1}", new Object[]{status.getHostPort(), checkResult.getHttpResponse()});
                 } else {
-                    LOG.log(Level.WARNING, "backend {0} became unreachable. Cause: {1}", new Object[]{status.getId(), checkResult.getHttpResponse()});
-                    reportBackendUnreachable(status.getId(), checkResult.getEndTs(), checkResult.getHttpResponse());
+                    LOG.log(Level.WARNING, "backend {0} became unreachable. Cause: {1}", new Object[]{status.getHostPort(), checkResult.getHttpResponse()});
+                    reportBackendUnreachable(status.getHostPort(), checkResult.getEndTs(), checkResult.getHttpResponse());
                 }
             }
             status.setLastProbe(checkResult);
@@ -203,21 +203,21 @@ public class BackendHealthManager implements Runnable {
         }
     }
 
-    public void reportBackendUnreachable(String id, long timestamp, String cause) {
-        BackendHealthStatus backend = getBackendStatus(id);
+    public void reportBackendUnreachable(String hostPort, long timestamp, String cause) {
+        BackendHealthStatus backend = getBackendStatus(hostPort);
         backend.reportAsUnreachable(timestamp);
     }
 
-    private BackendHealthStatus getBackendStatus(String backendId) {
-        BackendHealthStatus status = backends.computeIfAbsent(backendId, (id) -> new BackendHealthStatus(id));
+    private BackendHealthStatus getBackendStatus(String hostPort) {
+        BackendHealthStatus status = backends.computeIfAbsent(hostPort, (_hostPort) -> new BackendHealthStatus(_hostPort));
         if (status == null) {
-            throw new RuntimeException("Unknown backend " + backendId);
+            throw new RuntimeException("Unknown backend " + hostPort);
         }
         return status;
     }
 
-    public void reportBackendReachable(String id) {
-        BackendHealthStatus backend = getBackendStatus(id);
+    public void reportBackendReachable(String hostPort) {
+        BackendHealthStatus backend = getBackendStatus(hostPort);
         backend.reportAsReachable();
     }
 
@@ -225,8 +225,8 @@ public class BackendHealthManager implements Runnable {
         return new HashMap<>(backends);
     }
 
-    public boolean isAvailable(String id) {
-        BackendHealthStatus backend = getBackendStatus(id);
+    public boolean isAvailable(String hostPort) {
+        BackendHealthStatus backend = getBackendStatus(hostPort);
         return backend != null && backend.isAvailable();
     }
 

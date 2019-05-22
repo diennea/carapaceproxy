@@ -30,6 +30,7 @@ public final class EndpointKey {
 
     private final String host;
     private final int port;
+    private final String hostPort;
 
     public static EndpointKey make(String host, int port) {
         return new EndpointKey(host, port);
@@ -49,6 +50,7 @@ public final class EndpointKey {
     public EndpointKey(String host, int port) {
         this.host = host;
         this.port = port;
+        this.hostPort = host + ":" + port;
     }
 
     public String getHost() {
@@ -88,8 +90,8 @@ public final class EndpointKey {
         return true;
     }
 
-    public String toBackendId() {
-        return host + ":" + port;
+    public String getHostPort() {
+        return hostPort;
     }
 
     @Override

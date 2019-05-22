@@ -31,19 +31,19 @@ public class BackendHealthStatus {
 
     private static final Logger LOG = Logger.getLogger(BackendHealthStatus.class.getName());
 
-    private final String id;
+    private final String hostPort;
 
     private volatile boolean reportedAsUnreachable;
     private long reportedAsUnreachableTs;
 
     private BackendHealthCheck lastProbe;
 
-    public BackendHealthStatus(String id) {
-        this.id = id;
+    public BackendHealthStatus(String hostPort) {
+        this.hostPort = hostPort;
     }
 
-    public String getId() {
-        return id;
+    public String getHostPort() {
+        return hostPort;
     }
 
     public BackendHealthCheck getLastProbe() {
@@ -71,7 +71,7 @@ public class BackendHealthStatus {
     }
 
     void reportAsUnreachable(long timestamp) {
-        LOG.log(Level.INFO, "{0}: reportAsUnreachable {1}", new Object[]{id, new java.sql.Timestamp(timestamp)});
+        LOG.log(Level.INFO, "{0}: reportAsUnreachable {1}", new Object[]{hostPort, new java.sql.Timestamp(timestamp)});
         reportedAsUnreachableTs = timestamp;
         reportedAsUnreachable = true;
     }
@@ -87,7 +87,7 @@ public class BackendHealthStatus {
 
     @Override
     public String toString() {
-        return "BackendHealthStatus{" + "id=" + id + ", reportedAsUnreachable=" + reportedAsUnreachable + ", reportedAsUnreachableTs=" + reportedAsUnreachableTs + '}';
+        return "BackendHealthStatus{" + "hostPort=" + hostPort + ", reportedAsUnreachable=" + reportedAsUnreachable + ", reportedAsUnreachableTs=" + reportedAsUnreachableTs + '}';
     }
 
 }

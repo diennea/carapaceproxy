@@ -155,7 +155,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
                     EndpointConnection connectionToEndpoint = requestHandler.getConnectionToEndpoint();
                     if (connectionToEndpoint != null) {
                         backendHealthManager.reportBackendUnreachable(
-                            connectionToEndpoint.getKey().toBackendId(), now, 
+                            connectionToEndpoint.getKey().getHostPort(), now, 
                             "a request to " + requestHandler.getUri() + " for user " + requestHandler.getUserId() + " appears stuck");
                     }
                     stuckRequestsStat.inc();
