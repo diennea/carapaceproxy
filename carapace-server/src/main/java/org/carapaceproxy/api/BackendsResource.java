@@ -32,7 +32,6 @@ import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.backends.BackendHealthCheck;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.backends.BackendHealthStatus;
-import org.carapaceproxy.utils.StringUtils;
 
 /**
  * Access to backends status
