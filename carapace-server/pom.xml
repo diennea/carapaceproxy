@@ -34,11 +34,6 @@
             <version>${commons.lang3}</version>
         </dependency>
         <dependency>
-            <groupId>org.apache.bookkeeper.stats</groupId>
-            <artifactId>bookkeeper-stats-api</artifactId>
-            <version>${bookkeeper.version}</version>
-        </dependency>
-        <dependency>
             <groupId>org.apache.zookeeper</groupId>
             <artifactId>zookeeper</artifactId>
             <version>${zookkeeper.version}</version>
@@ -73,9 +68,19 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.apache.bookkeeper.stats</groupId>
-            <artifactId>prometheus-metrics-provider</artifactId>
-            <version>${bookkeeper.version}</version>
+            <groupId>io.prometheus</groupId>
+            <artifactId>simpleclient</artifactId>
+            <version>${libs.prometheus}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.prometheus</groupId>
+            <artifactId>simpleclient_hotspot</artifactId>
+            <version>${libs.prometheus}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.prometheus</groupId>
+            <artifactId>simpleclient_servlet</artifactId>
+            <version>${libs.prometheus}</version>
         </dependency>
         <dependency>
             <groupId>org.herddb</groupId>

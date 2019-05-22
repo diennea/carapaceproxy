@@ -20,6 +20,7 @@
 package org.carapaceproxy.server;
 
 import com.google.common.annotations.VisibleForTesting;
+import io.prometheus.client.exporter.MetricsServlet;
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.net.InetAddress;
@@ -124,8 +125,7 @@ public class HttpProxyServer implements AutoCloseable {
         this.listeners = new Listeners(this);
         this.cache = new ContentsCache(mainLogger, currentConfiguration);
         this.requestsLogger = new RequestsLogger(currentConfiguration);
-        this.connectionsManager = new ConnectionsManagerImpl(currentConfiguration,
-                mainLogger, backendHealthManager);
+        this.connectionsManager = new ConnectionsManagerImpl(currentConfiguration, backendHealthManager);
         this.dynamicCertificateManager = new DynamicCertificatesManager();
         if (mapper != null) {
             mapper.setDynamicCertificateManager(dynamicCertificateManager);
@@ -154,7 +154,7 @@ public class HttpProxyServer implements AutoCloseable {
         jerseyServlet.setInitOrder(0);
         jerseyServlet.setInitParameter(JAXRS_APPLICATION_CLASS, ApplicationConfig.class.getCanonicalName());
         context.addServlet(jerseyServlet, "/api/*");
-        context.addServlet(new ServletHolder(new PrometheusServlet(statsProvider)), "/metrics");
+        context.addServlet(new ServletHolder(new MetricsServlet()), "/metrics");
         context.setAttribute("server", this);
         contexts.addHandler(context);
 

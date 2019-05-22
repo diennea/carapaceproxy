@@ -43,7 +43,6 @@
     <properties>
         <curator.version>4.2.0</curator.version>
         <zookkeeper.version>3.5.4-beta</zookkeeper.version>
-        <bookkeeper.version>4.8.1</bookkeeper.version>
         <commons.lang3>3.8.1</commons.lang3>
         <netty.version>4.1.32.Final</netty.version>
         <netty.ssl.version>2.0.20.Final</netty.ssl.version>
@@ -65,6 +64,7 @@
         <libs.slf4j>1.7.25</libs.slf4j>
         <libs.stringtemplate>4.0.8</libs.stringtemplate>
         <libs.herddb>0.10.0-SNAPSHOT</libs.herddb>
+        <libs.prometheus>0.6.0</libs.prometheus>
         <javacc-maven-plugin.version>2.4</javacc-maven-plugin.version>
     </properties>
      <repositories>

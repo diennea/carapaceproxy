@@ -24,6 +24,8 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollEventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
+import io.prometheus.client.Counter;
+import io.prometheus.client.Gauge;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -45,8 +47,6 @@ import org.carapaceproxy.client.EndpointNotAvailableException;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
 import org.carapaceproxy.server.RequestHandler;
 import org.carapaceproxy.server.backends.BackendHealthManager;
-import org.apache.bookkeeper.stats.Counter;
-import org.apache.bookkeeper.stats.StatsLogger;
 import org.apache.commons.pool2.KeyedPooledObjectFactory;
 import org.apache.commons.pool2.PooledObject;
 import org.apache.commons.pool2.impl.DefaultPooledObject;
@@ -71,11 +71,19 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     private ScheduledFuture<?> stuckRequestsReaperFuture;
     private ConcurrentHashMap<Long, RequestHandler> pendingRequests = new ConcurrentHashMap<>();
 
-    final StatsLogger mainLogger;
     final BackendHealthManager backendHealthManager;
     final ScheduledExecutorService scheduler;
-    final Counter pendingRequestsStat;
-    final Counter stuckRequestsStat;
+
+    static final Gauge pendingRequestsStat = Gauge.build()
+            .namespace("outbound")
+            .name("pendingrequests")
+            .help("pending requests")
+            .register();
+    static final Counter stuckRequestsStat = Counter.build()
+            .namespace("outbound")
+            .name("stuckrequests")
+            .help("stuck requests, this request will be killed")
+            .register();
 
     void returnConnection(EndpointConnectionImpl con) {
 //        LOG.log(Level.SEVERE, "returnConnection:" + con);
@@ -139,9 +147,9 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     }
 
     @VisibleForTesting
-    public Counter getPendingRequestsStat() {
+    public Gauge getPendingRequestsStat() {
         return pendingRequestsStat;
-    }        
+    }
 
     private class RequestHandlerChecker implements Runnable {
 
@@ -188,10 +196,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     }
 
-    public ConnectionsManagerImpl(RuntimeServerConfiguration configuration, StatsLogger statsLogger, BackendHealthManager backendHealthManager) {
-        this.mainLogger = statsLogger.scope("outbound");
-        this.pendingRequestsStat = mainLogger.getCounter("pendingrequests");
-        this.stuckRequestsStat = mainLogger.getCounter("stuckrequests");
+    public ConnectionsManagerImpl(RuntimeServerConfiguration configuration, BackendHealthManager backendHealthManager) {
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
 
         GenericKeyedObjectPoolConfig config = new GenericKeyedObjectPoolConfig();
