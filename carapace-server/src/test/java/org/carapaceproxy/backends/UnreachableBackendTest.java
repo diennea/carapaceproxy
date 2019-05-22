@@ -36,6 +36,7 @@ import org.carapaceproxy.client.impl.ConnectionsManagerImpl;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
+import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import org.carapaceproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -104,7 +105,7 @@ public class UnreachableBackendTest {
             TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
         }
-    }
+    }   
 
     @Test
     public void testEmptyResponse() throws Exception {
@@ -179,7 +180,7 @@ public class UnreachableBackendTest {
                         + "    </body>        \n"
                         + "</html>\n", resp.getBodyString());
             }
-            assertFalse(server.getBackendHealthManager().isAvailable(key.toBackendId()));
+            assertFalse(server.getBackendHealthManager().isAvailable(key.getHostPort()));
             TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
         }
@@ -220,7 +221,7 @@ public class UnreachableBackendTest {
                         + "    </body>        \n"
                         + "</html>\n", resp.getBodyString());
             }
-            assertFalse(server.getBackendHealthManager().isAvailable(key.toBackendId()));
+            assertFalse(server.getBackendHealthManager().isAvailable(key.getHostPort()));
             TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
         }

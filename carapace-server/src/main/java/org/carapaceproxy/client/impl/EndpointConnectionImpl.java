@@ -136,7 +136,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
             } else {
                 connectionStats.registerFailedEvent(System.nanoTime() - now, TimeUnit.NANOSECONDS);
                 LOG.log(Level.INFO, "connect failed to " + key, future.cause());
-                parent.backendHealthManager.reportBackendUnreachable(key.toBackendId(), System.currentTimeMillis(), "connection failed");
+                parent.backendHealthManager.reportBackendUnreachable(key.getHostPort(), System.currentTimeMillis(), "connection failed");
             }
         });
         try {
@@ -359,7 +359,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
             LOG.log(Level.SEVERE, "I/O error on endpoint " + key, cause);
-            parent.backendHealthManager.reportBackendUnreachable(key.toBackendId(), System.currentTimeMillis(), "I/O error: " + cause);
+            parent.backendHealthManager.reportBackendUnreachable(key.getHostPort(), System.currentTimeMillis(), "I/O error: " + cause);
             RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
 
             if (_clientSidePeerHandler != null) {
