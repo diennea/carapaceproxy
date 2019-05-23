@@ -1,14 +1,16 @@
 #!/bin/bash
 
+# Carapace bump version
+CARAPACE_V=$(mvn org.apache.maven.plugins:maven-help-plugin:3.1.1:evaluate -Dexpression=project.version -q -DforceStdout -Dmaven.wagon.http.ssl.insecure=true)
+
 # stop if running
-carapace-server/target/carapace-server-1.0.0-SNAPSHOT/bin/service server stop
+carapace-server/target/carapace-server-${CARAPACE_V}/bin/service server stop
 
 mvn clean install -DskipTests -Pproduction
 cd carapace-server/target
 unzip *.zip
-cd carapace-server-1.0.0-SNAPSHOT
+cd carapace-server-${CARAPACE_V}
 ./bin/service server start
-
 
 timeout 22 sh -c 'until nc -z $0 $1; do sleep 1; done' localhost 8001
 
