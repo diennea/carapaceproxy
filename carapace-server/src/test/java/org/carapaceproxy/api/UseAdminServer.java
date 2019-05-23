@@ -81,6 +81,7 @@ public class UseAdminServer {
 
             server.start();
             server.startAdminInterface();
+            server.getCache().getStats().resetCacheMetrics();
         }
     }
 

@@ -39,6 +39,9 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
 import io.netty.util.concurrent.Future;
+import io.prometheus.client.Counter;
+import io.prometheus.client.Gauge;
+import io.prometheus.client.Summary;
 import java.io.IOException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -48,19 +51,22 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.apache.bookkeeper.stats.Counter;
-import org.apache.bookkeeper.stats.OpStatsLogger;
-import org.apache.bookkeeper.stats.StatsLogger;
 import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.client.EndpointConnection;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.RequestHandler;
+import org.carapaceproxy.utils.PrometheusUtils;
 
 public class EndpointConnectionImpl implements EndpointConnection {
 
     private static final Logger LOG = Logger.getLogger(EndpointConnectionImpl.class.getName());
 
     private static final AtomicLong IDGENERATOR = new AtomicLong();
+
+    private static final String METRIC_LABEL_RESULT = "result";
+    private static final String METRIC_LABEL_HOST = "host";
+    private static final String METRIC_LABEL_RESULT_SUCCESS = "success";
+    private static final String METRIC_LABEL_RESULT_FAILURE = "failure";
 
     private final long id = IDGENERATOR.incrementAndGet();
     private final ConnectionsManagerImpl parent;
@@ -77,11 +83,18 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private volatile RequestHandler clientSidePeerHandler;
 
     // stats
-    private final StatsLogger endpointStatsLogger;
-    private final OpStatsLogger connectionStats;
-    private final Counter openConnectionsStats;
-    private final Counter activeConnectionsStats;
-    private final Counter requestsStats;
+    private static final Summary CONNECTION_STATS_SUMMARY = PrometheusUtils.createSummary("backends", "connection_time_ns",
+            "backend connections", METRIC_LABEL_HOST, METRIC_LABEL_RESULT).register();
+    private static final Gauge OPEN_CONNECTIONS_GAUGE = PrometheusUtils.createGauge("backends", "open_connections",
+            "currently open backend connections", METRIC_LABEL_HOST).register();
+    private static final Gauge ACTIVE_CONNECTIONS_GAUGE = PrometheusUtils.createGauge("backends", "active_connections",
+            "currently active backend connections", METRIC_LABEL_HOST).register();
+    private static final Counter TOTAL_REQUESTS_COUNTER = PrometheusUtils.createCounter("backends", "sent_requests_total",
+            "sent requests", METRIC_LABEL_HOST).register();
+
+    private final Gauge.Child openConnectionsStats;
+    private final Gauge.Child activeConnectionsStats;
+    private final Counter.Child requestsStats;
 
     private static enum ConnectionState {
         IDLE,
@@ -90,8 +103,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     }
 
     /**
-     * Creates and return always a "CONNECTED" connection. This constructor will
-     * block until the backend is connected
+     * Creates and return always a "CONNECTED" connection. This constructor will block until the backend is connected
      *
      * @param key
      * @param parent
@@ -99,18 +111,18 @@ public class EndpointConnectionImpl implements EndpointConnection {
      * @throws IOException
      */
     public EndpointConnectionImpl(EndpointKey key, ConnectionsManagerImpl parent, EndpointStats endpointstats) throws IOException {
-        this.endpointStatsLogger = parent.mainLogger.scope(key.getHost() + "_" + key.getPort());
-        this.connectionStats = endpointStatsLogger.getOpStatsLogger("connections");
-        this.openConnectionsStats = endpointStatsLogger.getCounter("openconnections");
-        this.activeConnectionsStats = endpointStatsLogger.getCounter("activeconnections");
-        this.requestsStats = endpointStatsLogger.getCounter("requests");
         this.key = key;
         this.parent = parent;
         this.valid = true;
         this.endpointstats = endpointstats;
         activityDone();
 
-        long now = System.nanoTime();
+        String labelHost = key.getHost() + "_" + key.getPort();
+        this.openConnectionsStats = OPEN_CONNECTIONS_GAUGE.labels(labelHost);
+        this.activeConnectionsStats = ACTIVE_CONNECTIONS_GAUGE.labels(labelHost);
+        this.requestsStats = TOTAL_REQUESTS_COUNTER.labels(labelHost);
+
+        long startTime = System.nanoTime();
         Bootstrap b = new Bootstrap();
         b.group(parent.getGroup())
                 .channel(Epoll.isAvailable() ? EpollSocketChannel.class : NioSocketChannel.class)
@@ -132,9 +144,11 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 endpointstats.getTotalConnections().incrementAndGet();
                 endpointstats.getOpenConnections().incrementAndGet();
                 openConnectionsStats.inc();
-                connectionStats.registerSuccessfulEvent(System.nanoTime() - now, TimeUnit.NANOSECONDS);
+                CONNECTION_STATS_SUMMARY.labels(METRIC_LABEL_RESULT_SUCCESS, labelHost)
+                        .observe(System.nanoTime() - startTime);
             } else {
-                connectionStats.registerFailedEvent(System.nanoTime() - now, TimeUnit.NANOSECONDS);
+                CONNECTION_STATS_SUMMARY.labels(METRIC_LABEL_RESULT_FAILURE, labelHost)
+                        .observe(System.nanoTime() - startTime);
                 LOG.log(Level.INFO, "connect failed to " + key, future.cause());
                 parent.backendHealthManager.reportBackendUnreachable(key.getHostPort(), System.currentTimeMillis(), "connection failed");
             }

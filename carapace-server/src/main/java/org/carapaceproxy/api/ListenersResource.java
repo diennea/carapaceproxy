@@ -26,7 +26,9 @@ import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.server.ClientConnectionHandler;
 import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.server.Listeners;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 
@@ -50,9 +52,9 @@ public class ListenersResource {
         private final boolean ocps;
         private final String sslCiphers;
         private final String defaultCertificate;
-        private final long totalRequests;
+        private final int totalRequests;
 
-        public ListenerBean(String host, int port, boolean ssl, boolean ocps, String sslCiphers, String defaultCertificate, long totalRequests) {
+        public ListenerBean(String host, int port, boolean ssl, boolean ocps, String sslCiphers, String defaultCertificate, int totalRequests) {
             this.host = host;
             this.port = port;
             this.ssl = ssl;
@@ -86,7 +88,7 @@ public class ListenersResource {
             return defaultCertificate;
         }
 
-        public long getTotalRequests() {
+        public int getTotalRequests() {
             return totalRequests;
         }
 
@@ -97,9 +99,15 @@ public class ListenersResource {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         RuntimeServerConfiguration conf = server.getCurrentConfiguration();
 
+        Listeners listeners = server.getListeners();
         Map<String, ListenerBean> res = new HashMap<>();
         for (NetworkListenerConfiguration listener : conf.getListeners()) {
             int port = listener.getPort() + server.getListenersOffsetPort();
+            ClientConnectionHandler handler = listeners.getListenerHandler(listener.getKey());
+            int totalRequests = handler == null
+                    ? 0
+                    : handler.getTotalRequestsCount();
+
             ListenerBean lisBean = new ListenerBean(
                     listener.getHost(),
                     port,
@@ -107,7 +115,7 @@ public class ListenersResource {
                     listener.isOcps(),
                     listener.getSslCiphers(),
                     listener.getDefaultCertificate(),
-                    server.getMainLogger().getCounter("listener_" + listener.getHost() + "_" + port +"_requests").get()
+                    totalRequests
             );
             EndpointKey key = EndpointKey.make(listener.getHost(), listener.getPort());
             res.put(key.getHostPort(), lisBean);

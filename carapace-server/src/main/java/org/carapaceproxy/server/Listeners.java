@@ -41,6 +41,7 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.util.AsyncMapping;
 import io.netty.util.concurrent.Promise;
+import io.prometheus.client.Gauge;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -65,8 +66,7 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
-import org.apache.bookkeeper.stats.Counter;
-import org.apache.bookkeeper.stats.StatsLogger;
+import org.carapaceproxy.utils.PrometheusUtils;
 
 /**
  *
@@ -76,13 +76,15 @@ import org.apache.bookkeeper.stats.StatsLogger;
 public class Listeners {
 
     private static final Logger LOG = Logger.getLogger(Listeners.class.getName());
-    private final Counter currentClientConnections;
+    private static final Gauge CURRENT_CONNECTED_CLIENTS_GAUGE = PrometheusUtils.createGauge("clients", "current_connected",
+            "currently connected clients").register();
+
     private final EventLoopGroup bossGroup;
     private final EventLoopGroup workerGroup;
     private final HttpProxyServer parent;
     private final Map<String, SslContext> sslContexts = new ConcurrentHashMap<>();
     private final Map<HostPort, Channel> listeningChannels = new ConcurrentHashMap<>();
-    private final StatsLogger mainLogger;
+    private final Map<HostPort, ClientConnectionHandler> listenersHandlers = new ConcurrentHashMap<>();
     private final File basePath;
     private boolean started;
 
@@ -90,8 +92,6 @@ public class Listeners {
 
     public Listeners(HttpProxyServer parent) {
         this.parent = parent;
-        this.mainLogger = parent.getMainLogger();
-        this.currentClientConnections = mainLogger.getCounter("clients");
         this.currentConfiguration = parent.getCurrentConfiguration();
         this.basePath = parent.getBasePath();
         if (Epoll.isAvailable()) {
@@ -175,38 +175,40 @@ public class Listeners {
                 return promise.setFailure(err);
             }
         };
+
+        HostPort key = new HostPort(listener.getHost(), port);
         ServerBootstrap b = new ServerBootstrap();
         b.group(bossGroup, workerGroup)
                 .channel(Epoll.isAvailable() ? EpollServerSocketChannel.class : NioServerSocketChannel.class)
                 .childHandler(new ChannelInitializer<SocketChannel>() {
                     @Override
                     public void initChannel(SocketChannel channel) throws Exception {
-                        currentClientConnections.inc();
+                        CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
                         if (listener.isSsl()) {
                             SniHandler sni = new SniHandler(sniMappings);
                             channel.pipeline().addLast(sni);
                         }
                         channel.pipeline().addLast(new HttpRequestDecoder());
                         channel.pipeline().addLast(new HttpResponseEncoder());
-                        channel.pipeline().addLast(
-                                new ClientConnectionHandler(mainLogger, parent.getMapper(),
-                                        parent.getConnectionsManager(),
-                                        parent.getFilters(), parent.getCache(),
-                                        channel.remoteAddress(), parent.getStaticContentsManager(),
-                                        () -> currentClientConnections.dec(),
-                                        parent.getBackendHealthManager(),
-                                        parent.getRequestsLogger(),
-                                        listener.getHost(),
-                                        port,
-                                        listener.isSsl()
-                                )
-                        );
 
+                        ClientConnectionHandler connHandler = new ClientConnectionHandler(parent.getMapper(),
+                                parent.getConnectionsManager(),
+                                parent.getFilters(), parent.getCache(),
+                                channel.remoteAddress(), parent.getStaticContentsManager(),
+                                () -> CURRENT_CONNECTED_CLIENTS_GAUGE.dec(),
+                                parent.getBackendHealthManager(),
+                                parent.getRequestsLogger(),
+                                listener.getHost(),
+                                port,
+                                listener.isSsl()
+                        );
+                        channel.pipeline().addLast(connHandler);
+
+                        listenersHandlers.put(key, connHandler);
                     }
                 })
                 .option(ChannelOption.SO_BACKLOG, 128)
                 .childOption(ChannelOption.SO_KEEPALIVE, true);
-        HostPort key = new HostPort(listener.getHost(), port);
         Channel channel = b.bind(listener.getHost(), port).sync().channel();
 
         listeningChannels.put(key, channel);
@@ -271,6 +273,10 @@ public class Listeners {
             return addr.getPort();
         }
         return -1;
+    }
+    
+    public ClientConnectionHandler getListenerHandler(HostPort key) {
+        return listenersHandlers.get(key);
     }
 
     public void stop() {
@@ -426,6 +432,7 @@ public class Listeners {
         if (channel != null) {
             channel.close().sync();
         }
+        listenersHandlers.remove(hostport);
     }
 
 }

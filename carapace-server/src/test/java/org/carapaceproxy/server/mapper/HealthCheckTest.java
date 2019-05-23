@@ -26,8 +26,6 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.util.HashMap;
 import java.util.Map;
-import org.apache.bookkeeper.stats.NullStatsLogger;
-import org.apache.bookkeeper.stats.StatsLogger;
 import org.carapaceproxy.EndpointMapper;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
 import org.carapaceproxy.server.backends.BackendHealthCheck;
@@ -65,8 +63,7 @@ public class HealthCheckTest {
         EndpointMapper mapper = new TestEndpointMapper(null, 0, false, backends);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
 
-        StatsLogger statsLogger = new NullStatsLogger();
-        BackendHealthManager hman = new BackendHealthManager(conf, mapper, statsLogger);
+        BackendHealthManager hman = new BackendHealthManager(conf, mapper);
 
         {
             stubFor(get(urlEqualTo("/status.html"))
@@ -134,7 +131,7 @@ public class HealthCheckTest {
             assertThat(_status.isReportedAsUnreachable(), is(true));
             assertThat(_status.getReportedAsUnreachableTs() >= startTs, is(true));
             assertThat(_status.getReportedAsUnreachableTs() <= endTs, is(true));
-            reportedAsUnreachableTs =_status.getReportedAsUnreachableTs();
+            reportedAsUnreachableTs = _status.getReportedAsUnreachableTs();
 
             BackendHealthCheck lastProbe = _status.getLastProbe();
             assertThat(lastProbe.getPath(), is("/status.html"));

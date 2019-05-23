@@ -46,6 +46,7 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.CharsetUtil;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
+import io.prometheus.client.Counter;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
@@ -60,13 +61,12 @@ import org.carapaceproxy.client.impl.EndpointConnectionImpl;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
-import org.apache.bookkeeper.stats.Counter;
-import org.apache.bookkeeper.stats.StatsLogger;
 import static org.carapaceproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
 import static org.carapaceproxy.server.mapper.CustomHeader.HeaderMode.HEADER_MODE_ADD;
 import static org.carapaceproxy.server.mapper.CustomHeader.HeaderMode.HEADER_MODE_REMOVE;
 import static org.carapaceproxy.server.mapper.CustomHeader.HeaderMode.HEADER_MODE_SET;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchingContext;
+import org.carapaceproxy.utils.PrometheusUtils;
 
 /**
  * Keeps state for a single HttpRequest.
@@ -76,6 +76,10 @@ public class RequestHandler implements MatchingContext {
     private static final Logger LOG = Logger.getLogger(RequestHandler.class.getName());
     public static final String PROTO_HTTPS = "https";
     public static final String PROTO_HTTP = "http";
+
+    private static final Counter USER_REQUESTS_COUNTER = PrometheusUtils.createCounter("listeners", "user_requests_total",
+            "inbound requests count", "userId").register();
+
     private final long id;
     private final HttpRequest request;
     private final List<RequestFilter> filters;
@@ -86,7 +90,6 @@ public class RequestHandler implements MatchingContext {
     private final ClientConnectionHandler connectionToClient;
     private final ChannelHandlerContext channelToClient;
     private final AtomicReference<Runnable> onRequestFinished;
-    private final StatsLogger logger;
     private final BackendHealthManager backendHealthManager;
     private final RequestsLogger requestsLogger;
     private String userId;
@@ -98,7 +101,7 @@ public class RequestHandler implements MatchingContext {
     private volatile boolean headerSent = false;
     private UrlEncodedQueryString queryString;
 
-    public RequestHandler(long id, HttpRequest request, List<RequestFilter> filters, StatsLogger logger,
+    public RequestHandler(long id, HttpRequest request, List<RequestFilter> filters,
             ClientConnectionHandler parent, ChannelHandlerContext channelToClient, Runnable onRequestFinished,
             BackendHealthManager backendHealthManager, RequestsLogger requestsLogger) {
         this.id = id;
@@ -107,7 +110,6 @@ public class RequestHandler implements MatchingContext {
         this.connectionToClient = parent;
         this.channelToClient = channelToClient;
         this.filters = filters;
-        this.logger = logger;
         this.backendHealthManager = backendHealthManager;
         this.onRequestFinished = new AtomicReference<>(onRequestFinished);
         this.requestsLogger = requestsLogger;
@@ -192,11 +194,11 @@ public class RequestHandler implements MatchingContext {
             action = MapResult.INTERNAL_ERROR(MapResult.NO_ROUTE);
         }
         //LOG.info("map " + request.uri() + " to " + action.action);
-        Counter requestsPerUser;
+        Counter.Child requestsPerUser;
         if (userId != null) {
-            requestsPerUser = logger.getCounter("requests_" + userId + "_count");
+            requestsPerUser = USER_REQUESTS_COUNTER.labels(userId);
         } else {
-            requestsPerUser = logger.getCounter("requests_nobody_count");
+            requestsPerUser = USER_REQUESTS_COUNTER.labels("anonymous");
         }
         requestsPerUser.inc();
 

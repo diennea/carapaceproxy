@@ -24,6 +24,8 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollEventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
+import io.prometheus.client.Counter;
+import io.prometheus.client.Gauge;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -45,14 +47,13 @@ import org.carapaceproxy.client.EndpointNotAvailableException;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
 import org.carapaceproxy.server.RequestHandler;
 import org.carapaceproxy.server.backends.BackendHealthManager;
-import org.apache.bookkeeper.stats.Counter;
-import org.apache.bookkeeper.stats.StatsLogger;
 import org.apache.commons.pool2.KeyedPooledObjectFactory;
 import org.apache.commons.pool2.PooledObject;
 import org.apache.commons.pool2.impl.DefaultPooledObject;
 import org.apache.commons.pool2.impl.DefaultPooledObjectInfo;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
+import org.carapaceproxy.utils.PrometheusUtils;
 
 /**
  * Implementation of the {@link ConnectionsManager} component
@@ -71,11 +72,13 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     private ScheduledFuture<?> stuckRequestsReaperFuture;
     private ConcurrentHashMap<Long, RequestHandler> pendingRequests = new ConcurrentHashMap<>();
 
-    final StatsLogger mainLogger;
     final BackendHealthManager backendHealthManager;
     final ScheduledExecutorService scheduler;
-    final Counter pendingRequestsStat;
-    final Counter stuckRequestsStat;
+
+    private static final Gauge PENDING_REQUESTS_GAUGE = PrometheusUtils.createGauge("backends", "pending_requests",
+            "pending requests").register();
+    private static final Counter STUCK_REQUESTS_COUNTER = PrometheusUtils.createCounter("backends", "stuck_requests_total",
+            "stuck requests, this requests will be killed").register();
 
     void returnConnection(EndpointConnectionImpl con) {
 //        LOG.log(Level.SEVERE, "returnConnection:" + con);
@@ -125,7 +128,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     void registerPendingRequest(RequestHandler handler) {
         pendingRequests.put(handler.getId(), handler);
-        pendingRequestsStat.inc();
+        PENDING_REQUESTS_GAUGE.inc();
     }
 
     void unregisterPendingRequest(RequestHandler clientSidePeerHandler) {
@@ -134,14 +137,14 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         }
         RequestHandler removed = pendingRequests.remove(clientSidePeerHandler.getId());
         if (removed != null) {
-            pendingRequestsStat.dec();
+            PENDING_REQUESTS_GAUGE.dec();
         }
     }
 
     @VisibleForTesting
-    public Counter getPendingRequestsStat() {
-        return pendingRequestsStat;
-    }        
+    public Gauge getPENDING_REQUESTS_GAUGE() {
+        return PENDING_REQUESTS_GAUGE;
+    }
 
     private class RequestHandlerChecker implements Runnable {
 
@@ -158,7 +161,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
                             connectionToEndpoint.getKey().getHostPort(), now, 
                             "a request to " + requestHandler.getUri() + " for user " + requestHandler.getUserId() + " appears stuck");
                     }
-                    stuckRequestsStat.inc();
+                    STUCK_REQUESTS_COUNTER.inc();
                     toRemove.add(entry.getValue());
                 });
             }
@@ -188,10 +191,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     }
 
-    public ConnectionsManagerImpl(RuntimeServerConfiguration configuration, StatsLogger statsLogger, BackendHealthManager backendHealthManager) {
-        this.mainLogger = statsLogger.scope("outbound");
-        this.pendingRequestsStat = mainLogger.getCounter("pendingrequests");
-        this.stuckRequestsStat = mainLogger.getCounter("stuckrequests");
+    public ConnectionsManagerImpl(RuntimeServerConfiguration configuration, BackendHealthManager backendHealthManager) {
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
 
         GenericKeyedObjectPoolConfig config = new GenericKeyedObjectPoolConfig();
