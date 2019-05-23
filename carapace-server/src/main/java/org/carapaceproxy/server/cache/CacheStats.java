@@ -82,8 +82,11 @@ public class CacheStats {
         return (long) MISSES_COUNTER.get();
     }
     
+    /**
+     * Resets to 0 all cache metrics. This should only be used for testing purposes
+     */
     @VisibleForTesting
-    public void resetAllMetrics() {
+    public void resetCacheMetrics() {
         TOTAL_MEMORY_USED_GAUGE.set(0);
         directMemoryUsed.set(0);
         heapMemoryUsed.set(0);

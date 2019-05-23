@@ -78,7 +78,7 @@ public class CacheExpireTest {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
-            server.getCache().getStats().resetAllMetrics();
+            server.getCache().getStats().resetCacheMetrics();
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
@@ -141,7 +141,7 @@ public class CacheExpireTest {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
-            server.getCache().getStats().resetAllMetrics();
+            server.getCache().getStats().resetCacheMetrics();
 
             String expires;
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -208,7 +208,7 @@ public class CacheExpireTest {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
-            server.getCache().getStats().resetAllMetrics();
+            server.getCache().getStats().resetCacheMetrics();
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
@@ -261,7 +261,7 @@ public class CacheExpireTest {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
-            server.getCache().getStats().resetAllMetrics();
+            server.getCache().getStats().resetCacheMetrics();
 
             long startts = System.currentTimeMillis();
             java.util.Date expire = new java.util.Date(startts + 1500);
@@ -335,7 +335,7 @@ public class CacheExpireTest {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
-            server.getCache().getStats().resetAllMetrics();
+            server.getCache().getStats().resetCacheMetrics();
             server.getCache().getInnerCache().setVerbose(true);
 
             long startts = System.currentTimeMillis();

@@ -71,7 +71,7 @@ public class CacheTest {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
-            server.getCache().getStats().resetAllMetrics();
+            server.getCache().getStats().resetCacheMetrics();
 
             long startTs = System.currentTimeMillis();
 
@@ -153,7 +153,7 @@ public class CacheTest {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
-            server.getCache().getStats().resetAllMetrics();
+            server.getCache().getStats().resetCacheMetrics();
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
@@ -253,7 +253,7 @@ public class CacheTest {
                     null, null));
             server.start();
             int port = server.getLocalPort();
-            server.getCache().getStats().resetAllMetrics();
+            server.getCache().getStats().resetCacheMetrics();
 
             try (RawHttpClient client = new RawHttpClient("localhost", port, true)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
@@ -318,7 +318,7 @@ public class CacheTest {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
-            server.getCache().getStats().resetAllMetrics();
+            server.getCache().getStats().resetCacheMetrics();
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
@@ -389,7 +389,7 @@ public class CacheTest {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
-            server.getCache().getStats().resetAllMetrics();
+            server.getCache().getStats().resetCacheMetrics();
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
@@ -460,7 +460,7 @@ public class CacheTest {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
-            server.getCache().getStats().resetAllMetrics();
+            server.getCache().getStats().resetCacheMetrics();
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client.get("/index.html?_nocache").toString();
@@ -508,7 +508,7 @@ public class CacheTest {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
-            server.getCache().getStats().resetAllMetrics();
+            server.getCache().getStats().resetCacheMetrics();
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client.get("/index.png?_nocache").toString();

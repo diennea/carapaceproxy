@@ -72,7 +72,7 @@ public class CaffeineCacheImplTest {
 
     @After
     public void afterEach() {
-        stats.resetAllMetrics();
+        stats.resetCacheMetrics();
     }
 
     public void initializeCache(int maxSize) throws Exception {
