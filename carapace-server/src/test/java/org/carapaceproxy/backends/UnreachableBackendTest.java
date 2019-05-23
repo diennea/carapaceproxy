@@ -146,7 +146,7 @@ public class UnreachableBackendTest {
             }
             TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
             
-            Double value = ((ConnectionsManagerImpl) server.getConnectionsManager()).getPendingRequestsStat().get();            
+            Double value = ((ConnectionsManagerImpl) server.getConnectionsManager()).getPENDING_REQUESTS_GAUGE().get();            
             assertEquals(0, value.intValue());
 
         }

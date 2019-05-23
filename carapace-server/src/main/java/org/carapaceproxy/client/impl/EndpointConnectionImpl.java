@@ -55,6 +55,7 @@ import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.client.EndpointConnection;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.RequestHandler;
+import org.carapaceproxy.utils.PrometheusUtils;
 
 public class EndpointConnectionImpl implements EndpointConnection {
 
@@ -82,30 +83,18 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private volatile RequestHandler clientSidePeerHandler;
 
     // stats
-    private static final Summary connectionStats = Summary.build()
-        .namespace("connections")
-        .name("backendConnection")
-        .quantile(0.5, 0.05) // Add 50th percentile (= median) with 5% tolerated error
-        .quantile(0.9, 0.01) // Add 90th percentile with 1% tolerated error
-        .quantile(0.99, 0.001) // Add 99th percentile with 0.1% tolerated error
-        .labelNames(METRIC_LABEL_RESULT, METRIC_LABEL_HOST)
-        .help("backend connections")
-        .register();
-    private static final Gauge openConnectionsStats = Gauge.build()
-        .namespace("connections")
-        .name("currentOpenConnections")
-        .help("currently open backend connections")
-        .register();
-    private static final Gauge activeConnectionsStats = Gauge.build()
-        .namespace("connections")
-        .name("currentActiveConnections")
-        .help("currently active backend connections")
-        .register();
-    private static final Counter requestsStats = Counter.build()
-        .namespace("connections")
-        .name("sentRequests")
-        .help("sent requests")
-        .register();
+    private static final Summary CONNECTION_STATS_SUMMARY = PrometheusUtils.createSummary("backends", "connection_time_ns",
+            "backend connections", METRIC_LABEL_HOST, METRIC_LABEL_RESULT).register();
+    private static final Gauge OPEN_CONNECTIONS_GAUGE = PrometheusUtils.createGauge("backends", "open_connections",
+            "currently open backend connections", METRIC_LABEL_HOST).register();
+    private static final Gauge ACTIVE_CONNECTIONS_GAUGE = PrometheusUtils.createGauge("backends", "active_connections",
+            "currently active backend connections", METRIC_LABEL_HOST).register();
+    private static final Counter TOTAL_REQUESTS_COUNTER = PrometheusUtils.createCounter("backends", "sent_requests_total",
+            "sent requests", METRIC_LABEL_HOST).register();
+
+    private final Gauge.Child openConnectionsStats;
+    private final Gauge.Child activeConnectionsStats;
+    private final Counter.Child requestsStats;
 
     private static enum ConnectionState {
         IDLE,
@@ -114,8 +103,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     }
 
     /**
-     * Creates and return always a "CONNECTED" connection. This constructor will
-     * block until the backend is connected
+     * Creates and return always a "CONNECTED" connection. This constructor will block until the backend is connected
      *
      * @param key
      * @param parent
@@ -129,34 +117,38 @@ public class EndpointConnectionImpl implements EndpointConnection {
         this.endpointstats = endpointstats;
         activityDone();
 
+        String labelHost = key.getHost() + "_" + key.getPort();
+        this.openConnectionsStats = OPEN_CONNECTIONS_GAUGE.labels(labelHost);
+        this.activeConnectionsStats = ACTIVE_CONNECTIONS_GAUGE.labels(labelHost);
+        this.requestsStats = TOTAL_REQUESTS_COUNTER.labels(labelHost);
+
         long startTime = System.nanoTime();
         Bootstrap b = new Bootstrap();
         b.group(parent.getGroup())
-            .channel(Epoll.isAvailable() ? EpollSocketChannel.class : NioSocketChannel.class)
-            .option(ChannelOption.SO_KEEPALIVE, true)
-            .handler(new ChannelInitializer<SocketChannel>() {
-                @Override
-                public void initChannel(SocketChannel ch) throws Exception {
-                    ch.pipeline().addLast("readTimeoutHandler", new ReadTimeoutHandler(idleTimeout / 2));
-                    ch.pipeline().addLast("writeTimeoutHandler", new WriteTimeoutHandler(idleTimeout / 2));
-                    ch.pipeline().addLast("client-codec", new HttpClientCodec());
-                    ch.pipeline().addLast(new ReadEndpointResponseHandler());
-                }
-            });
+                .channel(Epoll.isAvailable() ? EpollSocketChannel.class : NioSocketChannel.class)
+                .option(ChannelOption.SO_KEEPALIVE, true)
+                .handler(new ChannelInitializer<SocketChannel>() {
+                    @Override
+                    public void initChannel(SocketChannel ch) throws Exception {
+                        ch.pipeline().addLast("readTimeoutHandler", new ReadTimeoutHandler(idleTimeout / 2));
+                        ch.pipeline().addLast("writeTimeoutHandler", new WriteTimeoutHandler(idleTimeout / 2));
+                        ch.pipeline().addLast("client-codec", new HttpClientCodec());
+                        ch.pipeline().addLast(new ReadEndpointResponseHandler());
+                    }
+                });
 
         final ChannelFuture connectFuture = b.connect(key.getHost(), key.getPort());
 
-        String labelHost = key.getHost() + "_" + key.getPort();
         connectFuture.addListener((Future<Void> future) -> {
             if (future.isSuccess()) {
                 endpointstats.getTotalConnections().incrementAndGet();
                 endpointstats.getOpenConnections().incrementAndGet();
                 openConnectionsStats.inc();
-                connectionStats.labels(METRIC_LABEL_RESULT_SUCCESS, labelHost)
-                    .observe(System.nanoTime() - startTime);
+                CONNECTION_STATS_SUMMARY.labels(METRIC_LABEL_RESULT_SUCCESS, labelHost)
+                        .observe(System.nanoTime() - startTime);
             } else {
-                connectionStats.labels(METRIC_LABEL_RESULT_FAILURE, labelHost)
-                    .observe(System.nanoTime() - startTime);
+                CONNECTION_STATS_SUMMARY.labels(METRIC_LABEL_RESULT_FAILURE, labelHost)
+                        .observe(System.nanoTime() - startTime);
                 LOG.log(Level.INFO, "connect failed to " + key, future.cause());
                 parent.backendHealthManager.reportBackendUnreachable(key.getHostPort(), System.currentTimeMillis(), "connection failed");
             }
@@ -182,12 +174,12 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
         channelToEndpoint = connectFuture.channel();
         channelToEndpoint
-            .closeFuture()
-            .addListener((Future<? super Void> future) -> {
-                LOG.log(Level.FINE, "channel closed to {0}", key);
-                endpointstats.getOpenConnections().decrementAndGet();
-                openConnectionsStats.dec();
-            });
+                .closeFuture()
+                .addListener((Future<? super Void> future) -> {
+                    LOG.log(Level.FINE, "channel closed to {0}", key);
+                    endpointstats.getOpenConnections().decrementAndGet();
+                    openConnectionsStats.dec();
+                });
 
     }
 
@@ -222,18 +214,18 @@ public class EndpointConnectionImpl implements EndpointConnection {
         clientSidePeerHandler.messageSentToBackend(EndpointConnectionImpl.this);
         activityDone();
         channelToEndpoint
-            .writeAndFlush(request)
-            .addListener((Future<? super Void> future) -> {
-                // BEWARE THAT THE RESPONSE MAY ALREADY HAVE BEEN
-                // RECEIVED
-                RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
-                if (!future.isSuccess()) {
-                    LOG.log(Level.INFO, this + " sendRequest " + request.getClass() + " failed", future.cause());
-                    state.compareAndSet(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE);
-                    _clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
-                    invalidate();
-                }
-            });
+                .writeAndFlush(request)
+                .addListener((Future<? super Void> future) -> {
+                    // BEWARE THAT THE RESPONSE MAY ALREADY HAVE BEEN
+                    // RECEIVED
+                    RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
+                    if (!future.isSuccess()) {
+                        LOG.log(Level.INFO, this + " sendRequest " + request.getClass() + " failed", future.cause());
+                        state.compareAndSet(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE);
+                        _clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
+                        invalidate();
+                    }
+                });
     }
 
     @Override
@@ -253,17 +245,17 @@ public class EndpointConnectionImpl implements EndpointConnection {
         clientSidePeerHandler.messageSentToBackend(EndpointConnectionImpl.this);
         activityDone();
         channelToEndpoint
-            .writeAndFlush(msg)
-            .addListener((Future<? super Void> future) -> {
-                if (!future.isSuccess()) {
-                    state.compareAndSet(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE);
-                    boolean done = clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
-                    if (done) {
-                        LOG.log(Level.SEVERE, this + " continueRequest " + msg.getClass() + " failed", future.cause());
-                        invalidate();
+                .writeAndFlush(msg)
+                .addListener((Future<? super Void> future) -> {
+                    if (!future.isSuccess()) {
+                        state.compareAndSet(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE);
+                        boolean done = clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
+                        if (done) {
+                            LOG.log(Level.SEVERE, this + " continueRequest " + msg.getClass() + " failed", future.cause());
+                            invalidate();
+                        }
                     }
-                }
-            });
+                });
     }
 
     @Override
@@ -282,21 +274,21 @@ public class EndpointConnectionImpl implements EndpointConnection {
         // may have already been received !
         activityDone();
         channelToEndpoint
-            .writeAndFlush(msg)
-            .addListener((Future<? super Void> future) -> {
-                if (!future.isSuccess()) {
-                    LOG.log(Level.INFO, "sendLastHttpContent failed " + msg, future.cause());
-                    state.compareAndSet(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE);
-                    clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
-                    invalidate();
-                } else {
-                    if (!state.compareAndSet(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE)) {
-                        // this may be a bug
-                        LOG.log(Level.SEVERE, "sendLastHttpContent finished without " + ConnectionState.REQUEST_SENT + " state");
+                .writeAndFlush(msg)
+                .addListener((Future<? super Void> future) -> {
+                    if (!future.isSuccess()) {
+                        LOG.log(Level.INFO, "sendLastHttpContent failed " + msg, future.cause());
+                        state.compareAndSet(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE);
+                        clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
+                        invalidate();
+                    } else {
+                        if (!state.compareAndSet(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE)) {
+                            // this may be a bug
+                            LOG.log(Level.SEVERE, "sendLastHttpContent finished without " + ConnectionState.REQUEST_SENT + " state");
+                        }
+                        clientSidePeerHandler.lastHttpContentSent();
                     }
-                    clientSidePeerHandler.lastHttpContentSent();
-                }
-            });
+                });
 
     }
 
@@ -329,8 +321,8 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     boolean isValid() {
         return valid
-            && (System.currentTimeMillis() - endpointstats.getLastActivity().longValue() <= idleTimeout)
-            && channelToEndpoint.isOpen();
+                && (System.currentTimeMillis() - endpointstats.getLastActivity().longValue() <= idleTimeout)
+                && channelToEndpoint.isOpen();
     }
 
     private void connectionDeactivated() {
@@ -357,13 +349,13 @@ public class EndpointConnectionImpl implements EndpointConnection {
             if (msg instanceof HttpContent) {
                 HttpContent f = (HttpContent) msg;
                 _clientSidePeerHandler.receivedFromRemote(f.copy(),
-                    EndpointConnectionImpl.this);
+                        EndpointConnectionImpl.this);
             } else if (msg instanceof DefaultHttpResponse) {
                 DefaultHttpResponse f = (DefaultHttpResponse) msg;
                 // DefaultHttpResponse has no "copy" method
                 _clientSidePeerHandler.receivedFromRemote(
-                    new DefaultHttpResponse(f.protocolVersion(), f.status(), f.headers()),
-                    EndpointConnectionImpl.this);
+                        new DefaultHttpResponse(f.protocolVersion(), f.status(), f.headers()),
+                        EndpointConnectionImpl.this);
             } else {
                 LOG.log(Level.SEVERE, "unknown message type " + msg.getClass() + ": " + msg);
             }

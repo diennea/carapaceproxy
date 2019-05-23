@@ -25,6 +25,8 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
+import io.prometheus.client.Counter;
+import io.prometheus.client.Gauge;
 import java.net.SocketAddress;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -35,8 +37,7 @@ import org.carapaceproxy.EndpointMapper;
 import org.carapaceproxy.client.impl.EndpointConnectionImpl;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.cache.ContentsCache;
-import org.apache.bookkeeper.stats.Counter;
-import org.apache.bookkeeper.stats.StatsLogger;
+import org.carapaceproxy.utils.PrometheusUtils;
 
 public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object> {
 
@@ -46,11 +47,14 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
 
     private final static AtomicLong requestIdGenerator = new AtomicLong();
 
+    private static final Counter TOTAL_REQUESTS_COUNTER_PER_LISTENER = PrometheusUtils.createCounter("listeners", "requests_total",
+            "total requests", "listener").register();
+    private static final Gauge RUNNING_REQUESTS_GAUGE = PrometheusUtils.createGauge("listeners", "running_requests",
+            "running requests").register();
+
+    private final Counter.Child totalRequests;
+
     final EndpointMapper mapper;
-    final StatsLogger mainLogger;
-    final Counter totalRequests;
-    final Counter runningRequests;
-    final Counter listenerRequests;
     final BackendHealthManager backendHealthManager;
     final ConnectionsManager connectionsManager;
     final List<RequestFilter> filters;
@@ -68,7 +72,6 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     private final boolean secure; // connection bind to https
 
     public ClientConnectionHandler(
-            StatsLogger mainLogger,
             EndpointMapper mapper,
             ConnectionsManager connectionsManager,
             List<RequestFilter> filters,
@@ -81,10 +84,6 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             String listenerHost,
             int listenerPort,
             boolean secure) {
-        this.mainLogger = mainLogger;
-        this.totalRequests = mainLogger.getCounter("totalrequests");
-        this.runningRequests = mainLogger.getCounter("runningrequests");
-        this.listenerRequests = mainLogger.getCounter("listener_" + listenerHost + "_" + listenerPort +"_requests");
         this.staticContentsManager = staticContentsManager;
         this.cache = cache;
         this.mapper = mapper;
@@ -98,6 +97,8 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         this.listenerHost = listenerHost;
         this.listenerPort = listenerPort;
         this.secure = secure;
+
+        this.totalRequests = TOTAL_REQUESTS_COUNTER_PER_LISTENER.labels(this.listenerHost + "_" + this.listenerPort);
     }
 
     public SocketAddress getClientAddress() {
@@ -133,7 +134,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         if (msg instanceof HttpRequest) {
             HttpRequest request = (HttpRequest) msg;
             RequestHandler currentRequest = new RequestHandler(requestIdGenerator.incrementAndGet(),
-                    request, filters, mainLogger, this, ctx, () -> runningRequests.dec(), backendHealthManager, requestsLogger);
+                    request, filters, this, ctx, () -> RUNNING_REQUESTS_GAUGE.dec(), backendHealthManager, requestsLogger);
             addPendingRequest(currentRequest);
             currentRequest.start();
         } else if (msg instanceof LastHttpContent) {
@@ -142,8 +143,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
                 RequestHandler currentRequest = pendingRequests.get(0);
                 currentRequest.clientRequestFinished(trailer);
                 totalRequests.inc();
-                runningRequests.inc();
-                listenerRequests.inc();
+                RUNNING_REQUESTS_GAUGE.inc();
             } catch (java.lang.ArrayIndexOutOfBoundsException noMorePendingRequests) {
                 LOG.log(Level.INFO, "{0} swallow {1}, no more pending requests", new Object[]{this, msg});
                 refuseOtherRequests = true;
@@ -177,9 +177,13 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     public int getListenerPort() {
         return listenerPort;
     }
-    
+
     public boolean isSecure() {
         return secure;
+    }
+    
+    public long getTotalRequestsCount() {
+        return (long) this.totalRequests.get();
     }
 
     public void errorSendingRequest(RequestHandler request, EndpointConnectionImpl endpointConnection, ChannelHandlerContext peerChannel, Throwable error) {

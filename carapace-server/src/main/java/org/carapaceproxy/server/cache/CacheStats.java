@@ -19,66 +19,66 @@
  */
 package org.carapaceproxy.server.cache;
 
-import org.apache.bookkeeper.stats.Counter;
-import org.apache.bookkeeper.stats.StatsLogger;
+import io.prometheus.client.Counter;
+import io.prometheus.client.Gauge;
+import org.carapaceproxy.utils.PrometheusUtils;
 
 /**
  * Overall statistics about cache
  */
 public class CacheStats {
 
-    private final Counter hits;
-    private final Counter misses;
-    private final Counter directMemoryUsed;
-    private final Counter heapMemoryUsed;
-    private final Counter totalMemoryUsed;
+    private static final Counter HITS_COUNTER = PrometheusUtils.createCounter("cache", "hits_total", "cache hits count").register();
+    private static final Counter MISSES_COUNTER = PrometheusUtils.createCounter("cache", "misses_total", "cache misses count").register();
+    private static final Gauge PAYLOAD_MEMORY_USED_GAUGE = PrometheusUtils.createGauge("cache", "payload_memory_usage_bytes", "memory currently used", "area").register();
+    private static final Gauge TOTAL_MEMORY_USED_GAUGE = PrometheusUtils.createGauge("cache", "total_memory_usage_bytes", "memory currently used").register();
 
-    public CacheStats(StatsLogger cacheScope) {
-        this.hits = cacheScope.getCounter("hits");
-        this.misses = cacheScope.getCounter("misses");
-        this.directMemoryUsed = cacheScope.getCounter("directMemoryUsed");
-        this.heapMemoryUsed = cacheScope.getCounter("heapMemoryUsed");
-        this.totalMemoryUsed = cacheScope.getCounter("totalMemoryUsed");
+    private final Gauge.Child directMemoryUsed;
+    private final Gauge.Child heapMemoryUsed;
+
+    public CacheStats() {
+        directMemoryUsed = PAYLOAD_MEMORY_USED_GAUGE.labels("direct");
+        heapMemoryUsed = PAYLOAD_MEMORY_USED_GAUGE.labels("heap");
     }
 
     public void update(boolean hit) {
         if (hit) {
-            hits.inc();
+            HITS_COUNTER.inc();
         } else {
-            misses.inc();
+            MISSES_COUNTER.inc();
         }
     }
 
     public void cached(long heap, long direct, long total) {
-        directMemoryUsed.add(direct);
-        heapMemoryUsed.add(heap);
-        totalMemoryUsed.add(total);
+        directMemoryUsed.inc(direct);
+        heapMemoryUsed.inc(heap);
+        TOTAL_MEMORY_USED_GAUGE.inc(total);
     }
 
     public void released(long heap, long direct, long total) {
-        directMemoryUsed.add(-direct);
-        heapMemoryUsed.add(-heap);
-        totalMemoryUsed.add(-total);
+        directMemoryUsed.dec(direct);
+        heapMemoryUsed.dec(heap);
+        PAYLOAD_MEMORY_USED_GAUGE.dec(total);
     }
 
     public long getDirectMemoryUsed() {
-        return directMemoryUsed.get();
+        return (long) directMemoryUsed.get();
     }
 
     public long getHeapMemoryUsed() {
-        return heapMemoryUsed.get();
+        return (long) heapMemoryUsed.get();
     }
 
     public long getTotalMemoryUsed() {
-        return totalMemoryUsed.get();
+        return (long) PAYLOAD_MEMORY_USED_GAUGE.get();
     }
 
     public long getHits() {
-        return hits.get();
+        return (long) HITS_COUNTER.get();
     }
 
     public long getMisses() {
-        return misses.get();
+        return (long) MISSES_COUNTER.get();
     }
 
 }

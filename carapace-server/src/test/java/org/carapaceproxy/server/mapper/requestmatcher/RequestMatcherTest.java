@@ -51,7 +51,7 @@ public class RequestMatcherTest {
 
         DefaultHttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/test.html");
 
-        RequestHandler handler = new RequestHandler(0, request, null, null, cch, null, null, null, null);
+        RequestHandler handler = new RequestHandler(0, request, null, cch, null, null, null, null);
 
         {
             RequestMatcher matcher = new RequestMatchParser("all").parse();
@@ -230,7 +230,7 @@ public class RequestMatcherTest {
         when(cch.getListenerHost()).thenReturn("localhost");
         when(cch.getListenerPort()).thenReturn(8080);
 
-        RequestHandler handler = new RequestHandler(0, request, null, null, cch, null, null, null, null);
+        RequestHandler handler = new RequestHandler(0, request, null, cch, null, null, null, null);
 
         // Test headers
         {

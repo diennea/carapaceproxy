@@ -20,6 +20,7 @@
 package org.carapaceproxy.server.backends;
 
 import com.google.common.annotations.VisibleForTesting;
+import io.prometheus.client.Gauge;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -32,11 +33,10 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.apache.bookkeeper.stats.Gauge;
-import org.apache.bookkeeper.stats.StatsLogger;
 import org.carapaceproxy.EndpointMapper;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
+import org.carapaceproxy.utils.PrometheusUtils;
 
 /**
  * Keeps status about backends
@@ -47,8 +47,10 @@ public class BackendHealthManager implements Runnable {
 
     private static final Logger LOG = Logger.getLogger(BackendHealthManager.class.getName());
 
+    private static final Gauge BACKEND_UPSTATUS_GAUGE = PrometheusUtils.createGauge("health", "backend_status",
+            "backend status", "host").register();
+
     private EndpointMapper mapper;
-    private final StatsLogger mainLogger;
 
     private ScheduledExecutorService timer;
     private ScheduledFuture<?> scheduledFuture;
@@ -59,13 +61,11 @@ public class BackendHealthManager implements Runnable {
     private volatile int connectTimeout;
     private volatile boolean started; // keep track of start() calling
 
-    private final ConcurrentHashMap<String, BackendHealthStatus> backends = new ConcurrentHashMap<>(); // host:port -> status
-    private final ConcurrentHashMap<String, Gauge> gauges = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, BackendHealthStatus> backends = new ConcurrentHashMap<>();
 
-    public BackendHealthManager(RuntimeServerConfiguration conf, EndpointMapper mapper, StatsLogger logger) {
+    public BackendHealthManager(RuntimeServerConfiguration conf, EndpointMapper mapper) {
 
         this.mapper = mapper; // may be null
-        this.mainLogger = logger.scope("health");
 
         // will be overridden before start
         this.period = 60000;
@@ -133,24 +133,6 @@ public class BackendHealthManager implements Runnable {
         }
     }
 
-    private void ensureGauge(String key, BackendHealthStatus status) {
-        gauges.computeIfAbsent(key, (k) -> {
-            Gauge gauge = new Gauge() {
-                @Override
-                public Number getDefaultValue() {
-                    return 0;
-                }
-
-                @Override
-                public Number getSample() {
-                    return status.isReportedAsUnreachable() ? 0 : 1;
-                }
-            };
-            mainLogger.registerGauge(k, gauge);
-            return gauge;
-        });
-    }
-
     @Override
     public void run() {
         if (mapper == null) {
@@ -158,9 +140,8 @@ public class BackendHealthManager implements Runnable {
         }
         Collection<BackendConfiguration> backendConfigurations = mapper.getBackends().values();
         for (BackendConfiguration bconf : backendConfigurations) {
-            String hostPort = bconf.getHostPort();
-            BackendHealthStatus status = backends.computeIfAbsent(hostPort, (_hostPort) -> new BackendHealthStatus(_hostPort));
-            ensureGauge("backend_" + status.getHostPort().replace(":", "_") + "_up", status);
+            String backendId = bconf.getHostPort();
+            BackendHealthStatus status = backends.computeIfAbsent(backendId, (id) -> new BackendHealthStatus(id));
 
             BackendHealthCheck checkResult = BackendHealthCheck.check(
                     bconf.getHost(), bconf.getPort(), bconf.getProbePath(), connectTimeout);
@@ -183,6 +164,12 @@ public class BackendHealthManager implements Runnable {
                 }
             }
             status.setLastProbe(checkResult);
+
+            if (status.isReportedAsUnreachable()) {
+                BACKEND_UPSTATUS_GAUGE.labels(bconf.getHost() + "_" + bconf.getHostPort()).set(0);
+            } else {
+                BACKEND_UPSTATUS_GAUGE.labels(bconf.getHost() + "_" + bconf.getHostPort()).set(1);
+            }
         }
         List<String> toRemove = new ArrayList<>();
         for (String key : backends.keySet()) {

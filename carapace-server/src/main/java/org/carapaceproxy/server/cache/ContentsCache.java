@@ -34,6 +34,7 @@ import io.netty.handler.codec.http.HttpResponse;
 import static io.netty.handler.codec.http.HttpStatusClass.REDIRECTION;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
+import io.prometheus.client.Counter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -46,8 +47,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.carapaceproxy.server.RequestHandler;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
-import org.apache.bookkeeper.stats.Counter;
-import org.apache.bookkeeper.stats.StatsLogger;
+import org.carapaceproxy.utils.PrometheusUtils;
 
 /**
  * Keeps contents in cache
@@ -56,19 +56,18 @@ public class ContentsCache {
 
     private static final Logger LOG = Logger.getLogger(ContentsCache.class.getName());
 
+    private static final Counter NO_CACHE_REQUESTS_COUNTER = PrometheusUtils.createCounter("cache", "non_cachable_requests_total", "not cachable requests").register();
+
     private CacheImpl cache;
 
     private final CacheStats stats;
-    private final Counter noCacheRequests;
     private final ScheduledExecutorService threadPool;
     private CacheRuntimeConfiguration currentConfiguration;
 
     static final long DEFAULT_TTL = 1000 * 60 * 60;
 
-    public ContentsCache(StatsLogger mainLogger, RuntimeServerConfiguration currentConfiguration) {
-        StatsLogger cacheScope = mainLogger.scope("cache");
-        this.stats = new CacheStats(cacheScope);
-        this.noCacheRequests = cacheScope.getCounter("nocacherequests");
+    public ContentsCache(RuntimeServerConfiguration currentConfiguration) {
+        this.stats = new CacheStats();
         this.threadPool = Executors.newSingleThreadScheduledExecutor();
 
         this.currentConfiguration = new CacheRuntimeConfiguration(currentConfiguration.getCacheMaxSize(), currentConfiguration.getCacheMaxFileSize());
@@ -151,7 +150,7 @@ public class ContentsCache {
                 .containsValue(HttpHeaderNames.CACHE_CONTROL, HttpHeaderValues.NO_CACHE, false);
         if (ctrlF5) {
             if (registerNoCacheStat) {
-                noCacheRequests.inc();
+                NO_CACHE_REQUESTS_COUNTER.inc();
             }
             return false;
         }
@@ -416,19 +415,18 @@ public class ContentsCache {
             this.host = host;
             this.uri = uri;
         }
-        
+
         public ContentKey(HttpRequest request) {
             this.method = request.method().name();
             this.host = request.headers().getAsString(HttpHeaderNames.HOST);
             this.uri = request.uri();
         }
-        
+
         public long getMemUsage() {
             // Just an estimate
-            return 
-                sizeof(method) +
-                sizeof(host) +
-                sizeof(uri);
+            return sizeof(method)
+                    + sizeof(host)
+                    + sizeof(uri);
         }
 
         public String getMethod() {
@@ -442,7 +440,7 @@ public class ContentsCache {
         public String getUri() {
             return uri;
         }
-        
+
         public String composeKey() {
             return method + " | " + host + " | " + uri;
         }

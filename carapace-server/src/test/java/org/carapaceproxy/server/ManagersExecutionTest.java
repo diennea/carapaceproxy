@@ -23,7 +23,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import org.apache.bookkeeper.stats.StatsLogger;
 import org.carapaceproxy.EndpointMapper;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.backends.BackendHealthManager;
@@ -46,9 +45,9 @@ import org.powermock.modules.junit4.PowerMockRunner;
  *
  * @author paolo
  *
- * Test about reconfiguring the execution period from initial value of '0' to > 0.
- * Because of the zero period the manager never start and when reconfigured with period > 0 it still won't run (#33).
- * 
+ * Test about reconfiguring the execution period from initial value of '0' to > 0. Because of the zero period the
+ * manager never start and when reconfigured with period > 0 it still won't run (#33).
+ *
  */
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({BackendHealthManager.class, DynamicCertificatesManager.class})
@@ -57,7 +56,7 @@ public class ManagersExecutionTest {
     @Test
     public void testBackendHealthManagerExecution() {
         RuntimeServerConfiguration config = new RuntimeServerConfiguration();
-        BackendHealthManager man = new BackendHealthManager(config, mock(EndpointMapper.class), mock(StatsLogger.class));
+        BackendHealthManager man = new BackendHealthManager(config, mock(EndpointMapper.class));
 
         ScheduledExecutorService timer = mock(ScheduledExecutorService.class);
         when(timer.scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(mock(ScheduledFuture.class));

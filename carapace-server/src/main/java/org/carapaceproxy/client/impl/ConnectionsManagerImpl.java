@@ -53,6 +53,7 @@ import org.apache.commons.pool2.impl.DefaultPooledObject;
 import org.apache.commons.pool2.impl.DefaultPooledObjectInfo;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
+import org.carapaceproxy.utils.PrometheusUtils;
 
 /**
  * Implementation of the {@link ConnectionsManager} component
@@ -74,16 +75,10 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     final BackendHealthManager backendHealthManager;
     final ScheduledExecutorService scheduler;
 
-    static final Gauge pendingRequestsStat = Gauge.build()
-            .namespace("outbound")
-            .name("pendingrequests")
-            .help("pending requests")
-            .register();
-    static final Counter stuckRequestsStat = Counter.build()
-            .namespace("outbound")
-            .name("stuckrequests")
-            .help("stuck requests, this requests will be killed")
-            .register();
+    private static final Gauge PENDING_REQUESTS_GAUGE = PrometheusUtils.createGauge("backends", "pending_requests",
+            "pending requests").register();
+    private static final Counter STUCK_REQUESTS_COUNTER = PrometheusUtils.createCounter("backends", "stuck_requests_total",
+            "stuck requests, this requests will be killed").register();
 
     void returnConnection(EndpointConnectionImpl con) {
 //        LOG.log(Level.SEVERE, "returnConnection:" + con);
@@ -133,7 +128,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     void registerPendingRequest(RequestHandler handler) {
         pendingRequests.put(handler.getId(), handler);
-        pendingRequestsStat.inc();
+        PENDING_REQUESTS_GAUGE.inc();
     }
 
     void unregisterPendingRequest(RequestHandler clientSidePeerHandler) {
@@ -142,13 +137,13 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         }
         RequestHandler removed = pendingRequests.remove(clientSidePeerHandler.getId());
         if (removed != null) {
-            pendingRequestsStat.dec();
+            PENDING_REQUESTS_GAUGE.dec();
         }
     }
 
     @VisibleForTesting
-    public Gauge getPendingRequestsStat() {
-        return pendingRequestsStat;
+    public Gauge getPENDING_REQUESTS_GAUGE() {
+        return PENDING_REQUESTS_GAUGE;
     }
 
     private class RequestHandlerChecker implements Runnable {
@@ -166,7 +161,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
                             connectionToEndpoint.getKey().getHostPort(), now, 
                             "a request to " + requestHandler.getUri() + " for user " + requestHandler.getUserId() + " appears stuck");
                     }
-                    stuckRequestsStat.inc();
+                    STUCK_REQUESTS_COUNTER.inc();
                     toRemove.add(entry.getValue());
                 });
             }

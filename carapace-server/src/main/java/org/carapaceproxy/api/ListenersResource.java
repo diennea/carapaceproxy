@@ -19,13 +19,19 @@
  */
 package org.carapaceproxy.api;
 
+import io.prometheus.client.Collector.MetricFamilySamples;
+import io.prometheus.client.CollectorRegistry;
+import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import javax.servlet.ServletContext;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.server.ClientConnectionHandler;
 import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -98,8 +104,30 @@ public class ListenersResource {
         RuntimeServerConfiguration conf = server.getCurrentConfiguration();
 
         Map<String, ListenerBean> res = new HashMap<>();
+//        PrometheusUtils.createCounter("requests", "totalrequests",
+//            "total requests", "host").register();
+
+        Map<String, Long> metricValues = new HashMap<>();
+
+        Set<String> names = new HashSet<>();
+        names.add("requests_totalrequests");
+        Enumeration<MetricFamilySamples> metrics = CollectorRegistry.defaultRegistry.filteredMetricFamilySamples(names);
+        if (metrics.hasMoreElements()) {
+            MetricFamilySamples metric = metrics.nextElement();
+            for (MetricFamilySamples.Sample sample : metric.samples) {
+                int i = sample.labelNames.indexOf("host");
+                if (i >= 0) {
+                    metricValues.put(sample.labelValues.get(i), (long) sample.value);
+                }
+            }
+        }
+
         for (NetworkListenerConfiguration listener : conf.getListeners()) {
             int port = listener.getPort() + server.getListenersOffsetPort();
+            ClientConnectionHandler handler = server.getListeners().getListenerHandler(listener.getKey());
+            long totalRequests = handler == null
+                    ? 0
+                    : handler.getTotalRequestsCount();
             ListenerBean lisBean = new ListenerBean(
                     listener.getHost(),
                     port,
@@ -107,7 +135,7 @@ public class ListenersResource {
                     listener.isOcps(),
                     listener.getSslCiphers(),
                     listener.getDefaultCertificate(),
-                    server.getMainLogger().getCounter("listener_" + listener.getHost() + "_" + port +"_requests").get()
+                    totalRequests
             );
             EndpointKey key = EndpointKey.make(listener.getHost(), listener.getPort());
             res.put(key.getHostPort(), lisBean);

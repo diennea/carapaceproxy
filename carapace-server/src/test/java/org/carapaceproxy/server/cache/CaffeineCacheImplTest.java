@@ -30,7 +30,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.apache.bookkeeper.stats.prometheus.PrometheusMetricsProvider;
 import org.carapaceproxy.server.cache.ContentsCache.ContentKey;
 import org.carapaceproxy.server.cache.ContentsCache.ContentPayload;
 import org.carapaceproxy.utils.TestUtils;
@@ -55,23 +54,23 @@ public class CaffeineCacheImplTest {
     private final Logger logger = new Logger("Cache", null) {
         @Override
         public void log(Level level, String msg, Object[] params) {
-            System.out.println((new MessageFormat(getName()+": "+level+" "+msg)).format(params));
+            System.out.println((new MessageFormat(getName() + ": " + level + " " + msg)).format(params));
         }
 
         @Override
         public void log(Level level, String msg, Object param1) {
-            Object[] params = { param1 };
-            System.out.println((new MessageFormat(getName()+": "+level+" "+msg)).format(params));
+            Object[] params = {param1};
+            System.out.println((new MessageFormat(getName() + ": " + level + " " + msg)).format(params));
         }
 
         @Override
         public void log(Level level, String msg) {
-            System.out.println(String.format(getName()+": "+level+" "+msg));
+            System.out.println(String.format(getName() + ": " + level + " " + msg));
         }
     };
 
     public void initializeCache(int maxSize) throws Exception {
-        stats = new CacheStats((new PrometheusMetricsProvider()).getStatsLogger("").scope("cache"));
+        stats = new CacheStats();
 
         cache = new CaffeineCacheImpl(stats, maxSize, logger);
         cache.setVerbose(true);
@@ -99,6 +98,7 @@ public class CaffeineCacheImplTest {
     }
 
     private static final class CacheEntry {
+
         final ContentKey key;
         final ContentPayload payload;
         RemovalCause removalCause;
@@ -168,7 +168,7 @@ public class CaffeineCacheImplTest {
         if (expireTs > 0) {
             payload.expiresTs = expireTs;
         } else {
-            payload.expiresTs = System.currentTimeMillis() + 60*60*1000;
+            payload.expiresTs = System.currentTimeMillis() + 60 * 60 * 1000;
         }
         return new CacheEntry(key, payload, false);
     }
@@ -304,12 +304,12 @@ public class CaffeineCacheImplTest {
         long totSize = 0;
         boolean ok = false;
         while (!ok) {
-            CacheEntry e = genCacheEntry("res_"+(c++), 100, 0);
-            System.out.println("Adding element "+e.key.uri+" of size="+e.getMemUsage());
+            CacheEntry e = genCacheEntry("res_" + (c++), 100, 0);
+            System.out.println("Adding element " + e.key.uri + " of size=" + e.getMemUsage());
             entries.add(e);
             cache.put(e.key, e.payload);
             assertThat(cache.get(e.key), is(e.payload));
-            System.out.println(" > cache.memSize="+cache.getMemSize());
+            System.out.println(" > cache.memSize=" + cache.getMemSize());
             totSize += e.getMemUsage();
             // In the last insertion cache.getMemSize() will exceed the maximum
             if (totSize <= maxSize) {
@@ -336,7 +336,6 @@ public class CaffeineCacheImplTest {
 //            }
 //        }
 //        entries.remove(0);
-
         CacheEntry evictedEntry = evictedResources.get(0);
         assertTrue(entries.remove(evictedEntry));
 
@@ -355,8 +354,8 @@ public class CaffeineCacheImplTest {
         List<CacheEntry> entries = new ArrayList<>();
         long expireTs = System.currentTimeMillis() + 1000;
         for (int i = 0; i < 10; i++) {
-            CacheEntry e = genCacheEntry("res_"+(i), 100, expireTs);
-            System.out.println("Adding element "+e.key.uri+" with expireTs="+new java.sql.Timestamp(expireTs));
+            CacheEntry e = genCacheEntry("res_" + (i), 100, expireTs);
+            System.out.println("Adding element " + e.key.uri + " with expireTs=" + new java.sql.Timestamp(expireTs));
             entries.add(e);
             cache.put(e.key, e.payload);
             assertThat(cache.get(e.key), is(e.payload));
@@ -386,7 +385,7 @@ public class CaffeineCacheImplTest {
         evictedResources.clear();
         entries.remove(0);
 
-        assertThat((int) cache.getSize(), is(10-1));
+        assertThat((int) cache.getSize(), is(10 - 1));
 
     }
 
