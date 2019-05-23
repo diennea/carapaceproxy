@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.server.cache;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import org.carapaceproxy.utils.PrometheusUtils;
@@ -58,7 +59,7 @@ public class CacheStats {
     public void released(long heap, long direct, long total) {
         directMemoryUsed.dec(direct);
         heapMemoryUsed.dec(heap);
-        PAYLOAD_MEMORY_USED_GAUGE.dec(total);
+        TOTAL_MEMORY_USED_GAUGE.dec(total);
     }
 
     public long getDirectMemoryUsed() {
@@ -70,7 +71,7 @@ public class CacheStats {
     }
 
     public long getTotalMemoryUsed() {
-        return (long) PAYLOAD_MEMORY_USED_GAUGE.get();
+        return (long) TOTAL_MEMORY_USED_GAUGE.get();
     }
 
     public long getHits() {
@@ -79,6 +80,16 @@ public class CacheStats {
 
     public long getMisses() {
         return (long) MISSES_COUNTER.get();
+    }
+    
+    @VisibleForTesting
+    public void resetAllMetrics() {
+        TOTAL_MEMORY_USED_GAUGE.set(0);
+        directMemoryUsed.set(0);
+        heapMemoryUsed.set(0);
+        
+        HITS_COUNTER.clear();
+        MISSES_COUNTER.clear();
     }
 
 }

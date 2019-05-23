@@ -52,9 +52,9 @@ public class ListenersResource {
         private final boolean ocps;
         private final String sslCiphers;
         private final String defaultCertificate;
-        private final long totalRequests;
+        private final int totalRequests;
 
-        public ListenerBean(String host, int port, boolean ssl, boolean ocps, String sslCiphers, String defaultCertificate, long totalRequests) {
+        public ListenerBean(String host, int port, boolean ssl, boolean ocps, String sslCiphers, String defaultCertificate, int totalRequests) {
             this.host = host;
             this.port = port;
             this.ssl = ssl;
@@ -88,7 +88,7 @@ public class ListenersResource {
             return defaultCertificate;
         }
 
-        public long getTotalRequests() {
+        public int getTotalRequests() {
             return totalRequests;
         }
 
@@ -104,7 +104,7 @@ public class ListenersResource {
         for (NetworkListenerConfiguration listener : conf.getListeners()) {
             int port = listener.getPort() + server.getListenersOffsetPort();
             ClientConnectionHandler handler = listeners.getListenerHandler(listener.getKey());
-            long totalRequests = handler == null
+            int totalRequests = handler == null
                     ? 0
                     : handler.getTotalRequestsCount();
 

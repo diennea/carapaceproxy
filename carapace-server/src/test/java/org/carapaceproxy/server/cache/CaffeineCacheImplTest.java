@@ -36,6 +36,7 @@ import org.carapaceproxy.utils.TestUtils;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
+import org.junit.After;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
@@ -69,6 +70,11 @@ public class CaffeineCacheImplTest {
         }
     };
 
+    @After
+    public void afterEach() {
+        stats.resetAllMetrics();
+    }
+
     public void initializeCache(int maxSize) throws Exception {
         stats = new CacheStats();
 
@@ -90,7 +96,6 @@ public class CaffeineCacheImplTest {
             Field modifiersField = Field.class.getDeclaredField("modifiers");
             modifiersField.setAccessible(true);
             modifiersField.setInt(field, field.getModifiers() & ~Modifier.FINAL);
-
             field.set(o, newValue);
         } catch (Exception ex) {
             throw new RuntimeException(ex);

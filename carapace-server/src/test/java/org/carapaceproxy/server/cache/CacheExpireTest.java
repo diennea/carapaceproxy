@@ -45,7 +45,7 @@ import org.junit.rules.TemporaryFolder;
  * more, depending on various factors.
  * Executing all tests in this class will hide the issue because the first test to be executed (and probably warm up
  * wiremock) is testHandleExpiresFromServer, that is not affected by a delay of 1000ms.
- * 
+ *
  * In order to fix the issue test should be refactored to start wiremock (and by the way HttpProxyServer) in a @Before rule
  */
 public class CacheExpireTest {
@@ -55,7 +55,7 @@ public class CacheExpireTest {
 
     @Rule
     public TemporaryFolder tmpDir = new TemporaryFolder();
-    
+
     @Test
     public void testHandleExpiresFromServer() throws Exception {
 
@@ -63,12 +63,12 @@ public class CacheExpireTest {
         String formatted = HttpUtils.formatDateHeader(expire);
 
         stubFor(get(urlEqualTo("/index-with-expire.html"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "text/html")
-                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                        .withHeader("Expires", formatted)
-                        .withBody("it <b>works</b> !!"))
+            .willReturn(aResponse()
+                .withStatus(200)
+                .withHeader("Content-Type", "text/html")
+                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                .withHeader("Expires", formatted)
+                .withBody("it <b>works</b> !!"))
         );
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
@@ -78,6 +78,7 @@ public class CacheExpireTest {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
+            server.getCache().getStats().resetAllMetrics();
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
@@ -115,8 +116,8 @@ public class CacheExpireTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
+                && epstats.getActiveConnections().intValue() == 0
+                && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
@@ -126,11 +127,11 @@ public class CacheExpireTest {
     public void testHandleExpiresMissingFromServer() throws Exception {
 
         stubFor(get(urlEqualTo("/index-no-expire.html"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "text/html")
-                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                        .withBody("it <b>works</b> !!"))
+            .willReturn(aResponse()
+                .withStatus(200)
+                .withHeader("Content-Type", "text/html")
+                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                .withBody("it <b>works</b> !!"))
         );
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
@@ -140,6 +141,7 @@ public class CacheExpireTest {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
+            server.getCache().getStats().resetAllMetrics();
 
             String expires;
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -176,8 +178,8 @@ public class CacheExpireTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
+                && epstats.getActiveConnections().intValue() == 0
+                && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
@@ -206,6 +208,7 @@ public class CacheExpireTest {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
+            server.getCache().getStats().resetAllMetrics();
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
@@ -241,8 +244,8 @@ public class CacheExpireTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
+                && epstats.getActiveConnections().intValue() == 0
+                && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
@@ -258,6 +261,7 @@ public class CacheExpireTest {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
+            server.getCache().getStats().resetAllMetrics();
 
             long startts = System.currentTimeMillis();
             java.util.Date expire = new java.util.Date(startts + 1500);
@@ -271,7 +275,7 @@ public class CacheExpireTest {
                     .withHeader("Expires", formatted)
                     .withBody("it <b>works</b> !!"))
             );
-            
+
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
@@ -314,8 +318,8 @@ public class CacheExpireTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
+                && epstats.getActiveConnections().intValue() == 0
+                && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 200);
@@ -331,6 +335,7 @@ public class CacheExpireTest {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
+            server.getCache().getStats().resetAllMetrics();
             server.getCache().getInnerCache().setVerbose(true);
 
             long startts = System.currentTimeMillis();
@@ -345,7 +350,7 @@ public class CacheExpireTest {
                     .withHeader("Expires", formatted)
                     .withBody("it <b>works</b> !!"))
             );
-            
+
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
@@ -363,7 +368,7 @@ public class CacheExpireTest {
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(0, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
-            
+
             TestUtils.waitForCondition(() -> {
                 server.getCache().getInnerCache().evict();
                 return server.getCache().getCacheSize() == 0;
@@ -374,8 +379,8 @@ public class CacheExpireTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
+                && epstats.getActiveConnections().intValue() == 0
+                && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);

@@ -166,9 +166,9 @@ public class BackendHealthManager implements Runnable {
             status.setLastProbe(checkResult);
 
             if (status.isReportedAsUnreachable()) {
-                BACKEND_UPSTATUS_GAUGE.labels(bconf.getHost() + "_" + bconf.getHostPort()).set(0);
+                BACKEND_UPSTATUS_GAUGE.labels(bconf.getHost() + "_" + bconf.getPort()).set(0);
             } else {
-                BACKEND_UPSTATUS_GAUGE.labels(bconf.getHost() + "_" + bconf.getHostPort()).set(1);
+                BACKEND_UPSTATUS_GAUGE.labels(bconf.getHost() + "_" + bconf.getPort()).set(1);
             }
         }
         List<String> toRemove = new ArrayList<>();

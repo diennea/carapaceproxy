@@ -182,8 +182,8 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         return secure;
     }
     
-    public long getTotalRequestsCount() {
-        return (long) this.totalRequests.get();
+    public int getTotalRequestsCount() {
+        return (int) this.totalRequests.get();
     }
 
     public void errorSendingRequest(RequestHandler request, EndpointConnectionImpl endpointConnection, ChannelHandlerContext peerChannel, Throwable error) {
