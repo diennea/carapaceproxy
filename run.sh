@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # stop if running
-carapace-server/target/carapace-server-1.0/bin/service server stop
+carapace-server/target/carapace-server-1.0.0-SNAPSHOT/bin/service server stop
 
 mvn clean install -DskipTests -Pproduction
 cd carapace-server/target
 unzip *.zip
-cd carapace-server-1.0
+cd carapace-server-1.0.0-SNAPSHOT
 ./bin/service server start
 
 
