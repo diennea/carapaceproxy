@@ -105,7 +105,7 @@ public class CertificatesResource {
 
             if (certificate.isDynamic()) {
                 DynamicCertificateState state = dynamicCertificateManager.getStateOfCertificate(certBean.getId());
-                certBean.setStatus(stateToStatusString(state));
+                certBean.setStatus(state.toString());
             }
             res.put(certificateEntry.getKey(), certBean);
         }
@@ -126,7 +126,7 @@ public class CertificatesResource {
         CertificateBean cert = findCertificateById(certId);
         byte[] data = new byte[0];
         if (cert != null && cert.isDynamic()) {
-            HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");            
+            HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
             DynamicCertificatesManager dynamicCertificateManager = server.getDynamicCertificateManager();
             data = dynamicCertificateManager.getCertificateForDomain(cert.hostname);
         }
@@ -152,7 +152,7 @@ public class CertificatesResource {
 
             if (certificate.isDynamic()) {
                 DynamicCertificateState state = server.getDynamicCertificateManager().getStateOfCertificate(certBean.getId());
-                certBean.setStatus(stateToStatusString(state));
+                certBean.setStatus(state.toString());
             }
             return certBean;
         }
@@ -160,24 +160,4 @@ public class CertificatesResource {
         return null;
     }
 
-    static String stateToStatusString(DynamicCertificateState state) {
-        switch (state) {
-            case WAITING:
-                return "waiting"; // certificate waiting for issuing/renews
-            case VERIFYING:
-                return "verifying"; // challenge verification by LE pending
-            case VERIFIED:
-                return "verified"; // challenge succeded
-            case ORDERING:
-                return "ordering"; // certificate order pending
-            case REQUEST_FAILED:
-                return "request failed"; // challenge/order failed
-            case AVAILABLE:
-                return "available";// certificate available(saved) and not expired
-            case EXPIRED:     // certificate expired
-                return "expired";
-            default:
-                return "unknown";
-        }
-    }
 }

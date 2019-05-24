@@ -79,6 +79,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     private DynamicCertificatesManager dynamicCertificateManger;
 
     public static final String DEBUGGING_HEADER_DEFAULT_NAME = "X-Proxy-Path";
+    public static final String DEBUGGING_HEADER_ID = "mapper-debug";
     private String debuggingHeaderName = DEBUGGING_HEADER_DEFAULT_NAME;
     private boolean debuggingHeaderEnabled = false;
 
@@ -112,6 +113,9 @@ public class StandardEndpointMapper extends EndpointMapper {
         this.debuggingHeaderName = properties.getProperty("mapper.debug.name", DEBUGGING_HEADER_DEFAULT_NAME);
         LOG.info("configured mapper.debug.name=" + debuggingHeaderName);
 
+        /**
+         * HEADERS
+         */
         for (int i = 0; i < MAX_IDS; i++) {
             String prefix = "header." + i + ".";
             String id = properties.getProperty(prefix + "id", "");
@@ -124,6 +128,9 @@ public class StandardEndpointMapper extends EndpointMapper {
             }
         }
 
+        /**
+         * ACTIONS
+         */
         for (int i = 0; i < MAX_IDS; i++) {
             String prefix = "action." + i + ".";
             String id = properties.getProperty(prefix + "id", "");
@@ -133,6 +140,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                 String file = properties.getProperty(prefix + "file", "");
                 String director = properties.getProperty(prefix + "director", DirectorConfiguration.DEFAULT);
                 int code = Integer.parseInt(properties.getProperty(prefix + "code", "-1"));
+                // Headers
                 String headersIds = properties.getProperty(prefix + "headers", "").trim();
                 List<CustomHeader> customHeaders = new ArrayList();
                 if (!headersIds.isEmpty()) {
@@ -155,6 +163,8 @@ public class StandardEndpointMapper extends EndpointMapper {
 
                 ActionConfiguration _action = new ActionConfiguration(id, action, director, file, code)
                         .setCustomHeaders(customHeaders);
+
+                // Action of type REDIRECT
                 String redirectLocation = properties.getProperty(prefix + "redirect.location", "");
                 _action.setRedirectLocation(redirectLocation);
                 if (redirectLocation.isEmpty()) {
@@ -179,6 +189,9 @@ public class StandardEndpointMapper extends EndpointMapper {
             }
         }
 
+        /**
+         * BACKENDS
+         */
         for (int i = 0; i < MAX_IDS; i++) {
             String prefix = "backend." + i + ".";
             String id = properties.getProperty(prefix + "id", "");
@@ -195,6 +208,9 @@ public class StandardEndpointMapper extends EndpointMapper {
             }
         }
 
+        /**
+         * DIRECTORS
+         */
         for (int i = 0; i < MAX_IDS; i++) {
             String prefix = "director." + i + ".";
             String id = properties.getProperty(prefix + "id", "");
@@ -215,6 +231,10 @@ public class StandardEndpointMapper extends EndpointMapper {
                 }
             }
         }
+
+        /**
+         * ROUTES
+         */
         for (int i = 0; i < MAX_IDS; i++) {
             String prefix = "route." + i + ".";
             String id = properties.getProperty(prefix + "id", "");
@@ -265,22 +285,22 @@ public class StandardEndpointMapper extends EndpointMapper {
     }
 
     private void addHeader(String id, String name, String value, String mode) throws ConfigurationNotValidException {
-        HeaderMode _mode = HeaderMode.HEADER_MODE_ADD;
+        HeaderMode _mode = HeaderMode.ADD;
         switch (mode) {
             case "set":
-                _mode = HeaderMode.HEADER_MODE_SET;
+                _mode = HeaderMode.SET;
                 break;
             case "add":
-                _mode = HeaderMode.HEADER_MODE_ADD;
+                _mode = HeaderMode.ADD;
                 break;
             case "remove":
-                _mode = HeaderMode.HEADER_MODE_REMOVE;
+                _mode = HeaderMode.REMOVE;
                 break;
             default:
                 throw new ConfigurationNotValidException("invalid value of mode " + mode + " for header " + id);
         }
 
-        if (headers.put(id, new CustomHeader(name, value, _mode)) != null) {
+        if (headers.put(id, new CustomHeader(id, name, value, _mode)) != null) {
             throw new ConfigurationNotValidException("header " + id + " is already configured");
         }
     }
@@ -311,6 +331,8 @@ public class StandardEndpointMapper extends EndpointMapper {
         routes.add(route);
     }
 
+
+
     @Override
     public Map<String, BackendConfiguration> getBackends() {
         return backends;
@@ -329,6 +351,11 @@ public class StandardEndpointMapper extends EndpointMapper {
     @Override
     public List<DirectorConfiguration> getDirectors() {
         return new ArrayList(directors.values());
+    }
+
+    @Override
+    public List<CustomHeader> getHeaders() {
+        return new ArrayList(headers.values());
     }
 
     @Override
@@ -423,7 +450,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                                     + action.getId() + ";"
                                     + action.getDirector() + ";"
                                     + backendId;
-                            customHeaders.add(new CustomHeader(debuggingHeaderName, routingPath, HeaderMode.HEADER_MODE_ADD));
+                            customHeaders.add(new CustomHeader(DEBUGGING_HEADER_ID, debuggingHeaderName, routingPath, HeaderMode.ADD));
                         }
                         return new MapResult(backend.getHost(), backend.getPort(), selectedAction, route.getId())
                                 .setCustomHeaders(customHeaders);

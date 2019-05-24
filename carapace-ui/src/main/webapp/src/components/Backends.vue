@@ -1,39 +1,10 @@
-<style scoped>
-    table th,
-    table tr td .label {
-        font-size: 13px;
-    }
-    table tr td .label-error{
-        background-color: #f44336;
-        border-radius: 2px;
-
-        text-transform: uppercase;
-        text-align: center;
-        font-weight: bold;
-        color: white;
-
-        padding: 10px;
-    }
-    table tr td .label-success{
-        background-color: #4CAF50;
-        border-radius: 2px;
-
-        text-transform: uppercase;
-        font-weight: bold;
-        text-align: center;
-        color: white;
-
-        padding: 10px;
-    }
-</style>
-
 <template>
     <div>
         <h2>Backends</h2>
         <table class="table table-striped">
             <thead>
                 <tr>
-                    <th scope="col">Backend ID</th>
+                    <th scope="col">ID</th>
                     <th scope="col">Host:Port</th>
                     <th scope="col">Open connections</th>
                     <th scope="col">Total Requests</th>
@@ -161,3 +132,32 @@
         }
     }
 </script>
+
+<style scoped>
+    table th,
+    table tr td .label {
+        font-size: 13px;
+    }
+    table tr td .label-error{
+        background-color: #f44336;
+        border-radius: 2px;
+
+        text-transform: uppercase;
+        text-align: center;
+        font-weight: bold;
+        color: white;
+
+        padding: 10px;
+    }
+    table tr td .label-success{
+        background-color: #4CAF50;
+        border-radius: 2px;
+
+        text-transform: uppercase;
+        font-weight: bold;
+        text-align: center;
+        color: white;
+
+        padding: 10px;
+    }
+</style>

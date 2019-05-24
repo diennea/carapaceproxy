@@ -21,11 +21,18 @@ package org.carapaceproxy.api;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import javax.servlet.ServletContext;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.server.config.ActionConfiguration;
+import static org.carapaceproxy.server.config.ActionConfiguration.TYPE_ACME_CHALLENGE;
+import static org.carapaceproxy.server.config.ActionConfiguration.TYPE_CACHE;
+import static org.carapaceproxy.server.config.ActionConfiguration.TYPE_PROXY;
+import static org.carapaceproxy.server.config.ActionConfiguration.TYPE_REDIRECT;
+import static org.carapaceproxy.server.config.ActionConfiguration.TYPE_STATIC;
 
 /**
  * Access to configured actions
@@ -43,16 +50,16 @@ public class ActionsResource {
 
         private final String id;
         private final String type;
-        private final String director;
-        private final String file;
-        private final int errorcode;
+        private final String description;
+        private final String errorcode;
+        private final String headers;
 
-        public ActionBean(String id, String type, String director, String file, int errorcode) {
+        public ActionBean(String id, String type, String desc, String headers, int errorcode) {
             this.id = id;
             this.type = type;
-            this.file = file;
-            this.director = director;
-            this.errorcode = errorcode;
+            this.description = desc;
+            this.headers = headers;
+            this.errorcode = errorcode > 0 ? (errorcode + "") : "";
         }
 
         public String getId() {
@@ -63,15 +70,15 @@ public class ActionsResource {
             return type;
         }
 
-        public String getDirector() {
-            return director;
+        public String getDescription() {
+            return description;
         }
 
-        public String getFile() {
-            return file;
+        public String getHeaders() {
+            return headers;
         }
 
-        public int getErrorcode() {
+        public String getErrorcode() {
             return errorcode;
         }
     }
@@ -81,10 +88,43 @@ public class ActionsResource {
         final List<ActionBean> actions = new ArrayList();
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         server.getMapper().getActions().forEach(action -> {
-            actions.add(new ActionBean(action.getId(), action.getType(), action.getDirector(), action.getFile(), action.getErrorcode()));
+            if (!TYPE_ACME_CHALLENGE.equals(action.getType())) {
+                String headers = action.getCustomHeaders().stream().map(h -> h.getId()).collect(Collectors.joining(","));
+                actions.add(new ActionBean(action.getId(), action.getType(), computeDescription(action), headers, action.getErrorcode()));
+            }
         });
 
         return actions;
+    }
+
+    private String computeDescription(ActionConfiguration action) {
+        switch (action.getType()) {
+            case TYPE_CACHE:
+            case TYPE_PROXY:
+                return "proxy to director: " + action.getDirector();
+            case TYPE_STATIC: {
+                return "serve file: " + action.getFile();
+            }
+            case TYPE_REDIRECT: {
+                String redirectLocation = action.getRedirectLocation();
+                if (redirectLocation.isEmpty()) {
+                    redirectLocation = emptyAsOther(action.getRedirectProto(), "proto") + "://"
+                            + emptyAsOther(action.getRedirectHost(), "hostname") + ":"
+                            + emptyAsOther(
+                                    action.getRedirectPort() > 0 ? (action.getRedirectPort() + "") : "",
+                                    "port"
+                            ) + "/"
+                            + emptyAsOther(action.getRedirectPath(), "path");
+                }
+                return "redirect to: " + redirectLocation;
+            }
+            default:
+                return "";
+        }
+    }
+
+    private String emptyAsOther(String value, String other) {
+        return value.isEmpty() ? other : value;
     }
 
 }

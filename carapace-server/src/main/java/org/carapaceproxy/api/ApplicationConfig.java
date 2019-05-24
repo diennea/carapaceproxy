@@ -47,6 +47,7 @@ public class ApplicationConfig extends Application {
         resources.add(UserRealmResource.class);
         resources.add(MetricsResource.class);
         resources.add(ClusterResource.class);
+        resources.add(HeadersResource.class);
         return resources;
     }
 }

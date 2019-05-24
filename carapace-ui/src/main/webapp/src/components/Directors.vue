@@ -4,7 +4,7 @@
         <table class="table table-striped">
             <thead>
                 <tr>
-                    <th scope="col">Director ID</th>
+                    <th scope="col">ID</th>
                     <th scope="col">Backends IDs</th>
                 </tr>
             </thead>
