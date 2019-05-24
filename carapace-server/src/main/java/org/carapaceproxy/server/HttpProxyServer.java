@@ -115,7 +115,7 @@ public class HttpProxyServer implements AutoCloseable {
 
     private Server adminserver;
     private boolean adminServerEnabled;
-    private int adminServerHttpPort = 8001;
+    private int adminServerHttpPort = -1;
     private String adminServerHost = "localhost";
     private int adminServerHttpsPort = -1;
     private String adminServerCertFile;
@@ -156,13 +156,24 @@ public class HttpProxyServer implements AutoCloseable {
             return;
         }
 
-        if (adminServerHttpsPort > 0) {
-            LOG.info("Starting Admin UI with HTTPS");
-            adminserver = new Server();
+        if (adminServerHttpPort <= 0 && adminServerHttpsPort <= 0) {
+            throw new RuntimeException("To enable admin interface at least one between http and https port must be set");
+        }
+
+        adminserver = new Server();
+
+        if (adminServerHttpPort > 0) {
+            LOG.info("Starting Admin UI over HTTP");
 
             ServerConnector httpConnector = new ServerConnector(adminserver);
             httpConnector.setPort(adminServerHttpPort);
             httpConnector.setHost(adminServerHost);
+
+            adminserver.addConnector(httpConnector);
+        }
+
+        if (adminServerHttpsPort > 0) {
+            LOG.info("Starting Admin UI over HTTPS");
 
             File sslCertFile = adminServerCertFile.startsWith("/") ? new File(adminServerCertFile) : new File(basePath, adminServerCertFile);
             sslCertFile = sslCertFile.getAbsoluteFile();
@@ -187,10 +198,7 @@ public class HttpProxyServer implements AutoCloseable {
             httpsConnector.setPort(adminServerHttpsPort);
             httpsConnector.setHost(adminServerHost);
 
-            adminserver.setConnectors(new Connector[]{httpConnector, httpsConnector});
-
-        } else {
-            adminserver = new Server(new InetSocketAddress(adminServerHost, adminServerHttpPort));
+            adminserver.addConnector(httpsConnector);
         }
 
         ContextHandlerCollection contexts = new ContextHandlerCollection();
@@ -218,11 +226,14 @@ public class HttpProxyServer implements AutoCloseable {
 
         adminserver.start();
 
-        LOG.info("Base Admin UI url: http://" + adminServerHost + ":" + adminServerHttpPort + "/ui");
-        LOG.info("Base Admin/API url: http://" + adminServerHost + ":" + adminServerHttpPort + "/api");
+        LOG.info("Admin UI stared");
+        if (adminServerHttpPort > 0) {
+            LOG.info("Base HTTP Admin UI url: http://" + adminServerHost + ":" + adminServerHttpPort + "/ui");
+            LOG.info("Base HTTP Admin API url: http://" + adminServerHost + ":" + adminServerHttpPort + "/api");
+        }
         if (adminServerHttpsPort > 0) {
             LOG.info("Base HTTPS Admin UI url: https://" + adminServerHost + ":" + adminServerHttpsPort + "/ui");
-            LOG.info("Base HTTP Admin/API url: https://" + adminServerHost + ":" + adminServerHttpsPort + "/api");
+            LOG.info("Base HTTPS Admin API url: https://" + adminServerHost + ":" + adminServerHttpsPort + "/api");
         }
 
         metricsUrl = "http://" + adminServerHost + ":" + adminServerHttpPort + "/metrics";
