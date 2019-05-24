@@ -156,23 +156,25 @@ public class HttpProxyServer implements AutoCloseable {
             return;
         }
 
-        if (adminServerHttpPort <= 0 && adminServerHttpsPort <= 0) {
+        if (adminServerHttpPort < 0 && adminServerHttpsPort < 0) {
             throw new RuntimeException("To enable admin interface at least one between http and https port must be set");
         }
 
         adminserver = new Server();
 
-        if (adminServerHttpPort > 0) {
+        ServerConnector httpConnector = null;
+        if (adminServerHttpPort >= 0) {
             LOG.info("Starting Admin UI over HTTP");
 
-            ServerConnector httpConnector = new ServerConnector(adminserver);
+            httpConnector = new ServerConnector(adminserver);
             httpConnector.setPort(adminServerHttpPort);
             httpConnector.setHost(adminServerHost);
 
             adminserver.addConnector(httpConnector);
         }
 
-        if (adminServerHttpsPort > 0) {
+        ServerConnector httpsConnector = null;
+        if (adminServerHttpsPort >= 0) {
             LOG.info("Starting Admin UI over HTTPS");
 
             File sslCertFile = adminServerCertFile.startsWith("/") ? new File(adminServerCertFile) : new File(basePath, adminServerCertFile);
@@ -192,7 +194,7 @@ public class HttpProxyServer implements AutoCloseable {
             https.setSecurePort(adminServerHttpsPort);
             https.addCustomizer(new SecureRequestCustomizer());
 
-            ServerConnector httpsConnector = new ServerConnector(adminserver,
+            httpsConnector = new ServerConnector(adminserver,
                     new SslConnectionFactory(sslContextFactory, "http/1.1"),
                     new HttpConnectionFactory(https));
             httpsConnector.setPort(adminServerHttpsPort);
@@ -227,6 +229,14 @@ public class HttpProxyServer implements AutoCloseable {
         adminserver.start();
 
         LOG.info("Admin UI stared");
+        
+        if (adminServerHttpPort == 0 && httpConnector != null) {
+            adminServerHttpPort = httpConnector.getLocalPort();
+        }
+        if (adminServerHttpsPort == 0 && httpsConnector != null) {
+            adminServerHttpsPort = httpsConnector.getLocalPort();
+        }
+        
         if (adminServerHttpPort > 0) {
             LOG.info("Base HTTP Admin UI url: http://" + adminServerHost + ":" + adminServerHttpPort + "/ui");
             LOG.info("Base HTTP Admin API url: http://" + adminServerHost + ":" + adminServerHttpPort + "/api");
