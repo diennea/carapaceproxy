@@ -26,6 +26,7 @@ import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import org.carapaceproxy.server.HttpProxyServer;
+import static org.carapaceproxy.server.mapper.StandardEndpointMapper.ACME_CHALLENGE_ROUTE_ACTION_ID;
 
 /**
  * Access to configured routes
@@ -73,7 +74,9 @@ public class RoutesResource {
     public List<RouteBean> getAll() {
         final List<RouteBean> routes = new ArrayList();
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-        server.getMapper().getRoutes().forEach(route -> {
+        server.getMapper().getRoutes().stream()
+                .filter(r -> !r.getId().equals(ACME_CHALLENGE_ROUTE_ACTION_ID))
+                .forEach(route -> {            
             routes.add(new RouteBean(route.getId(), route.getAction(), route.isEnabled(), route.getMatcher().getDescription()));
         });
 

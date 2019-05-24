@@ -33,7 +33,8 @@
         <table class="table table-striped">
             <thead>
                 <tr>
-                    <th scope="col">Backend</th>
+                    <th scope="col">Backend ID</th>
+                    <th scope="col">Host:Port</th>
                     <th scope="col">Open connections</th>
                     <th scope="col">Total Requests</th>
                     <th scope="col">Last Activity (Timestamp)</th>
@@ -48,6 +49,11 @@
             </thead>
             <tbody>
                 <tr v-for="item of backends" :key="item.id">
+                    <td>
+                        <div class="label">
+                            {{item.id}}
+                        </div>
+                    </td>
                     <td>
                         <div class="label">
                             {{item.host}}:{{item.port}}
