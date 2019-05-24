@@ -118,11 +118,11 @@ public class HttpProxyServer implements AutoCloseable {
     private String adminAccessLogTimezone = "GMT";
     private int adminLogRetentionDays = 90;
     private boolean adminServerEnabled;
-    private int adminServerHttpPort = -1;    
+    private int adminServerHttpPort = -1;
     private String adminServerHost = resolveAdminServerHost();
     private int adminServerHttpsPort = -1;
     private String adminServerCertFile;
-    private String adminServerCertFilePwd;    
+    private String adminServerCertFilePwd;
     private String metricsUrl;
     /**
      * This is only for testing cluster mode with a single machine
@@ -198,8 +198,8 @@ public class HttpProxyServer implements AutoCloseable {
             https.addCustomizer(new SecureRequestCustomizer());
 
             httpsConnector = new ServerConnector(adminserver,
-                new SslConnectionFactory(sslContextFactory, "http/1.1"),
-                new HttpConnectionFactory(https));
+                    new SslConnectionFactory(sslContextFactory, "http/1.1"),
+                    new HttpConnectionFactory(https));
             httpsConnector.setPort(adminServerHttpsPort);
             httpsConnector.setHost(adminServerHost);
 
@@ -370,8 +370,8 @@ public class HttpProxyServer implements AutoCloseable {
         } catch (ClassNotFoundException err) {
             throw new ConfigurationNotValidException(err);
         } catch (IllegalAccessException | IllegalArgumentException
-            | InstantiationException | NoSuchMethodException
-            | SecurityException | InvocationTargetException err) {
+                | InstantiationException | NoSuchMethodException
+                | SecurityException | InvocationTargetException err) {
             throw new RuntimeException(err);
         }
     }
@@ -384,8 +384,8 @@ public class HttpProxyServer implements AutoCloseable {
         } catch (ClassNotFoundException err) {
             throw new ConfigurationNotValidException(err);
         } catch (IllegalAccessException | IllegalArgumentException
-            | InstantiationException | NoSuchMethodException
-            | SecurityException | InvocationTargetException err) {
+                | InstantiationException | NoSuchMethodException
+                | SecurityException | InvocationTargetException err) {
             throw new RuntimeException(err);
         }
     }
@@ -544,8 +544,7 @@ public class HttpProxyServer implements AutoCloseable {
      *
      * @param newConfigurationStore
      * @throws InterruptedException
-     * @see
-     * #buildValidConfiguration(org.carapaceproxy.configstore.ConfigurationStore)
+     * @see #buildValidConfiguration(org.carapaceproxy.configstore.ConfigurationStore)
      */
     public void applyDynamicConfigurationFromAPI(ConfigurationStore newConfigurationStore) throws InterruptedException, ConfigurationChangeInProgressException {
         applyDynamicConfiguration(newConfigurationStore, false);
@@ -654,8 +653,16 @@ public class HttpProxyServer implements AutoCloseable {
         if (cluster) {
             Map<String, String> peerInfo = new HashMap();
             peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HOST, adminServerHost);
+             << << << < HEAD
+            
             peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_PORT, adminServerHttpPort + "");
-            peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HTTPS_PORT, adminServerHttpsPort + "");            
+            peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HTTPS_PORT, adminServerHttpsPort + "");
+             == == ==
+                    = peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_PORT, adminServerPort + "");
+             >>> >>> > e745ab6
+            ... UI:
+            General 
+            Fixies #94
             this.groupMembershipHandler = new ZooKeeperGroupMembershipHandler(zkAddress, zkTimeout, peerId, peerInfo);
         } else {
             this.groupMembershipHandler = new NullGroupMembershipHandler();
