@@ -22,10 +22,12 @@ package org.carapaceproxy.server;
 import com.google.common.annotations.VisibleForTesting;
 import io.prometheus.client.exporter.MetricsServlet;
 import java.io.File;
+import java.io.FileInputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import java.security.KeyStore;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -62,10 +64,17 @@ import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
 import org.carapaceproxy.user.UserRealm;
+import org.eclipse.jetty.server.Connector;
+import org.eclipse.jetty.server.HttpConfiguration;
+import org.eclipse.jetty.server.HttpConnectionFactory;
+import org.eclipse.jetty.server.SecureRequestCustomizer;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.SslConnectionFactory;
 import org.eclipse.jetty.server.handler.ContextHandlerCollection;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
+import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.webapp.WebAppContext;
 import org.glassfish.jersey.servlet.ServletContainer;
 import static org.glassfish.jersey.servlet.ServletProperties.JAXRS_APPLICATION_CLASS;
@@ -105,8 +114,11 @@ public class HttpProxyServer implements AutoCloseable {
 
     private Server adminserver;
     private boolean adminServerEnabled;
-    private int adminServerPort = 8001;
+    private int adminServerHttpPort = 8001;
     private String adminServerHost = "localhost";
+    private int adminServerHttpsPort = -1;
+    private String adminServerCertFile;
+    private String adminServerCertFilePwd;
     private String metricsUrl;
     /**
      * This is only for testing cluster mode with a single machine
@@ -142,7 +154,44 @@ public class HttpProxyServer implements AutoCloseable {
         if (!adminServerEnabled) {
             return;
         }
-        adminserver = new Server(new InetSocketAddress(adminServerHost, adminServerPort));
+
+        if (adminServerHttpsPort > 0) {
+            LOG.info("Starting Admin UI with HTTPS");
+            adminserver = new Server();
+
+            ServerConnector httpConnector = new ServerConnector(adminserver);
+            httpConnector.setPort(adminServerHttpPort);
+            httpConnector.setHost(adminServerHost);
+
+            File sslCertFile = adminServerCertFile.startsWith("/") ? new File(adminServerCertFile) : new File(basePath, adminServerCertFile);
+            sslCertFile = sslCertFile.getAbsoluteFile();
+
+            KeyStore ks = KeyStore.getInstance("PKCS12");
+            try (FileInputStream in = new FileInputStream(sslCertFile)) {
+                ks.load(in, adminServerCertFilePwd.trim().toCharArray());
+            }
+
+            SslContextFactory sslContextFactory = new SslContextFactory();
+            sslContextFactory.setKeyStore(ks);
+            sslContextFactory.setKeyStorePassword(adminServerCertFilePwd);
+            sslContextFactory.setKeyManagerPassword(adminServerCertFilePwd);
+
+            HttpConfiguration https = new HttpConfiguration();
+            https.setSecurePort(adminServerHttpsPort);
+            https.addCustomizer(new SecureRequestCustomizer());
+
+            ServerConnector httpsConnector = new ServerConnector(adminserver,
+                    new SslConnectionFactory(sslContextFactory, "http/1.1"),
+                    new HttpConnectionFactory(https));
+            httpsConnector.setPort(adminServerHttpsPort);
+            httpsConnector.setHost(adminServerHost);
+
+            adminserver.setConnectors(new Connector[]{httpConnector, httpsConnector});
+
+        } else {
+            adminserver = new Server(new InetSocketAddress(adminServerHost, adminServerHttpPort));
+        }
+
         ContextHandlerCollection contexts = new ContextHandlerCollection();
         adminserver.setHandler(contexts);
 
@@ -167,11 +216,15 @@ public class HttpProxyServer implements AutoCloseable {
         }
 
         adminserver.start();
-        String apiUrl = "http://" + adminServerHost + ":" + adminServerPort + "/api";
-        String uiUrl = "http://" + adminServerHost + ":" + adminServerPort + "/ui";
-        metricsUrl = "http://" + adminServerHost + ":" + adminServerPort + "/metrics";
-        LOG.info("Base Admin UI url: " + uiUrl);
-        LOG.info("Base Admin/API url: " + apiUrl);
+
+        LOG.info("Base Admin UI url: http://" + adminServerHost + ":" + adminServerHttpPort + "/ui");
+        LOG.info("Base Admin/API url: http://" + adminServerHost + ":" + adminServerHttpPort + "/api");
+        if (adminServerHttpsPort > 0) {
+            LOG.info("Base HTTPS Admin UI url: https://" + adminServerHost + ":" + adminServerHttpsPort + "/ui");
+            LOG.info("Base HTTP Admin/API url: https://" + adminServerHost + ":" + adminServerHttpsPort + "/api");
+        }
+
+        metricsUrl = "http://" + adminServerHost + ":" + adminServerHttpPort + "/metrics";
         LOG.info("Prometheus Metrics url: " + metricsUrl);
 
     }
@@ -343,13 +396,19 @@ public class HttpProxyServer implements AutoCloseable {
             statsProviderConfig.setProperty(key + "", value);
         });
         adminServerEnabled = Boolean.parseBoolean(properties.getProperty("http.admin.enabled", "false"));
-        adminServerPort = Integer.parseInt(properties.getProperty("http.admin.port", adminServerPort + ""));
+        adminServerHttpPort = Integer.parseInt(properties.getProperty("http.admin.port", adminServerHttpPort + ""));
         adminServerHost = properties.getProperty("http.admin.host", adminServerHost);
+        adminServerHttpsPort = Integer.parseInt(properties.getProperty("https.admin.port", adminServerHttpsPort + ""));
+        adminServerCertFile = properties.getProperty("https.admin.sslcertfile", adminServerCertFile);
+        adminServerCertFilePwd = properties.getProperty("https.admin.sslcertfilepassword", adminServerCertFilePwd);
         listenersOffsetPort = Integer.parseInt(properties.getProperty("listener.offset.port", listenersOffsetPort + ""));
 
         LOG.info("http.admin.enabled=" + adminServerEnabled);
-        LOG.info("http.admin.port=" + adminServerPort);
+        LOG.info("http.admin.port=" + adminServerHttpPort);
         LOG.info("http.admin.host=" + adminServerHost);
+        LOG.info("https.admin.port=" + adminServerHttpsPort);
+        LOG.info("https.admin.sslcertfile=" + adminServerCertFile);
+        LOG.info("https.admin.sslcertfilepassword=" + adminServerCertFilePwd);
         LOG.info("listener.offset.port=" + listenersOffsetPort);
     }
 
