@@ -30,6 +30,10 @@ public enum DynamicCertificateState {
     ORDERING, // certificate order pending
     REQUEST_FAILED, // challenge/order failed
     AVAILABLE, // certificate available(saved) and not expired
-    EXPIRED // certificate expired
+    EXPIRED; // certificate expired
 
+    @Override
+    public String toString() {
+        return super.toString().toLowerCase().replaceAll("_", " ");
+    }
 }
