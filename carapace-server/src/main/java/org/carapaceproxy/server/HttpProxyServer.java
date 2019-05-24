@@ -291,11 +291,11 @@ public class HttpProxyServer implements AutoCloseable {
     }
 
     public void configureAtBoot(ConfigurationStore bootConfigurationStore) throws ConfigurationNotValidException, InterruptedException {
-
         if (started) {
             throw new IllegalStateException("server already started");
         }
-
+        
+        readClusterConfiguration(bootConfigurationStore); // need to be always first thing to do (loads cluster setup)
         String dynamicConfigurationType = bootConfigurationStore.getProperty("config.type", cluster ? "database" : "file");
         switch (dynamicConfigurationType) {
             case "file":
@@ -317,7 +317,7 @@ public class HttpProxyServer implements AutoCloseable {
         // "static" configuration cannot change without a reboot
         applyStaticConfiguration(bootConfigurationStore);
         // need to be done after static configuration loading in order to know peer info
-        initGroupMembership(bootConfigurationStore);
+        initGroupMembership();
 
         try {
             // apply configuration
@@ -525,7 +525,7 @@ public class HttpProxyServer implements AutoCloseable {
         return this.groupMembershipHandler;
     }
 
-    private void initGroupMembership(ConfigurationStore staticConfiguration) throws ConfigurationNotValidException {
+    private void readClusterConfiguration(ConfigurationStore staticConfiguration) throws ConfigurationNotValidException {
         String mode = staticConfiguration.getProperty("mode", "standalone");
         switch (mode) {
             case "cluster":
@@ -534,24 +534,30 @@ public class HttpProxyServer implements AutoCloseable {
                 zkAddress = staticConfiguration.getProperty("zkAddress", "localhost:2181");
                 zkTimeout = Integer.parseInt(staticConfiguration.getProperty("zkTimeout", "40000"));
                 LOG.log(Level.INFO, "mode=cluster, zkAddress=''{0}'',zkTimeout={1}, peer.id=''{2}''", new Object[]{zkAddress, zkTimeout, peerId});
-                Map<String, String> peerInfo = new HashMap();
-                String adminHost = adminServerHost;
-                try {
-                    adminHost = InetAddress.getLocalHost().getHostName();
-                } catch (UnknownHostException ex) {
-                    LOG.log(Level.INFO, "Unable to resolve Admin Server Hostname for peer " + peerId + ". Using " + adminServerHost);
-                }
-                peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HOST, adminHost);
-                peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_PORT, adminServerPort + "");
-                this.groupMembershipHandler = new ZooKeeperGroupMembershipHandler(zkAddress, zkTimeout, peerId, peerInfo);
                 break;
             case "standalone":
                 cluster = false;
-                this.groupMembershipHandler = new NullGroupMembershipHandler();
+                LOG.log(Level.INFO, "mode=standalone");
                 break;
             default:
                 throw new ConfigurationNotValidException("Invalid mode '" + mode + "', only 'cluster' or 'standalone'");
+        }
+    }
 
+    private void initGroupMembership() throws ConfigurationNotValidException {
+        if (cluster) {
+            Map<String, String> peerInfo = new HashMap();
+            String adminHost = adminServerHost;
+            try {
+                adminHost = InetAddress.getLocalHost().getHostName();
+            } catch (UnknownHostException ex) {
+                LOG.log(Level.INFO, "Unable to resolve Admin Server Hostname for peer " + peerId + ". Using " + adminServerHost);
+            }
+            peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HOST, adminHost);
+            peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_PORT, adminServerPort + "");
+            this.groupMembershipHandler = new ZooKeeperGroupMembershipHandler(zkAddress, zkTimeout, peerId, peerInfo);
+        } else {
+            this.groupMembershipHandler = new NullGroupMembershipHandler();
         }
     }
 
