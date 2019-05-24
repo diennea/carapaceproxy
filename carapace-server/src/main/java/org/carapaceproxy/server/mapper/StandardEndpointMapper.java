@@ -60,6 +60,7 @@ import org.carapaceproxy.server.mapper.requestmatcher.parser.RequestMatchParser;
  */
 public class StandardEndpointMapper extends EndpointMapper {
 
+    public static final String ACME_CHALLENGE_ROUTE_ACTION_ID = "acme-challenge";
     private final Map<String, BackendConfiguration> backends = new HashMap<>();
     private final Map<String, DirectorConfiguration> directors = new HashMap<>();
     private final List<String> allbackendids = new ArrayList<>();
@@ -94,8 +95,8 @@ public class StandardEndpointMapper extends EndpointMapper {
         addAction(new ActionConfiguration("internal-error", ActionConfiguration.TYPE_STATIC, null, DEFAULT_INTERNAL_SERVER_ERROR, 500));
 
         // Route+Action configuration for Let's Encrypt ACME challenging
-        addAction(new ActionConfiguration("acme-challenge", ActionConfiguration.TYPE_ACME_CHALLENGE, null, null, HttpResponseStatus.OK.code()));
-        addRoute(new RouteConfiguration("acme-challenge", "acme-challenge", true, new RegexpRequestMatcher(PROPERTY_URI, ".*" + ACME_CHALLENGE_URI_PATTERN + ".*")));
+        addAction(new ActionConfiguration(ACME_CHALLENGE_ROUTE_ACTION_ID, ActionConfiguration.TYPE_ACME_CHALLENGE, null, null, HttpResponseStatus.OK.code()));
+        addRoute(new RouteConfiguration(ACME_CHALLENGE_ROUTE_ACTION_ID, ACME_CHALLENGE_ROUTE_ACTION_ID, true, new RegexpRequestMatcher(PROPERTY_URI, ".*" + ACME_CHALLENGE_URI_PATTERN + ".*")));
 
         this.defaultNotFoundAction = properties.getProperty("default.action.notfound", "not-found");
         LOG.info("configured default.action.notfound=" + defaultNotFoundAction);

@@ -22,16 +22,17 @@
                     <li>
                     <router-link to="/routes">Routes</router-link>
                     </li>
-
-                    <hr>
-
                     <li>
                     <router-link to="/listeners">Listeners</router-link>
+                    </li>
+                    
+                    <hr>
+                    <li>
+                    <router-link to="/headers">Headers</router-link>
                     </li>
                     <li>
                     <router-link to="/requestfilters">Request filters</router-link>
                     </li>
-
                     <hr>
 
                     <li>
@@ -78,7 +79,7 @@
         created: function () {
             var url = "/api/cluster/localpeer"
             var d = this
-            doGet(url, response => {            
+            doGet(url, response => {
                 d.peerId = response.id
                 document.title += ' (' + d.peerId + ')'
             })
