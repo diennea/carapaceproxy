@@ -45,7 +45,7 @@ public class ConfigResourceTest extends UseAdminServer {
     // 3) updating+applying dumped configuration
     // 4) dumping updated configuration
     public void testDynamicConfigurationDumpingAndApplying() throws Exception {
-        Properties configuration = new Properties();
+        Properties configuration = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         configuration.put("config.type", "database");
         configuration.put("db.jdbc.url", "jdbc:herddb:localhost");
         configuration.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
@@ -114,7 +114,7 @@ public class ConfigResourceTest extends UseAdminServer {
 
     @Test
     public void testReconfig() throws Exception {
-        Properties configuration = new Properties();
+        Properties configuration = new Properties(HTTP_ADMIN_SERVER_CONFIG);
 
         configuration.put("config.type", "database");
         configuration.put("db.jdbc.url", "jdbc:herddb:localhost");

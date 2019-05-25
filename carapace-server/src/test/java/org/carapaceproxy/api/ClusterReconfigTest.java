@@ -33,7 +33,7 @@ public class ClusterReconfigTest extends UseAdminServer {
     public void testReconfigInClusterMode() throws Exception {
         try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder());) {
             testingServer.start();
-            Properties configuration = new Properties();
+            Properties configuration = new Properties(HTTP_ADMIN_SERVER_CONFIG);
 
             configuration.put("config.type", "database");
             configuration.put("mode", "cluster");

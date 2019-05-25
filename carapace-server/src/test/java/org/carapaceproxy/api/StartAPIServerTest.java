@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.api;
 
+import java.io.IOException;
 import java.util.Base64;
 import java.util.Properties;
 import javax.servlet.http.HttpServletResponse;
@@ -33,12 +34,15 @@ import org.carapaceproxy.server.filters.RegexpMapSessionIdFilter;
 import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;
 import org.carapaceproxy.server.filters.XForwardedForRequestFilter;
 import org.carapaceproxy.utils.RawHttpClient;
+import org.carapaceproxy.utils.TestUtils;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
+import org.junit.Assert;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
+
 import org.junit.Test;
 
 /**
@@ -66,7 +70,7 @@ public class StartAPIServerTest extends UseAdminServer {
     @Test
     public void testUnauthorized() throws Exception {
         // start server with authentication and user test - test
-        Properties properties = new Properties();
+        Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
 
         properties.put("userrealm.class", "org.carapaceproxy.utils.TestUserRealm");
         properties.put("user.test", "test");
@@ -128,7 +132,7 @@ public class StartAPIServerTest extends UseAdminServer {
 
     @Test
     public void testRoutes() throws Exception {
-        Properties properties = new Properties();
+        Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         properties.put("route.0.id", "id0");
         properties.put("route.0.action", "id-action");
         properties.put("route.0.enabled", "true");
@@ -164,7 +168,7 @@ public class StartAPIServerTest extends UseAdminServer {
 
     @Test
     public void testDirectors() throws Exception {
-        Properties properties = new Properties();
+        Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         properties.put("director.1.backends", "*");
         properties.put("director.1.enabled", "false");
         properties.put("director.1.id", "*");
@@ -230,7 +234,7 @@ public class StartAPIServerTest extends UseAdminServer {
 
     @Test
     public void testListeners() throws Exception {
-        Properties properties = new Properties();
+        Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
 
         properties.put("listener.1.host", "localhost");
         properties.put("listener.1.port", "1234");
@@ -257,7 +261,7 @@ public class StartAPIServerTest extends UseAdminServer {
     @Test
     public void testCertificates() throws Exception {
         final String dynDomain = "prova.diennea.com";
-        Properties properties = new Properties();
+        Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
 
         properties.put("certificate.1.hostname", "localhost");
         properties.put("certificate.1.sslcertfile", "conf/mock1.file");
@@ -350,7 +354,7 @@ public class StartAPIServerTest extends UseAdminServer {
 
     @Test
     public void testResourcesFilter() throws Exception {
-        Properties properties = new Properties();
+        Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
 
         properties.put("filter.1.type", "match-user-regexp");
         properties.put("filter.1.param", "param_test_user");
@@ -378,7 +382,7 @@ public class StartAPIServerTest extends UseAdminServer {
 
     @Test
     public void testUserRealm() throws Exception {
-        Properties properties = new Properties();
+        Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
 
         properties.put("userrealm.class", "org.carapaceproxy.utils.TestUserRealm");
 
@@ -397,6 +401,63 @@ public class StartAPIServerTest extends UseAdminServer {
 
             assertThat(json, containsString("test1"));
             assertThat(json, containsString("test2"));
+        }
+    }
+    
+    @Test
+    public void testHttpsApi() throws Exception {
+        String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+        
+        Properties properties = new Properties();
+        properties.setProperty("http.admin.enabled", "true");
+        properties.setProperty("http.admin.host", "localhost");
+        properties.setProperty("https.admin.port", "8762");        
+        properties.setProperty("https.admin.sslcertfile", certificate);        
+        properties.setProperty("https.admin.sslcertfilepassword", "testproxy");        
+        
+        startServer(properties);
+        
+        try (RawHttpClient client = new RawHttpClient("localhost", 8762, true)) {
+            RawHttpClient.HttpResponse response = client.get("/api/config", credentials);
+            String json = response.getBodyString();
+
+            assertThat(json, containsString("https.admin.sslcertfile=" + certificate));
+        }
+        
+        IOException exc = null;
+        try (RawHttpClient client = new RawHttpClient("localhost", 8762, false)) {
+            client.get("/api/config", credentials);
+        } catch (IOException ex) {
+            exc = ex;
+        }
+        
+        Assert.assertNotNull(exc);
+        Assert.assertThat(exc.getMessage(), containsString("bad response, does not start with HTTP/1.1"));
+    }
+    
+    @Test
+    public void testHttpAndHttpsApi() throws Exception {
+        String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+        
+        Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
+        properties.setProperty("https.admin.port", "8762");        
+        properties.setProperty("https.admin.sslcertfile", certificate);        
+        properties.setProperty("https.admin.sslcertfilepassword", "testproxy");        
+        
+        startServer(properties);
+        
+        try (RawHttpClient client = new RawHttpClient("localhost", 8762, true)) {
+            RawHttpClient.HttpResponse response = client.get("/api/config", credentials);
+            String json = response.getBodyString();
+
+            assertThat(json, containsString("https.admin.sslcertfile=" + certificate));
+        }
+        
+        try (RawHttpClient client = new RawHttpClient("localhost", 8761, false)) {
+            RawHttpClient.HttpResponse response = client.get("/api/config", credentials);
+            String json = response.getBodyString();
+
+            assertThat(json, containsString("https.admin.sslcertfile=" + certificate));
         }
     }
 

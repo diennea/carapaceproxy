@@ -25,13 +25,13 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.security.KeyStore;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
@@ -65,14 +65,16 @@ import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
 import org.carapaceproxy.user.UserRealm;
-import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.HttpConfiguration;
 import org.eclipse.jetty.server.HttpConnectionFactory;
+import org.eclipse.jetty.server.NCSARequestLog;
+import org.eclipse.jetty.server.RequestLog;
 import org.eclipse.jetty.server.SecureRequestCustomizer;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.server.SslConnectionFactory;
 import org.eclipse.jetty.server.handler.ContextHandlerCollection;
+import org.eclipse.jetty.server.handler.RequestLogHandler;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
@@ -114,6 +116,9 @@ public class HttpProxyServer implements AutoCloseable {
     private final ReentrantLock configurationLock = new ReentrantLock();
 
     private Server adminserver;
+    private String adminAccessLogPath = "admin.access.log";
+    private String adminAccessLogTimezone = "GMT";
+    private int adminLogRetentionDays = 90;
     private boolean adminServerEnabled;
     private int adminServerHttpPort = -1;
     private String adminServerHost = "localhost";
@@ -195,8 +200,8 @@ public class HttpProxyServer implements AutoCloseable {
             https.addCustomizer(new SecureRequestCustomizer());
 
             httpsConnector = new ServerConnector(adminserver,
-                    new SslConnectionFactory(sslContextFactory, "http/1.1"),
-                    new HttpConnectionFactory(https));
+                new SslConnectionFactory(sslContextFactory, "http/1.1"),
+                new HttpConnectionFactory(https));
             httpsConnector.setPort(adminServerHttpsPort);
             httpsConnector.setHost(adminServerHost);
 
@@ -205,6 +210,14 @@ public class HttpProxyServer implements AutoCloseable {
 
         ContextHandlerCollection contexts = new ContextHandlerCollection();
         adminserver.setHandler(contexts);
+        
+        File webUi = new File(basePath, "web/ui");
+        if (webUi.isDirectory()) {
+            WebAppContext webApp = new WebAppContext(webUi.getAbsolutePath(), "/ui");
+            contexts.addHandler(webApp);
+        } else {
+            LOG.severe("Cannot find " + webUi.getAbsolutePath() + " directory. Web UI will not be deployed");
+        }
 
         ServletContextHandler context = new ServletContextHandler(ServletContextHandler.GZIP);
         context.setContextPath("/");
@@ -216,27 +229,32 @@ public class HttpProxyServer implements AutoCloseable {
         context.addServlet(jerseyServlet, "/api/*");
         context.addServlet(new ServletHolder(new MetricsServlet()), "/metrics");
         context.setAttribute("server", this);
-        contexts.addHandler(context);
-
-        File webUi = new File(basePath, "web/ui");
-        if (webUi.isDirectory()) {
-            WebAppContext webApp = new WebAppContext(webUi.getAbsolutePath(), "/ui");
-            contexts.addHandler(webApp);
-        } else {
-            LOG.severe("Cannot find " + webUi.getAbsolutePath() + " directory. Web UI will not be deployed");
-        }
+        
+        NCSARequestLog requestLog = new NCSARequestLog();
+        requestLog.setFilename(adminAccessLogPath);
+        requestLog.setFilenameDateFormat("yyyy-MM-dd");
+        requestLog.setRetainDays(adminLogRetentionDays);
+        requestLog.setAppend(true);
+        requestLog.setExtended(true);
+        requestLog.setLogCookies(false);
+        requestLog.setLogTimeZone(adminAccessLogTimezone);
+        RequestLogHandler requestLogHandler = new RequestLogHandler();
+        requestLogHandler.setRequestLog(requestLog);
+        requestLogHandler.setHandler(context);
+        
+        contexts.addHandler(requestLogHandler);
 
         adminserver.start();
 
-        LOG.info("Admin UI stared");
-        
+        LOG.info("Admin UI started");
+
         if (adminServerHttpPort == 0 && httpConnector != null) {
             adminServerHttpPort = httpConnector.getLocalPort();
         }
         if (adminServerHttpsPort == 0 && httpsConnector != null) {
             adminServerHttpsPort = httpsConnector.getLocalPort();
         }
-        
+
         if (adminServerHttpPort > 0) {
             LOG.info("Base HTTP Admin UI url: http://" + adminServerHost + ":" + adminServerHttpPort + "/ui");
             LOG.info("Base HTTP Admin API url: http://" + adminServerHost + ":" + adminServerHttpPort + "/api");
@@ -350,8 +368,8 @@ public class HttpProxyServer implements AutoCloseable {
         } catch (ClassNotFoundException err) {
             throw new ConfigurationNotValidException(err);
         } catch (IllegalAccessException | IllegalArgumentException
-                | InstantiationException | NoSuchMethodException
-                | SecurityException | InvocationTargetException err) {
+            | InstantiationException | NoSuchMethodException
+            | SecurityException | InvocationTargetException err) {
             throw new RuntimeException(err);
         }
     }
@@ -364,8 +382,8 @@ public class HttpProxyServer implements AutoCloseable {
         } catch (ClassNotFoundException err) {
             throw new ConfigurationNotValidException(err);
         } catch (IllegalAccessException | IllegalArgumentException
-                | InstantiationException | NoSuchMethodException
-                | SecurityException | InvocationTargetException err) {
+            | InstantiationException | NoSuchMethodException
+            | SecurityException | InvocationTargetException err) {
             throw new RuntimeException(err);
         }
     }
@@ -424,6 +442,10 @@ public class HttpProxyServer implements AutoCloseable {
         adminServerCertFile = properties.getProperty("https.admin.sslcertfile", adminServerCertFile);
         adminServerCertFilePwd = properties.getProperty("https.admin.sslcertfilepassword", adminServerCertFilePwd);
         listenersOffsetPort = Integer.parseInt(properties.getProperty("listener.offset.port", listenersOffsetPort + ""));
+        
+        adminAccessLogPath =  properties.getProperty("admin.accesslog.path", adminAccessLogPath);
+        adminAccessLogTimezone =  properties.getProperty("admin.accesslog.format.timezone", adminAccessLogTimezone);
+        adminLogRetentionDays = Integer.parseInt(properties.getProperty("admin.accesslog.retention.days", adminLogRetentionDays + ""));
 
         LOG.info("http.admin.enabled=" + adminServerEnabled);
         LOG.info("http.admin.port=" + adminServerHttpPort);
@@ -521,7 +543,8 @@ public class HttpProxyServer implements AutoCloseable {
      *
      * @param newConfigurationStore
      * @throws InterruptedException
-     * @see #buildValidConfiguration(org.carapaceproxy.configstore.ConfigurationStore)
+     * @see
+     * #buildValidConfiguration(org.carapaceproxy.configstore.ConfigurationStore)
      */
     public void applyDynamicConfigurationFromAPI(ConfigurationStore newConfigurationStore) throws InterruptedException, ConfigurationChangeInProgressException {
         applyDynamicConfiguration(newConfigurationStore, false);
