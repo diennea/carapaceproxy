@@ -19,7 +19,13 @@
  */
 package org.carapaceproxy.api;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileReader;
 import java.io.IOException;
+import java.io.Reader;
+import java.io.StringReader;
 import java.util.Base64;
 import java.util.Properties;
 import javax.servlet.http.HttpServletResponse;
@@ -458,6 +464,42 @@ public class StartAPIServerTest extends UseAdminServer {
             String json = response.getBodyString();
 
             assertThat(json, containsString("https.admin.sslcertfile=" + certificate));
+        }
+    }
+    
+    @Test
+    public void testApiRequestsLogger() throws Exception {
+        String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+        
+        Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
+        properties.setProperty("https.admin.port", "8762");
+        properties.setProperty("https.admin.sslcertfile", certificate);
+        properties.setProperty("https.admin.sslcertfilepassword", "testproxy");
+        
+        File accessLog = tmpDir.newFile("admin.access.log").getAbsoluteFile();
+        properties.put("admin.accesslog.path", accessLog.getAbsolutePath());
+        
+        startServer(properties);
+        
+        try (RawHttpClient client = new RawHttpClient("localhost", 8762, true)) {
+            client.get("/api/config", credentials);
+        }
+        
+        try (RawHttpClient client = new RawHttpClient("localhost", 8761, false)) {
+            client.get("/api/config", credentials);
+        }
+        
+        stopServer();
+        
+        try (BufferedReader reader = new BufferedReader(new FileReader(accessLog))) {
+            String line;
+            int lineCount = 0;
+            while ((line = reader.readLine()) != null) {
+                assertThat(line, containsString("\"GET /api/config HTTP/1.1\" 200"));
+                lineCount++;
+            }
+            
+            assertEquals(2, lineCount);
         }
     }
 

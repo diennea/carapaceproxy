@@ -39,7 +39,7 @@ public class AuthenticationAPIServerTest extends UseAdminServer {
 
     @Test
     public void testUnauthorizedRequests() throws Exception {
-        Properties prop = new Properties();
+        Properties prop = new Properties(HTTP_ADMIN_SERVER_CONFIG);
 
         prop.put("userrealm.class", "org.carapaceproxy.utils.TestUserRealm");
         prop.put("user.test1", "pass1");

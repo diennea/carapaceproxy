@@ -76,6 +76,13 @@ public class UseAdminServer {
         if (properties == null) {
             properties = new Properties();
         }
+        
+        if (!properties.containsKey("admin.accesslog.path")) {
+            properties.put("admin.accesslog.path", tmpDir.newFile("admin.access.log").getAbsolutePath());
+        }
+        if (!properties.containsKey("accesslog.path")) {
+            properties.put("accesslog.path", tmpDir.newFile("access.log").getAbsolutePath());
+        }
 
         if (server != null) {
             server.configureAtBoot(new PropertiesConfigurationStore(properties));
