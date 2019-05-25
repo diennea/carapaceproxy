@@ -20,6 +20,8 @@
 package org.carapaceproxy.api;
 
 import java.io.File;
+import java.io.IOException;
+import java.util.Arrays;
 import java.util.Properties;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.HttpProxyServer;
@@ -76,14 +78,9 @@ public class UseAdminServer {
         if (properties == null) {
             properties = new Properties();
         }
-        
-        if (!properties.containsKey("admin.accesslog.path")) {
-            properties.put("admin.accesslog.path", tmpDir.newFile("admin.access.log").getAbsolutePath());
-        }
-        if (!properties.containsKey("accesslog.path")) {
-            properties.put("accesslog.path", tmpDir.newFile("access.log").getAbsolutePath());
-        }
 
+        fixAccessLogFileConfiguration(properties);
+        
         if (server != null) {
             server.configureAtBoot(new PropertiesConfigurationStore(properties));
 
@@ -94,13 +91,20 @@ public class UseAdminServer {
     }
 
     public void startAdmin() throws Exception {
-        startServer(HTTP_ADMIN_SERVER_CONFIG);
+        startServer(new Properties(HTTP_ADMIN_SERVER_CONFIG));
     }
 
-    public void changeDynamicConfiguration(Properties configuration) throws ConfigurationNotValidException, ConfigurationChangeInProgressException, InterruptedException {
+    public void changeDynamicConfiguration(Properties configuration) throws ConfigurationNotValidException, ConfigurationChangeInProgressException, InterruptedException, IOException {
         if (server != null) {
+            fixAccessLogFileConfiguration(configuration);
             PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
             server.applyDynamicConfigurationFromAPI(config);
+        }
+    }
+    
+    private void fixAccessLogFileConfiguration(Properties properties) throws IOException {
+        if (!properties.containsKey("admin.accesslog.path")) {
+            properties.put("admin.accesslog.path", tmpDir.newFile().getAbsolutePath());
         }
     }
 

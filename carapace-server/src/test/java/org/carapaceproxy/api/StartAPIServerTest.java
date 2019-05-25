@@ -21,11 +21,8 @@ package org.carapaceproxy.api;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.Reader;
-import java.io.StringReader;
 import java.util.Base64;
 import java.util.Properties;
 import javax.servlet.http.HttpServletResponse;
@@ -207,14 +204,14 @@ public class StartAPIServerTest extends UseAdminServer {
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             String body = "#first line is a comment\n"
-                    + "connectionsmanager.maxconnectionsperendpoint=20";
+                + "connectionsmanager.maxconnectionsperendpoint=20";
             RawHttpClient.HttpResponse resp = client.executeRequest("POST /api/config/validate HTTP/1.1\r\n"
-                    + "Host: localhost\r\n"
-                    + "Content-Type: text/plain\r\n"
-                    + "Content-Length: " + body.length() + "\r\n"
-                    + "Authorization: Basic " + credentials.toBase64() + "\r\n"
-                    + "\r\n"
-                    + body);
+                + "Host: localhost\r\n"
+                + "Content-Type: text/plain\r\n"
+                + "Content-Length: " + body.length() + "\r\n"
+                + "Authorization: Basic " + credentials.toBase64() + "\r\n"
+                + "\r\n"
+                + body);
             String s = resp.getBodyString();
             System.out.println("s:" + s);
             // no backend configured
@@ -224,12 +221,12 @@ public class StartAPIServerTest extends UseAdminServer {
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             String body = "connectionsmanager.maxconnectionsperendpoint=20-BAD-VALUE";
             RawHttpClient.HttpResponse resp = client.executeRequest("POST /api/config/validate HTTP/1.1\r\n"
-                    + "Host: localhost\r\n"
-                    + "Content-Type: text/plain\r\n"
-                    + "Content-Length: " + body.length() + "\r\n"
-                    + "Authorization: Basic " + credentials.toBase64() + "\r\n"
-                    + "\r\n"
-                    + body);
+                + "Host: localhost\r\n"
+                + "Content-Type: text/plain\r\n"
+                + "Content-Length: " + body.length() + "\r\n"
+                + "Authorization: Basic " + credentials.toBase64() + "\r\n"
+                + "\r\n"
+                + body);
             String s = resp.getBodyString();
             System.out.println("s:" + s);
             // no backend configured
@@ -409,88 +406,88 @@ public class StartAPIServerTest extends UseAdminServer {
             assertThat(json, containsString("test2"));
         }
     }
-    
+
     @Test
     public void testHttpsApi() throws Exception {
         String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
-        
+
         Properties properties = new Properties();
         properties.setProperty("http.admin.enabled", "true");
         properties.setProperty("http.admin.host", "localhost");
-        properties.setProperty("https.admin.port", "8762");        
-        properties.setProperty("https.admin.sslcertfile", certificate);        
-        properties.setProperty("https.admin.sslcertfilepassword", "testproxy");        
-        
+        properties.setProperty("https.admin.port", "8762");
+        properties.setProperty("https.admin.sslcertfile", certificate);
+        properties.setProperty("https.admin.sslcertfilepassword", "testproxy");
+
         startServer(properties);
-        
+
         try (RawHttpClient client = new RawHttpClient("localhost", 8762, true)) {
             RawHttpClient.HttpResponse response = client.get("/api/config", credentials);
             String json = response.getBodyString();
 
             assertThat(json, containsString("https.admin.sslcertfile=" + certificate));
         }
-        
+
         IOException exc = null;
         try (RawHttpClient client = new RawHttpClient("localhost", 8762, false)) {
             client.get("/api/config", credentials);
         } catch (IOException ex) {
             exc = ex;
         }
-        
+
         Assert.assertNotNull(exc);
         Assert.assertThat(exc.getMessage(), containsString("bad response, does not start with HTTP/1.1"));
     }
-    
+
     @Test
     public void testHttpAndHttpsApi() throws Exception {
         String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
-        
-        Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
-        properties.setProperty("https.admin.port", "8762");        
-        properties.setProperty("https.admin.sslcertfile", certificate);        
-        properties.setProperty("https.admin.sslcertfilepassword", "testproxy");        
-        
-        startServer(properties);
-        
-        try (RawHttpClient client = new RawHttpClient("localhost", 8762, true)) {
-            RawHttpClient.HttpResponse response = client.get("/api/config", credentials);
-            String json = response.getBodyString();
 
-            assertThat(json, containsString("https.admin.sslcertfile=" + certificate));
-        }
-        
-        try (RawHttpClient client = new RawHttpClient("localhost", 8761, false)) {
-            RawHttpClient.HttpResponse response = client.get("/api/config", credentials);
-            String json = response.getBodyString();
-
-            assertThat(json, containsString("https.admin.sslcertfile=" + certificate));
-        }
-    }
-    
-    @Test
-    public void testApiRequestsLogger() throws Exception {
-        String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
-        
         Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         properties.setProperty("https.admin.port", "8762");
         properties.setProperty("https.admin.sslcertfile", certificate);
         properties.setProperty("https.admin.sslcertfilepassword", "testproxy");
-        
+
+        startServer(properties);
+
+        try (RawHttpClient client = new RawHttpClient("localhost", 8762, true)) {
+            RawHttpClient.HttpResponse response = client.get("/api/config", credentials);
+            String json = response.getBodyString();
+
+            assertThat(json, containsString("https.admin.sslcertfile=" + certificate));
+        }
+
+        try (RawHttpClient client = new RawHttpClient("localhost", 8761, false)) {
+            RawHttpClient.HttpResponse response = client.get("/api/config", credentials);
+            String json = response.getBodyString();
+
+            assertThat(json, containsString("https.admin.sslcertfile=" + certificate));
+        }
+    }
+
+    @Test
+    public void testApiRequestsLogger() throws Exception {
+        String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+
+        Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
+        properties.setProperty("https.admin.port", "8762");
+        properties.setProperty("https.admin.sslcertfile", certificate);
+        properties.setProperty("https.admin.sslcertfilepassword", "testproxy");
+
         File accessLog = tmpDir.newFile("admin.access.log").getAbsoluteFile();
         properties.put("admin.accesslog.path", accessLog.getAbsolutePath());
-        
+
         startServer(properties);
-        
+
         try (RawHttpClient client = new RawHttpClient("localhost", 8762, true)) {
             client.get("/api/config", credentials);
         }
-        
+
         try (RawHttpClient client = new RawHttpClient("localhost", 8761, false)) {
             client.get("/api/config", credentials);
         }
-        
+
         stopServer();
-        
+
         try (BufferedReader reader = new BufferedReader(new FileReader(accessLog))) {
             String line;
             int lineCount = 0;
@@ -498,7 +495,7 @@ public class StartAPIServerTest extends UseAdminServer {
                 assertThat(line, containsString("\"GET /api/config HTTP/1.1\" 200"));
                 lineCount++;
             }
-            
+
             assertEquals(2, lineCount);
         }
     }
