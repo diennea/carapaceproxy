@@ -22,10 +22,11 @@ package org.carapaceproxy.server;
 import com.google.common.annotations.VisibleForTesting;
 import io.prometheus.client.exporter.MetricsServlet;
 import java.io.File;
+import java.io.FileInputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import java.security.KeyStore;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -50,6 +51,7 @@ import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
 import org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler;
 import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_HOST;
 import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_PORT;
+import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_HTTPS_PORT;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
 import org.carapaceproxy.server.backends.BackendHealthManager;
@@ -62,10 +64,18 @@ import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
 import org.carapaceproxy.user.UserRealm;
+import org.eclipse.jetty.server.HttpConfiguration;
+import org.eclipse.jetty.server.HttpConnectionFactory;
+import org.eclipse.jetty.server.NCSARequestLog;
+import org.eclipse.jetty.server.SecureRequestCustomizer;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.SslConnectionFactory;
 import org.eclipse.jetty.server.handler.ContextHandlerCollection;
+import org.eclipse.jetty.server.handler.RequestLogHandler;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
+import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.webapp.WebAppContext;
 import org.glassfish.jersey.servlet.ServletContainer;
 import static org.glassfish.jersey.servlet.ServletProperties.JAXRS_APPLICATION_CLASS;
@@ -104,9 +114,15 @@ public class HttpProxyServer implements AutoCloseable {
     private final ReentrantLock configurationLock = new ReentrantLock();
 
     private Server adminserver;
+    private String adminAccessLogPath = "admin.access.log";
+    private String adminAccessLogTimezone = "GMT";
+    private int adminLogRetentionDays = 90;
     private boolean adminServerEnabled;
-    private int adminServerPort = 8001;
+    private int adminServerHttpPort = -1;
     private String adminServerHost = "localhost";
+    private int adminServerHttpsPort = -1;
+    private String adminServerCertFile;
+    private String adminServerCertFilePwd;
     private String metricsUrl;
     /**
      * This is only for testing cluster mode with a single machine
@@ -142,9 +158,64 @@ public class HttpProxyServer implements AutoCloseable {
         if (!adminServerEnabled) {
             return;
         }
-        adminserver = new Server(new InetSocketAddress(adminServerHost, adminServerPort));
+
+        if (adminServerHttpPort < 0 && adminServerHttpsPort < 0) {
+            throw new RuntimeException("To enable admin interface at least one between http and https port must be set");
+        }
+
+        adminserver = new Server();
+
+        ServerConnector httpConnector = null;
+        if (adminServerHttpPort >= 0) {
+            LOG.info("Starting Admin UI over HTTP");
+
+            httpConnector = new ServerConnector(adminserver);
+            httpConnector.setPort(adminServerHttpPort);
+            httpConnector.setHost(adminServerHost);
+
+            adminserver.addConnector(httpConnector);
+        }
+
+        ServerConnector httpsConnector = null;
+        if (adminServerHttpsPort >= 0) {
+            LOG.info("Starting Admin UI over HTTPS");
+
+            File sslCertFile = adminServerCertFile.startsWith("/") ? new File(adminServerCertFile) : new File(basePath, adminServerCertFile);
+            sslCertFile = sslCertFile.getAbsoluteFile();
+
+            KeyStore ks = KeyStore.getInstance("PKCS12");
+            try (FileInputStream in = new FileInputStream(sslCertFile)) {
+                ks.load(in, adminServerCertFilePwd.trim().toCharArray());
+            }
+
+            SslContextFactory sslContextFactory = new SslContextFactory();
+            sslContextFactory.setKeyStore(ks);
+            sslContextFactory.setKeyStorePassword(adminServerCertFilePwd);
+            sslContextFactory.setKeyManagerPassword(adminServerCertFilePwd);
+
+            HttpConfiguration https = new HttpConfiguration();
+            https.setSecurePort(adminServerHttpsPort);
+            https.addCustomizer(new SecureRequestCustomizer());
+
+            httpsConnector = new ServerConnector(adminserver,
+                new SslConnectionFactory(sslContextFactory, "http/1.1"),
+                new HttpConnectionFactory(https));
+            httpsConnector.setPort(adminServerHttpsPort);
+            httpsConnector.setHost(adminServerHost);
+
+            adminserver.addConnector(httpsConnector);
+        }
+
         ContextHandlerCollection contexts = new ContextHandlerCollection();
         adminserver.setHandler(contexts);
+
+        File webUi = new File(basePath, "web/ui");
+        if (webUi.isDirectory()) {
+            WebAppContext webApp = new WebAppContext(webUi.getAbsolutePath(), "/ui");
+            contexts.addHandler(webApp);
+        } else {
+            LOG.severe("Cannot find " + webUi.getAbsolutePath() + " directory. Web UI will not be deployed");
+        }
 
         ServletContextHandler context = new ServletContextHandler(ServletContextHandler.GZIP);
         context.setContextPath("/");
@@ -156,22 +227,46 @@ public class HttpProxyServer implements AutoCloseable {
         context.addServlet(jerseyServlet, "/api/*");
         context.addServlet(new ServletHolder(new MetricsServlet()), "/metrics");
         context.setAttribute("server", this);
-        contexts.addHandler(context);
 
-        File webUi = new File(basePath, "web/ui");
-        if (webUi.isDirectory()) {
-            WebAppContext webApp = new WebAppContext(webUi.getAbsolutePath(), "/ui");
-            contexts.addHandler(webApp);
-        } else {
-            LOG.severe("Cannot find " + webUi.getAbsolutePath() + " directory. Web UI will not be deployed");
-        }
+        NCSARequestLog requestLog = new NCSARequestLog();
+        requestLog.setFilename(adminAccessLogPath);
+        requestLog.setFilenameDateFormat("yyyy-MM-dd");
+        requestLog.setRetainDays(adminLogRetentionDays);
+        requestLog.setAppend(true);
+        requestLog.setExtended(true);
+        requestLog.setLogCookies(false);
+        requestLog.setLogTimeZone(adminAccessLogTimezone);
+        RequestLogHandler requestLogHandler = new RequestLogHandler();
+        requestLogHandler.setRequestLog(requestLog);
+        requestLogHandler.setHandler(context);
+
+        contexts.addHandler(requestLogHandler);
 
         adminserver.start();
-        String apiUrl = "http://" + adminServerHost + ":" + adminServerPort + "/api";
-        String uiUrl = "http://" + adminServerHost + ":" + adminServerPort + "/ui";
-        metricsUrl = "http://" + adminServerHost + ":" + adminServerPort + "/metrics";
-        LOG.info("Base Admin UI url: " + uiUrl);
-        LOG.info("Base Admin/API url: " + apiUrl);
+
+        LOG.info("Admin UI started");
+
+        if (adminServerHttpPort == 0 && httpConnector != null) {
+            adminServerHttpPort = httpConnector.getLocalPort();
+        }
+        if (adminServerHttpsPort == 0 && httpsConnector != null) {
+            adminServerHttpsPort = httpsConnector.getLocalPort();
+        }
+
+        if (adminServerHttpPort > 0) {
+            LOG.info("Base HTTP Admin UI url: http://" + adminServerHost + ":" + adminServerHttpPort + "/ui");
+            LOG.info("Base HTTP Admin API url: http://" + adminServerHost + ":" + adminServerHttpPort + "/api");
+        }
+        if (adminServerHttpsPort > 0) {
+            LOG.info("Base HTTPS Admin UI url: https://" + adminServerHost + ":" + adminServerHttpsPort + "/ui");
+            LOG.info("Base HTTPS Admin API url: https://" + adminServerHost + ":" + adminServerHttpsPort + "/api");
+        }
+
+        if (adminServerHttpPort > 0) {
+            metricsUrl = "http://" + adminServerHost + ":" + adminServerHttpPort + "/metrics";
+        } else {
+            metricsUrl = "https://" + adminServerHost + ":" + adminServerHttpsPort + "/metrics";
+        }
         LOG.info("Prometheus Metrics url: " + metricsUrl);
 
     }
@@ -275,8 +370,8 @@ public class HttpProxyServer implements AutoCloseable {
         } catch (ClassNotFoundException err) {
             throw new ConfigurationNotValidException(err);
         } catch (IllegalAccessException | IllegalArgumentException
-                | InstantiationException | NoSuchMethodException
-                | SecurityException | InvocationTargetException err) {
+            | InstantiationException | NoSuchMethodException
+            | SecurityException | InvocationTargetException err) {
             throw new RuntimeException(err);
         }
     }
@@ -289,8 +384,8 @@ public class HttpProxyServer implements AutoCloseable {
         } catch (ClassNotFoundException err) {
             throw new ConfigurationNotValidException(err);
         } catch (IllegalAccessException | IllegalArgumentException
-                | InstantiationException | NoSuchMethodException
-                | SecurityException | InvocationTargetException err) {
+            | InstantiationException | NoSuchMethodException
+            | SecurityException | InvocationTargetException err) {
             throw new RuntimeException(err);
         }
     }
@@ -299,7 +394,7 @@ public class HttpProxyServer implements AutoCloseable {
         if (started) {
             throw new IllegalStateException("server already started");
         }
-        
+
         readClusterConfiguration(bootConfigurationStore); // need to be always first thing to do (loads cluster setup)
         String dynamicConfigurationType = bootConfigurationStore.getProperty("config.type", cluster ? "database" : "file");
         switch (dynamicConfigurationType) {
@@ -343,13 +438,22 @@ public class HttpProxyServer implements AutoCloseable {
             statsProviderConfig.setProperty(key + "", value);
         });
         adminServerEnabled = Boolean.parseBoolean(properties.getProperty("http.admin.enabled", "false"));
-        adminServerPort = Integer.parseInt(properties.getProperty("http.admin.port", adminServerPort + ""));
+        adminServerHttpPort = Integer.parseInt(properties.getProperty("http.admin.port", adminServerHttpPort + ""));
         adminServerHost = properties.getProperty("http.admin.host", adminServerHost);
+        adminServerHttpsPort = Integer.parseInt(properties.getProperty("https.admin.port", adminServerHttpsPort + ""));
+        adminServerCertFile = properties.getProperty("https.admin.sslcertfile", adminServerCertFile);
+        adminServerCertFilePwd = properties.getProperty("https.admin.sslcertfilepassword", adminServerCertFilePwd);
         listenersOffsetPort = Integer.parseInt(properties.getProperty("listener.offset.port", listenersOffsetPort + ""));
 
+        adminAccessLogPath = properties.getProperty("admin.accesslog.path", adminAccessLogPath);
+        adminAccessLogTimezone = properties.getProperty("admin.accesslog.format.timezone", adminAccessLogTimezone);
+        adminLogRetentionDays = Integer.parseInt(properties.getProperty("admin.accesslog.retention.days", adminLogRetentionDays + ""));
+
         LOG.info("http.admin.enabled=" + adminServerEnabled);
-        LOG.info("http.admin.port=" + adminServerPort);
+        LOG.info("http.admin.port=" + adminServerHttpPort);
         LOG.info("http.admin.host=" + adminServerHost);
+        LOG.info("https.admin.port=" + adminServerHttpsPort);
+        LOG.info("https.admin.sslcertfile=" + adminServerCertFile);
         LOG.info("listener.offset.port=" + listenersOffsetPort);
     }
 
@@ -440,7 +544,8 @@ public class HttpProxyServer implements AutoCloseable {
      *
      * @param newConfigurationStore
      * @throws InterruptedException
-     * @see #buildValidConfiguration(org.carapaceproxy.configstore.ConfigurationStore)
+     * @see
+     * #buildValidConfiguration(org.carapaceproxy.configstore.ConfigurationStore)
      */
     public void applyDynamicConfigurationFromAPI(ConfigurationStore newConfigurationStore) throws InterruptedException, ConfigurationChangeInProgressException {
         applyDynamicConfiguration(newConfigurationStore, false);
@@ -555,7 +660,8 @@ public class HttpProxyServer implements AutoCloseable {
                 LOG.log(Level.INFO, "Unable to resolve Admin Server Hostname for peer " + peerId + ". Using " + adminServerHost);
             }
             peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HOST, adminHost);
-            peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_PORT, adminServerPort + "");
+            peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_PORT, adminServerHttpPort + "");
+            peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HTTPS_PORT, adminServerHttpsPort + "");
             this.groupMembershipHandler = new ZooKeeperGroupMembershipHandler(zkAddress, zkTimeout, peerId, peerInfo);
         } else {
             this.groupMembershipHandler = new NullGroupMembershipHandler();

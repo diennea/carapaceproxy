@@ -20,6 +20,8 @@
 package org.carapaceproxy.api;
 
 import java.io.File;
+import java.io.IOException;
+import java.util.Arrays;
 import java.util.Properties;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.HttpProxyServer;
@@ -42,6 +44,13 @@ public class UseAdminServer {
 
     public static final String DEFAULT_USERNAME = "admin";
     public static final String DEFAULT_PASSWORD = "admin";
+    
+    protected static final Properties HTTP_ADMIN_SERVER_CONFIG = new Properties();
+    static {
+        HTTP_ADMIN_SERVER_CONFIG.setProperty("http.admin.enabled", "true");
+        HTTP_ADMIN_SERVER_CONFIG.setProperty("http.admin.port", "8761");
+        HTTP_ADMIN_SERVER_CONFIG.setProperty("http.admin.host", "localhost");
+    }
 
     @Rule
     public TemporaryFolder tmpDir = new TemporaryFolder();
@@ -70,14 +79,10 @@ public class UseAdminServer {
             properties = new Properties();
         }
 
-        Properties prop = new Properties();
-        prop.setProperty("http.admin.enabled", "true");
-        prop.setProperty("http.admin.port", "8761");
-        prop.setProperty("http.admin.host", "localhost");
-        prop.putAll(properties);
-
+        fixAccessLogFileConfiguration(properties);
+        
         if (server != null) {
-            server.configureAtBoot(new PropertiesConfigurationStore(prop));
+            server.configureAtBoot(new PropertiesConfigurationStore(properties));
 
             server.start();
             server.startAdminInterface();
@@ -86,13 +91,20 @@ public class UseAdminServer {
     }
 
     public void startAdmin() throws Exception {
-        startServer(null);
+        startServer(new Properties(HTTP_ADMIN_SERVER_CONFIG));
     }
 
-    public void changeDynamicConfiguration(Properties configuration) throws ConfigurationNotValidException, ConfigurationChangeInProgressException, InterruptedException {
+    public void changeDynamicConfiguration(Properties configuration) throws ConfigurationNotValidException, ConfigurationChangeInProgressException, InterruptedException, IOException {
         if (server != null) {
+            fixAccessLogFileConfiguration(configuration);
             PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
             server.applyDynamicConfigurationFromAPI(config);
+        }
+    }
+    
+    private void fixAccessLogFileConfiguration(Properties properties) throws IOException {
+        if (!properties.containsKey("admin.accesslog.path")) {
+            properties.put("admin.accesslog.path", tmpDir.newFile().getAbsolutePath());
         }
     }
 

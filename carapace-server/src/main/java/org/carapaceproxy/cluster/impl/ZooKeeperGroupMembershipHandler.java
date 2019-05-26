@@ -59,6 +59,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
 
     public static final String PROPERTY_PEER_ADMIN_SERVER_HOST = "peer_admin_server_host"; // host of the Admin UI/API
     public static final String PROPERTY_PEER_ADMIN_SERVER_PORT = "peer_admin_server_port"; // port of the Admin UI/API
+    public static final String PROPERTY_PEER_ADMIN_SERVER_HTTPS_PORT = "peer_admin_server_https_port"; // https port of the Admin UI/API
 
     private static final Logger LOG = Logger.getLogger(ZooKeeperGroupMembershipHandler.class.getName());
     private static final ObjectMapper MAPPER = new ObjectMapper();
