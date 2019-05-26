@@ -262,7 +262,11 @@ public class HttpProxyServer implements AutoCloseable {
             LOG.info("Base HTTPS Admin API url: https://" + adminServerHost + ":" + adminServerHttpsPort + "/api");
         }
 
-        metricsUrl = "http://" + adminServerHost + ":" + adminServerHttpPort + "/metrics";
+        if (adminServerHttpPort > 0) {
+            metricsUrl = "http://" + adminServerHost + ":" + adminServerHttpPort + "/metrics";
+        } else {
+            metricsUrl = "https://" + adminServerHost + ":" + adminServerHttpsPort + "/metrics";
+        }
         LOG.info("Prometheus Metrics url: " + metricsUrl);
 
     }
@@ -450,7 +454,6 @@ public class HttpProxyServer implements AutoCloseable {
         LOG.info("http.admin.host=" + adminServerHost);
         LOG.info("https.admin.port=" + adminServerHttpsPort);
         LOG.info("https.admin.sslcertfile=" + adminServerCertFile);
-        LOG.info("https.admin.sslcertfilepassword=" + adminServerCertFilePwd);
         LOG.info("listener.offset.port=" + listenersOffsetPort);
     }
 

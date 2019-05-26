@@ -46,7 +46,7 @@ public class UseAdminServer {
     public static final String DEFAULT_PASSWORD = "admin";
     
     protected static final Properties HTTP_ADMIN_SERVER_CONFIG = new Properties();
-    {
+    static {
         HTTP_ADMIN_SERVER_CONFIG.setProperty("http.admin.enabled", "true");
         HTTP_ADMIN_SERVER_CONFIG.setProperty("http.admin.port", "8761");
         HTTP_ADMIN_SERVER_CONFIG.setProperty("http.admin.host", "localhost");
