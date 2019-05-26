@@ -473,7 +473,7 @@ public class StartAPIServerTest extends UseAdminServer {
         properties.setProperty("https.admin.sslcertfile", certificate);
         properties.setProperty("https.admin.sslcertfilepassword", "testproxy");
 
-        File accessLog = tmpDir.newFile("admin.access.log").getAbsoluteFile();
+        File accessLog = tmpDir.newFile().getAbsoluteFile();
         properties.put("admin.accesslog.path", accessLog.getAbsolutePath());
 
         startServer(properties);

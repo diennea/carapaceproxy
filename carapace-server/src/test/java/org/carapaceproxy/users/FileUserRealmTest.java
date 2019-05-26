@@ -69,6 +69,7 @@ public class FileUserRealmTest {
             prop.setProperty("http.admin.enabled", "true");
             prop.setProperty("http.admin.port", "8761");
             prop.setProperty("http.admin.host", "localhost");
+            prop.setProperty("admin.accesslog.path", tmpDir.newFile().getAbsolutePath());
 
             Map<String, String> users = new HashMap<>();
             users.put("test1", "pass1");
@@ -111,6 +112,7 @@ public class FileUserRealmTest {
             prop.setProperty("http.admin.enabled", "true");
             prop.setProperty("http.admin.port", "8761");
             prop.setProperty("http.admin.host", "localhost");
+            prop.setProperty("admin.accesslog.path", tmpDir.newFile().getAbsolutePath());
 
             File usersFile = createUserFile(users);
             prop.setProperty("userrealm.class", "org.carapaceproxy.user.FileUserRealm");
@@ -152,6 +154,7 @@ public class FileUserRealmTest {
             prop.setProperty("http.admin.enabled", "true");
             prop.setProperty("http.admin.port", "8761");
             prop.setProperty("http.admin.host", "localhost");
+            prop.setProperty("admin.accesslog.path", tmpDir.newFile().getAbsolutePath());
 
             // create new file in the server and access it with relative path
             File userPropertiesFile = new File("target/testuser" + System.currentTimeMillis() + ".properties");

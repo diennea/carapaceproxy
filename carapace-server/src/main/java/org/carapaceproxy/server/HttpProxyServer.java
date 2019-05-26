@@ -31,7 +31,6 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
@@ -68,7 +67,6 @@ import org.carapaceproxy.user.UserRealm;
 import org.eclipse.jetty.server.HttpConfiguration;
 import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.NCSARequestLog;
-import org.eclipse.jetty.server.RequestLog;
 import org.eclipse.jetty.server.SecureRequestCustomizer;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
@@ -210,7 +208,7 @@ public class HttpProxyServer implements AutoCloseable {
 
         ContextHandlerCollection contexts = new ContextHandlerCollection();
         adminserver.setHandler(contexts);
-        
+
         File webUi = new File(basePath, "web/ui");
         if (webUi.isDirectory()) {
             WebAppContext webApp = new WebAppContext(webUi.getAbsolutePath(), "/ui");
@@ -229,7 +227,7 @@ public class HttpProxyServer implements AutoCloseable {
         context.addServlet(jerseyServlet, "/api/*");
         context.addServlet(new ServletHolder(new MetricsServlet()), "/metrics");
         context.setAttribute("server", this);
-        
+
         NCSARequestLog requestLog = new NCSARequestLog();
         requestLog.setFilename(adminAccessLogPath);
         requestLog.setFilenameDateFormat("yyyy-MM-dd");
@@ -241,7 +239,7 @@ public class HttpProxyServer implements AutoCloseable {
         RequestLogHandler requestLogHandler = new RequestLogHandler();
         requestLogHandler.setRequestLog(requestLog);
         requestLogHandler.setHandler(context);
-        
+
         contexts.addHandler(requestLogHandler);
 
         adminserver.start();
@@ -442,9 +440,9 @@ public class HttpProxyServer implements AutoCloseable {
         adminServerCertFile = properties.getProperty("https.admin.sslcertfile", adminServerCertFile);
         adminServerCertFilePwd = properties.getProperty("https.admin.sslcertfilepassword", adminServerCertFilePwd);
         listenersOffsetPort = Integer.parseInt(properties.getProperty("listener.offset.port", listenersOffsetPort + ""));
-        
-        adminAccessLogPath =  properties.getProperty("admin.accesslog.path", adminAccessLogPath);
-        adminAccessLogTimezone =  properties.getProperty("admin.accesslog.format.timezone", adminAccessLogTimezone);
+
+        adminAccessLogPath = properties.getProperty("admin.accesslog.path", adminAccessLogPath);
+        adminAccessLogTimezone = properties.getProperty("admin.accesslog.format.timezone", adminAccessLogTimezone);
         adminLogRetentionDays = Integer.parseInt(properties.getProperty("admin.accesslog.retention.days", adminLogRetentionDays + ""));
 
         LOG.info("http.admin.enabled=" + adminServerEnabled);
