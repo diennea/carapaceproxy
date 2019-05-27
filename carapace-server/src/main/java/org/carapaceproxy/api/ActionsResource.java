@@ -123,7 +123,7 @@ public class ActionsResource {
         }
     }
 
-    private String emptyAsOther(String value, String other) {
+    static private String emptyAsOther(String value, String other) {
         return value.isEmpty() ? other : value;
     }
 

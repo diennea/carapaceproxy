@@ -652,17 +652,9 @@ public class HttpProxyServer implements AutoCloseable {
     private void initGroupMembership() throws ConfigurationNotValidException {
         if (cluster) {
             Map<String, String> peerInfo = new HashMap();
-            peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HOST, adminServerHost);
-             << << << < HEAD
-            
+            peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HOST, adminServerHost);          
             peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_PORT, adminServerHttpPort + "");
-            peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HTTPS_PORT, adminServerHttpsPort + "");
-             == == ==
-                    = peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_PORT, adminServerPort + "");
-             >>> >>> > e745ab6
-            ... UI:
-            General 
-            Fixies #94
+            peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HTTPS_PORT, adminServerHttpsPort + "");             
             this.groupMembershipHandler = new ZooKeeperGroupMembershipHandler(zkAddress, zkTimeout, peerId, peerInfo);
         } else {
             this.groupMembershipHandler = new NullGroupMembershipHandler();
@@ -673,6 +665,7 @@ public class HttpProxyServer implements AutoCloseable {
         try {
             return InetAddress.getLocalHost().getHostName();
         } catch (UnknownHostException ex) {
+            LOG.log(Level.INFO, "Unable to resolve Admin Server Hostname. Using localhost.");
             return "localhost";
         }
     }

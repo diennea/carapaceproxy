@@ -21,17 +21,12 @@ package org.carapaceproxy.api;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 import javax.servlet.ServletContext;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import org.carapaceproxy.server.HttpProxyServer;
-import static org.carapaceproxy.server.config.ActionConfiguration.TYPE_ACME_CHALLENGE;
-import static org.carapaceproxy.server.config.ActionConfiguration.TYPE_CACHE;
-import static org.carapaceproxy.server.config.ActionConfiguration.TYPE_PROXY;
-import static org.carapaceproxy.server.config.ActionConfiguration.TYPE_REDIRECT;
-import static org.carapaceproxy.server.config.ActionConfiguration.TYPE_STATIC;
+import org.carapaceproxy.server.mapper.CustomHeader;
 
 /**
  * Access to configured actions
@@ -81,12 +76,23 @@ public class HeadersResource {
         final List<HeaderBean> headers = new ArrayList();
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         server.getMapper().getHeaders().forEach(header -> {
-            headers.add(new HeaderBean(header.getId(), header.getName(), header.getValue(), header.getMode().toString()));
+            headers.add(new HeaderBean(header.getId(), header.getName(), header.getValue(), modeToString(header.getMode())));
         });
 
         return headers;
     }
 
-
+    static String modeToString(CustomHeader.HeaderMode mode) {
+        switch (mode) {
+            case ADD:
+                return "add";
+            case SET:
+                return "set";
+            case REMOVE:
+                return "remove";
+            default:
+                return "unknown";
+        }
+    }
 
 }
