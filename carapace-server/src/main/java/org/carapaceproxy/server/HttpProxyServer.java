@@ -106,7 +106,7 @@ public class HttpProxyServer implements AutoCloseable {
     private Server adminserver;
     private boolean adminServerEnabled;
     private int adminServerPort = 8001;
-    private String adminServerHost = "localhost";
+    private String adminServerHost = resolveAdminServerHost();
     private String metricsUrl;
     /**
      * This is only for testing cluster mode with a single machine
@@ -299,7 +299,7 @@ public class HttpProxyServer implements AutoCloseable {
         if (started) {
             throw new IllegalStateException("server already started");
         }
-        
+
         readClusterConfiguration(bootConfigurationStore); // need to be always first thing to do (loads cluster setup)
         String dynamicConfigurationType = bootConfigurationStore.getProperty("config.type", cluster ? "database" : "file");
         switch (dynamicConfigurationType) {
@@ -548,17 +548,19 @@ public class HttpProxyServer implements AutoCloseable {
     private void initGroupMembership() throws ConfigurationNotValidException {
         if (cluster) {
             Map<String, String> peerInfo = new HashMap();
-            String adminHost = adminServerHost;
-            try {
-                adminHost = InetAddress.getLocalHost().getHostName();
-            } catch (UnknownHostException ex) {
-                LOG.log(Level.INFO, "Unable to resolve Admin Server Hostname for peer " + peerId + ". Using " + adminServerHost);
-            }
-            peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HOST, adminHost);
+            peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HOST, adminServerHost);
             peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_PORT, adminServerPort + "");
             this.groupMembershipHandler = new ZooKeeperGroupMembershipHandler(zkAddress, zkTimeout, peerId, peerInfo);
         } else {
             this.groupMembershipHandler = new NullGroupMembershipHandler();
+        }
+    }
+
+    private static String resolveAdminServerHost() {
+        try {
+            return InetAddress.getLocalHost().getHostName();
+        } catch (UnknownHostException ex) {
+            return "localhost";
         }
     }
 

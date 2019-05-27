@@ -15,6 +15,7 @@ import DatatableList from './components/DatatableList'
 import Configuration from './components/Configuration'
 import Metrics from './components/Metrics'
 import Peers from './components/Peers'
+import Headers from './components/Headers'
 
 Vue.component('backends-status', Backends)
 Vue.component('routes', Routes)
@@ -29,6 +30,7 @@ Vue.component('datatable-list', DatatableList)
 Vue.component('configuration', Configuration)
 Vue.component('metrics', Metrics)
 Vue.component('peers', Peers)
+Vue.component('headers', Headers)
 
 Vue.use(Router)
 
@@ -98,6 +100,11 @@ export default new Router({
         path: '/peers',
         name: 'Peers',
         component: Peers
-    }
+    },
+    {
+      path: '/headers',
+      name: 'Headers',
+      component: Headers
+  }
   ]
 })

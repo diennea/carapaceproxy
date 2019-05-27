@@ -8,7 +8,7 @@
                 <div class="panel panel-info">
                     <div class="panel-body">
                         <ul class="list-group">
-                            <li class="list-group-item"><strong>Certificate id:</strong> {{certificate.id}}</li>
+                            <li class="list-group-item"><strong>ID:</strong> {{certificate.id}}</li>
                             <li class="list-group-item"><strong>Hostname:</strong> {{certificate.hostname}}</li>
                             <li class="list-group-item"><strong>Dynamic:</strong> {{certificate.dynamic | symbolFormat}}</li>
                             <li class="list-group-item"><strong>Status:</strong> {{certificate.status}}</li>                            

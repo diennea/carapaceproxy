@@ -32,6 +32,7 @@ import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
+import org.carapaceproxy.server.mapper.CustomHeader;
 
 /**
  * Maps requests to a remote HTTP server
@@ -47,6 +48,8 @@ public abstract class EndpointMapper {
     public abstract List<ActionConfiguration> getActions();
 
     public abstract List<DirectorConfiguration> getDirectors();
+
+    public abstract List<CustomHeader> getHeaders();
 
     public abstract MapResult map(HttpRequest request, String userId, String sessionId, BackendHealthManager backendHealthManager, RequestHandler requestHandler);
 

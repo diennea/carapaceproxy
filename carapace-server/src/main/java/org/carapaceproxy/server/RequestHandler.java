@@ -62,9 +62,7 @@ import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import static org.carapaceproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
-import static org.carapaceproxy.server.mapper.CustomHeader.HeaderMode.HEADER_MODE_ADD;
-import static org.carapaceproxy.server.mapper.CustomHeader.HeaderMode.HEADER_MODE_REMOVE;
-import static org.carapaceproxy.server.mapper.CustomHeader.HeaderMode.HEADER_MODE_SET;
+import org.carapaceproxy.server.mapper.CustomHeader.HeaderMode;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchingContext;
 import org.carapaceproxy.utils.PrometheusUtils;
 
@@ -660,12 +658,12 @@ public class RequestHandler implements MatchingContext {
         if (msg instanceof HttpResponse && action != null && action.customHeaders != null) {
             HttpHeaders headers = ((HttpResponse) msg).headers();
             action.customHeaders.forEach(customHeader -> {
-                if (HEADER_MODE_SET.equals(customHeader.getMode())
-                        || HEADER_MODE_REMOVE.equals(customHeader.getMode())) {
+                if (HeaderMode.SET.equals(customHeader.getMode())
+                        || HeaderMode.REMOVE.equals(customHeader.getMode())) {
                     headers.remove(customHeader.getName());
                 }
-                if (HEADER_MODE_SET.equals(customHeader.getMode())
-                        || HEADER_MODE_ADD.equals(customHeader.getMode())) {
+                if (HeaderMode.SET.equals(customHeader.getMode())
+                        || HeaderMode.ADD.equals(customHeader.getMode())) {
                     headers.add(customHeader.getName(), customHeader.getValue());
                 }
             });
@@ -822,7 +820,7 @@ public class RequestHandler implements MatchingContext {
     /**
      * RequestHandler as MatchingContext
      */
-    // All properties name have been converted to lowercase during parsing.    
+    // All properties name have been converted to lowercase during parsing.
     public static final String PROPERTY_URI = "request.uri";
     public static final String PROPERTY_METHOD = "request.method";
     public static final String PROPERTY_CONTENT_TYPE = "request.content-type";
@@ -833,7 +831,7 @@ public class RequestHandler implements MatchingContext {
     @Override
     public String getProperty(String name) {
         if (name.startsWith(PROPERTY_HEADERS)) {
-            // In case of multiple headers with same name, the first one is returned.            
+            // In case of multiple headers with same name, the first one is returned.
             return request.headers().get(name.substring(HEADERS_SUBSTRING_INDEX, name.length()), "");
         } else {
             switch (name) {

@@ -22,7 +22,6 @@ package org.carapaceproxy.api;
 import java.util.Base64;
 import java.util.Properties;
 import javax.servlet.http.HttpServletResponse;
-import static org.carapaceproxy.api.CertificatesResource.stateToStatusString;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.certiticates.DynamicCertificateState;
@@ -329,16 +328,16 @@ public class StartAPIServerTest extends UseAdminServer {
                 json = response.getBodyString();
                 assertThat(json, containsString(dynDomain));
                 assertThat(json, containsString("\"dynamic\":true"));
-                assertThat(json, containsString("\"status\":\"" + stateToStatusString(state) + "\""));
+                assertThat(json, containsString("\"status\":\"" + state + "\""));
 
                 response = client.get("/api/certificates/" + dynDomain, credentials);
                 json = response.getBodyString();
                 assertThat(json, containsString(dynDomain));
                 assertThat(json, containsString("\"dynamic\":true"));
-                assertThat(json, containsString("\"status\":\"" + stateToStatusString(state) + "\""));
+                assertThat(json, containsString("\"status\":\"" + state + "\""));
             }
 
-            // Downloading            
+            // Downloading
             CertificateData cert = store.loadCertificateForDomain(dynDomain);
             cert.setChain(Base64.getEncoder().encodeToString("CHAIN".getBytes()));
             store.saveCertificate(cert);
