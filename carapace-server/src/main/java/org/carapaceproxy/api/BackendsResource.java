@@ -19,11 +19,8 @@
  */
 package org.carapaceproxy.api;
 
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Stream;
 import javax.servlet.ServletContext;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -33,7 +30,6 @@ import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.backends.BackendHealthCheck;
-import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.backends.BackendHealthStatus;
 import org.carapaceproxy.server.config.BackendConfiguration;
 
@@ -134,28 +130,21 @@ public class BackendsResource {
     @GET
     public Map<String, BackendBean> getAll() {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-
-        BackendHealthManager backendHealthManager = server.getBackendHealthManager();
         ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
-        Map<String, BackendHealthStatus> backendsSnapshot = backendHealthManager.getBackendsSnapshot();
-
+        Map<String, BackendHealthStatus> backendsSnapshot = server.getBackendHealthManager().getBackendsSnapshot();
         Map<String, BackendBean> res = new HashMap<>();
-        Collection<BackendConfiguration> backendsConf = server.getMapper().getBackends().values();
-        for (Map.Entry<String, BackendHealthStatus> bb : backendsSnapshot.entrySet()) {
-            EndpointKey key = EndpointKey.make(bb.getKey());
-            EndpointStats epstats = stats.getEndpointStats(key);
-            String id = backendsConf.stream()
-                    .filter(b -> key.getHostPort().equals(b.getId()))
-                    .findFirst()
-                    .map(b -> b.getId())
-                    .orElse("");
-            BackendBean bean = new BackendBean(id, key.getHost(), key.getPort());
+
+        for (BackendConfiguration backendConf : server.getMapper().getBackends().values()) {
+            String id = backendConf.getId();
+            String hostPort = backendConf.getHostPort();
+            BackendBean bean = new BackendBean(id, backendConf.getHost(), backendConf.getPort());
+            EndpointStats epstats = stats.getEndpointStats(EndpointKey.make(hostPort));
             if (epstats != null) {
                 bean.openConnections = epstats.getOpenConnections().longValue();
                 bean.totalRequests = epstats.getTotalRequests().longValue();
                 bean.lastActivityTs = epstats.getLastActivity().longValue();
             }
-            BackendHealthStatus bhs = bb.getValue();
+            BackendHealthStatus bhs = backendsSnapshot.get(hostPort);
             if (bhs != null) {
                 bean.isAvailable = bhs.isAvailable();
                 bean.reportedAsUnreachable = bhs.isReportedAsUnreachable();
@@ -169,7 +158,7 @@ public class BackendsResource {
                     bean.httpBody = lastProbe.getHttpBody();
                 }
             }
-            res.put(bb.getKey(), bean);
+            res.put(id, bean);
         }
 
         return res;

@@ -22,6 +22,7 @@ package org.carapaceproxy.api;
 import java.util.Base64;
 import java.util.Properties;
 import javax.servlet.http.HttpServletResponse;
+import static org.carapaceproxy.api.CertificatesResource.stateToStatusString;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.certiticates.DynamicCertificateState;
@@ -156,7 +157,6 @@ public class StartAPIServerTest extends UseAdminServer {
             assertTrue(s.contains("\"not-found\",\"type\":\"static\""));
             assertTrue(s.contains("\"cache-if-possible\",\"type\":\"cache\""));
             assertTrue(s.contains("\"internal-error\",\"type\":\"static\""));
-            assertTrue(s.contains("\"acme-challenge\",\"type\":\"acme-challenge\""));
             assertTrue(s.contains("\"proxy-all\",\"type\":\"proxy\""));
         }
     }
@@ -328,13 +328,13 @@ public class StartAPIServerTest extends UseAdminServer {
                 json = response.getBodyString();
                 assertThat(json, containsString(dynDomain));
                 assertThat(json, containsString("\"dynamic\":true"));
-                assertThat(json, containsString("\"status\":\"" + state + "\""));
+                assertThat(json, containsString("\"status\":\"" + stateToStatusString(state) + "\""));
 
                 response = client.get("/api/certificates/" + dynDomain, credentials);
                 json = response.getBodyString();
                 assertThat(json, containsString(dynDomain));
                 assertThat(json, containsString("\"dynamic\":true"));
-                assertThat(json, containsString("\"status\":\"" + state + "\""));
+                assertThat(json, containsString("\"status\":\"" + stateToStatusString(state) + "\""));
             }
 
             // Downloading

@@ -105,7 +105,7 @@ public class CertificatesResource {
 
             if (certificate.isDynamic()) {
                 DynamicCertificateState state = dynamicCertificateManager.getStateOfCertificate(certBean.getId());
-                certBean.setStatus(state.toString());
+                certBean.setStatus(stateToStatusString(state));
             }
             res.put(certificateEntry.getKey(), certBean);
         }
@@ -133,7 +133,7 @@ public class CertificatesResource {
 
         return Response
                 .ok(data, MediaType.APPLICATION_OCTET_STREAM)
-                .header("content-disposition","attachment; filename = " + cert.hostname + ".p12")
+                .header("content-disposition", "attachment; filename = " + cert.hostname + ".p12")
                 .build();
     }
 
@@ -152,7 +152,7 @@ public class CertificatesResource {
 
             if (certificate.isDynamic()) {
                 DynamicCertificateState state = server.getDynamicCertificateManager().getStateOfCertificate(certBean.getId());
-                certBean.setStatus(state.toString());
+                certBean.setStatus(stateToStatusString(state));
             }
             return certBean;
         }
@@ -160,4 +160,24 @@ public class CertificatesResource {
         return null;
     }
 
+    static String stateToStatusString(DynamicCertificateState state) {
+        switch (state) {
+            case WAITING:
+                return "waiting"; // certificate waiting for issuing/renews
+            case VERIFYING:
+                return "verifying"; // challenge verification by LE pending
+            case VERIFIED:
+                return "verified"; // challenge succeded
+            case ORDERING:
+                return "ordering"; // certificate order pending
+            case REQUEST_FAILED:
+                return "request failed"; // challenge/order failed
+            case AVAILABLE:
+                return "available";// certificate available(saved) and not expired
+            case EXPIRED:     // certificate expired
+                return "expired";
+            default:
+                return "unknown";
+        }
+    }
 }
