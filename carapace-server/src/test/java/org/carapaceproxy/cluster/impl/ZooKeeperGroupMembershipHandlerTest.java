@@ -27,6 +27,7 @@ import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.curator.test.TestingServer;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
+import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -108,12 +109,9 @@ public class ZooKeeperGroupMembershipHandlerTest {
 
                 peer1.fireEvent("foo");
 
-                for (int i = 0; i < 10; i++) {
-                    if (eventFired2.get() >= 1) {
-                        break;
-                    }
-                    Thread.sleep(100);
-                }
+                TestUtils.waitForCondition(() -> {
+                    return eventFired2.get() >= 1;
+                }, 100);
                 assertTrue(eventFired2.get() >= 1);
                 eventFired2.set(0);
 
@@ -136,13 +134,10 @@ public class ZooKeeperGroupMembershipHandlerTest {
 
                     peer1.fireEvent("foo");
 
-                    for (int i = 0; i < 10; i++) {
-                        if (eventFired2.get() >= 1
-                                && eventFired3.get() >= 1) {
-                            break;
-                        }
-                        Thread.sleep(100);
-                    }
+                    TestUtils.waitForCondition(() -> {
+                        return (eventFired2.get() >= 1
+                                && eventFired3.get() >= 1);
+                    }, 100);
                     assertTrue(eventFired3.get() >= 1);
                     assertTrue(eventFired2.get() >= 1);
 
@@ -151,13 +146,10 @@ public class ZooKeeperGroupMembershipHandlerTest {
 
                     peer3.fireEvent("foo");
 
-                    for (int i = 0; i < 10; i++) {
-                        if (eventFired2.get() >= 1
-                                && eventFired3.get() >= 1) {
-                            break;
-                        }
-                        Thread.sleep(100);
-                    }
+                    TestUtils.waitForCondition(() -> {
+                        return (eventFired2.get() >= 1
+                                && eventFired3.get() >= 1);
+                    }, 100);
                     assertTrue(eventFired3.get() == 0); // self events are not fired
                     assertTrue(eventFired2.get() > 0);
                 }

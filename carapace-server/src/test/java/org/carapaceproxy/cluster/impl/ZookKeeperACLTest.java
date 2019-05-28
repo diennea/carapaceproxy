@@ -32,6 +32,7 @@ import javax.security.auth.login.Configuration;
 import org.apache.curator.test.InstanceSpec;
 import org.apache.curator.test.TestingServer;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
+import org.carapaceproxy.utils.TestUtils;
 import org.junit.AfterClass;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -102,7 +103,7 @@ public class ZookKeeperACLTest {
                 assertEquals(Arrays.asList(peerId1, peerId2), peersFrom1);
                 assertEquals(Arrays.asList(peerId1, peerId2), peersFrom2);
 
-                AtomicInteger eventFired2 = new AtomicInteger();;
+                AtomicInteger eventFired2 = new AtomicInteger();
                 peer2.watchEvent("foo", new GroupMembershipHandler.EventCallback() {
                     @Override
                     public void eventFired(String eventId) {
@@ -117,12 +118,10 @@ public class ZookKeeperACLTest {
 
                 peer1.fireEvent("foo");
 
-                for (int i = 0; i < 10; i++) {
-                    if (eventFired2.get() >= 1) {
-                        break;
-                    }
-                    Thread.sleep(100);
-                }
+                TestUtils.waitForCondition(() -> {
+                    return eventFired2.get() >= 1;
+                }, 100);
+
                 assertTrue(eventFired2.get() >= 1);
                 eventFired2.set(0);
 
@@ -145,13 +144,11 @@ public class ZookKeeperACLTest {
 
                     peer1.fireEvent("foo");
 
-                    for (int i = 0; i < 10; i++) {
-                        if (eventFired2.get() >= 1
-                                && eventFired3.get() >= 1) {
-                            break;
-                        }
-                        Thread.sleep(100);
-                    }
+                    TestUtils.waitForCondition(() -> {
+                        return (eventFired2.get() >= 1
+                                && eventFired3.get() >= 1);
+                    }, 100);
+
                     assertTrue(eventFired3.get() >= 1);
                     assertTrue(eventFired2.get() >= 1);
 
