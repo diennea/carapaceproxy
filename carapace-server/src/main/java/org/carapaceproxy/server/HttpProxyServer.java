@@ -119,7 +119,8 @@ public class HttpProxyServer implements AutoCloseable {
     private int adminLogRetentionDays = 90;
     private boolean adminServerEnabled;
     private int adminServerHttpPort = -1;
-    private String adminServerHost = resolveAdminServerHost();
+    private String adminServerHost = "localhost";
+    private String adminAdvertisedServerHost = adminServerHost; // hostname to access API/UI
     private int adminServerHttpsPort = -1;
     private String adminServerCertFile;
     private String adminServerCertFilePwd;
@@ -254,18 +255,18 @@ public class HttpProxyServer implements AutoCloseable {
         }
 
         if (adminServerHttpPort > 0) {
-            LOG.info("Base HTTP Admin UI url: http://" + adminServerHost + ":" + adminServerHttpPort + "/ui");
-            LOG.info("Base HTTP Admin API url: http://" + adminServerHost + ":" + adminServerHttpPort + "/api");
+            LOG.info("Base HTTP Admin UI url: http://" + adminAdvertisedServerHost + ":" + adminServerHttpPort + "/ui");
+            LOG.info("Base HTTP Admin API url: http://" + adminAdvertisedServerHost + ":" + adminServerHttpPort + "/api");
         }
         if (adminServerHttpsPort > 0) {
-            LOG.info("Base HTTPS Admin UI url: https://" + adminServerHost + ":" + adminServerHttpsPort + "/ui");
-            LOG.info("Base HTTPS Admin API url: https://" + adminServerHost + ":" + adminServerHttpsPort + "/api");
+            LOG.info("Base HTTPS Admin UI url: https://" + adminAdvertisedServerHost + ":" + adminServerHttpsPort + "/ui");
+            LOG.info("Base HTTPS Admin API url: https://" + adminAdvertisedServerHost + ":" + adminServerHttpsPort + "/api");
         }
 
         if (adminServerHttpPort > 0) {
-            metricsUrl = "http://" + adminServerHost + ":" + adminServerHttpPort + "/metrics";
+            metricsUrl = "http://" + adminAdvertisedServerHost + ":" + adminServerHttpPort + "/metrics";
         } else {
-            metricsUrl = "https://" + adminServerHost + ":" + adminServerHttpsPort + "/metrics";
+            metricsUrl = "https://" + adminAdvertisedServerHost + ":" + adminServerHttpsPort + "/metrics";
         }
         LOG.info("Prometheus Metrics url: " + metricsUrl);
 
@@ -443,6 +444,7 @@ public class HttpProxyServer implements AutoCloseable {
         adminServerHttpsPort = Integer.parseInt(properties.getProperty("https.admin.port", adminServerHttpsPort + ""));
         adminServerCertFile = properties.getProperty("https.admin.sslcertfile", adminServerCertFile);
         adminServerCertFilePwd = properties.getProperty("https.admin.sslcertfilepassword", adminServerCertFilePwd);
+        adminAdvertisedServerHost = properties.getProperty("admin.advertised.host", adminServerHost);
         listenersOffsetPort = Integer.parseInt(properties.getProperty("listener.offset.port", listenersOffsetPort + ""));
 
         adminAccessLogPath = properties.getProperty("admin.accesslog.path", adminAccessLogPath);
@@ -454,6 +456,7 @@ public class HttpProxyServer implements AutoCloseable {
         LOG.info("http.admin.host=" + adminServerHost);
         LOG.info("https.admin.port=" + adminServerHttpsPort);
         LOG.info("https.admin.sslcertfile=" + adminServerCertFile);
+        LOG.info("admin.advertised.host=" + adminAdvertisedServerHost);
         LOG.info("listener.offset.port=" + listenersOffsetPort);
     }
 
@@ -652,21 +655,12 @@ public class HttpProxyServer implements AutoCloseable {
     private void initGroupMembership() throws ConfigurationNotValidException {
         if (cluster) {
             Map<String, String> peerInfo = new HashMap();
-            peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HOST, adminServerHost);          
+            peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HOST, adminAdvertisedServerHost);
             peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_PORT, adminServerHttpPort + "");
-            peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HTTPS_PORT, adminServerHttpsPort + "");             
+            peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HTTPS_PORT, adminServerHttpsPort + "");
             this.groupMembershipHandler = new ZooKeeperGroupMembershipHandler(zkAddress, zkTimeout, peerId, peerInfo);
         } else {
             this.groupMembershipHandler = new NullGroupMembershipHandler();
-        }
-    }
-
-    private static String resolveAdminServerHost() {
-        try {
-            return InetAddress.getLocalHost().getHostName();
-        } catch (UnknownHostException ex) {
-            LOG.log(Level.INFO, "Unable to resolve Admin Server Hostname. Using localhost.", ex);
-            return "localhost";
         }
     }
 
