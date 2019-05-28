@@ -97,7 +97,7 @@ public class ActionsResource {
         return actions;
     }
 
-    private String computeDescription(ActionConfiguration action) {
+    private static String computeDescription(ActionConfiguration action) {
         switch (action.getType()) {
             case TYPE_CACHE:
             case TYPE_PROXY:
@@ -119,7 +119,7 @@ public class ActionsResource {
                 return "redirect to: " + redirectLocation;
             }
             default:
-                return "";
+                throw new IllegalStateException("For action " +  action);
         }
     }
 

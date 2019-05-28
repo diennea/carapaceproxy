@@ -665,7 +665,7 @@ public class HttpProxyServer implements AutoCloseable {
         try {
             return InetAddress.getLocalHost().getHostName();
         } catch (UnknownHostException ex) {
-            LOG.log(Level.INFO, "Unable to resolve Admin Server Hostname. Using localhost.");
+            LOG.log(Level.INFO, "Unable to resolve Admin Server Hostname. Using localhost.", ex);
             return "localhost";
         }
     }

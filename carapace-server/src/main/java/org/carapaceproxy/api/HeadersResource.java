@@ -91,7 +91,7 @@ public class HeadersResource {
             case REMOVE:
                 return "remove";
             default:
-                return "unknown";
+                return "not defined";
         }
     }
 
