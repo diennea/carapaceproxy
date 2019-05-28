@@ -126,14 +126,14 @@ public class CertificatesResource {
         CertificateBean cert = findCertificateById(certId);
         byte[] data = new byte[0];
         if (cert != null && cert.isDynamic()) {
-            HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");            
+            HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
             DynamicCertificatesManager dynamicCertificateManager = server.getDynamicCertificateManager();
             data = dynamicCertificateManager.getCertificateForDomain(cert.hostname);
         }
 
         return Response
                 .ok(data, MediaType.APPLICATION_OCTET_STREAM)
-                .header("content-disposition","attachment; filename = " + cert.hostname + ".p12")
+                .header("content-disposition", "attachment; filename = " + cert.hostname + ".p12")
                 .build();
     }
 

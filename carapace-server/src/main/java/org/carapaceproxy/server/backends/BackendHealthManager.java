@@ -140,8 +140,8 @@ public class BackendHealthManager implements Runnable {
         }
         Collection<BackendConfiguration> backendConfigurations = mapper.getBackends().values();
         for (BackendConfiguration bconf : backendConfigurations) {
-            String backendId = bconf.getHostPort();
-            BackendHealthStatus status = backends.computeIfAbsent(backendId, (id) -> new BackendHealthStatus(id));
+            String hostPort = bconf.getHostPort();
+            BackendHealthStatus status = backends.computeIfAbsent(hostPort, (_hostPort) -> new BackendHealthStatus(_hostPort));
 
             BackendHealthCheck checkResult = BackendHealthCheck.check(
                     bconf.getHost(), bconf.getPort(), bconf.getProbePath(), connectTimeout);

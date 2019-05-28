@@ -32,6 +32,7 @@ import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
+import org.carapaceproxy.server.mapper.CustomHeader;
 
 public class TestEndpointMapper extends EndpointMapper {
 
@@ -42,6 +43,7 @@ public class TestEndpointMapper extends EndpointMapper {
     private final List<RouteConfiguration> routes = new ArrayList();
     private final List<ActionConfiguration> actions = new ArrayList();
     private final List<DirectorConfiguration> directors = new ArrayList();
+    private final List<CustomHeader> headers = new ArrayList();
 
     public TestEndpointMapper(String host, int port) {
         this(host, port, false);
@@ -91,4 +93,10 @@ public class TestEndpointMapper extends EndpointMapper {
     public List<DirectorConfiguration> getDirectors() {
         return directors;
     }
+
+    public List<CustomHeader> getHeaders() {
+        return headers;
+    }
+
+
 }

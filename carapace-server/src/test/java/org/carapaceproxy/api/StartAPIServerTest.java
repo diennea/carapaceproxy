@@ -164,7 +164,6 @@ public class StartAPIServerTest extends UseAdminServer {
             assertTrue(s.contains("\"not-found\",\"type\":\"static\""));
             assertTrue(s.contains("\"cache-if-possible\",\"type\":\"cache\""));
             assertTrue(s.contains("\"internal-error\",\"type\":\"static\""));
-            assertTrue(s.contains("\"acme-challenge\",\"type\":\"acme-challenge\""));
             assertTrue(s.contains("\"proxy-all\",\"type\":\"proxy\""));
         }
     }
@@ -345,7 +344,7 @@ public class StartAPIServerTest extends UseAdminServer {
                 assertThat(json, containsString("\"status\":\"" + stateToStatusString(state) + "\""));
             }
 
-            // Downloading            
+            // Downloading
             CertificateData cert = store.loadCertificateForDomain(dynDomain);
             cert.setChain(Base64.getEncoder().encodeToString("CHAIN".getBytes()));
             store.saveCertificate(cert);

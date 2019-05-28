@@ -26,61 +26,73 @@ import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import org.carapaceproxy.server.HttpProxyServer;
-import static org.carapaceproxy.server.mapper.StandardEndpointMapper.ACME_CHALLENGE_ROUTE_ACTION_ID;
+import org.carapaceproxy.server.mapper.CustomHeader;
 
 /**
- * Access to configured routes
+ * Access to configured actions
  *
  * @author paolo.venturi
  */
-@Path("/routes")
+@Path("/headers")
 @Produces("application/json")
-public class RoutesResource {
+public class HeadersResource {
 
     @javax.ws.rs.core.Context
     ServletContext context;
 
-    public static final class RouteBean {
-        private final String id;
-        private final String action;
-        private final boolean enabled;
-        private final String matcher;
+    public static final class HeaderBean {
 
-        public RouteBean(String id, String action, boolean enabled, String matcher) {
+        private final String id;
+        private final String name;
+        private final String value;
+        private final String mode;
+
+        public HeaderBean(String id, String name, String value, String mode) {
             this.id = id;
-            this.action = action;
-            this.enabled = enabled;
-            this.matcher = matcher;
+            this.name = name;
+            this.value = value;
+            this.mode = mode;
         }
 
         public String getId() {
             return id;
         }
 
-        public String getAction() {
-            return action;
+        public String getName() {
+            return name;
         }
 
-        public boolean isEnabled() {
-            return enabled;
+        public String getValue() {
+            return value;
         }
 
-        public String getMatcher() {
-            return matcher;
+        public String getMode() {
+            return mode;
         }
     }
 
     @GET
-    public List<RouteBean> getAll() {
-        final List<RouteBean> routes = new ArrayList();
+    public List<HeaderBean> getAll() {
+        final List<HeaderBean> headers = new ArrayList();
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-        server.getMapper().getRoutes().stream()
-                .filter(r -> !r.getId().equals(ACME_CHALLENGE_ROUTE_ACTION_ID))
-                .forEach(route -> {            
-            routes.add(new RouteBean(route.getId(), route.getAction(), route.isEnabled(), route.getMatcher().getDescription()));
+        server.getMapper().getHeaders().forEach(header -> {
+            headers.add(new HeaderBean(header.getId(), header.getName(), header.getValue(), modeToString(header.getMode())));
         });
 
-        return routes;
+        return headers;
+    }
+
+    static String modeToString(CustomHeader.HeaderMode mode) {
+        switch (mode) {
+            case ADD:
+                return "add";
+            case SET:
+                return "set";
+            case REMOVE:
+                return "remove";
+            default:
+                return "not defined";
+        }
     }
 
 }

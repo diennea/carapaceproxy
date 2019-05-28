@@ -22,26 +22,36 @@ package org.carapaceproxy.server.mapper;
 /**
  *
  * Custom Header to add/set/remove in HttpResponses
- * 
+ *
  * @author paolo.venturi
  */
 public final class CustomHeader {
 
-    // ADD: to append the header
-    // SET: to set the header as the only one
-    // REMOVE: to remove the header
     public static enum HeaderMode {
-        HEADER_MODE_ADD, HEADER_MODE_SET, HEADER_MODE_REMOVE
+        ADD, // to append the header
+        SET, // to set the header as the only one
+        REMOVE; // to remove the header
+
+        @Override
+        public String toString() {
+            return super.toString().toLowerCase();
+        }
     }
 
+    private final String id;
     private final String name;
     private final String value;
     private final HeaderMode mode;
 
-    public CustomHeader(String name, String value, HeaderMode mode) {
+    public CustomHeader(String id, String name, String value, HeaderMode mode) {
+        this.id = id;
         this.name = name;
         this.value = value;
         this.mode = mode;
+    }
+
+    public String getId() {
+        return id;
     }
 
     public String getName() {
