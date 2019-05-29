@@ -9,7 +9,7 @@ jobs:
   include:
   - stage: test
     jdk: oraclejdk11
-    script: mvn verify -Dmaven.test.redirectTestOutputToFile=true -Dsurefire.rerunFailingTestsCount=2 
+    script: mvn verify -Pproduction -Dmaven.test.redirectTestOutputToFile=true -Dsurefire.rerunFailingTestsCount=2 
 
 branches:
   only:
