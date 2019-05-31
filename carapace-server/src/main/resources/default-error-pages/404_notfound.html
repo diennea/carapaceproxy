@@ -1,5 +1,45 @@
-<html>
-    <body>
-        The requested resource was not found
-    </body>        
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>404 - Not Found</title>
+    <style>
+        body {font-family: Helvetica, sans-serif;padding: 0;margin: 0}
+        .wrapper {display: flex;align-items: center;justify-content: center;position: relative;overflow: hidden;height: 100vh}
+        .notfound {width: 100%;max-width: 567px;padding: 0 30px}
+        .notfound .notfound-404 {position: relative;text-align: center;}
+        .notfound .notfound-404 h1 {
+            margin: 0;font-size: 250px;font-weight: 200;background: #0F2027;
+            margin-top: -50px;
+            background: #232526;  /* fallback for old browsers */
+            background: -webkit-linear-gradient(to bottom, #414345, #232526);  /* Chrome 10-25, Safari 5.1-6 */
+            background: linear-gradient(to bottom, #414345, #232526); /* W3C, IE 10+/ Edge, Firefox 16+, Chrome 26+, Opera 12+, Safari 7+ */
+            -webkit-background-clip: text;background-clip: text;
+            color: transparent;
+        }
+        .notfound h2 {font-size: 36px;font-weight: 200;text-transform: uppercase;margin-top: 0;margin-bottom: 10px;letter-spacing: 2px}
+        .notfound p {font-size: 18px;margin-top: 0}
+        @media only screen and (max-width:480px) {
+            .notfound .notfound-404 {position: relative;height: 168px}
+            .notfound .notfound-404 h1 {font-size: 142px}
+            .notfound h2 {font-size: 22px}
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrapper">
+        <div class="notfound">
+            <div class="notfound-404">
+                <h1>404</h1>
+            </div>
+            <h2>Oops! Nothing was found</h2>
+            <p>The page you are looking for might have been removed, had its name changed or is temporarily unavailable.
+        </div>
+    </div>
+</body>
+
 </html>
