@@ -1,0 +1,17 @@
+[Unit]
+Description=Carapace Service
+Documentation=https://github.com/diennea/carapaceproxy/wiki
+Requires=network.target
+After=network.target
+
+[Service]
+Type=forking
+User={RUNASUSER}
+Group={RUNASUSER_GROUP}
+ExecStart={CARAPACE_INSTALLATION_PATH}/bin/service server start
+ExecStop={CARAPACE_INSTALLATION_PATH}/bin/service server stop
+ExecReload={CARAPACE_INSTALLATION_PATH}/bin/service server restart
+WorkingDirectory={CARAPACE_INSTALLATION_PATH}
+
+[Install]
+WantedBy=default.target
