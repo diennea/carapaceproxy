@@ -32,6 +32,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -97,6 +98,8 @@ public class HttpProxyServer implements AutoCloseable {
 
     private String peerId = "localhost";
     private String zkAddress;
+    private Properties zkProperties = new Properties();
+    private boolean zkSecure;
     private int zkTimeout;
     private boolean cluster;
     private GroupMembershipHandler groupMembershipHandler = new NullGroupMembershipHandler();
@@ -547,7 +550,8 @@ public class HttpProxyServer implements AutoCloseable {
      *
      * @param newConfigurationStore
      * @throws InterruptedException
-     * @see #buildValidConfiguration(org.carapaceproxy.configstore.ConfigurationStore)
+     * @see
+     * #buildValidConfiguration(org.carapaceproxy.configstore.ConfigurationStore)
      */
     public void applyDynamicConfigurationFromAPI(ConfigurationStore newConfigurationStore) throws InterruptedException, ConfigurationChangeInProgressException {
         applyDynamicConfiguration(newConfigurationStore, false);
@@ -640,8 +644,13 @@ public class HttpProxyServer implements AutoCloseable {
                 cluster = true;
                 peerId = staticConfiguration.getProperty("peer.id", computeDefaultPeerId());
                 zkAddress = staticConfiguration.getProperty("zkAddress", "localhost:2181");
+                zkSecure = Boolean.parseBoolean(staticConfiguration.getProperty("zkSecure", "false"));
                 zkTimeout = Integer.parseInt(staticConfiguration.getProperty("zkTimeout", "40000"));
-                LOG.log(Level.INFO, "mode=cluster, zkAddress=''{0}'',zkTimeout={1}, peer.id=''{2}''", new Object[]{zkAddress, zkTimeout, peerId});
+                zkProperties = new Properties(staticConfiguration.asProperties("zookeeper."));
+                LOG.log(Level.INFO, "mode=cluster, zkAddress=''{0}'',zkTimeout={1}, peer.id=''{2}'', zkSecure: {3}", new Object[]{zkAddress, zkTimeout, peerId, zkSecure});
+                zkProperties.forEach((k, v) -> {
+                    LOG.log(Level.INFO, "additional zkclient property: " + k + "=" + v);
+                });
                 break;
             case "standalone":
                 cluster = false;
@@ -658,7 +667,7 @@ public class HttpProxyServer implements AutoCloseable {
             peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HOST, adminAdvertisedServerHost);
             peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_PORT, adminServerHttpPort + "");
             peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HTTPS_PORT, adminServerHttpsPort + "");
-            this.groupMembershipHandler = new ZooKeeperGroupMembershipHandler(zkAddress, zkTimeout, peerId, peerInfo);
+            this.groupMembershipHandler = new ZooKeeperGroupMembershipHandler(zkAddress, zkTimeout, zkSecure, peerId, peerInfo, zkProperties);
         } else {
             this.groupMembershipHandler = new NullGroupMembershipHandler();
         }

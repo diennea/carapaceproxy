@@ -26,6 +26,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
@@ -36,18 +37,26 @@ import java.util.logging.Logger;
 import org.apache.curator.ensemble.fixed.FixedEnsembleProvider;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
+import org.apache.curator.framework.api.ACLProvider;
+import org.apache.curator.framework.imps.DefaultACLProvider;
 import org.apache.curator.framework.recipes.cache.PathChildrenCache;
 import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent;
 import org.apache.curator.framework.recipes.cache.PathChildrenCacheListener;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
 import org.apache.curator.retry.ExponentialBackoffRetry;
+import org.apache.curator.utils.ZookeeperFactory;
 import org.apache.zookeeper.CreateMode;
+import org.apache.zookeeper.Watcher;
+import org.apache.zookeeper.ZooDefs;
+import org.apache.zookeeper.ZooKeeper;
+import org.apache.zookeeper.client.ZKClientConfig;
+import org.apache.zookeeper.data.ACL;
 import org.apache.zookeeper.data.Stat;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 
 /**
- * Implementation based on ZooKeeper. This class is very simple, we are not expecting heavy traffic on ZooKeeper. We
- * have two systems:
+ * Implementation based on ZooKeeper. This class is very simple, we are not
+ * expecting heavy traffic on ZooKeeper. We have two systems:
  * <ul>
  * <li>Peer discovery
  * <li>Configuration changes event broadcast
@@ -71,14 +80,55 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     private final ConcurrentHashMap<String, InterProcessMutex> mutexes = new ConcurrentHashMap<>();
     private final ExecutorService callbacksExecutor = Executors.newSingleThreadExecutor();
 
-    public ZooKeeperGroupMembershipHandler(String zkAddress, int zkTimeout, String peerId, Map<String, String> peerInfo) {
+    public ZooKeeperGroupMembershipHandler(String zkAddress, int zkTimeout, boolean zkAcl,
+            String peerId, Map<String, String> peerInfo,
+            Properties zkProperties) {
+        ACLProvider aclProvider = new DefaultACLProvider();
+        if (zkAcl) {
+            aclProvider = new ACLProvider() {
+                @Override
+                public List<ACL> getDefaultAcl() {
+                    return ZooDefs.Ids.CREATOR_ALL_ACL;
+                }
+
+                @Override
+                public List<ACL> getAclForPath(String path) {
+                    return getDefaultAcl();
+                }
+            };
+        }
+
+        final ZKClientConfig zkClientConfig = new ZKClientConfig();
+        zkProperties.forEach((k, v) -> {
+            zkClientConfig.setProperty(k.toString(), v.toString());
+            LOG.log(Level.INFO, "Setting ZK client config: {0}={1}", new Object[]{k, v});
+        });
+        ZookeeperFactory zkFactory = (String connect, int timeout, Watcher wtchr, boolean canBeReadOnly) -> {
+            LOG.log(Level.INFO, "Creating ZK client: {0}, timeout {1}, canBeReadOnly:{2}", new Object[]{connect, timeout, canBeReadOnly});
+            return new ZooKeeper(connect, timeout, wtchr, canBeReadOnly, zkClientConfig);
+        };
+
         client = CuratorFrameworkFactory
                 .builder()
+                .aclProvider(aclProvider)
+                .zookeeperFactory(zkFactory)
                 .sessionTimeoutMs(zkTimeout)
                 .waitForShutdownTimeoutMs(1000) // useful for tests
                 .retryPolicy(new ExponentialBackoffRetry(1000, 2))
                 .ensembleProvider(new FixedEnsembleProvider(zkAddress, true))
                 .build();
+        LOG.log(Level.INFO, "Waiting for ZK client connection to be established");
+        try {
+            boolean ok = client.blockUntilConnected(zkTimeout, TimeUnit.MILLISECONDS);
+            if (!ok) {
+                LOG.log(Level.SEVERE, "First connection to ZK cannot be established");
+            } else {
+                LOG.log(Level.SEVERE, "First connection to ZK established with success");
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(ex);
+        }
         this.peerId = peerId;
         this.peerInfo = peerInfo;
     }

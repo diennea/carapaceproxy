@@ -23,9 +23,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.curator.test.TestingServer;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
+import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -46,9 +48,9 @@ public class ZooKeeperGroupMembershipHandlerTest {
         try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder())) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
-                    6000, peerId1, Collections.EMPTY_MAP);
+                    6000, false /*acl */, peerId1, Collections.EMPTY_MAP, new Properties());
                     ZooKeeperGroupMembershipHandler peer2 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
-                    6000, peerId2, Collections.EMPTY_MAP)) {
+                            6000, false /*acl */, peerId2, Collections.EMPTY_MAP, new Properties())) {
                 peer1.start();
                 peer2.start();
                 List<String> peersFrom1 = peer1.getPeers();
@@ -57,7 +59,7 @@ public class ZooKeeperGroupMembershipHandlerTest {
                 assertEquals(Arrays.asList(peerId1, peerId2), peersFrom2);
 
                 try (ZooKeeperGroupMembershipHandler peer3 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
-                        6000, peerId3, Collections.EMPTY_MAP)) {
+                        6000, false /*acl */, peerId3, Collections.EMPTY_MAP, new Properties())) {
                     peer3.start();
                     peersFrom1 = peer1.getPeers();
                     peersFrom2 = peer2.getPeers();
@@ -82,9 +84,9 @@ public class ZooKeeperGroupMembershipHandlerTest {
         try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder());) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
-                    6000, peerId1, Collections.EMPTY_MAP);
+                    6000, false /*acl */, peerId1, Collections.EMPTY_MAP, new Properties());
                     ZooKeeperGroupMembershipHandler peer2 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
-                    6000, peerId2, Collections.EMPTY_MAP)) {
+                            6000, false /*acl */, peerId2, Collections.EMPTY_MAP, new Properties())) {
                 peer1.start();
                 peer2.start();
                 List<String> peersFrom1 = peer1.getPeers();
@@ -107,17 +109,14 @@ public class ZooKeeperGroupMembershipHandlerTest {
 
                 peer1.fireEvent("foo");
 
-                for (int i = 0; i < 10; i++) {
-                    if (eventFired2.get() >= 1) {
-                        break;
-                    }
-                    Thread.sleep(100);
-                }
+                TestUtils.waitForCondition(() -> {
+                    return eventFired2.get() >= 1;
+                }, 100);
                 assertTrue(eventFired2.get() >= 1);
                 eventFired2.set(0);
 
                 try (ZooKeeperGroupMembershipHandler peer3 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
-                        6000, peerId3, Collections.EMPTY_MAP)) {
+                        6000, false /*acl */, peerId3, Collections.EMPTY_MAP, new Properties())) {
                     peer3.start();
 
                     AtomicInteger eventFired3 = new AtomicInteger();
@@ -135,13 +134,10 @@ public class ZooKeeperGroupMembershipHandlerTest {
 
                     peer1.fireEvent("foo");
 
-                    for (int i = 0; i < 10; i++) {
-                        if (eventFired2.get() >= 1
-                                && eventFired3.get() >= 1) {
-                            break;
-                        }
-                        Thread.sleep(100);
-                    }
+                    TestUtils.waitForCondition(() -> {
+                        return (eventFired2.get() >= 1
+                                && eventFired3.get() >= 1);
+                    }, 100);
                     assertTrue(eventFired3.get() >= 1);
                     assertTrue(eventFired2.get() >= 1);
 
@@ -170,9 +166,9 @@ public class ZooKeeperGroupMembershipHandlerTest {
         try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder());) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
-                    6000, peerId1, Map.of("name", "peer1"));
+                    6000, false /*acl */, peerId1, Map.of("name", "peer1"), new Properties());
                     ZooKeeperGroupMembershipHandler peer2 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
-                    6000, peerId2, Map.of("name", "peer2"))) {
+                            6000, false /*acl */, peerId2, Map.of("name", "peer2"), new Properties())) {
                 peer1.start();
                 peer2.start();
 
@@ -186,7 +182,7 @@ public class ZooKeeperGroupMembershipHandlerTest {
                     peer1.storeLocalPeerInfo(Map.of("name", "newpeer1", "address", "localhost"));
                     info = peer1.loadInfoForPeer(peerId1);
                     assertEquals("newpeer1", info.get("name"));
-                    assertEquals("localhost", info.get("address"));                    
+                    assertEquals("localhost", info.get("address"));
 
                     peer1.storeLocalPeerInfo(Collections.EMPTY_MAP);
                     info = peer1.loadInfoForPeer(peerId1);
@@ -207,7 +203,7 @@ public class ZooKeeperGroupMembershipHandlerTest {
                     assertEquals("localhost:8080", info.get("address"));
                     info = peer2.loadInfoForPeer(peerId1);
                     assertNull(info);
-                }              
+                }
             }
         }
     }
