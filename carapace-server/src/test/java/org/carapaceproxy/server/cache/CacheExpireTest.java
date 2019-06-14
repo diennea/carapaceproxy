@@ -243,7 +243,7 @@ public class CacheExpireTest {
 
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() == 1
+            return epstats.getTotalConnections().intValue() >= 1
                 && epstats.getActiveConnections().intValue() == 0
                 && epstats.getOpenConnections().intValue() == 0;
         }, 100);

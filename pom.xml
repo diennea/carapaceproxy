@@ -31,11 +31,10 @@
             </plugin>
             <plugin>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>2.21.0</version>
+                <version>3.0.0-M3</version>
                 <configuration>
                     <reuseForks>false</reuseForks>
                     <trimStackTrace>false</trimStackTrace>
-                    <!--<forkedProcessTimeoutInSeconds>180</forkedProcessTimeoutInSeconds>-->
                 </configuration>
             </plugin>
         </plugins>

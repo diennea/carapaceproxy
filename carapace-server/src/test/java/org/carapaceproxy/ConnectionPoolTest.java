@@ -23,6 +23,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.hamcrest.CoreMatchers.containsString;
+
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.net.URL;
 import org.apache.commons.io.IOUtils;
@@ -32,9 +34,25 @@ import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import org.carapaceproxy.client.EndpointNotAvailableException;
+import org.carapaceproxy.client.impl.ConnectionsManagerImpl;
+import org.carapaceproxy.client.impl.EndpointConnectionImpl;
+import org.carapaceproxy.configstore.PropertiesConfigurationStore;
+import org.carapaceproxy.server.RuntimeServerConfiguration;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -91,7 +109,8 @@ public class ConnectionPoolTest {
             assertEquals(2, epstats.getTotalRequests().intValue());
 
             for (int i = 0; i < 10; i++) {
-                assertEquals("ok", IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8"));
+                assertEquals("ok", IOUtils.
+                        toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8"));
                 TestUtils.waitForCondition(TestUtils.NO_ACTIVE_CONNECTION(stats), 100);
                 System.out.println("STATS: " + epstats);
                 assertEquals(1, epstats.getTotalConnections().intValue());
@@ -100,6 +119,110 @@ public class ConnectionPoolTest {
                 assertEquals(i + 3, epstats.getTotalRequests().intValue());
             }
 
+        }
+
+        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+
+    }
+
+    @Test
+    public void testExhaustConnections() throws Exception {
+
+        stubFor(get(urlEqualTo("/index.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "2")
+                        .withBody("ok")));
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            Properties props = new Properties();
+            props.setProperty("connectionsmanager.maxconnectionsperendpoint", "1");
+            props.setProperty("connectionsmanager.borrowtimeout", "1000");
+
+            server.configureAtBoot(new PropertiesConfigurationStore(props));
+            server.start();
+            stats = server.getConnectionsManager().getStats();
+            ConnectionsManagerImpl connectionsManager = (ConnectionsManagerImpl) server.getConnectionsManager();
+            int expectedMaxWaitTimeout = connectionsManager.getBorrowTimeout();
+            assertEquals(1000, connectionsManager.getBorrowTimeout());
+            assertEquals(1, connectionsManager.getConnections().getMaxTotalPerKey());
+            assertEquals(1, connectionsManager.getConnections().getMaxIdlePerKey());
+
+            EndpointConnectionImpl connection1 = (EndpointConnectionImpl) connectionsManager.getConnection(key);
+            try {
+                long _start = System.currentTimeMillis();
+                long _end;
+                try {
+                    connectionsManager.getConnection(key);
+                    fail("cannot get more than 1 connection");
+                } catch (EndpointNotAvailableException err) {
+                    assertThat(err.getMessage(), containsString("Too many"));
+                } finally {
+                    _end = System.currentTimeMillis();
+                }
+                long delta = _end - _start;
+                assertTrue("ERROR AFTER: " + delta, delta >= expectedMaxWaitTimeout);
+            } finally {
+                connectionsManager.returnConnection(connection1);
+            }
+        }
+
+        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+
+    }
+
+    @Test
+    public void testMoreClientsThenMaxConnections() throws Exception {
+
+        stubFor(get(urlEqualTo("/index.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "2")
+                        .withBody("ok")));
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+
+            // tewaking configuration
+            server.getCurrentConfiguration().setMaxConnectionsPerEndpoint(1);            
+            server.getCurrentConfiguration().setBorrowTimeout(1000);
+            server.getConnectionsManager().applyNewConfiguration(server.getCurrentConfiguration());
+            server.start();
+            stats = server.getConnectionsManager().getStats();
+
+            int port = server.getLocalPort();
+
+            ExecutorService threadPool = Executors.newFixedThreadPool(2);
+            try {
+                List<Future<?>> all = new ArrayList<>();
+                for (int i = 0; i < 5; i++) {
+                    all.add(
+                            threadPool.submit(() -> {
+                                try {
+                                    assertEquals("ok", IOUtils.
+                                            toString(new URL("http://localhost:" + port + "/index.html").toURI(),
+                                                    "utf-8"));
+                                } catch (Exception err) {
+                                    throw new RuntimeException(err);
+                                }
+                            }));
+
+                }
+                for (Future<?> handle : all) {
+                    handle.get();
+                }
+            } finally {
+                threadPool.shutdownNow();
+            }
         }
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);

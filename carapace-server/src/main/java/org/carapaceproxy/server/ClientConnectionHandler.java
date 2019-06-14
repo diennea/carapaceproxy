@@ -24,6 +24,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
@@ -63,7 +64,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     final StaticContentsManager staticContentsManager;
     final RequestsLogger requestsLogger;
     final long connectionStartsTs;
-    volatile Boolean keepAlive;
+    volatile boolean keepAlive = true;
     volatile boolean refuseOtherRequests;
     private final List<RequestHandler> pendingRequests = new CopyOnWriteArrayList<>();
     final Runnable onClientDisconnected;
@@ -122,17 +123,24 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     }
 
     @Override
-    protected void channelRead0(ChannelHandlerContext ctx, Object msg) {
-        if (refuseOtherRequests) {
-            LOG.log(Level.INFO, "{0} refuseOtherRequests", this);
-            ctx.close();
-            return;
-        }
+    protected void channelRead0(ChannelHandlerContext ctx, Object msg) {       
         if (LOG.isLoggable(Level.FINEST)) {
             LOG.log(Level.FINEST, "{0} channelRead0 {1}", new Object[]{this, msg});
         }
         if (msg instanceof HttpRequest) {
+            if (refuseOtherRequests) {
+                if (LOG.isLoggable(Level.FINE)) {
+                    LOG.log(Level.FINE, "{0} refuseOtherRequests", this);
+                }
+                ctx.close();
+                return;
+            }
             HttpRequest request = (HttpRequest) msg;
+            boolean _keepAlive = HttpUtil.isKeepAlive(request);
+            if (!_keepAlive) {
+                this.keepAlive = false;
+                refuseOtherRequests = true;
+            }
             RequestHandler currentRequest = new RequestHandler(requestIdGenerator.incrementAndGet(),
                     request, filters, this, ctx, () -> RUNNING_REQUESTS_GAUGE.dec(), backendHealthManager, requestsLogger);
             addPendingRequest(currentRequest);
@@ -156,17 +164,21 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
                 RequestHandler currentRequest = pendingRequests.get(0);
                 currentRequest.continueClientRequest(httpContent);
             } catch (java.lang.ArrayIndexOutOfBoundsException noMorePendingRequests) {
-                LOG.info(this + " swallow " + msg + ", no more pending requests");
+                LOG.log(Level.INFO, "{0} swallow {1}, no more pending requests", new Object[]{this, msg});
                 refuseOtherRequests = true;
                 ctx.close();
             }
         }
     }
+    
+    void closeIfNotKeepAlive(final ChannelHandlerContext channelToClient) {
+        if (!keepAlive) {
+            refuseOtherRequests = true;
+            channelToClient.close();
+        }
+    }
 
     boolean isKeepAlive() {
-        if (keepAlive == null) {
-            return true;
-        }
         return keepAlive;
     }
 
@@ -192,12 +204,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         LOG.log(Level.INFO, error, () -> this + " errorSendingRequest " + endpointConnection);
     }
 
-    public void lastHttpContentSent(RequestHandler requestHandler) {
-        if (!requestHandler.isKeepAlive()) {
-            keepAlive = false;
-        } else if (keepAlive == null) {
-            keepAlive = true;
-        }
+    public void lastHttpContentSent(RequestHandler requestHandler) {        
         pendingRequests.remove(requestHandler);
     }
 
