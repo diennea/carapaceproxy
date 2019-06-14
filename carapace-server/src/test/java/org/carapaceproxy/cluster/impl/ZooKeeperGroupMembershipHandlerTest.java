@@ -146,10 +146,13 @@ public class ZooKeeperGroupMembershipHandlerTest {
 
                     peer3.fireEvent("foo");
 
-                    TestUtils.waitForCondition(() -> {
-                        return (eventFired2.get() >= 1
-                                && eventFired3.get() >= 1);
-                    }, 100);
+                    for (int i = 0; i < 10; i++) {
+                        if (eventFired2.get() >= 1
+                                && eventFired3.get() >= 1) {
+                            break;
+                        }
+                        Thread.sleep(100);
+                    }
                     assertTrue(eventFired3.get() == 0); // self events are not fired
                     assertTrue(eventFired2.get() > 0);
                 }
