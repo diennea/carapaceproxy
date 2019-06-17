@@ -251,9 +251,6 @@ public class RuntimeServerConfiguration {
         LOG.info("accesslog.flush.interval=" + accessLogFlushInterval);
         LOG.info("accesslog.failure.wait=" + accessLogWaitBetweenFailures);
 
-        this.userRealmClassname = getClassname("userrealm.class", FileUserRealm.class.getName(), properties);
-        LOG.log(Level.INFO, "userrealm.class={0}", this.userRealmClassname);
-
         for (int i = 0; i < 100; i++) {
             tryConfigureCertificate(i, properties);
         }
