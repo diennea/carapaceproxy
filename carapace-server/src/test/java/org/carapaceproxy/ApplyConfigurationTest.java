@@ -243,50 +243,49 @@ public class ApplyConfigurationTest {
     }
 
     @Test
-    public void testReloadRealm() throws Exception {
+    public void testUserRealm() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
-            {
-                Properties configuration = new Properties();
-                server.configureAtBoot(new PropertiesConfigurationStore(configuration));
-            }
+        // Default UserRealm
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+            Properties configuration = new Properties();
+            server.configureAtBoot(new PropertiesConfigurationStore(configuration));
             server.start();
-            {
-                UserRealm realm = server.getRealm();
-                assertTrue(realm instanceof SimpleUserRealm);
 
-                // default user with auth always valid
-                SimpleUserRealm userRealm = (SimpleUserRealm) server.getRealm();
-                assertEquals(1, userRealm.listUsers().size());
+            UserRealm realm = server.getRealm();
+            assertTrue(realm instanceof SimpleUserRealm);
 
-                assertNotNull(userRealm.login("test_0", "anypass0"));
-                assertNotNull(userRealm.login("test_1", "anypass1"));
-                assertNotNull(userRealm.login("test_2", "anypass2"));
-            }
+            // default user with auth always valid
+            SimpleUserRealm userRealm = (SimpleUserRealm) server.getRealm();
+            assertEquals(1, userRealm.listUsers().size());
 
-            {
-                // dynamic class change with a Test realm impelementation
-                Properties configuration = new Properties();
-                configuration.put("userrealm.class", "org.carapaceproxy.utils.TestUserRealm");
+            assertNotNull(userRealm.login("test_0", "anypass0"));
+            assertNotNull(userRealm.login("test_1", "anypass1"));
+            assertNotNull(userRealm.login("test_2", "anypass2"));
+        }
 
-                configuration.put("user.test1", "pass1");
-                configuration.put("user.test2", "pass2");
-                configuration.put("user.test3", "pass3");
+        // TestUserRealm
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+            Properties configuration = new Properties();
+            configuration.put("userrealm.class", "org.carapaceproxy.utils.TestUserRealm");
+            configuration.put("user.test1", "pass1");
+            configuration.put("user.test2", "pass2");
+            server.configureAtBoot(new PropertiesConfigurationStore(configuration));
+            server.start();
 
-                reloadConfiguration(configuration, server);
+            UserRealm realm = server.getRealm();
+            assertTrue(realm instanceof TestUserRealm);
+            TestUserRealm userRealm = (TestUserRealm) server.getRealm();
+            assertEquals(2, userRealm.listUsers().size());
+            assertNotNull(userRealm.login("test1", "pass1"));
+            assertNotNull(userRealm.login("test2", "pass2"));
+            assertNull(userRealm.login("test1", "pass3")); // wrong pass
 
-                UserRealm realm = server.getRealm();
-                assertTrue(realm instanceof TestUserRealm);
-
-                TestUserRealm userRealm = (TestUserRealm) server.getRealm();
-                assertEquals(3, userRealm.listUsers().size());
-
-                assertNotNull(userRealm.login("test1", "pass1"));
-                assertNotNull(userRealm.login("test2", "pass2"));
-                assertNotNull(userRealm.login("test3", "pass3"));
-
-                assertNull(userRealm.login("test1", "pass3")); // wrong pass
-            }
+            // Add new user
+            configuration.put("user.test3", "pass3");
+            reloadConfiguration(configuration, server);
+            userRealm = (TestUserRealm) server.getRealm(); // realm re-created at each configuration reload
+            assertEquals(3, userRealm.listUsers().size());
+            assertNotNull(userRealm.login("test3", "pass3"));
         }
     }
 

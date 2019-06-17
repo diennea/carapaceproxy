@@ -381,7 +381,7 @@ public class HttpProxyServer implements AutoCloseable {
         }
     }
 
-    private UserRealm buildRealm(ConfigurationStore properties) throws ConfigurationNotValidException {
+    private static UserRealm buildRealm(String userRealmClassname, ConfigurationStore properties) throws ConfigurationNotValidException {
         try {
             UserRealm res = (UserRealm) Class.forName(userRealmClassname).getConstructor().newInstance();
             res.configure(properties);
@@ -541,7 +541,12 @@ public class HttpProxyServer implements AutoCloseable {
 
     public RuntimeServerConfiguration buildValidConfiguration(ConfigurationStore simpleStore) throws ConfigurationNotValidException {
         RuntimeServerConfiguration newConfiguration = new RuntimeServerConfiguration();
-        newConfiguration.configure(simpleStore);        
+        
+        // Try to perform a service configuration from the passed store.
+        newConfiguration.configure(simpleStore);
+        buildMapper(newConfiguration.getMapperClassname(), simpleStore);
+        buildRealm(userRealmClassname, simpleStore);
+        
         return newConfiguration;
     }
 
@@ -576,7 +581,7 @@ public class HttpProxyServer implements AutoCloseable {
             RuntimeServerConfiguration newConfiguration = buildValidConfiguration(storeWithConfig);
             EndpointMapper newMapper = buildMapper(newConfiguration.getMapperClassname(), storeWithConfig);
             newMapper.setDynamicCertificateManager(this.dynamicCertificateManager);
-            UserRealm newRealm = buildRealm(storeWithConfig);
+            UserRealm newRealm = buildRealm(userRealmClassname, storeWithConfig);
 
             this.filters = buildFilters(newConfiguration);
             this.backendHealthManager.reloadConfiguration(newConfiguration, newMapper);
