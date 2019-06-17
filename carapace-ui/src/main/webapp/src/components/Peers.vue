@@ -22,9 +22,14 @@
                         </div>
                     </td>                    
                     <td>
-                        <div class="label">
+                        <div v-if="item.info['peer_admin_server_port'] > 0" class="label">
                             <a :href="'http://' + item.info['peer_admin_server_host'] + ':' + item.info['peer_admin_server_port'] + '/ui/#/'" >
-                                {{item.info['peer_admin_server_host']}}:{{item.info['peer_admin_server_port']}}
+                                http://{{item.info['peer_admin_server_host']}}:{{item.info['peer_admin_server_port']}}
+                            </a>
+                        </div>
+                        <div v-if="item.info['peer_admin_server_https_port'] > 0" class="label">
+                            <a :href="'https://' + item.info['peer_admin_server_host'] + ':' + item.info['peer_admin_server_https_port'] + '/ui/#/'" >
+                                https://{{item.info['peer_admin_server_host']}}:{{item.info['peer_admin_server_https_port']}}
                             </a>
                         </div>
                     </td>
