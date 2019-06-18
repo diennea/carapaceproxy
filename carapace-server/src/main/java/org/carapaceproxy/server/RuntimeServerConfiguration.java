@@ -39,6 +39,7 @@ import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
+import org.carapaceproxy.user.FileUserRealm;
 import org.carapaceproxy.user.SimpleUserRealm;
 
 /**
@@ -249,9 +250,6 @@ public class RuntimeServerConfiguration {
         LOG.info("accesslog.queue.maxcapacity=" + accessLogMaxQueueCapacity);
         LOG.info("accesslog.flush.interval=" + accessLogFlushInterval);
         LOG.info("accesslog.failure.wait=" + accessLogWaitBetweenFailures);
-
-        this.userRealmClassname = getClassname("userrealm.class", SimpleUserRealm.class.getName(), properties);
-        LOG.log(Level.INFO, "userrealm.class={0}", this.userRealmClassname);
 
         for (int i = 0; i < 100; i++) {
             tryConfigureCertificate(i, properties);

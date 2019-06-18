@@ -54,6 +54,7 @@ import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PRO
 import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_PORT;
 import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_HTTPS_PORT;
 import org.carapaceproxy.configstore.ConfigurationStore;
+import static org.carapaceproxy.configstore.ConfigurationStoreUtils.getClassname;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.cache.ContentsCache;
@@ -64,6 +65,8 @@ import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
+import org.carapaceproxy.user.FileUserRealm;
+import org.carapaceproxy.user.SimpleUserRealm;
 import org.carapaceproxy.user.UserRealm;
 import org.eclipse.jetty.server.HttpConfiguration;
 import org.eclipse.jetty.server.HttpConnectionFactory;
@@ -128,6 +131,7 @@ public class HttpProxyServer implements AutoCloseable {
     private String adminServerCertFile;
     private String adminServerCertFilePwd;
     private String metricsUrl;
+    private String userRealmClassname;
     /**
      * This is only for testing cluster mode with a single machine
      */
@@ -380,9 +384,9 @@ public class HttpProxyServer implements AutoCloseable {
         }
     }
 
-    private static UserRealm buildRealm(String className, ConfigurationStore properties) throws ConfigurationNotValidException {
+    private static UserRealm buildRealm(String userRealmClassname, ConfigurationStore properties) throws ConfigurationNotValidException {
         try {
-            UserRealm res = (UserRealm) Class.forName(className).getConstructor().newInstance();
+            UserRealm res = (UserRealm) Class.forName(userRealmClassname).getConstructor().newInstance();
             res.configure(properties);
             return res;
         } catch (ClassNotFoundException err) {
@@ -399,7 +403,7 @@ public class HttpProxyServer implements AutoCloseable {
             throw new IllegalStateException("server already started");
         }
 
-        readClusterConfiguration(bootConfigurationStore); // need to be always first thing to do (loads cluster setup)
+        readClusterConfiguration(bootConfigurationStore); // need to be always first thing to do (loads cluster setup)        
         String dynamicConfigurationType = bootConfigurationStore.getProperty("config.type", cluster ? "database" : "file");
         switch (dynamicConfigurationType) {
             case "file":
@@ -454,6 +458,8 @@ public class HttpProxyServer implements AutoCloseable {
         adminAccessLogTimezone = properties.getProperty("admin.accesslog.format.timezone", adminAccessLogTimezone);
         adminLogRetentionDays = Integer.parseInt(properties.getProperty("admin.accesslog.retention.days", adminLogRetentionDays + ""));
 
+        userRealmClassname = getClassname("userrealm.class", SimpleUserRealm.class.getName(), properties);
+
         LOG.info("http.admin.enabled=" + adminServerEnabled);
         LOG.info("http.admin.port=" + adminServerHttpPort);
         LOG.info("http.admin.host=" + adminServerHost);
@@ -461,6 +467,7 @@ public class HttpProxyServer implements AutoCloseable {
         LOG.info("https.admin.sslcertfile=" + adminServerCertFile);
         LOG.info("admin.advertised.host=" + adminAdvertisedServerHost);
         LOG.info("listener.offset.port=" + listenersOffsetPort);
+        LOG.info("userrealm.class=" + userRealmClassname);
     }
 
     private static List<RequestFilter> buildFilters(RuntimeServerConfiguration currentConfiguration) throws ConfigurationNotValidException {
@@ -537,11 +544,12 @@ public class HttpProxyServer implements AutoCloseable {
 
     public RuntimeServerConfiguration buildValidConfiguration(ConfigurationStore simpleStore) throws ConfigurationNotValidException {
         RuntimeServerConfiguration newConfiguration = new RuntimeServerConfiguration();
+        
+        // Try to perform a service configuration from the passed store.
         newConfiguration.configure(simpleStore);
-        // creating a mapper validates the configuration
         buildMapper(newConfiguration.getMapperClassname(), simpleStore);
-        buildRealm(newConfiguration.getUserRealmClassname(), simpleStore);
-
+        buildRealm(userRealmClassname, simpleStore);
+        
         return newConfiguration;
     }
 
@@ -577,7 +585,7 @@ public class HttpProxyServer implements AutoCloseable {
             RuntimeServerConfiguration newConfiguration = buildValidConfiguration(storeWithConfig);
             EndpointMapper newMapper = buildMapper(newConfiguration.getMapperClassname(), storeWithConfig);
             newMapper.setDynamicCertificateManager(this.dynamicCertificateManager);
-            UserRealm newRealm = buildRealm(newConfiguration.getUserRealmClassname(), storeWithConfig);
+            UserRealm newRealm = buildRealm(userRealmClassname, storeWithConfig);
 
             this.filters = buildFilters(newConfiguration);
             this.backendHealthManager.reloadConfiguration(newConfiguration, newMapper);

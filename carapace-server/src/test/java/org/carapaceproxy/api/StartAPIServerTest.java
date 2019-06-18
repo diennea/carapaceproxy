@@ -75,7 +75,7 @@ public class StartAPIServerTest extends UseAdminServer {
         // start server with authentication and user test - test
         Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
 
-        properties.put("userrealm.class", "org.carapaceproxy.utils.TestUserRealm");
+        properties.put("userrealm.class", "org.carapaceproxy.utils.TestUserRealm"); // configured at boot only.
         properties.put("user.test", "test");
 
         startServer(properties);
@@ -92,10 +92,11 @@ public class StartAPIServerTest extends UseAdminServer {
             assertTrue(resp.getBodyString().equals("ok"));
         }
 
+        // Add new user
         Properties reloadedProperties = new Properties();
-        reloadedProperties.put("userrealm.class", "org.carapaceproxy.user.SimpleUserRealm");
+        reloadedProperties.put("user.test2", "test2");
         changeDynamicConfiguration(reloadedProperties);
-
+        correctCredentials = new RawHttpClient.BasicAuthCredentials("test2", "test2");
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/up", correctCredentials);
             assertTrue(resp.getBodyString().equals("ok"));
