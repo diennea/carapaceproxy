@@ -1,57 +1,67 @@
     <template>
     <div>
         <h2>Listeners</h2>
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th scope="col">Host</th>
-                    <th scope="col">Port</th>
-                    <th scope="col">SSL</th>
-                    <th scope="col">OCPS</th>
-                    <th scope="col">SSLCiphers</th>
-                    <th scope="col">Total requests</th>
-                    <th scope="col">Default certificate</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr v-for="item of listeners" :key="item.id">
-                    <td>{{item.host}}</td>
-                    <td>{{item.port}}</td>
-                    <td>{{item.ssl | symbolFormat}}</td>
-                    <td>{{item.ssl ? (item.ocps | symbolFormat) : ""}}</td>
-                    <td>{{item.ssl ? item.sslCiphers : ""}}</td>
-                    <td>{{item.totalRequests}}</td>
-                    <td>
-                        <router-link :to="{ name: 'Certificate', params: { id: item.defaultCertificate }}"
-                                     v-if="item.ssl">
-                                {{item.defaultCertificate}}
-                        </router-link>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+        <datatable-list :fields="fields" :items="listeners">
+            <template v-slot:defaultCertificate="{ item }">
+                <router-link
+                    v-if="item.ssl"
+                    :to="{ name: 'Certificate', params: { id: item.defaultCertificate }}"
+                >{{item.defaultCertificate}}</router-link>
+            </template>
+        </datatable-list>
     </div>
 </template>
 
 <script>
-    import { doRequest } from './../mockserver'
-    export default {
-        name: 'Listeners',
-        data: function () {
-            return {
-                listeners: []
-            }
-        },
-        created: function () {
-            var url = "/api/listeners";
-            var d = this;
-            doRequest(url, {}, function (response) {
-                d.listeners = [];
-                Object.keys(response).forEach(function(key) {
-                    d.listeners.push(response[key]);
-                });
-            })
-
+import { doGet } from "./../mockserver";
+import { toBooleanSymbol } from "../lib/formatter";
+export default {
+    name: "Listeners",
+    data() {
+        return {
+            listeners: []
+        };
+    },
+    created() {
+        var url = "/api/listeners";
+        var self = this;
+        doGet(url, data => {
+            self.listeners = Object.values(data || {});
+        });
+    },
+    computed: {
+        fields() {
+            return [
+                { key: "host", label: "Host", sortable: true },
+                { key: "port", label: "Port", sortable: true },
+                {
+                    key: "ssl",
+                    label: "SSL",
+                    sortable: true,
+                    formatter: toBooleanSymbol
+                },
+                {
+                    key: "ocps",
+                    label: "OCPS",
+                    sortable: true,
+                    formatter: toBooleanSymbol
+                },
+                { key: "sslCiphers", label: "SSLCiphers", sortable: true },
+                {
+                    key: "totalRequests",
+                    label: "Total Requests",
+                    sortable: true
+                },
+                {
+                    key: "defaultCertificate",
+                    label: "Default Certificate",
+                    sortable: true
+                }
+            ];
         }
     }
+};
 </script>
+
+
+                   

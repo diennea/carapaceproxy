@@ -1,26 +1,26 @@
-import moment from 'moment';
+import moment from "moment";
 
-export const PATTERN = 'YYYY/MM/DD HH:mm';
+export const PATTERN = "YYYY/MM/DD HH:mm";
 
 export function formatTimestamp(v) {
     if (!v) {
-        return '';
+        return "";
     }
     if (!isNaN(v)) {
         return moment(v).format(PATTERN);
     }
-    return 'ts:' + v;
+    return "ts:" + v;
 }
 
 export function parseTimestamp(v) {
     if (!v) {
         return 0;
     }
-    
+
     return moment(v, PATTERN).valueOf();
 }
 
-export function compareTimestamp(a,b) {
+export function compareTimestamp(a, b) {
     if (!a && !b) {
         return 0;
     }
@@ -32,12 +32,13 @@ export function compareTimestamp(a,b) {
     }
     var _a = moment(a, PATTERN);
     var _b = moment(b, PATTERN);
-    return _a > _b ? 1 : (_a < _b ? -1: 0);
-    
+    return _a > _b ? 1 : _a < _b ? -1 : 0;
 }
 export function toInputDateValue(v) {
-    if (!v) return '';
+    if (!v) return "";
     return new Date(v).toISOString().substr(0, 10);
 }
 
-
+export function toBooleanSymbol(value) {
+    return value ? "Yes" : "No";
+}
