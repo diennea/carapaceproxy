@@ -115,7 +115,7 @@ public class BackendHealthCheck {
                 httpConn.setRequestMethod("GET");
                 httpConn.setInstanceFollowRedirects(true);
 
-                try ( InputStream is = httpConn.getInputStream()) {
+                try (InputStream is = httpConn.getInputStream()) {
                     int httpCode = httpConn.getResponseCode();
                     String httpResponse = httpCode + " " + Objects.toString(httpConn.getResponseMessage(), "");
                     String httpBody = IOUtils.toString(is, StandardCharsets.UTF_8);

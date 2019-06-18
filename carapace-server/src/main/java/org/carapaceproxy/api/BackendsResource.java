@@ -138,6 +138,7 @@ public class BackendsResource {
             String id = backendConf.getId();
             String hostPort = backendConf.getHostPort();
             BackendBean bean = new BackendBean(id, backendConf.getHost(), backendConf.getPort());
+            bean.lastProbePath = backendConf.getProbePath();
             EndpointStats epstats = stats.getEndpointStats(EndpointKey.make(hostPort));
             if (epstats != null) {
                 bean.openConnections = epstats.getOpenConnections().longValue();
@@ -151,7 +152,6 @@ public class BackendsResource {
                 bean.reportedAsUnreachableTs = bhs.getReportedAsUnreachableTs();
                 BackendHealthCheck lastProbe = bhs.getLastProbe();
                 if (lastProbe != null) {
-                    bean.lastProbePath = lastProbe.getPath();
                     bean.lastProbeTs = lastProbe.getEndTs();
                     bean.lastProbeSuccess = lastProbe.isOk();
                     bean.httpResponse = lastProbe.getHttpResponse();
