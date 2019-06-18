@@ -61,7 +61,7 @@ import org.carapaceproxy.server.mapper.requestmatcher.parser.RequestMatchParser;
 public class StandardEndpointMapper extends EndpointMapper {
 
     public static final String ACME_CHALLENGE_ROUTE_ACTION_ID = "acme-challenge";
-    private final Map<String, BackendConfiguration> backends = new HashMap<>();
+    private final Map<String, BackendConfiguration> backends = new HashMap<>(); // wiped out whenever a new configuration is applied
     private final Map<String, DirectorConfiguration> directors = new HashMap<>();
     private final List<String> allbackendids = new ArrayList<>();
     private final List<RouteConfiguration> routes = new ArrayList<>();

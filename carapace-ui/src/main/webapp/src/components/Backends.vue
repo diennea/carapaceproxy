@@ -127,7 +127,7 @@
         },
         methods: {
             openDetail(detail) {
-                window.open("", "", "width=900,height=600").document.write(detail)
+                window.open("", "", "width=900,height=600").document.write(detail ? detail : "")
             }
         }
     }
