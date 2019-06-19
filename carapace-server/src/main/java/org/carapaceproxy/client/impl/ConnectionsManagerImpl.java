@@ -26,6 +26,7 @@ import io.netty.channel.epoll.EpollEventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
+import java.net.ConnectException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -49,6 +50,7 @@ import org.carapaceproxy.server.RequestHandler;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.apache.commons.pool2.KeyedPooledObjectFactory;
 import org.apache.commons.pool2.PooledObject;
+import org.apache.commons.pool2.PooledObjectState;
 import org.apache.commons.pool2.impl.DefaultPooledObject;
 import org.apache.commons.pool2.impl.DefaultPooledObjectInfo;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
@@ -66,8 +68,10 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     private int idleTimeout;
     private int stuckRequestTimeout;
     private int connectTimeout;
+    private int borrowTimeout;
     private final ConcurrentHashMap<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
     private final EventLoopGroup group;
+    private final EventLoopGroup eventLoopForOutboundConnections;
 
     private ScheduledFuture<?> stuckRequestsReaperFuture;
     private ConcurrentHashMap<Long, RequestHandler> pendingRequests = new ConcurrentHashMap<>();
@@ -77,11 +81,13 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     private static final Gauge PENDING_REQUESTS_GAUGE = PrometheusUtils.createGauge("backends", "pending_requests",
             "pending requests").register();
-    private static final Counter STUCK_REQUESTS_COUNTER = PrometheusUtils.createCounter("backends", "stuck_requests_total",
+    private static final Counter STUCK_REQUESTS_COUNTER = PrometheusUtils.createCounter("backends",
+            "stuck_requests_total",
             "stuck requests, this requests will be killed").register();
 
-    void returnConnection(EndpointConnectionImpl con) {
-//        LOG.log(Level.SEVERE, "returnConnection:" + con);
+    @VisibleForTesting
+    public void returnConnection(EndpointConnectionImpl con) {
+        LOG.log(Level.INFO, "returnConnection:{0}", con);
         connections.returnObject(con.getKey(), con);
     }
 
@@ -107,11 +113,23 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
         @Override
         public boolean validateObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) {
-            boolean valid = po.getObject().isValid();
-            if (!valid) {
-                LOG.log(Level.INFO, "validateObject {0} {1}-> {2}", new Object[]{k, po.getObject(), valid});
+            PooledObjectState state = po.getState();
+            switch (state) {
+                case ABANDONED:
+                case IDLE:
+                case EVICTION:
+                    LOG.log(Level.INFO, "validateObject {2} {0} {1} ", new Object[]{k, po.getObject(), state});
+                    break;
+                default:
+                    if (LOG.isLoggable(Level.FINE)) {
+                        LOG.log(Level.FINE, "validateObject {2} {0} {1} ", new Object[]{k, po.getObject(), state});
+                    }
             }
-            return valid;
+            String validationResult = po.getObject().validate();
+            if (validationResult != null) {
+                LOG.log(Level.WARNING, "validateObject {0} {1}-> {2}", new Object[]{k, po.getObject(), validationResult});
+            }
+            return validationResult == null;
         }
 
         @Override
@@ -158,8 +176,8 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
                     EndpointConnection connectionToEndpoint = requestHandler.getConnectionToEndpoint();
                     if (connectionToEndpoint != null) {
                         backendHealthManager.reportBackendUnreachable(
-                            connectionToEndpoint.getKey().getHostPort(), now, 
-                            "a request to " + requestHandler.getUri() + " for user " + requestHandler.getUserId() + " appears stuck");
+                                connectionToEndpoint.getKey().getHostPort(), now,
+                                "a request to " + requestHandler.getUri() + " for user " + requestHandler.getUserId() + " appears stuck");
                     }
                     STUCK_REQUESTS_COUNTER.inc();
                     toRemove.add(entry.getValue());
@@ -178,15 +196,19 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         this.idleTimeout = configuration.getIdleTimeout();
         this.stuckRequestTimeout = configuration.getStuckRequestTimeout();
         this.connectTimeout = configuration.getConnectTimeout();
+        this.borrowTimeout = configuration.getBorrowTimeout();
         int maxConnectionsPerEndpoint = configuration.getMaxConnectionsPerEndpoint();
         connections.setMaxTotalPerKey(maxConnectionsPerEndpoint);
         connections.setMaxIdlePerKey(maxConnectionsPerEndpoint);
+        connections.setMaxTotal(-1);
 
         if (this.stuckRequestsReaperFuture != null && (oldIdleTimeout != idleTimeout)) {
             this.stuckRequestsReaperFuture.cancel(false);
-            LOG.log(Level.INFO, "Re-scheduling stuckRequestsReaper with period (idleTimeout/4):" + (idleTimeout / 4) + " ms");
-            this.stuckRequestsReaperFuture
-                    = this.scheduler.scheduleWithFixedDelay(new RequestHandlerChecker(), idleTimeout / 4, idleTimeout / 4, TimeUnit.MILLISECONDS);
+            LOG.log(Level.INFO,"Re-scheduling stuckRequestsReaper with period (idleTimeout/4):" +
+                    (idleTimeout / 4) + " ms");
+            this.stuckRequestsReaperFuture =
+                    this.scheduler.scheduleWithFixedDelay(new RequestHandlerChecker(), idleTimeout / 4, idleTimeout / 4,
+                            TimeUnit.MILLISECONDS);
         }
 
     }
@@ -199,36 +221,58 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         config.setTestOnBorrow(true);
         config.setTestWhileIdle(true);
         config.setBlockWhenExhausted(true);
+        config.setJmxEnabled(false);
         group = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
+        eventLoopForOutboundConnections =  Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
         connections = new GenericKeyedObjectPool<>(new ConnectionsFactory(), config);
         this.backendHealthManager = backendHealthManager;
         applyNewConfiguration(configuration);
     }
 
-    EventLoopGroup getGroup() {
-        return group;
+    EventLoopGroup getEventLoopForOutboundConnections() {
+        return eventLoopForOutboundConnections;
     }
 
     @Override
     public EndpointConnection getConnection(EndpointKey key) throws EndpointNotAvailableException {
+        long _start = System.currentTimeMillis();
         try {
-            EndpointConnection result = connections.borrowObject(key, connectTimeout * 2);
-            result.setIdleTimeout(idleTimeout);
+            EndpointConnection result = connections.borrowObject(key, borrowTimeout);
             return result;
         } catch (NoSuchElementException ex) {
-            throw new EndpointNotAvailableException("Too many connections to " + key + " and/or cannot create a new connection", ex);
+            if (LOG.isLoggable(Level.FINER)) {
+                long delta = System.currentTimeMillis() - _start;
+                LOG.log(Level.FINER,
+                        "Too many connections to " + key + " and/or cannot create a new connection (elapsed "
+                        + delta + ", borrowTimeout " + borrowTimeout + ")", ex);
+                connections.listAllObjects().forEach((k, list) -> {
+                    if (list != null) {
+                        list.forEach(po -> {
+                            LOG.log(Level.FINER, "current {0} con {1}", new Object[]{k, po.getPooledObjectToString()});
+                        });
+                    }
+                });
+            }
+            throw new EndpointNotAvailableException("Too many connections to " + key
+                    + " and/or cannot create a new connection ("+ex.getMessage()+")", ex);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new EndpointNotAvailableException("Interrupted while borrowing a connection from the pool for key "+key, ex);
+        } catch (ConnectException ex) {
+            throw new EndpointNotAvailableException("Endpoint error while borrowing a connection from the pool for key "+key, ex);
         } catch (Exception ex) {
+            LOG.log(Level.SEVERE,"Internal error while borrowing a connection for " + key, ex);
             throw new EndpointNotAvailableException(ex);
         }
     }
-    private static final Logger LOG = Logger.getLogger(ConnectionsManagerImpl.class
-            .getName());
+    private static final Logger LOG = Logger.getLogger(ConnectionsManagerImpl.class.getName());
 
     @Override
     public void start() {
         LOG.log(Level.INFO, "Scheduling stuckRequestsReaper with period (idleTimeout/4):" + (idleTimeout / 4) + " ms");
-        this.stuckRequestsReaperFuture
-                = this.scheduler.scheduleWithFixedDelay(new RequestHandlerChecker(), idleTimeout / 4, idleTimeout / 4, TimeUnit.MILLISECONDS);
+        this.stuckRequestsReaperFuture =
+                this.scheduler.scheduleWithFixedDelay(new RequestHandlerChecker(), idleTimeout / 4, idleTimeout / 4,
+                        TimeUnit.MILLISECONDS);
     }
 
     @Override
@@ -240,7 +284,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         Map<String, List<DefaultPooledObjectInfo>> all = connections.listAllObjects();
         LOG.fine("[POOL] numIdle: " + connections.getNumIdle() + " numActive: " + connections.getNumActive());
         connections.clear();
-        LOG.fine("[POOL] numIdle: " + connections.getNumIdle() + " numActive: " + connections.getNumActive());
+        LOG.info("[POOL] after close numIdle: " + connections.getNumIdle() + " numActive: " + connections.getNumActive());
 
         all.forEach((key, value) -> {
             LOG.fine("[POOL] " + key + " -> " + value.size() + " connections");
@@ -252,6 +296,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
         connections.close();
         group.shutdownGracefully();
+        eventLoopForOutboundConnections.shutdownGracefully();
     }
 
     final ConnectionsManagerStats stats = new ConnectionsManagerStats() {
@@ -272,7 +317,18 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     }
 
     @VisibleForTesting
+    public int getBorrowTimeout() {
+        return borrowTimeout;
+    }
+
+    @VisibleForTesting
     public ScheduledFuture<?> getStuckRequestsReaperFuture() {
         return stuckRequestsReaperFuture;
     }
+
+    @VisibleForTesting
+    public GenericKeyedObjectPool<EndpointKey, EndpointConnectionImpl> getConnections() {
+        return connections;
+    }
+
 }

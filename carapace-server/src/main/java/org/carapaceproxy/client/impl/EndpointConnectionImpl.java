@@ -25,6 +25,7 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
+import io.netty.channel.EventLoopGroup;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollSocketChannel;
@@ -73,13 +74,12 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private final EndpointKey key;
     private final EndpointStats endpointstats;
     private final AtomicBoolean closed = new AtomicBoolean();
-    private final AtomicBoolean active = new AtomicBoolean();
-    private int idleTimeout = 500_000;
+    private final AtomicBoolean active = new AtomicBoolean();    
 
     private final Channel channelToEndpoint;
 
     private AtomicReference<ConnectionState> state = new AtomicReference<>(ConnectionState.IDLE);
-    private volatile boolean valid;
+    private volatile boolean forcedInvalid = false;
     private volatile RequestHandler clientSidePeerHandler;
 
     // stats
@@ -113,25 +113,32 @@ public class EndpointConnectionImpl implements EndpointConnection {
     public EndpointConnectionImpl(EndpointKey key, ConnectionsManagerImpl parent, EndpointStats endpointstats) throws IOException {
         this.key = key;
         this.parent = parent;
-        this.valid = true;
+        this.forcedInvalid = false;
         this.endpointstats = endpointstats;
         activityDone();
 
+        EventLoopGroup eventLoopForOutboundConnections = parent.getEventLoopForOutboundConnections();
+        if (eventLoopForOutboundConnections.isShuttingDown()) {
+            throw new IOException("eventLoopForOutboundConnections "
+                    + eventLoopForOutboundConnections + " has been shutdown, cannot connect to " + key);
+        }
         String labelHost = key.getHost() + "_" + key.getPort();
         this.openConnectionsStats = OPEN_CONNECTIONS_GAUGE.labels(labelHost);
         this.activeConnectionsStats = ACTIVE_CONNECTIONS_GAUGE.labels(labelHost);
         this.requestsStats = TOTAL_REQUESTS_COUNTER.labels(labelHost);
 
-        long startTime = System.nanoTime();
+        final long startTime = System.nanoTime();
         Bootstrap b = new Bootstrap();
-        b.group(parent.getGroup())
+
+        b.group(eventLoopForOutboundConnections)
                 .channel(Epoll.isAvailable() ? EpollSocketChannel.class : NioSocketChannel.class)
                 .option(ChannelOption.SO_KEEPALIVE, true)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, parent.getConnectTimeout())
                 .handler(new ChannelInitializer<SocketChannel>() {
                     @Override
                     public void initChannel(SocketChannel ch) throws Exception {
-                        ch.pipeline().addLast("readTimeoutHandler", new ReadTimeoutHandler(idleTimeout / 2));
-                        ch.pipeline().addLast("writeTimeoutHandler", new WriteTimeoutHandler(idleTimeout / 2));
+                        ch.pipeline().addLast("readTimeoutHandler", new ReadTimeoutHandler(parent.getIdleTimeout() / 2));
+                        ch.pipeline().addLast("writeTimeoutHandler", new WriteTimeoutHandler(parent.getIdleTimeout() / 2));
                         ch.pipeline().addLast("client-codec", new HttpClientCodec());
                         ch.pipeline().addLast(new ReadEndpointResponseHandler());
                     }
@@ -150,12 +157,14 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 CONNECTION_STATS_SUMMARY.labels(METRIC_LABEL_RESULT_FAILURE, labelHost)
                         .observe(System.nanoTime() - startTime);
                 LOG.log(Level.INFO, "connect failed to " + key, future.cause());
-                parent.backendHealthManager.reportBackendUnreachable(key.getHostPort(), System.currentTimeMillis(), "connection failed");
+                parent.backendHealthManager.reportBackendUnreachable(key.getHostPort(),
+                        System.currentTimeMillis(), "connection failed");
             }
         });
         try {
             connectFuture.get(parent.getConnectTimeout(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException err) {
+            Thread.currentThread().interrupt();
             throw new IOException(err);
         } catch (ExecutionException err) {
             LOG.log(Level.INFO, "cannot create a valid connection to " + key, err.getCause());
@@ -168,8 +177,8 @@ public class EndpointConnectionImpl implements EndpointConnection {
             LOG.log(Level.INFO, "timed out creating a valid connection to " + key, err);
             throw new IOException(err);
         }
-        if (!valid) {
-            throw new IOException("Cannot connect to " + key);
+        if (forcedInvalid) {
+            throw new IOException("Cannot connect to " + key+" (already invalidated)");
         }
 
         channelToEndpoint = connectFuture.channel();
@@ -180,13 +189,13 @@ public class EndpointConnectionImpl implements EndpointConnection {
                     endpointstats.getOpenConnections().decrementAndGet();
                     openConnectionsStats.dec();
                 });
-
+        
     }
 
     @Override
     public void sendRequest(HttpRequest request, RequestHandler clientSidePeerHandler) {
         checkHandler(null);
-        if (!channelToEndpoint.isOpen() || !valid) {
+        if (!channelToEndpoint.isOpen() || forcedInvalid) {
             LOG.log(Level.SEVERE, "sendRequest " + request.getClass() + " failed, choosen connection is not valid");
             clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, new Exception("no more connected").fillInStackTrace());
             return;
@@ -231,7 +240,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     @Override
     public void sendChunk(HttpContent msg, RequestHandler clientSidePeerHandler) {
         checkHandler(clientSidePeerHandler);
-        if (!channelToEndpoint.isOpen() || !valid) {
+        if (!channelToEndpoint.isOpen() || forcedInvalid) {
             invalidate();
             LOG.log(Level.SEVERE, "continueRequest {0} to {1} . skip to invalid connection to endpoint {2}", new Object[]{msg, channelToEndpoint, this.key});
             clientSidePeerHandler.errorSendingRequest(this, new IOException("endpoint died"));
@@ -261,7 +270,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     @Override
     public void sendLastHttpContent(LastHttpContent msg, RequestHandler clientSidePeerHandler) {
         checkHandler(clientSidePeerHandler);
-        if (!channelToEndpoint.isOpen() || !valid) {
+        if (!channelToEndpoint.isOpen() || forcedInvalid) {
             invalidate();
             LOG.log(Level.SEVERE, "continueRequest {0} to {1} . skip to invalid connection to endpoint {2}", new Object[]{msg, channelToEndpoint, this.key});
             state.compareAndSet(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE);
@@ -295,10 +304,10 @@ public class EndpointConnectionImpl implements EndpointConnection {
     @Override
     public void release(boolean close, RequestHandler clientSidePeerHandler) {
         if (!state.compareAndSet(ConnectionState.RELEASABLE, ConnectionState.IDLE)) {
-            LOG.log(Level.SEVERE, "cannot release now " + this);
+            LOG.log(Level.SEVERE, "cannot release now {0}", this);
             return;
         }
-//        LOG.log(Level.SEVERE, "release " + close + " " + this);
+        LOG.log(Level.INFO, "release {0} {1}", new Object[]{close, this});
         checkHandler(clientSidePeerHandler);
         connectionDeactivated();
 
@@ -319,10 +328,18 @@ public class EndpointConnectionImpl implements EndpointConnection {
         channelToEndpoint.close();
     }
 
-    boolean isValid() {
-        return valid
-                && (System.currentTimeMillis() - endpointstats.getLastActivity().longValue() <= idleTimeout)
+    String validate() {
+        long delta = (System.currentTimeMillis() - endpointstats.getLastActivity().longValue());
+        boolean isOpen= channelToEndpoint.isOpen();
+        boolean ok = !forcedInvalid
+                && (delta <= parent.getIdleTimeout())
                 && channelToEndpoint.isOpen();
+        if (ok) {
+            return null;
+        } else {
+            return "NOT VALID (delta " + delta + "/" + parent.getIdleTimeout()
+                    + ", open " + isOpen + ", forcedInvalid=" + forcedInvalid + ")";
+        }
     }
 
     private void connectionDeactivated() {
@@ -388,7 +405,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     @Override
     public String toString() {
-        return "{id=" + id + ", " + state + ", channel=" + channelToEndpoint + ", key=" + key + ", valid=" + valid + ", closed=" + closed + '}';
+        return "{id=" + id + ", " + state + ", channel=" + channelToEndpoint + ", key=" + key + ", forcedInvalid=" + forcedInvalid + ", closed=" + closed + '}';
     }
 
     private void checkHandler(RequestHandler clientSidePeerHandler1) throws IllegalStateException {
@@ -402,17 +419,12 @@ public class EndpointConnectionImpl implements EndpointConnection {
     }
 
     private void invalidate() {
-        valid = false;
+        forcedInvalid = true;
     }
 
     @Override
     public EndpointKey getKey() {
         return key;
     }
-
-    @Override
-    public void setIdleTimeout(int timeout) {
-        this.idleTimeout = timeout;
-    }
-
+    
 }

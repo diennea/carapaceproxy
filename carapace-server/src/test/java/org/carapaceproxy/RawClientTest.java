@@ -22,24 +22,34 @@ package org.carapaceproxy;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
 import org.carapaceproxy.server.HttpProxyServer;
+
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.IOException;
 import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.utils.RawHttpClient;
+
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import org.carapaceproxy.client.impl.ConnectionsManagerImpl;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.junit.rules.TestName;
 
 /**
  *
@@ -47,12 +57,27 @@ import org.junit.rules.TemporaryFolder;
  */
 public class RawClientTest {
 
+    private static final Logger LOG = Logger.getLogger(RawClientTest.class.getName());
+    
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
 
     @Rule
     public TemporaryFolder tmpDir = new TemporaryFolder();
-
+    
+    @Rule
+    public TestName testName = new TestName();
+    
+    @Before
+    public void dumpTestName() throws Exception {
+        LOG.log(Level.INFO, "Starting {0}", testName.getMethodName());
+    }
+    
+    @After
+    public void dumpTestNameEnd() throws Exception {
+        LOG.log(Level.INFO, "End {0}", testName.getMethodName());
+    }
+    
     @Test
     public void testClientsExpectsConnectionClose() throws Exception {
 
@@ -240,14 +265,17 @@ public class RawClientTest {
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            // we want to reuse the same connection to the endpoint if the client is using Keep-Alive            
+            ((ConnectionsManagerImpl) server.getConnectionsManager()).getConnections().setMaxTotalPerKey(1);
             server.start();
             int port = server.getLocalPort();
+            assertEquals(1, ((ConnectionsManagerImpl) server.getConnectionsManager()).getConnections().getMaxTotalPerKey());
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
 
                 String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").getBodyString();
                 System.out.println("s:" + s);
-                assertTrue(s.equals("it <b>works</b> !!"));
+                assertEquals("it <b>works</b> !!", s);
 
                 try {
                     String s2 = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").getBodyString();
@@ -262,18 +290,23 @@ public class RawClientTest {
 
                 String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
                 System.out.println("s3:" + s);
-                assertTrue(s.equals("it <b>works</b> !!"));
+                assertEquals("it <b>works</b> !!", s);
+                
+                // this is needed for Travis, that runs with 1 vCPU!
+                // without this sleep the connection pool is not able to reuse the connection (this appears to the
+                // beheviour or CommonsPool2
+                Thread.sleep(1000);
 
                 String s2 = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
                 System.out.println("s4:" + s2);
-                assertTrue(s.equals("it <b>works</b> !!"));
+                assertEquals("it <b>works</b> !!", s2);
             }
 
             stats = server.getConnectionsManager().getStats();
             assertNotNull(stats.getEndpoints().get(key));
             TestUtils.waitForCondition(() -> {
                 stats.getEndpoints().values().forEach((EndpointStats st) -> {
-                    System.out.println("st2:" + st);
+                    System.out.println("statse:" + st);
                 });
                 EndpointStats epstats = stats.getEndpointStats(key);
                 return epstats.getTotalConnections().intValue() == 2
@@ -316,7 +349,7 @@ public class RawClientTest {
                 for (int i = 0; i < 1000; i++) {
                     String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
 //                    System.out.println("#" + i + " s:" + s);
-                    assertTrue(s.equals("a"));
+                    assertEquals("a", s);
                 }
 
             }
@@ -327,7 +360,7 @@ public class RawClientTest {
 
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
-            System.out.println("total con:" + epstats.getTotalConnections().intValue());
+            System.out.println("epstats:" + epstats);
             return epstats.getTotalConnections().intValue() >= 1
                     && epstats.getActiveConnections().intValue() == 0
                     && epstats.getOpenConnections().intValue() == 0;

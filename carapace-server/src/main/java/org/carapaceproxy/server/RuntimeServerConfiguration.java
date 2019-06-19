@@ -58,6 +58,7 @@ public class RuntimeServerConfiguration {
     private int idleTimeout = 60000;
     private int stuckRequestTimeout = 120000;
     private int connectTimeout = 10000;
+    private int borrowTimeout = 60000;
     private long cacheMaxSize = 0;
     private long cacheMaxFileSize = 0;
     private String mapperClassname;
@@ -171,6 +172,14 @@ public class RuntimeServerConfiguration {
         this.connectTimeout = connectTimeout;
     }
 
+    public int getBorrowTimeout() {
+        return borrowTimeout;
+    }
+
+    public void setBorrowTimeout(int borrowTimeout) {
+        this.borrowTimeout = borrowTimeout;
+    }        
+
     public long getCacheMaxSize() {
         return cacheMaxSize;
     }
@@ -218,10 +227,12 @@ public class RuntimeServerConfiguration {
         }
         this.stuckRequestTimeout = getInt("connectionsmanager.stuckrequesttimeout", stuckRequestTimeout, properties);
         this.connectTimeout = getInt("connectionsmanager.connecttimeout", connectTimeout, properties);
+        this.borrowTimeout = getInt("connectionsmanager.borrowtimeout", borrowTimeout, properties);
         LOG.info("connectionsmanager.maxconnectionsperendpoint=" + maxConnectionsPerEndpoint);
         LOG.info("connectionsmanager.idletimeout=" + idleTimeout);
         LOG.info("connectionsmanager.stuckrequesttimeout=" + stuckRequestTimeout);
         LOG.info("connectionsmanager.connecttimeout=" + connectTimeout);
+        LOG.info("connectionsmanager.borrowtimeout=" + borrowTimeout);
 
         this.mapperClassname = getClassname("mapper.class", StandardEndpointMapper.class.getName(), properties);
         LOG.log(Level.INFO, "mapper.class={0}", this.mapperClassname);

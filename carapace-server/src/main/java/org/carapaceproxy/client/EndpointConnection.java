@@ -34,8 +34,6 @@ public interface EndpointConnection {
 
     public EndpointKey getKey();
 
-    public void setIdleTimeout(int timeout);
-
     public void sendRequest(HttpRequest request, RequestHandler handler);
 
     public void release(boolean error, RequestHandler handler);
