@@ -45,6 +45,7 @@ import org.carapaceproxy.utils.PrometheusUtils;
  */
 public class BackendHealthManager implements Runnable {
 
+    public static final int DEFAULT_PERIOD = 60; // seconds
     private static final Logger LOG = Logger.getLogger(BackendHealthManager.class.getName());
 
     private static final Gauge BACKEND_UPSTATUS_GAUGE = PrometheusUtils.createGauge("health", "backend_status",
@@ -68,7 +69,7 @@ public class BackendHealthManager implements Runnable {
         this.mapper = mapper; // may be null
 
         // will be overridden before start
-        this.period = 60000;
+        this.period = DEFAULT_PERIOD;
         this.connectTimeout = conf.getConnectTimeout();
 
     }

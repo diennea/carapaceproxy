@@ -32,6 +32,7 @@ import org.carapaceproxy.configstore.ConfigurationStore;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.getClassname;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.getInt;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.getLong;
+import static org.carapaceproxy.server.backends.BackendHealthManager.DEFAULT_PERIOD;
 import static org.carapaceproxy.server.certiticates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -272,7 +273,7 @@ public class RuntimeServerConfiguration {
             tryConfigureFilter(i, properties);
         }
 
-        healthProbePeriod = getInt("healthmanager.period", 0, properties);
+        healthProbePeriod = getInt("healthmanager.period", DEFAULT_PERIOD, properties);
         LOG.info("healthmanager.period=" + healthProbePeriod);
 
         dynamicCertificatesManagerPeriod = getInt("dynamiccertificatesmanager.period", 0, properties);
