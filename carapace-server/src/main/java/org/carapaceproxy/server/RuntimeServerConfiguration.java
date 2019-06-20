@@ -32,7 +32,6 @@ import org.carapaceproxy.configstore.ConfigurationStore;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.getClassname;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.getInt;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.getLong;
-import static org.carapaceproxy.server.backends.BackendHealthManager.DEFAULT_PERIOD;
 import static org.carapaceproxy.server.certiticates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -40,7 +39,6 @@ import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
-import org.carapaceproxy.user.FileUserRealm;
 import org.carapaceproxy.user.SimpleUserRealm;
 
 /**
@@ -273,8 +271,11 @@ public class RuntimeServerConfiguration {
             tryConfigureFilter(i, properties);
         }
 
-        healthProbePeriod = getInt("healthmanager.period", DEFAULT_PERIOD, properties);
+        healthProbePeriod = getInt("healthmanager.period", 0, properties);
         LOG.info("healthmanager.period=" + healthProbePeriod);
+        if (healthProbePeriod <= 0) {
+            LOG.warning("BACKEND-HEALTH-MANAGER DISABLED");
+        }
 
         dynamicCertificatesManagerPeriod = getInt("dynamiccertificatesmanager.period", 0, properties);
         LOG.info("dynamiccertificatesmanager.period=" + dynamicCertificatesManagerPeriod);
