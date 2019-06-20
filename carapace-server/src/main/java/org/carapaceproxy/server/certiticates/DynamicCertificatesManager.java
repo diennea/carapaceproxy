@@ -30,7 +30,9 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -160,7 +162,7 @@ public class DynamicCertificatesManager implements Runnable {
     private CertificateData loadOrCreateDynamicCertificateForDomain(String domain) throws GeneralSecurityException, MalformedURLException {
         CertificateData cert = store.loadCertificateForDomain(domain);
         if (cert == null) {
-            cert = new CertificateData(domain, "", "", WAITING.name(), "", "", false);
+            cert = new CertificateData(domain, "", "", WAITING.name(), "", "", false);            
         }
         return cert;
     }
@@ -207,9 +209,11 @@ public class DynamicCertificatesManager implements Runnable {
     }
 
     private void certificatesLifecycle() {
-        boolean updateDB = true;
-        boolean notifyCertAvailChanged = false;
-        for (String domain : certificates.keySet()) {
+        List<String> domains = new ArrayList(certificates.keySet()); // to get a predictable execution sequence in tests
+        Collections.sort(domains);
+        for (String domain : domains) {
+            boolean updateDB = true;
+            boolean notifyCertAvailChanged = false;
             try {
                 CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain);
                 switch (DynamicCertificateState.valueOf(cert.getState())) {
@@ -217,11 +221,14 @@ public class DynamicCertificatesManager implements Runnable {
                         LOG.info("Certificate ISSUING process for domain: " + domain + " STARTED.");
                         Order order = client.createOrderForDomain(domain);
                         cert.setPendingOrderLocation(order.getLocation());
+                        LOG.fine("Pending order location for domain " + domain + ": " + order.getLocation());
                         Http01Challenge challenge = client.getHTTPChallengeForOrder(order);
                         if (challenge == null) {
+                            LOG.info("VERIFIED");
                             cert.setState(VERIFIED);
                         } else {
-                            triggerChallenge(challenge);
+                            LOG.fine("Pending challenge data for domain " + domain + ": " + challenge.getJSON());
+                            triggerChallenge(challenge);                            
                             cert.setPendingChallengeData(challenge.getJSON());
                             cert.setState(VERIFYING);
                         }
@@ -317,6 +324,7 @@ public class DynamicCertificatesManager implements Runnable {
                         throw new IllegalStateException();
                 }
                 if (updateDB) {
+                    LOG.fine("Save certificate for domain " + domain);
                     store.saveCertificate(cert);
                 }
                 if (notifyCertAvailChanged) {
@@ -325,7 +333,7 @@ public class DynamicCertificatesManager implements Runnable {
                     groupMembershipHandler.fireEvent(EVENT_CERT_AVAIL_CHANGED);
                 }
             } catch (AcmeException | IOException | ConfigurationStoreException | GeneralSecurityException | IllegalStateException ex) {
-                LOG.log(Level.SEVERE, null, ex);
+                LOG.log(Level.SEVERE, "Error while handling dynamic certificate for domain " + domain, ex);
             }
         }
     }

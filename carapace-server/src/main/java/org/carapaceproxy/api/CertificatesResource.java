@@ -161,6 +161,9 @@ public class CertificatesResource {
     }
 
     static String stateToStatusString(DynamicCertificateState state) {
+        if (state == null ) {
+            return "unknown";
+        }
         switch (state) {
             case WAITING:
                 return "waiting"; // certificate waiting for issuing/renews

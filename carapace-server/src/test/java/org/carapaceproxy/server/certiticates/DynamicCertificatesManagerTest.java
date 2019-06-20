@@ -30,6 +30,7 @@ import junitparams.Parameters;
 import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
+import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtilsTest.generateSampleChain;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
@@ -46,7 +47,10 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.shredzone.acme4j.Certificate;
 import org.shredzone.acme4j.Login;
@@ -97,55 +101,79 @@ public class DynamicCertificatesManagerTest {
         when(ac.fetchCertificateForOrder(any())).thenReturn(cert);
 
         DynamicCertificatesManager man = new DynamicCertificatesManager();
+        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
         Field client = man.getClass().getDeclaredField("client");
         client.setAccessible(true);
-        client.set(man, ac);
+        client.set(man, ac);        
 
-        String d = "localhost";
         // Store mocking
-        ConfigurationStore s = mock(ConfigurationStore.class);       
-
-        final CertificateData certData = new CertificateData(d, "", "", WAITING.name(), "", "", false);
-        when(s.loadCertificateForDomain(anyString())).thenReturn(certData);
+        ConfigurationStore s = mock(ConfigurationStore.class);
+        // yet available certificate
+        String d0 = "localhost0";
+        String chain = base64EncodeCertificateChain(generateSampleChain(keyPair,false), keyPair.getPrivate());
+        CertificateData cd0 = new CertificateData(d0, "", chain, AVAILABLE.name(), "", "", false);
+        when(s.loadCertificateForDomain(eq(d0))).thenReturn(cd0);
+        // certificate to order
+        String d1 = "localhost1";
+        CertificateData cd1 = new CertificateData(d1, "", "", WAITING.name(), "", "", false);
+        when(s.loadCertificateForDomain(eq(d1))).thenReturn(cd1);
         when(s.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
         man.setConfigurationStore(s);
 
         // Manager setup
         Properties props = new Properties();
-        props.setProperty("certificate.0.hostname", "localhost");
+        props.setProperty("certificate.0.hostname", d0);
         props.setProperty("certificate.0.dynamic", "true");
+        props.setProperty("certificate.1.hostname", d1);
+        props.setProperty("certificate.1.dynamic", "true");
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(configStore);
         man.reloadConfiguration(conf);
-
-        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
-
+        
+        assertEquals(AVAILABLE, man.getStateOfCertificate(d0));
+        
+        int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
+        
         // WAITING
-        assertEquals(WAITING, man.getStateOfCertificate(d));
+        assertEquals(WAITING, man.getStateOfCertificate(d1));
         man.run();
-        assertEquals(runCase.equals("challenge_null") ? VERIFIED : VERIFYING, man.getStateOfCertificate(d));
+        assertEquals(runCase.equals("challenge_null") ? VERIFIED : VERIFYING, man.getStateOfCertificate(d1));
+        verify(s, times(++saveCounter)).saveCertificate(any());
+
         man.run();
         if (runCase.equals("challenge_null")) { // VERIFIED
-            assertEquals(ORDERING, man.getStateOfCertificate(d));
+            assertEquals(ORDERING, man.getStateOfCertificate(d1));
+            verify(s, times(++saveCounter)).saveCertificate(any());
         } else { // VERIFYING
-            assertEquals(runCase.equals("challenge_status_invalid") ? REQUEST_FAILED : VERIFIED, man.getStateOfCertificate(d));
+            assertEquals(runCase.equals("challenge_status_invalid") ? REQUEST_FAILED : VERIFIED, man.getStateOfCertificate(d1));
+            verify(s, times(++saveCounter)).saveCertificate(any());
             man.run();
-            assertEquals(runCase.equals("challenge_status_invalid") ? WAITING : ORDERING, man.getStateOfCertificate(d));
+            assertEquals(runCase.equals("challenge_status_invalid") ? WAITING : ORDERING, man.getStateOfCertificate(d1));
+            verify(s, times(++saveCounter)).saveCertificate(any());
         }
         // ORDERING
         if (!runCase.equals("challenge_status_invalid")) {
             man.run();
-            assertEquals(runCase.equals("order_response_error") ? REQUEST_FAILED : AVAILABLE, man.getStateOfCertificate(d));
+            assertEquals(runCase.equals("order_response_error") ? REQUEST_FAILED : AVAILABLE, man.getStateOfCertificate(d1));
+            verify(s, times(++saveCounter)).saveCertificate(any());
             man.run();
             if (runCase.equals("order_response_error")) { // REQUEST_FAILED
-                assertEquals(WAITING, man.getStateOfCertificate(d));
+                assertEquals(WAITING, man.getStateOfCertificate(d1));
+                verify(s, times(++saveCounter)).saveCertificate(any());
             } else { // AVAILABLE
-                assertEquals(runCase.equals("available_to_expired") ? EXPIRED : AVAILABLE, man.getStateOfCertificate(d));
+                DynamicCertificateState state = man.getStateOfCertificate(d1);
+                assertEquals(runCase.equals("available_to_expired") ? EXPIRED : AVAILABLE, state);
+                saveCounter += AVAILABLE.equals(state) ? 0 : 1; // only with state AVAILABLE the certificate hasn't to be saved.
+                verify(s, times(saveCounter)).saveCertificate(any());
+                
                 man.run();
-                assertEquals(runCase.equals("available_to_expired") ? WAITING : AVAILABLE, man.getStateOfCertificate(d));
+                state = man.getStateOfCertificate(d1);
+                assertEquals(runCase.equals("available_to_expired") ? WAITING : AVAILABLE, state);
+                saveCounter += AVAILABLE.equals(state) ? 0 : 1; // only with state AVAILABLE the certificate hasn't to be saved.
+                verify(s, times(saveCounter)).saveCertificate(any());
             }
         }
-
     }
+    
 }

@@ -105,13 +105,14 @@ public class ACMEClient {
     public Http01Challenge getHTTPChallengeForOrder(Order order) throws AcmeException {
         Authorization auth = order.getAuthorizations().get(0);
         String domain = auth.getIdentifier().getDomain();
-        LOG.info("Authorization for domain {}", domain);
-
+        LOG.debug("Authorization for domain {} status:{}", domain, auth.getStatus());
+        
         // The authorization is already valid. No need to process a challenge.
         if (auth.getStatus() == Status.VALID) {
             return null;
         }
-
+        
+        LOG.debug("Retrieving challenge...");
         Http01Challenge challenge = httpChallenge(auth);
 
         if (challenge == null) {
@@ -119,6 +120,7 @@ public class ACMEClient {
         }
 
         // If the challenge is already verified, there's no need to execute it again.
+        LOG.debug("Challenge for domain {} status:{}", domain, challenge.getStatus());
         if (challenge.getStatus() == Status.VALID) {
             return null;
         }
@@ -144,10 +146,10 @@ public class ACMEClient {
         Http01Challenge challenge = auth.findChallenge(Http01Challenge.TYPE);
         if (challenge == null) {
             throw new AcmeException("Found no " + Http01Challenge.TYPE + " challenge, don't know what to do...");
-        }
+        }        
 
         // Output the challenge, wait for acknowledge...
-        LOG.info("It must be reachable at: http://{}/.well-known/acme-challenge/{}",
+        LOG.debug("It must be reachable at: http://{}/.well-known/acme-challenge/{}",
                 auth.getIdentifier().getDomain(), challenge.getToken());
 
         return challenge;

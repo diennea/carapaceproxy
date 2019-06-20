@@ -152,7 +152,7 @@ public class BackendHealthManager implements Runnable {
                             new Object[]{status.getHostPort(), checkResult.getEndTs() - checkResult.getStartTs()});
                     reportBackendReachable(status.getHostPort());
                 } else {
-                    LOG.log(Level.INFO, "backend {0} seems reachable. Response time {1}ms",
+                    LOG.log(Level.FINE, "backend {0} seems reachable. Response time {1}ms",
                             new Object[]{status.getHostPort(), checkResult.getEndTs() - checkResult.getStartTs()});
                 }
             } else {
