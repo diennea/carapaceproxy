@@ -39,7 +39,6 @@ import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
-import org.carapaceproxy.user.FileUserRealm;
 import org.carapaceproxy.user.SimpleUserRealm;
 
 /**
@@ -274,6 +273,9 @@ public class RuntimeServerConfiguration {
 
         healthProbePeriod = getInt("healthmanager.period", 0, properties);
         LOG.info("healthmanager.period=" + healthProbePeriod);
+        if (healthProbePeriod <= 0) {
+            LOG.warning("BACKEND-HEALTH-MANAGER DISABLED");
+        }
 
         dynamicCertificatesManagerPeriod = getInt("dynamiccertificatesmanager.period", 0, properties);
         LOG.info("dynamiccertificatesmanager.period=" + dynamicCertificatesManagerPeriod);
