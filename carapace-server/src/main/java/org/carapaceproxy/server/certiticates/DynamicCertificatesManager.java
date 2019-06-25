@@ -221,13 +221,12 @@ public class DynamicCertificatesManager implements Runnable {
                         LOG.info("Certificate ISSUING process for domain: " + domain + " STARTED.");
                         Order order = client.createOrderForDomain(domain);
                         cert.setPendingOrderLocation(order.getLocation());
-                        LOG.fine("Pending order location for domain " + domain + ": " + order.getLocation());
+                        LOG.info("Pending order location for domain " + domain + ": " + order.getLocation());
                         Http01Challenge challenge = client.getHTTPChallengeForOrder(order);
                         if (challenge == null) {
-                            LOG.info("VERIFIED");
                             cert.setState(VERIFIED);
                         } else {
-                            LOG.fine("Pending challenge data for domain " + domain + ": " + challenge.getJSON());
+                            LOG.info("Pending challenge data for domain " + domain + ": " + challenge.getJSON());
                             triggerChallenge(challenge);                            
                             cert.setPendingChallengeData(challenge.getJSON());
                             cert.setState(VERIFYING);
