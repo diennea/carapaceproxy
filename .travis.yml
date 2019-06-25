@@ -8,7 +8,7 @@ cache:
 jobs:
   include:
   - stage: test
-    jdk: oraclejdk11
+    jdk: openjdk11
     script: mvn verify -Pproduction -Dmaven.test.redirectTestOutputToFile=true -Dsurefire.rerunFailingTestsCount=2 
 
 branches:
