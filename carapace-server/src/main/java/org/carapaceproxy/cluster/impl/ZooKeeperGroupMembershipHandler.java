@@ -39,6 +39,7 @@ import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.api.ACLProvider;
 import org.apache.curator.framework.imps.DefaultACLProvider;
+import org.apache.curator.framework.recipes.cache.ChildData;
 import org.apache.curator.framework.recipes.cache.PathChildrenCache;
 import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent;
 import org.apache.curator.framework.recipes.cache.PathChildrenCacheListener;
@@ -206,8 +207,9 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
             watchedEvents.add(cache);
             cache.getListenable().addListener((PathChildrenCacheListener) (CuratorFramework cf, PathChildrenCacheEvent pcce) -> {
                 LOG.log(Level.INFO, "ZK event {0} at {1}", new Object[]{pcce, path});
-                if (eventpath.equals(pcce.getData().getPath())) {
-                    byte[] content = pcce.getData().getData();
+                ChildData data = pcce.getData();
+                if (data != null && eventpath.equals(data.getPath())) {
+                    byte[] content = data.getData();
                     LOG.log(Level.INFO, "ZK event content {0}", new Object[]{new String(content, StandardCharsets.UTF_8)});
                     if (content != null) {
                         Map<String, String> info = MAPPER.readValue(new ByteArrayInputStream(content), Map.class);
