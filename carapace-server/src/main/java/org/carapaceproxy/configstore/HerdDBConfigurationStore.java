@@ -31,11 +31,14 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -47,6 +50,7 @@ import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64Decode
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePublicKey;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeKey;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import sun.net.www.content.text.plain;
 
 /**
  * Reads/Write the configuration to a JDBC database. This configuration store is able to track versions of configuration

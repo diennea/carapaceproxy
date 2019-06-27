@@ -71,10 +71,10 @@ public class DynamicCertificatesManagerTest {
 
     @Test
     @Parameters({
-        "challenge_null",
-        "challenge_status_invalid",
-        "order_response_error",
-        "available_to_expired",
+//        "challenge_null",
+//        "challenge_status_invalid",
+//        "order_response_error",
+//        "available_to_expired",
         "all_ok"
     })
     public void testCertificateStateManagement(String runCase) throws Exception {
@@ -108,32 +108,46 @@ public class DynamicCertificatesManagerTest {
 
         // Store mocking
         ConfigurationStore s = mock(ConfigurationStore.class);
+        String chain = base64EncodeCertificateChain(generateSampleChain(keyPair,false), keyPair.getPrivate());
+        when(s.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
+
         // yet available certificate
         String d0 = "localhost0";
-        String chain = base64EncodeCertificateChain(generateSampleChain(keyPair,false), keyPair.getPrivate());
         CertificateData cd0 = new CertificateData(d0, "", chain, AVAILABLE.name(), "", "", false);
         when(s.loadCertificateForDomain(eq(d0))).thenReturn(cd0);
         // certificate to order
         String d1 = "localhost1";
         CertificateData cd1 = new CertificateData(d1, "", "", WAITING.name(), "", "", false);
         when(s.loadCertificateForDomain(eq(d1))).thenReturn(cd1);
-        when(s.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
         man.setConfigurationStore(s);
+        // manual certificate
+        String d2 = "notacme";
+        CertificateData cd2 = new CertificateData(d2, "", "", AVAILABLE.name(), "", "", true);
+        when(s.loadCertificateForDomain(eq(d2))).thenReturn(cd2);        
 
+        man.setConfigurationStore(s);        
+        
         // Manager setup
         Properties props = new Properties();
         props.setProperty("certificate.0.hostname", d0);
-        props.setProperty("certificate.0.dynamic", "true");
+        props.setProperty("certificate.0.mode", "acme");
         props.setProperty("certificate.1.hostname", d1);
-        props.setProperty("certificate.1.dynamic", "true");
+        props.setProperty("certificate.1.mode", "acme");
+        props.setProperty("certificate.2.hostname", d2);
+        props.setProperty("certificate.2.mode", "manual");
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(configStore);
         man.reloadConfiguration(conf);
-        
+
         assertEquals(AVAILABLE, man.getStateOfCertificate(d0));
+
+        assertEquals(AVAILABLE, man.getStateOfCertificate(d2));
+        assertNotNull(man.getCertificateForDomain(d2));
+        man.setStateOfCertificate(d2, WAITING); // has not to be renewed by the manager
+        assertEquals(WAITING, man.getStateOfCertificate(d2));
         
-        int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
+        int saveCounter = 1; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
         
         // WAITING
         assertEquals(WAITING, man.getStateOfCertificate(d1));

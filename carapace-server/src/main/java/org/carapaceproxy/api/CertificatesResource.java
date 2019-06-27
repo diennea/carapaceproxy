@@ -19,20 +19,36 @@
  */
 package org.carapaceproxy.api;
 
+import com.sun.jersey.multipart.FormDataParam;
+import java.io.InputStream;
 import java.security.GeneralSecurityException;
+import java.util.Base64;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Set;
 import javax.servlet.ServletContext;
+import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
+import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import org.carapaceproxy.configstore.CertificateData;
+import org.carapaceproxy.configstore.ConfigurationStore;
+import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
 import org.carapaceproxy.server.certiticates.DynamicCertificateState;
+import static org.carapaceproxy.server.certiticates.DynamicCertificateState.AVAILABLE;
+import static org.carapaceproxy.server.certiticates.DynamicCertificateState.WAITING;
 import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
+import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 
 /**
@@ -100,7 +116,7 @@ public class CertificatesResource {
                     certificate.getId(),
                     certificate.getHostname(),
                     certificate.isDynamic(),
-                    certificate.getSslCertificateFile()
+                    certificate.getFile()
             );
 
             if (certificate.isDynamic()) {
@@ -147,7 +163,7 @@ public class CertificatesResource {
                     certificate.getId(),
                     certificate.getHostname(),
                     certificate.isDynamic(),
-                    certificate.getSslCertificateFile()
+                    certificate.getFile()
             );
 
             if (certificate.isDynamic()) {
@@ -161,7 +177,7 @@ public class CertificatesResource {
     }
 
     static String stateToStatusString(DynamicCertificateState state) {
-        if (state == null ) {
+        if (state == null) {
             return "unknown";
         }
         switch (state) {
@@ -183,4 +199,33 @@ public class CertificatesResource {
                 return "unknown";
         }
     }
+
+    @POST
+    @Path("{domain}/upload")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    public Response uploadCertificate(@PathParam("domain") String domain,
+            @FormDataParam("file") InputStream uploadedInputStream) throws Exception {
+
+        HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
+        ConfigurationStore store = server.getDynamicConfigurationStore();        
+
+        // Salvo il certificato su db
+        String encodedChain = Base64.getEncoder().encodeToString(uploadedInputStream.readAllBytes());
+        CertificateData cert = new CertificateData(domain, "", encodedChain, AVAILABLE.name(), "", "", true);
+        store.saveCertificate(cert);       
+
+        // Aggiungo il nuovo certificato alla config (se non c'è già)
+        Properties props = store.asProperties(null);
+        if (!store.anyPropertyMatches("certificate\\.[0-9]+\\.hostname=" + domain)) {
+            String prefix = "certificate." + store.nextIndexFor("certificate") + ".";
+            props.setProperty(prefix + "hostname", domain);
+            props.setProperty(prefix + "mode", "manual");
+        }
+
+        // Ricarico la configurazione
+        server.applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(props));
+
+        return Response.status(200).entity("Certificate saved.").build();
+    }
+
 }

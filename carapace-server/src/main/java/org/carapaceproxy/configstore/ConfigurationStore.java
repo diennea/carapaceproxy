@@ -19,8 +19,12 @@
  */
 package org.carapaceproxy.configstore;
 
+import herddb.utils.BooleanHolder;
 import java.security.KeyPair;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Properties;
+import java.util.Set;
 import java.util.function.BiConsumer;
 
 /**
@@ -30,20 +34,53 @@ import java.util.function.BiConsumer;
  */
 public interface ConfigurationStore extends AutoCloseable {
 
-    String getProperty(String key, String defaultValue);
+    String getProperty(String key, String defaultValue);    
 
     void forEach(BiConsumer<String, String> consumer);
 
-    void forEach(String prefix, BiConsumer<String, String> consumer);
+    void forEach(String prefix, BiConsumer<String, String> consumer);    
 
     default Properties asProperties(String prefix) {
         Properties copy = new Properties();
         this.forEach((k, v) -> {
-            if (k.startsWith(prefix)) {
+            if (prefix == null) {
+                copy.put(k, v);
+            } else if (k.startsWith(prefix)) {
                 copy.put(k.substring(prefix.length() + 1), v);
             }
         });
         return copy;
+    }
+
+    /**
+     * 
+     * @param prefix until index of property type
+     * @return last index for property name
+     */
+    default int nextIndexFor(String prefix) {
+        Set<Integer> usedIndexes = new HashSet<>();
+        this.forEach(prefix, (k, v) -> {
+            String[] split = k.split("\\.");
+            try {
+                if (split.length > 2) {
+                    usedIndexes.add(Integer.parseInt(split[1]));
+                }
+            } catch (NumberFormatException e) {
+
+            }
+        });
+        return 1 + usedIndexes.stream().max(Comparator.naturalOrder()).orElse(-1);
+    }
+
+    default boolean anyPropertyMatches(String regexp) {
+        BooleanHolder any = new BooleanHolder(false);
+        this.forEach((k, v) -> {
+            boolean matches = (k + "=" + v).matches(regexp);
+            if (matches) {
+                any.value = true;                
+            }
+        });
+        return any.value;
     }
 
     @Override

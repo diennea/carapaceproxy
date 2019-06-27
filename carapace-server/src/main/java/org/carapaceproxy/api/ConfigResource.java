@@ -90,7 +90,7 @@ public class ConfigResource {
         }
     }
 
-    private PropertiesConfigurationStore buildStore(String newConfiguration) throws ConfigurationNotValidException {
+    public static PropertiesConfigurationStore buildStore(String newConfiguration) throws ConfigurationNotValidException {
         if (newConfiguration == null || newConfiguration.trim().isEmpty()) {
             throw new ConfigurationNotValidException("Invalid empty configuration");
         }

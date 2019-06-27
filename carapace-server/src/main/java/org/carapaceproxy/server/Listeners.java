@@ -127,16 +127,16 @@ public class Listeners {
                 String domain = certificate.getHostname();
                 byte[] keystoreContent = parent.getDynamicCertificateManager().getCertificateForDomain(domain);
                 if (keystoreContent == null) {
-                    throw new ConfigurationNotValidException("Dynamic certificate for domain " + domain + " is not yet available.");
+                    throw new ConfigurationNotValidException("Certificate for domain " + domain + " NOT AVAILABLE.");
                 }
                 LOG.log(Level.SEVERE, "start SSL with dynamic certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + port + " OCPS " + listener.isOcps());
-                keyFactory = initKeyManagerFactory("PKCS12", keystoreContent, "");
+                keyFactory = initKeyManagerFactory("PKCS12", keystoreContent, certificate.getPassword());
             } else {
-                String certificateFile = certificate.getSslCertificateFile();
+                String certificateFile = certificate.getFile();
                 File sslCertFile = certificateFile.startsWith("/") ? new File(certificateFile) : new File(basePath, certificateFile);
                 sslCertFile = sslCertFile.getAbsoluteFile();
                 LOG.log(Level.SEVERE, "start SSL with certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + port + " file=" + sslCertFile + " OCPS " + listener.isOcps());
-                keyFactory = initKeyManagerFactory("PKCS12", sslCertFile, certificate.getSslCertificatePassword());
+                keyFactory = initKeyManagerFactory("PKCS12", sslCertFile, certificate.getPassword());
             }
 
             TrustManagerFactory trustManagerFactory = null;

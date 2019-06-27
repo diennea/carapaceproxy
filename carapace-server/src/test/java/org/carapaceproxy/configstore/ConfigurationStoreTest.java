@@ -19,9 +19,13 @@
  */
 package org.carapaceproxy.configstore;
 
+import herddb.utils.BooleanHolder;
 import java.net.URL;
 import java.security.KeyPair;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Properties;
+import java.util.Set;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
 import org.apache.bookkeeper.stats.NullStatsLogger;
@@ -75,6 +79,13 @@ public class ConfigurationStoreTest {
         store = new PropertiesConfigurationStore(props);
         if (type.equals("db")) {
             store = new HerdDBConfigurationStore(store, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
+        } else {
+            assertEquals(2, store.asProperties("certificate.1").size());
+            assertEquals(5, store.asProperties(null).size());
+            assertEquals(2, store.nextIndexFor("certificate"));
+            assertEquals(0, store.nextIndexFor("unknown"));
+            assertEquals(true, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname=" + d1));
+            assertEquals(false, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname=unknown"));
         }
 
         testKeyPairOperations();
@@ -110,7 +121,7 @@ public class ConfigurationStoreTest {
         assertEqualsKey(domain2Pair.getPublic(), loadedPair.getPublic());
     }
 
-    private void testCertificateOperations() throws Exception {        
+    private void testCertificateOperations() throws Exception {
         String order = new URL("http://locallhost/order").toString();
         String challenge = JSON.parse("{\"challenge\": \"data\"}").toString();
 
@@ -122,7 +133,7 @@ public class ConfigurationStoreTest {
 
         CertificateData cert2 = new CertificateData(
                 d2, "encodedPK2", "encodedChain2", DynamicCertificateState.WAITING.name(), null, null, false
-        );        
+        );
         store.saveCertificate(cert2);
 
         // Certificates loading
@@ -177,6 +188,13 @@ public class ConfigurationStoreTest {
         assertEquals(d2, store.getProperty("certificate.1.hostname", ""));
         assertEquals("true", store.getProperty("certificate.1.dynamic", ""));
 
+        assertEquals(2, store.asProperties("certificate.1").size());
+        assertEquals(5, store.asProperties(null).size());
+        assertEquals(2, store.nextIndexFor("certificate"));
+        assertEquals(0, store.nextIndexFor("unknown"));
+        assertEquals(true, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname=" + d1));
+        assertEquals(false, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname=unknown"));
+
         // New configuration to apply
         props = new Properties();
         // no more certificate.0.*
@@ -208,5 +226,15 @@ public class ConfigurationStoreTest {
         assertEquals("false", store.getProperty("certificate.1.dynamic", ""));
         assertEquals(d3, store.getProperty("certificate.3.hostname", ""));
         assertEquals("true", store.getProperty("certificate.3.dynamic", ""));
+
+        assertEquals(2, store.asProperties("certificate.1.").size());
+        assertEquals(2, store.asProperties("certificate.3.").size());
+        assertEquals(4, store.asProperties(null).size());
+        assertEquals(4, store.nextIndexFor("certificate"));
+        assertEquals(0, store.nextIndexFor("unknown"));
+        assertEquals(true, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname=" + d1));
+        assertEquals(true, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname=" + d3));
+        assertEquals(false, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname=unknown"));
     }
+
 }

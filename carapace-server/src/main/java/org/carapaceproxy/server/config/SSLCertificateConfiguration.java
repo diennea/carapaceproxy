@@ -19,21 +19,27 @@
  */
 package org.carapaceproxy.server.config;
 
+import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
+
 /**
  * Configuration for a TLS Certificate
  *
  * @author enrico.olivelli
  */
-public class SSLCertificateConfiguration {
+public class SSLCertificateConfiguration {   
+
+    public static enum CertificateMode {
+        STATIC, ACME, MANUAL
+    }
 
     private final String id;
     private final String hostname;
-    private final String sslCertificateFile;
-    private final String sslCertificatePassword;
-    private final boolean wildcard;
-    private final boolean dynamic; // true for ACME certificates (p.e. issued by Let's Encrypt).    
-    
-    public SSLCertificateConfiguration(String hostname, String sslCertificateFile, String sslCertificatePassword, boolean dynamic) {
+    private final String file;
+    private final String password;
+    private final boolean wildcard;    
+    private final CertificateMode mode;
+        
+    public SSLCertificateConfiguration(String hostname, String file, String password, CertificateMode mode) {
         this.id = hostname;
         if (hostname.equals("*")) {
             this.hostname = "";
@@ -45,14 +51,10 @@ public class SSLCertificateConfiguration {
             this.hostname = hostname;
             this.wildcard = false;
         }
-        this.sslCertificateFile = sslCertificateFile;
-        this.sslCertificatePassword = sslCertificatePassword;
-        this.dynamic = dynamic;
-    }
-
-    public SSLCertificateConfiguration(String hostname, String sslCertificateFile, String sslCertificatePassword) {
-        this(hostname, sslCertificateFile, sslCertificatePassword, false);
-    }
+        this.file = file;
+        this.password = password;
+        this.mode = mode;
+    }    
 
     public String getId() {
         return id;
@@ -66,16 +68,20 @@ public class SSLCertificateConfiguration {
         return wildcard;
     }
 
-    public String getSslCertificateFile() {
-        return sslCertificateFile;
+    public String getFile() {
+        return file;
     }
 
-    public String getSslCertificatePassword() {
-        return sslCertificatePassword;
+    public String getPassword() {
+        return password;
     }
 
     public boolean isDynamic() {
-        return this.dynamic;
+        return !STATIC.equals(mode);
+    }
+
+    public CertificateMode getMode() {
+        return mode;
     }
 
     @Override

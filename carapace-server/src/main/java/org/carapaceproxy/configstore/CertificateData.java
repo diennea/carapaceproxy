@@ -39,6 +39,7 @@ public class CertificateData {
     private String pendingOrderLocation;
     private String pendingChallengeData;
     private boolean available;
+    private boolean manual;
 
     public CertificateData(String domain, String privateKey, String chain, String state,
             String orderLocation, String challengeData, boolean available) {
@@ -117,6 +118,14 @@ public class CertificateData {
 
     public void setPendingChallengeData(JSON challengeData) {
         this.pendingChallengeData = challengeData.toString();
+    }
+
+    public boolean isManual() {
+        return manual;
+    }
+
+    public void setManual(boolean manual) {
+        this.manual = manual;
     }
 
     @Override
