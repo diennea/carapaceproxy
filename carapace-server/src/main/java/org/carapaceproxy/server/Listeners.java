@@ -123,15 +123,19 @@ public class Listeners {
 
         try {
             KeyManagerFactory keyFactory;
-            if (certificate.isDynamic()) {
-                String domain = certificate.getHostname();
-                byte[] keystoreContent = parent.getDynamicCertificateManager().getCertificateForDomain(domain);
-                if (keystoreContent == null) {
-                    throw new ConfigurationNotValidException("Certificate for domain " + domain + " NOT AVAILABLE.");
-                }
+            String domain = certificate.getHostname();
+            // Try to find certificate data on db
+            byte[] keystoreContent = parent.getDynamicCertificateManager().getCertificateForDomain(domain);
+            if (keystoreContent != null) {
                 LOG.log(Level.SEVERE, "start SSL with dynamic certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + port + " OCPS " + listener.isOcps());
                 keyFactory = initKeyManagerFactory("PKCS12", keystoreContent, certificate.getPassword());
             } else {
+                if (certificate.isDynamic()) { // fallback to default certificate
+                    certificate = currentConfiguration.getCertificates().get(listener.getDefaultCertificate());
+                    if (certificate == null) {
+                        throw new ConfigurationNotValidException("Unable to boot SSL context for listener " + listener.getHost() + ": no default certificate setup.");
+                    }
+                }
                 String certificateFile = certificate.getFile();
                 File sslCertFile = certificateFile.startsWith("/") ? new File(certificateFile) : new File(basePath, certificateFile);
                 sslCertFile = sslCertFile.getAbsoluteFile();
@@ -274,7 +278,7 @@ public class Listeners {
         }
         return -1;
     }
-    
+
     public ClientConnectionHandler getListenerHandler(HostPort key) {
         return listenersHandlers.get(key);
     }
@@ -374,8 +378,10 @@ public class Listeners {
             this.currentConfiguration = newConfiguration;
             return;
         }
-        // stop dropped listeners, start new one
+        // Clear cached ssl contexts
+        sslContexts.clear();
 
+        // stop dropped listeners, start new one
         List<HostPort> listenersToStop = new ArrayList<>();
         List<HostPort> listenersToStart = new ArrayList<>();
         List<HostPort> listenersToRestart = new ArrayList<>();

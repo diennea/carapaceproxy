@@ -31,7 +31,6 @@ import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
-import static org.carapaceproxy.configstore.ConfigurationStoreUtilsTest.generateSampleChain;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
 import static org.carapaceproxy.server.certiticates.DynamicCertificateState.AVAILABLE;
@@ -42,6 +41,7 @@ import static org.carapaceproxy.server.certiticates.DynamicCertificateState.VERI
 import static org.carapaceproxy.server.certiticates.DynamicCertificateState.VERIFYING;
 import static org.carapaceproxy.server.certiticates.DynamicCertificateState.WAITING;
 import static org.carapaceproxy.server.certiticates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
+import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.junit.Assert.*;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -104,7 +104,7 @@ public class DynamicCertificatesManagerTest {
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
         Field client = man.getClass().getDeclaredField("client");
         client.setAccessible(true);
-        client.set(man, ac);        
+        client.set(man, ac);
 
         // Store mocking
         ConfigurationStore s = mock(ConfigurationStore.class);
@@ -123,10 +123,10 @@ public class DynamicCertificatesManagerTest {
         // manual certificate
         String d2 = "notacme";
         CertificateData cd2 = new CertificateData(d2, "", "", AVAILABLE.name(), "", "", true);
-        when(s.loadCertificateForDomain(eq(d2))).thenReturn(cd2);        
+        when(s.loadCertificateForDomain(eq(d2))).thenReturn(cd2);
 
-        man.setConfigurationStore(s);        
-        
+        man.setConfigurationStore(s);
+
         // Manager setup
         Properties props = new Properties();
         props.setProperty("certificate.0.hostname", d0);
@@ -146,9 +146,9 @@ public class DynamicCertificatesManagerTest {
         assertNotNull(man.getCertificateForDomain(d2));
         man.setStateOfCertificate(d2, WAITING); // has not to be renewed by the manager
         assertEquals(WAITING, man.getStateOfCertificate(d2));
-        
+
         int saveCounter = 1; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
-        
+
         // WAITING
         assertEquals(WAITING, man.getStateOfCertificate(d1));
         man.run();
@@ -180,7 +180,7 @@ public class DynamicCertificatesManagerTest {
                 assertEquals(runCase.equals("available_to_expired") ? EXPIRED : AVAILABLE, state);
                 saveCounter += AVAILABLE.equals(state) ? 0 : 1; // only with state AVAILABLE the certificate hasn't to be saved.
                 verify(s, times(saveCounter)).saveCertificate(any());
-                
+
                 man.run();
                 state = man.getStateOfCertificate(d1);
                 assertEquals(runCase.equals("available_to_expired") ? WAITING : AVAILABLE, state);
@@ -189,5 +189,5 @@ public class DynamicCertificatesManagerTest {
             }
         }
     }
-    
+
 }

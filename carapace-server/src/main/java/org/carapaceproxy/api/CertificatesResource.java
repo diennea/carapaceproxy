@@ -45,6 +45,7 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMo
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.ACME;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.MANUAL;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
+import org.carapaceproxy.utils.CertificatesUtils;
 
 /**
  * Access to certificates
@@ -61,7 +62,7 @@ public class CertificatesResource {
     public static final class CertificateBean {
 
         private final String id;
-        private final String hostname;        
+        private final String hostname;
         private final String mode;
         private final boolean dynamic;
         private String status;
@@ -223,15 +224,23 @@ public class CertificatesResource {
     @Path("{domain}/upload")
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     public Response uploadCertificate(@PathParam("domain") String domain, InputStream uploadedInputStream) throws Exception {
-        
-        String encodedChain = Base64.getEncoder().encodeToString(uploadedInputStream.readAllBytes());
-        CertificateData cert = new CertificateData(domain, "", encodedChain, AVAILABLE.name(), "", "", true);
+
+        byte[] data = uploadedInputStream.readAllBytes();
+
+        // Verification
+        if (!CertificatesUtils.validateKeystore(data)) {
+            return Response.status(422).entity("ERROR: Unknown certificate format.").build();
+        }
+
+        CertificateData cert = new CertificateData(
+                domain, "", Base64.getEncoder().encodeToString(data), AVAILABLE.name(), "", "", true
+        );
         cert.setManual(true);
 
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         server.createDynamicCertificateForDomain(cert);
 
-        return Response.status(200).entity("Certificate saved.").build();
+        return Response.status(200).entity("SUCCESS: Certificate saved.").build();
     }
 
 }

@@ -23,6 +23,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Properties;
 import javax.servlet.http.HttpServletResponse;
@@ -36,6 +37,8 @@ import org.carapaceproxy.server.mapper.requestmatcher.MatchAllRequestMatcher;
 import org.carapaceproxy.server.filters.RegexpMapSessionIdFilter;
 import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;
 import org.carapaceproxy.server.filters.XForwardedForRequestFilter;
+import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChainData;
+import static org.carapaceproxy.utils.CertificatesTestUtils.uploadCertificate;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestUtils;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -43,6 +46,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import org.junit.Assert;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
@@ -367,19 +371,16 @@ public class StartAPIServerTest extends UseAdminServer {
 
             int certsCount = server.getCurrentConfiguration().getCertificates().size();
 
-            // Uploading
-            String body = "CHAIN";
-            RawHttpClient.HttpResponse resp = client.executeRequest(
-                    "POST /api/certificates/" + manualDomain + "/upload HTTP/1.1\r\n"
-                    + "Host: localhost\r\n"
-                    + "Content-Type: application/octet-stream\r\n"
-                    + "Content-Length: " + body.length() + "\r\n"
-                    + "Authorization: Basic " + credentials.toBase64() + "\r\n"
-                    + "\r\n"
-                    + body);
+            // Uploading trash-stuff
+            RawHttpClient.HttpResponse resp = uploadCertificate(manualDomain, "fake-chain".getBytes(), client, credentials);
             String s = resp.getBodyString();
-            System.out.println("s:" + s);
-            assertTrue(s.contains("Certificate saved"));
+            assertTrue(s.contains("ERROR: Unknown certificate format."));
+
+            // Uploading real certificate
+            byte[] chain1 = generateSampleChainData();
+            resp = uploadCertificate(manualDomain, chain1, client, credentials);
+            s = resp.getBodyString();
+            assertTrue(s.contains("SUCCESS: Certificate saved."));
 
             int certsCount2 = server.getCurrentConfiguration().getCertificates().size();
             assertEquals(certsCount + 1, certsCount2);
@@ -401,24 +402,17 @@ public class StartAPIServerTest extends UseAdminServer {
             assertThat(json, containsString("\"dynamic\":true"));
             assertThat(json, containsString("\"status\":\"available\""));
 
-            // Downloading           
+            // Downloading
             response = client.get("/api/certificates/" + manualDomain + "/download", credentials);
-            assertEquals("CHAIN", response.getBodyString());
+            assertTrue(Arrays.equals(chain1, response.getBody()));
 
             // Certificate updating
             // Uploading
-            body = "CHAIN2";
-            resp = client.executeRequest(
-                    "POST /api/certificates/" + manualDomain + "/upload HTTP/1.1\r\n"
-                    + "Host: localhost\r\n"
-                    + "Content-Type: application/octet-stream\r\n"
-                    + "Content-Length: " + body.length() + "\r\n"
-                    + "Authorization: Basic " + credentials.toBase64() + "\r\n"
-                    + "\r\n"
-                    + body);
+            byte[] chain2 = generateSampleChainData();
+            assertFalse(Arrays.equals(chain1,chain2));
+            resp = uploadCertificate(manualDomain, chain2, client, credentials);
             s = resp.getBodyString();
-            System.out.println("s:" + s);
-            assertTrue(s.contains("Certificate saved"));
+            assertTrue(s.contains("SUCCESS: Certificate saved."));
 
             //  check properties (certificate) not duplicated
             int certsCount3 = server.getCurrentConfiguration().getCertificates().size();
@@ -443,7 +437,7 @@ public class StartAPIServerTest extends UseAdminServer {
 
             // Downloading
             response = client.get("/api/certificates/" + manualDomain + "/download", credentials);
-            assertEquals("CHAIN2", response.getBodyString());
+            assertTrue(Arrays.equals(chain2, response.getBody()));
         }
     }
 

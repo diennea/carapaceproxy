@@ -80,8 +80,12 @@ public class ConfigurationStoreTest {
             assertEquals(5, store.asProperties(null).size());
             assertEquals(2, store.nextIndexFor("certificate"));
             assertEquals(0, store.nextIndexFor("unknown"));
-            assertEquals(true, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname", d1));
-            assertEquals(false, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname", "unknown"));
+            assertEquals(true, store.anyPropertyMatches(
+                    (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals(d1)
+            ));
+            assertEquals(false, store.anyPropertyMatches(
+                    (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals("unknown")
+            ));
         }
 
         testKeyPairOperations();
@@ -188,8 +192,12 @@ public class ConfigurationStoreTest {
         assertEquals(5, store.asProperties(null).size());
         assertEquals(2, store.nextIndexFor("certificate"));
         assertEquals(0, store.nextIndexFor("unknown"));
-        assertEquals(true, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname", d1));
-        assertEquals(false, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname", "unknown"));
+        assertEquals(true, store.anyPropertyMatches(
+                (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals(d1)
+        ));
+        assertEquals(false, store.anyPropertyMatches(
+                (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals("unknown")
+        ));
 
         // New configuration to apply
         props = new Properties();
@@ -228,9 +236,16 @@ public class ConfigurationStoreTest {
         assertEquals(4, store.asProperties(null).size());
         assertEquals(4, store.nextIndexFor("certificate"));
         assertEquals(0, store.nextIndexFor("unknown"));
-        assertEquals(true, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname", d1));
-        assertEquals(true, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname", d3));
-        assertEquals(false, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname", "unknown"));
+
+        assertEquals(true, store.anyPropertyMatches(
+                (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals(d1)
+        ));
+        assertEquals(true, store.anyPropertyMatches(
+                (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals(d3)
+        ));
+        assertEquals(false, store.anyPropertyMatches(
+                (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals("unknown")
+        ));
     }
 
 }

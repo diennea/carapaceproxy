@@ -26,6 +26,7 @@ import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
 
 /**
  * Stores configuration
@@ -79,14 +80,13 @@ public interface ConfigurationStore extends AutoCloseable {
 
     /**
      *
-     * @param keyRegexp
-     * @param valueRegexp
-     * @return whether exist at least one property with both key and value matching to passed regexps.
+     * @param predicate
+     * @return  whether exist at least one property matching to passed predicate.
      */
-    default boolean anyPropertyMatches(String keyRegexp, String valueRegexp) {
+    default boolean anyPropertyMatches(BiPredicate<String, String> predicate) {
         BooleanHolder any = new BooleanHolder(false);
         this.forEach((k, v) -> {            
-            if (k.matches(keyRegexp) && v.matches(valueRegexp)) {
+            if (predicate.test(k, v)) {
                 any.value = true;                
             }
         });

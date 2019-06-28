@@ -404,7 +404,7 @@ public class HttpProxyServer implements AutoCloseable {
             throw new IllegalStateException("server already started");
         }
 
-        readClusterConfiguration(bootConfigurationStore); // need to be always first thing to do (loads cluster setup)        
+        readClusterConfiguration(bootConfigurationStore); // need to be always first thing to do (loads cluster setup)
         String dynamicConfigurationType = bootConfigurationStore.getProperty("config.type", cluster ? "database" : "file");
         switch (dynamicConfigurationType) {
             case "file":
@@ -545,12 +545,12 @@ public class HttpProxyServer implements AutoCloseable {
 
     public RuntimeServerConfiguration buildValidConfiguration(ConfigurationStore simpleStore) throws ConfigurationNotValidException {
         RuntimeServerConfiguration newConfiguration = new RuntimeServerConfiguration();
-        
+
         // Try to perform a service configuration from the passed store.
         newConfiguration.configure(simpleStore);
         buildMapper(newConfiguration.getMapperClassname(), simpleStore);
         buildRealm(userRealmClassname, simpleStore);
-        
+
         return newConfiguration;
     }
 
@@ -560,7 +560,8 @@ public class HttpProxyServer implements AutoCloseable {
 
         // Configuration updating with new certificate (whether not yet existent)
         Properties props = dynamicConfigurationStore.asProperties(null);
-        if (!dynamicConfigurationStore.anyPropertyMatches("certificate\\.[0-9]+\\.hostname", cert.getDomain())) {
+        if (!dynamicConfigurationStore.anyPropertyMatches((k, v) ->
+                 k.matches("certificate\\.[0-9]+\\.hostname") && v.equals(cert.getDomain()))) {
             String prefix = "certificate." + dynamicConfigurationStore.nextIndexFor("certificate") + ".";
             props.setProperty(prefix + "hostname", cert.getDomain());
             props.setProperty(prefix + "mode", cert.isManual() ? "manual" : "acme");
