@@ -71,10 +71,10 @@ public class DynamicCertificatesManagerTest {
 
     @Test
     @Parameters({
-//        "challenge_null",
-//        "challenge_status_invalid",
-//        "order_response_error",
-//        "available_to_expired",
+        "challenge_null",
+        "challenge_status_invalid",
+        "order_response_error",
+        "available_to_expired",
         "all_ok"
     })
     public void testCertificateStateManagement(String runCase) throws Exception {

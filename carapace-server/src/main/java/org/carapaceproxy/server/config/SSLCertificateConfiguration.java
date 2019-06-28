@@ -36,9 +36,9 @@ public class SSLCertificateConfiguration {
     private final String hostname;
     private final String file;
     private final String password;
-    private final boolean wildcard;    
+    private final boolean wildcard;
     private final CertificateMode mode;
-        
+
     public SSLCertificateConfiguration(String hostname, String file, String password, CertificateMode mode) {
         this.id = hostname;
         if (hostname.equals("*")) {

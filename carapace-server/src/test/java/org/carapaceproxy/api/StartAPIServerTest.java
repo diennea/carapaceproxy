@@ -204,14 +204,14 @@ public class StartAPIServerTest extends UseAdminServer {
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             String body = "#first line is a comment\n"
-                + "connectionsmanager.maxconnectionsperendpoint=20";
+                    + "connectionsmanager.maxconnectionsperendpoint=20";
             RawHttpClient.HttpResponse resp = client.executeRequest("POST /api/config/validate HTTP/1.1\r\n"
-                + "Host: localhost\r\n"
-                + "Content-Type: text/plain\r\n"
-                + "Content-Length: " + body.length() + "\r\n"
-                + "Authorization: Basic " + credentials.toBase64() + "\r\n"
-                + "\r\n"
-                + body);
+                    + "Host: localhost\r\n"
+                    + "Content-Type: text/plain\r\n"
+                    + "Content-Length: " + body.length() + "\r\n"
+                    + "Authorization: Basic " + credentials.toBase64() + "\r\n"
+                    + "\r\n"
+                    + body);
             String s = resp.getBodyString();
             System.out.println("s:" + s);
             // no backend configured
@@ -221,12 +221,12 @@ public class StartAPIServerTest extends UseAdminServer {
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             String body = "connectionsmanager.maxconnectionsperendpoint=20-BAD-VALUE";
             RawHttpClient.HttpResponse resp = client.executeRequest("POST /api/config/validate HTTP/1.1\r\n"
-                + "Host: localhost\r\n"
-                + "Content-Type: text/plain\r\n"
-                + "Content-Length: " + body.length() + "\r\n"
-                + "Authorization: Basic " + credentials.toBase64() + "\r\n"
-                + "\r\n"
-                + body);
+                    + "Host: localhost\r\n"
+                    + "Content-Type: text/plain\r\n"
+                    + "Content-Length: " + body.length() + "\r\n"
+                    + "Authorization: Basic " + credentials.toBase64() + "\r\n"
+                    + "\r\n"
+                    + body);
             String s = resp.getBodyString();
             System.out.println("s:" + s);
             // no backend configured
@@ -263,20 +263,20 @@ public class StartAPIServerTest extends UseAdminServer {
 
     @Test
     public void testCertificates() throws Exception {
-        final String dynDomain = "prova.diennea.com";
+        final String dynDomain = "dynamic.test.tld";
         Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
 
         properties.put("certificate.1.hostname", "localhost");
-        properties.put("certificate.1.sslcertfile", "conf/mock1.file");
-        properties.put("certificate.1.sslcertfilepassword", "pass");
+        properties.put("certificate.1.file", "conf/mock1.file");
+        properties.put("certificate.1.password", "pass");
 
         properties.put("certificate.2.hostname", "127.0.0.1");
-        properties.put("certificate.2.sslcertfile", "conf/mock2.file");
-        properties.put("certificate.2.sslcertfilepassword", "pass");
+        properties.put("certificate.2.file", "conf/mock2.file");
+        properties.put("certificate.2.password", "pass");
 
-        // Dynamic certificate
+        // Acme certificate
         properties.put("certificate.3.hostname", dynDomain);
-        properties.put("certificate.3.dynamic", "true");
+        properties.put("certificate.3.mode", "acme");
 
         startServer(properties);
 
@@ -292,12 +292,14 @@ public class StartAPIServerTest extends UseAdminServer {
             String json = response.getBodyString();
 
             assertThat(json, containsString("localhost"));
+            assertThat(json, containsString("\"mode\":\"static\""));
             assertThat(json, containsString("\"dynamic\":false"));
             assertThat(json, containsString("\"status\":null"));
             assertThat(json, containsString("conf/mock1.file"));
 
             assertThat(json, containsString("127.0.0.1"));
-            assertThat(json, containsString("\"dynamic\":false"));
+            assertThat(json, containsString("\"mode\":\"acme\""));
+            assertThat(json, containsString("\"dynamic\":true"));
             assertThat(json, containsString("\"status\":null"));
             assertThat(json, containsString("conf/mock2.file"));
 
@@ -305,12 +307,13 @@ public class StartAPIServerTest extends UseAdminServer {
             response = client.get("/api/certificates/127.0.0.1", credentials);
             json = response.getBodyString();
             assertThat(json, not(containsString("localhost")));
+            assertThat(json, containsString("\"mode\":\"static\""));
             assertThat(json, containsString("\"dynamic\":false"));
             assertThat(json, containsString("\"status\":null"));
             assertThat(json, not(containsString("conf/mock1.file")));
         }
 
-        // Dynamic certificate
+        // Acme certificate
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
 
             // full list request
@@ -318,6 +321,7 @@ public class StartAPIServerTest extends UseAdminServer {
             String json = response.getBodyString();
 
             assertThat(json, containsString(dynDomain));
+            assertThat(json, containsString("\"mode\":\"acme\""));
             assertThat(json, containsString("\"dynamic\":true"));
             assertThat(json, containsString("\"status\":\"waiting\""));
 
@@ -325,6 +329,7 @@ public class StartAPIServerTest extends UseAdminServer {
             response = client.get("/api/certificates/" + dynDomain, credentials);
             json = response.getBodyString();
             assertThat(json, containsString(dynDomain));
+            assertThat(json, containsString("\"mode\":\"acme\""));
             assertThat(json, containsString("\"dynamic\":true"));
             assertThat(json, containsString("\"status\":\"waiting\""));
 
@@ -335,12 +340,14 @@ public class StartAPIServerTest extends UseAdminServer {
                 response = client.get("/api/certificates", credentials);
                 json = response.getBodyString();
                 assertThat(json, containsString(dynDomain));
+                assertThat(json, containsString("\"mode\":\"acme\""));
                 assertThat(json, containsString("\"dynamic\":true"));
                 assertThat(json, containsString("\"status\":\"" + stateToStatusString(state) + "\""));
 
                 response = client.get("/api/certificates/" + dynDomain, credentials);
                 json = response.getBodyString();
                 assertThat(json, containsString(dynDomain));
+                assertThat(json, containsString("\"mode\":\"acme\""));
                 assertThat(json, containsString("\"dynamic\":true"));
                 assertThat(json, containsString("\"status\":\"" + stateToStatusString(state) + "\""));
             }
@@ -352,6 +359,91 @@ public class StartAPIServerTest extends UseAdminServer {
             man.setStateOfCertificate(dynDomain, DynamicCertificateState.AVAILABLE);
             response = client.get("/api/certificates/" + dynDomain + "/download", credentials);
             assertEquals("CHAIN", response.getBodyString());
+        }
+
+        // Manual certificate
+        try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+            String manualDomain = "manual.test.tld";
+
+            int certsCount = server.getCurrentConfiguration().getCertificates().size();
+
+            // Uploading
+            String body = "CHAIN";
+            RawHttpClient.HttpResponse resp = client.executeRequest(
+                    "POST /api/certificates/" + manualDomain + "/upload HTTP/1.1\r\n"
+                    + "Host: localhost\r\n"
+                    + "Content-Type: application/octet-stream\r\n"
+                    + "Content-Length: " + body.length() + "\r\n"
+                    + "Authorization: Basic " + credentials.toBase64() + "\r\n"
+                    + "\r\n"
+                    + body);
+            String s = resp.getBodyString();
+            System.out.println("s:" + s);
+            assertTrue(s.contains("Certificate saved"));
+
+            int certsCount2 = server.getCurrentConfiguration().getCertificates().size();
+            assertEquals(certsCount + 1, certsCount2);
+
+            // full list request
+            RawHttpClient.HttpResponse response = client.get("/api/certificates", credentials);
+            String json = response.getBodyString();
+
+            assertThat(json, containsString(manualDomain));
+            assertThat(json, containsString("\"mode\":\"manual\""));
+            assertThat(json, containsString("\"dynamic\":true"));
+            assertThat(json, containsString("\"status\":\"available\""));
+
+            // single cert request to /{certId}
+            response = client.get("/api/certificates/" + manualDomain, credentials);
+            json = response.getBodyString();
+            assertThat(json, containsString(manualDomain));
+            assertThat(json, containsString("\"mode\":\"manual\""));
+            assertThat(json, containsString("\"dynamic\":true"));
+            assertThat(json, containsString("\"status\":\"available\""));
+
+            // Downloading           
+            response = client.get("/api/certificates/" + manualDomain + "/download", credentials);
+            assertEquals("CHAIN", response.getBodyString());
+
+            // Certificate updating
+            // Uploading
+            body = "CHAIN2";
+            resp = client.executeRequest(
+                    "POST /api/certificates/" + manualDomain + "/upload HTTP/1.1\r\n"
+                    + "Host: localhost\r\n"
+                    + "Content-Type: application/octet-stream\r\n"
+                    + "Content-Length: " + body.length() + "\r\n"
+                    + "Authorization: Basic " + credentials.toBase64() + "\r\n"
+                    + "\r\n"
+                    + body);
+            s = resp.getBodyString();
+            System.out.println("s:" + s);
+            assertTrue(s.contains("Certificate saved"));
+
+            //  check properties (certificate) not duplicated
+            int certsCount3 = server.getCurrentConfiguration().getCertificates().size();
+            assertEquals(certsCount2, certsCount3);
+
+            // full list request
+            response = client.get("/api/certificates", credentials);
+            json = response.getBodyString();
+
+            assertThat(json, containsString(manualDomain));
+            assertThat(json, containsString("\"mode\":\"manual\""));
+            assertThat(json, containsString("\"dynamic\":true"));
+            assertThat(json, containsString("\"status\":\"available\""));
+
+            // single cert request to /{certId}
+            response = client.get("/api/certificates/" + manualDomain, credentials);
+            json = response.getBodyString();
+            assertThat(json, containsString(manualDomain));
+            assertThat(json, containsString("\"mode\":\"manual\""));
+            assertThat(json, containsString("\"dynamic\":true"));
+            assertThat(json, containsString("\"status\":\"available\""));
+
+            // Downloading
+            response = client.get("/api/certificates/" + manualDomain + "/download", credentials);
+            assertEquals("CHAIN2", response.getBodyString());
         }
     }
 

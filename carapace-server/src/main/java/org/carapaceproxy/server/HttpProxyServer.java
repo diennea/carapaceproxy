@@ -36,10 +36,10 @@ import java.util.Properties;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.naming.ConfigurationException;
 import javax.servlet.DispatcherType;
 import org.apache.bookkeeper.stats.*;
 import org.apache.bookkeeper.stats.prometheus.*;
-import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.PropertiesConfiguration;
 import org.carapaceproxy.EndpointMapper;
 import org.carapaceproxy.api.ApplicationConfig;
@@ -53,9 +53,11 @@ import org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler;
 import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_HOST;
 import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_PORT;
 import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_HTTPS_PORT;
+import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.getClassname;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
+import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
@@ -65,7 +67,6 @@ import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
-import org.carapaceproxy.user.FileUserRealm;
 import org.carapaceproxy.user.SimpleUserRealm;
 import org.carapaceproxy.user.UserRealm;
 import org.eclipse.jetty.server.HttpConfiguration;
@@ -551,6 +552,22 @@ public class HttpProxyServer implements AutoCloseable {
         buildRealm(userRealmClassname, simpleStore);
         
         return newConfiguration;
+    }
+
+    public void createDynamicCertificateForDomain(CertificateData cert) throws Exception {
+        // Certificate saving on db
+        dynamicConfigurationStore.saveCertificate(cert);
+
+        // Configuration updating with new certificate (whether not yet existent)
+        Properties props = dynamicConfigurationStore.asProperties(null);
+        if (!dynamicConfigurationStore.anyPropertyMatches("certificate\\.[0-9]+\\.hostname", cert.getDomain())) {
+            String prefix = "certificate." + dynamicConfigurationStore.nextIndexFor("certificate") + ".";
+            props.setProperty(prefix + "hostname", cert.getDomain());
+            props.setProperty(prefix + "mode", cert.isManual() ? "manual" : "acme");
+        }
+
+        // Configuration reloading
+        applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(props));
     }
 
     /**

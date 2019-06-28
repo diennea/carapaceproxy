@@ -34,12 +34,17 @@ import java.util.function.BiConsumer;
  */
 public interface ConfigurationStore extends AutoCloseable {
 
-    String getProperty(String key, String defaultValue);    
+    String getProperty(String key, String defaultValue);
 
     void forEach(BiConsumer<String, String> consumer);
 
-    void forEach(String prefix, BiConsumer<String, String> consumer);    
+    void forEach(String prefix, BiConsumer<String, String> consumer);
 
+    /**
+     *
+     * @param prefix prefix for properties to fetch. Whether null, all properties will be fetched.
+     * @return properties with key starting with prefix.
+     */
     default Properties asProperties(String prefix) {
         Properties copy = new Properties();
         this.forEach((k, v) -> {
@@ -72,11 +77,16 @@ public interface ConfigurationStore extends AutoCloseable {
         return 1 + usedIndexes.stream().max(Comparator.naturalOrder()).orElse(-1);
     }
 
-    default boolean anyPropertyMatches(String regexp) {
+    /**
+     *
+     * @param keyRegexp
+     * @param valueRegexp
+     * @return whether exist at least one property with both key and value matching to passed regexps.
+     */
+    default boolean anyPropertyMatches(String keyRegexp, String valueRegexp) {
         BooleanHolder any = new BooleanHolder(false);
-        this.forEach((k, v) -> {
-            boolean matches = (k + "=" + v).matches(regexp);
-            if (matches) {
+        this.forEach((k, v) -> {            
+            if (k.matches(keyRegexp) && v.matches(valueRegexp)) {
                 any.value = true;                
             }
         });

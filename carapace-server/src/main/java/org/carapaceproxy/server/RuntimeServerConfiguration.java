@@ -40,7 +40,6 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode;
 import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
-import org.carapaceproxy.user.SimpleUserRealm;
 
 /**
  * Configuration

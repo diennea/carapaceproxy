@@ -19,13 +19,9 @@
  */
 package org.carapaceproxy.configstore;
 
-import herddb.utils.BooleanHolder;
 import java.net.URL;
 import java.security.KeyPair;
-import java.util.Comparator;
-import java.util.HashSet;
 import java.util.Properties;
-import java.util.Set;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
 import org.apache.bookkeeper.stats.NullStatsLogger;
@@ -84,8 +80,8 @@ public class ConfigurationStoreTest {
             assertEquals(5, store.asProperties(null).size());
             assertEquals(2, store.nextIndexFor("certificate"));
             assertEquals(0, store.nextIndexFor("unknown"));
-            assertEquals(true, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname=" + d1));
-            assertEquals(false, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname=unknown"));
+            assertEquals(true, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname", d1));
+            assertEquals(false, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname", "unknown"));
         }
 
         testKeyPairOperations();
@@ -192,8 +188,8 @@ public class ConfigurationStoreTest {
         assertEquals(5, store.asProperties(null).size());
         assertEquals(2, store.nextIndexFor("certificate"));
         assertEquals(0, store.nextIndexFor("unknown"));
-        assertEquals(true, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname=" + d1));
-        assertEquals(false, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname=unknown"));
+        assertEquals(true, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname", d1));
+        assertEquals(false, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname", "unknown"));
 
         // New configuration to apply
         props = new Properties();
@@ -232,9 +228,9 @@ public class ConfigurationStoreTest {
         assertEquals(4, store.asProperties(null).size());
         assertEquals(4, store.nextIndexFor("certificate"));
         assertEquals(0, store.nextIndexFor("unknown"));
-        assertEquals(true, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname=" + d1));
-        assertEquals(true, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname=" + d3));
-        assertEquals(false, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname=unknown"));
+        assertEquals(true, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname", d1));
+        assertEquals(true, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname", d3));
+        assertEquals(false, store.anyPropertyMatches("certificate\\.[0-9]\\.hostname", "unknown"));
     }
 
 }

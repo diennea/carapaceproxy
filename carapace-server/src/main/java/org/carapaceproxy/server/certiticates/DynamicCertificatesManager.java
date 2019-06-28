@@ -151,7 +151,7 @@ public class DynamicCertificatesManager implements Runnable {
                 if (config.isDynamic()) {
                     String domain = config.getHostname();
                     CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain);
-                    if (MANUAL.equals(config.getMode())) {
+                    if (MANUAL == config.getMode()) {
                         cert.setManual(true);   // in-memory only
                     }
                     _certificates.put(domain, cert);

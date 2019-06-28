@@ -12,6 +12,7 @@
                 <tr>
                     <th scope="col">ID</th>
                     <th scope="col">Hostname</th>
+                    <th scope="col">Mode</th>
                     <th scope="col">Dynamic</th>
                     <th scope="col">Status</th>
                     <th scope="col">SSLCertificateFile</th>
@@ -27,6 +28,7 @@
 
                     <td>{{(item.id)}}</td>
                     <td>{{(item.hostname)}}</td>
+                    <td>{{(item.mode)}}</td>
                     <td>{{(item.dynamic) | symbolFormat}}</td>
                     <td>{{(item.status)}}</td>
                     <td>{{(item.sslCertificateFile)}}</td>
