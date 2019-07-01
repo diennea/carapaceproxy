@@ -10,6 +10,56 @@
         <module>carapace-ui</module>
     </modules>
     <name>Carapace :: Parent</name>
+    <description>A Distributed Java Reverse Proxy</description>
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+    <scm>
+         <url>https://github.com/diennea/carapaceproxy.git</url>
+         <connection>scm:git:https://github.com/diennea/carapaceproxy.git</connection>
+         <developerConnection>scm:git:https://github.com/diennea/carapaceproxy.git</developerConnection>
+    </scm>
+    <developers>
+        <developer>
+            <id>eolivelli</id>
+            <name>Enrico Olivelli</name>
+            <organization>Diennea</organization>
+        </developer>
+        <developer>
+            <id>paolo.venturi</id>
+            <name>Paolo Venturi</name>
+            <organization>Diennea</organization>
+        </developer>
+          <developer>
+            <id>francesco.caliumi</id>
+            <name>Francesco Caliumi</name>
+            <organization>Diennea</organization>
+        </developer>
+          <developer>
+            <id>dennis.mercuriali</id>
+            <name>Dennis Mercuriali</name>
+            <organization>Diennea</organization>
+        </developer>
+        <developer>
+            <id>matteo.minardi</id>
+            <name>Matteo Minardi</name>
+            <organization>Diennea</organization>
+        </developer>
+        <developer>
+            <id>hamado.dene</id>
+            <name>Hamado Dene</name>
+            <organization>Diennea</organization>
+        </developer>
+        <developer>
+            <id>alessandro.luccaroni</id>
+            <name>Alessandro Luccaroni</name>
+            <organization>Diennea</organization>
+        </developer>
+    </developers>
     <build>
         <plugins>
             <plugin>
