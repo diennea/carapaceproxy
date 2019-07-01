@@ -30,9 +30,7 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.X509Certificate;
-import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -43,6 +41,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
@@ -58,6 +57,7 @@ import static org.carapaceproxy.server.certiticates.DynamicCertificateState.VERI
 import static org.carapaceproxy.server.certiticates.DynamicCertificateState.VERIFYING;
 import static org.carapaceproxy.server.certiticates.DynamicCertificateState.WAITING;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
+import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.MANUAL;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
 import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.Status;
@@ -150,7 +150,11 @@ public class DynamicCertificatesManager implements Runnable {
                 SSLCertificateConfiguration config = e.getValue();
                 if (config.isDynamic()) {
                     String domain = config.getHostname();
-                    _certificates.put(domain, loadOrCreateDynamicCertificateForDomain(domain));
+                    CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain);
+                    if (MANUAL == config.getMode()) {
+                        cert.setManual(true);
+                    }
+                    _certificates.put(domain, cert);
                 }
             }
             this.certificates = _certificates; // only certificates/domains specified in the config have to be managed.
@@ -209,9 +213,12 @@ public class DynamicCertificatesManager implements Runnable {
     }
 
     private void certificatesLifecycle() {
-        List<String> domains = new ArrayList(certificates.keySet()); // to get a predictable execution sequence in tests
-        Collections.sort(domains);
-        for (String domain : domains) {
+        List<String> domains = certificates.entrySet().stream()
+                .filter(e -> !e.getValue().isManual())
+                .map(e -> e.getKey())
+                .sorted()
+                .collect(Collectors.toList());
+        for (String domain : domains) {          
             boolean updateDB = true;
             boolean notifyCertAvailChanged = false;
             try {

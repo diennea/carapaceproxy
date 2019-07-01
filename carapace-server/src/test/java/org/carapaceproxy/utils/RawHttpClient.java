@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.utils;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -28,12 +29,14 @@ import java.io.UnsupportedEncodingException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.security.cert.Certificate;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SNIServerName;
 import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
@@ -64,7 +67,6 @@ public final class RawHttpClient implements AutoCloseable {
             SSLSocketFactory factory = HttpUtils.getSocket_factory();
             socket = factory.createSocket();
             if (sniHostname != null) {
-
                 SSLSocket sSLSocket = (SSLSocket) socket;
                 SSLParameters sslParameters = new SSLParameters();
                 List<SNIServerName> sniHostNames = new ArrayList<>();
@@ -77,6 +79,11 @@ public final class RawHttpClient implements AutoCloseable {
             socket = new Socket(host, port);
         }
         socket.setSoTimeout(300 * 000);
+    }
+
+    public Certificate[] getServerCertificate() throws SSLPeerUnverifiedException {
+        SSLSocket sSLSocket = (SSLSocket) socket;
+        return sSLSocket.getSession().getPeerCertificates();
     }
 
     public OutputStream getOutputStream() throws IOException {
@@ -347,6 +354,11 @@ public final class RawHttpClient implements AutoCloseable {
             }
             b = in.read();
         }
+    }
+
+    public HttpResponse executeRequest(ByteArrayInputStream bais) throws IOException {
+        sendRequest(bais.readAllBytes());
+        return consumeHttpResponseInput(socket.getInputStream());
     }
 
     public HttpResponse executeRequest(String request) throws IOException {

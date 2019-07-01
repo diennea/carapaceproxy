@@ -37,9 +37,9 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
+import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode;
 import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
-import org.carapaceproxy.user.SimpleUserRealm;
 
 /**
  * Configuration
@@ -177,7 +177,7 @@ public class RuntimeServerConfiguration {
 
     public void setBorrowTimeout(int borrowTimeout) {
         this.borrowTimeout = borrowTimeout;
-    }        
+    }
 
     public long getCacheMaxSize() {
         return cacheMaxSize;
@@ -285,18 +285,24 @@ public class RuntimeServerConfiguration {
 
     private void tryConfigureCertificate(int i, ConfigurationStore properties) throws ConfigurationNotValidException {
         String prefix = "certificate." + i + ".";
-
-        String certificateHostname = properties.getProperty(prefix + "hostname", "");
-
-        if (!certificateHostname.isEmpty()) {
-            String certificateFile = properties.getProperty(prefix + "sslcertfile", "");
-            String certificatePassword = properties.getProperty(prefix + "sslcertfilepassword", "");
-            boolean isDynamic = properties.getProperty(prefix + "dynamic", "false").equalsIgnoreCase("true");
-            LOG.log(Level.INFO, "Configuring SSL certificate {0}hostname={1}, file: {2}", new Object[]{prefix, certificateHostname, certificateFile});
-
-            SSLCertificateConfiguration config = new SSLCertificateConfiguration(certificateHostname, certificateFile, certificatePassword, isDynamic);
-            this.addCertificate(config);
-
+        String hostname = properties.getProperty(prefix + "hostname", "");
+        if (!hostname.isEmpty()) {
+            String file = properties.getProperty(prefix + "file", "");
+            String pw = properties.getProperty(prefix + "password", "");
+            String mode = properties.getProperty(prefix + "mode", "static");
+            try {
+                CertificateMode _mode = CertificateMode.valueOf(mode.toUpperCase());                
+                LOG.log(Level.INFO,
+                        "Configuring SSL certificate {0}: hostname={1}, file={2}, password={3}, mode={4}",
+                        new Object[]{prefix, hostname, file, pw, mode}
+                );
+                SSLCertificateConfiguration config = new SSLCertificateConfiguration(hostname, file, pw, _mode);
+                this.addCertificate(config);
+            } catch (IllegalArgumentException e) {
+                throw new ConfigurationNotValidException(
+                        "Invalid value of '" + mode +  "' for " + prefix + "mode. Supperted ones: static, acme, manual"
+                );
+            }
         }
     }
 

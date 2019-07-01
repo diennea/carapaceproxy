@@ -19,9 +19,14 @@
  */
 package org.carapaceproxy.configstore;
 
+import herddb.utils.BooleanHolder;
 import java.security.KeyPair;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Properties;
+import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
 
 /**
  * Stores configuration
@@ -36,14 +41,56 @@ public interface ConfigurationStore extends AutoCloseable {
 
     void forEach(String prefix, BiConsumer<String, String> consumer);
 
+    /**
+     *
+     * @param prefix prefix for properties to fetch. Whether null, all properties will be fetched.
+     * @return properties with key starting with prefix.
+     */
     default Properties asProperties(String prefix) {
         Properties copy = new Properties();
         this.forEach((k, v) -> {
-            if (k.startsWith(prefix)) {
+            if (prefix == null) {
+                copy.put(k, v);
+            } else if (k.startsWith(prefix)) {
                 copy.put(k.substring(prefix.length() + 1), v);
             }
         });
         return copy;
+    }
+
+    /**
+     * 
+     * @param prefix until index of property type
+     * @return last index for property name
+     */
+    default int nextIndexFor(String prefix) {
+        Set<Integer> usedIndexes = new HashSet<>();
+        this.forEach(prefix, (k, v) -> {
+            String[] split = k.split("\\.");
+            try {
+                if (split.length > 2) {
+                    usedIndexes.add(Integer.parseInt(split[1]));
+                }
+            } catch (NumberFormatException e) {
+
+            }
+        });
+        return 1 + usedIndexes.stream().max(Comparator.naturalOrder()).orElse(-1);
+    }
+
+    /**
+     *
+     * @param predicate
+     * @return  whether exist at least one property matching to passed predicate.
+     */
+    default boolean anyPropertyMatches(BiPredicate<String, String> predicate) {
+        BooleanHolder any = new BooleanHolder(false);
+        this.forEach((k, v) -> {            
+            if (predicate.test(k, v)) {
+                any.value = true;                
+            }
+        });
+        return any.value;
     }
 
     @Override

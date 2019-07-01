@@ -19,13 +19,9 @@
  */
 package org.carapaceproxy.configstore;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.Key;
 import java.security.KeyFactory;
-import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.Certificate;
@@ -33,12 +29,10 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
+import static org.carapaceproxy.utils.CertificatesUtils.readFromKeystore;
 
 public final class ConfigurationStoreUtils {
-
-    public static final String KEYSTORE_FORMAT = "PKCS12";
-    public static final String KEYSTORE_CERT_ALIAS = "cert-chain";
-    static final char[] KEYSTORE_PW = new char[0];
 
     private ConfigurationStoreUtils() {
     }
@@ -94,26 +88,12 @@ public final class ConfigurationStoreUtils {
     }
 
     public static String base64EncodeCertificateChain(Certificate[] chain, PrivateKey key) throws GeneralSecurityException {
-        try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
-            KeyStore keyStore = KeyStore.getInstance(KEYSTORE_FORMAT);
-            keyStore.load(null, KEYSTORE_PW);
-            keyStore.setKeyEntry(KEYSTORE_CERT_ALIAS, key, KEYSTORE_PW, chain);
-            keyStore.store(os, KEYSTORE_PW);
-            return Base64.getEncoder().encodeToString(os.toByteArray());
-        } catch (IOException ex) {
-            throw new GeneralSecurityException(ex);
-        }
+        return Base64.getEncoder().encodeToString(createKeystore(chain, key));
     }
 
     public static Certificate[] base64DecodeCertificateChain(String chain) throws GeneralSecurityException {
         byte[] data = Base64.getDecoder().decode(chain);
-        try (ByteArrayInputStream is = new ByteArrayInputStream(data)) {
-            KeyStore keyStore = KeyStore.getInstance(KEYSTORE_FORMAT);
-            keyStore.load(is, KEYSTORE_PW);
-            return keyStore.getCertificateChain(KEYSTORE_CERT_ALIAS);
-        } catch (IOException ex) {
-            throw new GeneralSecurityException(ex);
-        }
+        return readFromKeystore(data);
     }
 
 }

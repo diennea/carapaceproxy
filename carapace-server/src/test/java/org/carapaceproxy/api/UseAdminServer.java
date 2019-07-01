@@ -21,7 +21,6 @@ package org.carapaceproxy.api;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Properties;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.HttpProxyServer;
@@ -44,11 +43,12 @@ public class UseAdminServer {
 
     public static final String DEFAULT_USERNAME = "admin";
     public static final String DEFAULT_PASSWORD = "admin";
-    
+    public static final int DEFAULT_ADMIN_PORT = 8761;
+
     protected static final Properties HTTP_ADMIN_SERVER_CONFIG = new Properties();
     static {
         HTTP_ADMIN_SERVER_CONFIG.setProperty("http.admin.enabled", "true");
-        HTTP_ADMIN_SERVER_CONFIG.setProperty("http.admin.port", "8761");
+        HTTP_ADMIN_SERVER_CONFIG.setProperty("http.admin.port", DEFAULT_ADMIN_PORT + "");
         HTTP_ADMIN_SERVER_CONFIG.setProperty("http.admin.host", "localhost");
     }
 
@@ -80,7 +80,7 @@ public class UseAdminServer {
         }
 
         fixAccessLogFileConfiguration(properties);
-        
+
         if (server != null) {
             server.configureAtBoot(new PropertiesConfigurationStore(properties));
 
@@ -101,7 +101,7 @@ public class UseAdminServer {
             server.applyDynamicConfigurationFromAPI(config);
         }
     }
-    
+
     private void fixAccessLogFileConfiguration(Properties properties) throws IOException {
         if (!properties.containsKey("admin.accesslog.path")) {
             properties.put("admin.accesslog.path", tmpDir.newFile().getAbsolutePath());

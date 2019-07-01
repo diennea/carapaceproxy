@@ -34,6 +34,7 @@ import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
+import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 import org.carapaceproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -70,8 +71,7 @@ public class SSLSNITest {
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
 
-            server.addCertificate(new SSLCertificateConfiguration(nonLocalhost,
-                    certificate, "testproxy"));
+            server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
 
             server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0,
                     true, false, null, nonLocalhost /* default */,
@@ -108,13 +108,9 @@ public class SSLSNITest {
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
 
-            server.addCertificate(new SSLCertificateConfiguration("other",
-                    "cert", "pwd"));
-
-            server.addCertificate(new SSLCertificateConfiguration("*.example.com",
-                    "cert", "pwd"));
-            server.addCertificate(new SSLCertificateConfiguration("www.example.com",
-                    "cert", "pwd"));
+            server.addCertificate(new SSLCertificateConfiguration("other", "cert", "pwd", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration("*.example.com", "cert", "pwd", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration("www.example.com", "cert", "pwd", STATIC));
 
             // client requests bad SNI, bad default in listener
             assertNull(server.getListeners().chooseCertificate("no", "no-default"));
@@ -134,7 +130,7 @@ public class SSLSNITest {
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
 
             // full wildcard
-            server.addCertificate(new SSLCertificateConfiguration("*", "cert", "pwd"));
+            server.addCertificate(new SSLCertificateConfiguration("*", "cert", "pwd", STATIC));
 
             assertEquals("*", server.getListeners().chooseCertificate(null, "www.example.com").getId());
             assertEquals("*", server.getListeners().chooseCertificate("www.example.com", null).getId());

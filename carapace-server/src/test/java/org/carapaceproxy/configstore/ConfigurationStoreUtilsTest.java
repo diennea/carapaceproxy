@@ -19,44 +19,30 @@
  */
 package org.carapaceproxy.configstore;
 
-import java.math.BigInteger;
 import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.PublicKey;
-import java.security.Security;
 import java.security.cert.Certificate;
-import java.security.cert.X509Certificate;
 import java.util.Arrays;
-import java.util.Date;
-import java.util.Random;
-import org.bouncycastle.asn1.x500.X500Name;
-import org.bouncycastle.asn1.x509.BasicConstraints;
-import org.bouncycastle.asn1.x509.Extension;
-import org.bouncycastle.asn1.x509.KeyUsage;
-import org.bouncycastle.cert.X509v3CertificateBuilder;
-import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
-import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePrivateKey;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePublicKey;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeKey;
 import static org.carapaceproxy.server.certiticates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
+import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.carapaceproxy.utils.TestUtils.assertEqualsKey;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 import org.shredzone.acme4j.util.KeyPairUtils;
-import static org.shredzone.acme4j.util.KeyPairUtils.createKeyPair;
 
 /**
  *
  * @author paolo.venturi
  */
-public class ConfigurationStoreUtilsTest {    
+public class ConfigurationStoreUtilsTest {
 
     @Test
     public void testBase64EncodeDecodeKeys() throws Exception {
@@ -87,73 +73,6 @@ public class ConfigurationStoreUtilsTest {
             assertNotNull(decodedCert);
             assertTrue(Arrays.equals(decodedCert.getEncoded(), originalChain[i].getEncoded()));
         }
-    }
-
-    public static Certificate[] generateSampleChain(KeyPair endUserKeypair, boolean expired) throws Exception {
-        Security.addProvider(new BouncyCastleProvider());
-
-        // Create self signed Root CA certificate
-        KeyPair rootCAKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
-        X509v3CertificateBuilder builder = new JcaX509v3CertificateBuilder(
-                new X500Name("CN=rootCA"), // issuer authority
-                BigInteger.valueOf(new Random().nextInt()), //serial number of certificate
-                new Date(), // start of validity
-                new Date(), //end of certificate validity
-                new X500Name("CN=rootCA"), // subject name of certificate
-                rootCAKeyPair.getPublic()
-        ); // public key of certificate
-
-        // Key usage restrictions
-        builder.addExtension(Extension.keyUsage, true, new KeyUsage(KeyUsage.keyCertSign));
-        builder.addExtension(Extension.basicConstraints, false, new BasicConstraints(true));
-
-        // Root certificate
-        X509Certificate rootCA = new JcaX509CertificateConverter().getCertificate(builder
-                .build(new JcaContentSignerBuilder("SHA256withRSA").setProvider("BC").
-                        build(rootCAKeyPair.getPrivate()))); // private key of signing authority , here it is self signed
-
-        // Create Intermediate CA cert signed by Root CA
-        KeyPair intermedCAKeyPair = createKeyPair(DEFAULT_KEYPAIRS_SIZE);
-        builder = new JcaX509v3CertificateBuilder(
-                rootCA, // here rootCA is issuer authority
-                BigInteger.valueOf(new Random().nextInt()),
-                new Date(),
-                new Date(),
-                new X500Name("CN=IntermedCA"), intermedCAKeyPair.getPublic());
-
-        // Key usage restrictions
-        builder.addExtension(Extension.keyUsage, true, new KeyUsage(KeyUsage.keyCertSign));
-        builder.addExtension(Extension.basicConstraints, false, new BasicConstraints(true));
-
-        // Intermediate certificate
-        X509Certificate intermediateCA = new JcaX509CertificateConverter().getCertificate(builder
-                .build(new JcaContentSignerBuilder("SHA256withRSA").setProvider("BC").
-                        build(rootCAKeyPair.getPrivate())));// private key of signing authority , here it is signed by rootCA
-
-        //create end user cert signed by Intermediate CA
-        int offset = 1000 * 60 * 60 * 24; // yesterday/tomorrow
-        Date expiringDate = new Date(System.currentTimeMillis() + (expired ? - offset : + offset));
-        builder = new JcaX509v3CertificateBuilder(
-                intermediateCA, //here intermedCA is issuer authority
-                BigInteger.valueOf(new Random().nextInt()),
-                new Date(System.currentTimeMillis() - offset),
-                expiringDate,
-                new X500Name("CN=endUserCert"), endUserKeypair.getPublic());
-
-        // Key usage restrictions
-        builder.addExtension(Extension.keyUsage, true, new KeyUsage(KeyUsage.digitalSignature));
-        builder.addExtension(Extension.basicConstraints, false, new BasicConstraints(false));
-
-        // End-user certificate
-        X509Certificate endUserCert = new JcaX509CertificateConverter().getCertificate(builder
-                .build(new JcaContentSignerBuilder("SHA256withRSA").setProvider("BC").
-                        build(intermedCAKeyPair.getPrivate())));// private key of signing authority , here it is signed by intermedCA
-
-        return new X509Certificate [] {
-            endUserCert,
-            intermediateCA,
-            rootCA,
-        };        
     }
 
 }

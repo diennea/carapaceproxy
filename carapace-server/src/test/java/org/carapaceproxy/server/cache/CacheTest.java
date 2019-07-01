@@ -32,6 +32,7 @@ import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
+import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
@@ -220,8 +221,7 @@ public class CacheTest {
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
-            server.addCertificate(new SSLCertificateConfiguration("localhost",
-                    "localhost.p12", "testproxy"));
+            server.addCertificate(new SSLCertificateConfiguration("localhost", "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", 0,
                     true, false, null, "localhost",
                     null, null));
@@ -246,8 +246,7 @@ public class CacheTest {
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
-            server.addCertificate(new SSLCertificateConfiguration("localhost",
-                    "localhost.p12", "testproxy"));
+            server.addCertificate(new SSLCertificateConfiguration("localhost", "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", 0,
                     true, false, null, "localhost",
                     null, null));
