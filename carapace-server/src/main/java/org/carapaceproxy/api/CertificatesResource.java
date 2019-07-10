@@ -227,9 +227,9 @@ public class CertificatesResource {
 
         byte[] data = uploadedInputStream.readAllBytes();
 
-        // Verification
+        // Validation
         if (!CertificatesUtils.validateKeystore(data)) {
-            return Response.status(422).entity("ERROR: Unknown certificate format.").build();
+            return Response.status(422).entity("ERROR: unable to read uploded certificate.").build();
         }
 
         CertificateData cert = new CertificateData(
@@ -240,7 +240,7 @@ public class CertificatesResource {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         server.createDynamicCertificateForDomain(cert);
 
-        return Response.status(200).entity("SUCCESS: Certificate saved.").build();
+        return Response.status(200).entity("SUCCESS: Certificate saved as manual.").build();
     }
 
 }

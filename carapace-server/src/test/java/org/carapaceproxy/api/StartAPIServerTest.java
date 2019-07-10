@@ -374,13 +374,13 @@ public class StartAPIServerTest extends UseAdminServer {
             // Uploading trash-stuff
             RawHttpClient.HttpResponse resp = uploadCertificate(manualDomain, "fake-chain".getBytes(), client, credentials);
             String s = resp.getBodyString();
-            assertTrue(s.contains("ERROR: Unknown certificate format."));
+            assertTrue(s.contains("ERROR"));
 
             // Uploading real certificate
             byte[] chain1 = generateSampleChainData();
             resp = uploadCertificate(manualDomain, chain1, client, credentials);
             s = resp.getBodyString();
-            assertTrue(s.contains("SUCCESS: Certificate saved."));
+            assertTrue(s.contains("SUCCESS"));
 
             int certsCount2 = server.getCurrentConfiguration().getCertificates().size();
             assertEquals(certsCount + 1, certsCount2);
@@ -412,7 +412,7 @@ public class StartAPIServerTest extends UseAdminServer {
             assertFalse(Arrays.equals(chain1,chain2));
             resp = uploadCertificate(manualDomain, chain2, client, credentials);
             s = resp.getBodyString();
-            assertTrue(s.contains("SUCCESS: Certificate saved."));
+            assertTrue(s.contains("SUCCESS"));
 
             //  check properties (certificate) not duplicated
             int certsCount3 = server.getCurrentConfiguration().getCertificates().size();

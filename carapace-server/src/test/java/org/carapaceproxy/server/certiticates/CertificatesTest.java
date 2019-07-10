@@ -107,7 +107,7 @@ public class CertificatesTest extends UseAdminServer {
             uploadedChain = generateSampleChain(endUserKeyPair, false);
             byte[] chainData = createKeystore(uploadedChain, endUserKeyPair.getPrivate());
             HttpResponse resp = uploadCertificate("localhost", chainData, client, credentials);
-            assertTrue(resp.getBodyString().contains("SUCCESS: Certificate saved."));
+            assertTrue(resp.getBodyString().contains("SUCCESS"));
         }
 
         // Request #2: expected uploaded certificate
@@ -128,7 +128,7 @@ public class CertificatesTest extends UseAdminServer {
             assertFalse(uploadedChain[0].equals(uploadedChain2[0]));
             byte[] chainData = createKeystore(uploadedChain2, endUserKeyPair.getPrivate());
             HttpResponse resp = uploadCertificate("localhost", chainData, client, credentials);
-            assertTrue(resp.getBodyString().contains("SUCCESS: Certificate saved."));
+            assertTrue(resp.getBodyString().contains("SUCCESS"));
         }
 
         // Request #3: expected last uploaded certificate
