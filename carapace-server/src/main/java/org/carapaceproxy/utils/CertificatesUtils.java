@@ -78,11 +78,12 @@ public final class CertificatesUtils {
      * @param data keystore data.
      * @return whether a valid keystore can be retrived from data.
      */
-    public static boolean validateKeystore(byte[] data) {
-        try {
-            Certificate[] chain = readFromKeystore(data);
-            return  chain != null && chain.length > 0;
-        } catch (Exception ex) {
+    public static boolean validateKeystore(byte[] data) throws GeneralSecurityException {
+        try (ByteArrayInputStream is = new ByteArrayInputStream(data)) {
+            KeyStore keyStore = KeyStore.getInstance(KEYSTORE_FORMAT);
+            keyStore.load(is, KEYSTORE_PW);
+            return keyStore.aliases().hasMoreElements();
+        } catch (IOException ex) {
             return false;
         }
     }
