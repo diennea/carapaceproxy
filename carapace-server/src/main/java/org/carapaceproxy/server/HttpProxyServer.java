@@ -130,7 +130,7 @@ public class HttpProxyServer implements AutoCloseable {
     private String adminAdvertisedServerHost = adminServerHost; // hostname to access API/UI
     private int adminServerHttpsPort = -1;
     private String adminServerCertFile;
-    private String adminServerCertFilePwd;
+    private String adminServerCertFilePwd="";
     private String metricsUrl;
     private String userRealmClassname;
     /**
