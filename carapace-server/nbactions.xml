@@ -4,6 +4,8 @@
             <actionName>CUSTOM-dependency:tree</actionName>
             <displayName>dependency:tree</displayName>
             <goals>
+                <goal>clean</goal>
+                <goal>install</goal>
                 <goal>dependency:tree</goal>
             </goals>
         </action>

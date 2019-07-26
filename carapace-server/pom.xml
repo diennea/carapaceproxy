@@ -54,6 +54,11 @@
                     <groupId>org.apache.yetus</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
+
+                <exclusion>
+                    <groupId>io.netty</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -86,6 +91,12 @@
             <groupId>org.herddb</groupId>
             <artifactId>herddb-jdbc</artifactId>
             <version>${libs.herddb}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.netty</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.netty</groupId>
@@ -255,14 +266,14 @@
             <version>1.1.1</version>
             <scope>test</scope>
             <type>jar</type>
-        </dependency>       
+        </dependency>
     </dependencies>
     <build>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>
-                <version>3.1.0</version>
+                <version>3.1.1</version>
                 <configuration>
                     <appendAssemblyId>false</appendAssemblyId>
                     <descriptors>
@@ -312,12 +323,12 @@
                             <sourceDirectory>src/main/javacc</sourceDirectory>
                             <includes>
                                 <include>**/*Parser.jj</include>
-                            </includes>                            
+                            </includes>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
         </plugins>
     </build>
-    
+
 </project>
