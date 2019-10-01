@@ -40,6 +40,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import org.carapaceproxy.configstore.CertificateData;
 import org.junit.Rule;
 import org.junit.Test;
 import org.shredzone.acme4j.util.KeyPairUtils;
@@ -90,6 +91,11 @@ public class CertificatesTest extends UseAdminServer {
         config.put("certificate.2.mode", "manual");
         changeDynamicConfiguration(config);
 
+        DynamicCertificatesManager dynCertMan = server.getDynamicCertificateManager();
+        CertificateData data = dynCertMan.getCertificateDataForDomain("localhost");
+        assertNotNull(data);
+        assertTrue(data.isManual());
+
         // Request #1: still expected default certificate
         Certificate[] chain1;
         try (RawHttpClient client = new RawHttpClient("localhost", port, true, "localhost")) {
@@ -108,6 +114,9 @@ public class CertificatesTest extends UseAdminServer {
             byte[] chainData = createKeystore(uploadedChain, endUserKeyPair.getPrivate());
             HttpResponse resp = uploadCertificate("localhost", chainData, client, credentials);
             assertTrue(resp.getBodyString().contains("SUCCESS"));
+            data = dynCertMan.getCertificateDataForDomain("localhost");
+            assertNotNull(data);
+            assertTrue(data.isManual());
         }
 
         // Request #2: expected uploaded certificate
@@ -129,6 +138,9 @@ public class CertificatesTest extends UseAdminServer {
             byte[] chainData = createKeystore(uploadedChain2, endUserKeyPair.getPrivate());
             HttpResponse resp = uploadCertificate("localhost", chainData, client, credentials);
             assertTrue(resp.getBodyString().contains("SUCCESS"));
+            data = dynCertMan.getCertificateDataForDomain("localhost");
+            assertNotNull(data);
+            assertTrue(data.isManual());
         }
 
         // Request #3: expected last uploaded certificate
@@ -140,6 +152,12 @@ public class CertificatesTest extends UseAdminServer {
             assertNotNull(chain3);
             assertTrue(uploadedChain2[0].equals(chain3[0]));
         }
+
+        // this calls "reloadFromDB" > "manual" flag has to be retained even if not stored in db.
+        dynCertMan.setStateOfCertificate("localhost", DynamicCertificateState.WAITING);
+        data = dynCertMan.getCertificateDataForDomain("localhost");
+        assertNotNull(data);
+        assertTrue(data.isManual());
     }
 
     private void configureAndStartServer() throws Exception {
@@ -152,6 +170,9 @@ public class CertificatesTest extends UseAdminServer {
                         .withBody("it <b>works</b> !!")));
 
         config = new Properties(HTTP_ADMIN_SERVER_CONFIG);
+        config.put("config.type", "database");
+        config.put("db.jdbc.url", "jdbc:herddb:localhost");
+        config.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
         startServer(config);
 
         // Default certificate

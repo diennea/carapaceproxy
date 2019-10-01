@@ -150,11 +150,8 @@ public class DynamicCertificatesManager implements Runnable {
                 SSLCertificateConfiguration config = e.getValue();
                 if (config.isDynamic()) {
                     String domain = config.getHostname();
-                    CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain);
-                    if (MANUAL == config.getMode()) {
-                        cert.setManual(true);
-                    }
-                    _certificates.put(domain, cert);
+                    boolean forceManual = MANUAL == config.getMode();
+                    _certificates.put(domain, loadOrCreateDynamicCertificateForDomain(domain, forceManual));
                 }
             }
             this.certificates = _certificates; // only certificates/domains specified in the config have to be managed.
@@ -163,11 +160,12 @@ public class DynamicCertificatesManager implements Runnable {
         }
     }
 
-    private CertificateData loadOrCreateDynamicCertificateForDomain(String domain) throws GeneralSecurityException, MalformedURLException {
+    private CertificateData loadOrCreateDynamicCertificateForDomain(String domain, boolean forceManual) throws GeneralSecurityException, MalformedURLException {
         CertificateData cert = store.loadCertificateForDomain(domain);
         if (cert == null) {
-            cert = new CertificateData(domain, "", "", WAITING.name(), "", "", false);            
+            cert = new CertificateData(domain, "", "", WAITING.name(), "", "", false);
         }
+        cert.setManual(forceManual);
         return cert;
     }
 
@@ -218,11 +216,11 @@ public class DynamicCertificatesManager implements Runnable {
                 .map(e -> e.getKey())
                 .sorted()
                 .collect(Collectors.toList());
-        for (String domain : domains) {          
+        for (String domain : domains) {
             boolean updateDB = true;
             boolean notifyCertAvailChanged = false;
             try {
-                CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain);
+                CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, false);
                 switch (DynamicCertificateState.valueOf(cert.getState())) {
                     case WAITING: { // certificate waiting to be issues/renew
                         LOG.info("Certificate ISSUING process for domain: " + domain + " STARTED.");
@@ -234,7 +232,7 @@ public class DynamicCertificatesManager implements Runnable {
                             cert.setState(VERIFIED);
                         } else {
                             LOG.info("Pending challenge data for domain " + domain + ": " + challenge.getJSON());
-                            triggerChallenge(challenge);                            
+                            triggerChallenge(challenge);
                             cert.setPendingChallengeData(challenge.getJSON());
                             cert.setState(VERIFYING);
                         }
@@ -251,7 +249,7 @@ public class DynamicCertificatesManager implements Runnable {
                             break;
                         }
                         LOG.info("CHALLENGE: " + cert.getPendingChallengeData() + ".");
-                        Http01Challenge pendingChallenge = new Http01Challenge(client.getLogin(), challengeData);                        
+                        Http01Challenge pendingChallenge = new Http01Challenge(client.getLogin(), challengeData);
                         Status status = client.checkResponseForChallenge(pendingChallenge); // checks response and updates the challenge
                         cert.setPendingChallengeData(pendingChallenge.getJSON());
                         if (status == Status.VALID) {
@@ -425,6 +423,11 @@ public class DynamicCertificatesManager implements Runnable {
         return Base64.getDecoder().decode(cert.getChain());
     }
 
+    @VisibleForTesting
+    public CertificateData getCertificateDataForDomain(String domain) throws GeneralSecurityException {
+        return certificates.get(domain);
+    }
+
     private class CertAvailChangeCallback implements GroupMembershipHandler.EventCallback {
 
         @Override
@@ -452,7 +455,9 @@ public class DynamicCertificatesManager implements Runnable {
         try {
             Map<String, CertificateData> _certificates = new ConcurrentHashMap<>();
             for (String domain : certificates.keySet()) {
-                _certificates.put(domain, loadOrCreateDynamicCertificateForDomain(domain));
+                // "manual" flag is not stored in db > has to be set from existing config
+                boolean forceManual = certificates.get(domain).isManual();
+                _certificates.put(domain, loadOrCreateDynamicCertificateForDomain(domain, forceManual));
             }
             this.certificates = _certificates; // only certificates/domains specified in the config have to be managed.
         } catch (GeneralSecurityException | MalformedURLException e) {
