@@ -454,10 +454,11 @@ public class DynamicCertificatesManager implements Runnable {
     private void reloadCertificatesFromDB() {
         try {
             Map<String, CertificateData> _certificates = new ConcurrentHashMap<>();
-            for (String domain : certificates.keySet()) {
-                // "manual" flag is not stored in db > has to be set from existing config
-                boolean forceManual = certificates.get(domain).isManual();
-                _certificates.put(domain, loadOrCreateDynamicCertificateForDomain(domain, forceManual));
+            for (Entry<String, CertificateData> entry: certificates.entrySet()) {
+                String domain = entry.getKey();
+                CertificateData cert = entry.getValue();
+                // "manual" flag is not stored in db > has to be re-set from existing config
+                _certificates.put(domain, loadOrCreateDynamicCertificateForDomain(domain, cert.isManual()));
             }
             this.certificates = _certificates; // only certificates/domains specified in the config have to be managed.
         } catch (GeneralSecurityException | MalformedURLException e) {
