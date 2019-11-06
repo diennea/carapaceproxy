@@ -8,6 +8,7 @@ After=network.target
 Type=forking
 User={RUNASUSER}
 Group={RUNASUSER_GROUP}
+PIDFile={CARAPACE_INSTALLATION_PATH}/server.java.pid
 ExecStart={CARAPACE_INSTALLATION_PATH}/bin/service server start
 ExecStop={CARAPACE_INSTALLATION_PATH}/bin/service server stop
 ExecReload={CARAPACE_INSTALLATION_PATH}/bin/service server restart
