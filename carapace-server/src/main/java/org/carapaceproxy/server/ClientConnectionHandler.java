@@ -34,7 +34,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.net.ssl.SSLHandshakeException;
 import org.carapaceproxy.EndpointMapper;
 import org.carapaceproxy.client.impl.EndpointConnectionImpl;
 import org.carapaceproxy.server.backends.BackendHealthManager;
@@ -120,9 +119,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
         super.exceptionCaught(ctx, cause);
-        if (!(cause.getCause() instanceof SSLHandshakeException)) {
-            LOG.log(Level.SEVERE, "bad error", cause);
-        }
+        LOG.log(Level.SEVERE, "bad error", cause);
     }
 
     @Override

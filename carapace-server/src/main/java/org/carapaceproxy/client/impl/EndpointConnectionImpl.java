@@ -312,7 +312,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     private boolean changeState(ConnectionState expected, ConnectionState newValue) {
         if (!state.compareAndSet(expected, newValue)) {
-            LOG.log(Level.SEVERE, this + " Cannot change state from " + expected + " to " + newValue);
+            LOG.log(Level.INFO, this + " Cannot change state from " + expected + " to " + newValue);
             return false;
         } else {
             return true;

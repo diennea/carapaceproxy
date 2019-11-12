@@ -201,7 +201,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         connections.setMaxIdlePerKey(maxConnectionsPerEndpoint);
         connections.setMaxTotal(-1);
         connections.setSwallowedExceptionListener((Exception ex) -> {
-            LOG.log(Level.SEVERE, "Internal error", ex);
+            LOG.log(Level.SEVERE, "Internal endpoints connection pool error", ex);
         });
 
         if (this.stuckRequestsReaperFuture != null && (oldIdleTimeout != idleTimeout)) {
