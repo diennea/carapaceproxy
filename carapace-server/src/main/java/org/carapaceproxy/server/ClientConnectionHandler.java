@@ -123,7 +123,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     }
 
     @Override
-    protected void channelRead0(ChannelHandlerContext ctx, Object msg) {       
+    protected void channelRead0(ChannelHandlerContext ctx, Object msg) {
         if (LOG.isLoggable(Level.FINEST)) {
             LOG.log(Level.FINEST, "{0} channelRead0 {1}", new Object[]{this, msg});
         }
@@ -170,7 +170,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             }
         }
     }
-    
+
     void closeIfNotKeepAlive(final ChannelHandlerContext channelToClient) {
         if (!keepAlive) {
             refuseOtherRequests = true;
@@ -193,7 +193,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     public boolean isSecure() {
         return secure;
     }
-    
+
     public int getTotalRequestsCount() {
         return (int) this.totalRequests.get();
     }
@@ -204,7 +204,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         LOG.log(Level.INFO, error, () -> this + " errorSendingRequest " + endpointConnection);
     }
 
-    public void lastHttpContentSent(RequestHandler requestHandler) {        
+    public void lastHttpContentSent(RequestHandler requestHandler) {
         pendingRequests.remove(requestHandler);
     }
 
