@@ -215,7 +215,7 @@ public class RequestHandler implements MatchingContext {
                 EndpointConnection connection;
                 try {
 //                    LOG.log(Level.SEVERE, "TIME"+TIME_TRACKER.incrementAndGet()+" start " + this + " thread " + Thread.currentThread().getName());
-                    connection = connectionToClient.connectionsManager.getConnection(new EndpointKey(action.host, action.port));                    
+                    connection = connectionToClient.connectionsManager.getConnection(new EndpointKey(action.host, action.port));
                 } catch (EndpointNotAvailableException err) {
                     fireRequestFinished();
                     LOG.log(Level.INFO, "{0} error on endpoint {1}: {2}", new Object[]{this, action, err});
@@ -232,9 +232,9 @@ public class RequestHandler implements MatchingContext {
                 }
                     EndpointConnection connection;
                 try {
-//                    LOG.log(Level.SEVERE, "TIME"+TIME_TRACKER.incrementAndGet()+" startc " + this + " thread " + Thread.currentThread().getName());                    
+//                    LOG.log(Level.SEVERE, "TIME"+TIME_TRACKER.incrementAndGet()+" startc " + this + " thread " + Thread.currentThread().getName());
                     connection = connectionToClient.connectionsManager.getConnection(new EndpointKey(
-                            action.host, action.port));                    
+                            action.host, action.port));
                 } catch (EndpointNotAvailableException err) {
                     fireRequestFinished();
                     LOG.log(Level.INFO, "{0} error on endpoint {1}: {2}", new Object[]{this, action, err});
@@ -685,7 +685,7 @@ public class RequestHandler implements MatchingContext {
             }
             return true;
         } else {
-            LOG.log(Level.SEVERE, this + " CANNOT release connection {0}, forceClose {1}, current {2}", new Object[]{connectionToEndpoint, forceClose, current});
+            LOG.log(Level.SEVERE, "{0} CANNOT release connection {1}, forceClose {2}, current {3}", new Object[]{this, connectionToEndpoint, forceClose, current});
             return false;
         }
     }
@@ -696,7 +696,7 @@ public class RequestHandler implements MatchingContext {
 
     @Override
     public String toString() {
-        return "RequestHandler{" + "id=" + id + ", connectionToEndpoint=" + connectionToEndpoint + ", connectionToClient=" + connectionToClient + ", last " + lastActivity + '}';
+        return "RequestHandler{" + "id=" + id + ", connectionToEndpoint=" + connectionToEndpoint + ", connectionToClient=" + connectionToClient + ", last " + lastActivity + ", uri" + uri + '}';
     }
 
     public boolean isKeepAlive() {

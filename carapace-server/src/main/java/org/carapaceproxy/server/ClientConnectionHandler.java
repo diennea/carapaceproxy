@@ -34,6 +34,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.net.ssl.SSLHandshakeException;
 import org.carapaceproxy.EndpointMapper;
 import org.carapaceproxy.client.impl.EndpointConnectionImpl;
 import org.carapaceproxy.server.backends.BackendHealthManager;
@@ -119,11 +120,13 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
         super.exceptionCaught(ctx, cause);
-        LOG.log(Level.SEVERE, "bad error", cause);
+        if (!(cause.getCause() instanceof SSLHandshakeException)) {
+            LOG.log(Level.SEVERE, "bad error", cause);
+        }
     }
 
     @Override
-    protected void channelRead0(ChannelHandlerContext ctx, Object msg) {       
+    protected void channelRead0(ChannelHandlerContext ctx, Object msg) {
         if (LOG.isLoggable(Level.FINEST)) {
             LOG.log(Level.FINEST, "{0} channelRead0 {1}", new Object[]{this, msg});
         }
@@ -170,7 +173,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             }
         }
     }
-    
+
     void closeIfNotKeepAlive(final ChannelHandlerContext channelToClient) {
         if (!keepAlive) {
             refuseOtherRequests = true;
@@ -193,7 +196,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     public boolean isSecure() {
         return secure;
     }
-    
+
     public int getTotalRequestsCount() {
         return (int) this.totalRequests.get();
     }
@@ -204,7 +207,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         LOG.log(Level.INFO, error, () -> this + " errorSendingRequest " + endpointConnection);
     }
 
-    public void lastHttpContentSent(RequestHandler requestHandler) {        
+    public void lastHttpContentSent(RequestHandler requestHandler) {
         pendingRequests.remove(requestHandler);
     }
 

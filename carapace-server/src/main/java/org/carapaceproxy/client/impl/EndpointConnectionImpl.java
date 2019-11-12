@@ -74,7 +74,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private final EndpointKey key;
     private final EndpointStats endpointstats;
     private final AtomicBoolean closed = new AtomicBoolean();
-    private final AtomicBoolean active = new AtomicBoolean();    
+    private final AtomicBoolean active = new AtomicBoolean();
 
     private final Channel channelToEndpoint;
 
@@ -99,7 +99,8 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private static enum ConnectionState {
         IDLE,
         REQUEST_SENT,
-        RELEASABLE
+        RELEASABLE,
+        DELAYED_RELEASE
     }
 
     /**
@@ -189,7 +190,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                     endpointstats.getOpenConnections().decrementAndGet();
                     openConnectionsStats.dec();
                 });
-        
+
     }
 
     @Override
@@ -203,7 +204,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         if (!active.compareAndSet(false, true)) {
             throw new IllegalStateException("this connection is already active!");
         }
-        if (!state.compareAndSet(ConnectionState.IDLE, ConnectionState.REQUEST_SENT)) {
+        if (!changeState(ConnectionState.IDLE, ConnectionState.REQUEST_SENT)) {
             LOG.log(Level.SEVERE, "bad status ! " + this + ", handler is " + clientSidePeerHandler);
             throw new IllegalStateException("bad status ! " + this);
         }
@@ -230,7 +231,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                     RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
                     if (!future.isSuccess()) {
                         LOG.log(Level.INFO, this + " sendRequest " + request.getClass() + " failed", future.cause());
-                        state.compareAndSet(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE);
+                        changeState(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE);
                         _clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
                         invalidate();
                     }
@@ -257,7 +258,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 .writeAndFlush(msg)
                 .addListener((Future<? super Void> future) -> {
                     if (!future.isSuccess()) {
-                        state.compareAndSet(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE);
+                        changeState(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE);
                         boolean done = clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
                         if (done) {
                             LOG.log(Level.SEVERE, this + " continueRequest " + msg.getClass() + " failed", future.cause());
@@ -273,7 +274,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         if (!channelToEndpoint.isOpen() || forcedInvalid) {
             invalidate();
             LOG.log(Level.SEVERE, "continueRequest {0} to {1} . skip to invalid connection to endpoint {2}", new Object[]{msg, channelToEndpoint, this.key});
-            state.compareAndSet(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE);
+            changeState(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE);
             clientSidePeerHandler.errorSendingRequest(this, new IOException("endpoint died"));
             return;
         }
@@ -287,24 +288,42 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 .addListener((Future<? super Void> future) -> {
                     if (!future.isSuccess()) {
                         LOG.log(Level.INFO, "sendLastHttpContent failed " + msg, future.cause());
-                        state.compareAndSet(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE);
+                        changeState(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE);
                         clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
                         invalidate();
                     } else {
-                        if (!state.compareAndSet(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE)) {
+                        boolean recover = false;
+                        if (!changeState(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE)) {
                             // this may be a bug
                             LOG.log(Level.SEVERE, "sendLastHttpContent finished without " + ConnectionState.REQUEST_SENT + " state");
+                            recover = true;
                         }
                         clientSidePeerHandler.lastHttpContentSent();
+                        if (recover) {
+                            if (changeState(ConnectionState.DELAYED_RELEASE, ConnectionState.RELEASABLE)) {
+                                LOG.log(Level.INFO, "recovering DELAYED_RELEASE " + this);
+                                release(true, clientSidePeerHandler);
+                            }
+                        }
                     }
                 });
 
     }
 
+    private boolean changeState(ConnectionState expected, ConnectionState newValue) {
+        if (!state.compareAndSet(expected, newValue)) {
+            LOG.log(Level.SEVERE, this + " Cannot change state from " + expected + " to " + newValue);
+            return false;
+        } else {
+            return true;
+        }
+    }
+
     @Override
     public void release(boolean close, RequestHandler clientSidePeerHandler) {
-        if (!state.compareAndSet(ConnectionState.RELEASABLE, ConnectionState.IDLE)) {
-            LOG.log(Level.SEVERE, "cannot release now {0}", this);
+        if (!changeState(ConnectionState.RELEASABLE, ConnectionState.IDLE)) {
+            LOG.log(Level.SEVERE, "cannot release now " + this);
+            changeState(ConnectionState.REQUEST_SENT, ConnectionState.DELAYED_RELEASE);
             return;
         }
         LOG.log(Level.INFO, "release {0} {1}", new Object[]{close, this});
@@ -426,5 +445,5 @@ public class EndpointConnectionImpl implements EndpointConnection {
     public EndpointKey getKey() {
         return key;
     }
-    
+
 }

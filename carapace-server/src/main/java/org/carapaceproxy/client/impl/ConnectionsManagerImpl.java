@@ -85,7 +85,6 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
             "stuck_requests_total",
             "stuck requests, this requests will be killed").register();
 
-    @VisibleForTesting
     public void returnConnection(EndpointConnectionImpl con) {
         LOG.log(Level.INFO, "returnConnection:{0}", con);
         connections.returnObject(con.getKey(), con);
@@ -201,6 +200,9 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         connections.setMaxTotalPerKey(maxConnectionsPerEndpoint);
         connections.setMaxIdlePerKey(maxConnectionsPerEndpoint);
         connections.setMaxTotal(-1);
+        connections.setSwallowedExceptionListener((Exception ex) -> {
+            LOG.log(Level.SEVERE, "Internal error", ex);
+        });
 
         if (this.stuckRequestsReaperFuture != null && (oldIdleTimeout != idleTimeout)) {
             this.stuckRequestsReaperFuture.cancel(false);
