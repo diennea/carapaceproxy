@@ -88,6 +88,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     public void returnConnection(EndpointConnectionImpl con) {
         LOG.log(Level.INFO, "returnConnection:{0}", con);
         connections.returnObject(con.getKey(), con);
+        LOG.log(Level.INFO, "Active connections for key " + con.getKey() + ": " + connections.getNumActive(con.getKey()) + "/" + connections.getMaxTotalPerKey());
     }
 
     public int getConnectTimeout() {

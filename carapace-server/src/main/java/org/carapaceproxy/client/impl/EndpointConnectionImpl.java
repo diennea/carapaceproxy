@@ -288,14 +288,17 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 .addListener((Future<? super Void> future) -> {
                     if (!future.isSuccess()) {
                         LOG.log(Level.INFO, "sendLastHttpContent failed " + msg, future.cause());
-                        changeState(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE);
+                        if (!changeState(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE)) {
+                            LOG.log(Level.SEVERE, "sendLastHttpContent finished without " + ConnectionState.REQUEST_SENT + " state: recovery");
+                            changeState(ConnectionState.DELAYED_RELEASE, ConnectionState.RELEASABLE);
+                        }
                         clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
                         invalidate();
                     } else {
                         boolean recover = false;
                         if (!changeState(ConnectionState.REQUEST_SENT, ConnectionState.RELEASABLE)) {
                             // this may be a bug
-                            LOG.log(Level.SEVERE, "sendLastHttpContent finished without " + ConnectionState.REQUEST_SENT + " state");
+                            LOG.log(Level.SEVERE, "sendLastHttpContent finished without " + ConnectionState.REQUEST_SENT + " state: recovery");
                             recover = true;
                         }
                         clientSidePeerHandler.lastHttpContentSent();
