@@ -330,7 +330,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     public void release(boolean close, RequestHandler clientSidePeerHandler) {
         channelToEndpoint.eventLoop().submit(() -> {
             if (changeStateTo(ConnectionState.IDLE, ConnectionState.RELEASABLE, ConnectionState.DELAYED_RELEASE)) {
-                LOG.log(Level.INFO, "release {0} {1}", new Object[]{close, this});
+                LOG.log(Level.FINE, "release {0} {1}", new Object[]{close, this});
                 checkHandler(clientSidePeerHandler);
                 connectionDeactivated();
                 if (close) {
