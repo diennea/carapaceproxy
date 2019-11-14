@@ -152,10 +152,10 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 endpointstats.getTotalConnections().incrementAndGet();
                 endpointstats.getOpenConnections().incrementAndGet();
                 openConnectionsStats.inc();
-                CONNECTION_STATS_SUMMARY.labels(METRIC_LABEL_RESULT_SUCCESS, labelHost)
+                CONNECTION_STATS_SUMMARY.labels(labelHost, METRIC_LABEL_RESULT_SUCCESS)
                         .observe(System.nanoTime() - startTime);
             } else {
-                CONNECTION_STATS_SUMMARY.labels(METRIC_LABEL_RESULT_FAILURE, labelHost)
+                CONNECTION_STATS_SUMMARY.labels(labelHost, METRIC_LABEL_RESULT_FAILURE)
                         .observe(System.nanoTime() - startTime);
                 LOG.log(Level.INFO, "connect failed to " + key, future.cause());
                 parent.backendHealthManager.reportBackendUnreachable(key.getHostPort(),
