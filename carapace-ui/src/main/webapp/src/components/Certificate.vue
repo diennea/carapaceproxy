@@ -45,12 +45,11 @@
             }
         },
         created() {
-            var self = this
-            var url = "/api/certificates/" + (self.$route.params.id || 0)
+            var url = "/api/certificates/" + (this.$route.params.id || 0)
             doGet(url, data => {
-                self.certificate = data
+                this.certificate = data
                 if (!data) {
-                    self.found = false
+                    this.found = false
                 }
             })
         }

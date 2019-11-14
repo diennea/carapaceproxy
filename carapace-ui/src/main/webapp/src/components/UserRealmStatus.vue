@@ -22,10 +22,8 @@ export default {
         };
     },
     created() {
-        var url = "/api/users/all";
-        var self = this;
-        doGet(url, data => {
-            self.users = data;
+        doGet("/api/users/all", data => {
+            this.users = data;
         });
     }
 };

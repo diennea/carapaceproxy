@@ -20,10 +20,8 @@ export default {
         };
     },
     created() {
-        var url = "/api/metrics/url";
-        var self = this;
-        doGet(url, data => {
-            self.metricsPath = data;
+        doGet("/api/metrics/url", data => {
+            this.metricsPath = data;
         });
     }
 };

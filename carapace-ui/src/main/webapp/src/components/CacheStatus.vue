@@ -1,13 +1,13 @@
 <template>
-    <div>        
+    <div>
         <h2>Cache</h2>
-        <button class="btn btn-dark float-right" v-on:click="flushCache">Flush cache</button>        
+        <button class="btn btn-dark float-right" v-on:click="flushCache">Flush cache</button>
         <div class="form-group row w-75">
             <label class="col-sm-4 col-form-label">Status:</label>
             <div class="col-sm-8">
                 <input type="text" readonly class="form-control-plaintext" v-model="status.result" />
             </div>
-        </div>        
+        </div>
         <div class="form-group row w-75">
             <label class="col-sm-4 col-form-label">Size:</label>
             <div class="col-sm-8">
@@ -86,19 +86,15 @@ export default {
     },
     methods: {
         loadData() {
-            var url = "/api/cache/info";
-            var self = this;
-
-            doGet(url, data => {
-                self.status = data;
+            doGet("/api/cache/info", data => {
+                this.status = data;
             });
-
             doGet("/api/cache/inspect", data => {
                 data.forEach(it => {
                     it.key = it.host + it.uri;
                     it.creationTs = formatTimestamp(it.creationTs);
                     it.expireTs = formatTimestamp(it.expireTs);
-                    self.cacheitems.push(it);
+                    this.cacheitems.push(it);
                 });
             });
         },
@@ -106,10 +102,9 @@ export default {
             return item.host + item.uri;
         },
         flushCache() {
-            var self = this;
             doGet("/api/cache/flush", data => {
-                self.cacheitems = [];
-                self.loadData();
+                this.cacheitems = [];
+                this.loadData();
             });
         }
     }

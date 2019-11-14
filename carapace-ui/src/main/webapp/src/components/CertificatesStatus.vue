@@ -16,10 +16,8 @@ export default {
         };
     },
     created() {
-        var url = "/api/certificates";
-        var self = this;
-        doGet(url, data => {
-            self.certificates = Object.values(data || {});
+        doGet("/api/certificates", data => {
+            this.certificates = Object.values(data || {});
         });
     },
     computed: {

@@ -23,10 +23,8 @@ export default {
         };
     },
     created() {
-        var url = "/api/listeners";
-        var self = this;
-        doGet(url, data => {
-            self.listeners = Object.values(data || {});
+        doGet("/api/listeners", data => {
+            this.listeners = Object.values(data || {});
         });
     },
     computed: {

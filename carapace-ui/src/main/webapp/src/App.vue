@@ -90,12 +90,10 @@ export default {
             peerId: ""
         };
     },
-    created() {
-        var url = "/api/cluster/localpeer";
-        var self = this;
-        doGet(url, data => {
-            self.peerId = data.id;
-            document.title += " (" + self.peerId + ")";
+    created() {        
+        doGet("/api/cluster/localpeer", data => {
+            this.peerId = data.id;
+            document.title += " (" + this.peerId + ")";
         });
     }
 };

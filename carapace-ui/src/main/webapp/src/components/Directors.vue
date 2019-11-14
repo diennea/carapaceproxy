@@ -15,10 +15,8 @@ export default {
         };
     },
     created() {
-        var url = "/api/directors";
-        var self = this;
-        doGet(url, data => {
-            self.directors = Object.values(data || {});
+        doGet("/api/directors", data => {
+            this.directors = Object.values(data || {});
         });
     },
     computed: {

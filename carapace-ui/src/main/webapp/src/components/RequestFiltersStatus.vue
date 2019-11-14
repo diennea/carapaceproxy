@@ -15,9 +15,7 @@ export default {
         };
     },
     created() {
-        var url = "/api/requestfilters";
-        var self = this;
-        doGet(url, data => {
+        doGet("/api/requestfilters", data => {
             data.forEach(item => {
                 var requestfilter = {};
                 requestfilter.type = item.type;
@@ -26,7 +24,7 @@ export default {
                     result.push(key + ": " + item.values[key]);
                 });
                 requestfilter.description = result.join(", ");
-                self.requestfilters.push(requestfilter);
+                this.requestfilters.push(requestfilter);
             });
         });
     },

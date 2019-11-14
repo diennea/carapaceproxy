@@ -44,19 +44,18 @@ export default {
     },
     methods: {
         save() {
-            var self = this;
             doPost(
                 "/api/config/apply",
                 this.configuration,
                 data => {
-                    self.opSuccess = data.ok;
-                    self.opMessage = data.ok
+                    this.opSuccess = data.ok;
+                    this.opMessage = data.ok
                         ? "Configuration saved successfully."
                         : "Error: unable to save the configuration.";
                 },
                 error => {
-                    self.opSuccess = false;
-                    self.opMessage =
+                    this.opSuccess = false;
+                    this.opMessage =
                         "Error: unable to save the configuration (" +
                         error +
                         ").";
@@ -64,17 +63,16 @@ export default {
             );
         },
         fetch() {
-            var self = this;
             doGet(
                 "/api/config",
                 conf => {
-                    self.configuration = conf;
-                    self.opSuccess = true;
-                    self.opMessage = "";
+                    this.configuration = conf;
+                    this.opSuccess = true;
+                    this.opMessage = "";
                 },
                 error => {
-                    self.opSuccess = false;
-                    self.opMessage =
+                    this.opSuccess = false;
+                    this.opMessage =
                         "Error: unable to fetch current configuration (" +
                         error +
                         ").";
@@ -82,19 +80,18 @@ export default {
             );
         },
         validate() {
-            var self = this;
             doPost(
                 "/api/config/validate",
                 this.configuration,
                 data => {
-                    self.opSuccess = data.ok;
-                    self.opMessage = data.ok
+                    this.opSuccess = data.ok;
+                    this.opMessage = data.ok
                         ? "Configuration is ok."
                         : "Error: configuration contains some errors, check it out before save it.";
                 },
                 error => {
-                    self.opSuccess = false;
-                    self.opMessage =
+                    this.opSuccess = false;
+                    this.opMessage =
                         "Error: unable to validate the configuration (" +
                         error +
                         ").";

@@ -28,10 +28,8 @@ export default {
         };
     },
     created() {
-        var url = "/api/cluster/peers";
-        var self = this;
-        doGet(url, data => {
-            self.peers = Object.values(data || {});
+        doGet("/api/cluster/peers", data => {
+            this.peers = Object.values(data || {});
         });
     },
     computed: {

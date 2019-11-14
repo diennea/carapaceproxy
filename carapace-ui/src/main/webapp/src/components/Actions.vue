@@ -15,10 +15,8 @@ export default {
         };
     },
     created() {
-        var url = "/api/actions";
-        var self = this;
-        doGet(url, data => {
-            self.actions = Object.values(data || {});
+        doGet("/api/actions", data => {
+            this.actions = Object.values(data || {});
         });
     },
     computed: {

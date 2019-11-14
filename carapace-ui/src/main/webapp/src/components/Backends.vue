@@ -44,10 +44,8 @@ export default {
         };
     },
     created() {
-        var url = "/api/backends";
-        var self = this;
-        doGet(url, data => {
-            self.backends = Object.values(data || {});
+        doGet("/api/backends", data => {
+            this.backends = Object.values(data || {});
         });
     },
     computed: {

@@ -1,9 +1,9 @@
 <template>
     <div>
         <h2>Routes</h2>
-        <div
-            class="box-warning"
-        >With no route matching the request, NOT-FOUND action will be performed.</div>
+        <div class="box-warning">
+            With no route matching the request, NOT-FOUND action will be performed.
+        </div>
         <datatable-list :fields="fields" :items="routes"></datatable-list>
     </div>
 </template>
@@ -19,14 +19,12 @@ export default {
         };
     },
     created() {
-        var url = "/api/routes";
-        var self = this;
-        doGet(url, data => {
-            self.routes = [];
+        doGet("/api/routes", data => {
+            this.routes = [];
             Object.keys(data).forEach(idx => {
                 var r = data[idx];
                 r.priority = idx; // routes fetched ordered by priority.
-                self.routes.push(r);
+                this.routes.push(r);
             });
         });
     },
