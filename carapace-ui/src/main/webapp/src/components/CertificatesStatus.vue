@@ -1,61 +1,50 @@
-<style scoped>
-    table tr {
-        cursor: pointer;
-    }
-</style>
-
 <template>
     <div>
         <h2>Certificates</h2>
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th scope="col">ID</th>
-                    <th scope="col">Hostname</th>
-                    <th scope="col">Mode</th>
-                    <th scope="col">Dynamic</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">SSLCertificateFile</th>
-                </tr>
-            </thead>
-            <tbody>
-                <router-link
-                    tag="tr"
-                    :to="{ name: 'Certificate', params: { id: item.id }}"
-                    v-for="item of certificates"
-                    :key="item.id"
-                    replace >
-
-                    <td>{{(item.id)}}</td>
-                    <td>{{(item.hostname)}}</td>
-                    <td>{{(item.mode)}}</td>
-                    <td>{{(item.dynamic) | symbolFormat}}</td>
-                    <td>{{(item.status)}}</td>
-                    <td>{{(item.sslCertificateFile)}}</td>
-                </router-link>
-            </tbody>
-        </table>
+        <datatable-list :fields="fields" :items="certificates" :rowClicked="showCertDetail"></datatable-list>
     </div>
 </template>
 
 <script>
-    import { doRequest } from './../mockserver'
-    export default {
-        name: 'Certificates',
-        data: function () {
-            return {
-                certificates: []
-            }
-        },
-        created: function () {
-            var url = "/api/certificates";
-            var d = this;
-            doRequest(url, {}, function (response) {
-                d.certificates = [];
-                Object.keys(response).forEach(function(key) {
-                    d.certificates.push(response[key]);
-                });
-            })
+import { doGet } from "./../mockserver";
+import { toBooleanSymbol } from "./../lib/formatter";
+export default {
+    name: "Certificates",
+    data() {
+        return {
+            certificates: []
+        };
+    },
+    created() {
+        doGet("/api/certificates", data => {
+            this.certificates = Object.values(data || {});
+        });
+    },
+    computed: {
+        fields() {
+            return [
+                { key: "id", label: "ID", sortable: true },
+                { key: "hostname", label: "Hostname", sortable: true },
+                { key: "mode", label: "Mode", sortable: true },
+                {
+                    key: "dynamic",
+                    label: "Dynamic",
+                    sortable: true,
+                    formatter: toBooleanSymbol
+                },
+                { key: "status", label: "Status", sortable: true },
+                {
+                    key: "sslCertificateFile",
+                    label: "SSL Certificate File",
+                    sortable: true
+                }
+            ];
+        }
+    },
+    methods: {
+        showCertDetail(cert) {
+            this.$router.push({ name: "Certificate", params: { id: cert.id } });
         }
     }
+};
 </script>
