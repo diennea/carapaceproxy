@@ -12,11 +12,18 @@
                 tag="li"
                 exact-active-class="active"
                 :key="el.label"
+                :id="el.label"
                 :to="el.href"
-                :title="collapsed ? el.label : null"
             >
                 <font-awesome-icon :icon="el.icoName" fixed-width></font-awesome-icon>
-                <span v-if="!collapsed">{{el.label}}</span>
+                <b-tooltip
+                    v-if="collapsed"
+                    :target="el.label"
+                    :title="el.label"
+                    placement="right"
+                    boundary="viewport"
+                ></b-tooltip>
+                <span v-else>{{el.label}}</span>
             </router-link>
         </ul>
         <!-- SIDEBAR-TOGGLE-BUTTON -->
