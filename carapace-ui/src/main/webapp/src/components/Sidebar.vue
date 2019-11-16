@@ -2,8 +2,8 @@
     <nav id="sidebar" :class="{'collapsed' : collapsed}">
         <!-- HEADER -->
         <div id="sidebar-header">
-            <h3 v-if="collapsed">{{headerCollapsed}}</h3>
-            <h3 v-else>{{header}}</h3>
+            <h2 v-if="collapsed">{{headerCollapsed}}</h2>
+            <h2 v-else>{{header}}</h2>
         </div>
         <!-- ELEMENTS -->
         <ul id="sidebar-elements" class="list-unstyled">
@@ -12,11 +12,18 @@
                 tag="li"
                 exact-active-class="active"
                 :key="el.label"
+                :id="el.label"
                 :to="el.href"
-                :title="collapsed ? el.label : null"
             >
                 <font-awesome-icon :icon="el.icoName" fixed-width></font-awesome-icon>
-                <span v-if="!collapsed">{{el.label}}</span>
+                <b-tooltip
+                    v-if="collapsed"
+                    :target="el.label"
+                    :title="el.label"
+                    placement="right"
+                    boundary="viewport"
+                ></b-tooltip>
+                <span v-else>{{el.label}}</span>
             </router-link>
         </ul>
         <!-- SIDEBAR-TOGGLE-BUTTON -->
@@ -98,7 +105,6 @@ export default {
     bottom: 0;
     left: 0;
     right: 0;
-    padding: 1em;
     text-align: center;
     color: $primary;
 }
@@ -126,12 +132,11 @@ export default {
 }
 
 #sidebar-header {
-    min-height: 5em;
-    max-height: 5em;
-    margin-bottom: 1em;
+    min-height: 15vh;
+    max-height: 15vh;
 }
 
-#sidebar-header h3 {
+#sidebar-header h2 {
     overflow: hidden;
 }
 
@@ -142,8 +147,9 @@ a:focus {
     text-decoration: none;
 }
 
-#sidebar #sidebar-header {
-    padding: 1em;
+#sidebar-header,
+#sidebar-toogle-button {
+    padding: 0.5rem 1rem;
     background: $secondary;
 }
 
@@ -184,6 +190,8 @@ a[aria-expanded="true"] {
 
 #sidebar-elements {
     overflow-x: hidden;
-    max-height: 76vh;
+    min-height: 66vh;
+    max-height: 66vh;
+    margin: 2vh auto;
 }
 </style>

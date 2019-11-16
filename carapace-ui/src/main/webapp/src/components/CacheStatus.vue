@@ -2,52 +2,63 @@
     <div>
         <h2>Cache</h2>
         <button class="btn btn-dark float-right" v-on:click="flushCache">Flush cache</button>
-        <div class="form-group row w-75">
-            <label class="col-sm-4 col-form-label">Status:</label>
-            <div class="col-sm-8">
-                <input type="text" readonly class="form-control-plaintext" v-model="status.result" />
+        <form class="float-left w-75">
+            <div class="form-group row">
+                <label class="col-sm-4 col-form-label">Status:</label>
+                <div class="col-sm-8">
+                    <input
+                        type="text"
+                        readonly
+                        class="form-control-plaintext"
+                        v-model="status.result"
+                    />
+                </div>
             </div>
-        </div>
-        <div class="form-group row w-75">
-            <label class="col-sm-4 col-form-label">Size:</label>
-            <div class="col-sm-8">
-                <input
-                    type="text"
-                    readonly
-                    class="form-control-plaintext"
-                    v-model="status.cachesize"
-                />
+            <div class="form-group row">
+                <label class="col-sm-4 col-form-label">Size:</label>
+                <div class="col-sm-8">
+                    <input
+                        type="text"
+                        readonly
+                        class="form-control-plaintext"
+                        v-model="status.cachesize"
+                    />
+                </div>
             </div>
-        </div>
-        <div class="form-group row w-75">
-            <label class="col-sm-4 col-form-label">Misses:</label>
-            <div class="col-sm-8">
-                <input type="text" readonly class="form-control-plaintext" v-model="status.misses" />
+            <div class="form-group row">
+                <label class="col-sm-4 col-form-label">Misses:</label>
+                <div class="col-sm-8">
+                    <input
+                        type="text"
+                        readonly
+                        class="form-control-plaintext"
+                        v-model="status.misses"
+                    />
+                </div>
             </div>
-        </div>
-        <div class="form-group row w-75">
-            <label class="col-sm-4 col-form-label">Direct memory used:</label>
-            <div class="col-sm-8">
-                <input
-                    type="text"
-                    readonly
-                    class="form-control-plaintext"
-                    v-model="status.directMemoryUsed"
-                />
+            <div class="form-group row">
+                <label class="col-sm-4 col-form-label">Direct memory used:</label>
+                <div class="col-sm-8">
+                    <input
+                        type="text"
+                        readonly
+                        class="form-control-plaintext"
+                        v-model="status.directMemoryUsed"
+                    />
+                </div>
             </div>
-        </div>
-        <div class="form-group row w-75">
-            <label class="col-sm-4 col-form-label">Heap memory used:</label>
-            <div class="col-sm-8">
-                <input
-                    type="text"
-                    readonly
-                    class="form-control-plaintext"
-                    v-model="status.heapMemoryUsed"
-                />
+            <div class="form-group row">
+                <label class="col-sm-4 col-form-label">Heap memory used:</label>
+                <div class="col-sm-8">
+                    <input
+                        type="text"
+                        readonly
+                        class="form-control-plaintext"
+                        v-model="status.heapMemoryUsed"
+                    />
+                </div>
             </div>
-        </div>
-
+        </form>
         <datatable-list :fields="fields" :items="cacheitems"></datatable-list>
     </div>
 </template>
