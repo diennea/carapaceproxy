@@ -105,7 +105,6 @@ public class SSLSNITest {
     public void testchooseCertificate() throws Exception {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
 
-        ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
 
             server.addCertificate(new SSLCertificateConfiguration("other", "cert", "pwd", STATIC));
@@ -125,6 +124,16 @@ public class SSLSNITest {
             assertEquals("www.example.com", server.getListeners().chooseCertificate("www.example.com", "no-default").getId());
             // wildcard
             assertEquals("*.example.com", server.getListeners().chooseCertificate("test.example.com", "no-default").getId());
+
+            // full wildcard
+            server.addCertificate(new SSLCertificateConfiguration("*", "cert", "pwd", STATIC));
+            // full wildcard has not to hide more specific wildcard one
+            assertEquals("*.example.com", server.getListeners().chooseCertificate("test.example.com", "no-default").getId());
+
+            // more specific wildcard
+            server.addCertificate(new SSLCertificateConfiguration("*.test.example.com", "cert", "pwd", STATIC));
+            // more specific wildcard has to hide less specific one (*.example.com)
+            assertEquals("*.test.example.com", server.getListeners().chooseCertificate("pippo.test.example.com", "no-default").getId());
         }
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
