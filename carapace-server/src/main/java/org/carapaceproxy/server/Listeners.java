@@ -340,20 +340,19 @@ public class Listeners {
         if (sniHostname == null) {
             sniHostname = "";
         }
+        Map<String, SSLCertificateConfiguration> certificates = currentConfiguration.getCertificates();
         SSLCertificateConfiguration certificateMatchExact = null;
         SSLCertificateConfiguration certificateMatchNoExact = null;
-
-        Map<String, SSLCertificateConfiguration> certificates = currentConfiguration.getCertificates();
         for (SSLCertificateConfiguration c : certificates.values()) {
             if (certificateMatches(sniHostname, c, true)) {
                 certificateMatchExact = c;
             } else if (certificateMatches(sniHostname, c, false)) {
-                certificateMatchNoExact = c;
+                if (certificateMatchNoExact == null || c.isMoreSpecific(certificateMatchNoExact)) {
+                    certificateMatchNoExact = c;
+                }
             }
         }
-
         SSLCertificateConfiguration choosen = null;
-
         if (certificateMatchExact != null) {
             choosen = certificateMatchExact;
         } else if (certificateMatchNoExact != null) {
@@ -365,7 +364,7 @@ public class Listeners {
         return choosen;
     }
 
-    private boolean certificateMatches(String hostname, SSLCertificateConfiguration c, boolean exact) {
+    private static boolean certificateMatches(String hostname, SSLCertificateConfiguration c, boolean exact) {
         if (exact) {
             return !c.isWildcard() && hostname.equals(c.getHostname());
         } else {

@@ -26,7 +26,7 @@ import static org.carapaceproxy.server.config.SSLCertificateConfiguration.Certif
  *
  * @author enrico.olivelli
  */
-public class SSLCertificateConfiguration {   
+public class SSLCertificateConfiguration {
 
     public static enum CertificateMode {
         STATIC, ACME, MANUAL
@@ -54,7 +54,7 @@ public class SSLCertificateConfiguration {
         this.file = file;
         this.password = password;
         this.mode = mode;
-    }    
+    }
 
     public String getId() {
         return id;
@@ -82,6 +82,10 @@ public class SSLCertificateConfiguration {
 
     public CertificateMode getMode() {
         return mode;
+    }
+
+    public boolean isMoreSpecific(SSLCertificateConfiguration other) {
+        return hostname.length() > other.getHostname().length();
     }
 
     @Override
