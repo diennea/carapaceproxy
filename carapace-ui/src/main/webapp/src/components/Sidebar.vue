@@ -77,7 +77,6 @@ export default {
     min-width: 240px;
     max-width: 240px;
     min-height: 100vh;
-    text-align: center;
     background: $secondary;
     color: $white;
     transition: all 0.5s ease;
@@ -138,6 +137,7 @@ export default {
 
 #sidebar-header h2 {
     overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 a,
@@ -155,18 +155,19 @@ a:focus {
 
 #sidebar ul li {
     font-size: 1.1rem;
-    padding: 0.5em 0.75em;
+    padding: 0.4rem 0.75rem;
     display: block;
     position: relative;
-    border: 0.25em solid transparent;
+    border: 0.25rem solid transparent;
 }
 
 #sidebar ul li span {
-    padding: 0.5em 0;
     position: absolute;
     top: 0;
     bottom: 0;
-    left: 3em;
+    left: 3.5rem;
+    display: inline-flex;
+    align-items: center;
 }
 
 #sidebar ul li:not(active):hover {
@@ -190,8 +191,8 @@ a[aria-expanded="true"] {
 
 #sidebar-elements {
     overflow-x: hidden;
-    min-height: 66vh;
-    max-height: 66vh;
-    margin: 2vh auto;
+    min-height: 67vh;
+    max-height: 67vh;
+    margin: 3vh auto;
 }
 </style>
