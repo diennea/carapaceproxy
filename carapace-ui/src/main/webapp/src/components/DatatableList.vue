@@ -71,6 +71,11 @@ export default {
             filter: null
         };
     },
+    watch: {
+        items() {
+            this.totalRows = this.items.length;
+        }
+    },
     methods: {
         onFiltered(filteredItems) {
             // Trigger pagination to update the number of buttons/pages due to filtering
@@ -86,12 +91,8 @@ export default {
 }
 
 .tall {
-    max-height: 80vh;
-    margin-bottom: 0.5rem;
-}
-
-#datatable {
-    margin-top: 0.25rem;
+    max-height: 75vh;
+    margin: 0.25rem auto;
 }
 
 #filter {
@@ -102,5 +103,9 @@ export default {
 #selector {
     float: right;
     width: 5rem;
+}
+
+#filter, #selector {
+    margin-bottom: 0.25rem;
 }
 </style>
