@@ -17,7 +17,7 @@
  under the License.
 
  */
-package org.carapaceproxy.server.certiticates;
+package org.carapaceproxy.server.certificates;
 
 import java.io.IOException;
 import java.net.URI;

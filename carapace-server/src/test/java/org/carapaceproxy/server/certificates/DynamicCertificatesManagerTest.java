@@ -17,8 +17,11 @@
  under the License.
 
  */
-package org.carapaceproxy.server.certiticates;
+package org.carapaceproxy.server.certificates;
 
+import org.carapaceproxy.server.certificates.ACMEClient;
+import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
+import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import java.lang.reflect.Field;
 import java.net.URL;
 import java.security.KeyPair;
@@ -33,14 +36,14 @@ import org.carapaceproxy.configstore.ConfigurationStore;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
-import static org.carapaceproxy.server.certiticates.DynamicCertificateState.AVAILABLE;
-import static org.carapaceproxy.server.certiticates.DynamicCertificateState.EXPIRED;
-import static org.carapaceproxy.server.certiticates.DynamicCertificateState.ORDERING;
-import static org.carapaceproxy.server.certiticates.DynamicCertificateState.REQUEST_FAILED;
-import static org.carapaceproxy.server.certiticates.DynamicCertificateState.VERIFIED;
-import static org.carapaceproxy.server.certiticates.DynamicCertificateState.VERIFYING;
-import static org.carapaceproxy.server.certiticates.DynamicCertificateState.WAITING;
-import static org.carapaceproxy.server.certiticates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.EXPIRED;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.ORDERING;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.REQUEST_FAILED;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERIFIED;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERIFYING;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.junit.Assert.*;
 import org.junit.Test;
@@ -113,16 +116,16 @@ public class DynamicCertificatesManagerTest {
 
         // yet available certificate
         String d0 = "localhost0";
-        CertificateData cd0 = new CertificateData(d0, "", chain, AVAILABLE.name(), "", "", false);
+        CertificateData cd0 = new CertificateData(d0, "", chain, AVAILABLE, "", "", false);
         when(s.loadCertificateForDomain(eq(d0))).thenReturn(cd0);
         // certificate to order
         String d1 = "localhost1";
-        CertificateData cd1 = new CertificateData(d1, "", "", WAITING.name(), "", "", false);
+        CertificateData cd1 = new CertificateData(d1, "", "", WAITING, "", "", false);
         when(s.loadCertificateForDomain(eq(d1))).thenReturn(cd1);
         man.setConfigurationStore(s);
         // manual certificate
         String d2 = "notacme";
-        CertificateData cd2 = new CertificateData(d2, "", "", AVAILABLE.name(), "", "", true);
+        CertificateData cd2 = new CertificateData(d2, "", "", AVAILABLE, "", "", true);
         when(s.loadCertificateForDomain(eq(d2))).thenReturn(cd2);
 
         man.setConfigurationStore(s);

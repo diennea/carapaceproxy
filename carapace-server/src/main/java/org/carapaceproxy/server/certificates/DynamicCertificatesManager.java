@@ -17,7 +17,7 @@
  under the License.
 
  */
-package org.carapaceproxy.server.certiticates;
+package org.carapaceproxy.server.certificates;
 
 import com.google.common.annotations.VisibleForTesting;
 import java.io.IOException;
@@ -49,13 +49,13 @@ import org.carapaceproxy.configstore.ConfigurationStoreException;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
-import static org.carapaceproxy.server.certiticates.DynamicCertificateState.AVAILABLE;
-import static org.carapaceproxy.server.certiticates.DynamicCertificateState.EXPIRED;
-import static org.carapaceproxy.server.certiticates.DynamicCertificateState.ORDERING;
-import static org.carapaceproxy.server.certiticates.DynamicCertificateState.REQUEST_FAILED;
-import static org.carapaceproxy.server.certiticates.DynamicCertificateState.VERIFIED;
-import static org.carapaceproxy.server.certiticates.DynamicCertificateState.VERIFYING;
-import static org.carapaceproxy.server.certiticates.DynamicCertificateState.WAITING;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.EXPIRED;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.ORDERING;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.REQUEST_FAILED;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERIFIED;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERIFYING;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.MANUAL;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
@@ -163,7 +163,7 @@ public class DynamicCertificatesManager implements Runnable {
     private CertificateData loadOrCreateDynamicCertificateForDomain(String domain, boolean forceManual) throws GeneralSecurityException, MalformedURLException {
         CertificateData cert = store.loadCertificateForDomain(domain);
         if (cert == null) {
-            cert = new CertificateData(domain, "", "", WAITING.name(), "", "", false);
+            cert = new CertificateData(domain, "", "", WAITING, "", "", false);
         }
         cert.setManual(forceManual);
         return cert;
@@ -221,7 +221,7 @@ public class DynamicCertificatesManager implements Runnable {
             boolean notifyCertAvailChanged = false;
             try {
                 CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, false);
-                switch (DynamicCertificateState.valueOf(cert.getState())) {
+                switch (cert.getState()) {
                     case WAITING: { // certificate waiting to be issues/renew
                         LOG.info("Certificate ISSUING process for domain: " + domain + " STARTED.");
                         Order order = client.createOrderForDomain(domain);
@@ -367,7 +367,7 @@ public class DynamicCertificatesManager implements Runnable {
         if (certificates.containsKey(id)) {
             CertificateData cert = store.loadCertificateForDomain(id);
             if (cert != null) {
-                return DynamicCertificateState.valueOf(cert.getState());
+                return cert.getState();
             }
         }
 
@@ -379,7 +379,7 @@ public class DynamicCertificatesManager implements Runnable {
             CertificateData cert = store.loadCertificateForDomain(id);
             if (cert != null) {
                 boolean prevAvail = cert.isAvailable();
-                cert.setState(state.name());
+                cert.setState(state);
                 cert.setAvailable(DynamicCertificateState.AVAILABLE.equals(state));
                 store.saveCertificate(cert);
                 // remember that events  are not delivered to the local JVM

@@ -26,7 +26,7 @@ import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.RequestHandler;
 import org.carapaceproxy.server.backends.BackendHealthManager;
-import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
+import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;

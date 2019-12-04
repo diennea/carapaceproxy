@@ -60,7 +60,7 @@ import org.carapaceproxy.configstore.HerdDBConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.cache.ContentsCache;
-import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
+import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;

@@ -25,8 +25,8 @@ import java.util.Properties;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
 import org.apache.bookkeeper.stats.NullStatsLogger;
-import org.carapaceproxy.server.certiticates.DynamicCertificateState;
-import static org.carapaceproxy.server.certiticates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
+import org.carapaceproxy.server.certificates.DynamicCertificateState;
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import static org.carapaceproxy.utils.TestUtils.assertEqualsKey;
 import org.junit.After;
@@ -127,12 +127,12 @@ public class ConfigurationStoreTest {
 
         // Certificates saving
         CertificateData cert1 = new CertificateData(
-                d1, "encodedPK1", "encodedChain1", DynamicCertificateState.AVAILABLE.name(), order, challenge, true
+                d1, "encodedPK1", "encodedChain1", DynamicCertificateState.AVAILABLE, order, challenge, true
         );
         store.saveCertificate(cert1);
 
         CertificateData cert2 = new CertificateData(
-                d2, "encodedPK2", "encodedChain2", DynamicCertificateState.WAITING.name(), null, null, false
+                d2, "encodedPK2", "encodedChain2", DynamicCertificateState.WAITING, null, null, false
         );
         store.saveCertificate(cert2);
 
@@ -142,7 +142,7 @@ public class ConfigurationStoreTest {
 
         // Cert Updating
         cert1.setAvailable(false);
-        cert1.setState(DynamicCertificateState.WAITING.name());
+        cert1.setState(DynamicCertificateState.WAITING);
         cert1.setPendingOrderLocation(new URL("http://locallhost/updatedorder").toString());
         cert1.setPendingChallengeData(JSON.parse("{\"challenge\": \"updateddata\"}").toString());
         store.saveCertificate(cert1);
