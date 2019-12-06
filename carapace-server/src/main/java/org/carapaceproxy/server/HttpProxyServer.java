@@ -94,7 +94,7 @@ public class HttpProxyServer implements AutoCloseable {
     private final StatsLogger mainLogger;
     private final File basePath;
     private final StaticContentsManager staticContentsManager = new StaticContentsManager();
-    private final BackendHealthManager backendHealthManager;
+    private BackendHealthManager backendHealthManager;
     private final ConnectionsManager connectionsManager;
     private final PrometheusMetricsProvider statsProvider;
     private final PropertiesConfiguration statsProviderConfig = new PropertiesConfiguration();
@@ -640,6 +640,11 @@ public class HttpProxyServer implements AutoCloseable {
     @VisibleForTesting
     public void setRealm(UserRealm realm) {
         this.realm = realm;
+    }
+
+    @VisibleForTesting
+    public void setBackendHealthManager(BackendHealthManager backendHealthManager) {
+        this.backendHealthManager = backendHealthManager;
     }
 
     public DynamicCertificatesManager getDynamicCertificateManager() {

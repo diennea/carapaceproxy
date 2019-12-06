@@ -26,7 +26,6 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.Properties;
@@ -50,12 +49,15 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.eq;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import static org.mockito.ArgumentMatchers.matches;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import java.net.HttpURLConnection;
+import org.carapaceproxy.server.backends.BackendHealthManager;
 
 /**
  *
@@ -159,6 +161,70 @@ public class BasicStandardEndpointMapperTest {
                 IOUtils.toString(new URL("http://localhost:" + port + "/notmapped.html").toURI(), "utf-8");
                 fail("expected 404");
             } catch (FileNotFoundException ok) {
+            }
+            }
+        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+
+    }
+
+    @Test
+    public void testDefaultRoute() throws Exception {
+        stubFor(get(urlEqualTo("/index.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
+
+        stubFor(get(urlEqualTo("/notmapped.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
+
+        stubFor(get(urlEqualTo("/down.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
+
+        int backendPort = backend1.port();
+
+        StandardEndpointMapper mapper = new StandardEndpointMapper();
+        mapper.addBackend(new BackendConfiguration("backend", "localhost", backendPort, "/"));
+        mapper.addBackend(new BackendConfiguration("backend-down", "localhost-down", backendPort, "/"));
+        mapper.addDirector(new DirectorConfiguration("director").addBackend("backend"));
+        mapper.addDirector(new DirectorConfiguration("director-down").addBackend("backend-down"));
+        mapper.addAction(new ActionConfiguration("cache", ActionConfiguration.TYPE_CACHE, "director", null, -1));
+        mapper.addAction(new ActionConfiguration("cache-down", ActionConfiguration.TYPE_CACHE, "director-down", null, -1));
+        mapper.addRoute(new RouteConfiguration("route", "cache", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index.html.*")));
+        mapper.addRoute(new RouteConfiguration("route-down", "cache-down", true, new RegexpRequestMatcher(PROPERTY_URI, ".*down.html.*")));
+        mapper.addRoute(new RouteConfiguration("route-default", "cache", true, new RegexpRequestMatcher(PROPERTY_URI, ".*html")));
+
+        ConnectionsManagerStats stats;
+        BackendHealthManager bhMan = mock(BackendHealthManager.class);
+        when(bhMan.isAvailable(eq("localhost:" + backendPort))).thenReturn(true);
+        when(bhMan.isAvailable(eq("localhost-down:" + backendPort))).thenReturn(false); // simulate unreachable backend -> expected 500 error
+
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            server.setBackendHealthManager(bhMan);
+            server.start();
+            int port = server.getLocalPort();
+            stats = server.getConnectionsManager().getStats();
+            // index.html matches with route
+            {
+                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8");
+                assertEquals("it <b>works</b> !!", s);
+            }
+            // notmapped.html matches with route-default
+            {
+                String s = IOUtils.toString(new URL("http://localhost:" + port + "/notmapped.html").toURI(), "utf-8");
+                assertEquals("it <b>works</b> !!", s);
+            }
+            // down.html (request to unreachable backend) has NOT to match to route-deafult BUT get internal-error
+            try {
+                IOUtils.toString(new URL("http://localhost:" + port + "/down.html").toURI(), "utf-8");
+                fail("expected 500");
+            } catch (IOException ok) {
             }
         }
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
@@ -501,21 +567,21 @@ public class BasicStandardEndpointMapperTest {
             {
                 // redirect to absolute host:port/uri
                 HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + port + "/index2.html").openConnection();
-                conn.setInstanceFollowRedirects(false);               
+                conn.setInstanceFollowRedirects(false);
                 assertEquals("http://foo/index0.html", conn.getHeaderField("Location"));
                 assertTrue(conn.getHeaderFields().toString().contains("302 Found"));
             }
             {
                 // relative redirect (same host:port, different uri)
                 HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + port + "/index3.html").openConnection();
-                conn.setInstanceFollowRedirects(false);                
+                conn.setInstanceFollowRedirects(false);
                 assertEquals("http://localhost:" + port + "/index0.html", conn.getHeaderField("Location"));
                 assertTrue(conn.getHeaderFields().toString().contains("303 See Other"));
             }
             {
                 // redirect custom
                 HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + port + "/index4.html").openConnection();
-                conn.setInstanceFollowRedirects(false);                
+                conn.setInstanceFollowRedirects(false);
                 assertEquals("https://192.0.0.1:1234/indexX.html", conn.getHeaderField("Location"));
                 assertTrue(conn.getHeaderFields().toString().contains("307 Temporary Redirect"));
             }

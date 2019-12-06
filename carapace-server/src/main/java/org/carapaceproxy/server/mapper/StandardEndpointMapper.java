@@ -457,12 +457,12 @@ public class StandardEndpointMapper extends EndpointMapper {
                 // none of selected backends available
                 if (!selectedBackends.isEmpty()) {
                     return MapResult.INTERNAL_ERROR(route.getId());
-                }
             }
         }
+        }
         // no one route matched
-        return MapResult.NOT_FOUND(MapResult.NO_ROUTE);
-    }
+            return MapResult.NOT_FOUND(MapResult.NO_ROUTE);
+        }
 
     public String getDefaultNotFoundAction() {
         return defaultNotFoundAction;
