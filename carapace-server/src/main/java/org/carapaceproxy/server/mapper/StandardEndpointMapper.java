@@ -40,13 +40,13 @@ import static org.carapaceproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SE
 import static org.carapaceproxy.server.StaticContentsManager.DEFAULT_NOT_FOUND;
 import static org.carapaceproxy.server.StaticContentsManager.IN_MEMORY_RESOURCE;
 import org.carapaceproxy.server.backends.BackendHealthManager;
-import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.BackendSelector;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import static org.carapaceproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
+import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
@@ -365,7 +365,6 @@ public class StandardEndpointMapper extends EndpointMapper {
 
     @Override
     public MapResult map(HttpRequest request, String userId, String sessionId, BackendHealthManager backendHealthManager, RequestHandler requestHandler) {
-        boolean somethingMatched = false;
         for (RouteConfiguration route : routes) {
             if (!route.isEnabled()) {
                 continue;
@@ -425,7 +424,6 @@ public class StandardEndpointMapper extends EndpointMapper {
                     }
                     selectedBackends = backendSelector.selectBackends(userId, sessionId, director);
                 }
-                somethingMatched = somethingMatched | !selectedBackends.isEmpty();
 
                 LOG.log(Level.FINEST, "selected {0} backends for {1}, director is {2}", new Object[]{selectedBackends, request.uri(), director});
                 for (String backendId : selectedBackends) {
@@ -456,14 +454,15 @@ public class StandardEndpointMapper extends EndpointMapper {
                                 .setCustomHeaders(customHeaders);
                     }
                 }
+                // none of selected backends available
+                if (!selectedBackends.isEmpty()) {
+                    return MapResult.INTERNAL_ERROR(route.getId());
             }
         }
-        if (somethingMatched) {
-            return MapResult.INTERNAL_ERROR(MapResult.NO_ROUTE);
-        } else {
+        }
+        // no one route matched
             return MapResult.NOT_FOUND(MapResult.NO_ROUTE);
         }
-    }
 
     public String getDefaultNotFoundAction() {
         return defaultNotFoundAction;
