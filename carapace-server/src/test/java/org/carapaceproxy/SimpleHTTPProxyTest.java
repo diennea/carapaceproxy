@@ -23,6 +23,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
@@ -35,12 +36,14 @@ import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
+import static org.junit.Assert.assertEquals;
 import org.carapaceproxy.utils.HttpUtils;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
+import javax.net.ssl.SSLHandshakeException;
+import org.carapaceproxy.utils.RawHttpClient;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -133,7 +136,7 @@ public class SimpleHTTPProxyTest {
             server.addCertificate(new SSLCertificateConfiguration("localhost", certificate, "changeit", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", 0,
                     true, false, null, "localhost",
-                    cacertificate, "changeit"));
+                    cacertificate, "changeit", DEFAULT_SSL_PROTOCOLS));
 
             server.start();
             int port = server.getLocalPort();
@@ -161,6 +164,13 @@ public class SimpleHTTPProxyTest {
 
             stats = server.getConnectionsManager().getStats();
             assertNotNull(stats.getEndpoints().get(key));
+
+            // check tls proto available versions (expected TSLv1.2, TSLv1.3)
+            TestUtils.assertThrows(SSLHandshakeException.class, () -> {
+                try (RawHttpClient client = RawHttpClient.withEnabledSSLProtocols("localhost", port, "TLSv1.2")) {
+                }
+            });
+
         }
 
         TestUtils.waitForCondition(() -> {

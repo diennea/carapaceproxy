@@ -51,15 +51,17 @@ public class ListenersResource {
         private final boolean ssl;
         private final boolean ocps;
         private final String sslCiphers;
+        private final String[] sslProtocols;
         private final String defaultCertificate;
         private final int totalRequests;
 
-        public ListenerBean(String host, int port, boolean ssl, boolean ocps, String sslCiphers, String defaultCertificate, int totalRequests) {
+        public ListenerBean(String host, int port, boolean ssl, boolean ocps, String sslCiphers, String[] sslProtocols, String defaultCertificate, int totalRequests) {
             this.host = host;
             this.port = port;
             this.ssl = ssl;
             this.ocps = ocps;
             this.sslCiphers = sslCiphers;
+            this.sslProtocols = sslProtocols;
             this.defaultCertificate = defaultCertificate;
             this.totalRequests = totalRequests;
         }
@@ -82,6 +84,10 @@ public class ListenersResource {
 
         public String getSslCiphers() {
             return sslCiphers;
+        }
+
+        public String[] getSslProtocols() {
+            return sslProtocols;
         }
 
         public String getDefaultCertificate() {
@@ -114,6 +120,7 @@ public class ListenersResource {
                     listener.isSsl(),
                     listener.isOcps(),
                     listener.getSslCiphers(),
+                    listener.getSslProtocols(),
                     listener.getDefaultCertificate(),
                     totalRequests
             );

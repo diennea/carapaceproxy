@@ -39,6 +39,7 @@ import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode;
 import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
+import java.util.Arrays;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 
 /**
@@ -291,7 +292,7 @@ public class RuntimeServerConfiguration {
             String pw = properties.getProperty(prefix + "password", "");
             String mode = properties.getProperty(prefix + "mode", "static");
             try {
-                CertificateMode _mode = CertificateMode.valueOf(mode.toUpperCase());                
+                CertificateMode _mode = CertificateMode.valueOf(mode.toUpperCase());
                 LOG.log(Level.INFO,
                         "Configuring SSL certificate {0}: hostname={1}, file={2}, password={3}, mode={4}",
                         new Object[]{prefix, hostname, file, pw, mode}
@@ -319,11 +320,16 @@ public class RuntimeServerConfiguration {
             String trustStorePassword = properties.getProperty(prefix + "ssltruststorepassword", "");
             String sslciphers = properties.getProperty(prefix + "sslciphers", "");
             String defautlSslCertificate = properties.getProperty(prefix + "defaultcertificate", "*");
+            String _sslProtocols = properties.getProperty(prefix + "sslprotocols", "");
+            String [] sslProtocols = NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
+            if (!_sslProtocols.isBlank()) {
+                sslProtocols = _sslProtocols.replaceAll(" ","").split(",");
+            }
+            LOG.log(Level.INFO, "configured listener for host:port " + host + ":" + port + " with ssl protocols: " + Arrays.toString(sslProtocols));
             NetworkListenerConfiguration config = new NetworkListenerConfiguration(host,
                     port, ssl, ocps, sslciphers, defautlSslCertificate,
-                    trustStoreFile, trustStorePassword);
+                    trustStoreFile, trustStorePassword, sslProtocols);
             this.addListener(config);
-
         }
     }
 

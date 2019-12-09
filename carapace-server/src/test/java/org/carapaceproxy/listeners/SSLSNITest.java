@@ -26,6 +26,7 @@ import org.carapaceproxy.server.HttpProxyServer;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.net.InetAddress;
 import java.security.cert.X509Certificate;
@@ -75,7 +76,7 @@ public class SSLSNITest {
 
             server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0,
                     true, false, null, nonLocalhost /* default */,
-                    null, null));
+                    null, null, DEFAULT_SSL_PROTOCOLS));
 
             server.start();
             stats = server.getConnectionsManager().getStats();

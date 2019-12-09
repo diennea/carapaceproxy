@@ -23,6 +23,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.util.List;
 import java.util.Map;
@@ -224,7 +225,7 @@ public class CacheTest {
             server.addCertificate(new SSLCertificateConfiguration("localhost", "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", 0,
                     true, false, null, "localhost",
-                    null, null));
+                    null, null, DEFAULT_SSL_PROTOCOLS));
             server.start();
         }
     }
@@ -249,7 +250,7 @@ public class CacheTest {
             server.addCertificate(new SSLCertificateConfiguration("localhost", "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", 0,
                     true, false, null, "localhost",
-                    null, null));
+                    null, null, DEFAULT_SSL_PROTOCOLS));
             server.start();
             int port = server.getLocalPort();
             server.getCache().getStats().resetCacheMetrics();
