@@ -2,8 +2,8 @@
     <nav id="sidebar" :class="{'collapsed' : collapsed}">
         <!-- HEADER -->
         <div id="sidebar-header">
-            <h2 v-if="collapsed">{{headerCollapsed}}</h2>
-            <h2 v-else>{{header}}</h2>
+            <img v-if="collapsed" :src="logoCollapsed" />
+            <img v-else :src="logo" />
         </div>
         <!-- ELEMENTS -->
         <ul id="sidebar-elements" class="list-unstyled">
@@ -38,8 +38,8 @@
 export default {
     name: "Sidebar",
     props: {
-        header: String,
-        headerCollapsed: String,
+        logo: String,
+        logoCollapsed: String,
         elements: Array
     },
     data() {
@@ -91,12 +91,12 @@ export default {
     max-width: 65px;
     text-align: center;
     transition: all 0.5s ease;
-}
 
-#sidebar.collapsed #sidebar-header {
-    padding-left: 0px;
-    padding-right: 0px;
-    background: $secondary;
+    #sidebar-header {
+        padding-left: 0px;
+        padding-right: 0px;
+        background: $secondary;
+    }
 }
 
 #sidebar-toogle-button {
@@ -131,13 +131,8 @@ export default {
 }
 
 #sidebar-header {
-    min-height: 15vh;
-    max-height: 15vh;
-}
-
-#sidebar-header h2 {
-    overflow: hidden;
-    text-overflow: ellipsis;
+    min-height: 10vh;
+    max-height: 10vh;
 }
 
 a,
@@ -159,15 +154,15 @@ a:focus {
     display: block;
     position: relative;
     border: 0.25rem solid transparent;
-}
 
-#sidebar ul li span {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 3.5rem;
-    display: inline-flex;
-    align-items: center;
+    span {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 3.5rem;
+        display: inline-flex;
+        align-items: center;
+    }
 }
 
 #sidebar ul li:not(active):hover {
@@ -191,8 +186,8 @@ a[aria-expanded="true"] {
 
 #sidebar-elements {
     overflow-x: hidden;
-    min-height: 67vh;
-    max-height: 67vh;
-    margin: 3vh auto;
+    min-height: 70vh;
+    max-height: 70vh;
+    margin: 7.5vh auto;
 }
 </style>
