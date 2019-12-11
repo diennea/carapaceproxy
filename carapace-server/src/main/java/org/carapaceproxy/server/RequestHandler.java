@@ -98,6 +98,13 @@ public class RequestHandler implements MatchingContext {
     private volatile long lastActivity;
     private volatile boolean headerSent = false;
     private UrlEncodedQueryString queryString;
+    // this is useful only for debugging heap dumps in production
+    private volatile RequestHandlerState clientState = RequestHandlerState.IDLE;
+
+    private static enum RequestHandlerState {
+        IDLE,
+        WRITING
+    }
 
     public RequestHandler(long id, HttpRequest request, List<RequestFilter> filters,
             ClientConnectionHandler parent, ChannelHandlerContext channelToClient, Runnable onRequestFinished,
@@ -199,7 +206,7 @@ public class RequestHandler implements MatchingContext {
             requestsPerUser = USER_REQUESTS_COUNTER.labels("anonymous");
         }
         requestsPerUser.inc();
-
+        LOG.log(Level.INFO, "start {0}", this);
         if (LOG.isLoggable(Level.FINER)) {
             LOG.log(Level.FINER, "{0} Mapped {1} to {2}, userid {3}", new Object[]{this, uri, action, userId});
         }
@@ -257,6 +264,7 @@ public class RequestHandler implements MatchingContext {
     }
 
     void continueClientRequest(HttpContent httpContent) {
+        LOG.log(Level.INFO, "continueClientRequest {0}", this);
         if (cacheSender != null) {
             LOG.log(Level.SEVERE, "{0} swallow chunk {1}, I am serving a cache content {2}", new Object[]{this, httpContent, cacheReceiver});
             return;
@@ -290,7 +298,7 @@ public class RequestHandler implements MatchingContext {
     }
 
     void clientRequestFinished(LastHttpContent trailer) {
-
+        LOG.log(Level.INFO, "clientRequestFinished {0}", this);
         if (cacheSender != null) {
             serveFromCache();
             return;
@@ -529,7 +537,9 @@ public class RequestHandler implements MatchingContext {
         }
 
         // Write the response.
+        clientState = RequestHandlerState.WRITING;
         channelToClient.writeAndFlush(response).addListener(future -> {
+            clientState = RequestHandlerState.IDLE;
             lastHttpContentSent();
         });
 
@@ -540,9 +550,11 @@ public class RequestHandler implements MatchingContext {
 //        LOG.info(this + " sendServiceNotAvailable due to " + cause + " to " + ctx);
         FullHttpResponse response
                 = connectionToClient.staticContentsManager.buildResponse(500, DEFAULT_INTERNAL_SERVER_ERROR);
+        clientState = RequestHandlerState.WRITING;
         channelToClient.writeAndFlush(response).addListener(new GenericFutureListener<Future<? super Void>>() {
             @Override
             public void operationComplete(Future<? super Void> future) throws Exception {
+                clientState = RequestHandlerState.IDLE;
                 LOG.log(Level.INFO, "{0} sendServiceNotAvailable result: {1}, cause {2}",
                         new Object[]{this, future.isSuccess(), future.cause()});
                 channelToClient.close();
@@ -602,15 +614,6 @@ public class RequestHandler implements MatchingContext {
         if (backendStartTs == 0) {
             backendStartTs = System.currentTimeMillis();
         }
-        if (connectionToClient == null) {
-            // client no more connected
-            if (cacheReceiver != null) {
-                cacheReceiver.abort();
-            }
-            LOG.log(Level.INFO, "receivedFromRemote with null connectionToClient");
-            releaseConnectionToEndpoint(true, connection);
-            return;
-        }
         if (cacheReceiver != null) {
             // msg object won't be cached as-is but the cache will retain a clone of it
             cacheReceiver.receivedFromRemote(msg);
@@ -620,22 +623,16 @@ public class RequestHandler implements MatchingContext {
             }
         }
 
-        addCustomResponseHeaders(msg);
 
+        // endpoint finished his work, we can release the connection
+        if (msg instanceof LastHttpContent) {
+           releaseConnectionToEndpoint(false /*force close*/, connection);
+        }
+
+        addCustomResponseHeaders(msg);
+        clientState = RequestHandlerState.WRITING;
         channelToClient.writeAndFlush(msg).addListener((Future<? super Void> future) -> {
-            boolean returnConnection = false;
-            if (future.isSuccess()) {
-                if (msg instanceof LastHttpContent) {
-//                    LOG.log(Level.INFO, this + " sent back to client last " + msg);
-                    returnConnection = true;
-                } else {
-//                    LOG.log(Level.INFO, this + " sent back to client " + msg);
-                }
-            } else {
-                boolean isOpen = channelToClient.channel().isOpen();
-                LOG.log(Level.FINE, this + " bad error writing to client, isOpen " + isOpen, future.cause());
-                returnConnection = true;
-            }
+            clientState = RequestHandlerState.IDLE;
             if (msg instanceof HttpResponse) {
                 headerSent = true;
                 HttpResponse httpMessage = (HttpResponse) msg;
@@ -648,13 +645,9 @@ public class RequestHandler implements MatchingContext {
                     }
                 }
             }
-            boolean keepAlive1 = connectionToClient.isKeepAlive() && future.isSuccess();
             // LOG.log(Level.INFO, this + " returnConnection:" + returnConnection + ", keepAlive1:" + keepAlive1 + " connecton " + connectionToEndpoint);
             if (msg instanceof LastHttpContent && future.isSuccess()) {
                 connectionToClient.closeIfNotKeepAlive(channelToClient);
-            }
-            if (returnConnection) {
-                releaseConnectionToEndpoint(false /*force close*/, connection);
             }
         });
     }
@@ -696,7 +689,7 @@ public class RequestHandler implements MatchingContext {
 
     @Override
     public String toString() {
-        return "RequestHandler{" + "id=" + id + ", connectionToEndpoint=" + connectionToEndpoint + ", connectionToClient=" + connectionToClient + ", last " + lastActivity + ", uri" + uri + '}';
+        return "RequestHandler{" + "rid=" + id + ", clientState=" + clientState + ", connectionToEndpoint=" + connectionToEndpoint + ", connectionToClient=" + connectionToClient + ", last " + lastActivity + ", uri" + uri + '}';
     }
 
     public boolean isKeepAlive() {
@@ -750,9 +743,10 @@ public class RequestHandler implements MatchingContext {
             notModified = false;
         }
         HttpObject _object = object;
-
+        clientState = RequestHandlerState.WRITING;
         channelToClient.writeAndFlush(_object)
                 .addListener((g) -> {
+                    clientState = RequestHandlerState.IDLE;
                     if (isLastHttpContent || notModified) {
                         lastHttpContentSent();
                         connectionToClient.closeIfNotKeepAlive(channelToClient);
@@ -814,7 +808,7 @@ public class RequestHandler implements MatchingContext {
     }
 
     public void badErrorOnRemote(Throwable cause) {
-        LOG.log(Level.INFO, this + " badErrorOnRemote " + cause);
+        LOG.log(Level.INFO, "{0} badErrorOnRemote {1}", new Object[]{this, cause});
         releaseConnectionToEndpoint(true, connectionToEndpoint.get());
         serveInternalErrorMessage(true);
     }

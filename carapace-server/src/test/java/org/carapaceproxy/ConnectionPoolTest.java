@@ -52,7 +52,6 @@ import org.carapaceproxy.client.EndpointNotAvailableException;
 import org.carapaceproxy.client.impl.ConnectionsManagerImpl;
 import org.carapaceproxy.client.impl.EndpointConnectionImpl;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
-import org.carapaceproxy.server.RuntimeServerConfiguration;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -193,7 +192,7 @@ public class ConnectionPoolTest {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
 
             // tewaking configuration
-            server.getCurrentConfiguration().setMaxConnectionsPerEndpoint(1);            
+            server.getCurrentConfiguration().setMaxConnectionsPerEndpoint(1);
             server.getCurrentConfiguration().setBorrowTimeout(1000);
             server.getConnectionsManager().applyNewConfiguration(server.getCurrentConfiguration());
             server.start();

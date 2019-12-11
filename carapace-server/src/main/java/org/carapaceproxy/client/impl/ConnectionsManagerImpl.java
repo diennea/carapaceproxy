@@ -241,7 +241,8 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         try {
             EndpointConnection result = connections.borrowObject(key, borrowTimeout);
             return result;
-        } catch (NoSuchElementException ex) {
+        } catch (NoSuchElementException | IllegalStateException ex) {
+            // IllegalStateException occurs during service shutdown (pool is closed)
             if (LOG.isLoggable(Level.FINER)) {
                 long delta = System.currentTimeMillis() - _start;
                 LOG.log(Level.FINER,
