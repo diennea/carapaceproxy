@@ -35,7 +35,7 @@ public interface EndpointConnection {
     public EndpointKey getKey();
 
     /**
-     * Start a requrest.
+     * Start a request and bind the connection to the RequestHandler.
      */
     public void sendRequest(HttpRequest request, RequestHandler handler);
 

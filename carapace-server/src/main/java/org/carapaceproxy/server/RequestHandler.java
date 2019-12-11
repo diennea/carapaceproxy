@@ -263,7 +263,6 @@ public class RequestHandler implements MatchingContext {
     }
 
     void continueClientRequest(HttpContent httpContent) {
-        LOG.log(Level.INFO, "continueClientRequest {0}", this);
         if (cacheSender != null) {
             LOG.log(Level.SEVERE, "{0} swallow chunk {1}, I am serving a cache content {2}", new Object[]{this, httpContent, cacheReceiver});
             return;
