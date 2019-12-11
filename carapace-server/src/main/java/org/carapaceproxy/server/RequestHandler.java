@@ -206,7 +206,6 @@ public class RequestHandler implements MatchingContext {
             requestsPerUser = USER_REQUESTS_COUNTER.labels("anonymous");
         }
         requestsPerUser.inc();
-        LOG.log(Level.INFO, "start {0}", this);
         if (LOG.isLoggable(Level.FINER)) {
             LOG.log(Level.FINER, "{0} Mapped {1} to {2}, userid {3}", new Object[]{this, uri, action, userId});
         }
@@ -298,7 +297,6 @@ public class RequestHandler implements MatchingContext {
     }
 
     void clientRequestFinished(LastHttpContent trailer) {
-        LOG.log(Level.INFO, "clientRequestFinished {0}", this);
         if (cacheSender != null) {
             serveFromCache();
             return;
