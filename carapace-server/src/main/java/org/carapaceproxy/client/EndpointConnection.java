@@ -26,7 +26,7 @@ import org.carapaceproxy.server.RequestHandler;
 
 /**
  * A Connection to a specific endpoint. Connections are pooled and so they have
- * to be returned to the pool
+ * to be returned to the pool. A connection can be bound to at most one RequestHandler at a time.
  *
  * @author enrico.olivelli
  */
@@ -34,12 +34,30 @@ public interface EndpointConnection {
 
     public EndpointKey getKey();
 
+    /**
+     * Start a request and bind the connection to the RequestHandler.
+     */
     public void sendRequest(HttpRequest request, RequestHandler handler);
 
-    public void release(boolean error, RequestHandler handler);
+    /**
+     * Send other chunks (chunked payload from the client).
+     * @param httpContent
+     * @param handler
+     */
+    public void sendChunk(HttpContent httpContent, RequestHandler handler);
 
+    /**
+     * Client finished its request.
+     * @param msg
+     * @param handler
+     */
     public void sendLastHttpContent(LastHttpContent msg, RequestHandler handler);
 
-    public void sendChunk(HttpContent httpContent, RequestHandler handler);
+    /**
+     * Connection is no more useful for the RequestHandler.
+     * @param forceClose
+     * @param handler
+     */
+    public void release(boolean forceClose, RequestHandler handler);
 
 }

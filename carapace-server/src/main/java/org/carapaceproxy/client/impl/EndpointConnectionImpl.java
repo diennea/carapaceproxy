@@ -44,6 +44,7 @@ import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import io.prometheus.client.Summary;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -195,6 +196,9 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     @Override
     public void sendRequest(HttpRequest request, RequestHandler clientSidePeerHandler) {
+        if (assertNotInEndpointEventLoop(clientSidePeerHandler)) {
+            return;
+        }
         checkHandler(null);
         if (!channelToEndpoint.isOpen() || forcedInvalid) {
             LOG.log(Level.SEVERE, "sendRequest " + request.getClass() + " failed, choosen connection is not valid");
@@ -238,8 +242,19 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 });
     }
 
+    private boolean assertNotInEndpointEventLoop(RequestHandler clientSidePeerHandler1) {
+        if (channelToEndpoint.eventLoop().inEventLoop()) {
+            LOG.log(Level.SEVERE, "Bad thread {0} for {1} with {2}", new Object[]{Thread.currentThread().getName(), this, clientSidePeerHandler1});
+            return true;
+        }
+        return false;
+    }
+
     @Override
     public void sendChunk(HttpContent msg, RequestHandler clientSidePeerHandler) {
+        if (assertNotInEndpointEventLoop(clientSidePeerHandler)) {
+            return;
+        }
         checkHandler(clientSidePeerHandler);
         if (!channelToEndpoint.isOpen() || forcedInvalid) {
             invalidate();
@@ -270,6 +285,9 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     @Override
     public void sendLastHttpContent(LastHttpContent msg, RequestHandler clientSidePeerHandler) {
+        if (assertNotInEndpointEventLoop(clientSidePeerHandler)) {
+            return;
+        }
         checkHandler(clientSidePeerHandler);
         if (!channelToEndpoint.isOpen() || forcedInvalid) {
             invalidate();
@@ -301,7 +319,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                             if (recover) {
                                 if (changeStateTo(ConnectionState.RELEASABLE, ConnectionState.DELAYED_RELEASE)) {
                                     LOG.log(Level.INFO, "recovering DELAYED_RELEASE " + this);
-                                    release(true, clientSidePeerHandler);
+                                    release(false, clientSidePeerHandler);
                                 }
                             }
                         }
@@ -319,16 +337,25 @@ public class EndpointConnectionImpl implements EndpointConnection {
             }
             return ok ? nValue : prevValue;
         }) != newValue) {
-            LOG.log(Level.INFO, this + " Cannot change state from " + expected + " to " + newValue);
+            LOG.log(Level.INFO, "{0} Cannot change state (expected {1}) to {2}", new Object[]{this, Arrays.toString(expected), newValue});
             return false;
         } else {
             return true;
         }
     }
 
+    private void executeInEndpointConnectionEventLoop(Runnable r) {
+        if (channelToEndpoint.eventLoop().inEventLoop()) {
+            r.run();
+        } else {
+            channelToEndpoint.eventLoop().submit(r);
+        }
+    }
+
     @Override
     public void release(boolean close, RequestHandler clientSidePeerHandler) {
-        channelToEndpoint.eventLoop().submit(() -> {
+        // this method can be called from RequestHandler eventLoop and from EndpointConnection eventloop
+        executeInEndpointConnectionEventLoop(() -> {
             if (changeStateTo(ConnectionState.IDLE, ConnectionState.RELEASABLE, ConnectionState.DELAYED_RELEASE)) {
                 LOG.log(Level.FINE, "release {0} {1}", new Object[]{close, this});
                 checkHandler(clientSidePeerHandler);
@@ -431,12 +458,12 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     @Override
     public String toString() {
-        return "{id=" + id + ", " + state + ", channel=" + channelToEndpoint + ", key=" + key + ", forcedInvalid=" + forcedInvalid + ", closed=" + closed + '}';
+        return "{cid=" + id + ", " + state + ", channel=" + channelToEndpoint + ", key=" + key + ", forcedInvalid=" + forcedInvalid + ", closed=" + closed + '}';
     }
 
-    private void checkHandler(RequestHandler clientSidePeerHandler1) throws IllegalStateException {
-        if (this.clientSidePeerHandler != clientSidePeerHandler1) {
-            throw new IllegalStateException("connection is bound to " + this.clientSidePeerHandler + " cannot be managed by " + clientSidePeerHandler1);
+    private void checkHandler(RequestHandler handler) throws IllegalStateException {
+        if (this.clientSidePeerHandler != handler) {
+            throw new IllegalStateException("connection is bound to " + this.clientSidePeerHandler + " cannot be managed by " + handler);
         }
     }
 

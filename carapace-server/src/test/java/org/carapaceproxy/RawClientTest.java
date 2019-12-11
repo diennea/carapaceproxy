@@ -41,9 +41,13 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.carapaceproxy.client.impl.ConnectionsManagerImpl;
+import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -58,26 +62,26 @@ import org.junit.rules.TestName;
 public class RawClientTest {
 
     private static final Logger LOG = Logger.getLogger(RawClientTest.class.getName());
-    
+
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
 
     @Rule
     public TemporaryFolder tmpDir = new TemporaryFolder();
-    
+
     @Rule
     public TestName testName = new TestName();
-    
+
     @Before
     public void dumpTestName() throws Exception {
         LOG.log(Level.INFO, "Starting {0}", testName.getMethodName());
     }
-    
+
     @After
     public void dumpTestNameEnd() throws Exception {
         LOG.log(Level.INFO, "End {0}", testName.getMethodName());
     }
-    
+
     @Test
     public void testClientsExpectsConnectionClose() throws Exception {
 
@@ -265,7 +269,7 @@ public class RawClientTest {
 
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
-            // we want to reuse the same connection to the endpoint if the client is using Keep-Alive            
+            // we want to reuse the same connection to the endpoint if the client is using Keep-Alive
             ((ConnectionsManagerImpl) server.getConnectionsManager()).getConnections().setMaxTotalPerKey(1);
             server.start();
             int port = server.getLocalPort();
@@ -291,7 +295,7 @@ public class RawClientTest {
                 String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
                 System.out.println("s3:" + s);
                 assertEquals("it <b>works</b> !!", s);
-                
+
                 // this is needed for Travis, that runs with 1 vCPU!
                 // without this sleep the connection pool is not able to reuse the connection (this appears to the
                 // beheviour or CommonsPool2
@@ -384,4 +388,59 @@ public class RawClientTest {
         }
     }
 
+     @Test
+    public void testManyInflightRequests() throws Exception {
+
+        stubFor(get(urlEqualTo("/index.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            server.start();
+            int port = server.getLocalPort();
+            assertTrue(port > 0);
+
+            List<RawHttpClient> clients = new ArrayList<>();
+            for (int i = 0; i < 20; i++) {
+                RawHttpClient client = new RawHttpClient("localhost", port);
+                client.sendRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                clients.add(client);
+            }
+
+            int i = 0;
+            for (RawHttpClient client: clients) {
+                client.close();
+                i++;
+            }
+            TestUtils.waitForCondition(() -> {
+                ConnectionsManagerStats _stats = server.getConnectionsManager().getStats();
+                if (_stats == null || (_stats.getEndpoints().get(key) == null)) {
+                    return false;
+                }
+                _stats.getEndpoints().values().forEach((EndpointStats st) -> {
+                    System.out.println("st2:" + st);
+                });
+                EndpointStats epstats = _stats.getEndpointStats(key);
+                return epstats.getActiveConnections().intValue() == 0
+                        && epstats.getOpenConnections().intValue() == 0;
+            }, 100);
+            stats = server.getConnectionsManager().getStats();
+            assertNotNull(stats.getEndpoints().get(key));
+        }
+
+        TestUtils.waitForCondition(() -> {
+            EndpointStats epstats = stats.getEndpointStats(key);
+            return epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
+        }, 100);
+
+        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+
+    }
 }

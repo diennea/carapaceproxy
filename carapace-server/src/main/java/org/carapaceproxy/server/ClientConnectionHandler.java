@@ -210,11 +210,11 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
 
     @Override
     public String toString() {
-        return "ClientConnectionHandler{" + id + ",ka=" + keepAlive + '}';
+        return "ClientConnectionHandler{chid=" + id + ",ka=" + keepAlive + '}';
     }
 
     void addPendingRequest(RequestHandler request) {
         pendingRequests.add(request);
     }
-
+    
 }
