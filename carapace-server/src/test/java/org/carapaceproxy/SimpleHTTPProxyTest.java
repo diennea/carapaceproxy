@@ -41,8 +41,6 @@ import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
-import javax.net.ssl.SSLHandshakeException;
-import org.carapaceproxy.utils.RawHttpClient;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -161,13 +159,6 @@ public class SimpleHTTPProxyTest {
 
             stats = server.getConnectionsManager().getStats();
             assertNotNull(stats.getEndpoints().get(key));
-
-            // check tls proto available versions (expected TSLv1.2, TSLv1.3)
-            TestUtils.assertThrows(SSLHandshakeException.class, () -> {
-                try (RawHttpClient client = RawHttpClient.withEnabledSSLProtocols("localhost", port, "TLSv1.2")) {
-                }
-            });
-
         }
 
         TestUtils.waitForCondition(() -> {
