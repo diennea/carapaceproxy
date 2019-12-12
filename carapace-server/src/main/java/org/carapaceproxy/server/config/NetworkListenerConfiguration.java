@@ -20,6 +20,8 @@
 package org.carapaceproxy.server.config;
 
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -27,7 +29,7 @@ import java.util.Objects;
  */
 public class NetworkListenerConfiguration {
 
-    public static final String[] DEFAULT_SSL_PROTOCOLS = new String[]{"TLSv1.2", "TLSv1.3"};
+    public static final List<String> DEFAULT_SSL_PROTOCOLS = Collections.unmodifiableList(Arrays.asList("TLSv1.2", "TLSv1.3"));
 
     private final String host;
     private final int port;
@@ -37,7 +39,7 @@ public class NetworkListenerConfiguration {
     private final String defaultCertificate;
     private final String sslTrustoreFile;
     private final String sslTrustorePassword;
-    private final String[] sslProtocols;
+    private String[] sslProtocols;
 
     public HostPort getKey() {
         return new HostPort(host, port);
@@ -106,11 +108,18 @@ public class NetworkListenerConfiguration {
         this.defaultCertificate = null;
         this.sslTrustoreFile = null;
         this.sslTrustorePassword = null;
-        this.sslProtocols = DEFAULT_SSL_PROTOCOLS;
+        this.sslProtocols = DEFAULT_SSL_PROTOCOLS.toArray(new String[0]);
+    }
+
+    public NetworkListenerConfiguration(String host, int port, boolean ssl, boolean ocps, String sslCiphers, String defaultCertificate, String sslTrustoreFile, String sslTrustorePassword) {
+        this(
+                host, port, ssl, ocps, sslCiphers, defaultCertificate,
+                sslTrustoreFile, sslTrustorePassword, DEFAULT_SSL_PROTOCOLS.toArray(new String[0])
+        );
     }
 
     public NetworkListenerConfiguration(String host, int port, boolean ssl, boolean ocps, String sslCiphers, String defaultCertificate, String sslTrustoreFile, String sslTrustorePassword,
-                                        String[] sslProtocols) {
+                                        String... sslProtocols) {
         this.host = host;
         this.port = port;
         this.ssl = ssl;
@@ -156,6 +165,10 @@ public class NetworkListenerConfiguration {
 
     public String[] getSslProtocols() {
         return sslProtocols;
+    }
+
+    public void setSslProtocols(String[] sslProtocols) {
+        this.sslProtocols = sslProtocols;
     }
 
     @Override

@@ -168,6 +168,50 @@ public class ApplyConfigurationTest {
             testIt(1425, false);
             testIt(1426, false);
 
+            // listener with correct tls version
+            {
+                Properties configuration = new Properties();
+                configuration.put("mapper.class", StaticEndpointMapper.class.getName());
+                configuration.put("certificate.1.hostname", "*");
+                configuration.put("certificate.1.mode", "manual");
+
+                configuration.put("listener.1.host", "localhost");
+                configuration.put("listener.1.port", "1423");
+                configuration.put("listener.1.ssl", "true");
+                configuration.put("listener.1.sslprotocols", "TLSv1.2");
+
+                configuration.put("listener.2.host", "localhost");
+                configuration.put("listener.2.port", "1426");
+                configuration.put("listener.2.ssl", "true");
+                configuration.put("listener.2.sslprotocols", "TLSv1.2,TLSv1.3");
+                reloadConfiguration(configuration, server);
+            }
+            // listener with default tls version
+            {
+                Properties configuration = new Properties();
+                configuration.put("mapper.class", StaticEndpointMapper.class.getName());
+                configuration.put("certificate.1.hostname", "*");
+                configuration.put("certificate.1.mode", "manual");
+                configuration.put("listener.1.host", "localhost");
+                configuration.put("listener.1.port", "1423");
+                configuration.put("listener.1.ssl", "true");
+                reloadConfiguration(configuration, server);
+            }
+            // listener with wrong tls version
+            try {
+                Properties configuration = new Properties();
+                configuration.put("mapper.class", StaticEndpointMapper.class.getName());
+                configuration.put("certificate.1.hostname", "*");
+                configuration.put("certificate.1.mode", "manual");
+                configuration.put("listener.1.host", "localhost");
+                configuration.put("listener.1.port", "1423");
+                configuration.put("listener.1.ssl", "true");
+                configuration.put("listener.1.sslprotocols", "TLSUNKNOWN");
+                reloadConfiguration(configuration, server);
+            } catch (IllegalStateException e) {
+                Throwable cause = e.getCause();
+                assertTrue(cause instanceof ConfigurationNotValidException && cause.getMessage().contains("Unsupported SSL Protocols"));
+            }
         }
     }
 

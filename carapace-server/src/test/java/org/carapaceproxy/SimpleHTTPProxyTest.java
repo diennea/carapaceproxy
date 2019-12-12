@@ -23,7 +23,6 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
@@ -134,9 +133,7 @@ public class SimpleHTTPProxyTest {
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
 
             server.addCertificate(new SSLCertificateConfiguration("localhost", certificate, "changeit", STATIC));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0,
-                    true, false, null, "localhost",
-                    cacertificate, "changeit", DEFAULT_SSL_PROTOCOLS));
+            server.addListener(new NetworkListenerConfiguration("localhost", 0, true, false, null, "localhost", cacertificate, "changeit"));
 
             server.start();
             int port = server.getLocalPort();
