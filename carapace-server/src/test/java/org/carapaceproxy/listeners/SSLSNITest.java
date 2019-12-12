@@ -40,8 +40,6 @@ import org.carapaceproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.net.ssl.SSLSession;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.junit.Rule;
@@ -165,23 +163,35 @@ public class SSLSNITest {
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
 
-        // default ssl proto version support checking
-        DEFAULT_SSL_PROTOCOLS.forEach(tlsVersion -> {
+        // TLS 1.3 support checking
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
+            server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
+            server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, null, null, "TLSv1.3"));
+            server.start();
+            int port = server.getLocalPort();
+            try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
+                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                assertTrue(resp.toString().endsWith("it <b>works</b> !!"));
+                SSLSession session = client.getSSLSocket().getSession();
+                assertTrue("TLSv1.3".equals(session.getProtocol()));
+            }
+        }
+
+        // default ssl protocol version support checking
+        for (String proto: DEFAULT_SSL_PROTOCOLS) {
             try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
                 server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
-                server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, null, null, tlsVersion));
+                server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, null, null, proto));
                 server.start();
                 int port = server.getLocalPort();
                 try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                     assertTrue(resp.toString().endsWith("it <b>works</b> !!"));
                     SSLSession session = client.getSSLSocket().getSession();
-                    assertEquals(tlsVersion, session.getProtocol());
+                    assertEquals(proto, session.getProtocol());
                 }
-            } catch (Exception ex) {
-                Logger.getLogger(SSLSNITest.class.getName()).log(Level.SEVERE, null, ex);
             }
-        });
+        }
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
             server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, null, null));
@@ -193,11 +203,9 @@ public class SSLSNITest {
                 SSLSession session = client.getSSLSocket().getSession();
                 assertTrue(DEFAULT_SSL_PROTOCOLS.contains(session.getProtocol()));
             }
-        } catch (Exception ex) {
-            Logger.getLogger(SSLSNITest.class.getName()).log(Level.SEVERE, null, ex);
         }
 
-        // wrong ssl proto version checking
+        // wrong ssl protocol version checking
         TestUtils.assertThrows(ConfigurationNotValidException.class, () -> {
             try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
                 server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
