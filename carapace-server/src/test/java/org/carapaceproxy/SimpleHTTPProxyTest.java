@@ -35,10 +35,10 @@ import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
+import static org.junit.Assert.assertEquals;
 import org.carapaceproxy.utils.HttpUtils;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 import org.junit.Rule;
@@ -131,9 +131,7 @@ public class SimpleHTTPProxyTest {
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
 
             server.addCertificate(new SSLCertificateConfiguration("localhost", certificate, "changeit", STATIC));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0,
-                    true, false, null, "localhost",
-                    cacertificate, "changeit"));
+            server.addListener(new NetworkListenerConfiguration("localhost", 0, true, false, null, "localhost", cacertificate, "changeit"));
 
             server.start();
             int port = server.getLocalPort();

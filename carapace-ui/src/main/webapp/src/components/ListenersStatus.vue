@@ -46,6 +46,13 @@ export default {
                 },
                 { key: "sslCiphers", label: "SSLCiphers", sortable: true },
                 {
+                    key: "sslProtocols",
+                    label: "SSLProtocols",
+                    formatter(protos) {
+                        return protos.join(", ");
+                    }
+                },
+                {
                     key: "totalRequests",
                     label: "Total Requests",
                     sortable: true

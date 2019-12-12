@@ -222,9 +222,7 @@ public class CacheTest {
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", "localhost.p12", "testproxy", STATIC));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0,
-                    true, false, null, "localhost",
-                    null, null));
+            server.addListener(new NetworkListenerConfiguration("localhost", 0, true, false, null, "localhost", null, null));
             server.start();
         }
     }
@@ -247,9 +245,7 @@ public class CacheTest {
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", "localhost.p12", "testproxy", STATIC));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0,
-                    true, false, null, "localhost",
-                    null, null));
+            server.addListener(new NetworkListenerConfiguration("localhost", 0, true, false, null, "localhost", null, null));
             server.start();
             int port = server.getLocalPort();
             server.getCache().getStats().resetCacheMetrics();

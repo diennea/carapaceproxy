@@ -1,30 +1,35 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.server.config;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 /**
  * Listens for connections on the network
  */
 public class NetworkListenerConfiguration {
+
+    public static final List<String> DEFAULT_SSL_PROTOCOLS = Collections.unmodifiableList(Arrays.asList("TLSv1.2", "TLSv1.3"));
 
     private final String host;
     private final int port;
@@ -34,6 +39,7 @@ public class NetworkListenerConfiguration {
     private final String defaultCertificate;
     private final String sslTrustoreFile;
     private final String sslTrustorePassword;
+    private String[] sslProtocols;
 
     public HostPort getKey() {
         return new HostPort(host, port);
@@ -102,18 +108,27 @@ public class NetworkListenerConfiguration {
         this.defaultCertificate = null;
         this.sslTrustoreFile = null;
         this.sslTrustorePassword = null;
+        this.sslProtocols = DEFAULT_SSL_PROTOCOLS.toArray(new String[0]);
     }
 
-    public NetworkListenerConfiguration(String host, int port, boolean ssl,
-            boolean ocps, String sslCiphers, String defaultCertificate, String sslTrustoreFile, String sslTrustorePassword) {
+    public NetworkListenerConfiguration(String host, int port, boolean ssl, boolean ocps, String sslCiphers, String defaultCertificate, String sslTrustoreFile, String sslTrustorePassword) {
+        this(
+                host, port, ssl, ocps, sslCiphers, defaultCertificate,
+                sslTrustoreFile, sslTrustorePassword, DEFAULT_SSL_PROTOCOLS.toArray(new String[0])
+        );
+    }
+
+    public NetworkListenerConfiguration(String host, int port, boolean ssl, boolean ocps, String sslCiphers, String defaultCertificate, String sslTrustoreFile, String sslTrustorePassword,
+                                        String... sslProtocols) {
         this.host = host;
         this.port = port;
         this.ssl = ssl;
-        this.defaultCertificate = defaultCertificate;
-        this.sslCiphers = sslCiphers;
         this.ocps = ocps;
+        this.sslCiphers = sslCiphers;
+        this.defaultCertificate = defaultCertificate;
         this.sslTrustoreFile = sslTrustoreFile;
         this.sslTrustorePassword = sslTrustorePassword;
+        this.sslProtocols = sslProtocols;
     }
 
     public String getSslTrustoreFile() {
@@ -148,17 +163,26 @@ public class NetworkListenerConfiguration {
         return sslCiphers;
     }
 
+    public String[] getSslProtocols() {
+        return sslProtocols;
+    }
+
+    public void setSslProtocols(String[] sslProtocols) {
+        this.sslProtocols = sslProtocols;
+    }
+
     @Override
     public int hashCode() {
-        int hash = 5;
-        hash = 29 * hash + Objects.hashCode(this.host);
-        hash = 29 * hash + this.port;
-        hash = 29 * hash + (this.ssl ? 1 : 0);
-        hash = 29 * hash + (this.ocps ? 1 : 0);
-        hash = 29 * hash + Objects.hashCode(this.sslCiphers);
-        hash = 29 * hash + Objects.hashCode(this.defaultCertificate);
-        hash = 29 * hash + Objects.hashCode(this.sslTrustoreFile);
-        hash = 29 * hash + Objects.hashCode(this.sslTrustorePassword);
+        int hash = 3;
+        hash = 89 * hash + Objects.hashCode(this.host);
+        hash = 89 * hash + this.port;
+        hash = 89 * hash + (this.ssl ? 1 : 0);
+        hash = 89 * hash + (this.ocps ? 1 : 0);
+        hash = 89 * hash + Objects.hashCode(this.sslCiphers);
+        hash = 89 * hash + Objects.hashCode(this.defaultCertificate);
+        hash = 89 * hash + Objects.hashCode(this.sslTrustoreFile);
+        hash = 89 * hash + Objects.hashCode(this.sslTrustorePassword);
+        hash = 89 * hash + Arrays.deepHashCode(this.sslProtocols);
         return hash;
     }
 
@@ -196,6 +220,9 @@ public class NetworkListenerConfiguration {
             return false;
         }
         if (!Objects.equals(this.sslTrustorePassword, other.sslTrustorePassword)) {
+            return false;
+        }
+        if (!Arrays.deepEquals(this.sslProtocols, other.sslProtocols)) {
             return false;
         }
         return true;

@@ -155,11 +155,12 @@ public class Listeners {
                 ciphers = Arrays.asList(sslCiphers.split(","));
             }
             return SslContextBuilder
-                    .forServer(keyFactory)
-                    .enableOcsp(listener.isOcps() && OpenSsl.isOcspSupported())
-                    .trustManager(trustManagerFactory)
-                    .sslProvider(SslProvider.OPENSSL)
-                    .ciphers(ciphers).build();
+                            .forServer(keyFactory)
+                            .enableOcsp(listener.isOcps() && OpenSsl.isOcspSupported())
+                            .trustManager(trustManagerFactory)
+                            .sslProvider(SslProvider.OPENSSL)
+                            .protocols(listener.getSslProtocols())
+                            .ciphers(ciphers).build();
         } catch (IOException | GeneralSecurityException err) {
             throw new ConfigurationNotValidException(err);
         }

@@ -1,21 +1,21 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.server;
 
@@ -39,6 +39,9 @@ import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode;
 import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
+import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
+import javax.net.ssl.SSLContext;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 
 /**
@@ -63,8 +66,8 @@ public class RuntimeServerConfiguration {
     private String mapperClassname;
     private String accessLogPath = "access.log";
     private String accessLogTimestampFormat = "yyyy-MM-dd HH:mm:ss.SSS";
-    private String accessLogFormat
-            = "[<timestamp>] [<method> <host> <uri>] [uid:<user_id>, sid:<session_id>, ip:<client_ip>] "
+    private String accessLogFormat =
+            "[<timestamp>] [<method> <host> <uri>] [uid:<user_id>, sid:<session_id>, ip:<client_ip>] "
             + "server=<server_ip>, act=<action_id>, route=<route_id>, backend=<backend_id>. "
             + "time t=<total_time>ms b=<backend_time>ms";
     private int accessLogMaxQueueCapacity = 2000;
@@ -74,6 +77,7 @@ public class RuntimeServerConfiguration {
     private int healthProbePeriod = 0;
     private int dynamicCertificatesManagerPeriod = 0;
     private int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
+    private List<String> supportedSSLProtocols = null;
 
     public String getAccessLogPath() {
         return accessLogPath;
@@ -291,7 +295,7 @@ public class RuntimeServerConfiguration {
             String pw = properties.getProperty(prefix + "password", "");
             String mode = properties.getProperty(prefix + "mode", "static");
             try {
-                CertificateMode _mode = CertificateMode.valueOf(mode.toUpperCase());                
+                CertificateMode _mode = CertificateMode.valueOf(mode.toUpperCase());
                 LOG.log(Level.INFO,
                         "Configuring SSL certificate {0}: hostname={1}, file={2}, password={3}, mode={4}",
                         new Object[]{prefix, hostname, file, pw, mode}
@@ -300,7 +304,7 @@ public class RuntimeServerConfiguration {
                 this.addCertificate(config);
             } catch (IllegalArgumentException e) {
                 throw new ConfigurationNotValidException(
-                        "Invalid value of '" + mode +  "' for " + prefix + "mode. Supperted ones: static, acme, manual"
+                        "Invalid value of '" + mode + "' for " + prefix + "mode. Supperted ones: static, acme, manual"
                 );
             }
         }
@@ -319,11 +323,17 @@ public class RuntimeServerConfiguration {
             String trustStorePassword = properties.getProperty(prefix + "ssltruststorepassword", "");
             String sslciphers = properties.getProperty(prefix + "sslciphers", "");
             String defautlSslCertificate = properties.getProperty(prefix + "defaultcertificate", "*");
-            NetworkListenerConfiguration config = new NetworkListenerConfiguration(host,
-                    port, ssl, ocps, sslciphers, defautlSslCertificate,
-                    trustStoreFile, trustStorePassword);
+            NetworkListenerConfiguration config = new NetworkListenerConfiguration(
+                    host, port, ssl, ocps, sslciphers, defautlSslCertificate, trustStoreFile, trustStorePassword
+            );
+            if (ssl) {
+                String _sslProtocols = properties.getProperty(prefix + "sslprotocols", "");
+                if (!_sslProtocols.isBlank()) {
+                    String[] sslProtocols = _sslProtocols.replaceAll(" ", "").split(",");
+                    config.setSslProtocols(sslProtocols);
+                }
+            }
             this.addListener(config);
-
         }
     }
 
@@ -348,7 +358,23 @@ public class RuntimeServerConfiguration {
 
     public void addListener(NetworkListenerConfiguration listener) throws ConfigurationNotValidException {
         if (listener.isSsl() && !certificates.containsKey(listener.getDefaultCertificate())) {
-            throw new ConfigurationNotValidException("listener " + listener.getHost() + ":" + listener.getPort() + ", ssl=" + listener.isSsl() + ", default certificate " + listener.getDefaultCertificate() + " not configured");
+            throw new ConfigurationNotValidException("listener " + listener.getHost() + ":" + listener.getPort() + ", ssl=" + listener.isSsl() + ", default certificate " + listener.
+                    getDefaultCertificate() + " not configured");
+        }
+        if (listener.isSsl()) {
+            try {
+                if (supportedSSLProtocols == null) {
+                    supportedSSLProtocols = Arrays.asList(SSLContext.getDefault().getSupportedSSLParameters().getProtocols());
+                }
+                if (!supportedSSLProtocols.containsAll(Arrays.asList(listener.getSslProtocols()))) {
+                    throw new ConfigurationNotValidException(
+                            "Unsupported SSL Protocols " + Arrays.toString(listener.getSslProtocols())
+                            + " for listener " + listener.getHost() + ":" + listener.getPort()
+                    );
+                }
+            } catch (NoSuchAlgorithmException ex) {
+                throw new ConfigurationNotValidException(ex);
+            }
         }
         listeners.add(listener);
     }
