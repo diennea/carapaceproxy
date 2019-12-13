@@ -1,21 +1,21 @@
 /*
- * Licensed to Diennea S.r.l. under one
- * or more contributor license agreements. See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership. Diennea S.r.l. licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- *
+ Licensed to Diennea S.r.l. under one
+ or more contributor license agreements. See the NOTICE file
+ distributed with this work for additional information
+ regarding copyright ownership. Diennea S.r.l. licenses this file
+ to you under the Apache License, Version 2.0 (the
+ "License"); you may not use this file except in compliance
+ with the License.  You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing,
+ software distributed under the License is distributed on an
+ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ KIND, either express or implied.  See the License for the
+ specific language governing permissions and limitations
+ under the License.
+
  */
 package org.carapaceproxy.api;
 
@@ -195,31 +195,36 @@ public class CertificatesResource {
             @QueryParam("type") @DefaultValue("manual") String type,
             InputStream uploadedInputStream) throws Exception {
 
-        // Certificate type (manual | acme)
-        CertificateMode certType = stringToCertificateMode(type);
-        if (certType == null || STATIC.equals(certType)) {
-            return Response.status(422).entity("ERROR: illegal type of certificate. Available: manual, acme").build();
-        }
-        // Certificate content (optional)
-        byte[] data = uploadedInputStream.readAllBytes();
-        if (data != null && data.length > 0 && !CertificatesUtils.validateKeystore(data)) {
-            return Response.status(422).entity("ERROR: unable to read uploded certificate.").build();
-        }
+        try (uploadedInputStream) {
+            // Certificate type (manual | acme)
+            CertificateMode certType = stringToCertificateMode(type);
+            if (certType == null || STATIC.equals(certType)) {
+                return Response.status(422).entity("ERROR: illegal type of certificate. Available: manual, acme").build();
+            }
+            // Certificate content (optional for acme type)
+            byte[] data = uploadedInputStream.readAllBytes();
+            if (MANUAL.equals(certType) && (data == null || data.length == 0)) {
+                return Response.status(422).entity("ERROR: certificate data required for type 'manual'").build();
+            }
+            if (data != null && data.length > 0 && !CertificatesUtils.validateKeystore(data)) {
+                return Response.status(422).entity("ERROR: unable to read uploded certificate.").build();
+            }
 
-        String encodedData = "";
-        DynamicCertificateState state = WAITING;
-        boolean available = false;
-        if (data != null && data.length > 0) {
-            encodedData = Base64.getEncoder().encodeToString(data);
-            available = true;
-            state = AVAILABLE;
-        }
-        CertificateData cert = new CertificateData(domain, "", encodedData, state, "", "", available);
-        cert.setManual(MANUAL.equals(certType));
-        HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-        server.createDynamicCertificateForDomain(cert);
+            String encodedData = "";
+            DynamicCertificateState state = WAITING;
+            boolean available = false;
+            if (data != null && data.length > 0) {
+                encodedData = Base64.getEncoder().encodeToString(data);
+                available = true;
+                state = AVAILABLE;
+            }
+            CertificateData cert = new CertificateData(domain, "", encodedData, state, "", "", available);
+            cert.setManual(MANUAL.equals(certType));
+            HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
+            server.updateDynamicCertificateForDomain(cert);
 
-        return Response.status(200).entity("SUCCESS: Certificate saved.").build();
+            return Response.status(200).entity("SUCCESS: Certificate saved.").build();
+        }
     }
 
 }

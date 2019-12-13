@@ -1,21 +1,21 @@
 /*
- * Licensed to Diennea S.r.l. under one
- * or more contributor license agreements. See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership. Diennea S.r.l. licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- *
+ Licensed to Diennea S.r.l. under one
+ or more contributor license agreements. See the NOTICE file
+ distributed with this work for additional information
+ regarding copyright ownership. Diennea S.r.l. licenses this file
+ to you under the Apache License, Version 2.0 (the
+ "License"); you may not use this file except in compliance
+ with the License.  You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing,
+ software distributed under the License is distributed on an
+ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ KIND, either express or implied.  See the License for the
+ specific language governing permissions and limitations
+ under the License.
+
  */
 package org.carapaceproxy.server.certificates;
 
@@ -23,8 +23,6 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
-import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.security.KeyPair;
 import java.security.cert.Certificate;
@@ -170,15 +168,20 @@ public class CertificatesTest extends UseAdminServer {
         int port = server.getLocalPort();
         DynamicCertificatesManager dynCertsMan = server.getDynamicCertificateManager();
 
-        // Uploading certificate without data (for type="acme" means creating an order for ACME certificate)
+        // Uploading certificate without data:
+        // - for type="acme" means creating an order for an ACME certificate
+        // - for type="manual" is forbidden
         try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
             HttpResponse resp = uploadCertificate("localhost", "type=" + type, new byte[0], client, credentials);
-            assertTrue(resp.getBodyString().contains("SUCCESS"));
-            CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost");
-            assertNotNull(data);
-            assertEquals(type.equals("manual"), data.isManual());
-            assertFalse(data.isAvailable()); // no certificate-data uploaded
-            assertEquals(DynamicCertificateState.WAITING, dynCertsMan.getStateOfCertificate("localhost"));
+            if (type.equals("manual")) {
+                assertTrue(resp.getBodyString().contains("ERROR: certificate data required"));
+            } else {
+                CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost");
+                assertNotNull(data);
+                assertFalse(data.isManual());
+                assertFalse(data.isAvailable()); // no certificate-data uploaded
+                assertEquals(DynamicCertificateState.WAITING, dynCertsMan.getStateOfCertificate("localhost"));
+            }
         }
 
         // Uploading certificate with data
@@ -204,10 +207,44 @@ public class CertificatesTest extends UseAdminServer {
             }
         }
 
-        // Uploading trush: bad-type
+        // Uploading trush: bad "type"
         try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
             HttpResponse resp = uploadCertificate("localhost", "type=undefined", new byte[0], client, credentials);
             assertTrue(resp.getBodyString().contains("ERROR: illegal type"));
+        }
+
+        // Uploading same certificate but with different type (will be update)
+        try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
+            String otherType = type.equals("manual") ? "acme" : "manual";
+            KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+            Certificate[] chain = generateSampleChain(endUserKeyPair, false);
+            byte[] chainData = createKeystore(chain, endUserKeyPair.getPrivate());
+            HttpResponse resp = uploadCertificate("localhost", "type=" + otherType, chainData, client, credentials);
+            assertTrue(resp.getBodyString().contains("SUCCESS"));
+            CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost");
+            assertNotNull(data);
+            assertEquals(otherType.equals("manual"), data.isManual());
+            assertTrue(data.isAvailable());
+            assertEquals(DynamicCertificateState.AVAILABLE, dynCertsMan.getStateOfCertificate("localhost"));
+
+            // check uploaded certificate
+            try (RawHttpClient c = new RawHttpClient("localhost", port, true, "localhost")) {
+                RawHttpClient.HttpResponse r = c.get("https://localhost:" + port + "/index.html", credentials);
+                assertEquals("it <b>works</b> !!", r.getBodyString());
+                Certificate[] obtainedChain = c.getServerCertificate();
+                assertNotNull(obtainedChain);
+                assertTrue(chain[0].equals(obtainedChain[0]));
+            }
+
+            resp = uploadCertificate("localhost", "type=" + type, new byte[0], client, credentials);
+            if (type.equals("acme")) {
+                assertTrue(resp.getBodyString().contains("SUCCESS"));
+                data = dynCertsMan.getCertificateDataForDomain("localhost");
+                assertNotNull(data);
+                assertFalse(data.isManual());
+                assertFalse(data.isAvailable()); // no certificate-data uploaded
+                assertEquals(DynamicCertificateState.WAITING, dynCertsMan.getStateOfCertificate("localhost"));
+            }
         }
     }
 

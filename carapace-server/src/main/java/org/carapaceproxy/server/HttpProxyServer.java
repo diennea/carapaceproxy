@@ -130,7 +130,7 @@ public class HttpProxyServer implements AutoCloseable {
     private String adminAdvertisedServerHost = adminServerHost; // hostname to access API/UI
     private int adminServerHttpsPort = -1;
     private String adminServerCertFile;
-    private String adminServerCertFilePwd="";
+    private String adminServerCertFilePwd = "";
     private String metricsUrl;
     private String userRealmClassname;
     /**
@@ -554,14 +554,20 @@ public class HttpProxyServer implements AutoCloseable {
         return newConfiguration;
     }
 
-    public void createDynamicCertificateForDomain(CertificateData cert) throws Exception {
+    public void updateDynamicCertificateForDomain(CertificateData cert) throws Exception {
         // Certificate saving on db
         dynamicConfigurationStore.saveCertificate(cert);
 
-        // Configuration updating with new certificate (whether not yet existent)
+        // Configuration updating
         Properties props = dynamicConfigurationStore.asProperties(null);
-        if (!dynamicConfigurationStore.anyPropertyMatches((k, v) ->
-                 k.matches("certificate\\.[0-9]+\\.hostname") && v.equals(cert.getDomain()))) {
+        boolean certificateForDomainAvailable = !dynamicConfigurationStore.anyPropertyMatches((k, v) -> {
+            if (k.matches("certificate\\.[0-9]+\\.hostname") && v.equals(cert.getDomain())) {
+                props.setProperty(k.replace("hostname", "mode"), cert.isManual() ? "manual" : "acme"); // updating existing certificate with new type
+                return true;
+            }
+            return false;
+        });
+        if (certificateForDomainAvailable) {
             String prefix = "certificate." + dynamicConfigurationStore.nextIndexFor("certificate") + ".";
             props.setProperty(prefix + "hostname", cert.getDomain());
             props.setProperty(prefix + "mode", cert.isManual() ? "manual" : "acme");
@@ -576,8 +582,7 @@ public class HttpProxyServer implements AutoCloseable {
      *
      * @param newConfigurationStore
      * @throws InterruptedException
-     * @see
-     * #buildValidConfiguration(org.carapaceproxy.configstore.ConfigurationStore)
+     * @see #buildValidConfiguration(org.carapaceproxy.configstore.ConfigurationStore)
      */
     public void applyDynamicConfigurationFromAPI(ConfigurationStore newConfigurationStore) throws InterruptedException, ConfigurationChangeInProgressException {
         applyDynamicConfiguration(newConfigurationStore, false);
