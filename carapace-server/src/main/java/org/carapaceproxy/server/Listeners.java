@@ -74,11 +74,12 @@ import org.carapaceproxy.utils.PrometheusUtils;
  */
 @SuppressFBWarnings(value = "OBL_UNSATISFIED_OBLIGATION", justification = "https://github.com/spotbugs/spotbugs/issues/432")
 public class Listeners {
-
+        
     private static final Logger LOG = Logger.getLogger(Listeners.class.getName());
     private static final Gauge CURRENT_CONNECTED_CLIENTS_GAUGE = PrometheusUtils.createGauge("clients", "current_connected",
             "currently connected clients").register();
 
+    
     private final EventLoopGroup bossGroup;
     private final EventLoopGroup workerGroup;
     private final HttpProxyServer parent;
@@ -91,6 +92,7 @@ public class Listeners {
     private RuntimeServerConfiguration currentConfiguration;
 
     public Listeners(HttpProxyServer parent) {
+        LOG.log(Level.INFO, "OpenSsl.isOcspSupported(): {0}", OpenSsl.isOcspSupported());        
         this.parent = parent;
         this.currentConfiguration = parent.getCurrentConfiguration();
         this.basePath = parent.getBasePath();
@@ -153,6 +155,9 @@ public class Listeners {
             if (sslCiphers != null && !sslCiphers.isEmpty()) {
                 LOG.log(Level.SEVERE, "required sslCiphers " + sslCiphers);
                 ciphers = Arrays.asList(sslCiphers.split(","));
+            }            
+            if (listener.isOcps() && !OpenSsl.isOcspSupported()) {
+                LOG.log(Level.SEVERE, "listener {0}:{1}, OCPS is configured but not supported by OpenSSL implementation", new Object[]{listener.getHost(), listener.getPort()});
             }
             return SslContextBuilder
                             .forServer(keyFactory)
@@ -160,7 +165,8 @@ public class Listeners {
                             .trustManager(trustManagerFactory)
                             .sslProvider(SslProvider.OPENSSL)
                             .protocols(listener.getSslProtocols())
-                            .ciphers(ciphers).build();
+                            .ciphers(ciphers)
+                            .build();
         } catch (IOException | GeneralSecurityException err) {
             throw new ConfigurationNotValidException(err);
         }

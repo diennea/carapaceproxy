@@ -95,7 +95,7 @@
         <zookkeeper.version>3.5.6</zookkeeper.version>
         <commons.lang3>3.8.1</commons.lang3>
         <netty.version>4.1.43.Final</netty.version>
-        <netty.ssl.version>2.0.27.Final</netty.ssl.version>
+        <netty.ssl.version>2.0.28.Final</netty.ssl.version>
         <jetty.version>9.4.8.v20171121</jetty.version>
         <jersey.version>2.27</jersey.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

@@ -38,8 +38,11 @@ import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import java.util.List;
+import javax.net.ssl.ExtendedSSLSession;
 import javax.net.ssl.SSLSession;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.junit.Rule;
@@ -212,5 +215,59 @@ public class SSLSNITest {
                 server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, null, null, "TLSvWRONG"));
             }
         });
+    }
+    
+    @Test
+    public void testOCSPStapling() throws Exception {
+
+        String nonLocalhost = InetAddress.getLocalHost().getCanonicalHostName();
+
+        String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+
+        stubFor(get(urlEqualTo("/index.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withBody("it <b>works</b> !!")));
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
+
+            server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
+
+            server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, true /* OCPS*/, null, nonLocalhost /* default */, null, null));
+
+            server.start();
+            stats = server.getConnectionsManager().getStats();
+            int port = server.getLocalPort();
+
+            try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
+                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                assertTrue(resp.toString().endsWith("it <b>works</b> !!"));
+                X509Certificate cert = (X509Certificate) client.getSSLSocket().getSession().getPeerCertificates()[0];
+                System.out.println("acert2: " + cert.getSerialNumber());
+                ExtendedSSLSession ex = (ExtendedSSLSession) client.getSSLSocket().getSession();
+                List<byte[]> ocps = ex.getStatusResponses();
+                for (byte[] b : ocps) {
+                    System.out.println("OCSP: "+b);
+                }
+                assertFalse(ocps.isEmpty());
+            }
+
+        }
+
+        TestUtils.waitForCondition(() -> {
+            EndpointStats epstats = stats.getEndpointStats(key);
+            return epstats.getTotalConnections().intValue() == 1
+                    && epstats.getActiveConnections().intValue() == 0
+                    && epstats.getOpenConnections().intValue() == 0;
+        }, 100);
+
+        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+
     }
 }
