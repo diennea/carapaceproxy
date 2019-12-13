@@ -195,14 +195,14 @@ public class CertificatesResource {
             @QueryParam("type") @DefaultValue("manual") String type,
             InputStream uploadedInputStream) throws Exception {
 
-        try (uploadedInputStream) {
+        try (InputStream input = uploadedInputStream) {
             // Certificate type (manual | acme)
             CertificateMode certType = stringToCertificateMode(type);
             if (certType == null || STATIC.equals(certType)) {
                 return Response.status(422).entity("ERROR: illegal type of certificate. Available: manual, acme").build();
             }
             // Certificate content (optional for acme type)
-            byte[] data = uploadedInputStream.readAllBytes();
+            byte[] data = input.readAllBytes();
             if (MANUAL.equals(certType) && (data == null || data.length == 0)) {
                 return Response.status(422).entity("ERROR: certificate data required for type 'manual'").build();
             }
