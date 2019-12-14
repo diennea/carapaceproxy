@@ -1,11 +1,11 @@
 <template>
     <nav id="sidebar" :class="{'collapsed' : collapsed}">
-        <!-- HEADER -->
+        <!-- SIDEBAR HEADER -->
         <div id="sidebar-header">
             <img v-if="collapsed" :src="logoCollapsed" />
             <img v-else :src="logo" />
         </div>
-        <!-- ELEMENTS -->
+        <!-- SIDEBAR ELEMENTS -->
         <ul id="sidebar-elements" class="list-unstyled">
             <router-link
                 v-for="el in elements"
@@ -26,7 +26,7 @@
                 <span v-else>{{el.label}}</span>
             </router-link>
         </ul>
-        <!-- SIDEBAR-TOGGLE-BUTTON -->
+        <!-- SIDEBAR TOGGLE-BUTTON -->
         <div id="sidebar-toogle-button" @click="toggleSidebar()">
             <font-awesome-icon icon="angle-right" :rotation="collapsed ? 0 : 180"></font-awesome-icon>
             <font-awesome-icon icon="angle-right" :rotation="collapsed ? 0 : 180"></font-awesome-icon>
@@ -79,109 +79,58 @@ export default {
     min-height: 100vh;
     background: $secondary;
     color: $white;
-    transition: all 0.5s ease;
+    transition: all 0.15s linear;
     text-align: left;
     -webkit-box-shadow: 0px 0px 7px 2px $shadow;
     box-shadow: 0px 0px 7px 2px $shadow;
     position: relative;
-}
-
-#sidebar.collapsed {
-    min-width: 65px;
-    max-width: 65px;
-    text-align: center;
-    transition: all 0.5s ease;
 
     #sidebar-header {
-        padding-left: 0px;
-        padding-right: 0px;
+        min-height: 7.5vh;
+        max-height: 10vh;
+        padding: 0.5rem 1rem;
         background: $secondary;
     }
-}
 
-#sidebar-toogle-button {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    text-align: center;
-    color: $primary;
-}
-
-#sidebar-toogle-button svg {
-    margin: auto 2px; /* default open */
-}
-
-#sidebar-toogle-button:hover svg {
-    margin: 0; /* on-hover > close */
-}
-
-#sidebar.collapsed #sidebar-toogle-button svg {
-    margin: 0; /* default closed */
-}
-
-#sidebar.collapsed #sidebar-toogle-button:hover svg {
-    margin: auto 2px; /* on-hover > open */
-}
-
-#sidebar-header,
-#sidebar li,
-#sidebar-toogle-button {
-    cursor: pointer;
-}
-
-#sidebar-header {
-    min-height: 10vh;
-    max-height: 10vh;
-}
-
-a,
-a:hover,
-a:focus {
-    color: inherit;
-    text-decoration: none;
-}
-
-#sidebar-header,
-#sidebar-toogle-button {
-    padding: 0.5rem 1rem;
-    background: $secondary;
-}
-
-#sidebar ul li {
-    font-size: 1.1rem;
-    padding: 0.4rem 0.75rem;
-    display: block;
-    position: relative;
-    border: 0.25rem solid transparent;
-
-    span {
+    #sidebar-toogle-button {
         position: absolute;
-        top: 0;
         bottom: 0;
-        left: 3.5rem;
-        display: inline-flex;
-        align-items: center;
+        left: 0;
+        right: 0;
+        text-align: center;
+        padding: 0.5rem;
+        color: $primary;
+        background: $secondary;
+
+        svg {
+            margin: auto 2px; /* default open */
+        }
+
+        &:hover svg {
+            margin: 0; /* on-hover > close */
+        }
     }
-}
 
-#sidebar ul li:not(active):hover {
-    background: $secondary-accent2;
-}
+    /* sidebar collapsed */
+    &.collapsed {
+        min-width: 65px;
+        max-width: 65px;
+        transition: all 0.15s linear;
 
-#sidebar ul li.active:hover {
-    background: $secondary-accent1;
-}
+        #sidebar-header {
+            padding: 0.5rem;
+        }
 
-.active {
-    color: $primary;
-    border-left-color: $primary !important;
-}
+        #sidebar-toogle-button {
+            svg {
+                margin: 0; /* default closed */
+            }
 
-#sidebar ul,
-a[aria-expanded="true"] {
-    color: $white;
-    background: $secondary;
+            &:hover svg {
+                margin: auto 2px; /* on-hover > open */
+            }
+        }
+    }
 }
 
 #sidebar-elements {
@@ -189,5 +138,58 @@ a[aria-expanded="true"] {
     min-height: 70vh;
     max-height: 70vh;
     margin: 7.5vh auto;
+
+    li {
+        font-size: 1.1rem;
+        padding: 0.75rem;
+        display: flex;
+        position: relative;
+        border: 0.25rem solid transparent;
+
+        svg {
+            margin: auto 0.25rem;
+        }
+
+        span {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 3.5rem;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        &:hover {
+            background: $secondary-accent2;
+        }
+
+        &.active {
+            color: $primary;
+            border-left-color: $primary !important;
+        }
+
+        &.active:hover {
+            background: $secondary-accent1;
+        }
+    }
+}
+
+#sidebar-header,
+#sidebar-toogle-button,
+#sidebar-elements li {
+    cursor: pointer;
+}
+
+#sidebar-elements,
+a[aria-expanded="true"] {
+    color: $white;
+    background: $secondary;
+}
+
+a,
+a:hover,
+a:focus {
+    color: inherit;
+    text-decoration: none;
 }
 </style>
