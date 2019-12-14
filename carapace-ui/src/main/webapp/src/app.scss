@@ -30,4 +30,7 @@ $theme-colors: (
     background-color: $warning;
     padding: 0.3em;
     margin: 0.3em auto;
+    border-radius: 3px;
+    border-left: 5px solid $warning-border;
+    font-size: 0.95rem;
 }
