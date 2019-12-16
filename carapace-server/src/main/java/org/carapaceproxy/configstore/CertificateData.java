@@ -21,7 +21,7 @@ package org.carapaceproxy.configstore;
 
 import java.net.URL;
 import java.util.Objects;
-import org.carapaceproxy.server.certiticates.DynamicCertificateState;
+import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.shredzone.acme4j.toolbox.JSON;
 
 /**
@@ -35,14 +35,14 @@ public class CertificateData {
     private String domain;
     private String privateKey; // base64 encoded string.
     private String chain; // base64 encoded string of the KeyStore.
-    private String state;
+    private DynamicCertificateState state;
     private String pendingOrderLocation;
     private String pendingChallengeData;
     private boolean available;
     private boolean manual;
 
-    public CertificateData(String domain, String privateKey, String chain, String state,
-            String orderLocation, String challengeData, boolean available) {
+    public CertificateData(String domain, String privateKey, String chain, DynamicCertificateState state,
+                           String orderLocation, String challengeData, boolean available) {
         this.domain = domain;
         this.privateKey = privateKey;
         this.chain = chain;
@@ -64,7 +64,7 @@ public class CertificateData {
         return chain;
     }
 
-    public String getState() {
+    public DynamicCertificateState getState() {
         return state;
     }
 
@@ -90,14 +90,10 @@ public class CertificateData {
 
     public void setChain(String chain) {
         this.chain = chain;
-    }   
-
-    public void setState(String state) {
-        this.state = state;
     }
 
     public void setState(DynamicCertificateState state) {
-        this.state = state.name();
+        this.state = state;
     }
 
     public void setAvailable(boolean available) {

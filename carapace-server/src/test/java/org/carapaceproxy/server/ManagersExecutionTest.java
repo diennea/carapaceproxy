@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
 import org.carapaceproxy.EndpointMapper;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.backends.BackendHealthManager;
-import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
+import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
 import static org.junit.Assert.*;
 import org.junit.Test;
 import org.junit.runner.RunWith;

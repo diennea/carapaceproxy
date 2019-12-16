@@ -19,7 +19,6 @@
  */
 package org.carapaceproxy.utils;
 
-import com.google.common.annotations.VisibleForTesting;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
@@ -38,7 +37,7 @@ import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
-import static org.carapaceproxy.server.certiticates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
 import org.carapaceproxy.utils.RawHttpClient.BasicAuthCredentials;
 import org.carapaceproxy.utils.RawHttpClient.HttpResponse;
@@ -124,10 +123,10 @@ public class CertificatesTestUtils {
         return createKeystore(originalChain, endUserKeyPair.getPrivate());
     }
 
-    public static HttpResponse uploadCertificate(String domain, byte[] data, RawHttpClient client, BasicAuthCredentials credentials) throws Exception {
-
+    public static HttpResponse uploadCertificate(String domain, String params, byte[] data, RawHttpClient client, BasicAuthCredentials credentials) throws Exception {
         ByteArrayOutputStream oo = new ByteArrayOutputStream();
-        oo.write(("POST /api/certificates/" + domain + "/upload HTTP/1.1\r\n"
+        params = (params == null || params.isEmpty()) ? "" : "?" + params;
+        oo.write(("POST /api/certificates/" + domain + "/upload" + params + " HTTP/1.1\r\n"
                 + "Host: localhost\r\n"
                 + "Content-Type: application/octet-stream\r\n"
                 + "Content-Length: " + data.length + "\r\n"

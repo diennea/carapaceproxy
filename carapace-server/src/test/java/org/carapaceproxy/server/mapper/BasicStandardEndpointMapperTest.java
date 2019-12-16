@@ -36,7 +36,7 @@ import org.carapaceproxy.server.HttpProxyServer;
 import static org.carapaceproxy.server.RequestHandler.PROPERTY_URI;
 import org.carapaceproxy.server.StaticContentsManager;
 import static org.carapaceproxy.server.StaticContentsManager.CLASSPATH_RESOURCE;
-import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
+import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.DirectorConfiguration;

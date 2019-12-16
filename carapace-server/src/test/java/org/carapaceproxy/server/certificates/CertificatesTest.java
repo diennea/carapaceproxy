@@ -17,7 +17,7 @@
  under the License.
 
  */
-package org.carapaceproxy.server.certiticates;
+package org.carapaceproxy.server.certificates;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
@@ -28,28 +28,32 @@ import java.security.KeyPair;
 import java.security.cert.Certificate;
 import java.util.Properties;
 import org.carapaceproxy.api.UseAdminServer;
-import static org.carapaceproxy.server.certiticates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.carapaceproxy.utils.CertificatesTestUtils.uploadCertificate;
 import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
-import org.carapaceproxy.utils.HttpUtils;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.RawHttpClient.HttpResponse;
-import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import junitparams.JUnitParamsRunner;
+import junitparams.Parameters;
 import org.carapaceproxy.configstore.CertificateData;
+import org.carapaceproxy.utils.HttpUtils;
+import org.carapaceproxy.utils.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.shredzone.acme4j.util.KeyPairUtils;
 
 /**
- * Test about basic certificate management and client requests.
+ * Test use cases for basic certificates management and client requests.
  *
  * @author paolo.venturi
  */
+@RunWith(JUnitParamsRunner.class)
 public class CertificatesTest extends UseAdminServer {
 
     @Rule
@@ -58,18 +62,13 @@ public class CertificatesTest extends UseAdminServer {
     private Properties config;
 
     /**
-     * Test case:
-     * - Start server with a default certificate
-     * - Make request expected default certificate
+     * Test case: - Start server with a default certificate - Make request expected default certificate
      *
-     * - Add a manual certificate to config (without upload)
-     * - Make request expected default certificate
+     * - Add a manual certificate to config (without upload) - Make request expected default certificate
      *
-     * - Upload the certificate
-     * - Make request expected uploaded certificate
+     * - Upload the certificate - Make request expected uploaded certificate
      *
-     * - Update the certificate
-     * - Make request expected updated certificate
+     * - Update the certificate - Make request expected updated certificate
      */
     @Test
     public void test() throws Exception {
@@ -112,11 +111,12 @@ public class CertificatesTest extends UseAdminServer {
             KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
             uploadedChain = generateSampleChain(endUserKeyPair, false);
             byte[] chainData = createKeystore(uploadedChain, endUserKeyPair.getPrivate());
-            HttpResponse resp = uploadCertificate("localhost", chainData, client, credentials);
+            HttpResponse resp = uploadCertificate("localhost", null, chainData, client, credentials);
             assertTrue(resp.getBodyString().contains("SUCCESS"));
             data = dynCertMan.getCertificateDataForDomain("localhost");
             assertNotNull(data);
             assertTrue(data.isManual());
+            assertTrue(data.isAvailable());
         }
 
         // Request #2: expected uploaded certificate
@@ -136,11 +136,12 @@ public class CertificatesTest extends UseAdminServer {
             uploadedChain2 = generateSampleChain(endUserKeyPair, false);
             assertFalse(uploadedChain[0].equals(uploadedChain2[0]));
             byte[] chainData = createKeystore(uploadedChain2, endUserKeyPair.getPrivate());
-            HttpResponse resp = uploadCertificate("localhost", chainData, client, credentials);
+            HttpResponse resp = uploadCertificate("localhost", null, chainData, client, credentials);
             assertTrue(resp.getBodyString().contains("SUCCESS"));
             data = dynCertMan.getCertificateDataForDomain("localhost");
             assertNotNull(data);
             assertTrue(data.isManual());
+            assertTrue(data.isAvailable());
         }
 
         // Request #3: expected last uploaded certificate
@@ -158,6 +159,93 @@ public class CertificatesTest extends UseAdminServer {
         data = dynCertMan.getCertificateDataForDomain("localhost");
         assertNotNull(data);
         assertTrue(data.isManual());
+    }
+
+    @Test
+    @Parameters({"acme", "manual"})
+    public void testUploadTypedCertificate(String type) throws Exception {
+        configureAndStartServer();
+        int port = server.getLocalPort();
+        DynamicCertificatesManager dynCertsMan = server.getDynamicCertificateManager();
+
+        // Uploading certificate without data:
+        // - for type="acme" means creating an order for an ACME certificate
+        // - for type="manual" is forbidden
+        try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
+            HttpResponse resp = uploadCertificate("localhost", "type=" + type, new byte[0], client, credentials);
+            if (type.equals("manual")) {
+                assertTrue(resp.getBodyString().contains("ERROR: certificate data required"));
+            } else {
+                CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost");
+                assertNotNull(data);
+                assertFalse(data.isManual());
+                assertFalse(data.isAvailable()); // no certificate-data uploaded
+                assertEquals(DynamicCertificateState.WAITING, dynCertsMan.getStateOfCertificate("localhost"));
+            }
+        }
+
+        // Uploading certificate with data
+        try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
+            KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+            Certificate[] chain = generateSampleChain(endUserKeyPair, false);
+            byte[] chainData = createKeystore(chain, endUserKeyPair.getPrivate());
+            HttpResponse resp = uploadCertificate("localhost", "type=" + type, chainData, client, credentials);
+            assertTrue(resp.getBodyString().contains("SUCCESS"));
+            CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost");
+            assertNotNull(data);
+            assertEquals(type.equals("manual"), data.isManual());
+            assertTrue(data.isAvailable());
+            assertEquals(DynamicCertificateState.AVAILABLE, dynCertsMan.getStateOfCertificate("localhost"));
+
+            // check uploaded certificate
+            try (RawHttpClient c = new RawHttpClient("localhost", port, true, "localhost")) {
+                RawHttpClient.HttpResponse r = c.get("https://localhost:" + port + "/index.html", credentials);
+                assertEquals("it <b>works</b> !!", r.getBodyString());
+                Certificate[] obtainedChain = c.getServerCertificate();
+                assertNotNull(obtainedChain);
+                assertTrue(chain[0].equals(obtainedChain[0]));
+            }
+        }
+
+        // Uploading trush: bad "type"
+        try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
+            HttpResponse resp = uploadCertificate("localhost", "type=undefined", new byte[0], client, credentials);
+            assertTrue(resp.getBodyString().contains("ERROR: illegal type"));
+        }
+
+        // Uploading same certificate but with different type (will be update)
+        try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
+            String otherType = type.equals("manual") ? "acme" : "manual";
+            KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+            Certificate[] chain = generateSampleChain(endUserKeyPair, false);
+            byte[] chainData = createKeystore(chain, endUserKeyPair.getPrivate());
+            HttpResponse resp = uploadCertificate("localhost", "type=" + otherType, chainData, client, credentials);
+            assertTrue(resp.getBodyString().contains("SUCCESS"));
+            CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost");
+            assertNotNull(data);
+            assertEquals(otherType.equals("manual"), data.isManual());
+            assertTrue(data.isAvailable());
+            assertEquals(DynamicCertificateState.AVAILABLE, dynCertsMan.getStateOfCertificate("localhost"));
+
+            // check uploaded certificate
+            try (RawHttpClient c = new RawHttpClient("localhost", port, true, "localhost")) {
+                RawHttpClient.HttpResponse r = c.get("https://localhost:" + port + "/index.html", credentials);
+                assertEquals("it <b>works</b> !!", r.getBodyString());
+                Certificate[] obtainedChain = c.getServerCertificate();
+                assertNotNull(obtainedChain);
+                assertTrue(chain[0].equals(obtainedChain[0]));
+            }
+
+            resp = uploadCertificate("localhost", "type=" + type, new byte[0], client, credentials);
+            if (type.equals("acme")) {
+                assertTrue(resp.getBodyString().contains("SUCCESS"));
+                data = dynCertsMan.getCertificateDataForDomain("localhost");
+                assertNotNull(data);
+                assertFalse(data.isManual());
+                assertFalse(data.isAvailable()); // no certificate-data uploaded
+                assertEquals(DynamicCertificateState.WAITING, dynCertsMan.getStateOfCertificate("localhost"));
+            }
+        }
     }
 
     private void configureAndStartServer() throws Exception {

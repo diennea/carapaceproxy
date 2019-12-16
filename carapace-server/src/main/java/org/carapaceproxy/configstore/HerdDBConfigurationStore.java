@@ -46,11 +46,11 @@ import org.apache.bookkeeper.stats.StatsLogger;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePrivateKey;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePublicKey;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeKey;
+import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 
 /**
- * Reads/Write the configuration to a JDBC database. This configuration store is able to track versions of configuration
- * properties
+ * Reads/Write the configuration to a JDBC database. This configuration store is able to track versions of configuration properties
  *
  * @author enrico.olivelli
  */
@@ -58,7 +58,7 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
 public class HerdDBConfigurationStore implements ConfigurationStore {
 
     private static final int TIMEOUT_WAIT_FOR_TABLE_SPACE = Integer.getInteger("herd.waitfortablespace.timeout", 1000 * 60 * 5); // default 5 min
-    
+
     public static final String ACME_USER_KEY = "_acmeuserkey";
 
     // Main table
@@ -107,7 +107,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     private final HerdDBEmbeddedDataSource datasource;
 
     public HerdDBConfigurationStore(ConfigurationStore staticConfiguration,
-            boolean cluster, String zkAddress, File baseDir, StatsLogger statsLogger) throws ConfigurationNotValidException {
+                                    boolean cluster, String zkAddress, File baseDir, StatsLogger statsLogger) throws ConfigurationNotValidException {
         this.datasource = buildDatasource(staticConfiguration, cluster, zkAddress, baseDir, statsLogger);
         loadCurrentConfiguration();
     }
@@ -134,7 +134,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     }
 
     private HerdDBEmbeddedDataSource buildDatasource(ConfigurationStore staticConfiguration,
-            boolean cluster, String zkAddress, File baseDir, StatsLogger statsLogger) {
+                                                     boolean cluster, String zkAddress, File baseDir, StatsLogger statsLogger) {
         Properties props = new Properties();
 
         if (cluster) {
@@ -149,7 +149,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             props.setProperty(ServerConfiguration.PROPERTY_BOOKKEEPER_WRITEQUORUMSIZE, replication);
 
             props.setProperty(ClientConfiguration.PROPERTY_MODE, ClientConfiguration.PROPERTY_MODE_CLUSTER);
-            props.setProperty(ClientConfiguration.PROPERTY_ZOOKEEPER_ADDRESS, zkAddress);            
+            props.setProperty(ClientConfiguration.PROPERTY_ZOOKEEPER_ADDRESS, zkAddress);
         }
 
         props.setProperty(ServerConfiguration.PROPERTY_BASEDIR, baseDir.getAbsolutePath());
@@ -334,7 +334,8 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     }
 
     private boolean saveKeyPair(KeyPair pair, String pk, boolean update) {
-        try (Connection con = datasource.getConnection(); PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_KEYPAIR_TABLE); PreparedStatement psUpdate = con.prepareStatement(UPDATE_KEYPAIR_TABLE)) {
+        try (Connection con = datasource.getConnection(); PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_KEYPAIR_TABLE); PreparedStatement psUpdate = con.prepareStatement(
+                UPDATE_KEYPAIR_TABLE)) {
             String privateKey = base64EncodeKey(pair.getPrivate());
             String publicKey = base64EncodeKey(pair.getPublic());
             boolean updateDone = false;
@@ -351,7 +352,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 return psInsert.executeUpdate() > 0;
             }
             return updateDone;
-        } catch (SQLException e ) {
+        } catch (SQLException e) {
             return false;
         }
     }
@@ -372,7 +373,15 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                         String pendingOrder = rs.getString(5);
                         String pendigChallenge = rs.getString(6);
                         boolean available = rs.getInt(7) == 1;
-                        return new CertificateData(domain, privateKey, chain, state, pendingOrder, pendigChallenge, available);
+                        return new CertificateData(
+                                domain,
+                                privateKey,
+                                chain,
+                                DynamicCertificateState.fromStorableFormat(state),
+                                pendingOrder,
+                                pendigChallenge,
+                                available
+                        );
                     }
                 }
                 return null;
@@ -391,7 +400,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             String domain = cert.getDomain();
             String privateKey = cert.getPrivateKey();
             String chain = cert.getChain();
-            String state = cert.getState();
+            String state = cert.getState().toStorableFormat();
             String pendingOrder = cert.getPendingOrderLocation();
             String pendigChallenge = cert.getPendingChallengeData();
             int available = cert.isAvailable() ? 1 : 0;

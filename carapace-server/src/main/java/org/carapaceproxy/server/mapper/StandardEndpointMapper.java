@@ -40,13 +40,13 @@ import static org.carapaceproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SE
 import static org.carapaceproxy.server.StaticContentsManager.DEFAULT_NOT_FOUND;
 import static org.carapaceproxy.server.StaticContentsManager.IN_MEMORY_RESOURCE;
 import org.carapaceproxy.server.backends.BackendHealthManager;
+import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.BackendSelector;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import static org.carapaceproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
-import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
@@ -331,8 +331,6 @@ public class StandardEndpointMapper extends EndpointMapper {
         routes.add(route);
     }
 
-
-
     @Override
     public Map<String, BackendConfiguration> getBackends() {
         return backends;
@@ -457,12 +455,12 @@ public class StandardEndpointMapper extends EndpointMapper {
                 // none of selected backends available
                 if (!selectedBackends.isEmpty()) {
                     return MapResult.INTERNAL_ERROR(route.getId());
+                }
             }
         }
-        }
         // no one route matched
-            return MapResult.NOT_FOUND(MapResult.NO_ROUTE);
-        }
+        return MapResult.NOT_FOUND(MapResult.NO_ROUTE);
+    }
 
     public String getDefaultNotFoundAction() {
         return defaultNotFoundAction;

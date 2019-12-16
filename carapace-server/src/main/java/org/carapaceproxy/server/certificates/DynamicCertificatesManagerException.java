@@ -17,23 +17,19 @@
  under the License.
 
  */
-package org.carapaceproxy.server.certiticates;
+package org.carapaceproxy.server.certificates;
 
 /**
  *
  * @author paolo.venturi
  */
-public enum DynamicCertificateState {
-    WAITING, // certificate waiting for issuing/renews
-    VERIFYING, // challenge verification by LE pending
-    VERIFIED, // challenge succeded
-    ORDERING, // certificate order pending
-    REQUEST_FAILED, // challenge/order failed
-    AVAILABLE, // certificate available(saved) and not expired
-    EXPIRED; // certificate expired
+public final class DynamicCertificatesManagerException extends RuntimeException {
 
-    @Override
-    public String toString() {
-        return super.toString().toLowerCase().replaceAll("_", " ");
+    public DynamicCertificatesManagerException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    public DynamicCertificatesManagerException(String message) {
+        super(message);
     }
 }

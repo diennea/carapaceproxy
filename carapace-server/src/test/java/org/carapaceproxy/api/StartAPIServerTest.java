@@ -27,12 +27,11 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Properties;
 import javax.servlet.http.HttpServletResponse;
-import static org.carapaceproxy.api.CertificatesResource.stateToStatusString;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
-import org.carapaceproxy.server.certiticates.DynamicCertificateState;
-import static org.carapaceproxy.server.certiticates.DynamicCertificateState.WAITING;
-import org.carapaceproxy.server.certiticates.DynamicCertificatesManager;
+import org.carapaceproxy.server.certificates.DynamicCertificateState;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
+import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchAllRequestMatcher;
 import org.carapaceproxy.server.filters.RegexpMapSessionIdFilter;
 import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;
@@ -51,6 +50,7 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
+import static org.carapaceproxy.utils.APIUtils.certificateStateToString;
 
 /**
  *
@@ -286,7 +286,7 @@ public class StartAPIServerTest extends UseAdminServer {
 
         ConfigurationStore store = server.getDynamicConfigurationStore();
         // need to explicitly add 'cause DynamicCertificatesManager never run
-        store.saveCertificate(new CertificateData(dynDomain, "", "", WAITING.name(), "", "", false));
+        store.saveCertificate(new CertificateData(dynDomain, "", "", WAITING, "", "", false));
 
         // Static certificates
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
@@ -346,14 +346,14 @@ public class StartAPIServerTest extends UseAdminServer {
                 assertThat(json, containsString(dynDomain));
                 assertThat(json, containsString("\"mode\":\"acme\""));
                 assertThat(json, containsString("\"dynamic\":true"));
-                assertThat(json, containsString("\"status\":\"" + stateToStatusString(state) + "\""));
+                assertThat(json, containsString("\"status\":\"" + certificateStateToString(state) + "\""));
 
                 response = client.get("/api/certificates/" + dynDomain, credentials);
                 json = response.getBodyString();
                 assertThat(json, containsString(dynDomain));
                 assertThat(json, containsString("\"mode\":\"acme\""));
                 assertThat(json, containsString("\"dynamic\":true"));
-                assertThat(json, containsString("\"status\":\"" + stateToStatusString(state) + "\""));
+                assertThat(json, containsString("\"status\":\"" + certificateStateToString(state) + "\""));
             }
 
             // Downloading
@@ -372,13 +372,13 @@ public class StartAPIServerTest extends UseAdminServer {
             int certsCount = server.getCurrentConfiguration().getCertificates().size();
 
             // Uploading trash-stuff
-            RawHttpClient.HttpResponse resp = uploadCertificate(manualDomain, "fake-chain".getBytes(), client, credentials);
+            RawHttpClient.HttpResponse resp = uploadCertificate(manualDomain, null, "fake-chain".getBytes(), client, credentials);
             String s = resp.getBodyString();
             assertTrue(s.contains("ERROR"));
 
             // Uploading real certificate
             byte[] chain1 = generateSampleChainData();
-            resp = uploadCertificate(manualDomain, chain1, client, credentials);
+            resp = uploadCertificate(manualDomain, null, chain1, client, credentials);
             s = resp.getBodyString();
             assertTrue(s.contains("SUCCESS"));
 
@@ -410,7 +410,7 @@ public class StartAPIServerTest extends UseAdminServer {
             // Uploading
             byte[] chain2 = generateSampleChainData();
             assertFalse(Arrays.equals(chain1,chain2));
-            resp = uploadCertificate(manualDomain, chain2, client, credentials);
+            resp = uploadCertificate(manualDomain, null, chain2, client, credentials);
             s = resp.getBodyString();
             assertTrue(s.contains("SUCCESS"));
 
