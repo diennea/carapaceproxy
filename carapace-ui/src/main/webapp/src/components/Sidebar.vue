@@ -135,14 +135,13 @@ export default {
 
 #sidebar-elements {
     overflow-x: hidden;
-    min-height: 70vh;
-    max-height: 70vh;
-    margin: 7.5vh auto;
+    min-height: 73vh;
+    max-height: 73vh;
+    margin: 7vh auto;
 
     li {
         font-size: 1.1rem;
-        padding: 0.75rem;
-        display: flex;
+        padding: 0.5rem 0.75rem;
         position: relative;
         border: 0.25rem solid transparent;
 
