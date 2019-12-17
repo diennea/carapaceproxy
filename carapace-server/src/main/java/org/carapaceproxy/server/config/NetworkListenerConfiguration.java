@@ -34,12 +34,12 @@ public class NetworkListenerConfiguration {
     private final String host;
     private final int port;
     private final boolean ssl;
-    private final boolean ocps;
+    private final boolean ocsp;
     private final String sslCiphers;
     private final String defaultCertificate;
     private final String sslTrustoreFile;
     private final String sslTrustorePassword;
-    private String[] sslProtocols;
+    private String[] sslProtocols = new String[0];
 
     public HostPort getKey() {
         return new HostPort(host, port);
@@ -104,31 +104,32 @@ public class NetworkListenerConfiguration {
         this.port = port;
         this.ssl = false;
         this.sslCiphers = null;
-        this.ocps = false;
+        this.ocsp = false;
         this.defaultCertificate = null;
         this.sslTrustoreFile = null;
         this.sslTrustorePassword = null;
-        this.sslProtocols = DEFAULT_SSL_PROTOCOLS.toArray(new String[0]);
     }
 
-    public NetworkListenerConfiguration(String host, int port, boolean ssl, boolean ocps, String sslCiphers, String defaultCertificate, String sslTrustoreFile, String sslTrustorePassword) {
+    public NetworkListenerConfiguration(String host, int port, boolean ssl, boolean ocsp, String sslCiphers, String defaultCertificate, String sslTrustoreFile, String sslTrustorePassword) {
         this(
-                host, port, ssl, ocps, sslCiphers, defaultCertificate,
+                host, port, ssl, ocsp, sslCiphers, defaultCertificate,
                 sslTrustoreFile, sslTrustorePassword, DEFAULT_SSL_PROTOCOLS.toArray(new String[0])
         );
     }
 
-    public NetworkListenerConfiguration(String host, int port, boolean ssl, boolean ocps, String sslCiphers, String defaultCertificate, String sslTrustoreFile, String sslTrustorePassword,
+    public NetworkListenerConfiguration(String host, int port, boolean ssl, boolean ocsp, String sslCiphers, String defaultCertificate, String sslTrustoreFile, String sslTrustorePassword,
                                         String... sslProtocols) {
         this.host = host;
         this.port = port;
         this.ssl = ssl;
-        this.ocps = ocps;
+        this.ocsp = ocsp;
         this.sslCiphers = sslCiphers;
         this.defaultCertificate = defaultCertificate;
         this.sslTrustoreFile = sslTrustoreFile;
         this.sslTrustorePassword = sslTrustorePassword;
-        this.sslProtocols = sslProtocols;
+        if (ssl) {
+            this.sslProtocols = sslProtocols;
+       }
     }
 
     public String getSslTrustoreFile() {
@@ -155,8 +156,8 @@ public class NetworkListenerConfiguration {
         return ssl;
     }
 
-    public boolean isOcps() {
-        return ocps;
+    public boolean isOcsp() {
+        return ocsp;
     }
 
     public String getSslCiphers() {
@@ -177,7 +178,7 @@ public class NetworkListenerConfiguration {
         hash = 89 * hash + Objects.hashCode(this.host);
         hash = 89 * hash + this.port;
         hash = 89 * hash + (this.ssl ? 1 : 0);
-        hash = 89 * hash + (this.ocps ? 1 : 0);
+        hash = 89 * hash + (this.ocsp ? 1 : 0);
         hash = 89 * hash + Objects.hashCode(this.sslCiphers);
         hash = 89 * hash + Objects.hashCode(this.defaultCertificate);
         hash = 89 * hash + Objects.hashCode(this.sslTrustoreFile);
@@ -204,7 +205,7 @@ public class NetworkListenerConfiguration {
         if (this.ssl != other.ssl) {
             return false;
         }
-        if (this.ocps != other.ocps) {
+        if (this.ocsp != other.ocsp) {
             return false;
         }
         if (!Objects.equals(this.host, other.host)) {

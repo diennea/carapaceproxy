@@ -139,7 +139,7 @@ function mockRequest(url) {
                     host: "0.0.0.0",
                     port: 4089,
                     ssl: true,
-                    ocps: true,
+                    ocsp: true,
                     sslCiphers: "ciph1",
                     defaultCertificate: "*"
                 },
@@ -147,7 +147,7 @@ function mockRequest(url) {
                     host: "0.0.0.0",
                     port: 8089,
                     ssl: false,
-                    ocps: true,
+                    ocsp: true,
                     sslCiphers: "ciph2",
                     defaultCertificate: "*"
                 }
