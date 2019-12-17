@@ -318,13 +318,13 @@ public class RuntimeServerConfiguration {
 
         if (port > 0) {
             boolean ssl = Boolean.parseBoolean(properties.getProperty(prefix + "ssl", "false"));
-            boolean ocps = Boolean.parseBoolean(properties.getProperty(prefix + "ocps", "true"));
+            boolean ocsp = Boolean.parseBoolean(properties.getProperty(prefix + "ocsp", "false"));
             String trustStoreFile = properties.getProperty(prefix + "ssltruststorefile", "");
             String trustStorePassword = properties.getProperty(prefix + "ssltruststorepassword", "");
             String sslciphers = properties.getProperty(prefix + "sslciphers", "");
             String defautlSslCertificate = properties.getProperty(prefix + "defaultcertificate", "*");
             NetworkListenerConfiguration config = new NetworkListenerConfiguration(
-                    host, port, ssl, ocps, sslciphers, defautlSslCertificate, trustStoreFile, trustStorePassword
+                    host, port, ssl, ocsp, sslciphers, defautlSslCertificate, trustStoreFile, trustStorePassword
             );
             if (ssl) {
                 String _sslProtocols = properties.getProperty(prefix + "sslprotocols", "");

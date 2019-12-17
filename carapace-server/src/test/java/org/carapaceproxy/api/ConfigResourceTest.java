@@ -63,7 +63,7 @@ public class ConfigResourceTest extends UseAdminServer {
                 + "listener.2.defaultcertificate=*\n"
                 + "listener.2.enabled=true\n"
                 + "listener.2.host=0.0.0.0\n"
-                + "listener.2.ocps=true\n"
+                + "listener.2.ocsp=true\n"
                 + "listener.2.port=4089\n"
                 + "listener.2.ssl=false";
             resp = client.executeRequest("POST /api/config/apply HTTP/1.1\r\n"
@@ -87,7 +87,7 @@ public class ConfigResourceTest extends UseAdminServer {
             dumpedToReApply = dumpedToReApply.replace("dynamiccertificatesmanager.period=45", "dynamiccertificatesmanager.period=30");
             dumpedToReApply += "listener.3.enabled=true\n"
                 + "listener.3.host=0.0.0.1\n"
-                + "listener.3.ocps=true\n"
+                + "listener.3.ocsp=true\n"
                 + "listener.3.port=4090\n"
                 + "listener.3.ssl=false";
 
