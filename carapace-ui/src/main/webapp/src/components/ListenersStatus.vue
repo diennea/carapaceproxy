@@ -39,8 +39,8 @@ export default {
                     formatter: toBooleanSymbol
                 },
                 {
-                    key: "ocps",
-                    label: "OCPS",
+                    key: "ocsp",
+                    label: "OCSP",
                     sortable: true,
                     formatter: toBooleanSymbol
                 },

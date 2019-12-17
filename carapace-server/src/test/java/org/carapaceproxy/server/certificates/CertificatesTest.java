@@ -273,7 +273,7 @@ public class CertificatesTest extends UseAdminServer {
         config.put("listener.1.host", "localhost");
         config.put("listener.1.port", "8443");
         config.put("listener.1.ssl", "true");
-        config.put("listener.1.ocps", "false");
+        config.put("listener.1.ocsp", "false");
         config.put("listener.1.enabled", "true");
         config.put("listener.1.defaultcertificate", "*");
 

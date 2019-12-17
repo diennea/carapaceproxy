@@ -127,7 +127,7 @@ public class Listeners {
             // Try to find certificate data on db
             byte[] keystoreContent = parent.getDynamicCertificateManager().getCertificateForDomain(domain);
             if (keystoreContent != null) {
-                LOG.log(Level.SEVERE, "start SSL with dynamic certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + port + " OCPS " + listener.isOcps());
+                LOG.log(Level.INFO, "start SSL with dynamic certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + port + " OCSP " + listener.isOcsp());
                 keyFactory = initKeyManagerFactory("PKCS12", keystoreContent, certificate.getPassword());
             } else {
                 if (certificate.isDynamic()) { // fallback to default certificate
@@ -139,24 +139,24 @@ public class Listeners {
                 String certificateFile = certificate.getFile();
                 File sslCertFile = certificateFile.startsWith("/") ? new File(certificateFile) : new File(basePath, certificateFile);
                 sslCertFile = sslCertFile.getAbsoluteFile();
-                LOG.log(Level.SEVERE, "start SSL with certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + port + " file=" + sslCertFile + " OCPS " + listener.isOcps());
+                LOG.log(Level.INFO, "start SSL with certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + port + " file=" + sslCertFile + " OCSP " + listener.isOcsp());
                 keyFactory = initKeyManagerFactory("PKCS12", sslCertFile, certificate.getPassword());
             }
 
             TrustManagerFactory trustManagerFactory = null;
             if (caFileConfigured) {
-                LOG.log(Level.SEVERE, "loading trustore from " + trustStoreCertFile);
+                LOG.log(Level.INFO, "loading trustore from " + trustStoreCertFile);
                 trustManagerFactory = initTrustManagerFactory("PKCS12", trustStoreCertFile, trustStrorePassword);
             }
 
             List<String> ciphers = null;
             if (sslCiphers != null && !sslCiphers.isEmpty()) {
-                LOG.log(Level.SEVERE, "required sslCiphers " + sslCiphers);
+                LOG.log(Level.INFO, "required sslCiphers " + sslCiphers);
                 ciphers = Arrays.asList(sslCiphers.split(","));
             }
             return SslContextBuilder
                             .forServer(keyFactory)
-                            .enableOcsp(listener.isOcps() && OpenSsl.isOcspSupported())
+                            .enableOcsp(listener.isOcsp() && OpenSsl.isOcspSupported())
                             .trustManager(trustManagerFactory)
                             .sslProvider(SslProvider.OPENSSL)
                             .protocols(listener.getSslProtocols())

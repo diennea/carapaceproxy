@@ -49,7 +49,7 @@ public class ListenersResource {
         private final String host;
         private final int port;
         private final boolean ssl;
-        private final boolean ocps;
+        private final boolean ocsp;
         private final String sslCiphers;
         private final String[] sslProtocols;
         private final String defaultCertificate;
@@ -59,7 +59,7 @@ public class ListenersResource {
             this.host = host;
             this.port = port;
             this.ssl = ssl;
-            this.ocps = ocps;
+            this.ocsp = ocps;
             this.sslCiphers = sslCiphers;
             this.sslProtocols = sslProtocols;
             this.defaultCertificate = defaultCertificate;
@@ -78,8 +78,8 @@ public class ListenersResource {
             return ssl;
         }
 
-        public boolean isOcps() {
-            return ocps;
+        public boolean isOcsp() {
+            return ocsp;
         }
 
         public String getSslCiphers() {
@@ -118,7 +118,7 @@ public class ListenersResource {
                     listener.getHost(),
                     port,
                     listener.isSsl(),
-                    listener.isOcps(),
+                    listener.isOcsp(),
                     listener.getSslCiphers(),
                     listener.getSslProtocols(),
                     listener.getDefaultCertificate(),

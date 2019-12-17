@@ -158,7 +158,7 @@ public class BackendHealthManager implements Runnable {
                 }
             } else {
                 if (status.isReportedAsUnreachable()) {
-                    LOG.log(Level.INFO, "backend {0} still unreachable. Cause: {1}", new Object[]{status.getHostPort(), checkResult.getHttpResponse()});
+                    LOG.log(Level.FINE, "backend {0} still unreachable. Cause: {1}", new Object[]{status.getHostPort(), checkResult.getHttpResponse()});
                 } else {
                     LOG.log(Level.WARNING, "backend {0} became unreachable. Cause: {1}", new Object[]{status.getHostPort(), checkResult.getHttpResponse()});
                     reportBackendUnreachable(status.getHostPort(), checkResult.getEndTs(), checkResult.getHttpResponse());

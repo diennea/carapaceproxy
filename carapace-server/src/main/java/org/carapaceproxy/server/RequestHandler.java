@@ -638,7 +638,6 @@ public class RequestHandler implements MatchingContext {
                     String transferEncoding = httpMessage.headers().get(HttpHeaderNames.TRANSFER_ENCODING);
                     if (contentLength < 0 && !"chunked".equals(transferEncoding)) {
                         connectionToClient.keepAlive = false;
-                        LOG.log(Level.SEVERE, uri + " response without contentLength{0} and with Transfer-Encoding {1}. keepalive will be disabled " + msg, new Object[]{contentLength, transferEncoding});
                     }
                 }
             }
