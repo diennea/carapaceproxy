@@ -86,7 +86,7 @@ public class ConfigResourceTest extends UseAdminServer {
             // 3) Update config file + re-Applying
             dumpedToReApply = dumpedToReApply.replace("dynamiccertificatesmanager.period=45", "dynamiccertificatesmanager.period=30");
             dumpedToReApply += "listener.3.enabled=true\n"
-                + "listener.3.host=0.0.0.1\n"
+                + "listener.3.host=127.0.0.1\n"
                 + "listener.3.ocsp=true\n"
                 + "listener.3.port=4090\n"
                 + "listener.3.ssl=false";
