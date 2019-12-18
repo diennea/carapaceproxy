@@ -20,8 +20,6 @@
 package org.carapaceproxy.server.cache;
 
 import com.github.benmanes.caffeine.cache.RemovalCause;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -88,20 +86,6 @@ public class CaffeineCacheImplTest {
         });
     }
 
-    public static void setFinalField(Object o, String name, Object newValue) {
-        try {
-            Field field = o.getClass().getDeclaredField(name);
-            field.setAccessible(true);
-
-            Field modifiersField = Field.class.getDeclaredField("modifiers");
-            modifiersField.setAccessible(true);
-            modifiersField.setInt(field, field.getModifiers() & ~Modifier.FINAL);
-            field.set(o, newValue);
-        } catch (Exception ex) {
-            throw new RuntimeException(ex);
-        }
-    }
-
     private static final class CacheEntry {
 
         final ContentKey key;
@@ -116,7 +100,7 @@ public class CaffeineCacheImplTest {
                 this.key = key;
                 this.payload = new ContentPayload();
                 this.payload.chunks.addAll(payload.chunks);
-                setFinalField(this.payload, "creationTs", payload.creationTs);
+                TestUtils.setFinalField(this.payload, "creationTs", payload.creationTs);
                 this.payload.directSize = payload.directSize;
                 this.payload.expiresTs = payload.expiresTs;
                 this.payload.heapSize = payload.heapSize;

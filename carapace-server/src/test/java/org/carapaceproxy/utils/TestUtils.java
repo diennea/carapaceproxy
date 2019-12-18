@@ -25,6 +25,14 @@ import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.junit.Assert;
 import static org.junit.Assert.assertTrue;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import sun.misc.Unsafe;
 
 /**
  * Utility for tests
@@ -175,5 +183,59 @@ public class TestUtils {
         String message = String.format("expected %s to be thrown, but nothing was thrown",
                 expectedThrowable.getSimpleName());
         throw new AssertionError(message);
+    }
+
+    public static void setFinalStaticField(Class clazz, String name, Object newValue) {
+        try {
+            Field field = clazz.getDeclaredField(name);
+            field.setAccessible(true);
+            int fieldModifiersMask = field.getModifiers();
+            boolean isFinalModifierPresent = (fieldModifiersMask & Modifier.FINAL) == Modifier.FINAL;
+            if (isFinalModifierPresent) {
+                AccessController.doPrivileged((PrivilegedAction) (() -> {
+                    try {
+                        Field field1 = Unsafe.class.getDeclaredField("theUnsafe");
+                        field1.setAccessible(true);
+                        Unsafe unsafe = (Unsafe) field1.get(null);
+                        long offset = unsafe.staticFieldOffset(field);
+                        unsafe.putObject(unsafe.staticFieldBase(field), offset, newValue);
+                        return null;
+                    } catch (Throwable t) {
+                        throw new RuntimeException("Cannot patch final static field " + name + " on " + clazz + " with value " + newValue + ": " + t, t);
+                    }
+                }));
+            } else {
+                throw new RuntimeException("Field " + field + " is not final");
+            }
+        } catch (NoSuchFieldException | SecurityException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    public static void setFinalField(Object object, String name, Object newValue) {
+        try {
+            Field field = object.getClass().getDeclaredField(name);
+            field.setAccessible(true);
+            int fieldModifiersMask = field.getModifiers();
+            boolean isFinalModifierPresent = (fieldModifiersMask & Modifier.FINAL) == Modifier.FINAL;
+            if (isFinalModifierPresent) {
+                AccessController.doPrivileged((PrivilegedAction) (() -> {
+                    try {
+                        Field field1 = Unsafe.class.getDeclaredField("theUnsafe");
+                        field1.setAccessible(true);
+                        Unsafe unsafe = (Unsafe) field1.get(null);
+                        long offset = unsafe.objectFieldOffset(field);
+                        unsafe.putObject(object, offset, newValue);
+                        return null;
+                    } catch (Throwable t) {
+                        throw new RuntimeException("Cannot patch final field " + name + " on " + object + " with value " + newValue + ": " + t, t);
+                    }
+                }));
+            } else {
+                throw new RuntimeException("Field " + field + " is not final");
+            }
+        } catch (NoSuchFieldException | SecurityException ex) {
+            throw new RuntimeException(ex);
+        }
     }
 }
