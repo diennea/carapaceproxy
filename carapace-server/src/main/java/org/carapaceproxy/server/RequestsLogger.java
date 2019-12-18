@@ -46,40 +46,40 @@ import org.stringtemplate.v4.STWriter;
  * @author francesco.caliumi
  */
 public class RequestsLogger implements Runnable, Closeable {
-    
+
     private static final Logger LOG = Logger.getLogger(ContentsCache.class.getName());
-    
+
     private final BlockingQueue<Entry> queue;
-    
+
     private volatile RuntimeServerConfiguration currentConfiguration;
     private volatile RuntimeServerConfiguration newConfiguration = null;
     private volatile boolean closeRequested = false;
     private volatile boolean closed = false;
-    
+
     private boolean started = false;
     private final Thread thread;
-    
+
     private OutputStream os = null;
     private OutputStreamWriter osw = null;
     private BufferedWriter bw = null;
     private STWriter stw = null;
-    
+
     public long lastFlush = 0;
-    
+
     private boolean verbose = false;
     private boolean breakRunForTests = false;
-    
+
     public RequestsLogger(RuntimeServerConfiguration currentConfiguration) {
         this.currentConfiguration = currentConfiguration;
         this.queue = new ArrayBlockingQueue<>(this.currentConfiguration.getAccessLogMaxQueueCapacity());
         this.thread = new Thread(this);
     }
-    
+
     private void ensureAccessLogFileOpened() throws IOException {
         if (os != null) {
             return;
         }
-        
+
         if (verbose) {
             LOG.log(Level.INFO, "Opening file: {0}", currentConfiguration.getAccessLogPath());
         }
@@ -88,7 +88,7 @@ public class RequestsLogger implements Runnable, Closeable {
         bw = new BufferedWriter(osw);
         stw = new NoIndentWriter(bw);
     }
-    
+
     @VisibleForTesting
     void flushAccessLogFile() throws IOException {
         if (verbose) {
@@ -105,7 +105,7 @@ public class RequestsLogger implements Runnable, Closeable {
         }
         lastFlush = System.currentTimeMillis();
     }
-    
+
     private void closeAccessLogFile() throws IOException {
         if (verbose) {
             LOG.log(Level.INFO, "Closing file");
@@ -126,16 +126,16 @@ public class RequestsLogger implements Runnable, Closeable {
             os = null;
         }
     }
-    
+
     public void reloadConfiguration(RuntimeServerConfiguration newConfiguration) {
         this.newConfiguration = newConfiguration;
     }
-    
+
     private void _reloadConfiguration() throws IOException {
         if (newConfiguration == null) {
             return;
         }
-        
+
         if (verbose) {
             LOG.log(Level.INFO, "Reloading conf");
         }
@@ -150,19 +150,19 @@ public class RequestsLogger implements Runnable, Closeable {
         }
         newConfiguration = null;
     }
-    
+
     public void logRequest(RequestHandler request) {
         Entry entry = new Entry(
             request, currentConfiguration.getAccessLogFormat(), currentConfiguration.getAccessLogTimestampFormat());
-        
+
         if (closeRequested) {
             LOG.log(Level.SEVERE, "Request {0} not logged to access log because RequestsLogger is closed", entry.render());
             return;
         }
-        
+
         // If configuration reloads already created entries will keep a possibile old format, but it doesn't really matter
         boolean ret = queue.offer(entry);
-        
+
         if (!ret) {
             LOG.log(Level.SEVERE, "Request {0} not logged to access log because queue is full", entry.render());
         }
@@ -172,7 +172,7 @@ public class RequestsLogger implements Runnable, Closeable {
     void setBreakRunForTests(boolean breakRunForTests) {
         this.breakRunForTests = breakRunForTests;
     }
- 
+
     @VisibleForTesting
     void setVerbose(boolean verbose) {
         this.verbose = verbose;
@@ -190,7 +190,7 @@ public class RequestsLogger implements Runnable, Closeable {
         thread.start();
         started = true;
     }
-    
+
     public void stop() {
         close();
         try {
@@ -199,18 +199,18 @@ public class RequestsLogger implements Runnable, Closeable {
             LOG.log(Level.SEVERE, "Interrupted while stopping");
         }
     }
-    
+
     @Override
     public void run() {
         if (lastFlush == 0) {
             lastFlush = System.currentTimeMillis();
         }
-        
+
         Entry currentEntry = null;
         while (!closed) {
             try {
                 _reloadConfiguration();
-                
+
                 try {
                     ensureAccessLogFileOpened();
                 } catch (IOException ex) {
@@ -223,16 +223,16 @@ public class RequestsLogger implements Runnable, Closeable {
                     }
                     continue;
                 }
-                
-                long waitTime = !closeRequested ? 
+
+                long waitTime = !closeRequested ?
                     currentConfiguration.getAccessLogFlushInterval() - (System.currentTimeMillis() - lastFlush) :
                     0L;
                 waitTime = Math.max(waitTime, 0L);
-                
+
                 if (currentEntry == null) {
                     currentEntry = queue.poll(waitTime, TimeUnit.MILLISECONDS);
                 }
-                
+
                 if (currentEntry != null) {
                     if (verbose) {
                         LOG.log(Level.INFO, "writing entry: {0}", currentEntry.render());
@@ -245,11 +245,11 @@ public class RequestsLogger implements Runnable, Closeable {
                         closed = true;
                     }
                 }
-                
+
                 if (System.currentTimeMillis() - lastFlush >= currentConfiguration.getAccessLogFlushInterval()) {
                     flushAccessLogFile();
                 }
-                
+
             } catch (InterruptedException ex) {
                 LOG.log(Level.SEVERE, "Interrupt received");
                 try {
@@ -258,7 +258,7 @@ public class RequestsLogger implements Runnable, Closeable {
                     LOG.log(Level.SEVERE, null, ex1);
                 }
                 closed = true;
-                
+
             } catch (IOException ex) {
                 LOG.log(Level.SEVERE, "Exception while writing on access log file");
                 LOG.log(Level.SEVERE, null, ex);
@@ -269,7 +269,7 @@ public class RequestsLogger implements Runnable, Closeable {
                     LOG.log(Level.SEVERE, null, ex1);
                 }
                 // File opening will be retried at next cycle start
-                
+
                 try {
                     Thread.sleep(currentConfiguration.getAccessLogFlushInterval());
                     lastFlush = System.currentTimeMillis();
@@ -277,15 +277,15 @@ public class RequestsLogger implements Runnable, Closeable {
                     closed = true;
                 }
             }
-            
+
             if (breakRunForTests) {
                 break;
             }
         }
     }
-    
+
     /* ---------------------------------------------------------------------------------------------------- */
-    
+
     /*
         Entry handled fields:
             <client_ip>: client ip address
@@ -293,7 +293,7 @@ public class RequestsLogger implements Runnable, Closeable {
             <method>: http method
             <host>: host header of the http request
             <uri>: uri requested in the http request
-            <timestamp>: when httpproxy started to serving the request 
+            <timestamp>: when httpproxy started to serving the request
             <backend_time>: milliseconds from request start to the first byte received from the backend
             <total_time>: milliseconds from request start to the last byte sended to client (tcp delays are not counted)
             <action_id>: action id (PROXY, CACHE, ...)
@@ -301,9 +301,11 @@ public class RequestsLogger implements Runnable, Closeable {
             <backend_id>: id (host+port) of the backend to which the request was forwarded
             <user_id>: user id inferred by filters
             <session_id>: session id inferred by filters
+            <tls_protocol>: tls protocol used
+            <tls_cipher_suite>: cipher suite used
     */
     static final class Entry {
-        
+
         private final ST format;
 
         public Entry(RequestHandler request, String format, String timestampFormat) {
@@ -329,6 +331,23 @@ public class RequestsLogger implements Runnable, Closeable {
                 this.format.add("backend_id", "CACHED");
                 this.format.add("backend_time", "0");
             }
+            formatSSLProperties(request);
+        }
+
+        private void formatSSLProperties(RequestHandler request) {
+            String sslProtocol = "n/a";
+            String cipherSuite = "n/a";
+            ClientConnectionHandler handler = request.getClientConnectionHandler();
+            if (handler != null && handler.isSecure()) {
+                if (handler.getSslProtocol() != null) {
+                    sslProtocol = handler.getSslProtocol();
+                }
+                if (handler.getCipherSuite() != null) {
+                    cipherSuite = handler.getCipherSuite();
+                }
+            }
+            this.format.add("tls_protocol", sslProtocol);
+            this.format.add("tls_cipher_suite", cipherSuite);
         }
 
         @VisibleForTesting

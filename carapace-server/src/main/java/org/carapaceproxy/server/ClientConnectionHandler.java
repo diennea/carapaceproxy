@@ -26,6 +26,7 @@ import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.LastHttpContent;
+import io.netty.handler.ssl.SslHandler;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import java.net.SocketAddress;
@@ -71,6 +72,8 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     private final String listenerHost;
     private final int listenerPort;
     private final boolean secure; // connection bind to https
+    private String sslProtocol;
+    private String cipherSuite;
 
     public ClientConnectionHandler(
             EndpointMapper mapper,
@@ -141,6 +144,9 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
                 this.keepAlive = false;
                 refuseOtherRequests = true;
             }
+            if (secure) {
+                detectSSLProperties(ctx);
+            }
             RequestHandler currentRequest = new RequestHandler(requestIdGenerator.incrementAndGet(),
                     request, filters, this, ctx, () -> RUNNING_REQUESTS_GAUGE.dec(), backendHealthManager, requestsLogger);
             addPendingRequest(currentRequest);
@@ -171,6 +177,19 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         }
     }
 
+    private void detectSSLProperties(ChannelHandlerContext ctx) {
+        SslHandler handler = ctx.channel().pipeline().get(SslHandler.class);
+        if (handler == null) {
+            return;
+        }
+        if (sslProtocol == null) {
+            sslProtocol = handler.engine().getSession().getProtocol();
+        }
+        if (cipherSuite == null) {
+            cipherSuite = handler.engine().getSession().getCipherSuite();
+        }
+    }
+
     void closeIfNotKeepAlive(final ChannelHandlerContext channelToClient) {
         if (!keepAlive) {
             refuseOtherRequests = true;
@@ -192,6 +211,14 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
 
     public boolean isSecure() {
         return secure;
+    }
+
+    public String getSslProtocol() {
+        return sslProtocol;
+    }
+
+    public String getCipherSuite() {
+        return cipherSuite;
     }
 
     public int getTotalRequestsCount() {
@@ -216,5 +243,5 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     void addPendingRequest(RequestHandler request) {
         pendingRequests.add(request);
     }
-    
+
 }
