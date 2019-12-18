@@ -205,9 +205,9 @@ public class TestUtils {
                     }
                 }));
             } else {
-                throw new RuntimeException("Field " + field + " is not final");
+                field.set(null, newValue);
             }
-        } catch (NoSuchFieldException | SecurityException ex) {
+        } catch (NoSuchFieldException | SecurityException | IllegalAccessException | IllegalArgumentException ex) {
             throw new RuntimeException(ex);
         }
     }
@@ -232,9 +232,9 @@ public class TestUtils {
                     }
                 }));
             } else {
-                throw new RuntimeException("Field " + field + " is not final");
+                field.set(object, newValue);
             }
-        } catch (NoSuchFieldException | SecurityException ex) {
+        } catch (NoSuchFieldException | SecurityException | IllegalAccessException | IllegalArgumentException ex) {
             throw new RuntimeException(ex);
         }
     }
