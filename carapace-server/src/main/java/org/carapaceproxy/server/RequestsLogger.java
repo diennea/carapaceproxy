@@ -301,8 +301,8 @@ public class RequestsLogger implements Runnable, Closeable {
             <backend_id>: id (host+port) of the backend to which the request was forwarded
             <user_id>: user id inferred by filters
             <session_id>: session id inferred by filters
-            <ssl_protocol>: ssl protocol used
-            <cipher_suite>: cipher suite used
+            <tls_protocol>: tls protocol used
+            <tls_cipher_suite>: cipher suite used
     */
     static final class Entry {
 
@@ -331,11 +331,23 @@ public class RequestsLogger implements Runnable, Closeable {
                 this.format.add("backend_id", "CACHED");
                 this.format.add("backend_time", "0");
             }
+            formatSSLProperties(request);
+        }
+
+        private void formatSSLProperties(RequestHandler request) {
+            String sslProtocol = "n/a";
+            String cipherSuite = "n/a";
             ClientConnectionHandler handler = request.getClientConnectionHandler();
             if (handler != null && handler.isSecure()) {
-                this.format.add("ssl_protocol", handler.getSslProtocol());
-                this.format.add("cipher_suite", handler.getCipherSuite());
+                if (handler.getSslProtocol() != null) {
+                    sslProtocol = handler.getSslProtocol();
+                }
+                if (handler.getCipherSuite() != null) {
+                    cipherSuite = handler.getCipherSuite();
+                }
             }
+            this.format.add("tls_protocol", sslProtocol);
+            this.format.add("tls_cipher_suite", cipherSuite);
         }
 
         @VisibleForTesting

@@ -144,12 +144,8 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
                 this.keepAlive = false;
                 refuseOtherRequests = true;
             }
-            if (secure && sslProtocol == null) {
-                SslHandler handler = ctx.channel().pipeline().get(SslHandler.class);
-                if (handler != null) {
-                    sslProtocol = handler.engine().getSession().getProtocol();
-                    cipherSuite = handler.engine().getSession().getCipherSuite();
-                }
+            if (secure) {
+                detectSSLProperties(ctx);
             }
             RequestHandler currentRequest = new RequestHandler(requestIdGenerator.incrementAndGet(),
                     request, filters, this, ctx, () -> RUNNING_REQUESTS_GAUGE.dec(), backendHealthManager, requestsLogger);
@@ -178,6 +174,19 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
                 refuseOtherRequests = true;
                 ctx.close();
             }
+        }
+    }
+
+    private void detectSSLProperties(ChannelHandlerContext ctx) {
+        SslHandler handler = ctx.channel().pipeline().get(SslHandler.class);
+        if (handler == null) {
+            return;
+        }
+        if (sslProtocol == null) {
+            sslProtocol = handler.engine().getSession().getProtocol();
+        }
+        if (cipherSuite == null) {
+            cipherSuite = handler.engine().getSession().getCipherSuite();
         }
     }
 
