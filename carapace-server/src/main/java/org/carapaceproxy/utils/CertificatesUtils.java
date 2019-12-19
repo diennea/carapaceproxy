@@ -26,6 +26,7 @@ import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
+import java.util.Iterator;
 
 /**
  * Utilitis for Certificates storing as Keystores
@@ -71,6 +72,23 @@ public final class CertificatesUtils {
         } catch (IOException ex) {
             throw new GeneralSecurityException(ex);
         }
+    }
+
+    /**
+     *
+     * @param keystore keystore.
+     * @return certificate chain contained into the keystore.
+     * @throws GeneralSecurityException
+     */
+    public static Certificate[] readFromKeystore(KeyStore keystore) throws GeneralSecurityException {
+        Iterator<String> iter = keystore.aliases().asIterator();
+        while (iter.hasNext()) {
+            Certificate[] chain = keystore.getCertificateChain(iter.next());
+            if (chain != null && chain.length > 0) {
+                return chain;
+            }
+        }
+        return new Certificate[0];
     }
 
     /**
