@@ -78,6 +78,7 @@ public class RuntimeServerConfiguration {
     private int dynamicCertificatesManagerPeriod = 0;
     private int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
     private List<String> supportedSSLProtocols = null;
+    private int ocspStaplingManagerPeriod = 0;
 
     public String getAccessLogPath() {
         return accessLogPath;
@@ -221,6 +222,10 @@ public class RuntimeServerConfiguration {
         return keyPairsSize;
     }
 
+    public int getOcspStaplingManagerPeriod() {
+        return ocspStaplingManagerPeriod;
+    }
+
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
         LOG.log(Level.INFO, "configuring from " + properties);
         this.maxConnectionsPerEndpoint = getInt("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint, properties);
@@ -285,6 +290,9 @@ public class RuntimeServerConfiguration {
         LOG.info("dynamiccertificatesmanager.period=" + dynamicCertificatesManagerPeriod);
         keyPairsSize = getInt("dynamiccertificatesmanager.keypairssize", DEFAULT_KEYPAIRS_SIZE, properties);
         LOG.info("dynamiccertificatesmanager.keypairssize=" + keyPairsSize);
+
+        ocspStaplingManagerPeriod = getInt("ocspstaplingmanager.period", 0, properties);
+        LOG.info("ocspstaplingmanager.period=" + ocspStaplingManagerPeriod);
     }
 
     private void tryConfigureCertificate(int i, ConfigurationStore properties) throws ConfigurationNotValidException {

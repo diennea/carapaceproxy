@@ -44,6 +44,8 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.util.AsyncMapping;
+import io.netty.util.Attribute;
+import io.netty.util.AttributeKey;
 import io.netty.util.concurrent.Promise;
 import io.prometheus.client.Gauge;
 import java.io.ByteArrayInputStream;
@@ -154,7 +156,7 @@ public class Listeners {
                 keyFactory = initKeyManagerFactory("PKCS12", sslCertFile, certificate.getPassword());
             }
 
-            if (listener.isOcsp()) {
+            if (listener.isOcsp() && OpenSsl.isOcspSupported()) {
                 // TODO: remove
                 LOG.log(Level.INFO, "perform OCSP stapling for domain " + domain);
                 ocspMan.performStaplingForDomain(domain, chain);
@@ -191,6 +193,8 @@ public class Listeners {
         AsyncMapping<String, SslContext> sniMappings = (String sniHostname, Promise<SslContext> promise) -> {
             try {
                 SslContext sslContext = resolveSslContext(listener, sniHostname);
+                Attribute<Object> attr = sslContext.attributes().attr(AttributeKey.newInstance("sniHostname"));
+                attr.set(sniHostname);
                 return promise.setSuccess(sslContext);
             } catch (ConfigurationNotValidException err) {
                 LOG.log(Level.SEVERE, "Error booting certificate for SNI hostname {0}, on listener {1}", new Object[]{sniHostname, listener});
@@ -210,19 +214,21 @@ public class Listeners {
                             SniHandler sni = new SniHandler(sniMappings) {
                                 @Override
                                 protected SslHandler newSslHandler(SslContext context, ByteBufAllocator allocator) {
-                                    try {
-                                        SslHandler handler = context.newHandler(allocator);
-                                        ReferenceCountedOpenSslEngine engine = (ReferenceCountedOpenSslEngine) handler.engine();
-                                        engine.setOcspResponse(ocspMan.getAllOcspResp().get(0).getEncoded());
-                                        channel.pipeline().addAfter("sni", "ocsp", handler);
-                                        return super.newSslHandler(context, allocator);
-                                    } catch (IOException ex) {
-                                        LOG.log(Level.SEVERE, ex + "");
+                                    SslHandler handler = super.newSslHandler(context, allocator);
+                                    if (listener.isOcsp() && OpenSsl.isOcspSupported()) {
+                                        try {
+                                            String sniHostname = (String) context.attributes().attr(AttributeKey.valueOf("sniHostname")).get();
+                                            LOG.log(Level.SEVERE, "SNI HOSTNAME: " + sniHostname);
+                                            ReferenceCountedOpenSslEngine engine = (ReferenceCountedOpenSslEngine) handler.engine();
+                                            engine.setOcspResponse(ocspMan.getResponseForDomain(sniHostname)); // set proper ocsp response
+                                        } catch (IOException ex) {
+                                            LOG.log(Level.SEVERE, ex + "");
+                                        }
                                     }
-                                    return null;
+                                    return handler;
                                 }
                             };
-                            channel.pipeline().addLast("sni", sni);
+                            channel.pipeline().addLast(sni);
                         }
                         channel.pipeline().addLast(new HttpRequestDecoder());
                         channel.pipeline().addLast(new HttpResponseEncoder());

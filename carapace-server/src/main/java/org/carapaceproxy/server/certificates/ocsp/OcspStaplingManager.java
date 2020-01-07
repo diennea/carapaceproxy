@@ -43,25 +43,29 @@ import org.bouncycastle.cert.ocsp.OCSPException;
 import org.bouncycastle.cert.ocsp.OCSPReq;
 import org.bouncycastle.cert.ocsp.OCSPResp;
 import org.bouncycastle.cert.ocsp.SingleResp;
-import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.configstore.ConfigurationStore;
+import org.carapaceproxy.server.RuntimeServerConfiguration;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
 
 /**
+ * Manager performing:
+ *  - periodic OCSP stapling requests
+ *  - OCSP responses management
  *
  * @author paolo.venturi
  */
 public class OcspStaplingManager implements Runnable {
 
     public static final String THREAD_NAME = "ocsp-stapling-manager";
+    private static final long DAY_SECONDS = 1000 * 60 * 60 * 24;
 
+    private static final boolean TESTING_MODE = Boolean.getBoolean("carapace.ocsp.testmode");
     private static final Logger LOG = Logger.getLogger(OcspStaplingManager.class.getName());
-    private ScheduledExecutorService scheduler;
+    private final ScheduledExecutorService scheduler;
     private ScheduledFuture<?> scheduledFuture;
     private volatile boolean started; // keep track of start() calling
     private ConfigurationStore store;
     private volatile int period = 0; // in seconds
-    private GroupMembershipHandler groupMembershipHandler;
 
     private final ConcurrentHashMap<String, OcspCheck> ocspChecks = new ConcurrentHashMap<>();
 
@@ -76,61 +80,64 @@ public class OcspStaplingManager implements Runnable {
         }
     }
 
+    public OcspStaplingManager() {
+        scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat(THREAD_NAME).build());
+    }
+
+    public void reloadConfiguration(RuntimeServerConfiguration newConfiguration) {
+        this.period = newConfiguration.getOcspStaplingManagerPeriod();
+    }
+
     public synchronized void start() {
         started = true;
         if (period <= 0) {
             return;
         }
-        if (scheduler == null) {
-            scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat(THREAD_NAME).build());
-        }
 
-        //LOG.info("Starting " + OcspStaplingManager.class.getName() + ", period: " + period + " seconds" + (TESTING_MODE ? " (TESTING_MODE)" : ""));
+        LOG.info("Starting " + OcspStaplingManager.class.getName() + ", period: " + period + " seconds" + (TESTING_MODE ? " (TESTING_MODE)" : ""));
         scheduledFuture = scheduler.scheduleWithFixedDelay(this, 0, period, TimeUnit.SECONDS);
     }
 
     public synchronized void stop() {
         started = false;
-        if (scheduler != null) {
-            scheduler.shutdown();
-            try {
-                scheduler.awaitTermination(10, TimeUnit.SECONDS);
-                scheduler = null;
-                scheduledFuture = null;
-            } catch (InterruptedException err) {
-                Thread.currentThread().interrupt();
-            }
+        scheduler.shutdown();
+        try {
+            scheduler.awaitTermination(10, TimeUnit.SECONDS);
+            scheduledFuture = null;
+        } catch (InterruptedException err) {
+            Thread.currentThread().interrupt();
         }
     }
 
     @Override
     public void run() {
-        if (groupMembershipHandler != null) {
-            int acquirePeriod = period;
-            if (acquirePeriod <= 0) {
-                acquirePeriod = 1;
+        ocspChecks.entrySet().forEach((ocspCheck) -> {
+            String domain = ocspCheck.getKey();
+            OcspCheck check = ocspCheck.getValue();
+            try {
+                if (isExpired(check.response)) {
+                    ocspChecks.remove(domain);
+                    performStaplingForDomain(domain, check.chain);
+                }
+            } catch (IOException | OCSPException | GeneralSecurityException ex) {
+                LOG.log(Level.SEVERE, "OCSP stapling failed for domain " + domain);
             }
-            groupMembershipHandler.executeInMutex(THREAD_NAME, acquirePeriod, () -> {
-                // Only one node of the cluster executes this
-                ocspChecks.entrySet().forEach((ocspCheck) -> {
-                    String domain = ocspCheck.getKey();
-                    OcspCheck check = ocspCheck.getValue();
-                    try {
-                        if (isExpired(check.response)) {
-                            performStaplingForDomain(domain, check.chain);
-                        }
-                    } catch (IOException | OCSPException | GeneralSecurityException ex) {
-                        LOG.log(Level.SEVERE, "OCSP stapling failed for domain " + domain);
-                    }
-                });
-            });
-        }
+        });
     }
 
     public static boolean isExpired(OCSPResp response) throws OCSPException {
-        BasicOCSPResp basicResponse = (BasicOCSPResp) response.getResponseObject();
-        Date nextUpdate = basicResponse.getResponses()[0].getNextUpdate();
-        return nextUpdate == null || nextUpdate.before(new Date());
+        SingleResp resp = ((BasicOCSPResp) response.getResponseObject()).getResponses()[0];
+        Date nextUpdate = resp.getNextUpdate();
+        if (nextUpdate == null) {
+            return true;
+        }
+        Date expiringDate = new Date(); // now
+        long daysBetween = TimeUnit.DAYS.convert(nextUpdate.getTime() - expiringDate.getTime(), TimeUnit.MILLISECONDS);
+        if (daysBetween >= 1) { // at least a day
+            expiringDate = new Date(expiringDate.getTime() + DAY_SECONDS); // tomorrow
+        }
+
+        return nextUpdate.before(expiringDate);
     }
 
     public void performStaplingForDomain(String domain, Certificate[] chain) throws IOException, OCSPException, GeneralSecurityException {
@@ -145,7 +152,7 @@ public class OcspStaplingManager implements Runnable {
         LOG.log(Level.INFO, "OCSP Responder URI: " + uri);
 
         if (uri == null) {
-            LOG.log(Level.INFO, "The CA/certificate doesn't have an OCSP responder, skipping OCSP stapling");
+            LOG.log(Level.INFO, "The CA/certificate doesn't have an OCSP responder, skipping OCSP stapling for domain " + domain);
             return;
         }
 

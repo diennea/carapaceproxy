@@ -1,21 +1,26 @@
 /*
- * Copyright 2017 The Netty Project
- *
- * The Netty Project licenses this file to you under the Apache License, version
- * 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at:
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations under
- * the License.
+ Licensed to Diennea S.r.l. under one
+ or more contributor license agreements. See the NOTICE file
+ distributed with this work for additional information
+ regarding copyright ownership. Diennea S.r.l. licenses this file
+ to you under the Apache License, Version 2.0 (the
+ "License"); you may not use this file except in compliance
+ with the License.  You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing,
+ software distributed under the License is distributed on an
+ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ KIND, either express or implied.  See the License for the
+ specific language governing permissions and limitations
+ under the License.
+
+ This code has been inspired by The Netty Project https://github.com/netty/netty
+
  */
 package org.carapaceproxy.server.certificates.ocsp;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -39,6 +44,8 @@ import org.bouncycastle.cert.ocsp.OCSPResp;
 import org.bouncycastle.x509.extension.X509ExtensionUtil;
 
 import io.netty.util.CharsetUtil;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public final class OcspUtils {
 
@@ -51,8 +58,9 @@ public final class OcspUtils {
             new ASN1ObjectIdentifier("1.3.6.1.5.5.7.48.1").intern();
 
     private static final String OCSP_REQUEST_TYPE = "application/ocsp-request";
-
     private static final String OCSP_RESPONSE_TYPE = "application/ocsp-response";
+
+    private static final Logger LOG = Logger.getLogger(OcspStaplingManager.class.getName());
 
     private OcspUtils() {
     }
@@ -109,14 +117,10 @@ public final class OcspUtils {
         return null;
     }
 
-    /**
-     * TODO: This is a very crude and non-scalable HTTP client to fetch the OCSP response from the CA's OCSP responder server. It's meant to demonstrate the basic building blocks on how to interact
-     * with the responder server and you should consider using Netty's HTTP client instead.
-     */
     public static OCSPResp request(URI uri, OCSPReq request, long timeout, TimeUnit unit) throws IOException {
         byte[] encoded = request.getEncoded();
-
         URL url = uri.toURL();
+        LOG.log(Level.INFO, "Performing OCSP request to " + uri);
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         try {
             connection.setConnectTimeout((int) unit.toMillis(timeout));
@@ -129,13 +133,10 @@ public final class OcspUtils {
             connection.setRequestProperty("accept", OCSP_RESPONSE_TYPE);
             connection.setRequestProperty("content-length", String.valueOf(encoded.length));
 
-            OutputStream out = connection.getOutputStream();
-            try {
+            try (OutputStream out = connection.getOutputStream()) {
                 out.write(encoded);
                 out.flush();
-
-                InputStream in = connection.getInputStream();
-                try {
+                try (InputStream in = connection.getInputStream()) {
                     int code = connection.getResponseCode();
                     if (code != HttpsURLConnection.HTTP_OK) {
                         throw new IOException("Unexpected status-code=" + code);
@@ -146,33 +147,8 @@ public final class OcspUtils {
                         throw new IOException("Unexpected content-type=" + contentType);
                     }
 
-                    int contentLength = connection.getContentLength();
-                    if (contentLength == -1) {
-                        // Probably a terrible idea!
-                        contentLength = Integer.MAX_VALUE;
-                    }
-
-                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    try {
-                        byte[] buffer = new byte[8192];
-                        int length = -1;
-
-                        while ((length = in.read(buffer)) != -1) {
-                            baos.write(buffer, 0, length);
-
-                            if (baos.size() >= contentLength) {
-                                break;
-                            }
-                        }
-                    } finally {
-                        baos.close();
-                    }
-                    return new OCSPResp(baos.toByteArray());
-                } finally {
-                    in.close();
+                    return new OCSPResp(in.readAllBytes());
                 }
-            } finally {
-                out.close();
             }
         } finally {
             connection.disconnect();
