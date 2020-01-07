@@ -679,6 +679,10 @@ public class HttpProxyServer implements AutoCloseable {
         return this.groupMembershipHandler;
     }
 
+    public OcspStaplingManager getOcspStaplingManager() {
+        return ocspStaplingManager;
+    }
+
     private void readClusterConfiguration(ConfigurationStore staticConfiguration) throws ConfigurationNotValidException {
         String mode = staticConfiguration.getProperty("mode", "standalone");
         switch (mode) {

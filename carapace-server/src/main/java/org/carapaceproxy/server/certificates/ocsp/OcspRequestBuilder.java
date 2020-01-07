@@ -16,8 +16,6 @@
  specific language governing permissions and limitations
  under the License.
 
- This code has been inspired by The Netty Project https://github.com/netty/netty
-
  */
 package org.carapaceproxy.server.certificates.ocsp;
 

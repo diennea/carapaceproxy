@@ -19,7 +19,6 @@
  */
 package org.carapaceproxy.server;
 
-import static org.carapaceproxy.utils.CertificatesUtils.readFromKeystore;
 import com.google.common.annotations.VisibleForTesting;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.netty.bootstrap.ServerBootstrap;
@@ -76,6 +75,7 @@ import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.PrometheusUtils;
+import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
 
 /**
  *
@@ -83,6 +83,8 @@ import org.carapaceproxy.utils.PrometheusUtils;
  */
 @SuppressFBWarnings(value = "OBL_UNSATISFIED_OBLIGATION", justification = "https://github.com/spotbugs/spotbugs/issues/432")
 public class Listeners {
+
+    public static final String OCSP_CERTIFICATE_KEY = "ocsp-certificate-key";
 
     private static final Logger LOG = Logger.getLogger(Listeners.class.getName());
     private static final Gauge CURRENT_CONNECTED_CLIENTS_GAUGE = PrometheusUtils.createGauge("clients", "current_connected",
@@ -94,7 +96,6 @@ public class Listeners {
     private final Map<String, SslContext> sslContexts = new ConcurrentHashMap<>();
     private final Map<HostPort, Channel> listeningChannels = new ConcurrentHashMap<>();
     private final Map<HostPort, ClientConnectionHandler> listenersHandlers = new ConcurrentHashMap<>();
-    private final OcspStaplingManager ocspMan = new OcspStaplingManager();
     private final File basePath;
     private boolean started;
 
@@ -139,7 +140,7 @@ public class Listeners {
             Certificate[] chain;
             if (keystoreContent != null) {
                 LOG.log(Level.INFO, "start SSL with dynamic certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + port + " OCSP " + listener.isOcsp());
-                chain = readFromKeystore(loadKeyStore("PKCS12", keystoreContent, certificate.getPassword()));
+                chain = readChainFromKeystore(loadKeyStore("PKCS12", keystoreContent, certificate.getPassword()));
                 keyFactory = initKeyManagerFactory("PKCS12", keystoreContent, certificate.getPassword());
             } else {
                 if (certificate.isDynamic()) { // fallback to default certificate
@@ -152,15 +153,10 @@ public class Listeners {
                 File sslCertFile = certificateFile.startsWith("/") ? new File(certificateFile) : new File(basePath, certificateFile);
                 sslCertFile = sslCertFile.getAbsoluteFile();
                 LOG.log(Level.INFO, "start SSL with certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + port + " file=" + sslCertFile + " OCSP " + listener.isOcsp());
-                chain = readFromKeystore(loadKeyStore("PKCS12", sslCertFile, certificate.getPassword()));
+                chain = readChainFromKeystore(loadKeyStore("PKCS12", sslCertFile, certificate.getPassword()));
                 keyFactory = initKeyManagerFactory("PKCS12", sslCertFile, certificate.getPassword());
             }
 
-            if (listener.isOcsp() && OpenSsl.isOcspSupported()) {
-                // TODO: remove
-                LOG.log(Level.INFO, "perform OCSP stapling for domain " + domain);
-                ocspMan.performStaplingForDomain(domain, chain);
-            }
 
             TrustManagerFactory trustManagerFactory = null;
             if (caFileConfigured) {
@@ -173,15 +169,24 @@ public class Listeners {
                 LOG.log(Level.INFO, "required sslCiphers " + sslCiphers);
                 ciphers = Arrays.asList(sslCiphers.split(","));
             }
-            return SslContextBuilder
+            SslContext sslContext = SslContextBuilder
                     .forServer(keyFactory)
                     .enableOcsp(listener.isOcsp() && OpenSsl.isOcspSupported())
                     .trustManager(trustManagerFactory)
                     .sslProvider(SslProvider.OPENSSL)
                     .protocols(listener.getSslProtocols())
                     .ciphers(ciphers).build();
-        } catch (IOException | OCSPException | GeneralSecurityException err) {
-            LOG.log(Level.SEVERE, "ERROR booting listener " + err);
+
+            if (listener.isOcsp() && OpenSsl.isOcspSupported()) {
+                String certKey = certificate.getId();
+                parent.getOcspStaplingManager().addCertificateForStapling(certKey, chain);
+                Attribute<Object> attr = sslContext.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_KEY));
+                attr.set(certKey);
+            }
+
+            return sslContext;
+        } catch (IOException | GeneralSecurityException err) {
+            LOG.log(Level.SEVERE, "ERROR booting listener " + err, err);
             throw new ConfigurationNotValidException(err);
         }
     }
@@ -193,8 +198,6 @@ public class Listeners {
         AsyncMapping<String, SslContext> sniMappings = (String sniHostname, Promise<SslContext> promise) -> {
             try {
                 SslContext sslContext = resolveSslContext(listener, sniHostname);
-                Attribute<Object> attr = sslContext.attributes().attr(AttributeKey.newInstance("sniHostname"));
-                attr.set(sniHostname);
                 return promise.setSuccess(sslContext);
             } catch (ConfigurationNotValidException err) {
                 LOG.log(Level.SEVERE, "Error booting certificate for SNI hostname {0}, on listener {1}", new Object[]{sniHostname, listener});
@@ -216,13 +219,16 @@ public class Listeners {
                                 protected SslHandler newSslHandler(SslContext context, ByteBufAllocator allocator) {
                                     SslHandler handler = super.newSslHandler(context, allocator);
                                     if (listener.isOcsp() && OpenSsl.isOcspSupported()) {
-                                        try {
-                                            String sniHostname = (String) context.attributes().attr(AttributeKey.valueOf("sniHostname")).get();
-                                            LOG.log(Level.SEVERE, "SNI HOSTNAME: " + sniHostname);
-                                            ReferenceCountedOpenSslEngine engine = (ReferenceCountedOpenSslEngine) handler.engine();
-                                            engine.setOcspResponse(ocspMan.getResponseForDomain(sniHostname)); // set proper ocsp response
-                                        } catch (IOException ex) {
-                                            LOG.log(Level.SEVERE, ex + "");
+                                        String ocspCertificate = (String) context.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_KEY)).get();
+                                        if (ocspCertificate != null) {
+                                            try {
+                                                ReferenceCountedOpenSslEngine engine = (ReferenceCountedOpenSslEngine) handler.engine();
+                                                engine.setOcspResponse(parent.getOcspStaplingManager().getOcspResponseForCertificate(ocspCertificate)); // set proper ocsp response
+                                            } catch (IOException ex) {
+                                                LOG.log(Level.SEVERE, ex + "Unable to serve OCSP Response for certificate " + ocspCertificate);
+                                            }
+                                        } else {
+                                            LOG.log(Level.SEVERE, "Cannot set OCSP response without the certificate");
                                         }
                                     }
                                     return handler;

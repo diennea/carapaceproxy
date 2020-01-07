@@ -26,7 +26,11 @@ import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
+import java.security.cert.CertificateEncodingException;
+import java.util.Arrays;
 import java.util.Iterator;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Utilitis for Certificates storing as Keystores
@@ -59,12 +63,13 @@ public final class CertificatesUtils {
     }
 
     /**
+     * To read a certificate chain from KeyStore data.
      *
      * @param data keystore data.
      * @return certificate chain contained into the keystore.
      * @throws GeneralSecurityException
      */
-    public static Certificate[] readFromKeystore(byte[] data) throws GeneralSecurityException {
+    public static Certificate[] readChainFromKeystore(byte[] data) throws GeneralSecurityException {
         try (ByteArrayInputStream is = new ByteArrayInputStream(data)) {
             KeyStore keyStore = KeyStore.getInstance(KEYSTORE_FORMAT);
             keyStore.load(is, KEYSTORE_PW);
@@ -75,12 +80,13 @@ public final class CertificatesUtils {
     }
 
     /**
+     * To read a certificate chain from a KeyStore.
      *
      * @param keystore keystore.
      * @return certificate chain contained into the keystore.
      * @throws GeneralSecurityException
      */
-    public static Certificate[] readFromKeystore(KeyStore keystore) throws GeneralSecurityException {
+    public static Certificate[] readChainFromKeystore(KeyStore keystore) throws GeneralSecurityException {
         Iterator<String> iter = keystore.aliases().asIterator();
         while (iter.hasNext()) {
             Certificate[] chain = keystore.getCertificateChain(iter.next());
@@ -104,5 +110,31 @@ public final class CertificatesUtils {
         } catch (IOException ex) {
             return false;
         }
+    }
+
+    /**
+     * Compare two certificates chain.
+     *
+     * @param c1 a chain
+     * @param c2 another chain
+     * @return true whether the chains are the same.
+     */
+    public static boolean compareChains(Certificate[] c1, Certificate[] c2) {
+        if (c1 == null && c2 != null || c2 == null && c1 != null) {
+            return false;
+        }
+        if (c1.length != c2.length) {
+            return false;
+        }
+        for (int i = 0; i < c1.length; i++) {
+            try {
+                if(!Arrays.equals(c1[i].getEncoded(), c2[i].getEncoded())) {
+                    return false;
+                }
+            } catch (CertificateEncodingException ex) {
+                return false;
+            }
+        }
+        return true;
     }
 }

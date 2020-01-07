@@ -16,8 +16,6 @@
  specific language governing permissions and limitations
  under the License.
 
- This code has been inspired by The Netty Project https://github.com/netty/netty
-
  */
 package org.carapaceproxy.server.certificates.ocsp;
 
@@ -117,10 +115,10 @@ public final class OcspUtils {
         return null;
     }
 
-    public static OCSPResp request(URI uri, OCSPReq request, long timeout, TimeUnit unit) throws IOException {
+    public static OCSPResp request(String certKey, URI uri, OCSPReq request, long timeout, TimeUnit unit) throws IOException {
         byte[] encoded = request.getEncoded();
         URL url = uri.toURL();
-        LOG.log(Level.INFO, "Performing OCSP request to " + uri);
+        LOG.log(Level.INFO, "Performing OCSP request for certificate " + certKey + " to " + uri);
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         try {
             connection.setConnectTimeout((int) unit.toMillis(timeout));

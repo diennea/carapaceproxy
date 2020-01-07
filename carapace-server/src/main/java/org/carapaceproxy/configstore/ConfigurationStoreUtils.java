@@ -30,7 +30,8 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
-import static org.carapaceproxy.utils.CertificatesUtils.readFromKeystore;
+import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
+import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
 
 public final class ConfigurationStoreUtils {
 
@@ -93,7 +94,7 @@ public final class ConfigurationStoreUtils {
 
     public static Certificate[] base64DecodeCertificateChain(String chain) throws GeneralSecurityException {
         byte[] data = Base64.getDecoder().decode(chain);
-        return readFromKeystore(data);
+        return readChainFromKeystore(data);
     }
 
 }
