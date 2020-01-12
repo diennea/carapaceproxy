@@ -147,6 +147,8 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             if (secure) {
                 detectSSLProperties(ctx);
             }
+            RUNNING_REQUESTS_GAUGE.inc();
+            totalRequests.inc();
             RequestHandler currentRequest = new RequestHandler(requestIdGenerator.incrementAndGet(),
                     request, filters, this, ctx, () -> RUNNING_REQUESTS_GAUGE.dec(), backendHealthManager, requestsLogger);
             addPendingRequest(currentRequest);
@@ -156,8 +158,6 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             try {
                 RequestHandler currentRequest = pendingRequests.get(0);
                 currentRequest.clientRequestFinished(trailer);
-                totalRequests.inc();
-                RUNNING_REQUESTS_GAUGE.inc();
             } catch (java.lang.ArrayIndexOutOfBoundsException noMorePendingRequests) {
                 LOG.log(Level.INFO, "{0} swallow {1}, no more pending requests", new Object[]{this, msg});
                 refuseOtherRequests = true;
