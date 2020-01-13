@@ -109,7 +109,7 @@ public class HttpProxyServer implements AutoCloseable {
     private boolean cluster;
     private GroupMembershipHandler groupMembershipHandler = new NullGroupMembershipHandler();
     private DynamicCertificatesManager dynamicCertificateManager;
-    private final OcspStaplingManager ocspStaplingManager;
+    private OcspStaplingManager ocspStaplingManager;
     private RuntimeServerConfiguration currentConfiguration;
     private ConfigurationStore dynamicConfigurationStore;
     private EndpointMapper mapper;
@@ -681,6 +681,11 @@ public class HttpProxyServer implements AutoCloseable {
 
     public OcspStaplingManager getOcspStaplingManager() {
         return ocspStaplingManager;
+    }
+
+    @VisibleForTesting
+    public void setOcspStaplingManager(OcspStaplingManager ocspStaplingManager) {
+        this.ocspStaplingManager = ocspStaplingManager;
     }
 
     private void readClusterConfiguration(ConfigurationStore staticConfiguration) throws ConfigurationNotValidException {

@@ -68,8 +68,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManagerFactory;
-import org.bouncycastle.cert.ocsp.OCSPException;
-import org.carapaceproxy.server.certificates.ocsp.OcspStaplingManager;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
@@ -176,7 +174,7 @@ public class Listeners {
                     .protocols(listener.getSslProtocols())
                     .ciphers(ciphers).build();
 
-            if (listener.isOcsp() && OpenSsl.isOcspSupported()) {
+            if (listener.isOcsp() && OpenSsl.isOcspSupported() && chain != null && chain.length > 0) {
                 parent.getOcspStaplingManager().addCertificateForStapling(chain);
                 Attribute<Object> attr = sslContext.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN));
                 attr.set(chain[0]);

@@ -44,10 +44,8 @@ import org.bouncycastle.cert.ocsp.OCSPException;
 import org.bouncycastle.cert.ocsp.OCSPReq;
 import org.bouncycastle.cert.ocsp.OCSPResp;
 import org.bouncycastle.cert.ocsp.SingleResp;
-import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
-import static org.carapaceproxy.utils.CertificatesUtils.compareChains;
 
 /**
  * Manager performing: - periodic OCSP stapling requests - OCSP responses management
@@ -59,15 +57,13 @@ public class OcspStaplingManager implements Runnable {
     public static final String THREAD_NAME = "ocsp-stapling-manager";
     private static final long DAY_SECONDS = 1000 * 60 * 60 * 24;
 
-    private static final boolean TESTING_MODE = Boolean.getBoolean("carapace.ocsp.testmode");
     private static final Logger LOG = Logger.getLogger(OcspStaplingManager.class.getName());
     private final ScheduledExecutorService scheduler;
     private ScheduledFuture<?> scheduledFuture;
     private volatile boolean started; // keep track of start() calling
-    private ConfigurationStore store;
     private volatile int period = 0; // in seconds
 
-    private ConcurrentHashMap<Certificate, OcspCheck> ocspChecks = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Certificate, OcspCheck> ocspChecks = new ConcurrentHashMap<>();
 
     private static final class OcspCheck {
 
@@ -84,9 +80,15 @@ public class OcspStaplingManager implements Runnable {
         scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat(THREAD_NAME).build());
     }
 
-    public void reloadConfiguration(RuntimeServerConfiguration newConfiguration) {
-        period = newConfiguration.getOcspStaplingManagerPeriod();
+    public synchronized void reloadConfiguration(RuntimeServerConfiguration configuration) {
+        if (scheduledFuture != null) {
+            scheduledFuture.cancel(true);
+        }
+        period = configuration.getOcspStaplingManagerPeriod();
         ocspChecks.clear();
+        if (scheduledFuture != null || started) {
+            start();
+        }
     }
 
     public synchronized void start() {
@@ -95,7 +97,7 @@ public class OcspStaplingManager implements Runnable {
             return;
         }
 
-        LOG.info("Starting " + OcspStaplingManager.class.getCanonicalName() + ", period: " + period + " seconds" + (TESTING_MODE ? " (TESTING_MODE)" : ""));
+        LOG.log(Level.INFO, "Starting {0}, period: {1} seconds", new Object[]{OcspStaplingManager.class.getCanonicalName(), period});
         scheduledFuture = scheduler.scheduleWithFixedDelay(this, 0, period, TimeUnit.SECONDS);
     }
 
@@ -113,17 +115,17 @@ public class OcspStaplingManager implements Runnable {
     @Override
     public void run() {
         ocspChecks.values().forEach((check) -> {
-            Certificate cert = check.chain[0];
+            X509Certificate cert = (X509Certificate) check.chain[0];
+            String dn = cert.getSubjectDN().getName();
             try {
                 if (check.response == null || isExpired(check.response)) { // new or expired
+                    LOG.log(Level.INFO, "Performing OCSP stapling for {0}", dn);
                     if (!performStaplingForCertificate(check.chain)) {
-                        LOG.log(Level.SEVERE, "OCSP stapling failed for certificate " + cert);
-                        ocspChecks.remove(cert);
+                        LOG.log(Level.SEVERE, "OCSP stapling failed for {0}", dn);
                     }
                 }
             } catch (IOException | OCSPException | GeneralSecurityException ex) {
-                LOG.log(Level.SEVERE, "OCSP stapling failed for certificate " + cert);
-                ocspChecks.remove(cert);
+                LOG.log(Level.SEVERE, "Unable to perform OCSP stapling for " + dn, ex);
             }
         });
     }
@@ -150,18 +152,20 @@ public class OcspStaplingManager implements Runnable {
         if (!OpenSsl.isAvailable() || !OpenSsl.isOcspSupported()) {
             return false;
         }
-        if (chain == null && chain.length == 0) {
+
+        if (chain == null || chain.length == 0) {
             return false;
         }
 
         X509Certificate cert = (X509Certificate) chain[0];
         X509Certificate issuer = (X509Certificate) chain[chain.length - 1];
+        String dn = cert.getSubjectDN().getName();
 
         URI uri = OcspUtils.ocspUri(cert);
-        LOG.log(Level.INFO, "OCSP Responder URI: " + uri);
+        LOG.log(Level.INFO, "OCSP Responder URI: {0}", uri);
 
         if (uri == null) {
-            LOG.log(Level.INFO, "The CA/certificate doesn't have an OCSP responder, skipping OCSP stapling for certificate " + cert);
+            LOG.log(Level.INFO, "The CA/certificate doesn''t have an OCSP responder, skipping OCSP stapling for {0}", dn);
             return false;
         }
 
@@ -172,9 +176,9 @@ public class OcspStaplingManager implements Runnable {
                 .build();
 
         // Step 2: Do the request to the CA's OCSP responder
-        OCSPResp response = OcspUtils.request(cert, uri, request, 5L, TimeUnit.SECONDS);
+        OCSPResp response = OcspUtils.request(dn, uri, request, 5L, TimeUnit.SECONDS);
         if (response.getStatus() != OCSPResponseStatus.SUCCESSFUL) {
-            LOG.log(Level.SEVERE, "response-status=" + response.getStatus() + ", OCSP stapling failed");
+            LOG.log(Level.SEVERE, "response-status={0}, OCSP stapling failed", response.getStatus());
             return false;
         }
 
@@ -183,14 +187,14 @@ public class OcspStaplingManager implements Runnable {
         SingleResp first = basicResponse.getResponses()[0];
 
         CertificateStatus status = first.getCertStatus();
-        LOG.log(Level.INFO, "Status: " + (status == CertificateStatus.GOOD ? "Good" : status));
-        LOG.log(Level.INFO, "This Update: " + first.getThisUpdate());
-        LOG.log(Level.INFO, "Next Update: " + first.getNextUpdate());
+        LOG.log(Level.INFO, "Status: {0}", status == CertificateStatus.GOOD ? "Good" : status);
+        LOG.log(Level.INFO, "This Update: {0}", first.getThisUpdate());
+        LOG.log(Level.INFO, "Next Update: {0}", first.getNextUpdate());
 
         BigInteger certSerial = cert.getSerialNumber();
         BigInteger ocspSerial = first.getCertID().getSerialNumber();
         if (!certSerial.equals(ocspSerial)) {
-            LOG.log(Level.INFO, "Bad Serials=" + certSerial + " vs. " + ocspSerial + ". Skipping response");
+            LOG.log(Level.INFO, "Bad Serials={0} vs. {1}. Skipping response", new Object[]{certSerial, ocspSerial});
             return false;
         }
 
@@ -200,7 +204,7 @@ public class OcspStaplingManager implements Runnable {
     }
 
     public void addCertificateForStapling(Certificate[] chain) {
-        ocspChecks.putIfAbsent(chain[0], new OcspCheck(chain, null));
+       ocspChecks.putIfAbsent(chain[0], new OcspCheck(chain, null));
     }
 
     public byte[] getOcspResponseForCertificate(Certificate cert) throws IOException {

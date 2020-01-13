@@ -23,12 +23,13 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.carapaceproxy.api.UseAdminServer.DEFAULT_ADMIN_PORT;
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.security.KeyPair;
 import java.security.cert.Certificate;
 import java.util.Properties;
 import org.carapaceproxy.api.UseAdminServer;
-import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.carapaceproxy.utils.CertificatesTestUtils.uploadCertificate;
 import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
@@ -38,9 +39,30 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+import java.util.Date;
+import java.util.List;
+import javax.net.ssl.ExtendedSSLSession;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
+import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
+import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
+import org.bouncycastle.cert.ocsp.BasicOCSPResp;
+import org.bouncycastle.cert.ocsp.BasicOCSPRespBuilder;
+import org.bouncycastle.cert.ocsp.CertificateID;
+import org.bouncycastle.cert.ocsp.CertificateStatus;
+import org.bouncycastle.cert.ocsp.OCSPResp;
+import org.bouncycastle.cert.ocsp.OCSPRespBuilder;
+import org.bouncycastle.operator.DigestCalculatorProvider;
+import org.bouncycastle.operator.bc.BcDigestCalculatorProvider;
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.carapaceproxy.configstore.CertificateData;
+import org.carapaceproxy.server.certificates.ocsp.OcspStaplingManager;
+import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.HttpUtils;
 import org.carapaceproxy.utils.TestUtils;
 import org.junit.Rule;
@@ -248,6 +270,65 @@ public class CertificatesTest extends UseAdminServer {
         }
     }
 
+    @Test
+    public void testOCSP() throws Exception {
+        configureAndStartServer();
+        int port = server.getLocalPort();
+        OcspStaplingManager ocspMan = mock(OcspStaplingManager.class);
+        server.setOcspStaplingManager(ocspMan);
+        DynamicCertificatesManager dynCertMan = server.getDynamicCertificateManager();
+
+        // Upload certificate and check its OCSP response
+        Certificate[] uploadedChain;
+        KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        uploadedChain = generateSampleChain(endUserKeyPair, false);
+        OCSPResp ocspResp = generateOCSPResponse(uploadedChain,CertificateStatus.GOOD);
+        when(ocspMan.getOcspResponseForCertificate(uploadedChain[0])).thenReturn(ocspResp.getEncoded());
+        byte[] chainData = createKeystore(uploadedChain, endUserKeyPair.getPrivate());
+        try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
+            RawHttpClient.HttpResponse resp = uploadCertificate("localhost", null, chainData, client, credentials);
+            assertTrue(resp.getBodyString().contains("SUCCESS"));
+            CertificateData data = dynCertMan.getCertificateDataForDomain("localhost");
+            assertNotNull(data);
+            assertTrue(data.isManual());
+            assertTrue(data.isAvailable());
+        }
+        // check ocsp response
+        try (RawHttpClient c = new RawHttpClient("localhost", port, true, "localhost")) {
+            RawHttpClient.HttpResponse r = c.get("https://localhost:" + port + "/index.html", credentials);
+            assertEquals("it <b>works</b> !!", r.getBodyString());
+            Certificate[] obtainedChain = c.getServerCertificate();
+            assertNotNull(obtainedChain);
+            CertificatesUtils.compareChains(uploadedChain, obtainedChain);
+            ExtendedSSLSession session = (ExtendedSSLSession) c.getSSLSocket().getSession();
+            List<byte[]> statusResponses = session.getStatusResponses();
+            assertEquals(1, statusResponses.size());
+        }
+    }
+
+    private static OCSPResp generateOCSPResponse(Certificate[] chain, CertificateStatus status) throws CertificateException {
+        try {
+            X509Certificate cert = (X509Certificate) chain[0];
+            X509Certificate issuer = (X509Certificate) chain[chain.length - 1];
+            X509CertificateHolder caCert = new JcaX509CertificateHolder(issuer);
+
+            DigestCalculatorProvider digCalcProv = new BcDigestCalculatorProvider();
+            BasicOCSPRespBuilder basicBuilder = new BasicOCSPRespBuilder(
+                    SubjectPublicKeyInfo.getInstance(issuer.getPublicKey().getEncoded()),
+                    digCalcProv.get(CertificateID.HASH_SHA1)
+            );
+
+            CertificateID certId = new CertificateID(digCalcProv.get(CertificateID.HASH_SHA1), caCert, cert.getSerialNumber());
+            basicBuilder.addResponse(certId, status);
+            BasicOCSPResp resp = basicBuilder.build(new JcaContentSignerBuilder("SHA256withRSA").build(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE).getPrivate()),null, new Date());
+
+            OCSPRespBuilder builder = new OCSPRespBuilder();
+            return builder.build(OCSPRespBuilder.SUCCESSFUL, resp);
+        } catch (Exception e) {
+            throw new CertificateException("cannot generate OCSP response", e);
+        }
+    }
+
     private void configureAndStartServer() throws Exception {
         HttpUtils.overideJvmWideHttpsVerifier();
 
@@ -273,7 +354,7 @@ public class CertificatesTest extends UseAdminServer {
         config.put("listener.1.host", "localhost");
         config.put("listener.1.port", "8443");
         config.put("listener.1.ssl", "true");
-        config.put("listener.1.ocsp", "false");
+        config.put("listener.1.ocsp", "true");
         config.put("listener.1.enabled", "true");
         config.put("listener.1.defaultcertificate", "*");
 

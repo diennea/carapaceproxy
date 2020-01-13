@@ -42,7 +42,6 @@ import org.bouncycastle.cert.ocsp.OCSPResp;
 import org.bouncycastle.x509.extension.X509ExtensionUtil;
 
 import io.netty.util.CharsetUtil;
-import java.security.cert.Certificate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -116,10 +115,10 @@ public final class OcspUtils {
         return null;
     }
 
-    public static OCSPResp request(Certificate cert, URI uri, OCSPReq request, long timeout, TimeUnit unit) throws IOException {
+    public static OCSPResp request(String dn, URI uri, OCSPReq request, long timeout, TimeUnit unit) throws IOException {
         byte[] encoded = request.getEncoded();
         URL url = uri.toURL();
-        LOG.log(Level.INFO, "Performing OCSP request for certificate " + cert + " to " + uri);
+        LOG.log(Level.INFO, "Performing OCSP request for {0} to {1}", new Object[]{dn, uri});
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         try {
             connection.setConnectTimeout((int) unit.toMillis(timeout));
