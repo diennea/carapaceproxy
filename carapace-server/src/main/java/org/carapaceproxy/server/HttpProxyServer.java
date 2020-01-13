@@ -84,6 +84,7 @@ import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.webapp.WebAppContext;
 import org.glassfish.jersey.servlet.ServletContainer;
 import static org.glassfish.jersey.servlet.ServletProperties.JAXRS_APPLICATION_CLASS;
+import org.carapaceproxy.server.certificates.ocsp.OcspStaplingManager;
 
 public class HttpProxyServer implements AutoCloseable {
 
@@ -108,6 +109,7 @@ public class HttpProxyServer implements AutoCloseable {
     private boolean cluster;
     private GroupMembershipHandler groupMembershipHandler = new NullGroupMembershipHandler();
     private DynamicCertificatesManager dynamicCertificateManager;
+    private OcspStaplingManager ocspStaplingManager;
     private RuntimeServerConfiguration currentConfiguration;
     private ConfigurationStore dynamicConfigurationStore;
     private EndpointMapper mapper;
@@ -155,6 +157,7 @@ public class HttpProxyServer implements AutoCloseable {
         if (mapper != null) {
             mapper.setDynamicCertificateManager(dynamicCertificateManager);
         }
+        this.ocspStaplingManager = new OcspStaplingManager();
     }
 
     public static HttpProxyServer buildForTests(String host, int port, EndpointMapper mapper, File baseDir) throws ConfigurationNotValidException, Exception {
@@ -291,6 +294,7 @@ public class HttpProxyServer implements AutoCloseable {
             backendHealthManager.start();
             dynamicCertificateManager.attachGroupMembershipHandler(groupMembershipHandler);
             dynamicCertificateManager.start();
+            ocspStaplingManager.start();
             groupMembershipHandler.watchEvent("configurationChange", new ConfigurationChangeCallback());
         } catch (RuntimeException err) {
             close();
@@ -324,6 +328,7 @@ public class HttpProxyServer implements AutoCloseable {
         groupMembershipHandler.stop();
         backendHealthManager.stop();
         dynamicCertificateManager.stop();
+        ocspStaplingManager.stop();
 
         if (adminserver != null) {
             try {
@@ -613,6 +618,7 @@ public class HttpProxyServer implements AutoCloseable {
             this.filters = buildFilters(newConfiguration);
             this.backendHealthManager.reloadConfiguration(newConfiguration, newMapper);
             this.dynamicCertificateManager.reloadConfiguration(newConfiguration);
+            this.ocspStaplingManager.reloadConfiguration(newConfiguration);
             this.listeners.reloadConfiguration(newConfiguration);
             this.cache.reloadConfiguration(newConfiguration);
             this.requestsLogger.reloadConfiguration(newConfiguration);
@@ -671,6 +677,15 @@ public class HttpProxyServer implements AutoCloseable {
 
     public GroupMembershipHandler getGroupMembershipHandler() {
         return this.groupMembershipHandler;
+    }
+
+    public OcspStaplingManager getOcspStaplingManager() {
+        return ocspStaplingManager;
+    }
+
+    @VisibleForTesting
+    public void setOcspStaplingManager(OcspStaplingManager ocspStaplingManager) {
+        this.ocspStaplingManager = ocspStaplingManager;
     }
 
     private void readClusterConfiguration(ConfigurationStore staticConfiguration) throws ConfigurationNotValidException {

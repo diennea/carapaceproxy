@@ -90,7 +90,7 @@ public class SSLCertificateConfiguration {
 
     @Override
     public String toString() {
-        return "SSLCertificateConfiguration{" + "id=" + id + '}';
+        return "SSLCertificateConfiguration{" + "id=" + id + ", hostname=" + hostname + ", mode=" + mode + '}';
     }
 
 }

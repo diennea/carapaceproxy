@@ -22,6 +22,7 @@ package org.carapaceproxy.server;
 import com.google.common.annotations.VisibleForTesting;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.netty.bootstrap.ServerBootstrap;
+import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
@@ -35,11 +36,15 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.HttpRequestDecoder;
 import io.netty.handler.codec.http.HttpResponseEncoder;
 import io.netty.handler.ssl.OpenSsl;
+import io.netty.handler.ssl.ReferenceCountedOpenSslEngine;
 import io.netty.handler.ssl.SniHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.util.AsyncMapping;
+import io.netty.util.Attribute;
+import io.netty.util.AttributeKey;
 import io.netty.util.concurrent.Promise;
 import io.prometheus.client.Gauge;
 import java.io.ByteArrayInputStream;
@@ -52,6 +57,7 @@ import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
+import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -67,6 +73,7 @@ import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.PrometheusUtils;
+import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
 
 /**
  *
@@ -74,6 +81,8 @@ import org.carapaceproxy.utils.PrometheusUtils;
  */
 @SuppressFBWarnings(value = "OBL_UNSATISFIED_OBLIGATION", justification = "https://github.com/spotbugs/spotbugs/issues/432")
 public class Listeners {
+
+    public static final String OCSP_CERTIFICATE_CHAIN = "ocsp-certificate";
 
     private static final Logger LOG = Logger.getLogger(Listeners.class.getName());
     private static final Gauge CURRENT_CONNECTED_CLIENTS_GAUGE = PrometheusUtils.createGauge("clients", "current_connected",
@@ -126,8 +135,10 @@ public class Listeners {
             String domain = certificate.getHostname();
             // Try to find certificate data on db
             byte[] keystoreContent = parent.getDynamicCertificateManager().getCertificateForDomain(domain);
+            Certificate[] chain;
             if (keystoreContent != null) {
                 LOG.log(Level.INFO, "start SSL with dynamic certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + port + " OCSP " + listener.isOcsp());
+                chain = readChainFromKeystore(loadKeyStore("PKCS12", keystoreContent, certificate.getPassword()));
                 keyFactory = initKeyManagerFactory("PKCS12", keystoreContent, certificate.getPassword());
             } else {
                 if (certificate.isDynamic()) { // fallback to default certificate
@@ -140,6 +151,7 @@ public class Listeners {
                 File sslCertFile = certificateFile.startsWith("/") ? new File(certificateFile) : new File(basePath, certificateFile);
                 sslCertFile = sslCertFile.getAbsoluteFile();
                 LOG.log(Level.INFO, "start SSL with certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + port + " file=" + sslCertFile + " OCSP " + listener.isOcsp());
+                chain = readChainFromKeystore(loadKeyStore("PKCS12", sslCertFile, certificate.getPassword()));
                 keyFactory = initKeyManagerFactory("PKCS12", sslCertFile, certificate.getPassword());
             }
 
@@ -154,17 +166,25 @@ public class Listeners {
                 LOG.log(Level.INFO, "required sslCiphers " + sslCiphers);
                 ciphers = Arrays.asList(sslCiphers.split(","));
             }
-            return SslContextBuilder
-                            .forServer(keyFactory)
-                            .enableOcsp(listener.isOcsp() && OpenSsl.isOcspSupported())
-                            .trustManager(trustManagerFactory)
-                            .sslProvider(SslProvider.OPENSSL)
-                            .protocols(listener.getSslProtocols())
-                            .ciphers(ciphers).build();
+            SslContext sslContext = SslContextBuilder
+                    .forServer(keyFactory)
+                    .enableOcsp(listener.isOcsp() && OpenSsl.isOcspSupported())
+                    .trustManager(trustManagerFactory)
+                    .sslProvider(SslProvider.OPENSSL)
+                    .protocols(listener.getSslProtocols())
+                    .ciphers(ciphers).build();
+
+            if (listener.isOcsp() && OpenSsl.isOcspSupported() && chain != null && chain.length > 0) {
+                parent.getOcspStaplingManager().addCertificateForStapling(chain);
+                Attribute<Object> attr = sslContext.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN));
+                attr.set(chain[0]);
+            }
+
+            return sslContext;
         } catch (IOException | GeneralSecurityException err) {
+            LOG.log(Level.SEVERE, "ERROR booting listener " + err, err);
             throw new ConfigurationNotValidException(err);
         }
-
     }
 
     private void bootListener(NetworkListenerConfiguration listener) throws InterruptedException {
@@ -190,12 +210,30 @@ public class Listeners {
                     public void initChannel(SocketChannel channel) throws Exception {
                         CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
                         if (listener.isSsl()) {
-                            SniHandler sni = new SniHandler(sniMappings);
+                            SniHandler sni = new SniHandler(sniMappings) {
+                                @Override
+                                protected SslHandler newSslHandler(SslContext context, ByteBufAllocator allocator) {
+                                    SslHandler handler = super.newSslHandler(context, allocator);
+                                    if (listener.isOcsp() && OpenSsl.isOcspSupported()) {
+                                        Certificate cert = (Certificate) context.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN)).get();
+                                        if (cert != null) {
+                                            try {
+                                                ReferenceCountedOpenSslEngine engine = (ReferenceCountedOpenSslEngine) handler.engine();
+                                                engine.setOcspResponse(parent.getOcspStaplingManager().getOcspResponseForCertificate(cert)); // setting proper ocsp response
+                                            } catch (IOException ex) {
+                                                LOG.log(Level.SEVERE, "Error setting OCSP response.", ex);
+                                            }
+                                        } else {
+                                            LOG.log(Level.SEVERE, "Cannot set OCSP response without the certificate");
+                                        }
+                                    }
+                                    return handler;
+                                }
+                            };
                             channel.pipeline().addLast(sni);
                         }
                         channel.pipeline().addLast(new HttpRequestDecoder());
                         channel.pipeline().addLast(new HttpResponseEncoder());
-
                         ClientConnectionHandler connHandler = new ClientConnectionHandler(parent.getMapper(),
                                 parent.getConnectionsManager(),
                                 parent.getFilters(), parent.getCache(),
@@ -222,7 +260,7 @@ public class Listeners {
     }
 
     private KeyManagerFactory initKeyManagerFactory(String keyStoreType, File keyStoreLocation,
-            String keyStorePassword) throws SecurityException, KeyStoreException, NoSuchAlgorithmException,
+                                                    String keyStorePassword) throws SecurityException, KeyStoreException, NoSuchAlgorithmException,
             CertificateException, IOException, UnrecoverableKeyException {
         KeyStore ks = loadKeyStore(keyStoreType, keyStoreLocation, keyStorePassword);
         KeyManagerFactory kmf = KeyManagerFactory
@@ -232,7 +270,7 @@ public class Listeners {
     }
 
     private KeyManagerFactory initKeyManagerFactory(String keyStoreType, byte[] keyStoreData,
-            String keyStorePassword) throws SecurityException, KeyStoreException, NoSuchAlgorithmException,
+                                                    String keyStorePassword) throws SecurityException, KeyStoreException, NoSuchAlgorithmException,
             CertificateException, IOException, UnrecoverableKeyException {
         KeyStore ks = loadKeyStore(keyStoreType, keyStoreData, keyStorePassword);
         KeyManagerFactory kmf = KeyManagerFactory
@@ -242,7 +280,7 @@ public class Listeners {
     }
 
     private TrustManagerFactory initTrustManagerFactory(String trustStoreType, File trustStoreLocation,
-            String trustStorePassword)
+                                                        String trustStorePassword)
             throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException, SecurityException {
         TrustManagerFactory tmf;
 
@@ -311,22 +349,17 @@ public class Listeners {
         try {
             return sslContexts.computeIfAbsent(key, (k) -> {
                 try {
-                    SSLCertificateConfiguration choosen = chooseCertificate(sniHostname,
-                            listener.getDefaultCertificate());
-
+                    SSLCertificateConfiguration choosen = chooseCertificate(sniHostname, listener.getDefaultCertificate());
                     if (choosen == null) {
-                        throw new ConfigurationNotValidException("cannot find a certificate for snihostname "
-                                + sniHostname
-                                + ", with default cert for listener as '" + listener
-                                        .getDefaultCertificate() + "', available " + currentConfiguration.getCertificates()
-                                        .keySet());
+                        throw new ConfigurationNotValidException("cannot find a certificate for snihostname " + sniHostname
+                                + ", with default cert for listener as '" + listener.getDefaultCertificate()
+                                + "', available " + currentConfiguration.getCertificates().keySet());
                     }
                     return bootSslContext(listener, choosen);
                 } catch (ConfigurationNotValidException err) {
                     throw new RuntimeException(err);
                 }
             });
-
         } catch (RuntimeException err) {
             if (err.getCause() instanceof ConfigurationNotValidException) {
                 throw (ConfigurationNotValidException) err.getCause();
