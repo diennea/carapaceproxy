@@ -84,7 +84,7 @@ import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
 @SuppressFBWarnings(value = "OBL_UNSATISFIED_OBLIGATION", justification = "https://github.com/spotbugs/spotbugs/issues/432")
 public class Listeners {
 
-    public static final String OCSP_CERTIFICATE_KEY = "ocsp-certificate-key";
+    public static final String OCSP_CERTIFICATE_CHAIN = "ocsp-certificate";
 
     private static final Logger LOG = Logger.getLogger(Listeners.class.getName());
     private static final Gauge CURRENT_CONNECTED_CLIENTS_GAUGE = PrometheusUtils.createGauge("clients", "current_connected",
@@ -157,7 +157,6 @@ public class Listeners {
                 keyFactory = initKeyManagerFactory("PKCS12", sslCertFile, certificate.getPassword());
             }
 
-
             TrustManagerFactory trustManagerFactory = null;
             if (caFileConfigured) {
                 LOG.log(Level.INFO, "loading trustore from " + trustStoreCertFile);
@@ -178,10 +177,9 @@ public class Listeners {
                     .ciphers(ciphers).build();
 
             if (listener.isOcsp() && OpenSsl.isOcspSupported()) {
-                String certKey = certificate.getId();
-                parent.getOcspStaplingManager().addCertificateForStapling(certKey, chain);
-                Attribute<Object> attr = sslContext.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_KEY));
-                attr.set(certKey);
+                parent.getOcspStaplingManager().addCertificateForStapling(chain);
+                Attribute<Object> attr = sslContext.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN));
+                attr.set(chain[0]);
             }
 
             return sslContext;
@@ -219,13 +217,13 @@ public class Listeners {
                                 protected SslHandler newSslHandler(SslContext context, ByteBufAllocator allocator) {
                                     SslHandler handler = super.newSslHandler(context, allocator);
                                     if (listener.isOcsp() && OpenSsl.isOcspSupported()) {
-                                        String ocspCertificate = (String) context.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_KEY)).get();
-                                        if (ocspCertificate != null) {
+                                        Certificate cert = (Certificate) context.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN)).get();
+                                        if (cert != null) {
                                             try {
                                                 ReferenceCountedOpenSslEngine engine = (ReferenceCountedOpenSslEngine) handler.engine();
-                                                engine.setOcspResponse(parent.getOcspStaplingManager().getOcspResponseForCertificate(ocspCertificate)); // set proper ocsp response
+                                                engine.setOcspResponse(parent.getOcspStaplingManager().getOcspResponseForCertificate(cert)); // setting proper ocsp response
                                             } catch (IOException ex) {
-                                                LOG.log(Level.SEVERE, ex + "Unable to serve OCSP Response for certificate " + ocspCertificate);
+                                                LOG.log(Level.SEVERE, "Error setting OCSP response.", ex);
                                             }
                                         } else {
                                             LOG.log(Level.SEVERE, "Cannot set OCSP response without the certificate");

@@ -29,8 +29,6 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateEncodingException;
 import java.util.Arrays;
 import java.util.Iterator;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * Utilitis for Certificates storing as Keystores
@@ -128,7 +126,7 @@ public final class CertificatesUtils {
         }
         for (int i = 0; i < c1.length; i++) {
             try {
-                if(!Arrays.equals(c1[i].getEncoded(), c2[i].getEncoded())) {
+                if (!Arrays.equals(c1[i].getEncoded(), c2[i].getEncoded())) {
                     return false;
                 }
             } catch (CertificateEncodingException ex) {

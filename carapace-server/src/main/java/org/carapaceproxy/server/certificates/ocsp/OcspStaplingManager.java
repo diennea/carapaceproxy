@@ -50,9 +50,7 @@ import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
 import static org.carapaceproxy.utils.CertificatesUtils.compareChains;
 
 /**
- * Manager performing:
- *  - periodic OCSP stapling requests
- *  - OCSP responses management
+ * Manager performing: - periodic OCSP stapling requests - OCSP responses management
  *
  * @author paolo.venturi
  */
@@ -69,7 +67,7 @@ public class OcspStaplingManager implements Runnable {
     private ConfigurationStore store;
     private volatile int period = 0; // in seconds
 
-    private ConcurrentHashMap<String, OcspCheck> ocspChecks = new ConcurrentHashMap<>();
+    private ConcurrentHashMap<Certificate, OcspCheck> ocspChecks = new ConcurrentHashMap<>();
 
     private static final class OcspCheck {
 
@@ -114,19 +112,18 @@ public class OcspStaplingManager implements Runnable {
 
     @Override
     public void run() {
-        ocspChecks.entrySet().forEach((ocspCheck) -> {
-            String certKey = ocspCheck.getKey();
-            OcspCheck check = ocspCheck.getValue();
+        ocspChecks.values().forEach((check) -> {
+            Certificate cert = check.chain[0];
             try {
                 if (check.response == null || isExpired(check.response)) { // new or expired
-                    if (!performStaplingForCertificate(certKey, check.chain)) {
-                        LOG.log(Level.SEVERE, "OCSP stapling failed for certificate " + certKey);
-                        ocspChecks.remove(certKey);
+                    if (!performStaplingForCertificate(check.chain)) {
+                        LOG.log(Level.SEVERE, "OCSP stapling failed for certificate " + cert);
+                        ocspChecks.remove(cert);
                     }
                 }
             } catch (IOException | OCSPException | GeneralSecurityException ex) {
-                LOG.log(Level.SEVERE, "OCSP stapling failed for certificate " + certKey);
-                ocspChecks.remove(certKey);
+                LOG.log(Level.SEVERE, "OCSP stapling failed for certificate " + cert);
+                ocspChecks.remove(cert);
             }
         });
     }
@@ -149,13 +146,12 @@ public class OcspStaplingManager implements Runnable {
         return nextUpdate.before(expiringDate);
     }
 
-    public boolean performStaplingForCertificate(String certKey, Certificate[] chain) throws IOException, OCSPException, GeneralSecurityException {
+    public boolean performStaplingForCertificate(Certificate[] chain) throws IOException, OCSPException, GeneralSecurityException {
         if (!OpenSsl.isAvailable() || !OpenSsl.isOcspSupported()) {
             return false;
         }
         if (chain == null && chain.length == 0) {
-           LOG.log(Level.INFO, "No chain present for certificate " + certKey + ",  skipping OCSP stapling");
-           return false;
+            return false;
         }
 
         X509Certificate cert = (X509Certificate) chain[0];
@@ -165,7 +161,7 @@ public class OcspStaplingManager implements Runnable {
         LOG.log(Level.INFO, "OCSP Responder URI: " + uri);
 
         if (uri == null) {
-            LOG.log(Level.INFO, "The CA/certificate doesn't have an OCSP responder, skipping OCSP stapling for certificate " + certKey);
+            LOG.log(Level.INFO, "The CA/certificate doesn't have an OCSP responder, skipping OCSP stapling for certificate " + cert);
             return false;
         }
 
@@ -176,7 +172,7 @@ public class OcspStaplingManager implements Runnable {
                 .build();
 
         // Step 2: Do the request to the CA's OCSP responder
-        OCSPResp response = OcspUtils.request(certKey, uri, request, 5L, TimeUnit.SECONDS);
+        OCSPResp response = OcspUtils.request(cert, uri, request, 5L, TimeUnit.SECONDS);
         if (response.getStatus() != OCSPResponseStatus.SUCCESSFUL) {
             LOG.log(Level.SEVERE, "response-status=" + response.getStatus() + ", OCSP stapling failed");
             return false;
@@ -199,19 +195,16 @@ public class OcspStaplingManager implements Runnable {
         }
 
         // Step 4: Cache the OCSP response and use it as long as it's not expired.
-        OcspCheck toUpdate = ocspChecks.get(certKey);
-        if (toUpdate != null && compareChains(toUpdate.chain, chain)) { // old check still exists && certificate not changed (is the response obsolete?)
-            toUpdate.response = response;
-        }
+        ocspChecks.replace(cert, new OcspCheck(chain, response));
         return true;
     }
 
-    public void addCertificateForStapling(String certKey, Certificate[] chain) {
-        ocspChecks.putIfAbsent(certKey, new OcspCheck(chain, null));
+    public void addCertificateForStapling(Certificate[] chain) {
+        ocspChecks.putIfAbsent(chain[0], new OcspCheck(chain, null));
     }
 
-    public byte[] getOcspResponseForCertificate(String certKey) throws IOException {
-        OcspCheck check = ocspChecks.get(certKey);
+    public byte[] getOcspResponseForCertificate(Certificate cert) throws IOException {
+        OcspCheck check = ocspChecks.get(cert);
         return check != null && check.response != null ? check.response.getEncoded() : new byte[0];
     }
 
