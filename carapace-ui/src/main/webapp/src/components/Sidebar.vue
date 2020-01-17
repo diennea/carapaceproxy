@@ -1,11 +1,5 @@
 <template>
     <nav id="sidebar" :class="{'collapsed' : collapsed}">
-        <!-- SIDEBAR HEADER -->
-        <div id="sidebar-header">
-            <img v-if="collapsed" :src="logoCollapsed" />
-            <img v-else :src="logo" />
-        </div>
-        <!-- SIDEBAR ELEMENTS -->
         <ul id="sidebar-elements" class="list-unstyled">
             <router-link
                 v-for="el in elements"
@@ -26,7 +20,6 @@
                 <span v-else>{{el.label}}</span>
             </router-link>
         </ul>
-        <!-- SIDEBAR TOGGLE-BUTTON -->
         <div id="sidebar-toogle-button" @click="toggleSidebar()">
             <font-awesome-icon icon="angle-right" :rotation="collapsed ? 0 : 180"></font-awesome-icon>
             <font-awesome-icon icon="angle-right" :rotation="collapsed ? 0 : 180"></font-awesome-icon>
@@ -38,8 +31,6 @@
 export default {
     name: "Sidebar",
     props: {
-        logo: String,
-        logoCollapsed: String,
         elements: Array
     },
     data() {
@@ -74,23 +65,15 @@ export default {
 @import "../variables.scss";
 
 #sidebar {
-    min-width: 240px;
-    max-width: 240px;
-    min-height: 100vh;
-    background: $secondary;
+    min-width: $sidebar-width;
+    max-width: $sidebar-width;
+    background: $sidebar-background;
     color: $white;
     transition: all 0.15s linear;
     text-align: left;
-    -webkit-box-shadow: 0px 0px 7px 2px $shadow;
-    box-shadow: 0px 0px 7px 2px $shadow;
+    -webkit-box-shadow: 2px 0px 7px -2px $shadow;
+    box-shadow: 2px 0px 7px -2px $shadow;
     position: relative;
-
-    #sidebar-header {
-        min-height: 7.5vh;
-        max-height: 10vh;
-        padding: 0.5rem 1rem;
-        background: $secondary;
-    }
 
     #sidebar-toogle-button {
         position: absolute;
@@ -100,7 +83,7 @@ export default {
         text-align: center;
         padding: 0.5rem;
         color: $primary;
-        background: $secondary;
+        background: $sidebar-background;
 
         svg {
             margin: auto 2px; /* default open */
@@ -113,13 +96,9 @@ export default {
 
     /* sidebar collapsed */
     &.collapsed {
-        min-width: 65px;
-        max-width: 65px;
+        min-width: $sidebar-collapsed-width;
+        max-width: $sidebar-collapsed-width;
         transition: all 0.15s linear;
-
-        #sidebar-header {
-            padding: 0.5rem;
-        }
 
         #sidebar-toogle-button {
             svg {
@@ -134,10 +113,13 @@ export default {
 }
 
 #sidebar-elements {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 2rem;
+    left: 0;
     overflow-x: hidden;
-    min-height: 73vh;
-    max-height: 73vh;
-    margin: 7vh auto;
+    padding-top: 0.5rem;
 
     li {
         font-size: 1.1rem;
@@ -159,7 +141,7 @@ export default {
         }
 
         &:hover {
-            background: $secondary-accent2;
+            background: $primary-dark-accent2;
         }
 
         &.active {
@@ -168,12 +150,11 @@ export default {
         }
 
         &.active:hover {
-            background: $secondary-accent1;
+            background: $primary-dark-accent1;
         }
     }
 }
 
-#sidebar-header,
 #sidebar-toogle-button,
 #sidebar-elements li {
     cursor: pointer;
@@ -181,8 +162,8 @@ export default {
 
 #sidebar-elements,
 a[aria-expanded="true"] {
-    color: $white;
-    background: $secondary;
+    color: $sidebar-elements;
+    background: $sidebar-background;
 }
 
 a,
