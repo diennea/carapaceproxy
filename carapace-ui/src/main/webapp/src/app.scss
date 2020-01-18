@@ -3,7 +3,7 @@
 /* Bootstrap colors overriding */
 $theme-colors: (
     primary: $primary,
-    secondary: $secondary
+    secondary: $primary-dark
 );
 
 @import "./../node_modules/bootstrap/scss/bootstrap";
@@ -31,6 +31,12 @@ $theme-colors: (
     padding: 0.3em;
     margin: 0.3em auto;
     border-radius: 3px;
-    border-left: 5px solid $warning-border;
+    border-left: 5px solid $warning-dark;
     font-size: 0.95rem;
+}
+
+* {
+    font-family: "Exo 2", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }

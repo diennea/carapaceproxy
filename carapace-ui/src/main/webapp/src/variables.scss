@@ -1,11 +1,24 @@
-/* Context colors */
+// App colors
 $primary: #42b883;
-$secondary: #35495e;
-$secondary-accent1: #4c6c8b;
-$secondary-accent2: #415b75;
+$primary-bright: #f4f5f7;
+$primary-dark: #35495e;
+$primary-dark-accent1: #4c6c8b;
+$primary-dark-accent2: #415b75;
+
+// Other colors
+$white: #f2f2f2;
 $warning: #ffd4019c;
-$warning-border: #e68b179c;
+$warning-dark: #e68b179c;
 $shadow: rgba(65, 91, 117, 0.6);
 
-/* Other colors */
-$white: #f2f2f2;
+// Components colors
+$navbar-background: $primary;
+$navbar-logo: $primary-dark;
+$navbar-elements: $primary-bright;
+$sidebar-background: $primary-dark;
+$sidebar-elements: $primary-bright;
+
+// Sizing
+$navbar-height: 65px;
+$sidebar-width: 240px;
+$sidebar-collapsed-width: 65px;

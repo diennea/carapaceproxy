@@ -104,7 +104,7 @@ export default {
 
 <style scoped>
 #config-editor {
-    height: 80vh;
+    height: 72vh;
 }
 
 #status-alert {
