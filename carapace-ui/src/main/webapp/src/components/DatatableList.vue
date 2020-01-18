@@ -91,7 +91,7 @@ export default {
 }
 
 .tall {
-    max-height: 75vh;
+    max-height: 72vh;
     margin: 0.25rem auto;
 }
 
