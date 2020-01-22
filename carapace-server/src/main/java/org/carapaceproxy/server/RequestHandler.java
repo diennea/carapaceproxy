@@ -107,8 +107,8 @@ public class RequestHandler implements MatchingContext {
     }
 
     public RequestHandler(long id, HttpRequest request, List<RequestFilter> filters,
-            ClientConnectionHandler parent, ChannelHandlerContext channelToClient, Runnable onRequestFinished,
-            BackendHealthManager backendHealthManager, RequestsLogger requestsLogger) {
+                          ClientConnectionHandler parent, ChannelHandlerContext channelToClient, Runnable onRequestFinished,
+                          BackendHealthManager backendHealthManager, RequestsLogger requestsLogger) {
         this.id = id;
         this.uri = request.uri();
         this.request = request;
@@ -233,10 +233,10 @@ public class RequestHandler implements MatchingContext {
             }
             case CACHE: {
                 cacheSender = connectionToClient.cache.serveFromCache(this);
-                    if (cacheSender != null) {
+                if (cacheSender != null) {
                     return;
                 }
-                    EndpointConnection connection;
+                EndpointConnection connection;
                 try {
 //                    LOG.log(Level.SEVERE, "TIME"+TIME_TRACKER.incrementAndGet()+" startc " + this + " thread " + Thread.currentThread().getName());
                     connection = connectionToClient.connectionsManager.getConnection(new EndpointKey(
@@ -348,7 +348,7 @@ public class RequestHandler implements MatchingContext {
     private final StringBuilder output = new StringBuilder();
 
     private void serveNotFoundMessage() {
-        MapResult fromDefault = connectionToClient.mapper.mapDefaultPageNotFound(request, action.routeid);
+        MapResult fromDefault = connectionToClient.mapper.mapPageNotFound(request, action.routeid);
         int code = 0;
         String resource = null;
         if (fromDefault != null) {
@@ -374,7 +374,7 @@ public class RequestHandler implements MatchingContext {
     }
 
     private void serveInternalErrorMessage(boolean forceClose) {
-        MapResult fromDefault = connectionToClient.mapper.mapDefaultInternalError(request, action.routeid);
+        MapResult fromDefault = connectionToClient.mapper.mapInternalError(request, action.routeid);
         int code = 0;
         String resource = null;
         if (fromDefault != null) {
@@ -398,8 +398,7 @@ public class RequestHandler implements MatchingContext {
     }
 
     private void serveStaticMessage() {
-        FullHttpResponse response
-                = connectionToClient.staticContentsManager.buildResponse(action.errorcode, action.resource);
+        FullHttpResponse response = connectionToClient.staticContentsManager.buildResponse(action.errorcode, action.resource);
         addCustomResponseHeaders(response);
         if (!writeSimpleResponse(response)) {
             // If keep-alive is off, close the connection once the content is fully written.
@@ -545,8 +544,7 @@ public class RequestHandler implements MatchingContext {
 
     private void sendServiceNotAvailable() {
 //        LOG.info(this + " sendServiceNotAvailable due to " + cause + " to " + ctx);
-        FullHttpResponse response
-                = connectionToClient.staticContentsManager.buildResponse(500, DEFAULT_INTERNAL_SERVER_ERROR);
+        FullHttpResponse response = connectionToClient.staticContentsManager.buildResponse(500, DEFAULT_INTERNAL_SERVER_ERROR);
         clientState = RequestHandlerState.WRITING;
         channelToClient.writeAndFlush(response).addListener(new GenericFutureListener<Future<? super Void>>() {
             @Override
@@ -597,7 +595,7 @@ public class RequestHandler implements MatchingContext {
     }
 
     public boolean errorSendingRequest(EndpointConnectionImpl connection, Throwable cause) {
-        LOG.log(Level.INFO,"errorSendingRequest to " + connection, cause);
+        LOG.log(Level.INFO, "errorSendingRequest to " + connection, cause);
         boolean ok = releaseConnectionToEndpoint(true, connection);
         if (ok) {
             connectionToClient.errorSendingRequest(this, connection, channelToClient, cause);
@@ -619,7 +617,6 @@ public class RequestHandler implements MatchingContext {
                 cleanResponseForCachedData(httpMessage);
             }
         }
-
 
         // endpoint finished his work, we can release the connection
         if (msg instanceof LastHttpContent) {

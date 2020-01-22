@@ -23,26 +23,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.net.URL;
-import java.net.URLConnection;
-import java.util.Properties;
-import org.apache.commons.io.IOUtils;
-import org.carapaceproxy.client.ConnectionsManagerStats;
-import org.carapaceproxy.configstore.PropertiesConfigurationStore;
-import org.carapaceproxy.server.HttpProxyServer;
 import static org.carapaceproxy.server.RequestHandler.PROPERTY_URI;
-import org.carapaceproxy.server.StaticContentsManager;
 import static org.carapaceproxy.server.StaticContentsManager.CLASSPATH_RESOURCE;
-import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
-import org.carapaceproxy.server.config.ActionConfiguration;
-import org.carapaceproxy.server.config.BackendConfiguration;
-import org.carapaceproxy.server.config.DirectorConfiguration;
-import org.carapaceproxy.server.config.RouteConfiguration;
-import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
-import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -50,14 +32,32 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.eq;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 import static org.mockito.ArgumentMatchers.matches;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLConnection;
+import java.util.Properties;
+import org.apache.commons.io.IOUtils;
+import org.carapaceproxy.client.ConnectionsManagerStats;
+import org.carapaceproxy.configstore.PropertiesConfigurationStore;
+import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.server.StaticContentsManager;
 import org.carapaceproxy.server.backends.BackendHealthManager;
+import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
+import org.carapaceproxy.server.config.ActionConfiguration;
+import org.carapaceproxy.server.config.BackendConfiguration;
+import org.carapaceproxy.server.config.DirectorConfiguration;
+import org.carapaceproxy.server.config.RouteConfiguration;
+import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
+import org.carapaceproxy.utils.TestUtils;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 /**
  *
@@ -162,9 +162,117 @@ public class BasicStandardEndpointMapperTest {
                 fail("expected 404");
             } catch (FileNotFoundException ok) {
             }
-            }
+        }
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
+    }
+
+    @Test
+    public void testRouteErrors() throws Exception {
+        stubFor(get(urlEqualTo("/index.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
+
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+
+            Properties configuration = new Properties();
+            configuration.put("listener.1.host", "0.0.0.0");
+            configuration.put("listener.1.port", "1425");
+            configuration.put("listener.1.ssl", "false");
+            configuration.put("listener.1.enabled", "true");
+
+            configuration.put("backend.1.id", "backend");
+            configuration.put("backend.1.host", "localhost");
+            configuration.put("backend.1.port", backend1.port() + "");
+            configuration.put("backend.1.enabled", "true");
+
+            configuration.put("director.1.id", "director");
+            configuration.put("director.1.backends", "backend");
+            configuration.put("director.1.enabled", "true");
+
+            // unreachable backend -> expected Internal Error
+            configuration.put("backend.2.id", "backend-down");
+            configuration.put("backend.2.host", "localhost-down");
+            configuration.put("backend.2.port", backend1.port() + "");
+            configuration.put("backend.2.enabled", "true");
+
+            configuration.put("director.2.id", "director-down");
+            configuration.put("director.2.backends", "backend-down");
+            configuration.put("director.2.enabled", "true");
+
+            configuration.put("action.0.id", "to-backend-down");
+            configuration.put("action.0.enabled", "true");
+            configuration.put("action.0.type", "cache");
+            configuration.put("action.0.director", "director-down");
+
+            configuration.put("action.1.id", "custom-error");
+            configuration.put("action.1.enabled", "true");
+            configuration.put("action.1.type", "static");
+            configuration.put("action.1.file", CLASSPATH_RESOURCE + "/test-static-page.html");
+            configuration.put("action.1.code", "555");
+
+            configuration.put("action.2.id", "default");
+            configuration.put("action.2.enabled", "true");
+            configuration.put("action.2.type", "cache");
+            configuration.put("action.2.director", "director");
+
+            // global-custom Not Found
+            configuration.put("action.3.id", "custom-global-error");
+            configuration.put("action.3.enabled", "true");
+            configuration.put("action.3.type", "static");
+            configuration.put("action.3.file", CLASSPATH_RESOURCE + "/test-static-page.html");
+            configuration.put("action.3.code", "444");
+            configuration.put("default.action.notfound", "custom-global-error");
+
+            // route-custom error
+            configuration.put("route.1.id", "route-custom-error");
+            configuration.put("route.1.enabled", "true");
+            configuration.put("route.1.match", "request.uri ~ \".*custom-error.*\"");
+            configuration.put("route.1.action", "to-backend-down");
+            configuration.put("route.1.erroraction", "custom-error");
+
+            // default
+            configuration.put("route.2.id", "default");
+            configuration.put("route.2.enabled", "true");
+            configuration.put("route.2.match", "request.uri ~ \".*index.html.*\"");
+            configuration.put("route.2.action", "default");
+
+            PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
+
+            BackendHealthManager bhMan = mock(BackendHealthManager.class);
+            when(bhMan.isAvailable(eq("localhost:" + backend1.port()))).thenReturn(true);
+            when(bhMan.isAvailable(eq("localhost-down:" + backend1.port()))).thenReturn(false); // simulate unreachable backend -> expected 500 error
+            server.setBackendHealthManager(bhMan);
+            server.configureAtBoot(config);
+            server.start();
+
+            // working one
+            {
+                String url = "http://localhost:" + server.getLocalPort() + "/index.html";
+                String s = IOUtils.toString(new URL(url).toURI(), "utf-8");
+                assertEquals("it <b>works</b> !!", s);
+            }
+
+            // route-custom error
+            try {
+                String url = "http://localhost:" + server.getLocalPort() + "/custom-error.html";
+                String s = IOUtils.toString(new URL(url).toURI(), "utf-8");
+                fail("Expected route-custom error");
+            } catch (Exception ex) {
+                assertTrue(ex.getMessage().contains("Server returned HTTP response code: 555"));
+            }
+
+            // global-custom Not Found
+            try {
+                String url = "http://localhost:" + server.getLocalPort() + "/index2.html";
+                String s = IOUtils.toString(new URL(url).toURI(), "utf-8");
+                fail("Expected global-custom Not Found");
+            } catch (Exception ex) {
+                assertTrue(ex.getMessage().contains("Server returned HTTP response code: 444"));
+            }
+        }
     }
 
     @Test
@@ -268,10 +376,21 @@ public class BasicStandardEndpointMapperTest {
                 configuration.put("action.1.type", "static");
                 configuration.put("action.1.file", CLASSPATH_RESOURCE + "/test-static-page.html");
                 configuration.put("action.1.code", "200");
-                configuration.put("route.8.id", "static-page");
-                configuration.put("route.8.enabled", "true");
-                configuration.put("route.8.match", "request.uri ~ \".*index.*\"");
-                configuration.put("route.8.action", "serve-static");
+                configuration.put("route.1.id", "static-page");
+                configuration.put("route.1.enabled", "true");
+                configuration.put("route.1.match", "request.uri ~ \".*index.*\"");
+                configuration.put("route.1.action", "serve-static");
+
+                configuration.put("action.2.id", "static-not-exists"); // file not exists
+                configuration.put("action.2.enabled", "true");
+                configuration.put("action.2.type", "static");
+                configuration.put("action.2.file", CLASSPATH_RESOURCE + "/not-exists.html");
+                configuration.put("action.2.code", "200");
+                configuration.put("route.2.id", "static-not-exists");
+                configuration.put("route.2.enabled", "true");
+                configuration.put("route.2.match", "request.uri ~ \".*not-exists.*\"");
+                configuration.put("route.2.action", "static-not-exists");
+
                 PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
                 server.configureAtBoot(config);
             }
@@ -289,7 +408,14 @@ public class BasicStandardEndpointMapperTest {
                 String s = IOUtils.toString(new URL(url).toURI(), "utf-8");
                 assertEquals("it <b>works</b> !!", s);
             }
-
+            // resource not esists > Not Found
+            try {
+                String url = "http://localhost:" + server.getLocalPort() + "/not-exists.html";
+                String s = IOUtils.toString(new URL(url).toURI(), "utf-8");
+                fail("Expected Not Found");
+            } catch (Exception ex) {
+                assertTrue(ex instanceof FileNotFoundException);
+            }
         }
     }
 
@@ -585,6 +711,6 @@ public class BasicStandardEndpointMapperTest {
                 assertEquals("https://192.0.0.1:1234/indexX.html", conn.getHeaderField("Location"));
                 assertTrue(conn.getHeaderFields().toString().contains("307 Temporary Redirect"));
             }
-            }
         }
     }
+}

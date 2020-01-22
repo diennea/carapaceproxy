@@ -53,11 +53,11 @@ public abstract class EndpointMapper {
 
     public abstract MapResult map(HttpRequest request, String userId, String sessionId, BackendHealthManager backendHealthManager, RequestHandler requestHandler);
 
-    public MapResult mapDefaultInternalError(HttpRequest request, String routeid) {
+    public MapResult mapInternalError(HttpRequest request, String routeid) {
         return MapResult.INTERNAL_ERROR(routeid);
     }
 
-    public MapResult mapDefaultPageNotFound(HttpRequest request, String routeid) {
+    public MapResult mapPageNotFound(HttpRequest request, String routeid) {
         return MapResult.NOT_FOUND(routeid);
     }
 
