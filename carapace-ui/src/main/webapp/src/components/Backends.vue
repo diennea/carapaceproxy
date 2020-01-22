@@ -130,31 +130,30 @@ export default {
 };
 </script>
 
-<style scoped>
-table th,
-table tr td .label {
+<style lang="scss" scoped>
+@import "../variables.scss";
+
+table th {
     font-size: 13px;
 }
-table tr td .label-error {
-    background-color: #f44336;
-    border-radius: 2px;
 
-    text-transform: uppercase;
-    text-align: center;
-    font-weight: bold;
-    color: white;
+table tr td {
+    & .label {
+        font-size: 13px;        
+        border-radius: 2px;
+        text-transform: uppercase;
+        text-align: center;
+        font-weight: bold;
+        color: $white;
+        padding: 10px;
+    } 
+    
+    & .label-success {
+        background-color: $success;
+    }
 
-    padding: 10px;
-}
-table tr td .label-success {
-    background-color: #4caf50;
-    border-radius: 2px;
-
-    text-transform: uppercase;
-    font-weight: bold;
-    text-align: center;
-    color: white;
-
-    padding: 10px;
+    & .label-error {
+        background-color: $error;
+    }
 }
 </style>
