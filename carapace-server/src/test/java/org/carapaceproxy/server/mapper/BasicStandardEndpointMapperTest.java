@@ -202,42 +202,59 @@ public class BasicStandardEndpointMapperTest {
             configuration.put("director.2.backends", "backend-down");
             configuration.put("director.2.enabled", "true");
 
+            // custom headers
+            configuration.put("header.1.id", "h-custom-error");
+            configuration.put("header.1.name", "h-custom-error");
+            configuration.put("header.1.value", "h-custom-error-value; h-custom-error-value2;h-custom-error-value3");
+
+            configuration.put("header.2.id", "h-working-one");
+            configuration.put("header.2.name", "h-working-one");
+            configuration.put("header.2.value", "h-working-one-value; h-working-one-value2;h-working-one-value3");
+
+            configuration.put("header.3.id", "h-custom-global-error");
+            configuration.put("header.3.name", "h-custom-global-error");
+            configuration.put("header.3.value", "h-custom-global-error-value; h-custom-global-error-value2;h-custom-global-error-value3");
+
             configuration.put("action.0.id", "to-backend-down");
             configuration.put("action.0.enabled", "true");
             configuration.put("action.0.type", "cache");
             configuration.put("action.0.director", "director-down");
 
+            // actions
             configuration.put("action.1.id", "custom-error");
             configuration.put("action.1.enabled", "true");
             configuration.put("action.1.type", "static");
             configuration.put("action.1.file", CLASSPATH_RESOURCE + "/test-static-page.html");
             configuration.put("action.1.code", "555");
+            configuration.put("action.1.headers", "h-custom-error");
 
-            configuration.put("action.2.id", "default");
+            configuration.put("action.2.id", "working-one");
             configuration.put("action.2.enabled", "true");
             configuration.put("action.2.type", "cache");
             configuration.put("action.2.director", "director");
+            configuration.put("action.2.headers", "h-working-one");
 
-            // global-custom Not Found
+            // global-custom error (Not Found)
             configuration.put("action.3.id", "custom-global-error");
             configuration.put("action.3.enabled", "true");
             configuration.put("action.3.type", "static");
             configuration.put("action.3.file", CLASSPATH_RESOURCE + "/test-static-page.html");
             configuration.put("action.3.code", "444");
+            configuration.put("action.3.headers", "h-custom-global-error");
             configuration.put("default.action.notfound", "custom-global-error");
 
-            // route-custom error
+            // route-custom error (Internal Errror)
             configuration.put("route.1.id", "route-custom-error");
             configuration.put("route.1.enabled", "true");
             configuration.put("route.1.match", "request.uri ~ \".*custom-error.*\"");
             configuration.put("route.1.action", "to-backend-down");
             configuration.put("route.1.erroraction", "custom-error");
 
-            // default
-            configuration.put("route.2.id", "default");
+            // working-one
+            configuration.put("route.2.id", "working-one");
             configuration.put("route.2.enabled", "true");
             configuration.put("route.2.match", "request.uri ~ \".*index.html.*\"");
-            configuration.put("route.2.action", "default");
+            configuration.put("route.2.action", "working-one");
 
             PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
 
@@ -248,29 +265,25 @@ public class BasicStandardEndpointMapperTest {
             server.configureAtBoot(config);
             server.start();
 
+            // route-custom error (Internal Errror)
+            {
+                HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + server.getLocalPort() + "/custom-error.html").openConnection();
+                assertEquals("h-custom-error-value; h-custom-error-value2;h-custom-error-value3", conn.getHeaderField("h-custom-error"));
+                assertEquals(555, conn.getResponseCode());
+            }
+
             // working one
             {
-                String url = "http://localhost:" + server.getLocalPort() + "/index.html";
-                String s = IOUtils.toString(new URL(url).toURI(), "utf-8");
-                assertEquals("it <b>works</b> !!", s);
+                HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + server.getLocalPort() + "/index.html").openConnection();
+                assertEquals("h-working-one-value; h-working-one-value2;h-working-one-value3", conn.getHeaderField("h-working-one"));
+                assertEquals(200, conn.getResponseCode());
             }
 
-            // route-custom error
-            try {
-                String url = "http://localhost:" + server.getLocalPort() + "/custom-error.html";
-                String s = IOUtils.toString(new URL(url).toURI(), "utf-8");
-                fail("Expected route-custom error");
-            } catch (Exception ex) {
-                assertTrue(ex.getMessage().contains("Server returned HTTP response code: 555"));
-            }
-
-            // global-custom Not Found
-            try {
-                String url = "http://localhost:" + server.getLocalPort() + "/index2.html";
-                String s = IOUtils.toString(new URL(url).toURI(), "utf-8");
-                fail("Expected global-custom Not Found");
-            } catch (Exception ex) {
-                assertTrue(ex.getMessage().contains("Server returned HTTP response code: 444"));
+            // global-custom error (Not Found)
+            {
+                HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + server.getLocalPort() + "/index2.html").openConnection();
+                assertEquals("h-custom-global-error-value; h-custom-global-error-value2;h-custom-global-error-value3", conn.getHeaderField("h-custom-global-error"));
+                assertEquals(444, conn.getResponseCode());
             }
         }
     }

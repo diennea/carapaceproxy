@@ -491,7 +491,7 @@ public class StandardEndpointMapper extends EndpointMapper {
             errorAction = actions.get(defaultInternalErrorAction);
         }
         if (errorAction != null) {
-            return new SimpleHTTPResponse(errorAction.getErrorcode(), errorAction.getFile());
+            return new SimpleHTTPResponse(errorAction.getErrorcode(), errorAction.getFile(), errorAction.getCustomHeaders());
         }
         // fallback
         return super.mapInternalError(routeid);
@@ -501,9 +501,9 @@ public class StandardEndpointMapper extends EndpointMapper {
     public SimpleHTTPResponse mapPageNotFound(String routeid) {
         // custom global
         if (defaultNotFoundAction != null) {
-            ActionConfiguration actionError = actions.get(defaultNotFoundAction);
-            if (actionError != null) {
-                return new SimpleHTTPResponse(actionError.getErrorcode(), actionError.getFile());
+            ActionConfiguration errorAction = actions.get(defaultNotFoundAction);
+            if (errorAction != null) {
+                return new SimpleHTTPResponse(errorAction.getErrorcode(), errorAction.getFile(), errorAction.getCustomHeaders());
             }
         }
         // fallback

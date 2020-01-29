@@ -19,6 +19,11 @@
  */
 package org.carapaceproxy;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import org.carapaceproxy.server.mapper.CustomHeader;
+
 /**
  * Static response to sent to clients.
  *
@@ -28,10 +33,12 @@ public class SimpleHTTPResponse {
 
     private final int errorcode;
     private final String resource;
+    private final List<CustomHeader> customHeaders;
 
-    public SimpleHTTPResponse(int errorcode, String resource) {
+    public SimpleHTTPResponse(int errorcode, String resource, List<CustomHeader> customHeaders) {
         this.errorcode = errorcode;
         this.resource = resource;
+        this.customHeaders = Collections.unmodifiableList(customHeaders == null ? new ArrayList() : customHeaders);
     }
 
     public int getErrorcode() {
@@ -42,17 +49,21 @@ public class SimpleHTTPResponse {
         return resource;
     }
 
+    public List<CustomHeader> getCustomHeaders() {
+        return customHeaders;
+    }
+
     public static final SimpleHTTPResponse NOT_FOUND(String res) {
-        return new SimpleHTTPResponse(404, res);
+        return new SimpleHTTPResponse(404, res, null);
     }
 
     public static final SimpleHTTPResponse INTERNAL_ERROR(String res) {
-        return new SimpleHTTPResponse(500, res);
+        return new SimpleHTTPResponse(500, res, null);
     }
 
     @Override
     public String toString() {
-        return "SimpleHTTPResponse{" + "errorcode=" + errorcode + ", resource=" + resource + '}';
+        return "SimpleHTTPResponse{" + "errorcode=" + errorcode + ", resource=" + resource + ", customHeaders=" + customHeaders + '}';
     }
 
 }
