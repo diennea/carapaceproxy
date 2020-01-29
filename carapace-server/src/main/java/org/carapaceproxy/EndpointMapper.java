@@ -25,6 +25,7 @@ import java.util.Map;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.RequestHandler;
+import org.carapaceproxy.server.StaticContentsManager;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
 import org.carapaceproxy.server.config.ActionConfiguration;
@@ -53,12 +54,12 @@ public abstract class EndpointMapper {
 
     public abstract MapResult map(HttpRequest request, String userId, String sessionId, BackendHealthManager backendHealthManager, RequestHandler requestHandler);
 
-    public MapResult mapInternalError(HttpRequest request, String routeid) {
-        return MapResult.INTERNAL_ERROR(routeid);
+    public SimpleHTTPResponse mapPageNotFound(String routeid) {
+        return SimpleHTTPResponse.NOT_FOUND(StaticContentsManager.DEFAULT_NOT_FOUND);
     }
 
-    public MapResult mapPageNotFound(HttpRequest request, String routeid) {
-        return MapResult.NOT_FOUND(routeid);
+    public SimpleHTTPResponse mapInternalError(String routeid) {
+        return SimpleHTTPResponse.INTERNAL_ERROR(StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR);
     }
 
     public void endpointFailed(EndpointKey key, Throwable error) {

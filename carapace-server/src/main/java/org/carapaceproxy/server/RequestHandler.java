@@ -62,6 +62,7 @@ import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import static org.carapaceproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
+import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.server.mapper.CustomHeader.HeaderMode;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchingContext;
 import org.carapaceproxy.utils.PrometheusUtils;
@@ -348,12 +349,12 @@ public class RequestHandler implements MatchingContext {
     private final StringBuilder output = new StringBuilder();
 
     private void serveNotFoundMessage() {
-        MapResult fromDefault = connectionToClient.mapper.mapPageNotFound(request, action.routeid);
+        SimpleHTTPResponse res = connectionToClient.mapper.mapPageNotFound(action.routeid);
         int code = 0;
         String resource = null;
-        if (fromDefault != null) {
-            code = fromDefault.getErrorcode();
-            resource = fromDefault.getResource();
+        if (res != null) {
+            code = res.getErrorcode();
+            resource = res.getResource();
         }
         if (resource == null) {
             resource = StaticContentsManager.DEFAULT_NOT_FOUND;
@@ -374,12 +375,12 @@ public class RequestHandler implements MatchingContext {
     }
 
     private void serveInternalErrorMessage(boolean forceClose) {
-        MapResult fromDefault = connectionToClient.mapper.mapInternalError(request, action.routeid);
+        SimpleHTTPResponse res = connectionToClient.mapper.mapInternalError(action.routeid);
         int code = 0;
         String resource = null;
-        if (fromDefault != null) {
-            code = fromDefault.getErrorcode();
-            resource = fromDefault.getResource();
+        if (res != null) {
+            code = res.getErrorcode();
+            resource = res.getResource();
         }
         if (resource == null) {
             resource = StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;

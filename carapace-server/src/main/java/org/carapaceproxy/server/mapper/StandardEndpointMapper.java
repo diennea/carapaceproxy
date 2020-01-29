@@ -48,6 +48,7 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import static org.carapaceproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
 import java.util.Optional;
+import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
@@ -475,7 +476,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     }
 
     @Override
-    public MapResult mapInternalError(HttpRequest request, String routeid) {
+    public SimpleHTTPResponse mapInternalError(String routeid) {
         ActionConfiguration errorAction = null;
         // custom for route
         Optional<RouteConfiguration> config = routes.stream().filter(r -> r.getId().equalsIgnoreCase(routeid)).findFirst();
@@ -490,29 +491,23 @@ public class StandardEndpointMapper extends EndpointMapper {
             errorAction = actions.get(defaultInternalErrorAction);
         }
         if (errorAction != null) {
-            return new MapResult(null, 0, Action.INTERNAL_ERROR, routeid)
-                    .setResource(errorAction.getFile())
-                    .setErrorcode(errorAction.getErrorcode())
-                    .setCustomHeaders(errorAction.getCustomHeaders());
+            return new SimpleHTTPResponse(errorAction.getErrorcode(), errorAction.getFile());
         }
         // fallback
-        return super.mapInternalError(request, routeid);
+        return super.mapInternalError(routeid);
     }
 
     @Override
-    public MapResult mapPageNotFound(HttpRequest request, String routeid) {
+    public SimpleHTTPResponse mapPageNotFound(String routeid) {
         // custom global
         if (defaultNotFoundAction != null) {
             ActionConfiguration actionError = actions.get(defaultNotFoundAction);
             if (actionError != null) {
-                return new MapResult(null, 0, Action.NOTFOUND, routeid)
-                        .setResource(actionError.getFile())
-                        .setErrorcode(actionError.getErrorcode())
-                        .setCustomHeaders(actionError.getCustomHeaders());
+                return new SimpleHTTPResponse(actionError.getErrorcode(), actionError.getFile());
             }
         }
         // fallback
-        return super.mapPageNotFound(request, routeid);
+        return super.mapPageNotFound(routeid);
     }
 
     public String getForceDirectorParameter() {
