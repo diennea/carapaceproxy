@@ -43,12 +43,14 @@ public class RoutesResource {
     public static final class RouteBean {
         private final String id;
         private final String action;
+        private final String errorAction;
         private final boolean enabled;
         private final String matcher;
 
-        public RouteBean(String id, String action, boolean enabled, String matcher) {
+        public RouteBean(String id, String action, String errorAction, boolean enabled, String matcher) {
             this.id = id;
             this.action = action;
+            this.errorAction = errorAction;
             this.enabled = enabled;
             this.matcher = matcher;
         }
@@ -59,6 +61,10 @@ public class RoutesResource {
 
         public String getAction() {
             return action;
+        }
+
+        public String getErrorAction() {
+            return errorAction;
         }
 
         public boolean isEnabled() {
@@ -76,9 +82,14 @@ public class RoutesResource {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         server.getMapper().getRoutes().stream()
                 .filter(r -> !r.getId().equals(ACME_CHALLENGE_ROUTE_ACTION_ID))
-                .forEach(route -> {            
-            routes.add(new RouteBean(route.getId(), route.getAction(), route.isEnabled(), route.getMatcher().getDescription()));
-        });
+                .forEach(route -> {
+                    routes.add(new RouteBean(
+                            route.getId(),
+                            route.getAction(),
+                            route.getErrorAction(),
+                            route.isEnabled(),
+                            route.getMatcher().getDescription()));
+                });
 
         return routes;
     }
