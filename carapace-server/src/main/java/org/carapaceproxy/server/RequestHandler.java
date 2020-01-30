@@ -62,6 +62,8 @@ import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import static org.carapaceproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
+import org.carapaceproxy.SimpleHTTPResponse;
+import org.carapaceproxy.server.mapper.CustomHeader;
 import org.carapaceproxy.server.mapper.CustomHeader.HeaderMode;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchingContext;
 import org.carapaceproxy.utils.PrometheusUtils;
@@ -107,8 +109,8 @@ public class RequestHandler implements MatchingContext {
     }
 
     public RequestHandler(long id, HttpRequest request, List<RequestFilter> filters,
-            ClientConnectionHandler parent, ChannelHandlerContext channelToClient, Runnable onRequestFinished,
-            BackendHealthManager backendHealthManager, RequestsLogger requestsLogger) {
+                          ClientConnectionHandler parent, ChannelHandlerContext channelToClient, Runnable onRequestFinished,
+                          BackendHealthManager backendHealthManager, RequestsLogger requestsLogger) {
         this.id = id;
         this.uri = request.uri();
         this.request = request;
@@ -233,10 +235,10 @@ public class RequestHandler implements MatchingContext {
             }
             case CACHE: {
                 cacheSender = connectionToClient.cache.serveFromCache(this);
-                    if (cacheSender != null) {
+                if (cacheSender != null) {
                     return;
                 }
-                    EndpointConnection connection;
+                EndpointConnection connection;
                 try {
 //                    LOG.log(Level.SEVERE, "TIME"+TIME_TRACKER.incrementAndGet()+" startc " + this + " thread " + Thread.currentThread().getName());
                     connection = connectionToClient.connectionsManager.getConnection(new EndpointKey(
@@ -348,12 +350,14 @@ public class RequestHandler implements MatchingContext {
     private final StringBuilder output = new StringBuilder();
 
     private void serveNotFoundMessage() {
-        MapResult fromDefault = connectionToClient.mapper.mapDefaultPageNotFound(request, action.routeid);
+        SimpleHTTPResponse res = connectionToClient.mapper.mapPageNotFound(action.routeid);
         int code = 0;
         String resource = null;
-        if (fromDefault != null) {
-            code = fromDefault.getErrorcode();
-            resource = fromDefault.getResource();
+        List<CustomHeader> customHeaders = null;
+        if (res != null) {
+            code = res.getErrorcode();
+            resource = res.getResource();
+            customHeaders = res.getCustomHeaders();
         }
         if (resource == null) {
             resource = StaticContentsManager.DEFAULT_NOT_FOUND;
@@ -363,6 +367,7 @@ public class RequestHandler implements MatchingContext {
         }
 
         FullHttpResponse response = connectionToClient.staticContentsManager.buildResponse(code, resource);
+        addCustomResponseHeaders(response, customHeaders);
         if (!writeSimpleResponse(response)) {
             forceCloseChannelToClient();
         }
@@ -374,12 +379,14 @@ public class RequestHandler implements MatchingContext {
     }
 
     private void serveInternalErrorMessage(boolean forceClose) {
-        MapResult fromDefault = connectionToClient.mapper.mapDefaultInternalError(request, action.routeid);
+        SimpleHTTPResponse res = connectionToClient.mapper.mapInternalError(action.routeid);
         int code = 0;
         String resource = null;
-        if (fromDefault != null) {
-            code = fromDefault.getErrorcode();
-            resource = fromDefault.getResource();
+        List<CustomHeader> customHeaders = null;
+        if (res != null) {
+            code = res.getErrorcode();
+            resource = res.getResource();
+            customHeaders = res.getCustomHeaders();
         }
         if (resource == null) {
             resource = StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
@@ -389,8 +396,7 @@ public class RequestHandler implements MatchingContext {
         }
 
         FullHttpResponse response = connectionToClient.staticContentsManager.buildResponse(code, resource);
-        addCustomResponseHeaders(response);
-
+        addCustomResponseHeaders(response, customHeaders);
         if (!writeSimpleResponse(response) || forceClose) {
             // If keep-alive is off, close the connection once the content is fully written.
             forceCloseChannelToClient();
@@ -398,9 +404,8 @@ public class RequestHandler implements MatchingContext {
     }
 
     private void serveStaticMessage() {
-        FullHttpResponse response
-                = connectionToClient.staticContentsManager.buildResponse(action.errorcode, action.resource);
-        addCustomResponseHeaders(response);
+        FullHttpResponse response = connectionToClient.staticContentsManager.buildResponse(action.errorcode, action.resource);
+        addCustomResponseHeaders(response, action.customHeaders);
         if (!writeSimpleResponse(response)) {
             // If keep-alive is off, close the connection once the content is fully written.
             forceCloseChannelToClient();
@@ -412,7 +417,7 @@ public class RequestHandler implements MatchingContext {
                 HttpVersion.HTTP_1_1,
                 HttpResponseStatus.valueOf(action.errorcode < 0 ? 302 : action.errorcode) // redirect: 3XX
         );
-        addCustomResponseHeaders(res);
+        addCustomResponseHeaders(res, action.customHeaders);
         res.headers().set(HttpHeaderNames.CACHE_CONTROL, "no-cache");
 
         String location = action.redirectLocation;
@@ -545,8 +550,7 @@ public class RequestHandler implements MatchingContext {
 
     private void sendServiceNotAvailable() {
 //        LOG.info(this + " sendServiceNotAvailable due to " + cause + " to " + ctx);
-        FullHttpResponse response
-                = connectionToClient.staticContentsManager.buildResponse(500, DEFAULT_INTERNAL_SERVER_ERROR);
+        FullHttpResponse response = connectionToClient.staticContentsManager.buildResponse(500, DEFAULT_INTERNAL_SERVER_ERROR);
         clientState = RequestHandlerState.WRITING;
         channelToClient.writeAndFlush(response).addListener(new GenericFutureListener<Future<? super Void>>() {
             @Override
@@ -597,7 +601,7 @@ public class RequestHandler implements MatchingContext {
     }
 
     public boolean errorSendingRequest(EndpointConnectionImpl connection, Throwable cause) {
-        LOG.log(Level.INFO,"errorSendingRequest to " + connection, cause);
+        LOG.log(Level.INFO, "errorSendingRequest to " + connection, cause);
         boolean ok = releaseConnectionToEndpoint(true, connection);
         if (ok) {
             connectionToClient.errorSendingRequest(this, connection, channelToClient, cause);
@@ -620,13 +624,12 @@ public class RequestHandler implements MatchingContext {
             }
         }
 
-
         // endpoint finished his work, we can release the connection
         if (msg instanceof LastHttpContent) {
            releaseConnectionToEndpoint(false /*force close*/, connection);
         }
 
-        addCustomResponseHeaders(msg);
+        addCustomResponseHeaders(msg, action.customHeaders);
         clientState = RequestHandlerState.WRITING;
         channelToClient.writeAndFlush(msg).addListener((Future<? super Void> future) -> {
             clientState = RequestHandlerState.IDLE;
@@ -648,11 +651,11 @@ public class RequestHandler implements MatchingContext {
         });
     }
 
-    private void addCustomResponseHeaders(HttpObject msg) {
+    private void addCustomResponseHeaders(HttpObject msg, List<CustomHeader> customHeaders) {
         // Custom response Headers
-        if (msg instanceof HttpResponse && action != null && action.customHeaders != null) {
+        if (msg instanceof HttpResponse && customHeaders != null) {
             HttpHeaders headers = ((HttpResponse) msg).headers();
-            action.customHeaders.forEach(customHeader -> {
+            customHeaders.forEach(customHeader -> {
                 if (HeaderMode.SET.equals(customHeader.getMode())
                         || HeaderMode.REMOVE.equals(customHeader.getMode())) {
                     headers.remove(customHeader.getName());

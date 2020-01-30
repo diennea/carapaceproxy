@@ -36,6 +36,7 @@ export default {
                 { key: "id", label: "ID", sortable: true },
                 { key: "matcher", label: "Request Matcher", sortable: true },
                 { key: "action", label: "Action", sortable: true },
+                { key: "errorAction", label: "Error Action", sortable: true },
                 {
                     key: "enabled",
                     label: "Enabled",

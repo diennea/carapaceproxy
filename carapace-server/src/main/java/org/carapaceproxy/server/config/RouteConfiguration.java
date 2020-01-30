@@ -28,9 +28,10 @@ import org.carapaceproxy.server.RequestHandler;
 public class RouteConfiguration {
 
     private final String id;
-    private final String action;
     private final boolean enabled;
     private final RequestMatcher matcher;
+    private final String action;
+    private String errorAction;
 
     public RouteConfiguration(String id, String action, boolean enabled, RequestMatcher matcher) {
         this.id = id;
@@ -45,6 +46,14 @@ public class RouteConfiguration {
 
     public String getAction() {
         return action;
+    }
+
+    public String getErrorAction() {
+        return errorAction;
+    }
+
+    public void setErrorAction(String errorAction) {
+        this.errorAction = errorAction;
     }
 
     public boolean isEnabled() {

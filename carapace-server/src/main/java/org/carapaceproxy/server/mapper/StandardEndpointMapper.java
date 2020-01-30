@@ -47,6 +47,8 @@ import org.carapaceproxy.server.config.BackendSelector;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import static org.carapaceproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
+import java.util.Optional;
+import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
@@ -238,20 +240,31 @@ public class StandardEndpointMapper extends EndpointMapper {
         for (int i = 0; i < MAX_IDS; i++) {
             String prefix = "route." + i + ".";
             String id = properties.getProperty(prefix + "id", "");
-            if (!id.isEmpty()) {
+            if (id.isEmpty()) {
+                continue;
+            }
+            String matchingCondition = "";
+            try {
                 String action = properties.getProperty(prefix + "action", "");
                 boolean enabled = Boolean.parseBoolean(properties.getProperty(prefix + "enabled", "false"));
-                String matchingCondition = properties.getProperty(prefix + "match", "all").trim();
-                try {
-                    RequestMatcher matcher = new RequestMatchParser(matchingCondition).parse();
-                    LOG.log(Level.INFO, "configured route {0} action: {1} enabled: {2} matcher: {3}", new Object[]{id, action, enabled, matcher});
-                    RouteConfiguration config = new RouteConfiguration(id, action, enabled, matcher);
-                    addRoute(config);
-                } catch (ParseException | ConfigurationNotValidException ex) {
-                    throw new ConfigurationNotValidException(
-                            prefix + " unable to parse matching condition \"" + matchingCondition + "\" due to: " + ex
-                    );
+                matchingCondition = properties.getProperty(prefix + "match", "all").trim();
+                RequestMatcher matcher = new RequestMatchParser(matchingCondition).parse();
+                LOG.log(Level.INFO, "configured route {0} action: {1} enabled: {2} matcher: {3}", new Object[]{id, action, enabled, matcher});
+                RouteConfiguration config = new RouteConfiguration(id, action, enabled, matcher);
+                // Error action
+                String errorAction = properties.getProperty(prefix + "erroraction", "");
+                if (!errorAction.isEmpty()) {
+                    ActionConfiguration defined = actions.get(errorAction);
+                    if (defined == null || !ActionConfiguration.TYPE_STATIC.equals(defined.getType())) {
+                        throw new ConfigurationNotValidException("Error action for route " + id + " has to be defined and has to be type STATIC");
+                    }
                 }
+                config.setErrorAction(errorAction);
+                addRoute(config);
+            } catch (ParseException | ConfigurationNotValidException ex) {
+                throw new ConfigurationNotValidException(
+                        prefix + " unable to parse matching condition \"" + matchingCondition + "\" due to: " + ex
+                );
             }
         }
     }
@@ -375,7 +388,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                 ActionConfiguration action = actions.get(route.getAction());
                 if (action == null) {
                     LOG.info("no action '" + route.getAction() + "' -> not-found for " + request.uri() + ", valid " + actions.keySet());
-                    return MapResult.NOT_FOUND(route.getId());
+                    return MapResult.INTERNAL_ERROR(route.getId());
                 }
 
                 if (ActionConfiguration.TYPE_REDIRECT.equals(action.getType())) {
@@ -434,7 +447,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                             selectedAction = MapResult.Action.CACHE;
                             break;
                         default:
-                            return MapResult.NOT_FOUND(route.getId());
+                            return MapResult.INTERNAL_ERROR(route.getId());
                     }
 
                     BackendConfiguration backend = this.backends.get(backendId);
@@ -462,12 +475,39 @@ public class StandardEndpointMapper extends EndpointMapper {
         return MapResult.NOT_FOUND(MapResult.NO_ROUTE);
     }
 
-    public String getDefaultNotFoundAction() {
-        return defaultNotFoundAction;
+    @Override
+    public SimpleHTTPResponse mapInternalError(String routeid) {
+        ActionConfiguration errorAction = null;
+        // custom for route
+        Optional<RouteConfiguration> config = routes.stream().filter(r -> r.getId().equalsIgnoreCase(routeid)).findFirst();
+        if (config.isPresent()) {
+            String action = config.get().getErrorAction();
+            if (action != null) {
+                errorAction = actions.get(action);
+            }
+        }
+        // custom global
+        if (errorAction == null && defaultInternalErrorAction != null) {
+            errorAction = actions.get(defaultInternalErrorAction);
+        }
+        if (errorAction != null) {
+            return new SimpleHTTPResponse(errorAction.getErrorcode(), errorAction.getFile(), errorAction.getCustomHeaders());
+        }
+        // fallback
+        return super.mapInternalError(routeid);
     }
 
-    public String getDefaultInternalErrorAction() {
-        return defaultInternalErrorAction;
+    @Override
+    public SimpleHTTPResponse mapPageNotFound(String routeid) {
+        // custom global
+        if (defaultNotFoundAction != null) {
+            ActionConfiguration errorAction = actions.get(defaultNotFoundAction);
+            if (errorAction != null) {
+                return new SimpleHTTPResponse(errorAction.getErrorcode(), errorAction.getFile(), errorAction.getCustomHeaders());
+            }
+        }
+        // fallback
+        return super.mapPageNotFound(routeid);
     }
 
     public String getForceDirectorParameter() {
