@@ -19,7 +19,6 @@
  */
 package org.carapaceproxy;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import org.carapaceproxy.server.mapper.CustomHeader;
@@ -38,7 +37,7 @@ public class SimpleHTTPResponse {
     public SimpleHTTPResponse(int errorcode, String resource, List<CustomHeader> customHeaders) {
         this.errorcode = errorcode;
         this.resource = resource;
-        this.customHeaders = Collections.unmodifiableList(customHeaders == null ? new ArrayList() : customHeaders);
+        this.customHeaders = customHeaders == null ? Collections.emptyList() : Collections.unmodifiableList(customHeaders);
     }
 
     public int getErrorcode() {

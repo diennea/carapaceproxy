@@ -40,7 +40,7 @@ public class ActionConfiguration {
     private final String director;
     private final String file;
     private final int errorcode;
-    private List<CustomHeader> customHeaders = Collections.EMPTY_LIST; // it's a list to keep ordering
+    private List<CustomHeader> customHeaders = Collections.emptyList(); // it's a list to keep ordering
     private String redirectLocation;
     private String redirectProto;
     private String redirectHost;
