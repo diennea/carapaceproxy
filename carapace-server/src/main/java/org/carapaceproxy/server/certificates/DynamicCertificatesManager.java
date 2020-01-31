@@ -19,18 +19,18 @@
  */
 package org.carapaceproxy.server.certificates;
 
+import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
+import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.EXPIRED;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.ORDERING;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.REQUEST_FAILED;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERIFIED;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERIFYING;
 import com.google.common.annotations.VisibleForTesting;
-import java.io.IOException;
 import java.net.MalformedURLException;
-import java.net.URL;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
-import java.security.PrivateKey;
-import java.security.cert.Certificate;
-import java.security.cert.CertificateExpiredException;
-import java.security.cert.CertificateNotYetValidException;
-import java.security.cert.X509Certificate;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -39,25 +39,26 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
-import org.carapaceproxy.configstore.ConfigurationStoreException;
-import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
-import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
-import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
-import static org.carapaceproxy.server.certificates.DynamicCertificateState.EXPIRED;
-import static org.carapaceproxy.server.certificates.DynamicCertificateState.ORDERING;
-import static org.carapaceproxy.server.certificates.DynamicCertificateState.REQUEST_FAILED;
-import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERIFIED;
-import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERIFYING;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.MANUAL;
+import java.io.IOException;
+import java.net.URL;
+import java.security.PrivateKey;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateExpiredException;
+import java.security.cert.CertificateNotYetValidException;
+import java.security.cert.X509Certificate;
+import java.util.Base64;
+import java.util.logging.Level;
+import org.carapaceproxy.configstore.ConfigurationStoreException;
+import org.carapaceproxy.server.HttpProxyServer;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
 import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.Status;
@@ -93,6 +94,11 @@ public class DynamicCertificatesManager implements Runnable {
     private volatile int period = 0; // in seconds
     private volatile int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
     private GroupMembershipHandler groupMembershipHandler;
+    private final HttpProxyServer server;
+
+    public DynamicCertificatesManager(HttpProxyServer server) {
+        this.server = server;
+    }
 
     public void setConfigurationStore(ConfigurationStore configStore) {
         this.store = configStore;
@@ -178,7 +184,7 @@ public class DynamicCertificatesManager implements Runnable {
             scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat(THREAD_NAME).build());
         }
 
-        LOG.info("Starting DynamicCertificatesManager, period: " + period + " seconds" + (TESTING_MODE ? " (TESTING_MODE)" : ""));
+        LOG.log(Level.INFO, "Starting DynamicCertificatesManager, period: {0} seconds{1}", new Object[]{period, TESTING_MODE ? " (TESTING_MODE)" : ""});
         scheduledFuture = scheduler.scheduleWithFixedDelay(this, 0, period, TimeUnit.SECONDS);
     }
 
@@ -223,15 +229,15 @@ public class DynamicCertificatesManager implements Runnable {
                 CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, false);
                 switch (cert.getState()) {
                     case WAITING: { // certificate waiting to be issues/renew
-                        LOG.info("Certificate ISSUING process for domain: " + domain + " STARTED.");
+                        LOG.log(Level.INFO, "Certificate ISSUING process for domain: {0} STARTED.", domain);
                         Order order = client.createOrderForDomain(domain);
                         cert.setPendingOrderLocation(order.getLocation());
-                        LOG.info("Pending order location for domain " + domain + ": " + order.getLocation());
+                        LOG.log(Level.INFO, "Pending order location for domain {0}: {1}", new Object[]{domain, order.getLocation()});
                         Http01Challenge challenge = client.getHTTPChallengeForOrder(order);
                         if (challenge == null) {
                             cert.setState(VERIFIED);
                         } else {
-                            LOG.info("Pending challenge data for domain " + domain + ": " + challenge.getJSON());
+                            LOG.log(Level.INFO, "Pending challenge data for domain {0}: {1}", new Object[]{domain, challenge.getJSON()});
                             triggerChallenge(challenge);
                             cert.setPendingChallengeData(challenge.getJSON());
                             cert.setState(VERIFYING);
@@ -239,7 +245,7 @@ public class DynamicCertificatesManager implements Runnable {
                         break;
                     }
                     case VERIFYING: { // challenge verification by LE pending
-                        LOG.info("VERIFYING certificate for domain " + domain + ".");
+                        LOG.log(Level.INFO, "VERIFYING certificate for domain {0}.", domain);
                         JSON challengeData = null;
                         try {
                             challengeData = JSON.parse(cert.getPendingChallengeData());
@@ -248,7 +254,7 @@ public class DynamicCertificatesManager implements Runnable {
                             cert.setState(REQUEST_FAILED);
                             break;
                         }
-                        LOG.info("CHALLENGE: " + cert.getPendingChallengeData() + ".");
+                        LOG.log(Level.INFO, "CHALLENGE: {0}.", cert.getPendingChallengeData());
                         Http01Challenge pendingChallenge = new Http01Challenge(client.getLogin(), challengeData);
                         Status status = client.checkResponseForChallenge(pendingChallenge); // checks response and updates the challenge
                         cert.setPendingChallengeData(pendingChallenge.getJSON());
@@ -262,7 +268,7 @@ public class DynamicCertificatesManager implements Runnable {
                         break;
                     }
                     case VERIFIED: { // challenge succeded
-                        LOG.info("Certificate for domain " + domain + " VERIFIED.");
+                        LOG.log(Level.INFO, "Certificate for domain {0} VERIFIED.", domain);
                         URL orderLocation = null;
                         try {
                             orderLocation = new URL(cert.getPendingOrderLocation());
@@ -279,7 +285,7 @@ public class DynamicCertificatesManager implements Runnable {
                         break;
                     }
                     case ORDERING: { // certificate ordering
-                        LOG.info("ORDERING certificate for domain " + domain + ".");
+                        LOG.log(Level.INFO, "ORDERING certificate for domain {0}.", domain);
                         URL orderLocation = null;
                         try {
                             orderLocation = new URL(cert.getPendingOrderLocation());
@@ -298,14 +304,14 @@ public class DynamicCertificatesManager implements Runnable {
                             cert.setAvailable(true);
                             cert.setState(AVAILABLE);
                             notifyCertAvailChanged = true; // all other peers need to know that this cert is available.
-                            LOG.info("Certificate issuing for domain: " + domain + " SUCCEED. Certificate's NOW AVAILABLE.");
+                            LOG.log(Level.INFO, "Certificate issuing for domain: {0} SUCCEED. Certificate''s NOW AVAILABLE.", domain);
                         } else if (status == Status.INVALID) {
                             cert.setState(REQUEST_FAILED);
                         }
                         break;
                     }
                     case REQUEST_FAILED: { // challenge/order failed
-                        LOG.info("Certificate issuing for domain: " + domain + " current status is FAILED, setting status=WAITING again.");
+                        LOG.log(Level.INFO, "Certificate issuing for domain: {0} current status is FAILED, setting status=WAITING again.", domain);
                         cert.setState(WAITING);
                         break;
                     }
@@ -320,7 +326,7 @@ public class DynamicCertificatesManager implements Runnable {
                         break;
                     }
                     case EXPIRED: {     // certificate expired
-                        LOG.info("Certificate for domain: " + domain + " EXPIRED.");
+                        LOG.log(Level.INFO, "Certificate for domain: {0} EXPIRED.", domain);
                         cert.setState(WAITING);
                         break;
                     }
@@ -328,7 +334,7 @@ public class DynamicCertificatesManager implements Runnable {
                         throw new IllegalStateException();
                 }
                 if (updateDB) {
-                    LOG.fine("Save certificate for domain " + domain);
+                    LOG.log(Level.INFO, "Save certificate for domain {0}", domain);
                     store.saveCertificate(cert);
                 }
                 if (notifyCertAvailChanged) {
@@ -452,16 +458,20 @@ public class DynamicCertificatesManager implements Runnable {
     }
 
     private void reloadCertificatesFromDB() {
+        LOG.log(Level.INFO, "Reloading certificates from db");
         try {
             Map<String, CertificateData> _certificates = new ConcurrentHashMap<>();
             for (Entry<String, CertificateData> entry: certificates.entrySet()) {
                 String domain = entry.getKey();
                 CertificateData cert = entry.getValue();
                 // "manual" flag is not stored in db > has to be re-set from existing config
-                _certificates.put(domain, loadOrCreateDynamicCertificateForDomain(domain, cert.isManual()));
+                CertificateData freshCert = loadOrCreateDynamicCertificateForDomain(domain, cert.isManual());
+                _certificates.put(domain, freshCert);
+                LOG.log(Level.INFO, "RELOADED certificate for domain {0}: {1}", new Object[]{domain, freshCert});
             }
             this.certificates = _certificates; // only certificates/domains specified in the config have to be managed.
-        } catch (GeneralSecurityException | MalformedURLException e) {
+            server.getListeners().reloadCurrentConfiguration();
+        } catch (GeneralSecurityException | MalformedURLException | InterruptedException e) {
             throw new DynamicCertificatesManagerException("Unable to load dynamic certificates from db.", e);
         }
     }

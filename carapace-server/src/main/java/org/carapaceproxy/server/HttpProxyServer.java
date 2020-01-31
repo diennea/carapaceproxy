@@ -153,7 +153,7 @@ public class HttpProxyServer implements AutoCloseable {
         this.cache = new ContentsCache(currentConfiguration);
         this.requestsLogger = new RequestsLogger(currentConfiguration);
         this.connectionsManager = new ConnectionsManagerImpl(currentConfiguration, backendHealthManager);
-        this.dynamicCertificateManager = new DynamicCertificatesManager();
+        this.dynamicCertificateManager = new DynamicCertificatesManager(this);
         if (mapper != null) {
             mapper.setDynamicCertificateManager(dynamicCertificateManager);
         }

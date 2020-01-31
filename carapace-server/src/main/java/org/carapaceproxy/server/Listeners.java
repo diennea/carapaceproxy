@@ -406,6 +406,10 @@ public class Listeners {
         }
     }
 
+    public void reloadCurrentConfiguration() throws InterruptedException {
+        reloadConfiguration(this.currentConfiguration);
+    }
+
     void reloadConfiguration(RuntimeServerConfiguration newConfiguration) throws InterruptedException {
         if (!started) {
             this.currentConfiguration = newConfiguration;

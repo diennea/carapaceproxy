@@ -19,9 +19,6 @@
  */
 package org.carapaceproxy.server.certificates;
 
-import org.carapaceproxy.server.certificates.ACMEClient;
-import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
-import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import java.lang.reflect.Field;
 import java.net.URL;
 import java.security.KeyPair;
@@ -60,6 +57,8 @@ import org.shredzone.acme4j.Login;
 import org.shredzone.acme4j.Order;
 import static org.shredzone.acme4j.Status.INVALID;
 import static org.shredzone.acme4j.Status.VALID;
+import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.server.Listeners;
 import org.shredzone.acme4j.challenge.Http01Challenge;
 import org.shredzone.acme4j.toolbox.JSON;
 import org.shredzone.acme4j.util.KeyPairUtils;
@@ -103,7 +102,9 @@ public class DynamicCertificatesManagerTest {
         when(cert.getCertificateChain()).thenReturn(Arrays.asList(_cert));
         when(ac.fetchCertificateForOrder(any())).thenReturn(cert);
 
-        DynamicCertificatesManager man = new DynamicCertificatesManager();
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        when(parent.getListeners()).thenReturn(mock(Listeners.class));
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
         Field client = man.getClass().getDeclaredField("client");
         client.setAccessible(true);
