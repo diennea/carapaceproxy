@@ -9,7 +9,9 @@
                         <li class="list-group-item"><strong>Hostname:</strong> {{certificate.hostname}}</li>
                         <li class="list-group-item"><strong>Mode:</strong> {{certificate.mode}}</li>
                         <li class="list-group-item"><strong>Dynamic:</strong> {{certificate.dynamic | symbolFormat}}</li>
-                        <li class="list-group-item"><strong>Status:</strong> {{certificate.status}}</li>                        
+                        <li class="list-group-item"><strong>Status:</strong> {{certificate.status}}</li>
+                        <li v-if="certificate.dynamic" class="list-group-item"><strong>Expiring Date:</strong> {{certificate.expiringDate}}</li>
+                        <li v-if="certificate.mode == 'acme'" class="list-group-item"><strong>Advance Renewal (days):</strong> {{certificate.daysAdvanceRenewal}}</li>
                         <li v-if="certificate.dynamic" class="p-2 text-center">
                             <b-button
                                 :href="'/api/certificates/' + certificate.id + '/download'"

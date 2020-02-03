@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.utils;
 
+import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -27,8 +28,14 @@ import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateEncodingException;
+import java.security.cert.CertificateExpiredException;
+import java.security.cert.CertificateNotYetValidException;
+import java.security.cert.X509Certificate;
 import java.util.Arrays;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.Iterator;
+import org.carapaceproxy.configstore.CertificateData;
 
 /**
  * Utilitis for Certificates storing as Keystores
@@ -108,6 +115,23 @@ public final class CertificatesUtils {
         } catch (IOException ex) {
             return false;
         }
+    }
+
+    public static boolean isCertificateExpired(CertificateData cert) throws GeneralSecurityException {
+        try {
+            Certificate[] chain = base64DecodeCertificateChain(cert.getChain());
+            if (chain != null && chain.length > 0) {
+                Calendar cal = Calendar.getInstance();
+                cal.setTime(new Date());
+                cal.add(Calendar.DATE, cert.getDaysAdvanceRenewal());
+                ((X509Certificate) chain[0]).checkValidity(cal.getTime());
+            } else {
+                return true;
+            }
+        } catch (CertificateNotYetValidException | CertificateExpiredException ex) {
+            return true;
+        }
+        return false;
     }
 
     /**

@@ -38,6 +38,7 @@ public class SSLCertificateConfiguration {
     private final String password;
     private final boolean wildcard;
     private final CertificateMode mode;
+    private int daysAdvanceRenewal;
 
     public SSLCertificateConfiguration(String hostname, String file, String password, CertificateMode mode) {
         this.id = hostname;
@@ -86,6 +87,14 @@ public class SSLCertificateConfiguration {
 
     public boolean isMoreSpecific(SSLCertificateConfiguration other) {
         return hostname.length() > other.getHostname().length();
+    }
+
+    public void setDaysAdvanceRenewal(int daysAdvanceRenewal) {
+        this.daysAdvanceRenewal = daysAdvanceRenewal;
+    }
+
+    public int getDaysAdvanceRenewal() {
+        return daysAdvanceRenewal;
     }
 
     @Override

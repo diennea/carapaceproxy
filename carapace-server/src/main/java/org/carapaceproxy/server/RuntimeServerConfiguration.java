@@ -32,6 +32,7 @@ import org.carapaceproxy.configstore.ConfigurationStore;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.getClassname;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.getInt;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.getLong;
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_ADVANCE_RENEWAL;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -302,6 +303,7 @@ public class RuntimeServerConfiguration {
             String file = properties.getProperty(prefix + "file", "");
             String pw = properties.getProperty(prefix + "password", "");
             String mode = properties.getProperty(prefix + "mode", "static");
+            int daysAdvanceRenewal = Integer.parseInt(properties.getProperty(prefix + "daysadvancerenewal", DEFAULT_DAYS_ADVANCE_RENEWAL + ""));
             try {
                 CertificateMode _mode = CertificateMode.valueOf(mode.toUpperCase());
                 LOG.log(Level.INFO,
@@ -309,6 +311,7 @@ public class RuntimeServerConfiguration {
                         new Object[]{prefix, hostname, file, pw, mode}
                 );
                 SSLCertificateConfiguration config = new SSLCertificateConfiguration(hostname, file, pw, _mode);
+                config.setDaysAdvanceRenewal(daysAdvanceRenewal);
                 this.addCertificate(config);
             } catch (IllegalArgumentException e) {
                 throw new ConfigurationNotValidException(

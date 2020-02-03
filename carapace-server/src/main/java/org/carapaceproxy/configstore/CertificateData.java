@@ -40,6 +40,7 @@ public class CertificateData {
     private String pendingChallengeData;
     private boolean available;
     private boolean manual;
+    private int daysAdvanceRenewal;
 
     public CertificateData(String domain, String privateKey, String chain, DynamicCertificateState state,
                            String orderLocation, String challengeData, boolean available) {
@@ -122,6 +123,14 @@ public class CertificateData {
 
     public void setManual(boolean manual) {
         this.manual = manual;
+    }
+
+    public int getDaysAdvanceRenewal() {
+        return daysAdvanceRenewal;
+    }
+
+    public void setDaysAdvanceRenewal(int daysAdvanceRenewal) {
+        this.daysAdvanceRenewal = daysAdvanceRenewal;
     }
 
     @Override
