@@ -95,7 +95,7 @@ public class ManagersExecutionTest {
     @Test
     public void testDynamicCertificatesManagerExecution() {
         RuntimeServerConfiguration config = new RuntimeServerConfiguration();
-        DynamicCertificatesManager man = new DynamicCertificatesManager();
+        DynamicCertificatesManager man = new DynamicCertificatesManager(null);
 
         man.setConfigurationStore(mock(ConfigurationStore.class));
 
