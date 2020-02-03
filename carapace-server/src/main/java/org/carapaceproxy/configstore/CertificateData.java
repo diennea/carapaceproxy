@@ -173,4 +173,9 @@ public class CertificateData {
         return true;
     }
 
+    @Override
+    public String toString() {
+        return "CertificateData{" + "domain=" + domain + ", state=" + state + ", available=" + available + ", manual=" + manual + '}';
+    }
+
 }

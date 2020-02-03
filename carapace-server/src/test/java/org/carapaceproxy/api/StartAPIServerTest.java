@@ -338,7 +338,7 @@ public class StartAPIServerTest extends UseAdminServer {
             assertThat(json, containsString("\"status\":\"waiting\""));
 
             // Changing dynamic certificate state
-            DynamicCertificatesManager man = server.getDynamicCertificateManager();
+            DynamicCertificatesManager man = server.getDynamicCertificatesManager();
             for (DynamicCertificateState state : DynamicCertificateState.values()) {
                 man.setStateOfCertificate(dynDomain, state);
                 response = client.get("/api/certificates", credentials);

@@ -25,12 +25,12 @@ import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.carapaceproxy.api.UseAdminServer.DEFAULT_ADMIN_PORT;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
+import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.security.KeyPair;
 import java.security.cert.Certificate;
 import java.util.Properties;
 import org.carapaceproxy.api.UseAdminServer;
-import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.carapaceproxy.utils.CertificatesTestUtils.uploadCertificate;
 import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
 import org.carapaceproxy.utils.RawHttpClient;
@@ -39,10 +39,13 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.shredzone.acme4j.Status.VALID;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import javax.net.ssl.ExtendedSSLSession;
@@ -61,6 +64,7 @@ import org.bouncycastle.operator.DigestCalculatorProvider;
 import org.bouncycastle.operator.bc.BcDigestCalculatorProvider;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.carapaceproxy.configstore.CertificateData;
+import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.certificates.ocsp.OcspStaplingManager;
 import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.HttpUtils;
@@ -68,6 +72,8 @@ import org.carapaceproxy.utils.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.shredzone.acme4j.Login;
+import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.util.KeyPairUtils;
 
 /**
@@ -112,7 +118,7 @@ public class CertificatesTest extends UseAdminServer {
         config.put("certificate.2.mode", "manual");
         changeDynamicConfiguration(config);
 
-        DynamicCertificatesManager dynCertMan = server.getDynamicCertificateManager();
+        DynamicCertificatesManager dynCertMan = server.getDynamicCertificatesManager();
         CertificateData data = dynCertMan.getCertificateDataForDomain("localhost");
         assertNotNull(data);
         assertTrue(data.isManual());
@@ -188,7 +194,7 @@ public class CertificatesTest extends UseAdminServer {
     public void testUploadTypedCertificate(String type) throws Exception {
         configureAndStartServer();
         int port = server.getLocalPort();
-        DynamicCertificatesManager dynCertsMan = server.getDynamicCertificateManager();
+        DynamicCertificatesManager dynCertsMan = server.getDynamicCertificatesManager();
 
         // Uploading certificate without data:
         // - for type="acme" means creating an order for an ACME certificate
@@ -276,7 +282,7 @@ public class CertificatesTest extends UseAdminServer {
         int port = server.getLocalPort();
         OcspStaplingManager ocspMan = mock(OcspStaplingManager.class);
         server.setOcspStaplingManager(ocspMan);
-        DynamicCertificatesManager dynCertMan = server.getDynamicCertificateManager();
+        DynamicCertificatesManager dynCertMan = server.getDynamicCertificatesManager();
 
         // Upload certificate and check its OCSP response
         Certificate[] uploadedChain;
@@ -326,6 +332,73 @@ public class CertificatesTest extends UseAdminServer {
             return builder.build(OCSPRespBuilder.SUCCESSFUL, resp);
         } catch (Exception e) {
             throw new CertificateException("cannot generate OCSP response", e);
+        }
+    }
+
+    @Test
+    public void testCertificatesRenew() throws Exception {
+
+        configureAndStartServer();
+        int port = server.getLocalPort();
+        DynamicCertificatesManager dcMan = server.getDynamicCertificatesManager();
+        dcMan.setPeriod(0);
+
+        // Uploading ACME certificate with data
+        KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        Certificate[] chain1 = generateSampleChain(endUserKeyPair, false);
+        try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
+            byte[] chainData = createKeystore(chain1, endUserKeyPair.getPrivate());
+            HttpResponse resp = uploadCertificate("localhost", "type=acme", chainData, client, credentials);
+            assertTrue(resp.getBodyString().contains("SUCCESS"));
+            CertificateData data = dcMan.getCertificateDataForDomain("localhost");
+            assertNotNull(data);
+            assertTrue(data.isAvailable());
+            assertEquals(DynamicCertificateState.AVAILABLE, dcMan.getStateOfCertificate("localhost"));
+
+            // check uploaded certificate
+            try (RawHttpClient c = new RawHttpClient("localhost", port, true, "localhost")) {
+                RawHttpClient.HttpResponse r = c.get("https://localhost:" + port + "/index.html", credentials);
+                assertEquals("it <b>works</b> !!", r.getBodyString());
+                Certificate[] obtainedChain = c.getServerCertificate();
+                assertNotNull(obtainedChain);
+                assertTrue(chain1[0].equals(obtainedChain[0]));
+            }
+        }
+
+        // Renew
+        KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+
+        ConfigurationStore store = dcMan.getConfigurationStore();
+        store.saveKeyPairForDomain(keyPair, "localhost", false);
+        CertificateData cert = store.loadCertificateForDomain("localhost");
+        cert.setAvailable(false);
+        cert.setState(DynamicCertificateState.ORDERING);
+        cert.setPendingOrderLocation("https://localhost/orderlocation");
+        store.saveCertificate(cert);
+        assertEquals(DynamicCertificateState.ORDERING, dcMan.getStateOfCertificate("localhost"));
+
+        // ACME mocking        
+        ACMEClient ac = mock(ACMEClient.class);
+        Order o = mock(Order.class);
+        when(ac.getLogin()).thenReturn(mock(Login.class));
+        when(ac.checkResponseForOrder(any())).thenReturn(VALID);
+        org.shredzone.acme4j.Certificate _cert = mock(org.shredzone.acme4j.Certificate.class);
+        X509Certificate renewed = (X509Certificate) generateSampleChain(keyPair, false)[0];
+        when(_cert.getCertificateChain()).thenReturn(Arrays.asList(renewed));
+        when(ac.fetchCertificateForOrder(any())).thenReturn(_cert);
+        dcMan.setACMEClient(ac);
+
+        // Renew
+        dcMan.run();
+        assertEquals(DynamicCertificateState.AVAILABLE, dcMan.getStateOfCertificate("localhost"));
+
+        // Check renewed certificate
+        try (RawHttpClient cl = new RawHttpClient("localhost", port, true, "localhost")) {
+            RawHttpClient.HttpResponse r = cl.get("https://localhost:" + port + "/index.html", credentials);
+            assertEquals("it <b>works</b> !!", r.getBodyString());
+            Certificate[] obtainedChain = cl.getServerCertificate();
+            assertNotNull(obtainedChain);
+            assertTrue(renewed.equals(obtainedChain[0]));
         }
     }
 
