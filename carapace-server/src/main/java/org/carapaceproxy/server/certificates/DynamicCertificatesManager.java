@@ -104,6 +104,11 @@ public class DynamicCertificatesManager implements Runnable {
         this.store = configStore;
     }
 
+    @VisibleForTesting
+    public ConfigurationStore getConfigurationStore() {
+        return store;
+    }
+
     public void attachGroupMembershipHandler(GroupMembershipHandler groupMembershipHandler) {
         this.groupMembershipHandler = groupMembershipHandler;
         groupMembershipHandler.watchEvent(EVENT_CERT_AVAIL_CHANGED, new CertAvailChangeCallback());
@@ -117,6 +122,11 @@ public class DynamicCertificatesManager implements Runnable {
     @VisibleForTesting
     public void setPeriod(int period) {
         this.period = period;
+    }
+
+    @VisibleForTesting
+    public void setACMEClient(ACMEClient client) {
+        this.client = client;
     }
 
     public synchronized void reloadConfiguration(RuntimeServerConfiguration configuration) {

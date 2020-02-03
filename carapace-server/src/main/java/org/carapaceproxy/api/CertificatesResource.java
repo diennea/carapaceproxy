@@ -117,7 +117,7 @@ public class CertificatesResource {
     public Map<String, CertificateBean> getAllCertificates() {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         RuntimeServerConfiguration conf = server.getCurrentConfiguration();
-        DynamicCertificatesManager dynamicCertificateManager = server.getDynamicCertificateManager();
+        DynamicCertificatesManager dynamicCertificateManager = server.getDynamicCertificatesManager();
         Map<String, CertificateBean> res = new HashMap<>();
         for (Map.Entry<String, SSLCertificateConfiguration> certificateEntry : conf.getCertificates().entrySet()) {
             SSLCertificateConfiguration certificate = certificateEntry.getValue();
@@ -153,7 +153,7 @@ public class CertificatesResource {
         byte[] data = new byte[0];
         if (cert != null && cert.isDynamic()) {
             HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-            DynamicCertificatesManager dynamicCertificateManager = server.getDynamicCertificateManager();
+            DynamicCertificatesManager dynamicCertificateManager = server.getDynamicCertificatesManager();
             data = dynamicCertificateManager.getCertificateForDomain(cert.hostname);
         }
 
@@ -178,7 +178,7 @@ public class CertificatesResource {
             );
 
             if (certificate.isDynamic()) {
-                DynamicCertificateState state = server.getDynamicCertificateManager().getStateOfCertificate(certBean.getId());
+                DynamicCertificateState state = server.getDynamicCertificatesManager().getStateOfCertificate(certBean.getId());
                 certBean.setStatus(certificateStateToString(state));
             }
             return certBean;

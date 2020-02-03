@@ -108,7 +108,7 @@ public class HttpProxyServer implements AutoCloseable {
     private int zkTimeout;
     private boolean cluster;
     private GroupMembershipHandler groupMembershipHandler = new NullGroupMembershipHandler();
-    private DynamicCertificatesManager dynamicCertificateManager;
+    private DynamicCertificatesManager dynamicCertificatesManager;
     private OcspStaplingManager ocspStaplingManager;
     private RuntimeServerConfiguration currentConfiguration;
     private ConfigurationStore dynamicConfigurationStore;
@@ -153,9 +153,9 @@ public class HttpProxyServer implements AutoCloseable {
         this.cache = new ContentsCache(currentConfiguration);
         this.requestsLogger = new RequestsLogger(currentConfiguration);
         this.connectionsManager = new ConnectionsManagerImpl(currentConfiguration, backendHealthManager);
-        this.dynamicCertificateManager = new DynamicCertificatesManager(this);
+        this.dynamicCertificatesManager = new DynamicCertificatesManager(this);
         if (mapper != null) {
-            mapper.setDynamicCertificateManager(dynamicCertificateManager);
+            mapper.setDynamicCertificateManager(dynamicCertificatesManager);
         }
         this.ocspStaplingManager = new OcspStaplingManager();
     }
@@ -292,8 +292,8 @@ public class HttpProxyServer implements AutoCloseable {
             requestsLogger.start();
             listeners.start();
             backendHealthManager.start();
-            dynamicCertificateManager.attachGroupMembershipHandler(groupMembershipHandler);
-            dynamicCertificateManager.start();
+            dynamicCertificatesManager.attachGroupMembershipHandler(groupMembershipHandler);
+            dynamicCertificatesManager.start();
             ocspStaplingManager.start();
             groupMembershipHandler.watchEvent("configurationChange", new ConfigurationChangeCallback());
         } catch (RuntimeException err) {
@@ -327,7 +327,7 @@ public class HttpProxyServer implements AutoCloseable {
     public void close() {
         groupMembershipHandler.stop();
         backendHealthManager.stop();
-        dynamicCertificateManager.stop();
+        dynamicCertificatesManager.stop();
         ocspStaplingManager.stop();
 
         if (adminserver != null) {
@@ -426,7 +426,7 @@ public class HttpProxyServer implements AutoCloseable {
                 throw new ConfigurationNotValidException("invalid config.type='" + dynamicConfigurationType + "', only 'file' and 'database' are supported");
         }
 
-        this.dynamicCertificateManager.setConfigurationStore(dynamicConfigurationStore);
+        this.dynamicCertificatesManager.setConfigurationStore(dynamicConfigurationStore);
 
         // "static" configuration cannot change without a reboot
         applyStaticConfiguration(bootConfigurationStore);
@@ -612,12 +612,12 @@ public class HttpProxyServer implements AutoCloseable {
         try {
             RuntimeServerConfiguration newConfiguration = buildValidConfiguration(storeWithConfig);
             EndpointMapper newMapper = buildMapper(newConfiguration.getMapperClassname(), storeWithConfig);
-            newMapper.setDynamicCertificateManager(this.dynamicCertificateManager);
+            newMapper.setDynamicCertificateManager(this.dynamicCertificatesManager);
             UserRealm newRealm = buildRealm(userRealmClassname, storeWithConfig);
 
             this.filters = buildFilters(newConfiguration);
             this.backendHealthManager.reloadConfiguration(newConfiguration, newMapper);
-            this.dynamicCertificateManager.reloadConfiguration(newConfiguration);
+            this.dynamicCertificatesManager.reloadConfiguration(newConfiguration);
             this.ocspStaplingManager.reloadConfiguration(newConfiguration);
             this.listeners.reloadConfiguration(newConfiguration);
             this.cache.reloadConfiguration(newConfiguration);
@@ -644,7 +644,7 @@ public class HttpProxyServer implements AutoCloseable {
     public void setMapper(EndpointMapper mapper) {
         this.mapper = mapper;
         if (mapper != null) {
-            mapper.setDynamicCertificateManager(dynamicCertificateManager);
+            mapper.setDynamicCertificateManager(dynamicCertificatesManager);
         }
     }
 
@@ -658,15 +658,15 @@ public class HttpProxyServer implements AutoCloseable {
         this.backendHealthManager = backendHealthManager;
     }
 
-    public DynamicCertificatesManager getDynamicCertificateManager() {
-        return this.dynamicCertificateManager;
+    public DynamicCertificatesManager getDynamicCertificatesManager() {
+        return this.dynamicCertificatesManager;
     }
 
     @VisibleForTesting
-    public void setDynamicCertificateManager(DynamicCertificatesManager dynamicCertificateManager) {
-        this.dynamicCertificateManager = dynamicCertificateManager;
+    public void setDynamicCertificatesManager(DynamicCertificatesManager dynamicCertificatesManager) {
+        this.dynamicCertificatesManager = dynamicCertificatesManager;
         if (mapper != null) {
-            mapper.setDynamicCertificateManager(dynamicCertificateManager);
+            mapper.setDynamicCertificateManager(dynamicCertificatesManager);
         }
     }
 

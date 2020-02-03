@@ -439,7 +439,7 @@ public class BasicStandardEndpointMapperTest {
             final String tokenData = "test-token-data-content";
             DynamicCertificatesManager dynamicCertificateManager = mock(DynamicCertificatesManager.class);
             when(dynamicCertificateManager.getChallengeToken(matches(tokenName))).thenReturn(tokenData);
-            server.setDynamicCertificateManager(dynamicCertificateManager);
+            server.setDynamicCertificatesManager(dynamicCertificateManager);
 
             Properties configuration = new Properties();
             configuration.put("backend.1.id", "foo");

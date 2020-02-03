@@ -19,7 +19,6 @@
  */
 package org.carapaceproxy.server.certificates;
 
-import java.lang.reflect.Field;
 import java.net.URL;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
@@ -106,9 +105,7 @@ public class DynamicCertificatesManagerTest {
         when(parent.getListeners()).thenReturn(mock(Listeners.class));
         DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
-        Field client = man.getClass().getDeclaredField("client");
-        client.setAccessible(true);
-        client.set(man, ac);
+        man.setACMEClient(ac);
 
         // Store mocking
         ConfigurationStore s = mock(ConfigurationStore.class);
