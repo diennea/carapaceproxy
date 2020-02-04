@@ -24,7 +24,6 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.carapaceproxy.api.UseAdminServer.DEFAULT_ADMIN_PORT;
-import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_ADVANCE_RENEWAL;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
@@ -76,6 +75,7 @@ import org.junit.runner.RunWith;
 import org.shredzone.acme4j.Login;
 import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.util.KeyPairUtils;
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
 
 /**
  * Test use cases for basic certificates management and client requests.
@@ -279,7 +279,7 @@ public class CertificatesTest extends UseAdminServer {
 
     @Test
     @Parameters({"acme", "manual"})
-    public void testUploadTypedCertificatesWithDaysAdvanceRenewal(String type) throws Exception {
+    public void testUploadTypedCertificatesWithDaysBeforeRenewal(String type) throws Exception {
         configureAndStartServer();
         int port = server.getLocalPort();
         DynamicCertificatesManager dynCertsMan = server.getDynamicCertificatesManager();
@@ -289,34 +289,54 @@ public class CertificatesTest extends UseAdminServer {
 
         try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
             // Create
-            HttpResponse resp = uploadCertificate("localhost2", "type=" + type + "&daysadvancerenewal=10", chainData, client, credentials);
+            HttpResponse resp = uploadCertificate("localhost2", "type=" + type + "&daysbeforerenewal=10", chainData, client, credentials);
             if (type.equals("manual")) {
-                assertTrue(resp.getBodyString().contains("ERROR: param 'daysadvancerenewal' available for type 'acme' only"));
+                assertTrue(resp.getBodyString().contains("ERROR: param 'daysbeforerenewal' available for type 'acme' only"));
             } else {
                 CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost2");
                 assertNotNull(data);
-                assertEquals(10, data.getDaysAdvanceRenewal());
+                assertEquals(10, data.getDaysBeforeRenewal());
+            }
+            // negative value
+            resp = uploadCertificate("localhost-negative", "type=" + type + "&daysbeforerenewal=-10", chainData, client, credentials);
+            if (type.equals("manual")) {
+                assertTrue(resp.getBodyString().contains("ERROR: param 'daysbeforerenewal' available for type 'acme' only"));
+            } else {
+                assertTrue(resp.getBodyString().contains("ERROR: param 'daysbeforerenewal' has to be a positive number"));
             }
             // default value
             uploadCertificate("localhost-default", "type=" + type, chainData, client, credentials);
             CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost-default");
             assertNotNull(data);
-            assertEquals(type.equals("manual") ? 0 : DEFAULT_DAYS_ADVANCE_RENEWAL, data.getDaysAdvanceRenewal());
+            assertEquals(type.equals("manual") ? 0 : DEFAULT_DAYS_BEFORE_RENEWAL, data.getDaysBeforeRenewal());
 
             // Update
-            uploadCertificate("localhost2", "type=" + type + "&daysadvancerenewal=45", chainData, client, credentials);
+            uploadCertificate("localhost2", "type=" + type + "&daysbeforerenewal=45", chainData, client, credentials);
             if (type.equals("manual")) {
-                assertTrue(resp.getBodyString().contains("ERROR: param 'daysadvancerenewal' available for type 'acme' only"));
+                assertTrue(resp.getBodyString().contains("ERROR: param 'daysbeforerenewal' available for type 'acme' only"));
             } else {
                 data = dynCertsMan.getCertificateDataForDomain("localhost2");
                 assertNotNull(data);
-                assertEquals(45, data.getDaysAdvanceRenewal());
+                assertEquals(45, data.getDaysBeforeRenewal());
+            }
+            // negative value
+            resp = uploadCertificate("localhost2", "type=" + type + "&daysbeforerenewal=-10", chainData, client, credentials);
+            if (type.equals("manual")) {
+                assertTrue(resp.getBodyString().contains("ERROR: param 'daysbeforerenewal' available for type 'acme' only"));
+            } else {
+                assertTrue(resp.getBodyString().contains("ERROR: param 'daysbeforerenewal' has to be a positive number"));
             }
             // default value
             uploadCertificate("localhost2", "type=" + type, chainData, client, credentials);
             data = dynCertsMan.getCertificateDataForDomain("localhost2");
             assertNotNull(data);
-            assertEquals(type.equals("manual") ? 0 : DEFAULT_DAYS_ADVANCE_RENEWAL, data.getDaysAdvanceRenewal());
+            assertEquals(type.equals("manual") ? 0 : DEFAULT_DAYS_BEFORE_RENEWAL, data.getDaysBeforeRenewal());
+            // changing the type (acme <-> manual)
+            String other = type.equals("manual") ? "acme" : "manual";
+            uploadCertificate("localhost2", "type=" + other, chainData, client, credentials);
+            data = dynCertsMan.getCertificateDataForDomain("localhost2");
+            assertNotNull(data);
+            assertEquals(other.equals("manual") ? 0 : DEFAULT_DAYS_BEFORE_RENEWAL, data.getDaysBeforeRenewal());
         }
     }
 
@@ -392,13 +412,13 @@ public class CertificatesTest extends UseAdminServer {
         Certificate[] chain1 = generateSampleChain(endUserKeyPair, false);
         try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
             byte[] chainData = createKeystore(chain1, endUserKeyPair.getPrivate());
-            HttpResponse resp = uploadCertificate("localhost", "type=acme&daysadvancerenewal=45", chainData, client, credentials);
+            HttpResponse resp = uploadCertificate("localhost", "type=acme&daysbeforerenewal=45", chainData, client, credentials);
             assertTrue(resp.getBodyString().contains("SUCCESS"));
             CertificateData data = dcMan.getCertificateDataForDomain("localhost");
             assertNotNull(data);
             assertTrue(data.isAvailable());
             assertEquals(DynamicCertificateState.AVAILABLE, data.getState());
-            assertEquals(45, data.getDaysAdvanceRenewal());
+            assertEquals(45, data.getDaysBeforeRenewal());
             assertFalse(data.isManual());
             // check uploaded certificate
             try (RawHttpClient c = new RawHttpClient("localhost", port, true, "localhost")) {
@@ -439,7 +459,7 @@ public class CertificatesTest extends UseAdminServer {
         assertNotNull(updated);
         assertTrue(updated.isAvailable());
         assertEquals(DynamicCertificateState.AVAILABLE, updated.getState());
-        assertEquals(45, updated.getDaysAdvanceRenewal());
+        assertEquals(45, updated.getDaysBeforeRenewal());
         assertFalse(updated.isManual());
 
         // Check renewed certificate

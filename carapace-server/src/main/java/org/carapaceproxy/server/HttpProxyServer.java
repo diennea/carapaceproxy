@@ -582,8 +582,10 @@ public class HttpProxyServer implements AutoCloseable {
 
     private void performUpdate(Properties props, String key, CertificateData cert) {
         props.setProperty(key.replace("hostname", "mode"), cert.isManual() ? "manual" : "acme");
-        if (!cert.isManual()) {
-            props.setProperty(key.replace("hostname", "daysadvancerenewal"), cert.getDaysAdvanceRenewal() + "");
+        if (cert.isManual()) {
+            props.remove(key.replace("hostname", "daysbeforerenewal")); // type changed from acme to manual
+        } else {
+            props.setProperty(key.replace("hostname", "daysbeforerenewal"), cert.getDaysBeforeRenewal() + "");
         }
     }
     private void performCreate(Properties props, CertificateData cert) {
@@ -591,7 +593,7 @@ public class HttpProxyServer implements AutoCloseable {
         props.setProperty(prefix + "hostname", cert.getDomain());
         props.setProperty(prefix + "mode", cert.isManual() ? "manual" : "acme");
         if (!cert.isManual()) {
-            props.setProperty(prefix + "daysadvancerenewal", cert.getDaysAdvanceRenewal() + "");
+            props.setProperty(prefix + "daysbeforerenewal", cert.getDaysBeforeRenewal() + "");
         }
     }
 

@@ -74,11 +74,11 @@ public class CertificatesUtilsTest {
             Certificate[] chain = generateSampleChain(endUserKeyPair, false); // not before == not after == today
             String encodedChain = base64EncodeCertificateChain(chain, endUserKeyPair.getPrivate());
             CertificateData cert = new CertificateData("localhost", null, encodedChain, DynamicCertificateState.AVAILABLE, null, null, true);
-            cert.setDaysAdvanceRenewal(0);
+            cert.setDaysBeforeRenewal(0);
             assertFalse(CertificatesUtils.isCertificateExpired(cert));
-            cert.setDaysAdvanceRenewal(-30);
+            cert.setDaysBeforeRenewal(-30);
             assertTrue(CertificatesUtils.isCertificateExpired(cert)); // not before
-            cert.setDaysAdvanceRenewal(30);
+            cert.setDaysBeforeRenewal(30);
             assertTrue(CertificatesUtils.isCertificateExpired(cert)); // not after
         }
         {
@@ -86,11 +86,11 @@ public class CertificatesUtilsTest {
             Certificate[] chain = generateSampleChain(endUserKeyPair, true); // not before == not after == today
             String encodedChain = base64EncodeCertificateChain(chain, endUserKeyPair.getPrivate());
             CertificateData cert = new CertificateData("localhost", null, encodedChain, DynamicCertificateState.AVAILABLE, null, null, true);
-            cert.setDaysAdvanceRenewal(0);
+            cert.setDaysBeforeRenewal(0);
             assertTrue(CertificatesUtils.isCertificateExpired(cert));
-            cert.setDaysAdvanceRenewal(-30);
+            cert.setDaysBeforeRenewal(-30);
             assertTrue(CertificatesUtils.isCertificateExpired(cert)); // not before
-            cert.setDaysAdvanceRenewal(30);
+            cert.setDaysBeforeRenewal(30);
             assertTrue(CertificatesUtils.isCertificateExpired(cert)); // not after
         }
     }

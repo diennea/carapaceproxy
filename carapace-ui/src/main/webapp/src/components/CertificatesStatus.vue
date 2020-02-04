@@ -34,7 +34,7 @@ export default {
                 },
                 { key: "status", label: "Status", sortable: true },
                 { key: "expiringDate", label: "Expiring Date", sortable: true },
-                { key: "daysAdvanceRenewal", label: "Advance Renewal (days)", sortable: true },
+                { key: "daysBeforeRenewal", label: "Days Before Renewal", sortable: true },
                 {
                     key: "sslCertificateFile",
                     label: "SSL Certificate File",

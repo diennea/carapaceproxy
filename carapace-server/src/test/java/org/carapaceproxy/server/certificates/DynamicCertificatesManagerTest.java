@@ -132,13 +132,13 @@ public class DynamicCertificatesManagerTest {
         Properties props = new Properties();
         props.setProperty("certificate.0.hostname", d0);
         props.setProperty("certificate.0.mode", "acme");
-        props.setProperty("certificate.0.daysadvancerenewal", "0");
+        props.setProperty("certificate.0.daysbeforerenewal", "0");
         props.setProperty("certificate.1.hostname", d1);
         props.setProperty("certificate.1.mode", "acme");
-        props.setProperty("certificate.1.daysadvancerenewal", "0");
+        props.setProperty("certificate.1.daysbeforerenewal", "0");
         props.setProperty("certificate.2.hostname", d2);
         props.setProperty("certificate.2.mode", "manual");
-        props.setProperty("certificate.2.daysadvancerenewal", "0");
+        props.setProperty("certificate.2.daysbeforerenewal", "0");
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(configStore);

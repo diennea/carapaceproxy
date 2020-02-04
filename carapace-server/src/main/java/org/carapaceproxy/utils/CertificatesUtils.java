@@ -123,7 +123,7 @@ public final class CertificatesUtils {
             if (chain != null && chain.length > 0) {
                 Calendar cal = Calendar.getInstance();
                 cal.setTime(new Date());
-                cal.add(Calendar.DATE, cert.getDaysAdvanceRenewal());
+                cal.add(Calendar.DATE, cert.getDaysBeforeRenewal());
                 ((X509Certificate) chain[0]).checkValidity(cal.getTime());
             } else {
                 return true;

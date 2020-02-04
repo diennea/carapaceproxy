@@ -77,7 +77,7 @@ public class DynamicCertificatesManager implements Runnable {
 
     // RSA key size of generated key pairs
     public static final int DEFAULT_KEYPAIRS_SIZE = Integer.getInteger("carapace.acme.default.keypairssize", 2048);
-    public static final int DEFAULT_DAYS_ADVANCE_RENEWAL = Integer.getInteger("carapace.acme.default.daysadvancerenewal", 30);
+    public static final int DEFAULT_DAYS_BEFORE_RENEWAL = Integer.getInteger("carapace.acme.default.daysbeforerenewal", 30);
     private static final boolean TESTING_MODE = Boolean.getBoolean("carapace.acme.testmode");
 
     private static final Logger LOG = Logger.getLogger(DynamicCertificatesManager.class.getName());
@@ -167,7 +167,7 @@ public class DynamicCertificatesManager implements Runnable {
                 if (config.isDynamic()) {
                     String domain = config.getHostname();
                     boolean forceManual = MANUAL == config.getMode();
-                    _certificates.put(domain, loadOrCreateDynamicCertificateForDomain(domain, forceManual, config.getDaysAdvanceRenewal()));
+                    _certificates.put(domain, loadOrCreateDynamicCertificateForDomain(domain, forceManual, config.getDaysBeforeRenewal()));
                 }
             }
             this.certificates = _certificates; // only certificates/domains specified in the config have to be managed.
@@ -176,14 +176,14 @@ public class DynamicCertificatesManager implements Runnable {
         }
     }
 
-    private CertificateData loadOrCreateDynamicCertificateForDomain(String domain, boolean forceManual, int daysAdvanceRenewal) throws GeneralSecurityException, MalformedURLException {
+    private CertificateData loadOrCreateDynamicCertificateForDomain(String domain, boolean forceManual, int daysBeforeRenewal) throws GeneralSecurityException, MalformedURLException {
         CertificateData cert = store.loadCertificateForDomain(domain);
         if (cert == null) {
             cert = new CertificateData(domain, "", "", WAITING, "", "", false);
         }
         cert.setManual(forceManual);
         if (!forceManual) { // only for ACME
-            cert.setDaysAdvanceRenewal(daysAdvanceRenewal);
+            cert.setDaysBeforeRenewal(daysBeforeRenewal);
         }
         return cert;
     }
@@ -240,7 +240,7 @@ public class DynamicCertificatesManager implements Runnable {
             boolean notifyCertAvailChanged = false;
             final String domain = data.getDomain();
             try {
-                CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, false, data.getDaysAdvanceRenewal());
+                CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, false, data.getDaysBeforeRenewal());
                 switch (cert.getState()) {
                     case WAITING: { // certificate waiting to be issues/renew
                         LOG.log(Level.INFO, "Certificate ISSUING process for domain: {0} STARTED.", domain);
@@ -465,7 +465,7 @@ public class DynamicCertificatesManager implements Runnable {
                 String domain = entry.getKey();
                 CertificateData cert = entry.getValue();
                 // "manual" flag is not stored in db > has to be re-set from existing config
-                CertificateData freshCert = loadOrCreateDynamicCertificateForDomain(domain, cert.isManual(), cert.getDaysAdvanceRenewal());
+                CertificateData freshCert = loadOrCreateDynamicCertificateForDomain(domain, cert.isManual(), cert.getDaysBeforeRenewal());
                 _certificates.put(domain, freshCert);
                 LOG.log(Level.INFO, "RELOADED certificate for domain {0}: {1}", new Object[]{domain, freshCert});
             }
