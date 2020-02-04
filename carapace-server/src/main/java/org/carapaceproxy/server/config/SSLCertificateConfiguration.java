@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.server.config;
 
+import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.ACME;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 
 /**
@@ -79,6 +80,10 @@ public class SSLCertificateConfiguration {
 
     public boolean isDynamic() {
         return !STATIC.equals(mode);
+    }
+
+    public boolean isAcme() {
+        return ACME.equals(mode);
     }
 
     public CertificateMode getMode() {

@@ -311,7 +311,9 @@ public class RuntimeServerConfiguration {
                         new Object[]{prefix, hostname, file, pw, mode}
                 );
                 SSLCertificateConfiguration config = new SSLCertificateConfiguration(hostname, file, pw, _mode);
-                config.setDaysBeforeRenewal(daysBeforeRenewal);
+                if (config.isAcme()) {
+                    config.setDaysBeforeRenewal(daysBeforeRenewal);
+                }
                 this.addCertificate(config);
             } catch (IllegalArgumentException e) {
                 throw new ConfigurationNotValidException(

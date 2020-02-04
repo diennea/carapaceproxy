@@ -55,6 +55,8 @@ import static org.carapaceproxy.utils.APIUtils.stringToCertificateMode;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Access to certificates
@@ -66,6 +68,7 @@ import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.D
 public class CertificatesResource {
 
     public static final Set<DynamicCertificateState> AVAILABLE_CERTIFICATES_STATES_FOR_UPLOAD = Set.of(AVAILABLE, WAITING);
+    private static final Logger LOG = Logger.getLogger(CertificatesResource.class.getName());
 
     @javax.ws.rs.core.Context
     ServletContext context;
@@ -164,7 +167,7 @@ public class CertificatesResource {
                         }
                     }
                 } catch (GeneralSecurityException e) {
-                    // unable to read the keystore
+                    LOG.log(Level.SEVERE, "Unable to read Keystore for certificate {0}. Reason: {1}", new Object[]{certificate.getId(), e});
                 }
             }
             res.put(certificateEntry.getKey(), certBean);
@@ -229,7 +232,7 @@ public class CertificatesResource {
                         certBean.setDaysBeforeRenewal(cert.getDaysBeforeRenewal() + "");
                     }
                 } catch (GeneralSecurityException e) {
-                    // unable to read the keystore
+                    LOG.log(Level.SEVERE, "Unable to read Keystore for certificate {0}. Reason: {1}", new Object[]{certificate.getId(), e});
                 }
             }
             return certBean;

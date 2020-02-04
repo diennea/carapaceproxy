@@ -76,6 +76,7 @@ import org.shredzone.acme4j.Login;
 import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.util.KeyPairUtils;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
+import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 
 /**
  * Test use cases for basic certificates management and client requests.
@@ -337,6 +338,16 @@ public class CertificatesTest extends UseAdminServer {
             data = dynCertsMan.getCertificateDataForDomain("localhost2");
             assertNotNull(data);
             assertEquals(other.equals("manual") ? 0 : DEFAULT_DAYS_BEFORE_RENEWAL, data.getDaysBeforeRenewal());
+            SSLCertificateConfiguration config = server.getCurrentConfiguration().getCertificates().get("localhost2");
+            assertEquals(other.equals("manual") ? 0 : DEFAULT_DAYS_BEFORE_RENEWAL, config.getDaysBeforeRenewal());
+            // checking for "certificate.X.daysbeforerenewal" property delete
+            ConfigurationStore store = server.getDynamicConfigurationStore();
+            assertEquals(other.equals("acme"), store.anyPropertyMatches((k, v) -> {
+                if (k.matches("certificate\\.[0-9]+\\.hostname") && v.equals("localhost2")) {
+                    return store.getProperty(k.replace("hostname", "daysbeforerenewal"), null) != null;
+                }
+                return false;
+            }));
         }
     }
 
