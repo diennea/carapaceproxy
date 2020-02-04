@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.api;
 
+import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
 import java.util.Base64;
@@ -51,6 +52,11 @@ import org.carapaceproxy.utils.CertificatesUtils;
 import static org.carapaceproxy.utils.APIUtils.certificateStateToString;
 import static org.carapaceproxy.utils.APIUtils.certificateModeToString;
 import static org.carapaceproxy.utils.APIUtils.stringToCertificateMode;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Access to certificates
@@ -62,6 +68,7 @@ import static org.carapaceproxy.utils.APIUtils.stringToCertificateMode;
 public class CertificatesResource {
 
     public static final Set<DynamicCertificateState> AVAILABLE_CERTIFICATES_STATES_FOR_UPLOAD = Set.of(AVAILABLE, WAITING);
+    private static final Logger LOG = Logger.getLogger(CertificatesResource.class.getName());
 
     @javax.ws.rs.core.Context
     ServletContext context;
@@ -74,6 +81,8 @@ public class CertificatesResource {
         private final boolean dynamic;
         private String status;
         private final String sslCertificateFile;
+        private String expiringDate;
+        private String daysBeforeRenewal;
 
         public CertificateBean(String id, String hostname, String mode, boolean dynamic, String sslCertificateFile) {
             this.id = id;
@@ -110,6 +119,23 @@ public class CertificatesResource {
         public String getSslCertificateFile() {
             return sslCertificateFile;
         }
+
+        public String getExpiringDate() {
+            return expiringDate;
+        }
+
+        public void setExpiringDate(String expiringDate) {
+            this.expiringDate = expiringDate;
+        }
+
+        public String getDaysBeforeRenewal() {
+            return daysBeforeRenewal;
+        }
+
+        public void setDaysBeforeRenewal(String daysBeforeRenewal) {
+            this.daysBeforeRenewal = daysBeforeRenewal;
+        }
+
     }
 
     @GET
@@ -130,13 +156,32 @@ public class CertificatesResource {
             );
 
             if (certificate.isDynamic()) {
-                DynamicCertificateState state = dynamicCertificateManager.getStateOfCertificate(certBean.getId());
-                certBean.setStatus(certificateStateToString(state));
+                certBean.setStatus(certificateStateToString(null)); // unknown
+                try {
+                    CertificateData cert = dynamicCertificateManager.getCertificateDataForDomain(certificate.getHostname());
+                    if (cert != null) {
+                        certBean.setStatus(certificateStateToString(cert.getState()));
+                        certBean.setExpiringDate(extractExpiringDate(cert));
+                        if (!cert.isManual()) {
+                            certBean.setDaysBeforeRenewal(cert.getDaysBeforeRenewal() + "");
+                        }
+                    }
+                } catch (GeneralSecurityException e) {
+                    LOG.log(Level.SEVERE, "Unable to read Keystore for certificate {0}. Reason: {1}", new Object[]{certificate.getId(), e});
+                }
             }
             res.put(certificateEntry.getKey(), certBean);
         }
 
         return res;
+    }
+
+    private static String extractExpiringDate(CertificateData cert) throws GeneralSecurityException {
+        Certificate[] chain = base64DecodeCertificateChain(cert.getChain());
+        if (chain != null && chain.length > 0) {
+            return ((X509Certificate) chain[0]).getNotAfter().toString();
+        }
+        return "";
     }
 
     @GET
@@ -178,8 +223,17 @@ public class CertificatesResource {
             );
 
             if (certificate.isDynamic()) {
-                DynamicCertificateState state = server.getDynamicCertificatesManager().getStateOfCertificate(certBean.getId());
-                certBean.setStatus(certificateStateToString(state));
+                certBean.setStatus(certificateStateToString(null)); // unknown
+                try {
+                    CertificateData cert = server.getDynamicCertificatesManager().getCertificateDataForDomain(certificate.getHostname());
+                    certBean.setStatus(certificateStateToString(cert.getState()));
+                    certBean.setExpiringDate(extractExpiringDate(cert));
+                    if (!cert.isManual()) {
+                        certBean.setDaysBeforeRenewal(cert.getDaysBeforeRenewal() + "");
+                    }
+                } catch (GeneralSecurityException e) {
+                    LOG.log(Level.SEVERE, "Unable to read Keystore for certificate {0}. Reason: {1}", new Object[]{certificate.getId(), e});
+                }
             }
             return certBean;
         }
@@ -193,6 +247,7 @@ public class CertificatesResource {
     public Response uploadCertificate(
             @PathParam("domain") String domain,
             @QueryParam("type") @DefaultValue("manual") String type,
+            @QueryParam("daysbeforerenewal") Integer daysbeforerenewal,
             InputStream uploadedInputStream) throws Exception {
 
         try (InputStream input = uploadedInputStream) {
@@ -207,7 +262,15 @@ public class CertificatesResource {
                 return Response.status(422).entity("ERROR: certificate data required for type 'manual'").build();
             }
             if (data != null && data.length > 0 && !CertificatesUtils.validateKeystore(data)) {
-                return Response.status(422).entity("ERROR: unable to read uploded certificate.").build();
+                return Response.status(422).entity("ERROR: unable to read uploded certificate").build();
+            }
+
+            if (daysbeforerenewal != null) {
+                if (CertificateMode.ACME.equals(certType) && daysbeforerenewal < 0) {
+                    return Response.status(422).entity("ERROR: param 'daysbeforerenewal' has to be a positive number").build();
+                } else if (!CertificateMode.ACME.equals(certType)) {
+                    return Response.status(422).entity("ERROR: param 'daysbeforerenewal' available for type 'acme' only").build();
+                }
             }
 
             String encodedData = "";
@@ -220,10 +283,11 @@ public class CertificatesResource {
             }
             CertificateData cert = new CertificateData(domain, "", encodedData, state, "", "", available);
             cert.setManual(MANUAL.equals(certType));
+            cert.setDaysBeforeRenewal(daysbeforerenewal != null ? daysbeforerenewal : DEFAULT_DAYS_BEFORE_RENEWAL);
             HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
             server.updateDynamicCertificateForDomain(cert);
 
-            return Response.status(200).entity("SUCCESS: Certificate saved.").build();
+            return Response.status(200).entity("SUCCESS: Certificate saved").build();
         }
     }
 

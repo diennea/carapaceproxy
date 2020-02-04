@@ -33,6 +33,8 @@ export default {
                     formatter: toBooleanSymbol
                 },
                 { key: "status", label: "Status", sortable: true },
+                { key: "expiringDate", label: "Expiring Date", sortable: true },
+                { key: "daysBeforeRenewal", label: "Days Before Renewal", sortable: true },
                 {
                     key: "sslCertificateFile",
                     label: "SSL Certificate File",

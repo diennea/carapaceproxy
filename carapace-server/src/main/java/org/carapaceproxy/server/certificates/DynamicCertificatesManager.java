@@ -19,7 +19,6 @@
  */
 package org.carapaceproxy.server.certificates;
 
-import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.EXPIRED;
@@ -48,12 +47,11 @@ import org.carapaceproxy.server.RuntimeServerConfiguration;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.MANUAL;
+import static org.carapaceproxy.utils.CertificatesUtils.isCertificateExpired;
 import java.io.IOException;
 import java.net.URL;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
-import java.security.cert.CertificateExpiredException;
-import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
 import java.util.logging.Level;
@@ -78,9 +76,11 @@ public class DynamicCertificatesManager implements Runnable {
     public static final String THREAD_NAME = "dynamic-certificates-manager";
 
     // RSA key size of generated key pairs
-    public static final int DEFAULT_KEYPAIRS_SIZE = 2048;
-    private static final Logger LOG = Logger.getLogger(DynamicCertificatesManager.class.getName());
+    public static final int DEFAULT_KEYPAIRS_SIZE = Integer.getInteger("carapace.acme.default.keypairssize", 2048);
+    public static final int DEFAULT_DAYS_BEFORE_RENEWAL = Integer.getInteger("carapace.acme.default.daysbeforerenewal", 30);
     private static final boolean TESTING_MODE = Boolean.getBoolean("carapace.acme.testmode");
+
+    private static final Logger LOG = Logger.getLogger(DynamicCertificatesManager.class.getName());
     private static final String EVENT_CERT_AVAIL_CHANGED = "certAvailChanged";
 
     private Map<String, CertificateData> certificates = new ConcurrentHashMap();
@@ -167,7 +167,7 @@ public class DynamicCertificatesManager implements Runnable {
                 if (config.isDynamic()) {
                     String domain = config.getHostname();
                     boolean forceManual = MANUAL == config.getMode();
-                    _certificates.put(domain, loadOrCreateDynamicCertificateForDomain(domain, forceManual));
+                    _certificates.put(domain, loadOrCreateDynamicCertificateForDomain(domain, forceManual, config.getDaysBeforeRenewal()));
                 }
             }
             this.certificates = _certificates; // only certificates/domains specified in the config have to be managed.
@@ -176,12 +176,15 @@ public class DynamicCertificatesManager implements Runnable {
         }
     }
 
-    private CertificateData loadOrCreateDynamicCertificateForDomain(String domain, boolean forceManual) throws GeneralSecurityException, MalformedURLException {
+    private CertificateData loadOrCreateDynamicCertificateForDomain(String domain, boolean forceManual, int daysBeforeRenewal) throws GeneralSecurityException, MalformedURLException {
         CertificateData cert = store.loadCertificateForDomain(domain);
         if (cert == null) {
             cert = new CertificateData(domain, "", "", WAITING, "", "", false);
         }
         cert.setManual(forceManual);
+        if (!forceManual) { // only for ACME
+            cert.setDaysBeforeRenewal(daysBeforeRenewal);
+        }
         return cert;
     }
 
@@ -227,16 +230,17 @@ public class DynamicCertificatesManager implements Runnable {
     }
 
     private void certificatesLifecycle() {
-        List<String> domains = certificates.entrySet().stream()
+        List<CertificateData> _certificates = certificates.entrySet().stream()
                 .filter(e -> !e.getValue().isManual())
-                .map(e -> e.getKey())
-                .sorted()
+                .sorted((e1, e2) -> e1.getKey().compareTo(e2.getKey()))
+                .map(e -> e.getValue())
                 .collect(Collectors.toList());
-        for (String domain : domains) {
+        for (CertificateData data : _certificates) {
             boolean updateDB = true;
             boolean notifyCertAvailChanged = false;
+            final String domain = data.getDomain();
             try {
-                CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, false);
+                CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, false, data.getDaysBeforeRenewal());
                 switch (cert.getState()) {
                     case WAITING: { // certificate waiting to be issues/renew
                         LOG.log(Level.INFO, "Certificate ISSUING process for domain: {0} STARTED.", domain);
@@ -326,7 +330,7 @@ public class DynamicCertificatesManager implements Runnable {
                         break;
                     }
                     case AVAILABLE: { // certificate saved/available/not expired
-                        if (checkCertificateExpired(cert)) {
+                        if (isCertificateExpired(cert)) {
                             cert.setAvailable(false);
                             cert.setState(EXPIRED);
                             notifyCertAvailChanged = true; // all other peers need to know that this cert is expired.
@@ -407,20 +411,6 @@ public class DynamicCertificatesManager implements Runnable {
         }
     }
 
-    public static boolean checkCertificateExpired(CertificateData cert) throws GeneralSecurityException {
-        try {
-            Certificate[] chain = base64DecodeCertificateChain(cert.getChain());
-            if (chain != null && chain.length > 0) {
-                ((X509Certificate) chain[0]).checkValidity();
-            } else {
-                return true;
-            }
-        } catch (CertificateExpiredException | CertificateNotYetValidException ex) {
-            return true;
-        }
-        return false;
-    }
-
     /**
      *
      * @param domain
@@ -475,7 +465,7 @@ public class DynamicCertificatesManager implements Runnable {
                 String domain = entry.getKey();
                 CertificateData cert = entry.getValue();
                 // "manual" flag is not stored in db > has to be re-set from existing config
-                CertificateData freshCert = loadOrCreateDynamicCertificateForDomain(domain, cert.isManual());
+                CertificateData freshCert = loadOrCreateDynamicCertificateForDomain(domain, cert.isManual(), cert.getDaysBeforeRenewal());
                 _certificates.put(domain, freshCert);
                 LOG.log(Level.INFO, "RELOADED certificate for domain {0}: {1}", new Object[]{domain, freshCert});
             }
