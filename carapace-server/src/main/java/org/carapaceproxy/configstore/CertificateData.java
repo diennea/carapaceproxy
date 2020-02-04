@@ -40,6 +40,7 @@ public class CertificateData {
     private String pendingChallengeData;
     private boolean available;
     private boolean manual;
+    private int daysBeforeRenewal;
 
     public CertificateData(String domain, String privateKey, String chain, DynamicCertificateState state,
                            String orderLocation, String challengeData, boolean available) {
@@ -124,16 +125,26 @@ public class CertificateData {
         this.manual = manual;
     }
 
+    public int getDaysBeforeRenewal() {
+        return daysBeforeRenewal;
+    }
+
+    public void setDaysBeforeRenewal(int daysBeforeRenewal) {
+        this.daysBeforeRenewal = daysBeforeRenewal;
+    }
+
     @Override
     public int hashCode() {
-        int hash = 5;
-        hash = 59 * hash + Objects.hashCode(this.domain);
-        hash = 59 * hash + Objects.hashCode(this.privateKey);
-        hash = 59 * hash + Objects.hashCode(this.chain);
-        hash = 59 * hash + Objects.hashCode(this.state);
-        hash = 59 * hash + Objects.hashCode(this.pendingOrderLocation);
-        hash = 59 * hash + Objects.hashCode(this.pendingChallengeData);
-        hash = 59 * hash + (this.available ? 1 : 0);
+        int hash = 7;
+        hash = 89 * hash + Objects.hashCode(this.domain);
+        hash = 89 * hash + Objects.hashCode(this.privateKey);
+        hash = 89 * hash + Objects.hashCode(this.chain);
+        hash = 89 * hash + Objects.hashCode(this.state);
+        hash = 89 * hash + Objects.hashCode(this.pendingOrderLocation);
+        hash = 89 * hash + Objects.hashCode(this.pendingChallengeData);
+        hash = 89 * hash + (this.available ? 1 : 0);
+        hash = 89 * hash + (this.manual ? 1 : 0);
+        hash = 89 * hash + this.daysBeforeRenewal;
         return hash;
     }
 
@@ -152,6 +163,12 @@ public class CertificateData {
         if (this.available != other.available) {
             return false;
         }
+        if (this.manual != other.manual) {
+            return false;
+        }
+        if (this.daysBeforeRenewal != other.daysBeforeRenewal) {
+            return false;
+        }
         if (!Objects.equals(this.domain, other.domain)) {
             return false;
         }
@@ -161,13 +178,13 @@ public class CertificateData {
         if (!Objects.equals(this.chain, other.chain)) {
             return false;
         }
-        if (!Objects.equals(this.state, other.state)) {
-            return false;
-        }
         if (!Objects.equals(this.pendingOrderLocation, other.pendingOrderLocation)) {
             return false;
         }
         if (!Objects.equals(this.pendingChallengeData, other.pendingChallengeData)) {
+            return false;
+        }
+        if (this.state != other.state) {
             return false;
         }
         return true;

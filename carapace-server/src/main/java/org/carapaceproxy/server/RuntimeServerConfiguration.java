@@ -43,6 +43,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import javax.net.ssl.SSLContext;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
 
 /**
  * Configuration
@@ -302,6 +303,7 @@ public class RuntimeServerConfiguration {
             String file = properties.getProperty(prefix + "file", "");
             String pw = properties.getProperty(prefix + "password", "");
             String mode = properties.getProperty(prefix + "mode", "static");
+            int daysBeforeRenewal = Integer.parseInt(properties.getProperty(prefix + "daysbeforerenewal", DEFAULT_DAYS_BEFORE_RENEWAL + ""));
             try {
                 CertificateMode _mode = CertificateMode.valueOf(mode.toUpperCase());
                 LOG.log(Level.INFO,
@@ -309,6 +311,9 @@ public class RuntimeServerConfiguration {
                         new Object[]{prefix, hostname, file, pw, mode}
                 );
                 SSLCertificateConfiguration config = new SSLCertificateConfiguration(hostname, file, pw, _mode);
+                if (config.isAcme()) {
+                    config.setDaysBeforeRenewal(daysBeforeRenewal);
+                }
                 this.addCertificate(config);
             } catch (IllegalArgumentException e) {
                 throw new ConfigurationNotValidException(

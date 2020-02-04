@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.server.config;
 
+import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.ACME;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 
 /**
@@ -38,6 +39,7 @@ public class SSLCertificateConfiguration {
     private final String password;
     private final boolean wildcard;
     private final CertificateMode mode;
+    private int daysBeforeRenewal;
 
     public SSLCertificateConfiguration(String hostname, String file, String password, CertificateMode mode) {
         this.id = hostname;
@@ -80,12 +82,24 @@ public class SSLCertificateConfiguration {
         return !STATIC.equals(mode);
     }
 
+    public boolean isAcme() {
+        return ACME.equals(mode);
+    }
+
     public CertificateMode getMode() {
         return mode;
     }
 
     public boolean isMoreSpecific(SSLCertificateConfiguration other) {
         return hostname.length() > other.getHostname().length();
+    }
+
+    public int getDaysBeforeRenewal() {
+        return daysBeforeRenewal;
+    }
+
+    public void setDaysBeforeRenewal(int daysBeforeRenewal) {
+        this.daysBeforeRenewal = daysBeforeRenewal;
     }
 
     @Override
