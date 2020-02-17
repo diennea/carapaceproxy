@@ -55,7 +55,6 @@ import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PRO
 import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_HTTPS_PORT;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
-import static org.carapaceproxy.configstore.ConfigurationStoreUtils.getClassname;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.backends.BackendHealthManager;
@@ -410,7 +409,7 @@ public class HttpProxyServer implements AutoCloseable {
         }
 
         readClusterConfiguration(bootConfigurationStore); // need to be always first thing to do (loads cluster setup)
-        String dynamicConfigurationType = bootConfigurationStore.getProperty("config.type", cluster ? "database" : "file");
+        String dynamicConfigurationType = bootConfigurationStore.getString("config.type", cluster ? "database" : "file");
         switch (dynamicConfigurationType) {
             case "file":
                 // configuration is store on the same file
@@ -451,20 +450,20 @@ public class HttpProxyServer implements AutoCloseable {
         properties.forEach((String key, String value) -> {
             statsProviderConfig.setProperty(key + "", value);
         });
-        adminServerEnabled = Boolean.parseBoolean(properties.getProperty("http.admin.enabled", "false"));
-        adminServerHttpPort = Integer.parseInt(properties.getProperty("http.admin.port", adminServerHttpPort + ""));
-        adminServerHost = properties.getProperty("http.admin.host", adminServerHost);
-        adminServerHttpsPort = Integer.parseInt(properties.getProperty("https.admin.port", adminServerHttpsPort + ""));
-        adminServerCertFile = properties.getProperty("https.admin.sslcertfile", adminServerCertFile);
-        adminServerCertFilePwd = properties.getProperty("https.admin.sslcertfilepassword", adminServerCertFilePwd);
-        adminAdvertisedServerHost = properties.getProperty("admin.advertised.host", adminServerHost);
-        listenersOffsetPort = Integer.parseInt(properties.getProperty("listener.offset.port", listenersOffsetPort + ""));
+        adminServerEnabled = properties.getBoolean("http.admin.enabled", false);
+        adminServerHttpPort = properties.getInt("http.admin.port", adminServerHttpPort);
+        adminServerHost = properties.getString("http.admin.host", adminServerHost);
+        adminServerHttpsPort = properties.getInt("https.admin.port", adminServerHttpsPort);
+        adminServerCertFile = properties.getString("https.admin.sslcertfile", adminServerCertFile);
+        adminServerCertFilePwd = properties.getString("https.admin.sslcertfilepassword", adminServerCertFilePwd);
+        adminAdvertisedServerHost = properties.getString("admin.advertised.host", adminServerHost);
+        listenersOffsetPort = properties.getInt("listener.offset.port", listenersOffsetPort);
 
-        adminAccessLogPath = properties.getProperty("admin.accesslog.path", adminAccessLogPath);
-        adminAccessLogTimezone = properties.getProperty("admin.accesslog.format.timezone", adminAccessLogTimezone);
-        adminLogRetentionDays = Integer.parseInt(properties.getProperty("admin.accesslog.retention.days", adminLogRetentionDays + ""));
+        adminAccessLogPath = properties.getString("admin.accesslog.path", adminAccessLogPath);
+        adminAccessLogTimezone = properties.getString("admin.accesslog.format.timezone", adminAccessLogTimezone);
+        adminLogRetentionDays = properties.getInt("admin.accesslog.retention.days", adminLogRetentionDays);
 
-        userRealmClassname = getClassname("userrealm.class", SimpleUserRealm.class.getName(), properties);
+        userRealmClassname = properties.getClassname("userrealm.class", SimpleUserRealm.class.getName());
 
         LOG.info("http.admin.enabled=" + adminServerEnabled);
         LOG.info("http.admin.port=" + adminServerHttpPort);
@@ -704,14 +703,14 @@ public class HttpProxyServer implements AutoCloseable {
     }
 
     private void readClusterConfiguration(ConfigurationStore staticConfiguration) throws ConfigurationNotValidException {
-        String mode = staticConfiguration.getProperty("mode", "standalone");
+        String mode = staticConfiguration.getString("mode", "standalone");
         switch (mode) {
             case "cluster":
                 cluster = true;
-                peerId = staticConfiguration.getProperty("peer.id", computeDefaultPeerId());
-                zkAddress = staticConfiguration.getProperty("zkAddress", "localhost:2181");
-                zkSecure = Boolean.parseBoolean(staticConfiguration.getProperty("zkSecure", "false"));
-                zkTimeout = Integer.parseInt(staticConfiguration.getProperty("zkTimeout", "40000"));
+                peerId = staticConfiguration.getString("peer.id", computeDefaultPeerId());
+                zkAddress = staticConfiguration.getString("zkAddress", "localhost:2181");
+                zkSecure = staticConfiguration.getBoolean("zkSecure", false);
+                zkTimeout = staticConfiguration.getInt("zkTimeout", 40_000);
                 zkProperties = new Properties(staticConfiguration.asProperties("zookeeper."));
                 LOG.log(Level.INFO, "mode=cluster, zkAddress=''{0}'',zkTimeout={1}, peer.id=''{2}'', zkSecure: {3}", new Object[]{zkAddress, zkTimeout, peerId, zkSecure});
                 zkProperties.forEach((k, v) -> {

@@ -29,9 +29,13 @@ import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import static org.carapaceproxy.utils.TestUtils.assertEqualsKey;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.collection.ArrayMatching.arrayContaining;
 import org.junit.After;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThat;
+import org.carapaceproxy.utils.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -63,8 +67,68 @@ public class ConfigurationStoreTest {
     }
 
     @Test
+    public void test() throws Exception {
+        Properties props = new Properties();
+        props.setProperty("property.int.1", "    1    ");
+        props.setProperty("property.int.2", "        ");
+        props.setProperty("property.int.3", "   true     ");
+
+        props.setProperty("property.long.1", "    1    ");
+        props.setProperty("property.long.2", "        ");
+        props.setProperty("property.long.3", "   true     ");
+
+        props.setProperty("property.boolean.1", "    true    ");
+        props.setProperty("property.boolean.2", "    false    ");
+        props.setProperty("property.boolean.3", "    tr ue    ");
+        props.setProperty("property.boolean.4", "        ");
+
+        props.setProperty("property.string.1", "   a string     ");
+        props.setProperty("property.string.2", "        ");
+
+        props.setProperty("property.array.1", "   1,2,3,4     ");
+        props.setProperty("property.array.2", "  a1,a2, a3   ,a4      ");
+        props.setProperty("property.array.3", "        ");
+        props.setProperty("property.array.4", "");
+
+        String className = this.getClass().getName();
+        props.setProperty("property.class.1", className);
+        props.setProperty("property.class.2", "   " + className + "     ");
+        props.setProperty("property.class.3", "        ");
+
+        store = new PropertiesConfigurationStore(props);
+        assertThat(store.getInt("property.int.1", 11), is(1));
+        assertThat(store.getInt("property.int.2", 11), is(11)); // empty > default
+        TestUtils.assertThrows(ConfigurationNotValidException.class, () -> store.getInt("property.int.3", 11));
+        assertThat(store.getInt("property.int.11", 11), is(11)); // not exists
+
+        assertThat(store.getLong("property.long.1", 11), is(1L));
+        assertThat(store.getLong("property.long.2", 11), is(11L)); // empty > default
+        TestUtils.assertThrows(ConfigurationNotValidException.class, () -> store.getLong("property.long.3", 11));
+        assertThat(store.getLong("property.long.11", 11), is(11L)); // not exists
+
+        assertThat(store.getBoolean("property.boolean.1", false), is(true));
+        assertThat(store.getBoolean("property.boolean.2", true), is(false));
+        assertThat(store.getBoolean("property.boolean.3", true), is(false));
+        assertThat(store.getBoolean("property.boolean.4", true), is(true)); // empty > default
+        assertThat(store.getBoolean("property.boolean.ne", true), is(true)); // not exists
+
+        assertThat(store.getArray("property.array.1", new String[]{"default"}), arrayContaining("1", "2", "3", "4"));
+        assertThat(store.getArray("property.array.2", new String[]{"default"}), arrayContaining("a1", "a2", "a3", "a4"));
+        assertThat(store.getArray("property.array.3", new String[]{"default"}), arrayContaining("default")); // no elements > default
+        assertThat(store.getArray("property.array.4", new String[]{"default"}), arrayContaining("default")); // empty > default
+        assertThat(store.getArray("property.array.11", new String[]{"default"}), arrayContaining("default")); // not exitst
+
+        String DClassName = Object.class.getName();
+        assertThat(store.getClassname("property.class.1", DClassName), is(className));
+        assertThat(store.getClassname("property.class.2", DClassName), is(className));
+        assertThat(store.getClassname("property.class.3", DClassName), is(DClassName)); // empty > default
+        assertThat(store.getClassname("property.class.nd", DClassName), is(DClassName)); // not defined > default
+        TestUtils.assertThrows(ConfigurationNotValidException.class, () -> store.getClassname("property.class.4", "DClassName")); // not exists
+    }
+
+    @Test
     @Parameters({"in-memory", "db"})
-    public void testConfigurationStore(String type) throws Exception {
+    public void testCertiticatesConfigurationStore(String type) throws Exception {
         Properties props = new Properties();
         props.setProperty("certificate.0.hostname", d1);
         props.setProperty("certificate.0.dynamic", "true");
@@ -161,7 +225,7 @@ public class ConfigurationStoreTest {
     }
 
     @Test
-    public void testPersistentConfiguration() throws ConfigurationNotValidException {
+    public void testCertificatesPersistency() throws ConfigurationNotValidException {
         Properties props = new Properties();
         props.setProperty("certificate.0.hostname", d1);
         props.setProperty("certificate.0.dynamic", "true");
