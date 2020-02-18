@@ -36,6 +36,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import org.carapaceproxy.utils.TestUtils;
+import org.hamcrest.core.IsNull;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -112,6 +113,10 @@ public class ConfigurationStoreTest {
         assertThat(store.getBoolean("property.boolean.4", true), is(true)); // empty > default
         assertThat(store.getBoolean("property.boolean.ne", true), is(true)); // not exists
 
+        assertThat(store.getString("property.string.1", "default"), is("a string"));
+        assertThat(store.getString("property.string.2", null), is(IsNull.nullValue())); // empty > default
+        assertThat(store.getString("property.string.3", "default"), is("default")); // not exists
+
         assertThat(store.getArray("property.array.1", new String[]{"default"}), arrayContaining("1", "2", "3", "4"));
         assertThat(store.getArray("property.array.2", new String[]{"default"}), arrayContaining("a1", "a2", "a3", "a4"));
         assertThat(store.getArray("property.array.3", new String[]{"default"}), arrayContaining("default")); // no elements > default
@@ -123,6 +128,7 @@ public class ConfigurationStoreTest {
         assertThat(store.getClassname("property.class.2", DClassName), is(className));
         assertThat(store.getClassname("property.class.3", DClassName), is(DClassName)); // empty > default
         assertThat(store.getClassname("property.class.nd", DClassName), is(DClassName)); // not defined > default
+        assertThat(store.getClassname("property.class.nd", null), is(IsNull.nullValue())); // not defined > default
         TestUtils.assertThrows(ConfigurationNotValidException.class, () -> store.getClassname("property.class.4", "DClassName")); // not exists
     }
 

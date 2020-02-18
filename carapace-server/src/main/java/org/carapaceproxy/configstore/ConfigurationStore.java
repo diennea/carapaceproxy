@@ -65,11 +65,11 @@ public interface ConfigurationStore extends AutoCloseable {
     }
 
     default String getString(String key, String defaultValue) throws ConfigurationNotValidException {
-        String property = getProperty(key, defaultValue).trim();
-        if (property.isEmpty()) {
+        String property = getProperty(key, defaultValue);
+        if (property == null || property.isBlank()) {
             return defaultValue;
         }
-        return property;
+        return property.trim();
     }
 
     default boolean getBoolean(String key, boolean defaultValue) throws ConfigurationNotValidException {
@@ -86,15 +86,14 @@ public interface ConfigurationStore extends AutoCloseable {
     }
 
     default String getClassname(String key, String defaultValue) throws ConfigurationNotValidException {
-        String property = getProperty(key, defaultValue + "").trim();
-        if (property.isEmpty()) {
-            property = defaultValue;
-        }
+        String classname = getString(key, defaultValue);
         try {
-            Class.forName(property, true, Thread.currentThread().getContextClassLoader());
-            return property;
+            if (classname != null) {
+                Class.forName(classname, true, Thread.currentThread().getContextClassLoader());
+            }
+            return classname;
         } catch (ClassNotFoundException err) {
-            throw new ConfigurationNotValidException("Invalid class value '" + property + "' for parameter '" + key + "' : " + err);
+            throw new ConfigurationNotValidException("Invalid class value '" + classname + "' for parameter '" + key + "' : " + err);
         }
     }
 
