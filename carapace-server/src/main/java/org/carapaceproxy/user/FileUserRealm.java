@@ -69,7 +69,7 @@ public class FileUserRealm implements UserRealm {
 
     @Override
     public void configure(ConfigurationStore configStore) throws ConfigurationNotValidException {
-        String path = configStore.getProperty("userrealm.path", "conf/user.properties");
+        String path = configStore.getString("userrealm.path", "conf/user.properties");
         Properties properties = new Properties();
         try {
             File userFile = new File(path).getAbsoluteFile();

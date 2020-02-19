@@ -27,6 +27,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
 
 /**
  * Stores configuration
@@ -35,7 +36,66 @@ import java.util.function.BiPredicate;
  */
 public interface ConfigurationStore extends AutoCloseable {
 
+    public static final String PROPERTY_ARRAY_SEPARATOR = ",";
+
     String getProperty(String key, String defaultValue);
+
+    default int getInt(String key, int defaultValue) throws ConfigurationNotValidException {
+        String property = getProperty(key, defaultValue + "").trim();
+        if (property.isEmpty()) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(property);
+        } catch (NumberFormatException err) {
+            throw new ConfigurationNotValidException("Invalid integer value '" + property + "' for parameter '" + key + "'");
+        }
+    }
+
+    default long getLong(String key, long defaultValue) throws ConfigurationNotValidException {
+        String property = getProperty(key, defaultValue + "").trim();
+        if (property.isEmpty()) {
+            return defaultValue;
+        }
+        try {
+            return Long.parseLong(property);
+        } catch (NumberFormatException err) {
+            throw new ConfigurationNotValidException("Invalid integer value '" + property + "' for parameter '" + key + "'");
+        }
+    }
+
+    default String getString(String key, String defaultValue) throws ConfigurationNotValidException {
+        String property = getProperty(key, defaultValue);
+        if (property == null || property.isBlank()) {
+            return defaultValue;
+        }
+        return property.trim();
+    }
+
+    default boolean getBoolean(String key, boolean defaultValue) throws ConfigurationNotValidException {
+        String property = getProperty(key, defaultValue + "").trim();
+        if (property.isEmpty()) {
+            return defaultValue;
+        }
+        return Boolean.parseBoolean(property);
+    }
+
+    default String[] getArray(String key, String[] defaultValue) throws ConfigurationNotValidException {
+        String[] array = getString(key, "").replaceAll(" ", "").split(PROPERTY_ARRAY_SEPARATOR);
+        return array.length == 1 && (array[0] == null || array[0].isEmpty()) ? defaultValue : array;
+    }
+
+    default String getClassname(String key, String defaultValue) throws ConfigurationNotValidException {
+        String classname = getString(key, defaultValue);
+        try {
+            if (classname != null) {
+                Class.forName(classname, true, Thread.currentThread().getContextClassLoader());
+            }
+            return classname;
+        } catch (ClassNotFoundException err) {
+            throw new ConfigurationNotValidException("Invalid class value '" + classname + "' for parameter '" + key + "' : " + err);
+        }
+    }
 
     void forEach(BiConsumer<String, String> consumer);
 
@@ -59,7 +119,7 @@ public interface ConfigurationStore extends AutoCloseable {
     }
 
     /**
-     * 
+     *
      * @param prefix until index of property type
      * @return last index for property name
      */
@@ -85,9 +145,9 @@ public interface ConfigurationStore extends AutoCloseable {
      */
     default boolean anyPropertyMatches(BiPredicate<String, String> predicate) {
         BooleanHolder any = new BooleanHolder(false);
-        this.forEach((k, v) -> {            
+        this.forEach((k, v) -> {
             if (predicate.test(k, v)) {
-                any.value = true;                
+                any.value = true;
             }
         });
         return any.value;
@@ -110,7 +170,7 @@ public interface ConfigurationStore extends AutoCloseable {
     boolean saveAcmeUserKey(KeyPair pair);
 
     KeyPair loadKeyPairForDomain(String domain);
-    
+
     boolean saveKeyPairForDomain(KeyPair pair, String domain, boolean update);
 
     CertificateData loadCertificateForDomain(String domain);

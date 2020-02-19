@@ -11,4 +11,5 @@ dependency-reduced-pom.xml
 **/pom.xml.releaseBackup
 release.properties
 **/*.p12
+**/*.DS_Store
 

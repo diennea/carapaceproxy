@@ -101,18 +101,18 @@ public class StandardEndpointMapper extends EndpointMapper {
         addAction(new ActionConfiguration(ACME_CHALLENGE_ROUTE_ACTION_ID, ActionConfiguration.TYPE_ACME_CHALLENGE, null, null, HttpResponseStatus.OK.code()));
         addRoute(new RouteConfiguration(ACME_CHALLENGE_ROUTE_ACTION_ID, ACME_CHALLENGE_ROUTE_ACTION_ID, true, new RegexpRequestMatcher(PROPERTY_URI, ".*" + ACME_CHALLENGE_URI_PATTERN + ".*")));
 
-        this.defaultNotFoundAction = properties.getProperty("default.action.notfound", "not-found");
+        this.defaultNotFoundAction = properties.getString("default.action.notfound", "not-found");
         LOG.info("configured default.action.notfound=" + defaultNotFoundAction);
-        this.defaultInternalErrorAction = properties.getProperty("default.action.internalerror", "internal-error");
+        this.defaultInternalErrorAction = properties.getString("default.action.internalerror", "internal-error");
         LOG.info("configured default.action.internalerror=" + defaultInternalErrorAction);
-        this.forceDirectorParameter = properties.getProperty("mapper.forcedirector.parameter", forceDirectorParameter);
+        this.forceDirectorParameter = properties.getString("mapper.forcedirector.parameter", forceDirectorParameter);
         LOG.info("configured mapper.forcedirector.parameter=" + forceDirectorParameter);
-        this.forceBackendParameter = properties.getProperty("mapper.forcebackend.parameter", forceBackendParameter);
+        this.forceBackendParameter = properties.getString("mapper.forcebackend.parameter", forceBackendParameter);
         LOG.info("configured mapper.forcebackend.parameter=" + forceBackendParameter);
         // To add custom debugging header for request choosen mapping-path
-        this.debuggingHeaderEnabled = Boolean.parseBoolean(properties.getProperty("mapper.debug", "false"));
+        this.debuggingHeaderEnabled = properties.getBoolean("mapper.debug", false);
         LOG.info("configured mapper.debug=" + debuggingHeaderEnabled);
-        this.debuggingHeaderName = properties.getProperty("mapper.debug.name", DEBUGGING_HEADER_DEFAULT_NAME);
+        this.debuggingHeaderName = properties.getString("mapper.debug.name", DEBUGGING_HEADER_DEFAULT_NAME);
         LOG.info("configured mapper.debug.name=" + debuggingHeaderName);
 
         /**
@@ -120,11 +120,11 @@ public class StandardEndpointMapper extends EndpointMapper {
          */
         for (int i = 0; i < MAX_IDS; i++) {
             String prefix = "header." + i + ".";
-            String id = properties.getProperty(prefix + "id", "");
-            String name = properties.getProperty(prefix + "name", "");
+            String id = properties.getString(prefix + "id", "");
+            String name = properties.getString(prefix + "name", "");
             if (!id.isEmpty() && !name.isEmpty()) {
-                String value = properties.getProperty(prefix + "value", "");
-                String mode = properties.getProperty(prefix + "mode", "add").toLowerCase().trim();
+                String value = properties.getString(prefix + "value", "");
+                String mode = properties.getString(prefix + "mode", "add").toLowerCase().trim();
                 addHeader(id, name, value, mode);
                 LOG.info("configured header " + id + " name:" + name + ", value:" + value);
             }
@@ -135,45 +135,41 @@ public class StandardEndpointMapper extends EndpointMapper {
          */
         for (int i = 0; i < MAX_IDS; i++) {
             String prefix = "action." + i + ".";
-            String id = properties.getProperty(prefix + "id", "");
-            boolean enabled = Boolean.parseBoolean(properties.getProperty(prefix + "enabled", "false"));
+            String id = properties.getString(prefix + "id", "");
+            boolean enabled = properties.getBoolean(prefix + "enabled", false);
             if (!id.isEmpty() && enabled) {
-                String action = properties.getProperty(prefix + "type", ActionConfiguration.TYPE_PROXY);
-                String file = properties.getProperty(prefix + "file", "");
-                String director = properties.getProperty(prefix + "director", DirectorConfiguration.DEFAULT);
-                int code = Integer.parseInt(properties.getProperty(prefix + "code", "-1"));
+                String action = properties.getString(prefix + "type", ActionConfiguration.TYPE_PROXY);
+                String file = properties.getString(prefix + "file", "");
+                String director = properties.getString(prefix + "director", DirectorConfiguration.DEFAULT);
+                int code = properties.getInt(prefix + "code", -1);
                 // Headers
-                String headersIds = properties.getProperty(prefix + "headers", "").trim();
                 List<CustomHeader> customHeaders = new ArrayList();
-                if (!headersIds.isEmpty()) {
-                    String[] _headersIds = headersIds.split(",");
-                    Set<String> usedIds = new HashSet();
-                    for (String headerId : _headersIds) {
-                        if (usedIds.contains(headerId)) {
-                            throw new ConfigurationNotValidException("while configuring action '" + id + "': header '" + headerId + "' duplicated");
+                Set<String> usedIds = new HashSet();
+                String[] headersIds = properties.getArray(prefix + "headers", new String[0]);
+                for (String headerId : headersIds) {
+                    if (usedIds.contains(headerId)) {
+                        throw new ConfigurationNotValidException("while configuring action '" + id + "': header '" + headerId + "' duplicated");
+                    } else {
+                        usedIds.add(headerId);
+                        CustomHeader header = headers.get(headerId);
+                        if (header != null) {
+                            customHeaders.add(header);
                         } else {
-                            usedIds.add(headerId);
-                            CustomHeader header = headers.get(headerId);
-                            if (header != null) {
-                                customHeaders.add(header);
-                            } else {
-                                throw new ConfigurationNotValidException("while configuring action '" + id + "': header '" + headerId + "' does not exist");
-                            }
+                            throw new ConfigurationNotValidException("while configuring action '" + id + "': header '" + headerId + "' does not exist");
                         }
                     }
                 }
 
-                ActionConfiguration _action = new ActionConfiguration(id, action, director, file, code)
-                        .setCustomHeaders(customHeaders);
+                ActionConfiguration _action = new ActionConfiguration(id, action, director, file, code).setCustomHeaders(customHeaders);
 
                 // Action of type REDIRECT
-                String redirectLocation = properties.getProperty(prefix + "redirect.location", "");
+                String redirectLocation = properties.getString(prefix + "redirect.location", "");
                 _action.setRedirectLocation(redirectLocation);
                 if (redirectLocation.isEmpty()) {
-                    _action.setRedirectProto(properties.getProperty(prefix + "redirect.proto", ""));
-                    _action.setRedirectHost(properties.getProperty(prefix + "redirect.host", ""));
-                    _action.setRedirectPort(Integer.parseInt(properties.getProperty(prefix + "redirect.port", "-1")));
-                    _action.setRedirectPath(properties.getProperty(prefix + "redirect.path", ""));
+                    _action.setRedirectProto(properties.getString(prefix + "redirect.proto", ""));
+                    _action.setRedirectHost(properties.getString(prefix + "redirect.host", ""));
+                    _action.setRedirectPort(properties.getInt(prefix + "redirect.port", -1));
+                    _action.setRedirectPath(properties.getString(prefix + "redirect.path", ""));
                     if (action.equals(ActionConfiguration.TYPE_REDIRECT) && _action.getRedirectProto().isEmpty() && _action.getRedirectHost().isEmpty()
                             && _action.getRedirectPort() == -1 && _action.getRedirectPath().isEmpty()) {
                         throw new ConfigurationNotValidException("while configuring action '" + id
@@ -196,12 +192,12 @@ public class StandardEndpointMapper extends EndpointMapper {
          */
         for (int i = 0; i < MAX_IDS; i++) {
             String prefix = "backend." + i + ".";
-            String id = properties.getProperty(prefix + "id", "");
+            String id = properties.getString(prefix + "id", "");
             if (!id.isEmpty()) {
-                boolean enabled = Boolean.parseBoolean(properties.getProperty(prefix + "enabled", "false"));
-                String host = properties.getProperty(prefix + "host", "localhost");
-                int port = Integer.parseInt(properties.getProperty(prefix + "port", "8086"));
-                String probePath = properties.getProperty(prefix + "probePath", null);
+                boolean enabled = properties.getBoolean(prefix + "enabled", false);
+                String host = properties.getString(prefix + "host", "localhost");
+                int port = properties.getInt(prefix + "port", 8086);
+                String probePath = properties.getString(prefix + "probePath", "");
                 LOG.info("configured backend " + id + " " + host + ":" + port + " enabled:" + enabled);
                 if (enabled) {
                     BackendConfiguration config = new BackendConfiguration(id, host, port, probePath);
@@ -215,14 +211,13 @@ public class StandardEndpointMapper extends EndpointMapper {
          */
         for (int i = 0; i < MAX_IDS; i++) {
             String prefix = "director." + i + ".";
-            String id = properties.getProperty(prefix + "id", "");
+            String id = properties.getString(prefix + "id", "");
             if (!id.isEmpty()) {
-                boolean enabled = Boolean.parseBoolean(properties.getProperty(prefix + "enabled", "false"));
-                String backends = properties.getProperty(prefix + "backends", "");
+                boolean enabled = properties.getBoolean(prefix + "enabled", false);
+                String[] backendids = properties.getArray(prefix + "backends", new String[0]);
                 LOG.info("configured director " + id + " backends:" + backends + ", enabled:" + enabled);
                 if (enabled) {
                     DirectorConfiguration config = new DirectorConfiguration(id);
-                    String[] backendids = backends.split(",");
                     for (String backendId : backendids) {
                         if (!backendId.equals(DirectorConfiguration.ALL_BACKENDS) && !this.backends.containsKey(backendId)) {
                             throw new ConfigurationNotValidException("while configuring director '" + id + "': backend '" + backendId + "' does not exist");
@@ -239,20 +234,20 @@ public class StandardEndpointMapper extends EndpointMapper {
          */
         for (int i = 0; i < MAX_IDS; i++) {
             String prefix = "route." + i + ".";
-            String id = properties.getProperty(prefix + "id", "");
+            String id = properties.getString(prefix + "id", "");
             if (id.isEmpty()) {
                 continue;
             }
             String matchingCondition = "";
             try {
-                String action = properties.getProperty(prefix + "action", "");
-                boolean enabled = Boolean.parseBoolean(properties.getProperty(prefix + "enabled", "false"));
-                matchingCondition = properties.getProperty(prefix + "match", "all").trim();
+                String action = properties.getString(prefix + "action", "");
+                boolean enabled = properties.getBoolean(prefix + "enabled", false);
+                matchingCondition = properties.getString(prefix + "match", "all");
                 RequestMatcher matcher = new RequestMatchParser(matchingCondition).parse();
                 LOG.log(Level.INFO, "configured route {0} action: {1} enabled: {2} matcher: {3}", new Object[]{id, action, enabled, matcher});
                 RouteConfiguration config = new RouteConfiguration(id, action, enabled, matcher);
                 // Error action
-                String errorAction = properties.getProperty(prefix + "erroraction", "");
+                String errorAction = properties.getString(prefix + "erroraction", "");
                 if (!errorAction.isEmpty()) {
                     ActionConfiguration defined = actions.get(errorAction);
                     if (defined == null || !ActionConfiguration.TYPE_STATIC.equals(defined.getType())) {
