@@ -29,9 +29,6 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.carapaceproxy.configstore.ConfigurationStore;
-import static org.carapaceproxy.configstore.ConfigurationStoreUtils.getClassname;
-import static org.carapaceproxy.configstore.ConfigurationStoreUtils.getInt;
-import static org.carapaceproxy.configstore.ConfigurationStoreUtils.getLong;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -44,6 +41,7 @@ import java.util.Arrays;
 import javax.net.ssl.SSLContext;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
+import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 
 /**
  * Configuration
@@ -229,34 +227,34 @@ public class RuntimeServerConfiguration {
 
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
         LOG.log(Level.INFO, "configuring from " + properties);
-        this.maxConnectionsPerEndpoint = getInt("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint, properties);
-        this.idleTimeout = getInt("connectionsmanager.idletimeout", idleTimeout, properties);
+        this.maxConnectionsPerEndpoint = properties.getInt("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint);
+        this.idleTimeout = properties.getInt("connectionsmanager.idletimeout", idleTimeout);
         if (this.idleTimeout <= 0) {
             throw new ConfigurationNotValidException("Invalid value '" + this.idleTimeout + "' for connectionsmanager.idletimeout");
         }
-        this.stuckRequestTimeout = getInt("connectionsmanager.stuckrequesttimeout", stuckRequestTimeout, properties);
-        this.connectTimeout = getInt("connectionsmanager.connecttimeout", connectTimeout, properties);
-        this.borrowTimeout = getInt("connectionsmanager.borrowtimeout", borrowTimeout, properties);
+        this.stuckRequestTimeout = properties.getInt("connectionsmanager.stuckrequesttimeout", stuckRequestTimeout);
+        this.connectTimeout = properties.getInt("connectionsmanager.connecttimeout", connectTimeout);
+        this.borrowTimeout = properties.getInt("connectionsmanager.borrowtimeout", borrowTimeout);
         LOG.info("connectionsmanager.maxconnectionsperendpoint=" + maxConnectionsPerEndpoint);
         LOG.info("connectionsmanager.idletimeout=" + idleTimeout);
         LOG.info("connectionsmanager.stuckrequesttimeout=" + stuckRequestTimeout);
         LOG.info("connectionsmanager.connecttimeout=" + connectTimeout);
         LOG.info("connectionsmanager.borrowtimeout=" + borrowTimeout);
 
-        this.mapperClassname = getClassname("mapper.class", StandardEndpointMapper.class.getName(), properties);
+        this.mapperClassname = properties.getClassname("mapper.class", StandardEndpointMapper.class.getName());
         LOG.log(Level.INFO, "mapper.class={0}", this.mapperClassname);
 
-        this.cacheMaxSize = getLong("cache.maxsize", cacheMaxSize, properties);
-        this.cacheMaxFileSize = getLong("cache.maxfilesize", cacheMaxFileSize, properties);
+        this.cacheMaxSize = properties.getLong("cache.maxsize", cacheMaxSize);
+        this.cacheMaxFileSize = properties.getLong("cache.maxfilesize", cacheMaxFileSize);
         LOG.info("cache.maxsize=" + cacheMaxSize);
         LOG.info("cache.maxfilesize=" + cacheMaxFileSize);
 
-        this.accessLogPath = properties.getProperty("accesslog.path", accessLogPath);
-        this.accessLogTimestampFormat = properties.getProperty("accesslog.format.timestamp", accessLogTimestampFormat);
-        this.accessLogFormat = properties.getProperty("accesslog.format", accessLogFormat);
-        this.accessLogMaxQueueCapacity = getInt("accesslog.queue.maxcapacity", accessLogMaxQueueCapacity, properties);
-        this.accessLogFlushInterval = getInt("accesslog.flush.interval", accessLogFlushInterval, properties);
-        this.accessLogWaitBetweenFailures = getInt("accesslog.failure.wait", accessLogWaitBetweenFailures, properties);
+        this.accessLogPath = properties.getString("accesslog.path", accessLogPath);
+        this.accessLogTimestampFormat = properties.getString("accesslog.format.timestamp", accessLogTimestampFormat);
+        this.accessLogFormat = properties.getString("accesslog.format", accessLogFormat);
+        this.accessLogMaxQueueCapacity = properties.getInt("accesslog.queue.maxcapacity", accessLogMaxQueueCapacity);
+        this.accessLogFlushInterval = properties.getInt("accesslog.flush.interval", accessLogFlushInterval);
+        this.accessLogWaitBetweenFailures = properties.getInt("accesslog.failure.wait", accessLogWaitBetweenFailures);
         String tsFormatExample;
         try {
             SimpleDateFormat formatter = new SimpleDateFormat(this.accessLogTimestampFormat);
@@ -281,29 +279,29 @@ public class RuntimeServerConfiguration {
             tryConfigureFilter(i, properties);
         }
 
-        healthProbePeriod = getInt("healthmanager.period", 0, properties);
+        healthProbePeriod = properties.getInt("healthmanager.period", 0);
         LOG.info("healthmanager.period=" + healthProbePeriod);
         if (healthProbePeriod <= 0) {
             LOG.warning("BACKEND-HEALTH-MANAGER DISABLED");
         }
 
-        dynamicCertificatesManagerPeriod = getInt("dynamiccertificatesmanager.period", 0, properties);
+        dynamicCertificatesManagerPeriod = properties.getInt("dynamiccertificatesmanager.period", 0);
         LOG.info("dynamiccertificatesmanager.period=" + dynamicCertificatesManagerPeriod);
-        keyPairsSize = getInt("dynamiccertificatesmanager.keypairssize", DEFAULT_KEYPAIRS_SIZE, properties);
+        keyPairsSize = properties.getInt("dynamiccertificatesmanager.keypairssize", DEFAULT_KEYPAIRS_SIZE);
         LOG.info("dynamiccertificatesmanager.keypairssize=" + keyPairsSize);
 
-        ocspStaplingManagerPeriod = getInt("ocspstaplingmanager.period", 0, properties);
+        ocspStaplingManagerPeriod = properties.getInt("ocspstaplingmanager.period", 0);
         LOG.info("ocspstaplingmanager.period=" + ocspStaplingManagerPeriod);
     }
 
     private void tryConfigureCertificate(int i, ConfigurationStore properties) throws ConfigurationNotValidException {
         String prefix = "certificate." + i + ".";
-        String hostname = properties.getProperty(prefix + "hostname", "");
+        String hostname = properties.getString(prefix + "hostname", "");
         if (!hostname.isEmpty()) {
-            String file = properties.getProperty(prefix + "file", "");
-            String pw = properties.getProperty(prefix + "password", "");
-            String mode = properties.getProperty(prefix + "mode", "static");
-            int daysBeforeRenewal = Integer.parseInt(properties.getProperty(prefix + "daysbeforerenewal", DEFAULT_DAYS_BEFORE_RENEWAL + ""));
+            String file = properties.getString(prefix + "file", "");
+            String pw = properties.getString(prefix + "password", "");
+            String mode = properties.getString(prefix + "mode", "static");
+            int daysBeforeRenewal = properties.getInt(prefix + "daysbeforerenewal", DEFAULT_DAYS_BEFORE_RENEWAL);
             try {
                 CertificateMode _mode = CertificateMode.valueOf(mode.toUpperCase());
                 LOG.log(Level.INFO,
@@ -325,26 +323,22 @@ public class RuntimeServerConfiguration {
 
     private void tryConfigureListener(int i, ConfigurationStore properties) throws ConfigurationNotValidException {
         String prefix = "listener." + i + ".";
-        String host = properties.getProperty(prefix + "host", "0.0.0.0");
+        String host = properties.getString(prefix + "host", "0.0.0.0");
 
-        int port = getInt(prefix + "port", 0, properties);
+        int port = properties.getInt(prefix + "port", 0);
 
         if (port > 0) {
-            boolean ssl = Boolean.parseBoolean(properties.getProperty(prefix + "ssl", "false"));
-            boolean ocsp = Boolean.parseBoolean(properties.getProperty(prefix + "ocsp", "false"));
-            String trustStoreFile = properties.getProperty(prefix + "ssltruststorefile", "");
-            String trustStorePassword = properties.getProperty(prefix + "ssltruststorepassword", "");
-            String sslciphers = properties.getProperty(prefix + "sslciphers", "");
-            String defautlSslCertificate = properties.getProperty(prefix + "defaultcertificate", "*");
+            boolean ssl = properties.getBoolean(prefix + "ssl", false);
+            boolean ocsp = properties.getBoolean(prefix + "ocsp", false);
+            String trustStoreFile = properties.getString(prefix + "ssltruststorefile", "");
+            String trustStorePassword = properties.getString(prefix + "ssltruststorepassword", "");
+            String sslciphers = properties.getString(prefix + "sslciphers", "");
+            String defautlSslCertificate = properties.getString(prefix + "defaultcertificate", "*");
             NetworkListenerConfiguration config = new NetworkListenerConfiguration(
                     host, port, ssl, ocsp, sslciphers, defautlSslCertificate, trustStoreFile, trustStorePassword
             );
             if (ssl) {
-                String _sslProtocols = properties.getProperty(prefix + "sslprotocols", "");
-                if (!_sslProtocols.isBlank()) {
-                    String[] sslProtocols = _sslProtocols.replaceAll(" ", "").split(",");
-                    config.setSslProtocols(sslProtocols);
-                }
+                config.setSslProtocols(properties.getArray(prefix + "sslprotocols", DEFAULT_SSL_PROTOCOLS.toArray(new String[0])));
             }
             this.addListener(config);
         }
@@ -352,8 +346,7 @@ public class RuntimeServerConfiguration {
 
     private void tryConfigureFilter(int i, ConfigurationStore properties) throws ConfigurationNotValidException {
         String prefix = "filter." + i + ".";
-        String type = properties.getProperty(prefix + "type", "").trim();
-
+        String type = properties.getString(prefix + "type", "");
         if (type.isEmpty()) {
             return;
         }

@@ -28,41 +28,12 @@ import java.security.cert.Certificate;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
-import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
 import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
 
 public final class ConfigurationStoreUtils {
 
     private ConfigurationStoreUtils() {
-    }
-
-    public static int getInt(String key, int defaultValue, ConfigurationStore properties) throws ConfigurationNotValidException {
-        String property = properties.getProperty(key, defaultValue + "");
-        try {
-            return Integer.parseInt(properties.getProperty(key, defaultValue + ""));
-        } catch (NumberFormatException err) {
-            throw new ConfigurationNotValidException("Invalid integer value '" + property + "' for parameter '" + key + "'");
-        }
-    }
-
-    public static long getLong(String key, long defaultValue, ConfigurationStore properties) throws ConfigurationNotValidException {
-        String property = properties.getProperty(key, defaultValue + "");
-        try {
-            return Long.parseLong(properties.getProperty(key, defaultValue + ""));
-        } catch (NumberFormatException err) {
-            throw new ConfigurationNotValidException("Invalid integer value '" + property + "' for parameter '" + key + "'");
-        }
-    }
-
-    public static String getClassname(String key, String defaultValue, ConfigurationStore properties) throws ConfigurationNotValidException {
-        String property = properties.getProperty(key, defaultValue + "");
-        try {
-            Class.forName(property, true, Thread.currentThread().getContextClassLoader());
-            return property;
-        } catch (ClassNotFoundException err) {
-            throw new ConfigurationNotValidException("Invalid class value '" + property + "' for parameter '" + key + "' : " + err);
-        }
     }
 
     public static String base64EncodeKey(Key key) {
