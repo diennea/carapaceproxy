@@ -269,15 +269,9 @@ public class RuntimeServerConfiguration {
         LOG.info("accesslog.flush.interval=" + accessLogFlushInterval);
         LOG.info("accesslog.failure.wait=" + accessLogWaitBetweenFailures);
 
-        for (int i = 0; i < 100; i++) {
-            tryConfigureCertificate(i, properties);
-        }
-        for (int i = 0; i < 100; i++) {
-            tryConfigureListener(i, properties);
-        }
-        for (int i = 0; i < 100; i++) {
-            tryConfigureFilter(i, properties);
-        }
+        tryConfigureCertificates(properties);
+        tryConfigureListeners(properties);
+        tryConfigureFilters(properties);
 
         healthProbePeriod = properties.getInt("healthmanager.period", 0);
         LOG.info("healthmanager.period=" + healthProbePeriod);
@@ -294,72 +288,81 @@ public class RuntimeServerConfiguration {
         LOG.info("ocspstaplingmanager.period=" + ocspStaplingManagerPeriod);
     }
 
-    private void tryConfigureCertificate(int i, ConfigurationStore properties) throws ConfigurationNotValidException {
-        String prefix = "certificate." + i + ".";
-        String hostname = properties.getString(prefix + "hostname", "");
-        if (!hostname.isEmpty()) {
-            String file = properties.getString(prefix + "file", "");
-            String pw = properties.getString(prefix + "password", "");
-            String mode = properties.getString(prefix + "mode", "static");
-            int daysBeforeRenewal = properties.getInt(prefix + "daysbeforerenewal", DEFAULT_DAYS_BEFORE_RENEWAL);
-            try {
-                CertificateMode _mode = CertificateMode.valueOf(mode.toUpperCase());
-                LOG.log(Level.INFO,
-                        "Configuring SSL certificate {0}: hostname={1}, file={2}, password={3}, mode={4}",
-                        new Object[]{prefix, hostname, file, pw, mode}
-                );
-                SSLCertificateConfiguration config = new SSLCertificateConfiguration(hostname, file, pw, _mode);
-                if (config.isAcme()) {
-                    config.setDaysBeforeRenewal(daysBeforeRenewal);
+    private void tryConfigureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
+        String prefix = "certificate.";
+        int max = properties.nextIndexFor(prefix);
+        for (int i = 0; i < max; i++) {
+            prefix = "certificate." + i + ".";
+            String hostname = properties.getString(prefix + "hostname", "");
+            if (!hostname.isEmpty()) {
+                String file = properties.getString(prefix + "file", "");
+                String pw = properties.getString(prefix + "password", "");
+                String mode = properties.getString(prefix + "mode", "static");
+                int daysBeforeRenewal = properties.getInt(prefix + "daysbeforerenewal", DEFAULT_DAYS_BEFORE_RENEWAL);
+                try {
+                    CertificateMode _mode = CertificateMode.valueOf(mode.toUpperCase());
+                    LOG.log(Level.INFO,
+                            "Configuring SSL certificate {0}: hostname={1}, file={2}, password={3}, mode={4}",
+                            new Object[]{prefix, hostname, file, pw, mode}
+                    );
+                    SSLCertificateConfiguration config = new SSLCertificateConfiguration(hostname, file, pw, _mode);
+                    if (config.isAcme()) {
+                        config.setDaysBeforeRenewal(daysBeforeRenewal);
+                    }
+                    this.addCertificate(config);
+                } catch (IllegalArgumentException e) {
+                    throw new ConfigurationNotValidException(
+                            "Invalid value of '" + mode + "' for " + prefix + "mode. Supperted ones: static, acme, manual"
+                    );
                 }
-                this.addCertificate(config);
-            } catch (IllegalArgumentException e) {
-                throw new ConfigurationNotValidException(
-                        "Invalid value of '" + mode + "' for " + prefix + "mode. Supperted ones: static, acme, manual"
+            }
+        }
+    }
+
+    private void tryConfigureListeners(ConfigurationStore properties) throws ConfigurationNotValidException {
+        String prefix = "listener.";
+        int max = properties.nextIndexFor(prefix);
+        for (int i = 0; i < max; i++) {
+            prefix = "listener." + i + ".";
+            String host = properties.getString(prefix + "host", "0.0.0.0");
+            int port = properties.getInt(prefix + "port", 0);
+            if (port > 0) {
+                boolean ssl = properties.getBoolean(prefix + "ssl", false);
+                boolean ocsp = properties.getBoolean(prefix + "ocsp", false);
+                String trustStoreFile = properties.getString(prefix + "ssltruststorefile", "");
+                String trustStorePassword = properties.getString(prefix + "ssltruststorepassword", "");
+                String sslciphers = properties.getString(prefix + "sslciphers", "");
+                String defautlSslCertificate = properties.getString(prefix + "defaultcertificate", "*");
+                NetworkListenerConfiguration config = new NetworkListenerConfiguration(
+                        host, port, ssl, ocsp, sslciphers, defautlSslCertificate, trustStoreFile, trustStorePassword
                 );
+                if (ssl) {
+                    config.setSslProtocols(properties.getArray(prefix + "sslprotocols", DEFAULT_SSL_PROTOCOLS.toArray(new String[0])));
+                }
+                this.addListener(config);
             }
         }
     }
 
-    private void tryConfigureListener(int i, ConfigurationStore properties) throws ConfigurationNotValidException {
-        String prefix = "listener." + i + ".";
-        String host = properties.getString(prefix + "host", "0.0.0.0");
-
-        int port = properties.getInt(prefix + "port", 0);
-
-        if (port > 0) {
-            boolean ssl = properties.getBoolean(prefix + "ssl", false);
-            boolean ocsp = properties.getBoolean(prefix + "ocsp", false);
-            String trustStoreFile = properties.getString(prefix + "ssltruststorefile", "");
-            String trustStorePassword = properties.getString(prefix + "ssltruststorepassword", "");
-            String sslciphers = properties.getString(prefix + "sslciphers", "");
-            String defautlSslCertificate = properties.getString(prefix + "defaultcertificate", "*");
-            NetworkListenerConfiguration config = new NetworkListenerConfiguration(
-                    host, port, ssl, ocsp, sslciphers, defautlSslCertificate, trustStoreFile, trustStorePassword
-            );
-            if (ssl) {
-                config.setSslProtocols(properties.getArray(prefix + "sslprotocols", DEFAULT_SSL_PROTOCOLS.toArray(new String[0])));
+    private void tryConfigureFilters(ConfigurationStore properties) throws ConfigurationNotValidException {
+        String prefix = "filter.";
+        int max = properties.nextIndexFor(prefix);
+        for (int i = 0; i < max; i++) {
+            prefix = "filter." + i + ".";
+            String type = properties.getString(prefix + "type", "");
+            if (!type.isEmpty()) {
+                Map<String, String> filterConfig = new HashMap<>();
+                RequestFilterConfiguration config = new RequestFilterConfiguration(type, filterConfig);
+                LOG.log(Level.INFO, "configure filter " + prefix + "type={0}", type);
+                properties.forEach(prefix, (k, v) -> {
+                    LOG.log(Level.INFO, "{0}={1}", new Object[]{k, v});
+                    filterConfig.put(k, v);
+                });
+                // try to build the filter for validation
+                buildRequestFilter(config);
+                this.addRequestFilter(config);
             }
-            this.addListener(config);
         }
-    }
-
-    private void tryConfigureFilter(int i, ConfigurationStore properties) throws ConfigurationNotValidException {
-        String prefix = "filter." + i + ".";
-        String type = properties.getString(prefix + "type", "");
-        if (type.isEmpty()) {
-            return;
-        }
-        Map<String, String> filterConfig = new HashMap<>();
-        RequestFilterConfiguration config = new RequestFilterConfiguration(type, filterConfig);
-        LOG.log(Level.INFO, "configure filter " + prefix + "type={0}", type);
-        properties.forEach(prefix, (k, v) -> {
-            LOG.log(Level.INFO, prefix + k + "=" + v);
-            filterConfig.put(k, v);
-        });
-        // try to build the filter for validation
-        buildRequestFilter(config);
-        this.addRequestFilter(config);
     }
 
     public void addListener(NetworkListenerConfiguration listener) throws ConfigurationNotValidException {
