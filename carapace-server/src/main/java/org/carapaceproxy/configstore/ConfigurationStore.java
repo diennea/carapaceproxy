@@ -1,21 +1,21 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.configstore;
 
@@ -120,28 +120,29 @@ public interface ConfigurationStore extends AutoCloseable {
 
     /**
      *
-     * @param prefix until index of property type
-     * @return last index for property name
+     * @param prefix before the index of the property.
+     * @return max index for the property or -1 if no property matches the prefix.
      */
-    default int nextIndexFor(String prefix) {
+    default int findMaxIndexForPrefix(String prefix) {
         Set<Integer> usedIndexes = new HashSet<>();
-        this.forEach(prefix, (k, v) -> {
+        this.forEach(prefix + ".", (k, v) -> {
             String[] split = k.split("\\.");
             try {
-                if (split.length > 2) {
-                    usedIndexes.add(Integer.parseInt(split[1]));
+                if (split.length > 0) {
+                    usedIndexes.add(Integer.parseInt(split[0]));
                 }
             } catch (NumberFormatException e) {
 
             }
         });
-        return 1 + usedIndexes.stream().max(Comparator.naturalOrder()).orElse(-1);
+
+        return usedIndexes.stream().max(Comparator.naturalOrder()).orElse(-1);
     }
 
     /**
      *
      * @param predicate
-     * @return  whether exist at least one property matching to passed predicate.
+     * @return whether exist at least one property matching to passed predicate.
      */
     default boolean anyPropertyMatches(BiPredicate<String, String> predicate) {
         BooleanHolder any = new BooleanHolder(false);

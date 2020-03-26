@@ -1,21 +1,21 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.server.mapper;
 
@@ -75,7 +75,6 @@ public class StandardEndpointMapper extends EndpointMapper {
     private String forceDirectorParameter = "x-director";
     private String forceBackendParameter = "x-backend";
 
-    private static final int MAX_IDS = 200;
     private static final Logger LOG = Logger.getLogger(StandardEndpointMapper.class.getName());
     private static final String ACME_CHALLENGE_URI_PATTERN = "/\\.well-known/acme-challenge/";
     private DynamicCertificatesManager dynamicCertificateManger;
@@ -118,7 +117,8 @@ public class StandardEndpointMapper extends EndpointMapper {
         /**
          * HEADERS
          */
-        for (int i = 0; i < MAX_IDS; i++) {
+        int max = properties.findMaxIndexForPrefix("header");
+        for (int i = 0; i <= max; i++) {
             String prefix = "header." + i + ".";
             String id = properties.getString(prefix + "id", "");
             String name = properties.getString(prefix + "name", "");
@@ -133,7 +133,8 @@ public class StandardEndpointMapper extends EndpointMapper {
         /**
          * ACTIONS
          */
-        for (int i = 0; i < MAX_IDS; i++) {
+        max = properties.findMaxIndexForPrefix("action");
+        for (int i = 0; i <= max; i++) {
             String prefix = "action." + i + ".";
             String id = properties.getString(prefix + "id", "");
             boolean enabled = properties.getBoolean(prefix + "enabled", false);
@@ -190,7 +191,8 @@ public class StandardEndpointMapper extends EndpointMapper {
         /**
          * BACKENDS
          */
-        for (int i = 0; i < MAX_IDS; i++) {
+        max = properties.findMaxIndexForPrefix("backend");
+        for (int i = 0; i <= max; i++) {
             String prefix = "backend." + i + ".";
             String id = properties.getString(prefix + "id", "");
             if (!id.isEmpty()) {
@@ -209,7 +211,8 @@ public class StandardEndpointMapper extends EndpointMapper {
         /**
          * DIRECTORS
          */
-        for (int i = 0; i < MAX_IDS; i++) {
+        max = properties.findMaxIndexForPrefix("director");
+        for (int i = 0; i <= max; i++) {
             String prefix = "director." + i + ".";
             String id = properties.getString(prefix + "id", "");
             if (!id.isEmpty()) {
@@ -232,7 +235,8 @@ public class StandardEndpointMapper extends EndpointMapper {
         /**
          * ROUTES
          */
-        for (int i = 0; i < MAX_IDS; i++) {
+        max = properties.findMaxIndexForPrefix("route");
+        for (int i = 0; i <= max; i++) {
             String prefix = "route." + i + ".";
             String id = properties.getString(prefix + "id", "");
             if (id.isEmpty()) {
