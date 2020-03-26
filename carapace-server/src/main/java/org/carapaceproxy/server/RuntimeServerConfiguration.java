@@ -289,10 +289,9 @@ public class RuntimeServerConfiguration {
     }
 
     private void tryConfigureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
-        String prefix = "certificate.";
-        int max = properties.nextIndexFor(prefix);
-        for (int i = 0; i < max; i++) {
-            prefix = "certificate." + i + ".";
+        int max = properties.findMaxIndexForPrefix("certificate");
+        for (int i = 0; i <= max; i++) {
+            String prefix = "certificate." + i + ".";
             String hostname = properties.getString(prefix + "hostname", "");
             if (!hostname.isEmpty()) {
                 String file = properties.getString(prefix + "file", "");
@@ -320,10 +319,9 @@ public class RuntimeServerConfiguration {
     }
 
     private void tryConfigureListeners(ConfigurationStore properties) throws ConfigurationNotValidException {
-        String prefix = "listener.";
-        int max = properties.nextIndexFor(prefix);
-        for (int i = 0; i < max; i++) {
-            prefix = "listener." + i + ".";
+        int max = properties.findMaxIndexForPrefix("listener");
+        for (int i = 0; i <= max; i++) {
+            String prefix = "listener." + i + ".";
             String host = properties.getString(prefix + "host", "0.0.0.0");
             int port = properties.getInt(prefix + "port", 0);
             if (port > 0) {
@@ -345,10 +343,9 @@ public class RuntimeServerConfiguration {
     }
 
     private void tryConfigureFilters(ConfigurationStore properties) throws ConfigurationNotValidException {
-        String prefix = "filter.";
-        int max = properties.nextIndexFor(prefix);
-        for (int i = 0; i < max; i++) {
-            prefix = "filter." + i + ".";
+        int max = properties.findMaxIndexForPrefix("filter");
+        for (int i = 0; i <= max; i++) {
+            String prefix = "filter." + i + ".";
             String type = properties.getString(prefix + "type", "");
             if (!type.isEmpty()) {
                 Map<String, String> filterConfig = new HashMap<>();

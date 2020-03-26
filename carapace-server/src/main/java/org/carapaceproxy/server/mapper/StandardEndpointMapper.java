@@ -117,8 +117,8 @@ public class StandardEndpointMapper extends EndpointMapper {
         /**
          * HEADERS
          */
-        int max = properties.nextIndexFor("header.");
-        for (int i = 0; i < max; i++) {
+        int max = properties.findMaxIndexForPrefix("header");
+        for (int i = 0; i <= max; i++) {
             String prefix = "header." + i + ".";
             String id = properties.getString(prefix + "id", "");
             String name = properties.getString(prefix + "name", "");
@@ -133,8 +133,8 @@ public class StandardEndpointMapper extends EndpointMapper {
         /**
          * ACTIONS
          */
-        max = properties.nextIndexFor("action.");
-        for (int i = 0; i < max; i++) {
+        max = properties.findMaxIndexForPrefix("action");
+        for (int i = 0; i <= max; i++) {
             String prefix = "action." + i + ".";
             String id = properties.getString(prefix + "id", "");
             boolean enabled = properties.getBoolean(prefix + "enabled", false);
@@ -191,8 +191,8 @@ public class StandardEndpointMapper extends EndpointMapper {
         /**
          * BACKENDS
          */
-        max = properties.nextIndexFor("backend.");
-        for (int i = 0; i < max; i++) {
+        max = properties.findMaxIndexForPrefix("backend");
+        for (int i = 0; i <= max; i++) {
             String prefix = "backend." + i + ".";
             String id = properties.getString(prefix + "id", "");
             if (!id.isEmpty()) {
@@ -211,8 +211,8 @@ public class StandardEndpointMapper extends EndpointMapper {
         /**
          * DIRECTORS
          */
-        max = properties.nextIndexFor("director.");
-        for (int i = 0; i < max; i++) {
+        max = properties.findMaxIndexForPrefix("director");
+        for (int i = 0; i <= max; i++) {
             String prefix = "director." + i + ".";
             String id = properties.getString(prefix + "id", "");
             if (!id.isEmpty()) {
@@ -235,8 +235,8 @@ public class StandardEndpointMapper extends EndpointMapper {
         /**
          * ROUTES
          */
-        max = properties.nextIndexFor("route.");
-        for (int i = 0; i < max; i++) {
+        max = properties.findMaxIndexForPrefix("route");
+        for (int i = 0; i <= max; i++) {
             String prefix = "route." + i + ".";
             String id = properties.getString(prefix + "id", "");
             if (id.isEmpty()) {

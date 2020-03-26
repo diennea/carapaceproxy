@@ -1,21 +1,21 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.configstore;
 
@@ -56,6 +56,7 @@ public class ConfigurationStoreTest {
     public TemporaryFolder tmpDir = new TemporaryFolder();
 
     private ConfigurationStore store;
+    private String type;
     private static final String d1 = "localhost1";
     private static final String d2 = "localhost2";
     private static final String d3 = "localhost3";
@@ -67,8 +68,25 @@ public class ConfigurationStoreTest {
         }
     }
 
+    private void updateConfigStore(Properties props) throws ConfigurationNotValidException {
+        ConfigurationStore newStore = new PropertiesConfigurationStore(props);
+        if (type.equals("db")) {
+            if (store == null) {
+                props.put("db.jdbc.url", "jdbc:herddb:localhost");
+                newStore = new PropertiesConfigurationStore(props);
+                store = new HerdDBConfigurationStore(newStore, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
+            }
+            store.commitConfiguration(newStore);
+        } else {
+            store = newStore;
+        }
+    }
+
     @Test
-    public void test() throws Exception {
+    @Parameters({"in-memory", "db"})
+    public void test(String type) throws Exception {
+        this.type = type;
+
         Properties props = new Properties();
         props.setProperty("property.int.1", "    1    ");
         props.setProperty("property.int.2", "        ");
@@ -96,7 +114,8 @@ public class ConfigurationStoreTest {
         props.setProperty("property.class.2", "   " + className + "     ");
         props.setProperty("property.class.3", "        ");
 
-        store = new PropertiesConfigurationStore(props);
+        updateConfigStore(props);
+
         assertThat(store.getInt("property.int.1", 11), is(1));
         assertThat(store.getInt("property.int.2", 11), is(11)); // empty > default
         TestUtils.assertThrows(ConfigurationNotValidException.class, () -> store.getInt("property.int.3", 11));
@@ -134,29 +153,70 @@ public class ConfigurationStoreTest {
 
     @Test
     @Parameters({"in-memory", "db"})
+    public void testPropertiesIndex(String type) throws Exception {
+        this.type = type;
+
+        // test no properties -> max index -1
+        updateConfigStore(new Properties());
+        assertThat(store.findMaxIndexForPrefix("property"), is(-1));
+
+        // test single property -> max index == property index
+        Properties props = new Properties();
+        props.setProperty("property.0.value", "value");
+        updateConfigStore(props);
+        assertThat(store.findMaxIndexForPrefix("property"), is(0));
+
+        props = new Properties();
+        props.setProperty("property.100.value", "value");
+        updateConfigStore(props);
+        assertThat(store.findMaxIndexForPrefix("property"), is(100));
+
+        // test multiple properties -> max index == max property index
+        props = new Properties();
+        props.setProperty("property.0.value", "value");
+        props.setProperty("property.1.value", "value");
+        updateConfigStore(props);
+        assertThat(store.findMaxIndexForPrefix("property"), is(1));
+
+        props.setProperty("property.100.value", "value");
+        updateConfigStore(props);
+        assertThat(store.findMaxIndexForPrefix("property"), is(100));
+
+        props.setProperty("property2.111.value", "value");
+        updateConfigStore(props);
+        assertThat(store.findMaxIndexForPrefix("property"), is(100));
+        assertThat(store.findMaxIndexForPrefix("property2"), is(111));
+
+        props.setProperty("property.weird.8.9.value", "value");
+        updateConfigStore(props);
+        assertThat(store.findMaxIndexForPrefix("property"), is(100));
+        assertThat(store.findMaxIndexForPrefix("property.weird"), is(8));
+        assertThat(store.findMaxIndexForPrefix("property.weird.8"), is(9));
+        assertThat(store.findMaxIndexForPrefix("property.weird.8.9"), is(-1));
+        assertThat(store.findMaxIndexForPrefix("property.weird.8.9.value"), is(-1));
+    }
+
+    @Test
+    @Parameters({"in-memory", "db"})
     public void testCertiticatesConfigurationStore(String type) throws Exception {
+        this.type = type;
+
         Properties props = new Properties();
         props.setProperty("certificate.0.hostname", d1);
         props.setProperty("certificate.0.dynamic", "true");
         props.setProperty("certificate.1.hostname", d2);
         props.setProperty("certificate.1.dynamic", "true");
-        props.put("db.jdbc.url", "jdbc:herddb:localhost");
+        updateConfigStore(props);
 
-        store = new PropertiesConfigurationStore(props);
-        if (type.equals("db")) {
-            store = new HerdDBConfigurationStore(store, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
-        } else {
-            assertEquals(2, store.asProperties("certificate.1").size());
-            assertEquals(5, store.asProperties(null).size());
-            assertEquals(2, store.nextIndexFor("certificate"));
-            assertEquals(0, store.nextIndexFor("unknown"));
-            assertEquals(true, store.anyPropertyMatches(
-                    (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals(d1)
-            ));
-            assertEquals(false, store.anyPropertyMatches(
-                    (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals("unknown")
-            ));
-        }
+        assertEquals(type.equals("db") ? 5 : 4, store.asProperties(null).size());
+        assertEquals(1, store.findMaxIndexForPrefix("certificate"));
+        assertEquals(2, store.asProperties("certificate.1").size());
+        assertEquals(true, store.anyPropertyMatches(
+                (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals(d1)
+        ));
+        assertEquals(false, store.anyPropertyMatches(
+                (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals("unknown")
+        ));
 
         testKeyPairOperations();
         testCertificateOperations();
@@ -258,10 +318,9 @@ public class ConfigurationStoreTest {
         assertEquals(d2, store.getProperty("certificate.1.hostname", ""));
         assertEquals("true", store.getProperty("certificate.1.dynamic", ""));
 
-        assertEquals(2, store.asProperties("certificate.1").size());
         assertEquals(5, store.asProperties(null).size());
-        assertEquals(2, store.nextIndexFor("certificate"));
-        assertEquals(0, store.nextIndexFor("unknown"));
+        assertEquals(1, store.findMaxIndexForPrefix("certificate"));
+        assertEquals(2, store.asProperties("certificate.1").size());
         assertEquals(true, store.anyPropertyMatches(
                 (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals(d1)
         ));
@@ -301,12 +360,10 @@ public class ConfigurationStoreTest {
         assertEquals(d3, store.getProperty("certificate.3.hostname", ""));
         assertEquals("true", store.getProperty("certificate.3.dynamic", ""));
 
+        assertEquals(4, store.asProperties(null).size());
+        assertEquals(3, store.findMaxIndexForPrefix("certificate"));
         assertEquals(2, store.asProperties("certificate.1.").size());
         assertEquals(2, store.asProperties("certificate.3.").size());
-        assertEquals(4, store.asProperties(null).size());
-        assertEquals(4, store.nextIndexFor("certificate"));
-        assertEquals(0, store.nextIndexFor("unknown"));
-
         assertEquals(true, store.anyPropertyMatches(
                 (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals(d1)
         ));
