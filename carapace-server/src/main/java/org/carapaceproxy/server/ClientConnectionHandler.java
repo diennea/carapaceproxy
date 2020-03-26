@@ -1,21 +1,21 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.server;
 
@@ -74,6 +74,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     private final boolean secure; // connection bind to https
     private String sslProtocol;
     private String cipherSuite;
+    private boolean http2;
 
     public ClientConnectionHandler(
             EndpointMapper mapper,
@@ -130,6 +131,36 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         if (LOG.isLoggable(Level.FINEST)) {
             LOG.log(Level.FINEST, "{0} channelRead0 {1}", new Object[]{this, msg});
         }
+        if (http2) {
+            handleHttp2Request(ctx, msg);
+        } else {
+            handleHttpRequest(ctx, msg);
+        }
+    }
+
+    private void handleHttp2Request(ChannelHandlerContext ctx, Object msg) {
+        if (msg instanceof HttpRequest) {
+            HttpRequest request = (HttpRequest) msg;
+            if (secure) {
+                detectSSLProperties(ctx);
+            }
+            RUNNING_REQUESTS_GAUGE.inc();
+            totalRequests.inc();
+            RequestHandler currentRequest = new RequestHandler(requestIdGenerator.incrementAndGet(),
+                    request, filters, this, ctx, () -> RUNNING_REQUESTS_GAUGE.dec(), backendHealthManager, requestsLogger);
+            addPendingRequest(currentRequest);
+            currentRequest.start();
+            try {
+                currentRequest.clientRequestFinished((LastHttpContent) msg);
+            } catch (java.lang.ArrayIndexOutOfBoundsException noMorePendingRequests) {
+                LOG.log(Level.INFO, "{0} swallow {1}, no more pending requests", new Object[]{this, msg});
+                refuseOtherRequests = true;
+                ctx.close();
+            }
+        }
+    }
+
+    private void handleHttpRequest(ChannelHandlerContext ctx, Object msg) {
         if (msg instanceof HttpRequest) {
             if (refuseOtherRequests) {
                 if (LOG.isLoggable(Level.FINE)) {
@@ -242,6 +273,14 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
 
     void addPendingRequest(RequestHandler request) {
         pendingRequests.add(request);
+    }
+
+    public boolean isHttp2() {
+        return http2;
+    }
+
+    public void setHttp2(boolean http2) {
+        this.http2 = http2;
     }
 
 }

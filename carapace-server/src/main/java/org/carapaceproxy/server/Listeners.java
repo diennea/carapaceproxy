@@ -1,25 +1,24 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.server;
 
-import com.google.common.annotations.VisibleForTesting;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBufAllocator;
@@ -33,8 +32,6 @@ import io.netty.channel.epoll.EpollServerSocketChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
-import io.netty.handler.codec.http.HttpRequestDecoder;
-import io.netty.handler.codec.http.HttpResponseEncoder;
 import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.ReferenceCountedOpenSslEngine;
 import io.netty.handler.ssl.SniHandler;
@@ -47,19 +44,10 @@ import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
 import io.netty.util.concurrent.Promise;
 import io.prometheus.client.Gauge;
-import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.security.GeneralSecurityException;
-import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.UnrecoverableKeyException;
 import java.security.cert.Certificate;
-import java.security.cert.CertificateException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -74,6 +62,27 @@ import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.PrometheusUtils;
 import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
+import com.google.common.annotations.VisibleForTesting;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.http.HttpRequestDecoder;
+import io.netty.handler.codec.http.HttpResponseEncoder;
+import io.netty.handler.codec.http2.DefaultHttp2Connection;
+import io.netty.handler.codec.http2.HttpToHttp2ConnectionHandler;
+import io.netty.handler.codec.http2.HttpToHttp2ConnectionHandlerBuilder;
+import io.netty.handler.codec.http2.InboundHttp2ToHttpAdapter;
+import io.netty.handler.codec.http2.InboundHttp2ToHttpAdapterBuilder;
+import io.netty.handler.ssl.ApplicationProtocolConfig;
+import io.netty.handler.ssl.ApplicationProtocolNames;
+import java.io.ByteArrayInputStream;
+import java.io.FileInputStream;
+import java.net.InetSocketAddress;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.CertificateException;
+import java.util.ArrayList;
+import java.util.function.Consumer;
 
 /**
  *
@@ -83,6 +92,8 @@ import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
 public class Listeners {
 
     public static final String OCSP_CERTIFICATE_CHAIN = "ocsp-certificate";
+
+    private static final int MAX_CONTENT_LENGTH = 1024 * 100;
 
     private static final Logger LOG = Logger.getLogger(Listeners.class.getName());
     private static final Gauge CURRENT_CONNECTED_CLIENTS_GAUGE = PrometheusUtils.createGauge("clients", "current_connected",
@@ -166,13 +177,25 @@ public class Listeners {
                 LOG.log(Level.INFO, "required sslCiphers " + sslCiphers);
                 ciphers = Arrays.asList(sslCiphers.split(","));
             }
-            SslContext sslContext = SslContextBuilder
+
+            SslContext sslContext;
+            ApplicationProtocolConfig apn = new ApplicationProtocolConfig(
+                    ApplicationProtocolConfig.Protocol.ALPN,
+                    // NO_ADVERTISE is currently the only mode supported by both OpenSsl and JDK providers.
+                    ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
+                    // ACCEPT is currently the only mode supported by both OpenSsl and JDK providers.
+                    ApplicationProtocolConfig.SelectedListenerFailureBehavior.ACCEPT,
+                    ApplicationProtocolNames.HTTP_2,
+                    ApplicationProtocolNames.HTTP_1_1
+            );
+            sslContext = SslContextBuilder
                     .forServer(keyFactory)
                     .enableOcsp(listener.isOcsp() && OpenSsl.isOcspSupported())
                     .trustManager(trustManagerFactory)
                     .sslProvider(SslProvider.OPENSSL)
                     .protocols(listener.getSslProtocols())
-                    .ciphers(ciphers).build();
+                    .ciphers(ciphers)
+                    .applicationProtocolConfig(apn).build();
 
             if (listener.isOcsp() && OpenSsl.isOcspSupported() && chain != null && chain.length > 0) {
                 parent.getOcspStaplingManager().addCertificateForStapling(chain);
@@ -190,73 +213,111 @@ public class Listeners {
     private void bootListener(NetworkListenerConfiguration listener) throws InterruptedException {
         int port = listener.getPort() + parent.getListenersOffsetPort();
         LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{listener.getHost(), port, listener.isSsl()});
-
-        AsyncMapping<String, SslContext> sniMappings = (String sniHostname, Promise<SslContext> promise) -> {
-            try {
-                SslContext sslContext = resolveSslContext(listener, sniHostname);
-                return promise.setSuccess(sslContext);
-            } catch (ConfigurationNotValidException err) {
-                LOG.log(Level.SEVERE, "Error booting certificate for SNI hostname {0}, on listener {1}", new Object[]{sniHostname, listener});
-                return promise.setFailure(err);
-            }
-        };
-
         HostPort key = new HostPort(listener.getHost(), port);
         ServerBootstrap b = new ServerBootstrap();
         b.group(bossGroup, workerGroup)
                 .channel(Epoll.isAvailable() ? EpollServerSocketChannel.class : NioServerSocketChannel.class)
-                .childHandler(new ChannelInitializer<SocketChannel>() {
-                    @Override
-                    public void initChannel(SocketChannel channel) throws Exception {
-                        CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
-                        if (listener.isSsl()) {
-                            SniHandler sni = new SniHandler(sniMappings) {
-                                @Override
-                                protected SslHandler newSslHandler(SslContext context, ByteBufAllocator allocator) {
-                                    SslHandler handler = super.newSslHandler(context, allocator);
-                                    if (listener.isOcsp() && OpenSsl.isOcspSupported()) {
-                                        Certificate cert = (Certificate) context.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN)).get();
-                                        if (cert != null) {
-                                            try {
-                                                ReferenceCountedOpenSslEngine engine = (ReferenceCountedOpenSslEngine) handler.engine();
-                                                engine.setOcspResponse(parent.getOcspStaplingManager().getOcspResponseForCertificate(cert)); // setting proper ocsp response
-                                            } catch (IOException ex) {
-                                                LOG.log(Level.SEVERE, "Error setting OCSP response.", ex);
-                                            }
-                                        } else {
-                                            LOG.log(Level.SEVERE, "Cannot set OCSP response without the certificate");
-                                        }
-                                    }
-                                    return handler;
-                                }
-                            };
-                            channel.pipeline().addLast(sni);
-                        }
-                        channel.pipeline().addLast(new HttpRequestDecoder());
-                        channel.pipeline().addLast(new HttpResponseEncoder());
-                        ClientConnectionHandler connHandler = new ClientConnectionHandler(parent.getMapper(),
-                                parent.getConnectionsManager(),
-                                parent.getFilters(), parent.getCache(),
-                                channel.remoteAddress(), parent.getStaticContentsManager(),
-                                () -> CURRENT_CONNECTED_CLIENTS_GAUGE.dec(),
-                                parent.getBackendHealthManager(),
-                                parent.getRequestsLogger(),
-                                listener.getHost(),
-                                port,
-                                listener.isSsl()
-                        );
-                        channel.pipeline().addLast(connHandler);
-
-                        listenersHandlers.put(key, connHandler);
-                    }
-                })
+                .childHandler(new ListenerChannelInitializer(key, listener))
                 .option(ChannelOption.SO_BACKLOG, 128)
                 .childOption(ChannelOption.SO_KEEPALIVE, true);
         Channel channel = b.bind(listener.getHost(), port).sync().channel();
-
         listeningChannels.put(key, channel);
         LOG.log(Level.INFO, "started listener at {0}: {1}", new Object[]{key, channel});
+    }
 
+    private final class ListenerChannelInitializer extends ChannelInitializer<SocketChannel> {
+
+        private final HostPort key;
+        private final NetworkListenerConfiguration listener;
+
+        public ListenerChannelInitializer(HostPort key, NetworkListenerConfiguration listener) {
+            this.key = key;
+            this.listener = listener;
+        }
+
+        @Override
+        public void initChannel(SocketChannel channel) throws Exception {
+            CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
+            ClientConnectionHandler connHandler = new ClientConnectionHandler(parent.getMapper(),
+                    parent.getConnectionsManager(),
+                    parent.getFilters(), parent.getCache(),
+                    channel.remoteAddress(), parent.getStaticContentsManager(),
+                    () -> CURRENT_CONNECTED_CLIENTS_GAUGE.dec(),
+                    parent.getBackendHealthManager(),
+                    parent.getRequestsLogger(),
+                    listener.getHost(),
+                    key.getPort(),
+                    listener.isSsl()
+            );
+            if (listener.isSsl()) {
+                AsyncMapping<String, SslContext> sniMappings = (String sniHostname, Promise<SslContext> promise) -> {
+                    try {
+                        SslContext sslContext = resolveSslContext(listener, sniHostname);
+                        return promise.setSuccess(sslContext);
+                    } catch (ConfigurationNotValidException err) {
+                        LOG.log(Level.SEVERE, "Error booting certificate for SNI hostname {0}, on listener {1}", new Object[]{sniHostname, listener});
+                        return promise.setFailure(err);
+                    }
+                };
+                SniHandler sni = new SniHandler(sniMappings) {
+                    @Override
+                    protected SslHandler newSslHandler(SslContext context, ByteBufAllocator allocator) {
+                        SslHandler handler = super.newSslHandler(context, allocator);
+                        if (listener.isOcsp() && OpenSsl.isOcspSupported()) {
+                            Certificate cert = (Certificate) context.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN)).get();
+                            if (cert != null) {
+                                try {
+                                    ReferenceCountedOpenSslEngine engine = (ReferenceCountedOpenSslEngine) handler.engine();
+                                    engine.setOcspResponse(parent.getOcspStaplingManager().getOcspResponseForCertificate(cert)); // setting proper ocsp response
+                                } catch (IOException ex) {
+                                    LOG.log(Level.SEVERE, "Error setting OCSP response.", ex);
+                                }
+                            } else {
+                                LOG.log(Level.SEVERE, "Cannot set OCSP response without the certificate");
+                            }
+                        }
+                        return handler;
+                    }
+                };
+                channel.pipeline().addLast(sni);
+
+                // HTTP/2 or HTTP/1.1
+                Consumer<ChannelHandlerContext> onHttp2Callback = ctx -> {
+                    connHandler.setHttp2(true);
+                    DefaultHttp2Connection connection = new DefaultHttp2Connection(true);
+                    InboundHttp2ToHttpAdapter frameListener = new InboundHttp2ToHttpAdapterBuilder(connection)
+                            .propagateSettings(true)
+                            .validateHttpHeaders(false)
+                            .maxContentLength(MAX_CONTENT_LENGTH)
+                            .build();
+                    HttpToHttp2ConnectionHandler httpTohttp2ConnHandler = new HttpToHttp2ConnectionHandlerBuilder()
+                            .frameListener(frameListener)
+                            .connection(connection)
+                            .build();
+                    ctx.pipeline().addLast(
+                            httpTohttp2ConnHandler,
+                            connHandler
+                    );
+                    listenersHandlers.put(key, connHandler);
+                };
+                Consumer<ChannelHandlerContext> onHttpCallback = ctx -> {
+                    ctx.pipeline().addLast(
+                            new HttpRequestDecoder(),
+                            new HttpResponseEncoder(),
+                            connHandler
+                    );
+                    listenersHandlers.put(key, connHandler);
+                };
+                channel.pipeline().addLast(new Http2OrHttpHandler(onHttp2Callback, onHttpCallback));
+            } else {
+                channel.pipeline().addLast(
+                        new HttpRequestDecoder(),
+                        new HttpResponseEncoder(),
+                        connHandler
+                );
+                listenersHandlers.put(key, connHandler);
+            }
+        }
     }
 
     private KeyManagerFactory initKeyManagerFactory(String keyStoreType, File keyStoreLocation,

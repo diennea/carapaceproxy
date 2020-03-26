@@ -226,6 +226,9 @@ public class EndpointConnectionImpl implements EndpointConnection {
         // it will be too late and the response from the server
         // may have already been received !
         clientSidePeerHandler.messageSentToBackend(EndpointConnectionImpl.this);
+        if (clientSidePeerHandler.getClientConnectionHandler().isHttp2()) {
+            return; // will be done in sendLastHttpContent
+        }
         activityDone();
         channelToEndpoint
                 .writeAndFlush(request)
@@ -418,14 +421,14 @@ public class EndpointConnectionImpl implements EndpointConnection {
             }
             if (msg instanceof HttpContent) {
                 HttpContent f = (HttpContent) msg;
-                _clientSidePeerHandler.receivedFromRemote(f.copy(),
-                        EndpointConnectionImpl.this);
+                _clientSidePeerHandler.receivedFromRemote(f.copy(), EndpointConnectionImpl.this);
             } else if (msg instanceof DefaultHttpResponse) {
                 DefaultHttpResponse f = (DefaultHttpResponse) msg;
                 // DefaultHttpResponse has no "copy" method
                 _clientSidePeerHandler.receivedFromRemote(
                         new DefaultHttpResponse(f.protocolVersion(), f.status(), f.headers()),
-                        EndpointConnectionImpl.this);
+                        EndpointConnectionImpl.this
+                );
             } else {
                 LOG.log(Level.SEVERE, "unknown message type " + msg.getClass() + ": " + msg);
             }

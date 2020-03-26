@@ -1,21 +1,21 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.server;
 
@@ -62,6 +62,8 @@ import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import static org.carapaceproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
+import io.netty.channel.ChannelFuture;
+import io.netty.handler.codec.http2.HttpConversionUtil;
 import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.server.mapper.CustomHeader;
 import org.carapaceproxy.server.mapper.CustomHeader.HeaderMode;
@@ -375,7 +377,14 @@ public class RequestHandler implements MatchingContext {
 
     private void forceCloseChannelToClient() {
         // If keep-alive is off, close the connection once the content is fully written.
-        channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+        writeAndFlushToClient(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+    }
+
+    private ChannelFuture writeAndFlushToClient(Object o) {
+        if (o instanceof HttpObject && connectionToClient.isHttp2()) {
+            setStreamIdFromRequest((HttpObject) o, request);
+        }
+        return channelToClient.writeAndFlush(o);
     }
 
     private void serveInternalErrorMessage(boolean forceClose) {
@@ -540,7 +549,7 @@ public class RequestHandler implements MatchingContext {
 
         // Write the response.
         clientState = RequestHandlerState.WRITING;
-        channelToClient.writeAndFlush(response).addListener(future -> {
+        writeAndFlushToClient(response).addListener(future -> {
             clientState = RequestHandlerState.IDLE;
             lastHttpContentSent();
         });
@@ -552,7 +561,7 @@ public class RequestHandler implements MatchingContext {
 //        LOG.info(this + " sendServiceNotAvailable due to " + cause + " to " + ctx);
         FullHttpResponse response = connectionToClient.staticContentsManager.buildResponse(500, DEFAULT_INTERNAL_SERVER_ERROR);
         clientState = RequestHandlerState.WRITING;
-        channelToClient.writeAndFlush(response).addListener(new GenericFutureListener<Future<? super Void>>() {
+        writeAndFlushToClient(response).addListener(new GenericFutureListener<Future<? super Void>>() {
             @Override
             public void operationComplete(Future<? super Void> future) throws Exception {
                 clientState = RequestHandlerState.IDLE;
@@ -626,12 +635,17 @@ public class RequestHandler implements MatchingContext {
 
         // endpoint finished his work, we can release the connection
         if (msg instanceof LastHttpContent) {
-           releaseConnectionToEndpoint(false /*force close*/, connection);
+            releaseConnectionToEndpoint(false /*
+                     * force close
+                     */, connection);
         }
 
         addCustomResponseHeaders(msg, action.customHeaders);
+        if (connectionToClient.isHttp2()) {
+            setStreamIdFromRequest(msg, request);
+        }
         clientState = RequestHandlerState.WRITING;
-        channelToClient.writeAndFlush(msg).addListener((Future<? super Void> future) -> {
+        writeAndFlushToClient(msg).addListener((Future<? super Void> future) -> {
             clientState = RequestHandlerState.IDLE;
             if (msg instanceof HttpResponse) {
                 headerSent = true;
@@ -743,7 +757,7 @@ public class RequestHandler implements MatchingContext {
         }
         HttpObject _object = object;
         clientState = RequestHandlerState.WRITING;
-        channelToClient.writeAndFlush(_object)
+        writeAndFlushToClient(_object)
                 .addListener((g) -> {
                     clientState = RequestHandlerState.IDLE;
                     if (isLastHttpContent || notModified) {
@@ -850,6 +864,13 @@ public class RequestHandler implements MatchingContext {
     @Override
     public boolean isSecure() {
         return connectionToClient.isSecure();
+    }
+
+    private static void setStreamIdFromRequest(HttpObject response, HttpRequest request) {
+        if (response instanceof HttpResponse) {
+            String streamId = request.headers().get(HttpConversionUtil.ExtensionHeaderNames.STREAM_ID.text());
+            ((HttpResponse) response).headers().set(HttpConversionUtil.ExtensionHeaderNames.STREAM_ID.text(), streamId);
+        }
     }
 
 }

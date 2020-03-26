@@ -129,7 +129,7 @@ public class NetworkListenerConfiguration {
         this.sslTrustorePassword = sslTrustorePassword;
         if (ssl) {
             this.sslProtocols = sslProtocols;
-       }
+        }
     }
 
     public String getSslTrustoreFile() {
