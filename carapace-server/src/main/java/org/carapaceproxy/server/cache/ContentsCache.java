@@ -388,6 +388,9 @@ public class ContentsCache {
     }
 
     private static long sizeof(Object o) {
+        if (o == null) {
+            return 0;
+        }
         if (o instanceof String) {
             return 8
                     + // object header used by the VM
