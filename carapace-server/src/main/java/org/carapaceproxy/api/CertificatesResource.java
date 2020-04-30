@@ -83,6 +83,7 @@ public class CertificatesResource {
         private final String sslCertificateFile;
         private String expiringDate;
         private String daysBeforeRenewal;
+        private String serialNumber;
 
         public CertificateBean(String id, String hostname, String mode, boolean dynamic, String sslCertificateFile) {
             this.id = id;
@@ -136,6 +137,14 @@ public class CertificatesResource {
             this.daysBeforeRenewal = daysBeforeRenewal;
         }
 
+        public String getSerialNumber() {
+            return serialNumber;
+        }
+
+        public void setSerialNumber(String serialNumber) {
+            this.serialNumber = serialNumber;
+        }
+
     }
 
     @GET
@@ -154,18 +163,11 @@ public class CertificatesResource {
                     certificate.isDynamic(),
                     certificate.getFile()
             );
-
             if (certificate.isDynamic()) {
                 certBean.setStatus(certificateStateToString(null)); // unknown
                 try {
                     CertificateData cert = dynamicCertificateManager.getCertificateDataForDomain(certificate.getHostname());
-                    if (cert != null) {
-                        certBean.setStatus(certificateStateToString(cert.getState()));
-                        certBean.setExpiringDate(extractExpiringDate(cert));
-                        if (!cert.isManual()) {
-                            certBean.setDaysBeforeRenewal(cert.getDaysBeforeRenewal() + "");
-                        }
-                    }
+                    fillDynamicCertificateBean(certBean, cert);
                 } catch (GeneralSecurityException e) {
                     LOG.log(Level.SEVERE, "Unable to read Keystore for certificate {0}. Reason: {1}", new Object[]{certificate.getId(), e});
                 }
@@ -176,12 +178,20 @@ public class CertificatesResource {
         return res;
     }
 
-    private static String extractExpiringDate(CertificateData cert) throws GeneralSecurityException {
+    private void fillDynamicCertificateBean(CertificateBean bean, CertificateData cert) throws GeneralSecurityException {
+        if (cert == null) {
+            return;
+        }
+        bean.setStatus(certificateStateToString(cert.getState()));
         Certificate[] chain = base64DecodeCertificateChain(cert.getChain());
         if (chain != null && chain.length > 0) {
-            return ((X509Certificate) chain[0]).getNotAfter().toString();
+            X509Certificate _cert = ((X509Certificate) chain[0]);
+            bean.setExpiringDate(_cert.getNotAfter().toString());
+            bean.setSerialNumber(_cert.getSerialNumber().toString(16).toUpperCase()); // HEX
         }
-        return "";
+        if (!cert.isManual()) { // ACME
+            bean.setDaysBeforeRenewal(cert.getDaysBeforeRenewal() + "");
+        }
     }
 
     @GET
@@ -226,11 +236,7 @@ public class CertificatesResource {
                 certBean.setStatus(certificateStateToString(null)); // unknown
                 try {
                     CertificateData cert = server.getDynamicCertificatesManager().getCertificateDataForDomain(certificate.getHostname());
-                    certBean.setStatus(certificateStateToString(cert.getState()));
-                    certBean.setExpiringDate(extractExpiringDate(cert));
-                    if (!cert.isManual()) {
-                        certBean.setDaysBeforeRenewal(cert.getDaysBeforeRenewal() + "");
-                    }
+                    fillDynamicCertificateBean(certBean, cert);
                 } catch (GeneralSecurityException e) {
                     LOG.log(Level.SEVERE, "Unable to read Keystore for certificate {0}. Reason: {1}", new Object[]{certificate.getId(), e});
                 }

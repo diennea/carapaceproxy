@@ -31,12 +31,12 @@ import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchAllRequestMatcher;
 import org.carapaceproxy.server.filters.RegexpMapSessionIdFilter;
 import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;
 import org.carapaceproxy.server.filters.XForwardedForRequestFilter;
-import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChainData;
 import static org.carapaceproxy.utils.CertificatesTestUtils.uploadCertificate;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestUtils;
@@ -51,6 +51,12 @@ import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 import static org.carapaceproxy.utils.APIUtils.certificateStateToString;
+import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
+import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
+import java.security.KeyPair;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
+import org.shredzone.acme4j.util.KeyPairUtils;
 
 /**
  *
@@ -284,9 +290,16 @@ public class StartAPIServerTest extends UseAdminServer {
 
         startServer(properties);
 
-        ConfigurationStore store = server.getDynamicConfigurationStore();
+        DynamicCertificatesManager man = server.getDynamicCertificatesManager();
+
         // need to explicitly add 'cause DynamicCertificatesManager never run
-        store.saveCertificate(new CertificateData(dynDomain, "", "", WAITING, "", "", false));
+        ConfigurationStore store = server.getDynamicConfigurationStore();
+        KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        Certificate[] originalChain = generateSampleChain(endUserKeyPair, false);
+        String serialNumber = ((X509Certificate) originalChain[0]).getSerialNumber().toString(16).toUpperCase();
+        String dynChain = Base64.getEncoder().encodeToString(createKeystore(originalChain, endUserKeyPair.getPrivate()));
+        store.saveCertificate(new CertificateData(dynDomain, "", dynChain, WAITING, "", "", false));
+        man.setStateOfCertificate(dynDomain, WAITING); // this reloads certificates from the store
 
         // Static certificates
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
@@ -328,6 +341,7 @@ public class StartAPIServerTest extends UseAdminServer {
             assertThat(json, containsString("\"mode\":\"acme\""));
             assertThat(json, containsString("\"dynamic\":true"));
             assertThat(json, containsString("\"status\":\"waiting\""));
+            assertThat(json, containsString("\"serialNumber\":\"" + serialNumber + "\""));
 
             // single cert request to /{certId}
             response = client.get("/api/certificates/" + dynDomain, credentials);
@@ -336,9 +350,9 @@ public class StartAPIServerTest extends UseAdminServer {
             assertThat(json, containsString("\"mode\":\"acme\""));
             assertThat(json, containsString("\"dynamic\":true"));
             assertThat(json, containsString("\"status\":\"waiting\""));
+            assertThat(json, containsString("\"serialNumber\":\"" + serialNumber + "\""));
 
             // Changing dynamic certificate state
-            DynamicCertificatesManager man = server.getDynamicCertificatesManager();
             for (DynamicCertificateState state : DynamicCertificateState.values()) {
                 man.setStateOfCertificate(dynDomain, state);
                 response = client.get("/api/certificates", credentials);
@@ -377,7 +391,10 @@ public class StartAPIServerTest extends UseAdminServer {
             assertTrue(s.contains("ERROR"));
 
             // Uploading real certificate
-            byte[] chain1 = generateSampleChainData();
+            endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+            originalChain = generateSampleChain(endUserKeyPair, false);
+            serialNumber = ((X509Certificate) originalChain[0]).getSerialNumber().toString(16).toUpperCase();
+            byte[] chain1 = createKeystore(originalChain, endUserKeyPair.getPrivate());
             resp = uploadCertificate(manualDomain, null, chain1, client, credentials);
             s = resp.getBodyString();
             assertTrue(s.contains("SUCCESS"));
@@ -393,6 +410,7 @@ public class StartAPIServerTest extends UseAdminServer {
             assertThat(json, containsString("\"mode\":\"manual\""));
             assertThat(json, containsString("\"dynamic\":true"));
             assertThat(json, containsString("\"status\":\"available\""));
+            assertThat(json, containsString("\"serialNumber\":\"" + serialNumber + "\""));
 
             // single cert request to /{certId}
             response = client.get("/api/certificates/" + manualDomain, credentials);
@@ -401,6 +419,7 @@ public class StartAPIServerTest extends UseAdminServer {
             assertThat(json, containsString("\"mode\":\"manual\""));
             assertThat(json, containsString("\"dynamic\":true"));
             assertThat(json, containsString("\"status\":\"available\""));
+            assertThat(json, containsString("\"serialNumber\":\"" + serialNumber + "\""));
 
             // Downloading
             response = client.get("/api/certificates/" + manualDomain + "/download", credentials);
@@ -408,8 +427,11 @@ public class StartAPIServerTest extends UseAdminServer {
 
             // Certificate updating
             // Uploading
-            byte[] chain2 = generateSampleChainData();
-            assertFalse(Arrays.equals(chain1,chain2));
+            endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+            originalChain = generateSampleChain(endUserKeyPair, false);
+            serialNumber = ((X509Certificate) originalChain[0]).getSerialNumber().toString(16).toUpperCase();
+            byte[] chain2 = createKeystore(originalChain, endUserKeyPair.getPrivate());
+            assertFalse(Arrays.equals(chain1, chain2));
             resp = uploadCertificate(manualDomain, null, chain2, client, credentials);
             s = resp.getBodyString();
             assertTrue(s.contains("SUCCESS"));
@@ -426,6 +448,7 @@ public class StartAPIServerTest extends UseAdminServer {
             assertThat(json, containsString("\"mode\":\"manual\""));
             assertThat(json, containsString("\"dynamic\":true"));
             assertThat(json, containsString("\"status\":\"available\""));
+            assertThat(json, containsString("\"serialNumber\":\"" + serialNumber + "\""));
 
             // single cert request to /{certId}
             response = client.get("/api/certificates/" + manualDomain, credentials);
@@ -434,6 +457,7 @@ public class StartAPIServerTest extends UseAdminServer {
             assertThat(json, containsString("\"mode\":\"manual\""));
             assertThat(json, containsString("\"dynamic\":true"));
             assertThat(json, containsString("\"status\":\"available\""));
+            assertThat(json, containsString("\"serialNumber\":\"" + serialNumber + "\""));
 
             // Downloading
             response = client.get("/api/certificates/" + manualDomain + "/download", credentials);
