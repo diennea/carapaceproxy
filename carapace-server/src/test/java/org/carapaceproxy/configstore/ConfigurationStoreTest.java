@@ -73,6 +73,8 @@ public class ConfigurationStoreTest {
         if (type.equals("db")) {
             if (store == null) {
                 props.put("db.jdbc.url", "jdbc:herddb:localhost");
+                props.put("db.admin.username", "theusername");
+                props.put("db.admin.password", "thepassword");
                 newStore = new PropertiesConfigurationStore(props);
                 store = new HerdDBConfigurationStore(newStore, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
             }
@@ -208,7 +210,7 @@ public class ConfigurationStoreTest {
         props.setProperty("certificate.1.dynamic", "true");
         updateConfigStore(props);
 
-        assertEquals(type.equals("db") ? 5 : 4, store.asProperties(null).size());
+        assertEquals(type.equals("db") ? 7 : 4, store.asProperties(null).size());
         assertEquals(1, store.findMaxIndexForPrefix("certificate"));
         assertEquals(2, store.asProperties("certificate.1").size());
         assertEquals(true, store.anyPropertyMatches(
