@@ -429,7 +429,6 @@ public class DynamicCertificatesManager implements Runnable {
         return Base64.getDecoder().decode(cert.getChain());
     }
 
-    @VisibleForTesting
     public CertificateData getCertificateDataForDomain(String domain) throws GeneralSecurityException {
         return certificates.get(domain);
     }
