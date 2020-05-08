@@ -46,6 +46,7 @@ import org.apache.bookkeeper.stats.StatsLogger;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePrivateKey;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePublicKey;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeKey;
+import herddb.security.SimpleSingleUserManager;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 
@@ -165,6 +166,13 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             ds.setWaitForTableSpaceTimeout(TIMEOUT_WAIT_FOR_TABLE_SPACE);
             ds.setStartServer(true);
         }
+
+        // single-admin-user
+        String user = props.getProperty(SimpleSingleUserManager.PROPERTY_ADMIN_USERNAME, ClientConfiguration.PROPERTY_CLIENT_USERNAME_DEFAULT);
+        String pw = props.getProperty(SimpleSingleUserManager.PROPERTY_ADMIN_PASSWORD, ClientConfiguration.PROPERTY_CLIENT_PASSWORD_DEFAULT);
+        ds.setUsername(user);
+        ds.setPassword(pw);
+
         return ds;
     }
 
