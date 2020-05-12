@@ -132,9 +132,8 @@ public class Listeners {
 
         try {
             KeyManagerFactory keyFactory;
-            String domain = certificate.getHostname();
             // Try to find certificate data on db
-            byte[] keystoreContent = parent.getDynamicCertificatesManager().getCertificateForDomain(domain);
+            byte[] keystoreContent = parent.getDynamicCertificatesManager().getCertificateForDomain(certificate.getId());
             Certificate[] chain;
             if (keystoreContent != null) {
                 LOG.log(Level.INFO, "start SSL with dynamic certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + port + " OCSP " + listener.isOcsp());

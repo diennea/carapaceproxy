@@ -29,6 +29,8 @@ import static org.carapaceproxy.server.config.SSLCertificateConfiguration.Certif
  */
 public class SSLCertificateConfiguration {
 
+    public static final String WILDCARD_SYMBOL = "*.";
+
     public static enum CertificateMode {
         STATIC, ACME, MANUAL
     }
@@ -46,7 +48,7 @@ public class SSLCertificateConfiguration {
         if (hostname.equals("*")) {
             this.hostname = "";
             this.wildcard = true;
-        } else if (hostname.startsWith("*.")) {
+        } else if (hostname.startsWith(WILDCARD_SYMBOL)) {
             this.hostname = hostname.substring(2);
             this.wildcard = true;
         } else {

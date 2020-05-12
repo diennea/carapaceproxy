@@ -25,6 +25,7 @@ package org.carapaceproxy.server.certificates;
  */
 public enum DynamicCertificateState {
     WAITING, // certificate waiting for issuing/renews
+    DNS_CHALLENGE_WAIT, // for dns-challenge, wait for dns propagation
     VERIFYING, // challenge verification by LE pending
     VERIFIED, // challenge succeded
     ORDERING, // certificate order pending

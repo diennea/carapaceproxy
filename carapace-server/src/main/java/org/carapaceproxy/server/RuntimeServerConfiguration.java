@@ -78,6 +78,8 @@ public class RuntimeServerConfiguration {
     private int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
     private List<String> supportedSSLProtocols = null;
     private int ocspStaplingManagerPeriod = 0;
+    private String awsAccessKey;
+    private String awsSecretKey;
 
     public String getAccessLogPath() {
         return accessLogPath;
@@ -225,8 +227,16 @@ public class RuntimeServerConfiguration {
         return ocspStaplingManagerPeriod;
     }
 
+    public String getAwsAccessKey() {
+        return awsAccessKey;
+    }
+
+    public String getAwsSecretKey() {
+        return awsSecretKey;
+    }
+
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
-        LOG.log(Level.INFO, "configuring from " + properties);
+        LOG.log(Level.INFO, "configuring from {0}", properties);
         this.maxConnectionsPerEndpoint = properties.getInt("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint);
         this.idleTimeout = properties.getInt("connectionsmanager.idletimeout", idleTimeout);
         if (this.idleTimeout <= 0) {
@@ -262,9 +272,9 @@ public class RuntimeServerConfiguration {
         } catch (Exception err) {
             throw new ConfigurationNotValidException("Invalid accesslog.format.timestamp='" + accessLogTimestampFormat + ": " + err);
         }
-        LOG.info("accesslog.path=" + accessLogPath);
-        LOG.info("accesslog.format.timestamp=" + accessLogTimestampFormat + " (example: " + tsFormatExample + ")");
-        LOG.info("accesslog.format=" + accessLogFormat);
+        LOG.log(Level.INFO, "accesslog.path={0}", accessLogPath);
+        LOG.log(Level.INFO, "accesslog.format.timestamp={0} (example: {1})", new Object[]{accessLogTimestampFormat, tsFormatExample});
+        LOG.log(Level.INFO, "accesslog.format={0}", accessLogFormat);
         LOG.info("accesslog.queue.maxcapacity=" + accessLogMaxQueueCapacity);
         LOG.info("accesslog.flush.interval=" + accessLogFlushInterval);
         LOG.info("accesslog.failure.wait=" + accessLogWaitBetweenFailures);
@@ -286,6 +296,11 @@ public class RuntimeServerConfiguration {
 
         ocspStaplingManagerPeriod = properties.getInt("ocspstaplingmanager.period", 0);
         LOG.info("ocspstaplingmanager.period=" + ocspStaplingManagerPeriod);
+
+        awsAccessKey = properties.getString("aws.accesskey", null);
+        LOG.log(Level.INFO, "aws.accesskey={0}", awsAccessKey);
+        awsSecretKey = properties.getString("aws.secretkey", null);
+        LOG.log(Level.INFO, "aws.secretkey={0}", awsSecretKey);
     }
 
     private void tryConfigureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
