@@ -78,6 +78,7 @@ import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.D
 import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
 import java.util.Base64;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
+import org.powermock.reflect.Whitebox;
 
 /**
  * Test use cases for basic certificates management and client requests.
@@ -512,7 +513,7 @@ public class CertificatesTest extends UseAdminServer {
         X509Certificate renewed = (X509Certificate) generateSampleChain(keyPair, false)[0];
         when(_cert.getCertificateChain()).thenReturn(Arrays.asList(renewed));
         when(ac.fetchCertificateForOrder(any())).thenReturn(_cert);
-        dcMan.setACMEClient(ac);
+        Whitebox.setInternalState(dcMan, ac);
 
         // Renew
         dcMan.run();

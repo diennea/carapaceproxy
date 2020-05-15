@@ -23,6 +23,7 @@ import static org.carapaceproxy.server.certificates.Route53Client.DNSChallengeAc
 import static org.carapaceproxy.server.certificates.Route53Client.DNSChallengeAction.DELETE;
 import static org.carapaceproxy.server.certificates.Route53Client.DNSChallengeAction.UPSERT;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.WILDCARD_SYMBOL;
+import java.util.NoSuchElementException;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -33,6 +34,7 @@ import software.amazon.awssdk.services.route53.model.Change;
 import software.amazon.awssdk.services.route53.model.ChangeAction;
 import software.amazon.awssdk.services.route53.model.ChangeBatch;
 import software.amazon.awssdk.services.route53.model.ChangeResourceRecordSetsRequest;
+import software.amazon.awssdk.services.route53.model.HostedZone;
 import software.amazon.awssdk.services.route53.model.ListHostedZonesByNameRequest;
 import software.amazon.awssdk.services.route53.model.ListHostedZonesByNameResponse;
 import software.amazon.awssdk.services.route53.model.RRType;
@@ -47,7 +49,7 @@ import software.amazon.awssdk.services.route53.model.TestDnsAnswerResponse;
  *
  * @author paolo.venturi
  */
-public final class Route53Client {
+public class Route53Client {
 
     public enum DNSChallengeAction {
         UPSERT,
@@ -92,16 +94,26 @@ public final class Route53Client {
 
     private void performActionOnDNSChallengeForDomain(String domain, String digest, DNSChallengeAction action, Consumer<Route53Response> onRequestComplete,
                                                       Consumer<Throwable> onRequestFail) {
-        String challengeName = DNS_CHALLENGE_PREFIX + domain.replace(WILDCARD_SYMBOL, "");
+        String dnsName = domain.replace(WILDCARD_SYMBOL, "") + ".";
+        String challengeName = DNS_CHALLENGE_PREFIX + dnsName;
 
         // find out the hostedzone where to update the acme dns-challenge txt record
         CompletableFuture<ListHostedZonesByNameResponse> futureFindHZ = client.listHostedZonesByName(
-                ListHostedZonesByNameRequest.builder().dnsName(domain).build()
+                ListHostedZonesByNameRequest.builder().dnsName(dnsName).build()
         );
 
         futureFindHZ.whenComplete((resFindHZ, excFindHZ) -> {
-            if (excFindHZ == null && resFindHZ.sdkHttpResponse().isSuccessful() && !resFindHZ.hostedZones().isEmpty()) {
-                String idhostedzone = resFindHZ.hostedZones().get(0).id().replace(HOSTEDZONE_ID_PREFIX, "");
+            if (excFindHZ == null && resFindHZ.sdkHttpResponse().isSuccessful()) {
+                if (resFindHZ.hostedZones().isEmpty()) {
+                    onRequestFail.accept(new NoSuchElementException("No hostedzones found for dns: " + dnsName));
+                    return;
+                }
+                HostedZone hostedzone = resFindHZ.hostedZones().get(0);
+                if (!hostedzone.name().equals(dnsName)) {
+                    onRequestFail.accept(new NoSuchElementException("Unable to find hostedzone for dns: " + dnsName));
+                    return;
+                }
+                String idhostedzone = hostedzone.id().replace(HOSTEDZONE_ID_PREFIX, "");
                 CompletableFuture<? extends Route53Response> future;
                 switch (action) {
                     case UPSERT:

@@ -19,15 +19,13 @@
  */
 package org.carapaceproxy.server.certificates;
 
-import org.junit.Test;
-
 /**
  *
  * @author paolo.venturi
  */
 public class Route53ClientTest {
 
-    @Test
+    //@Test
     public void testCRUD() throws InterruptedException {
         Route53Client r53Client = new Route53Client(
                 null, null

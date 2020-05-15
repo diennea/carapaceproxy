@@ -279,6 +279,11 @@ public class RuntimeServerConfiguration {
         LOG.info("accesslog.flush.interval=" + accessLogFlushInterval);
         LOG.info("accesslog.failure.wait=" + accessLogWaitBetweenFailures);
 
+        awsAccessKey = properties.getString("aws.accesskey", null);
+        LOG.log(Level.INFO, "aws.accesskey={0}", awsAccessKey);
+        awsSecretKey = properties.getString("aws.secretkey", null);
+        LOG.log(Level.INFO, "aws.secretkey={0}", awsSecretKey);
+
         tryConfigureCertificates(properties);
         tryConfigureListeners(properties);
         tryConfigureFilters(properties);
@@ -297,10 +302,6 @@ public class RuntimeServerConfiguration {
         ocspStaplingManagerPeriod = properties.getInt("ocspstaplingmanager.period", 0);
         LOG.info("ocspstaplingmanager.period=" + ocspStaplingManagerPeriod);
 
-        awsAccessKey = properties.getString("aws.accesskey", null);
-        LOG.log(Level.INFO, "aws.accesskey={0}", awsAccessKey);
-        awsSecretKey = properties.getString("aws.secretkey", null);
-        LOG.log(Level.INFO, "aws.secretkey={0}", awsSecretKey);
     }
 
     private void tryConfigureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
@@ -322,6 +323,11 @@ public class RuntimeServerConfiguration {
                     SSLCertificateConfiguration config = new SSLCertificateConfiguration(hostname, file, pw, _mode);
                     if (config.isAcme()) {
                         config.setDaysBeforeRenewal(daysBeforeRenewal);
+                        if (config.isWildcard() && (awsAccessKey == null || awsSecretKey == null)) {
+                            throw new ConfigurationNotValidException(
+                                    "For ACME wildcards certificates AWS Route53 credentials has to be set"
+                            );
+                        }
                     }
                     this.addCertificate(config);
                 } catch (IllegalArgumentException e) {

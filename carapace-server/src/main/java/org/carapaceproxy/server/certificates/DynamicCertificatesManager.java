@@ -83,7 +83,7 @@ public class DynamicCertificatesManager implements Runnable {
     public static final int DEFAULT_DAYS_BEFORE_RENEWAL = Integer.getInteger("carapace.acme.default.daysbeforerenewal", 30);
     private static final boolean TESTING_MODE = Boolean.getBoolean("carapace.acme.testmode");
 
-    private static final int DNS_CHALLENGE_CREATION_CHECKS_LIMIT = Integer.getInteger("carapace.acme.dnschallengecreationcheck.limit", 10);
+    private static final int DNS_CHALLENGE_REACHABILITY_CHECKS_LIMIT = Integer.getInteger("carapace.acme.dnschallengereachabilitycheck.limit", 10);
 
     private static final Logger LOG = Logger.getLogger(DynamicCertificatesManager.class.getName());
     private static final String EVENT_CERT_AVAIL_CHANGED = "certAvailChanged";
@@ -91,7 +91,7 @@ public class DynamicCertificatesManager implements Runnable {
     private Map<String, CertificateData> certificates = new ConcurrentHashMap();
     private ACMEClient acmeClient; // Let's Encrypt client
     private Route53Client r53Client;
-    private Map<String, DnsChallengeCreationStatus> dnsChallegesCreationStatus = new ConcurrentHashMap();
+    private final Map<String, DnsChallengeCreationStatus> dnsChallegesCreationStatus = new ConcurrentHashMap();
 
     private ScheduledExecutorService scheduler;
     private ScheduledFuture<?> scheduledFuture;
@@ -129,11 +129,6 @@ public class DynamicCertificatesManager implements Runnable {
     @VisibleForTesting
     public void setPeriod(int period) {
         this.period = period;
-    }
-
-    @VisibleForTesting
-    public void setACMEClient(ACMEClient client) {
-        this.acmeClient = client;
     }
 
     public synchronized void reloadConfiguration(RuntimeServerConfiguration configuration) {
@@ -281,13 +276,13 @@ public class DynamicCertificatesManager implements Runnable {
                             break;
                         }
                         // creation of the acme dns-record-challenge failed
-                        DnsChallengeCreationStatus status = dnsChallegesCreationStatus.computeIfAbsent(domain, d -> new DnsChallengeCreationStatus());
-                        if (status.isDnsChallengeError()) {
+                        DnsChallengeCreationStatus creationStatus = dnsChallegesCreationStatus.computeIfAbsent(domain, d -> new DnsChallengeCreationStatus());
+                        if (creationStatus.isError()) {
                             cert.setState(REQUEST_FAILED);
                             break;
                         }
                         // check dns visibility
-                        checkDNSChallengeAvailabilityForCertificate(pendingChallenge, cert, status);
+                        checkDNSChallengeAvailabilityForCertificate(pendingChallenge, cert, creationStatus);
                         break;
                     }
                     case VERIFYING: { // challenge verification by LE pending
@@ -367,7 +362,7 @@ public class DynamicCertificatesManager implements Runnable {
                         throw new IllegalStateException();
                 }
                 if (updateDB) {
-                    LOG.log(Level.INFO, "Save certificate for domain {0}", domain);
+                    LOG.log(Level.INFO, "Save certificate request status for domain {0}", domain);
                     store.saveCertificate(cert);
                 }
                 if (notifyCertAvailChanged) {
@@ -399,10 +394,11 @@ public class DynamicCertificatesManager implements Runnable {
                 dnsChallegesCreationStatus.put(cert.getDomain(), new DnsChallengeCreationStatus());
                 Dns01Challenge ch = (Dns01Challenge) challenge;
                 r53Client.createDNSChallengeForDomain(cert.getDomain(), ch.getDigest(),
-                        res -> LOG.log(Level.INFO, "Create new TXT DNS challenge-record for domain {0}. Details: {1}", new Object[]{cert.getDomain(), res.responseMetadata()}), (Throwable err) -> {
+                        res -> LOG.log(Level.INFO, "Created new TXT DNS challenge-record for domain {0}. Details: {1}", new Object[]{cert.getDomain(), res.responseMetadata()}),
+                        (Throwable err) -> {
                             DnsChallengeCreationStatus status = dnsChallegesCreationStatus.get(cert.getDomain());
                             if (status != null) {
-                                status.setDnsChallengeError();
+                                status.setError();
                             }
                             LOG.log(Level.INFO, "Creation of TXT DNS challenge-record for domain {0} FAILED. Reason: {1}", new Object[]{cert.getDomain(), err});
                         });
@@ -429,13 +425,13 @@ public class DynamicCertificatesManager implements Runnable {
         }
     }
 
-    private void checkDNSChallengeAvailabilityForCertificate(Dns01Challenge challenge, CertificateData cert, DnsChallengeCreationStatus status) throws AcmeException {
+    private void checkDNSChallengeAvailabilityForCertificate(Dns01Challenge challenge, CertificateData cert, DnsChallengeCreationStatus creationStatus) throws AcmeException {
         String domain = cert.getDomain();
-        if (status.isDnsChallengeReady()) {
+        if (creationStatus.isCompleted()) {
             cert.setState(VERIFYING);
             dnsChallegesCreationStatus.remove(domain);
             challenge.trigger();
-        } else if (status.testDnsChecksLimit()) {
+        } else if (creationStatus.testReachability()) {
             cert.setState(REQUEST_FAILED);
             dnsChallegesCreationStatus.remove(domain);
             cleanupChallengeForCertificate(challenge, cert);
@@ -443,8 +439,8 @@ public class DynamicCertificatesManager implements Runnable {
             r53Client.isDNSChallengeForDomainAvailable(domain, challenge.getDigest(),
                     available -> {
                         DnsChallengeCreationStatus s = dnsChallegesCreationStatus.get(domain);
-                        if (s != null) {
-                            s.setDnsChallengeReady();
+                        if (available && s != null) {
+                            s.setCompleted();
                         }
                     },
                     err -> LOG.log(Level.INFO, "Creation of TXT DNS challenge-record for domain {0} FAILED. Reason: {1}", new Object[]{domain, err})
@@ -588,28 +584,28 @@ public class DynamicCertificatesManager implements Runnable {
 
     public static final class DnsChallengeCreationStatus {
 
-        private volatile boolean dnsChallengeError;
-        private volatile boolean dnsChallengeReady;
-        private volatile int dnsChecksCount;
+        private volatile boolean error;
+        private volatile boolean completed;
+        private volatile int reachabilityChecksCount;
 
-        public boolean isDnsChallengeError() {
-            return dnsChallengeError;
+        public boolean isError() {
+            return error;
         }
 
-        public void setDnsChallengeError() {
-            this.dnsChallengeError = true;
+        public void setError() {
+            this.error = true;
         }
 
-        public boolean isDnsChallengeReady() {
-            return dnsChallengeReady;
+        public boolean isCompleted() {
+            return completed;
         }
 
-        public void setDnsChallengeReady() {
-            this.dnsChallengeReady = true;
+        public void setCompleted() {
+            this.completed = true;
         }
 
-        public boolean testDnsChecksLimit() {
-            return ++dnsChecksCount > DNS_CHALLENGE_CREATION_CHECKS_LIMIT;
+        public boolean testReachability() {
+            return ++reachabilityChecksCount > DNS_CHALLENGE_REACHABILITY_CHECKS_LIMIT;
         }
 
     }
