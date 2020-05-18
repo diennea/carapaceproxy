@@ -19,13 +19,12 @@
  */
 package org.carapaceproxy.server.certificates;
 
-import static org.carapaceproxy.server.certificates.Route53Client.DNSChallengeAction.CHECK;
-import static org.carapaceproxy.server.certificates.Route53Client.DNSChallengeAction.DELETE;
-import static org.carapaceproxy.server.certificates.Route53Client.DNSChallengeAction.UPSERT;
+import static org.carapaceproxy.server.certificates.Route53Client.DnsChallengeAction.CHECK;
+import static org.carapaceproxy.server.certificates.Route53Client.DnsChallengeAction.DELETE;
+import static org.carapaceproxy.server.certificates.Route53Client.DnsChallengeAction.UPSERT;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.WILDCARD_SYMBOL;
 import java.util.NoSuchElementException;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
@@ -34,6 +33,7 @@ import software.amazon.awssdk.services.route53.model.Change;
 import software.amazon.awssdk.services.route53.model.ChangeAction;
 import software.amazon.awssdk.services.route53.model.ChangeBatch;
 import software.amazon.awssdk.services.route53.model.ChangeResourceRecordSetsRequest;
+import software.amazon.awssdk.services.route53.model.ChangeResourceRecordSetsResponse;
 import software.amazon.awssdk.services.route53.model.HostedZone;
 import software.amazon.awssdk.services.route53.model.ListHostedZonesByNameRequest;
 import software.amazon.awssdk.services.route53.model.ListHostedZonesByNameResponse;
@@ -51,10 +51,16 @@ import software.amazon.awssdk.services.route53.model.TestDnsAnswerResponse;
  */
 public class Route53Client {
 
-    public enum DNSChallengeAction {
+    public static enum DnsChallengeAction {
         UPSERT,
         DELETE,
         CHECK
+    }
+
+    public static interface DnsChallengeRequestCallback<T> {
+
+        void onComplete(T res, Throwable err);
+
     }
 
     private static final String DNS_CHALLENGE_PREFIX = "_acme-challenge.";
@@ -76,24 +82,26 @@ public class Route53Client {
         client.close();
     }
 
-    public void createDNSChallengeForDomain(String domain, String digest, Consumer<Route53Response> onRequestComplete, Consumer<Throwable> onRequestFail) {
-        performActionOnDNSChallengeForDomain(domain, digest, UPSERT, onRequestComplete, onRequestFail);
+    public void createDnsChallengeForDomain(String domain, String digest, DnsChallengeRequestCallback<ChangeResourceRecordSetsResponse> callback) {
+        performActionOnDnsChallengeForDomain(domain, digest, UPSERT, callback);
     }
 
-    public void deleteDNSChallengeForDomain(String domain, String digest, Consumer<Route53Response> onRequestComplete, Consumer<Throwable> onRequestFail) {
-        performActionOnDNSChallengeForDomain(domain, digest, DELETE, onRequestComplete, onRequestFail);
+    public void deleteDnsChallengeForDomain(String domain, String digest, DnsChallengeRequestCallback<ChangeResourceRecordSetsResponse> callback) {
+        performActionOnDnsChallengeForDomain(domain, digest, DELETE, callback);
     }
 
-    public void isDNSChallengeForDomainAvailable(String domain, String digest, Consumer<Boolean> onRequestComplete, Consumer<Throwable> onRequestFail) {
-        Consumer<Route53Response> check = res -> {
-            TestDnsAnswerResponse r = (TestDnsAnswerResponse) res;
-            onRequestComplete.accept(r.recordData().size() == 1 && r.recordData().get(0).equals("\"" + digest + "\""));
+    public void isDnsChallengeForDomainAvailable(String domain, String digest, DnsChallengeRequestCallback<Boolean> callback) {
+        DnsChallengeRequestCallback<TestDnsAnswerResponse> check = (TestDnsAnswerResponse res, Throwable err) -> {
+            if (err == null) {
+                callback.onComplete(res.recordData().size() == 1 && res.recordData().get(0).equals("\"" + digest + "\""), null);
+            } else {
+                callback.onComplete(null, err);
+            }
         };
-        performActionOnDNSChallengeForDomain(domain, null, CHECK, check, onRequestFail);
+        performActionOnDnsChallengeForDomain(domain, null, CHECK, check);
     }
 
-    private void performActionOnDNSChallengeForDomain(String domain, String digest, DNSChallengeAction action, Consumer<Route53Response> onRequestComplete,
-                                                      Consumer<Throwable> onRequestFail) {
+    private void performActionOnDnsChallengeForDomain(String domain, String digest, DnsChallengeAction action, DnsChallengeRequestCallback callback) {
         String dnsName = domain.replace(WILDCARD_SYMBOL, "") + ".";
         String challengeName = DNS_CHALLENGE_PREFIX + dnsName;
 
@@ -105,12 +113,12 @@ public class Route53Client {
         futureFindHZ.whenComplete((resFindHZ, excFindHZ) -> {
             if (excFindHZ == null && resFindHZ.sdkHttpResponse().isSuccessful()) {
                 if (resFindHZ.hostedZones().isEmpty()) {
-                    onRequestFail.accept(new NoSuchElementException("No hostedzones found for dns: " + dnsName));
+                    callback.onComplete(null, new NoSuchElementException("No hostedzones found for dns: " + dnsName));
                     return;
                 }
                 HostedZone hostedzone = resFindHZ.hostedZones().get(0);
                 if (!hostedzone.name().equals(dnsName)) {
-                    onRequestFail.accept(new NoSuchElementException("Unable to find hostedzone for dns: " + dnsName));
+                    callback.onComplete(null, new NoSuchElementException("Unable to find hostedzone for dns: " + dnsName));
                     return;
                 }
                 String idhostedzone = hostedzone.id().replace(HOSTEDZONE_ID_PREFIX, "");
@@ -119,13 +127,13 @@ public class Route53Client {
                     case UPSERT:
                         // ACME DNS-challenge TXT record upsert
                         future = client.changeResourceRecordSets(
-                                acmeDNSChallengeUpdateRequest(idhostedzone, challengeName, digest, ChangeAction.UPSERT)
+                                acmeDnsChallengeUpdateRequest(idhostedzone, challengeName, digest, ChangeAction.UPSERT)
                         );
                         break;
                     case DELETE:
                         // ACME DNS-challenge TXT record delete
                         future = client.changeResourceRecordSets(
-                                acmeDNSChallengeUpdateRequest(idhostedzone, challengeName, digest, ChangeAction.DELETE)
+                                acmeDnsChallengeUpdateRequest(idhostedzone, challengeName, digest, ChangeAction.DELETE)
                         );
                         break;
                     case CHECK:
@@ -138,23 +146,23 @@ public class Route53Client {
                         );
                         break;
                     default:
-                        onRequestFail.accept(new IllegalArgumentException("Unexpected value for action: " + action));
+                        callback.onComplete(null, new IllegalArgumentException("Unexpected value for action: " + action));
                         return;
                 }
                 future.whenComplete((res, exc) -> {
                     if (exc == null && res.sdkHttpResponse().isSuccessful()) {
-                        onRequestComplete.accept(res);
+                        callback.onComplete(res, null);
                     } else {
-                        onRequestFail.accept(exc);
+                        callback.onComplete(null, exc);
                     }
                 });
             } else {
-                onRequestFail.accept(excFindHZ);
+                callback.onComplete(null, excFindHZ);
             }
         });
     }
 
-    private static ChangeResourceRecordSetsRequest acmeDNSChallengeUpdateRequest(String idhostedzone, String challengeName, String digest, ChangeAction action) {
+    private static ChangeResourceRecordSetsRequest acmeDnsChallengeUpdateRequest(String idhostedzone, String challengeName, String digest, ChangeAction action) {
         ResourceRecordSet txtRecord = ResourceRecordSet.builder()
                 .name(challengeName)
                 .ttl(3600L) // an hour

@@ -20,6 +20,7 @@
 package org.carapaceproxy.server.certificates;
 
 /**
+ * Class for testing real AWS Route53 calls.
  *
  * @author paolo.venturi
  */
@@ -31,33 +32,53 @@ public class Route53ClientTest {
                 null, null
         );
 
-        r53Client.createDNSChallengeForDomain(
-                "testcara.tld",
+        r53Client.createDnsChallengeForDomain(
+                "*.testcara.tld",
                 "digest",
-                res -> System.out.println("RES: " + res),
-                err -> System.out.println("ERR: " + err)
+                (res, err) -> {
+                    if (err == null) {
+                        System.out.println("RES: " + res);
+                    } else {
+                        System.out.println("ERR: " + err);
+                    }
+                }
         );
         Thread.sleep(1_000 * 5);
-        r53Client.isDNSChallengeForDomainAvailable(
-                "testcara.tld",
+        r53Client.isDnsChallengeForDomainAvailable(
+                "*.testcara.tld",
                 "digest",
-                res -> System.out.println("RES: " + res),
-                err -> System.out.println("ERR: " + err)
+                (res, err) -> {
+                    if (err == null) {
+                        System.out.println("RES: " + res);
+                    } else {
+                        System.out.println("ERR: " + err);
+                    }
+                }
         );
 
-        r53Client.deleteDNSChallengeForDomain(
-                "testcara.tld",
+        r53Client.deleteDnsChallengeForDomain(
+                "*.testcara.tld",
                 "digest",
-                res -> System.out.println("RES: " + res),
-                err -> System.out.println("ERR: " + err)
+                (res, err) -> {
+                    if (err == null) {
+                        System.out.println("RES: " + res);
+                    } else {
+                        System.out.println("ERR: " + err);
+                    }
+                }
         );
 
         Thread.sleep(1_000 * 5);
-        r53Client.isDNSChallengeForDomainAvailable(
-                "testcara.tld",
+        r53Client.isDnsChallengeForDomainAvailable(
+                "*.testcara.tld",
                 "digest",
-                res -> System.out.println("RES: " + res),
-                err -> System.out.println("ERR: " + err)
+                (res, err) -> {
+                    if (err == null) {
+                        System.out.println("RES: " + res);
+                    } else {
+                        System.out.println("ERR: " + err);
+                    }
+                }
         );
         Thread.sleep(1_000 * 60);
     }

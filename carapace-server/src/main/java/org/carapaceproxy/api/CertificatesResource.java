@@ -166,7 +166,7 @@ public class CertificatesResource {
             if (certificate.isDynamic()) {
                 certBean.setStatus(certificateStateToString(null)); // unknown
                 try {
-                    CertificateData cert = dynamicCertificateManager.getCertificateDataForDomain(certificate.getHostname());
+                    CertificateData cert = dynamicCertificateManager.getCertificateDataForDomain(certificate.getId());
                     fillDynamicCertificateBean(certBean, cert);
                 } catch (GeneralSecurityException e) {
                     LOG.log(Level.SEVERE, "Unable to read Keystore for certificate {0}. Reason: {1}", new Object[]{certificate.getId(), e});
@@ -214,7 +214,7 @@ public class CertificatesResource {
 
         return Response
                 .ok(data, MediaType.APPLICATION_OCTET_STREAM)
-                .header("content-disposition", "attachment; filename = " + cert.hostname + ".p12")
+                .header("content-disposition", "attachment; filename = " + cert.getId() + ".p12")
                 .build();
     }
 

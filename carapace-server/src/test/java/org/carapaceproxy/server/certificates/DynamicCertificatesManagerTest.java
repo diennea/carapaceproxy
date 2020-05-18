@@ -60,10 +60,10 @@ import org.shredzone.acme4j.Order;
 import static org.shredzone.acme4j.Status.INVALID;
 import static org.shredzone.acme4j.Status.VALID;
 import java.util.Map;
-import java.util.function.Consumer;
 import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.Listeners;
 import org.carapaceproxy.server.certificates.DynamicCertificatesManager.DnsChallengeCreationStatus;
+import org.carapaceproxy.server.certificates.Route53Client.DnsChallengeRequestCallback;
 import org.powermock.reflect.Whitebox;
 import org.shredzone.acme4j.Session;
 import org.shredzone.acme4j.challenge.Dns01Challenge;
@@ -71,7 +71,7 @@ import org.shredzone.acme4j.challenge.Http01Challenge;
 import org.shredzone.acme4j.connector.Connection;
 import org.shredzone.acme4j.toolbox.JSON;
 import org.shredzone.acme4j.util.KeyPairUtils;
-import software.amazon.awssdk.services.route53.model.Route53Response;
+import software.amazon.awssdk.services.route53.model.ChangeResourceRecordSetsResponse;
 
 /**
  * Test for DynamicCertificatesManager.
@@ -204,7 +204,7 @@ public class DynamicCertificatesManagerTest {
         }
     }
 
-    //@Test
+    @Test
     // A) record not created -> request failed
     // B) record not created + reboot -> request failed after LIMIT attempts
     // C) record created but not ready -> request failed after LIMIT attempts
@@ -215,9 +215,9 @@ public class DynamicCertificatesManagerTest {
         "challenge_creation_failed",
         "challenge_creation_failed_n_reboot",
         "challenge_check_limit_expired",
-        "challenge_ready"
-//        "challenge_verified",
-//        "challenge_failed"
+        "challenge_ready",
+        "challenge_verified",
+        "challenge_failed"
     })
     public void testWidlcardCertificateStateManagement(String runCase) throws Exception {
         System.setProperty("carapace.acme.dnschallengereachabilitycheck.limit", "1");
@@ -225,8 +225,8 @@ public class DynamicCertificatesManagerTest {
         Session session = mock(Session.class);
         when(session.connect()).thenReturn(mock(Connection.class));
         Login login = mock(Login.class);
+        when(login.getSession()).thenReturn(session);
         when(login.getKeyPair()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE));
-        when(login.getSession()).thenReturn(mock(Session.class));
 
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
@@ -259,20 +259,19 @@ public class DynamicCertificatesManagerTest {
         // Route53Cliente mocking
         Route53Client r53Client = mock(Route53Client.class);
         doAnswer(inv -> {
+            DnsChallengeRequestCallback callback = (DnsChallengeRequestCallback<ChangeResourceRecordSetsResponse>) inv.getArgument(2);
             if (runCase.startsWith("challenge_creation_failed")) {
-                Consumer<Throwable> onFail = (Consumer<Throwable>) inv.getArgument(3);
-                onFail.accept(new RuntimeException());
+                callback.onComplete(null, new RuntimeException());
             } else {
-                Consumer<Route53Response> onComplete = (Consumer<Route53Response>) inv.getArgument(2);
-                onComplete.accept(mock(Route53Response.class));
+                callback.onComplete(ChangeResourceRecordSetsResponse.builder().build(), null);
             }
             return null;
-        }).when(r53Client).createDNSChallengeForDomain(any(), any(), any(), any());
+        }).when(r53Client).createDnsChallengeForDomain(any(), any(), any());
         doAnswer(inv -> {
-            Consumer<Boolean> onComplete = (Consumer<Boolean>) inv.getArgument(2);
-            onComplete.accept(!(runCase.equals("challenge_creation_failed_n_reboot") || runCase.equals("challenge_check_limit_expired")));
+            DnsChallengeRequestCallback callback = (DnsChallengeRequestCallback<Boolean>) inv.getArgument(2);
+            callback.onComplete(!(runCase.equals("challenge_creation_failed_n_reboot") || runCase.equals("challenge_check_limit_expired")), null);
             return null;
-        }).when(r53Client).isDNSChallengeForDomainAvailable(any(), any(), any(), any());
+        }).when(r53Client).isDnsChallengeForDomainAvailable(any(), any(), any());
         Whitebox.setInternalState(man, r53Client);
 
         // Store mocking
@@ -323,33 +322,25 @@ public class DynamicCertificatesManagerTest {
             assertThat(man.getStateOfCertificate(domain), is(DNS_CHALLENGE_WAIT));
             man.run();
             verify(store, times(++saveCounter)).saveCertificate(any());
-            DynamicCertificateState expected =
-                    runCase.equals("challenge_creation_failed_n_reboot") || runCase.equals("challenge_check_limit_expired")
-                    ? REQUEST_FAILED : VERIFYING;
-            assertThat(man.getStateOfCertificate(domain), is(expected));
+            boolean requestFailed = runCase.equals("challenge_creation_failed_n_reboot") || runCase.equals("challenge_check_limit_expired");
+            assertThat(man.getStateOfCertificate(domain), is(requestFailed ? REQUEST_FAILED : VERIFYING));
+            if (requestFailed) {
+                // check dns-challenge-record deleted
+                verify(r53Client, times(1)).deleteDnsChallengeForDomain(any(), any(), any());
+            }
+            // VERIFYING
+            man.run();
+            verify(store, times(++saveCounter)).saveCertificate(any());
+            if (runCase.equals("challenge_failed")) { // REQUEST_FAILED
+                assertThat(man.getStateOfCertificate(domain), is(REQUEST_FAILED));
+                // check dns-challenge-record deleted
+                verify(r53Client, times(1)).deleteDnsChallengeForDomain(any(), any(), any());
+            } else if (runCase.equals("challenge_verified")) { // VERIFIED
+                assertThat(man.getStateOfCertificate(domain), is(VERIFIED));
+                // check dns-challenge-record deleted
+                verify(r53Client, times(1)).deleteDnsChallengeForDomain(any(), any(), any());
+            }
         }
-//        // ORDERING
-//        if (!runCase.equals("challenge_status_invalid")) {
-//            man.run();
-//            assertEquals(runCase.equals("order_response_error") ? REQUEST_FAILED : AVAILABLE, man.getStateOfCertificate(domain));
-//            verify(store, times(++saveCounter)).saveCertificate(any());
-//            man.run();
-//            if (runCase.equals("order_response_error")) { // REQUEST_FAILED
-//                assertEquals(WAITING, man.getStateOfCertificate(domain));
-//                verify(store, times(++saveCounter)).saveCertificate(any());
-//            } else { // AVAILABLE
-//                DynamicCertificateState state = man.getStateOfCertificate(domain);
-//                assertEquals(runCase.equals("available_to_expired") ? EXPIRED : AVAILABLE, state);
-//                saveCounter += AVAILABLE.equals(state) ? 0 : 1; // only with state AVAILABLE the certificate hasn't to be saved.
-//                verify(store, times(saveCounter)).saveCertificate(any());
-//
-//                man.run();
-//                state = man.getStateOfCertificate(domain);
-//                assertEquals(runCase.equals("available_to_expired") ? WAITING : AVAILABLE, state);
-//                saveCounter += AVAILABLE.equals(state) ? 0 : 1; // only with state AVAILABLE the certificate hasn't to be saved.
-//                verify(store, times(saveCounter)).saveCertificate(any());
-//            }
-//        }
     }
 
 }

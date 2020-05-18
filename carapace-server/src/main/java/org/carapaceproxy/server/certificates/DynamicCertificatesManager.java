@@ -393,15 +393,17 @@ public class DynamicCertificatesManager implements Runnable {
             if (cert.isWildcard()) {
                 dnsChallegesCreationStatus.put(cert.getDomain(), new DnsChallengeCreationStatus());
                 Dns01Challenge ch = (Dns01Challenge) challenge;
-                r53Client.createDNSChallengeForDomain(cert.getDomain(), ch.getDigest(),
-                        res -> LOG.log(Level.INFO, "Created new TXT DNS challenge-record for domain {0}. Details: {1}", new Object[]{cert.getDomain(), res.responseMetadata()}),
-                        (Throwable err) -> {
-                            DnsChallengeCreationStatus status = dnsChallegesCreationStatus.get(cert.getDomain());
-                            if (status != null) {
-                                status.setError();
-                            }
-                            LOG.log(Level.INFO, "Creation of TXT DNS challenge-record for domain {0} FAILED. Reason: {1}", new Object[]{cert.getDomain(), err});
-                        });
+                r53Client.createDnsChallengeForDomain(cert.getDomain(), ch.getDigest(), (res, err) -> {
+                    if (err == null) {
+                        LOG.log(Level.INFO, "Created new TXT DNS challenge-record for domain {0}. Details: {1}", new Object[]{cert.getDomain(), res});
+                    } else {
+                        DnsChallengeCreationStatus status = dnsChallegesCreationStatus.get(cert.getDomain());
+                        if (status != null) {
+                            status.setError();
+                        }
+                        LOG.log(Level.INFO, "Creation of TXT DNS challenge-record for domain {0} FAILED. Reason: {1}", new Object[]{cert.getDomain(), err});
+                    }
+                });
                 cert.setState(DNS_CHALLENGE_WAIT);
             } else {
                 Http01Challenge ch = (Http01Challenge) challenge;
@@ -416,7 +418,7 @@ public class DynamicCertificatesManager implements Runnable {
     private Challenge getChallengeFromCertificate(CertificateData cert) throws AcmeException {
         try {
             JSON challengeData = JSON.parse(cert.getPendingChallengeData());
-            LOG.log(Level.INFO, "CHALLENGE: {0}.", challengeData);
+            LOG.log(Level.FINE, "CHALLENGE: {0}.", challengeData);
             return cert.isWildcard()
                     ? new Dns01Challenge(acmeClient.getLogin(), challengeData)
                     : new Http01Challenge(acmeClient.getLogin(), challengeData);
@@ -436,15 +438,16 @@ public class DynamicCertificatesManager implements Runnable {
             dnsChallegesCreationStatus.remove(domain);
             cleanupChallengeForCertificate(challenge, cert);
         } else {
-            r53Client.isDNSChallengeForDomainAvailable(domain, challenge.getDigest(),
-                    available -> {
-                        DnsChallengeCreationStatus s = dnsChallegesCreationStatus.get(domain);
-                        if (available && s != null) {
-                            s.setCompleted();
-                        }
-                    },
-                    err -> LOG.log(Level.INFO, "Creation of TXT DNS challenge-record for domain {0} FAILED. Reason: {1}", new Object[]{domain, err})
-            );
+            r53Client.isDnsChallengeForDomainAvailable(domain, challenge.getDigest(), (available, err) -> {
+                if (err == null) {
+                    DnsChallengeCreationStatus s = dnsChallegesCreationStatus.get(domain);
+                    if (available && s != null) {
+                        s.setCompleted();
+                    }
+                } else {
+                    LOG.log(Level.INFO, "Creation of TXT DNS challenge-record for domain {0} FAILED. Reason: {1}", new Object[]{domain, err});
+                }
+            });
         }
 
     }
@@ -464,10 +467,13 @@ public class DynamicCertificatesManager implements Runnable {
     private void cleanupChallengeForCertificate(Challenge challenge, CertificateData cert) {
         if (cert.isWildcard()) {
             Dns01Challenge ch = (Dns01Challenge) challenge;
-            r53Client.deleteDNSChallengeForDomain(cert.getDomain(), ch.getDigest(),
-                    res -> LOG.log(Level.INFO, "DELETE TXT DNS challenge-record for domain {0}. Details: {1}", new Object[]{cert.getDomain(), res.responseMetadata()}),
-                    err -> LOG.log(Level.INFO, "Deletion of TXT DNS challenge-record for domain {0} FAILED. Reason: {1}", new Object[]{cert.getDomain(), err})
-            );
+            r53Client.deleteDnsChallengeForDomain(cert.getDomain(), ch.getDigest(), (res, err) -> {
+                if (err == null) {
+                    LOG.log(Level.INFO, "DELETE TXT DNS challenge-record for domain {0}. Details: {1}", new Object[]{cert.getDomain(), res});
+                } else {
+                    LOG.log(Level.INFO, "Deletion of TXT DNS challenge-record for domain {0} FAILED. Reason: {1}", new Object[]{cert.getDomain(), err});
+                }
+            });
         } else {
             Http01Challenge ch = (Http01Challenge) challenge;
             store.deleteAcmeChallengeToken(ch.getToken());

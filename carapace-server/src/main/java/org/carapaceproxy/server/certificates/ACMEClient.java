@@ -94,11 +94,8 @@ public class ACMEClient {
      * Methods for step-by-step certificate issuing
      */
     public Order createOrderForDomain(String... domains) throws AcmeException, IOException {
-        // Get the Account.
-        // If there is no account yet, create a new one.
         Account acct = getLogin().getAccount();
 
-        // Order the certificate
         return acct.newOrder().domains(domains).create();
     }
 
@@ -138,13 +135,11 @@ public class ACMEClient {
      * @return {@link Http01Challenge} to verify
      */
     private Http01Challenge httpChallenge(Authorization auth) throws AcmeException {
-        // Find a single http-01 challenge
         Http01Challenge challenge = auth.findChallenge(Http01Challenge.TYPE);
         if (challenge == null) {
             throw new AcmeException("Found no " + Http01Challenge.TYPE + " challenge, don't know what to do...");
         }
 
-        // Output the challenge, wait for acknowledge...
         LOG.debug("It must be reachable at: http://{}/.well-known/acme-challenge/{}",
                 auth.getIdentifier().getDomain(), challenge.getToken());
 
@@ -159,17 +154,15 @@ public class ACMEClient {
      *
      * @param auth {@link Authorization} to find the challenge in
      * @return {@link Challenge} to verify
+     * @throws org.shredzone.acme4j.exception.AcmeException
      */
     public Challenge dnsChallenge(Authorization auth) throws AcmeException {
-        // Find a single dns-01 challenge
         Dns01Challenge challenge = auth.findChallenge(Dns01Challenge.TYPE);
         if (challenge == null) {
             throw new AcmeException("Found no " + Dns01Challenge.TYPE + " challenge, don't know what to do...");
         }
 
-        // Output the challenge, wait for acknowledge...
-        LOG.info("Please create a TXT record:");
-        LOG.info("_acme-challenge.{}. IN TXT {}", auth.getIdentifier().getDomain(), challenge.getDigest());
+        LOG.debug("DNS-challenge _acme-challenge.{}. to save as TXT-record with content {}", auth.getIdentifier().getDomain(), challenge.getDigest());
 
         return challenge;
     }
@@ -199,12 +192,10 @@ public class ACMEClient {
     public void orderCertificate(Order order, KeyPair domainKeyPair) throws IOException, AcmeException {
         List<String> domains = order.getIdentifiers().stream().map(e -> e.getDomain()).collect(Collectors.toList());
 
-        // Generate a CSR (Certificate signing request) for all of the domains, and sign it with the domain key pair.
         CSRBuilder csrb = new CSRBuilder();
         csrb.addDomains(domains);
         csrb.sign(domainKeyPair);
 
-        // Order the certificate
         LOG.info("Certificate ordering for domains {}", domains);
         order.execute(csrb.getEncoded());
     }
@@ -223,7 +214,6 @@ public class ACMEClient {
     }
 
     public Certificate fetchCertificateForOrder(Order order) throws AcmeException, IOException {
-        // Get the certificate
         Certificate certificate = order.getCertificate();
         String domain = order.getIdentifiers().get(0).getDomain();
         if (certificate == null) {

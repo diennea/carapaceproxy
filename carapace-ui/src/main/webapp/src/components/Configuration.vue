@@ -5,7 +5,7 @@
             id="status-alert"
             fade
             dismissible
-            :show="showAlert"
+            :show="opMessage ? 10 : 0"
             @dismissed="opMessage = ''"
             :variant="opSuccess ? 'success' : 'danger'"
         >{{opMessage}}</b-alert>
@@ -41,14 +41,6 @@ export default {
     },
     created() {
         this.fetch();
-    },
-    computed: {
-        showAlert() {
-            if (!this.opSuccess) {
-                return true;
-            }
-            return this.opMessage ? 5 : 0;
-        }
     },
     methods: {
         save() {
