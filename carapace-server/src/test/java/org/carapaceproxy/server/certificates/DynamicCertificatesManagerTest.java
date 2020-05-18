@@ -49,7 +49,6 @@ import org.junit.runner.RunWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -59,11 +58,8 @@ import org.shredzone.acme4j.Login;
 import org.shredzone.acme4j.Order;
 import static org.shredzone.acme4j.Status.INVALID;
 import static org.shredzone.acme4j.Status.VALID;
-import java.util.Map;
 import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.Listeners;
-import org.carapaceproxy.server.certificates.DynamicCertificatesManager.DnsChallengeCreationStatus;
-import org.carapaceproxy.server.certificates.Route53Client.DnsChallengeRequestCallback;
 import org.powermock.reflect.Whitebox;
 import org.shredzone.acme4j.Session;
 import org.shredzone.acme4j.challenge.Dns01Challenge;
@@ -71,7 +67,6 @@ import org.shredzone.acme4j.challenge.Http01Challenge;
 import org.shredzone.acme4j.connector.Connection;
 import org.shredzone.acme4j.toolbox.JSON;
 import org.shredzone.acme4j.util.KeyPairUtils;
-import software.amazon.awssdk.services.route53.model.ChangeResourceRecordSetsResponse;
 
 /**
  * Test for DynamicCertificatesManager.
@@ -206,21 +201,19 @@ public class DynamicCertificatesManagerTest {
 
     @Test
     // A) record not created -> request failed
-    // B) record not created + reboot -> request failed after LIMIT attempts
-    // C) record created but not ready -> request failed after LIMIT attempts
-    // D) record created and ready -> VERIFYING
-    // E) challenge verified -> record deleted
-    // F) challenge failed -> record deleted
+    // B) record created but not ready -> request failed after LIMIT attempts
+    // C) record created and ready -> VERIFYING
+    // D) challenge verified -> record deleted
+    // E) challenge failed -> record deleted
     @Parameters({
         "challenge_creation_failed",
-        "challenge_creation_failed_n_reboot",
         "challenge_check_limit_expired",
         "challenge_ready",
         "challenge_verified",
         "challenge_failed"
     })
     public void testWidlcardCertificateStateManagement(String runCase) throws Exception {
-        System.setProperty("carapace.acme.dnschallengereachabilitycheck.limit", "1");
+        System.setProperty("carapace.acme.dnschallengereachabilitycheck.limit", "2");
 
         Session session = mock(Session.class);
         when(session.connect()).thenReturn(mock(Connection.class));
@@ -258,25 +251,12 @@ public class DynamicCertificatesManagerTest {
 
         // Route53Cliente mocking
         Route53Client r53Client = mock(Route53Client.class);
-        doAnswer(inv -> {
-            DnsChallengeRequestCallback callback = (DnsChallengeRequestCallback<ChangeResourceRecordSetsResponse>) inv.getArgument(2);
-            if (runCase.startsWith("challenge_creation_failed")) {
-                callback.onComplete(null, new RuntimeException());
-            } else {
-                callback.onComplete(ChangeResourceRecordSetsResponse.builder().build(), null);
-            }
-            return null;
-        }).when(r53Client).createDnsChallengeForDomain(any(), any(), any());
-        doAnswer(inv -> {
-            DnsChallengeRequestCallback callback = (DnsChallengeRequestCallback<Boolean>) inv.getArgument(2);
-            callback.onComplete(!(runCase.equals("challenge_creation_failed_n_reboot") || runCase.equals("challenge_check_limit_expired")), null);
-            return null;
-        }).when(r53Client).isDnsChallengeForDomainAvailable(any(), any(), any());
+        when(r53Client.createDnsChallengeForDomain(any(), any())).thenReturn(!runCase.startsWith("challenge_creation_failed"));
+        when(r53Client.isDnsChallengeForDomainAvailable(any(), any())).thenReturn(!(runCase.equals("challenge_creation_failed_n_reboot") || runCase.equals("challenge_check_limit_expired")));
         Whitebox.setInternalState(man, r53Client);
 
         // Store mocking
         ConfigurationStore store = mock(ConfigurationStore.class);
-        String chain = base64EncodeCertificateChain(generateSampleChain(keyPair, false), keyPair.getPrivate());
         when(store.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
 
         // certificate to order
@@ -299,46 +279,43 @@ public class DynamicCertificatesManagerTest {
 
         CertificateData certData = man.getCertificateDataForDomain(domain);
         assertThat(certData.isWildcard(), is(true));
-
         int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
 
-        // WAITING -> dns-challeng-record creation
+        // WAITING
         assertEquals(WAITING, man.getStateOfCertificate(domain));
         man.run();
         verify(store, times(++saveCounter)).saveCertificate(any());
-        assertThat(man.getStateOfCertificate(domain), is(DNS_CHALLENGE_WAIT));
-
-        // simulate reboot -> challenges creation status erased.
-        if (runCase.equals("challenge_creation_failed_n_reboot")) {
-            Map<String, DnsChallengeCreationStatus> status = (Map<String, DnsChallengeCreationStatus>) Whitebox.getInternalState(man, "dnsChallegesCreationStatus");
-            status.clear();
-        }
-
-        man.run();
-        verify(store, times(++saveCounter)).saveCertificate(any());
-        if (runCase.equals("challenge_creation_failed")) { // REQUEST_FAILED
+        if (runCase.equals("challenge_creation_failed")) {
+            // REQUEST_FAILED
             assertThat(man.getStateOfCertificate(domain), is(REQUEST_FAILED));
-        } else { // DNS_CHALLENGE_WAIT
+        } else {
+            // DNS_CHALLENGE_WAIT
             assertThat(man.getStateOfCertificate(domain), is(DNS_CHALLENGE_WAIT));
             man.run();
             verify(store, times(++saveCounter)).saveCertificate(any());
-            boolean requestFailed = runCase.equals("challenge_creation_failed_n_reboot") || runCase.equals("challenge_check_limit_expired");
-            assertThat(man.getStateOfCertificate(domain), is(requestFailed ? REQUEST_FAILED : VERIFYING));
-            if (requestFailed) {
-                // check dns-challenge-record deleted
-                verify(r53Client, times(1)).deleteDnsChallengeForDomain(any(), any(), any());
-            }
-            // VERIFYING
-            man.run();
-            verify(store, times(++saveCounter)).saveCertificate(any());
-            if (runCase.equals("challenge_failed")) { // REQUEST_FAILED
+            if (runCase.equals("challenge_check_limit_expired")) {
+                assertThat(man.getStateOfCertificate(domain), is(DNS_CHALLENGE_WAIT));
+                man.run();
+                verify(store, times(++saveCounter)).saveCertificate(any());
                 assertThat(man.getStateOfCertificate(domain), is(REQUEST_FAILED));
                 // check dns-challenge-record deleted
-                verify(r53Client, times(1)).deleteDnsChallengeForDomain(any(), any(), any());
-            } else if (runCase.equals("challenge_verified")) { // VERIFIED
-                assertThat(man.getStateOfCertificate(domain), is(VERIFIED));
-                // check dns-challenge-record deleted
-                verify(r53Client, times(1)).deleteDnsChallengeForDomain(any(), any(), any());
+                verify(r53Client, times(1)).deleteDnsChallengeForDomain(any(), any());
+            } else {
+                // VERIFYING
+                assertThat(man.getStateOfCertificate(domain), is(VERIFYING));
+                man.run();
+                verify(store, times(++saveCounter)).saveCertificate(any());
+                if (runCase.equals("challenge_failed")) {
+                    // REQUEST_FAILED
+                    assertThat(man.getStateOfCertificate(domain), is(REQUEST_FAILED));
+                    // check dns-challenge-record deleted
+                    verify(r53Client, times(1)).deleteDnsChallengeForDomain(any(), any());
+                } else if (runCase.equals("challenge_verified")) {
+                    // VERIFIED
+                    assertThat(man.getStateOfCertificate(domain), is(VERIFIED));
+                    // check dns-challenge-record deleted
+                    verify(r53Client, times(1)).deleteDnsChallengeForDomain(any(), any());
+                }
             }
         }
     }

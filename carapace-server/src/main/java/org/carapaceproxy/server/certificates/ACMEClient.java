@@ -162,7 +162,7 @@ public class ACMEClient {
             throw new AcmeException("Found no " + Dns01Challenge.TYPE + " challenge, don't know what to do...");
         }
 
-        LOG.debug("DNS-challenge _acme-challenge.{}. to save as TXT-record with content {}", auth.getIdentifier().getDomain(), challenge.getDigest());
+        LOG.info("DNS-challenge _acme-challenge.{}. to save as TXT-record with content {}", auth.getIdentifier().getDomain(), challenge.getDigest());
 
         return challenge;
     }

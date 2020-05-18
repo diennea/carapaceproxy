@@ -32,54 +32,11 @@ public class Route53ClientTest {
                 null, null
         );
 
-        r53Client.createDnsChallengeForDomain(
-                "*.testcara.tld",
-                "digest",
-                (res, err) -> {
-                    if (err == null) {
-                        System.out.println("RES: " + res);
-                    } else {
-                        System.out.println("ERR: " + err);
-                    }
-                }
-        );
-        Thread.sleep(1_000 * 5);
-        r53Client.isDnsChallengeForDomainAvailable(
-                "*.testcara.tld",
-                "digest",
-                (res, err) -> {
-                    if (err == null) {
-                        System.out.println("RES: " + res);
-                    } else {
-                        System.out.println("ERR: " + err);
-                    }
-                }
-        );
+        System.out.println("RES: " + r53Client.createDnsChallengeForDomain("*.testcara.tld", "digest"));
 
-        r53Client.deleteDnsChallengeForDomain(
-                "*.testcara.tld",
-                "digest",
-                (res, err) -> {
-                    if (err == null) {
-                        System.out.println("RES: " + res);
-                    } else {
-                        System.out.println("ERR: " + err);
-                    }
-                }
-        );
+        System.out.println("RES: " + r53Client.isDnsChallengeForDomainAvailable("*.testcara.tld", "digest"));
 
-        Thread.sleep(1_000 * 5);
-        r53Client.isDnsChallengeForDomainAvailable(
-                "*.testcara.tld",
-                "digest",
-                (res, err) -> {
-                    if (err == null) {
-                        System.out.println("RES: " + res);
-                    } else {
-                        System.out.println("ERR: " + err);
-                    }
-                }
-        );
-        Thread.sleep(1_000 * 60);
+        System.out.println("RES: " + r53Client.deleteDnsChallengeForDomain("*.testcara.tld", "digest"));
     }
+
 }
