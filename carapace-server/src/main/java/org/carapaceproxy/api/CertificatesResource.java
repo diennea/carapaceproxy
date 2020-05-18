@@ -164,7 +164,7 @@ public class CertificatesResource {
                     certificate.getFile()
             );
             if (certificate.isDynamic()) {
-                certBean.setStatus(certificateStateToString(null)); // unknown
+                certBean.setStatus(certificateStateToString(dynamicCertificateManager.getStateOfCertificate(certificate.getId())));
                 try {
                     CertificateData cert = dynamicCertificateManager.getCertificateDataForDomain(certificate.getId());
                     fillDynamicCertificateBean(certBean, cert);
@@ -182,7 +182,6 @@ public class CertificatesResource {
         if (cert == null) {
             return;
         }
-        bean.setStatus(certificateStateToString(cert.getState()));
         Certificate[] chain = base64DecodeCertificateChain(cert.getChain());
         if (chain != null && chain.length > 0) {
             X509Certificate _cert = ((X509Certificate) chain[0]);
@@ -230,7 +229,7 @@ public class CertificatesResource {
                     certificate.getFile()
             );
             if (certificate.isDynamic()) {
-                certBean.setStatus(certificateStateToString(null)); // unknown
+                certBean.setStatus(certificateStateToString(server.getDynamicCertificatesManager().getStateOfCertificate(certificate.getId())));
                 try {
                     CertificateData cert = server.getDynamicCertificatesManager().getCertificateDataForDomain(certificate.getId());
                     fillDynamicCertificateBean(certBean, cert);
