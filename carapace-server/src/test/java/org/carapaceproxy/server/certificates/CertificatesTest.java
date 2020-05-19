@@ -32,7 +32,6 @@ import java.security.cert.Certificate;
 import java.util.Properties;
 import org.carapaceproxy.api.UseAdminServer;
 import static org.carapaceproxy.utils.CertificatesTestUtils.uploadCertificate;
-import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.RawHttpClient.HttpResponse;
 import static org.junit.Assert.assertEquals;
@@ -76,7 +75,10 @@ import org.shredzone.acme4j.Login;
 import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.util.KeyPairUtils;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
+import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
+import java.util.Base64;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
+import org.powermock.reflect.Whitebox;
 
 /**
  * Test use cases for basic certificates management and client requests.
@@ -90,6 +92,55 @@ public class CertificatesTest extends UseAdminServer {
     public WireMockRule wireMockRule = new WireMockRule(0);
 
     private Properties config;
+
+    private void configureAndStartServer() throws Exception {
+        HttpUtils.overideJvmWideHttpsVerifier();
+
+        stubFor(get(urlEqualTo("/index.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
+
+        config = new Properties(HTTP_ADMIN_SERVER_CONFIG);
+        config.put("config.type", "database");
+        config.put("db.jdbc.url", "jdbc:herddb:localhost");
+        config.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
+        startServer(config);
+
+        // Default certificate
+        String defaultCertificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+        config.put("certificate.1.hostname", "*");
+        config.put("certificate.1.file", defaultCertificate);
+        config.put("certificate.1.password", "testproxy");
+
+        // SSL Listener
+        config.put("listener.1.host", "localhost");
+        config.put("listener.1.port", "8443");
+        config.put("listener.1.ssl", "true");
+        config.put("listener.1.ocsp", "true");
+        config.put("listener.1.enabled", "true");
+        config.put("listener.1.defaultcertificate", "*");
+
+        // Backend
+        config.put("backend.1.id", "localhost");
+        config.put("backend.1.enabled", "true");
+        config.put("backend.1.host", "localhost");
+        config.put("backend.1.port", wireMockRule.port() + "");
+
+        // Default director
+        config.put("director.1.id", "*");
+        config.put("director.1.backends", "*");
+        config.put("director.1.enabled", "true");
+
+        // Default route
+        config.put("route.100.id", "default");
+        config.put("route.100.enabled", "true");
+        config.put("route.100.match", "all");
+        config.put("route.100.action", "proxy-all");
+
+        changeDynamicConfiguration(config);
+    }
 
     /**
      * Test case: - Start server with a default certificate - Make request expected default certificate
@@ -363,7 +414,7 @@ public class CertificatesTest extends UseAdminServer {
         Certificate[] uploadedChain;
         KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         uploadedChain = generateSampleChain(endUserKeyPair, false);
-        OCSPResp ocspResp = generateOCSPResponse(uploadedChain,CertificateStatus.GOOD);
+        OCSPResp ocspResp = generateOCSPResponse(uploadedChain, CertificateStatus.GOOD);
         when(ocspMan.getOcspResponseForCertificate(uploadedChain[0])).thenReturn(ocspResp.getEncoded());
         byte[] chainData = createKeystore(uploadedChain, endUserKeyPair.getPrivate());
         try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
@@ -401,7 +452,7 @@ public class CertificatesTest extends UseAdminServer {
 
             CertificateID certId = new CertificateID(digCalcProv.get(CertificateID.HASH_SHA1), caCert, cert.getSerialNumber());
             basicBuilder.addResponse(certId, status);
-            BasicOCSPResp resp = basicBuilder.build(new JcaContentSignerBuilder("SHA256withRSA").build(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE).getPrivate()),null, new Date());
+            BasicOCSPResp resp = basicBuilder.build(new JcaContentSignerBuilder("SHA256withRSA").build(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE).getPrivate()), null, new Date());
 
             OCSPRespBuilder builder = new OCSPRespBuilder();
             return builder.build(OCSPRespBuilder.SUCCESSFUL, resp);
@@ -462,7 +513,7 @@ public class CertificatesTest extends UseAdminServer {
         X509Certificate renewed = (X509Certificate) generateSampleChain(keyPair, false)[0];
         when(_cert.getCertificateChain()).thenReturn(Arrays.asList(renewed));
         when(ac.fetchCertificateForOrder(any())).thenReturn(_cert);
-        dcMan.setACMEClient(ac);
+        Whitebox.setInternalState(dcMan, ac);
 
         // Renew
         dcMan.run();
@@ -483,53 +534,41 @@ public class CertificatesTest extends UseAdminServer {
         }
     }
 
-    private void configureAndStartServer() throws Exception {
-        HttpUtils.overideJvmWideHttpsVerifier();
+    @Test
+    public void testWildcardsCertificates() throws Exception {
+        configureAndStartServer();
+        DynamicCertificatesManager dynCertsMan = server.getDynamicCertificatesManager();
 
-        stubFor(get(urlEqualTo("/index.html"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "text/html")
-                        .withBody("it <b>works</b> !!")));
+        try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
 
-        config = new Properties(HTTP_ADMIN_SERVER_CONFIG);
-        config.put("config.type", "database");
-        config.put("db.jdbc.url", "jdbc:herddb:localhost");
-        config.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
-        startServer(config);
+            // upload exact
+            KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+            Certificate[] chain = generateSampleChain(endUserKeyPair, false);
+            byte[] chainData = createKeystore(chain, endUserKeyPair.getPrivate());
+            String chain1 = Base64.getEncoder().encodeToString(chainData);
+            uploadCertificate("localhost2", null, chainData, client, credentials);
+            CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost2");
+            assertNotNull(data);
+            assertEquals(chain1, data.getChain());
+            assertFalse(data.isWildcard());
 
-        // Default certificate
-        String defaultCertificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
-        config.put("certificate.1.hostname", "*");
-        config.put("certificate.1.file", defaultCertificate);
-        config.put("certificate.1.password", "testproxy");
+            // upload wildcard
+            endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+            chain = generateSampleChain(endUserKeyPair, false);
+            chainData = createKeystore(chain, endUserKeyPair.getPrivate());
+            String chain2 = Base64.getEncoder().encodeToString(chainData);
+            uploadCertificate("*.localhost2", null, chainData, client, credentials);
+            data = dynCertsMan.getCertificateDataForDomain("*.localhost2");
+            assertNotNull(data);
+            assertEquals(chain2, data.getChain());
+            assertTrue(data.isWildcard());
 
-        // SSL Listener
-        config.put("listener.1.host", "localhost");
-        config.put("listener.1.port", "8443");
-        config.put("listener.1.ssl", "true");
-        config.put("listener.1.ocsp", "true");
-        config.put("listener.1.enabled", "true");
-        config.put("listener.1.defaultcertificate", "*");
-
-        // Backend
-        config.put("backend.1.id", "localhost");
-        config.put("backend.1.enabled", "true");
-        config.put("backend.1.host", "localhost");
-        config.put("backend.1.port", wireMockRule.port() + "");
-
-        // Default director
-        config.put("director.1.id", "*");
-        config.put("director.1.backends", "*");
-        config.put("director.1.enabled", "true");
-
-        // Default route
-        config.put("route.100.id", "default");
-        config.put("route.100.enabled", "true");
-        config.put("route.100.match", "all");
-        config.put("route.100.action", "proxy-all");
-
-        changeDynamicConfiguration(config);
+            // exact still different from wildcard
+            data = dynCertsMan.getCertificateDataForDomain("localhost2");
+            assertNotNull(data);
+            assertEquals(chain1, data.getChain());
+            assertFalse(data.isWildcard());
+        }
     }
 
 }

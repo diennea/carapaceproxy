@@ -5,7 +5,7 @@
             id="status-alert"
             fade
             dismissible
-            :show="opMessage ? 5 : 0"
+            :show="opMessage ? 10 : 0"
             @dismissed="opMessage = ''"
             :variant="opSuccess ? 'success' : 'danger'"
         >{{opMessage}}</b-alert>
@@ -51,7 +51,7 @@ export default {
                     this.opSuccess = data.ok;
                     this.opMessage = data.ok
                         ? "Configuration saved successfully."
-                        : "Error: unable to save the configuration.";
+                        : "Error: unable to save the configuration. Reason: " + data.error;
                 },
                 error => {
                     this.opSuccess = false;
@@ -87,7 +87,7 @@ export default {
                     this.opSuccess = data.ok;
                     this.opMessage = data.ok
                         ? "Configuration is ok."
-                        : "Error: configuration contains some errors, check it out before save it.";
+                        : "Error: configuration contains some errors. Details: " + data.error;
                 },
                 error => {
                     this.opSuccess = false;

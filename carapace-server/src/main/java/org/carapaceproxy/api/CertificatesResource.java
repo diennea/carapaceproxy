@@ -164,9 +164,9 @@ public class CertificatesResource {
                     certificate.getFile()
             );
             if (certificate.isDynamic()) {
-                certBean.setStatus(certificateStateToString(null)); // unknown
+                certBean.setStatus(certificateStateToString(dynamicCertificateManager.getStateOfCertificate(certificate.getId())));
                 try {
-                    CertificateData cert = dynamicCertificateManager.getCertificateDataForDomain(certificate.getHostname());
+                    CertificateData cert = dynamicCertificateManager.getCertificateDataForDomain(certificate.getId());
                     fillDynamicCertificateBean(certBean, cert);
                 } catch (GeneralSecurityException e) {
                     LOG.log(Level.SEVERE, "Unable to read Keystore for certificate {0}. Reason: {1}", new Object[]{certificate.getId(), e});
@@ -182,7 +182,6 @@ public class CertificatesResource {
         if (cert == null) {
             return;
         }
-        bean.setStatus(certificateStateToString(cert.getState()));
         Certificate[] chain = base64DecodeCertificateChain(cert.getChain());
         if (chain != null && chain.length > 0) {
             X509Certificate _cert = ((X509Certificate) chain[0]);
@@ -209,21 +208,19 @@ public class CertificatesResource {
         if (cert != null && cert.isDynamic()) {
             HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
             DynamicCertificatesManager dynamicCertificateManager = server.getDynamicCertificatesManager();
-            data = dynamicCertificateManager.getCertificateForDomain(cert.hostname);
+            data = dynamicCertificateManager.getCertificateForDomain(cert.getId());
         }
 
         return Response
                 .ok(data, MediaType.APPLICATION_OCTET_STREAM)
-                .header("content-disposition", "attachment; filename = " + cert.hostname + ".p12")
+                .header("content-disposition", "attachment; filename = " + cert.getId() + ".p12")
                 .build();
     }
 
     private CertificateBean findCertificateById(String certId) {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-        RuntimeServerConfiguration conf = server.getCurrentConfiguration();
-        Map<String, SSLCertificateConfiguration> certificateList = conf.getCertificates();
-        if (certificateList.containsKey(certId)) {
-            SSLCertificateConfiguration certificate = certificateList.get(certId);
+        SSLCertificateConfiguration certificate = server.getCurrentConfiguration().getCertificates().get(certId);
+        if (certificate != null) {
             CertificateBean certBean = new CertificateBean(
                     certificate.getId(),
                     certificate.getHostname(),
@@ -231,11 +228,10 @@ public class CertificatesResource {
                     certificate.isDynamic(),
                     certificate.getFile()
             );
-
             if (certificate.isDynamic()) {
-                certBean.setStatus(certificateStateToString(null)); // unknown
+                certBean.setStatus(certificateStateToString(server.getDynamicCertificatesManager().getStateOfCertificate(certificate.getId())));
                 try {
-                    CertificateData cert = server.getDynamicCertificatesManager().getCertificateDataForDomain(certificate.getHostname());
+                    CertificateData cert = server.getDynamicCertificatesManager().getCertificateDataForDomain(certificate.getId());
                     fillDynamicCertificateBean(certBean, cert);
                 } catch (GeneralSecurityException e) {
                     LOG.log(Level.SEVERE, "Unable to read Keystore for certificate {0}. Reason: {1}", new Object[]{certificate.getId(), e});

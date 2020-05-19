@@ -1,26 +1,27 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.server.certificates;
 
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.DNS_CHALLENGE_WAIT;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.EXPIRED;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.ORDERING;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.REQUEST_FAILED;
@@ -60,6 +61,8 @@ import org.carapaceproxy.server.HttpProxyServer;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
 import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.Status;
+import org.shredzone.acme4j.challenge.Challenge;
+import org.shredzone.acme4j.challenge.Dns01Challenge;
 import org.shredzone.acme4j.challenge.Http01Challenge;
 import org.shredzone.acme4j.exception.AcmeException;
 import org.shredzone.acme4j.toolbox.JSON;
@@ -80,11 +83,15 @@ public class DynamicCertificatesManager implements Runnable {
     public static final int DEFAULT_DAYS_BEFORE_RENEWAL = Integer.getInteger("carapace.acme.default.daysbeforerenewal", 30);
     private static final boolean TESTING_MODE = Boolean.getBoolean("carapace.acme.testmode");
 
+    private static final int DNS_CHALLENGE_REACHABILITY_CHECKS_LIMIT = Integer.getInteger("carapace.acme.dnschallengereachabilitycheck.limit", 10);
+
     private static final Logger LOG = Logger.getLogger(DynamicCertificatesManager.class.getName());
     private static final String EVENT_CERT_AVAIL_CHANGED = "certAvailChanged";
 
     private Map<String, CertificateData> certificates = new ConcurrentHashMap();
-    private ACMEClient client; // Let's Encrypt client
+    private ACMEClient acmeClient; // Let's Encrypt client
+    private Route53Client r53Client;
+    private final Map<String, Integer> dnsChallegeReachabilityChecks = new ConcurrentHashMap();
 
     private ScheduledExecutorService scheduler;
     private ScheduledFuture<?> scheduledFuture;
@@ -124,18 +131,20 @@ public class DynamicCertificatesManager implements Runnable {
         this.period = period;
     }
 
-    @VisibleForTesting
-    public void setACMEClient(ACMEClient client) {
-        this.client = client;
-    }
-
     public synchronized void reloadConfiguration(RuntimeServerConfiguration configuration) {
         if (store == null) {
             throw new DynamicCertificatesManagerException("ConfigurationStore not set.");
         }
         keyPairsSize = configuration.getKeyPairsSize();
-        if (client == null) {
-            client = new ACMEClient(loadOrCreateAcmeUserKeyPair(), TESTING_MODE);
+        if (acmeClient == null) {
+            acmeClient = new ACMEClient(loadOrCreateAcmeUserKeyPair(), TESTING_MODE);
+        }
+        if (r53Client == null) {
+            String awsAccessKey = configuration.getAwsAccessKey();
+            String awsSecretKey = configuration.getAwsSecretKey();
+            if (awsAccessKey != null && awsSecretKey != null) {
+                r53Client = new Route53Client(awsAccessKey, awsSecretKey);
+            }
         }
         loadCertificates(configuration.getCertificates());
         period = configuration.getDynamicCertificatesManagerPeriod();
@@ -165,9 +174,12 @@ public class DynamicCertificatesManager implements Runnable {
             for (Entry<String, SSLCertificateConfiguration> e : certificates.entrySet()) {
                 SSLCertificateConfiguration config = e.getValue();
                 if (config.isDynamic()) {
-                    String domain = config.getHostname();
+                    String domain = config.getId(); // hostname or *.hostname
+                    boolean wildcard = config.isWildcard();
                     boolean forceManual = MANUAL == config.getMode();
-                    _certificates.put(domain, loadOrCreateDynamicCertificateForDomain(domain, forceManual, config.getDaysBeforeRenewal()));
+                    _certificates.put(domain, loadOrCreateDynamicCertificateForDomain(
+                            domain, wildcard, forceManual, config.getDaysBeforeRenewal()
+                    ));
                 }
             }
             this.certificates = _certificates; // only certificates/domains specified in the config have to be managed.
@@ -176,11 +188,15 @@ public class DynamicCertificatesManager implements Runnable {
         }
     }
 
-    private CertificateData loadOrCreateDynamicCertificateForDomain(String domain, boolean forceManual, int daysBeforeRenewal) throws GeneralSecurityException, MalformedURLException {
+    private CertificateData loadOrCreateDynamicCertificateForDomain(String domain,
+                                                                    boolean wildcard,
+                                                                    boolean forceManual,
+                                                                    int daysBeforeRenewal) throws GeneralSecurityException, MalformedURLException {
         CertificateData cert = store.loadCertificateForDomain(domain);
         if (cert == null) {
             cert = new CertificateData(domain, "", "", WAITING, "", "", false);
         }
+        cert.setWildcard(wildcard);
         cert.setManual(forceManual);
         if (!forceManual) { // only for ACME
             cert.setDaysBeforeRenewal(daysBeforeRenewal);
@@ -209,6 +225,9 @@ public class DynamicCertificatesManager implements Runnable {
                 scheduler.awaitTermination(10, TimeUnit.SECONDS);
                 scheduler = null;
                 scheduledFuture = null;
+                if (r53Client != null) {
+                    r53Client.close();
+                }
             } catch (InterruptedException err) {
                 Thread.currentThread().interrupt();
             }
@@ -240,44 +259,34 @@ public class DynamicCertificatesManager implements Runnable {
             boolean notifyCertAvailChanged = false;
             final String domain = data.getDomain();
             try {
-                CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, false, data.getDaysBeforeRenewal());
+                CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, data.isWildcard(), false, data.getDaysBeforeRenewal());
                 switch (cert.getState()) {
                     case WAITING: { // certificate waiting to be issues/renew
                         LOG.log(Level.INFO, "Certificate ISSUING process for domain: {0} STARTED.", domain);
-                        Order order = client.createOrderForDomain(domain);
-                        cert.setPendingOrderLocation(order.getLocation());
-                        LOG.log(Level.INFO, "Pending order location for domain {0}: {1}", new Object[]{domain, order.getLocation()});
-                        Http01Challenge challenge = client.getHTTPChallengeForOrder(order);
-                        if (challenge == null) {
-                            cert.setState(VERIFIED);
-                        } else {
-                            LOG.log(Level.INFO, "Pending challenge data for domain {0}: {1}", new Object[]{domain, challenge.getJSON()});
-                            triggerChallenge(challenge);
-                            cert.setPendingChallengeData(challenge.getJSON());
-                            cert.setState(VERIFYING);
+                        Order order = createOrderForCertificate(cert);
+                        createChallengeForCertificateOrder(cert, order);
+                        break;
+                    }
+                    case DNS_CHALLENGE_WAIT: { // waiting for full dns propagation
+                        LOG.log(Level.INFO, "DNS_CHALLENGE_WAIT for domain {0}.", domain);
+                        Dns01Challenge pendingChallenge = (Dns01Challenge) getChallengeFromCertificate(cert);
+                        if (pendingChallenge == null) {
+                            LOG.log(Level.SEVERE, "Unable to get pending challenge data for domain " + domain);
+                            cert.setState(REQUEST_FAILED);
+                            break;
                         }
+                        // check dns reachability
+                        checkDnsChallengeReachabilityForCertificate(pendingChallenge, cert);
                         break;
                     }
                     case VERIFYING: { // challenge verification by LE pending
                         LOG.log(Level.INFO, "VERIFYING certificate for domain {0}.", domain);
-                        JSON challengeData = null;
-                        try {
-                            challengeData = JSON.parse(cert.getPendingChallengeData());
-                        } catch (Exception e) {
-                            LOG.log(Level.SEVERE, "Unable to get pending challenge data for domain " + domain, e);
+                        Challenge pendingChallenge = getChallengeFromCertificate(cert);
+                        if (pendingChallenge == null) {
+                            LOG.log(Level.SEVERE, "Unable to get pending challenge data for domain {0}", domain);
                             cert.setState(REQUEST_FAILED);
-                            break;
-                        }
-                        LOG.log(Level.INFO, "CHALLENGE: {0}.", cert.getPendingChallengeData());
-                        Http01Challenge pendingChallenge = new Http01Challenge(client.getLogin(), challengeData);
-                        Status status = client.checkResponseForChallenge(pendingChallenge); // checks response and updates the challenge
-                        cert.setPendingChallengeData(pendingChallenge.getJSON());
-                        if (status == Status.VALID) {
-                            cert.setState(VERIFIED);
-                            store.deleteAcmeChallengeToken(pendingChallenge.getToken());
-                        } else if (status == Status.INVALID) {
-                            cert.setState(REQUEST_FAILED);
-                            store.deleteAcmeChallengeToken(pendingChallenge.getToken());
+                        } else {
+                            checkChallengeResponseForCertificate(pendingChallenge, cert);
                         }
                         break;
                     }
@@ -291,10 +300,9 @@ public class DynamicCertificatesManager implements Runnable {
                             cert.setState(REQUEST_FAILED);
                             break;
                         }
-                        Order pendingOrder = client.getLogin().bindOrder(orderLocation);
+                        Order pendingOrder = acmeClient.getLogin().bindOrder(orderLocation);
                         KeyPair keys = loadOrCreateKeyPairForDomain(domain);
-                        cert.setPrivateKey(domain);
-                        client.orderCertificate(pendingOrder, keys);
+                        acmeClient.orderCertificate(pendingOrder, keys);
                         cert.setState(ORDERING);
                         break;
                     }
@@ -308,10 +316,10 @@ public class DynamicCertificatesManager implements Runnable {
                             cert.setState(REQUEST_FAILED);
                             break;
                         }
-                        Order order = client.getLogin().bindOrder(orderLocation);
-                        Status status = client.checkResponseForOrder(order);
+                        Order order = acmeClient.getLogin().bindOrder(orderLocation);
+                        Status status = acmeClient.checkResponseForOrder(order);
                         if (status == Status.VALID) {
-                            List<X509Certificate> certificateChain = client.fetchCertificateForOrder(order).getCertificateChain();
+                            List<X509Certificate> certificateChain = acmeClient.fetchCertificateForOrder(order).getCertificateChain();
                             PrivateKey key = loadOrCreateKeyPairForDomain(domain).getPrivate();
                             String chain = base64EncodeCertificateChain(certificateChain.toArray(new Certificate[0]), key);
                             cert.setChain(chain);
@@ -348,7 +356,7 @@ public class DynamicCertificatesManager implements Runnable {
                         throw new IllegalStateException();
                 }
                 if (updateDB) {
-                    LOG.log(Level.INFO, "Save certificate for domain {0}", domain);
+                    LOG.log(Level.INFO, "Save certificate request status for domain {0}", domain);
                     store.saveCertificate(cert);
                 }
                 if (notifyCertAvailChanged) {
@@ -362,9 +370,94 @@ public class DynamicCertificatesManager implements Runnable {
         }
     }
 
-    private void triggerChallenge(Http01Challenge challenge) throws AcmeException {
-        store.saveAcmeChallengeToken(challenge.getToken(), challenge.getAuthorization());
-        challenge.trigger();
+    private Order createOrderForCertificate(CertificateData cert) throws AcmeException, IOException {
+        Order order = acmeClient.createOrderForDomain(cert.getDomain());
+        cert.setPendingOrderLocation(order.getLocation());
+        LOG.log(Level.INFO, "Pending order location for domain {0}: {1}", new Object[]{cert.getDomain(), order.getLocation()});
+
+        return order;
+    }
+
+    private void createChallengeForCertificateOrder(CertificateData cert, Order order) throws AcmeException {
+        Challenge challenge = acmeClient.getChallengeForOrder(order, cert.isWildcard());
+        if (challenge == null) {
+            cert.setState(VERIFIED);
+        } else {
+            LOG.log(Level.INFO, "Pending challenge data for domain {0}: {1}", new Object[]{cert.getDomain(), challenge.getJSON()});
+            if (cert.isWildcard()) {
+                Dns01Challenge ch = (Dns01Challenge) challenge;
+                if (r53Client.createDnsChallengeForDomain(cert.getDomain(), ch.getDigest())) {
+                    cert.setState(DNS_CHALLENGE_WAIT);
+                    LOG.log(Level.INFO, "Created new TXT DNS challenge-record for domain {0}.", cert.getDomain());
+                } else {
+                    cert.setState(REQUEST_FAILED);
+                    LOG.log(Level.INFO, "Creation of TXT DNS challenge-record for domain {0} FAILED.", cert.getDomain());
+                }
+            } else {
+                Http01Challenge ch = (Http01Challenge) challenge;
+                store.saveAcmeChallengeToken(ch.getToken(), ch.getAuthorization()); // used for incoming acme-challenge requests
+                challenge.trigger();
+                cert.setState(VERIFYING);
+            }
+            cert.setPendingChallengeData(challenge.getJSON());
+        }
+    }
+
+    private Challenge getChallengeFromCertificate(CertificateData cert) throws AcmeException {
+        try {
+            JSON challengeData = JSON.parse(cert.getPendingChallengeData());
+            LOG.log(Level.FINE, "CHALLENGE: {0}.", challengeData);
+            return cert.isWildcard()
+                    ? new Dns01Challenge(acmeClient.getLogin(), challengeData)
+                    : new Http01Challenge(acmeClient.getLogin(), challengeData);
+        } catch (IOException | AcmeException e) {
+            return null;
+        }
+    }
+
+    private void checkDnsChallengeReachabilityForCertificate(Dns01Challenge challenge, CertificateData cert) throws AcmeException {
+        String domain = cert.getDomain();
+        if (r53Client.isDnsChallengeForDomainAvailable(domain, challenge.getDigest())) {
+            cert.setState(VERIFYING);
+            dnsChallegeReachabilityChecks.remove(domain);
+            challenge.trigger();
+        } else {
+            Integer value = dnsChallegeReachabilityChecks.getOrDefault(domain, 0);
+            if (++value >= DNS_CHALLENGE_REACHABILITY_CHECKS_LIMIT) {
+                LOG.log(Level.INFO, "Too many reachability attempts of TXT DNS challenge-record for domain {0}.", cert.getDomain());
+                cert.setState(REQUEST_FAILED);
+                dnsChallegeReachabilityChecks.remove(domain);
+                cleanupChallengeForCertificate(challenge, cert);
+            } else {
+                dnsChallegeReachabilityChecks.put(domain, value);
+            }
+        }
+    }
+
+    private void checkChallengeResponseForCertificate(Challenge challenge, CertificateData cert) throws AcmeException, IOException {
+        Status status = acmeClient.checkResponseForChallenge(challenge); // checks response and updates the challenge
+        cert.setPendingChallengeData(challenge.getJSON());
+        if (status == Status.VALID) {
+            cert.setState(VERIFIED);
+            cleanupChallengeForCertificate(challenge, cert);
+        } else if (status == Status.INVALID) {
+            cert.setState(REQUEST_FAILED);
+            cleanupChallengeForCertificate(challenge, cert);
+        }
+    }
+
+    private void cleanupChallengeForCertificate(Challenge challenge, CertificateData cert) {
+        if (cert.isWildcard()) {
+            Dns01Challenge ch = (Dns01Challenge) challenge;
+            if (r53Client.deleteDnsChallengeForDomain(cert.getDomain(), ch.getDigest())) {
+                LOG.log(Level.INFO, "DELETE TXT DNS challenge-record for domain {0}.", cert.getDomain());
+            } else {
+                LOG.log(Level.INFO, "Deletion of TXT DNS challenge-record for domain {0} FAILED.", cert.getDomain());
+            }
+        } else {
+            Http01Challenge ch = (Http01Challenge) challenge;
+            store.deleteAcmeChallengeToken(ch.getToken());
+        }
     }
 
     public String getChallengeToken(String tokenName) {
@@ -404,7 +497,7 @@ public class DynamicCertificatesManager implements Runnable {
                 store.saveCertificate(cert);
                 // remember that events  are not delivered to the local JVM
                 reloadCertificatesFromDB();
-                if (prevAvail != cert.isAvailable() && groupMembershipHandler!= null) {
+                if (prevAvail != cert.isAvailable() && groupMembershipHandler != null) {
                     groupMembershipHandler.fireEvent(EVENT_CERT_AVAIL_CHANGED);
                 }
             }
@@ -460,11 +553,11 @@ public class DynamicCertificatesManager implements Runnable {
         LOG.log(Level.INFO, "Reloading certificates from db");
         try {
             Map<String, CertificateData> _certificates = new ConcurrentHashMap<>();
-            for (Entry<String, CertificateData> entry: certificates.entrySet()) {
+            for (Entry<String, CertificateData> entry : certificates.entrySet()) {
                 String domain = entry.getKey();
                 CertificateData cert = entry.getValue();
-                // "manual" flag is not stored in db > has to be re-set from existing config
-                CertificateData freshCert = loadOrCreateDynamicCertificateForDomain(domain, cert.isManual(), cert.getDaysBeforeRenewal());
+                // "wildcard" and "manual" flags and "daysBeforeRenewal" are not stored in db > have to be re-set from existing config
+                CertificateData freshCert = loadOrCreateDynamicCertificateForDomain(domain, cert.isWildcard(), cert.isManual(), cert.getDaysBeforeRenewal());
                 _certificates.put(domain, freshCert);
                 LOG.log(Level.INFO, "RELOADED certificate for domain {0}: {1}", new Object[]{domain, freshCert});
             }
