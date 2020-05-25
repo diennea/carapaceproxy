@@ -285,8 +285,8 @@ public class DynamicCertificatesManagerTest {
         man.run();
         verify(store, times(++saveCounter)).saveCertificate(any());
         if (runCase.equals("challenge_creation_failed")) {
-            // REQUEST_FAILED
-            assertThat(man.getStateOfCertificate(domain), is(REQUEST_FAILED));
+            // WAITING
+            assertThat(man.getStateOfCertificate(domain), is(WAITING));
         } else {
             // DNS_CHALLENGE_WAIT
             assertThat(man.getStateOfCertificate(domain), is(DNS_CHALLENGE_WAIT));

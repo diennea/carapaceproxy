@@ -56,7 +56,6 @@ import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
 import java.util.logging.Level;
-import org.carapaceproxy.configstore.ConfigurationStoreException;
 import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
@@ -281,39 +280,20 @@ public class DynamicCertificatesManager implements Runnable {
                         break;
                     }
                     case DNS_CHALLENGE_WAIT: { // waiting for full dns propagation
-                        LOG.log(Level.INFO, "DNS_CHALLENGE_WAIT for domain {0}.", domain);
+                        LOG.log(Level.INFO, "DNS CHALLENGE WAITING for domain {0}.", domain);
                         Dns01Challenge pendingChallenge = (Dns01Challenge) getChallengeFromCertificate(cert);
-                        if (pendingChallenge == null) {
-                            LOG.log(Level.SEVERE, "Unable to get pending challenge data for domain " + domain);
-                            cert.setState(REQUEST_FAILED);
-                            break;
-                        }
-                        // check dns reachability
                         checkDnsChallengeReachabilityForCertificate(pendingChallenge, cert);
                         break;
                     }
                     case VERIFYING: { // challenge verification by LE pending
                         LOG.log(Level.INFO, "VERIFYING certificate for domain {0}.", domain);
                         Challenge pendingChallenge = getChallengeFromCertificate(cert);
-                        if (pendingChallenge == null) {
-                            LOG.log(Level.SEVERE, "Unable to get pending challenge data for domain {0}", domain);
-                            cert.setState(REQUEST_FAILED);
-                        } else {
-                            checkChallengeResponseForCertificate(pendingChallenge, cert);
-                        }
+                        checkChallengeResponseForCertificate(pendingChallenge, cert);
                         break;
                     }
                     case VERIFIED: { // challenge succeded
                         LOG.log(Level.INFO, "Certificate for domain {0} VERIFIED.", domain);
-                        URL orderLocation = null;
-                        try {
-                            orderLocation = new URL(cert.getPendingOrderLocation());
-                        } catch (Exception e) {
-                            LOG.log(Level.SEVERE, "Unable to manage pending order location for domain " + domain, e);
-                            cert.setState(REQUEST_FAILED);
-                            break;
-                        }
-                        Order pendingOrder = acmeClient.getLogin().bindOrder(orderLocation);
+                        Order pendingOrder = acmeClient.getLogin().bindOrder(new URL(cert.getPendingOrderLocation()));
                         KeyPair keys = loadOrCreateKeyPairForDomain(domain);
                         acmeClient.orderCertificate(pendingOrder, keys);
                         cert.setState(ORDERING);
@@ -321,15 +301,7 @@ public class DynamicCertificatesManager implements Runnable {
                     }
                     case ORDERING: { // certificate ordering
                         LOG.log(Level.INFO, "ORDERING certificate for domain {0}.", domain);
-                        URL orderLocation = null;
-                        try {
-                            orderLocation = new URL(cert.getPendingOrderLocation());
-                        } catch (Exception e) {
-                            LOG.log(Level.SEVERE, "Unable to manage pending order location for domain " + domain, e);
-                            cert.setState(REQUEST_FAILED);
-                            break;
-                        }
-                        Order order = acmeClient.getLogin().bindOrder(orderLocation);
+                        Order order = acmeClient.getLogin().bindOrder(new URL(cert.getPendingOrderLocation()));
                         Status status = acmeClient.checkResponseForOrder(order);
                         if (status == Status.VALID) {
                             List<X509Certificate> certificateChain = acmeClient.fetchCertificateForOrder(order).getCertificateChain();
@@ -339,7 +311,7 @@ public class DynamicCertificatesManager implements Runnable {
                             cert.setAvailable(true);
                             cert.setState(AVAILABLE);
                             notifyCertAvailChanged = true; // all other peers need to know that this cert is available.
-                            LOG.log(Level.INFO, "Certificate issuing for domain: {0} SUCCEED. Certificate''s NOW AVAILABLE.", domain);
+                            LOG.log(Level.INFO, "Certificate issuing for domain: {0} SUCCEED. Certificate AVAILABLE.", domain);
                         } else if (status == Status.INVALID) {
                             cert.setState(REQUEST_FAILED);
                         }
@@ -377,13 +349,13 @@ public class DynamicCertificatesManager implements Runnable {
                     reloadCertificatesFromDB();
                     groupMembershipHandler.fireEvent(EVENT_CERT_AVAIL_CHANGED);
                 }
-            } catch (AcmeException | IOException | ConfigurationStoreException | GeneralSecurityException | IllegalStateException ex) {
+            } catch (AcmeException | IOException | GeneralSecurityException | IllegalStateException ex) {
                 LOG.log(Level.SEVERE, "Error while handling dynamic certificate for domain " + domain, ex);
             }
         }
     }
 
-    private Order createOrderForCertificate(CertificateData cert) throws AcmeException, IOException {
+    private Order createOrderForCertificate(CertificateData cert) throws AcmeException {
         Order order = acmeClient.createOrderForDomain(cert.getDomain());
         cert.setPendingOrderLocation(order.getLocation());
         LOG.log(Level.INFO, "Pending order location for domain {0}: {1}", new Object[]{cert.getDomain(), order.getLocation()});
@@ -403,7 +375,6 @@ public class DynamicCertificatesManager implements Runnable {
                     cert.setState(DNS_CHALLENGE_WAIT);
                     LOG.log(Level.INFO, "Created new TXT DNS challenge-record for domain {0}.", cert.getDomain());
                 } else {
-                    cert.setState(REQUEST_FAILED);
                     LOG.log(Level.INFO, "Creation of TXT DNS challenge-record for domain {0} FAILED.", cert.getDomain());
                 }
             } else {
@@ -417,15 +388,11 @@ public class DynamicCertificatesManager implements Runnable {
     }
 
     private Challenge getChallengeFromCertificate(CertificateData cert) throws AcmeException {
-        try {
-            JSON challengeData = JSON.parse(cert.getPendingChallengeData());
-            LOG.log(Level.FINE, "CHALLENGE: {0}.", challengeData);
-            return cert.isWildcard()
-                    ? new Dns01Challenge(acmeClient.getLogin(), challengeData)
-                    : new Http01Challenge(acmeClient.getLogin(), challengeData);
-        } catch (IOException | AcmeException e) {
-            return null;
-        }
+        JSON challengeData = JSON.parse(cert.getPendingChallengeData());
+        LOG.log(Level.FINE, "CHALLENGE: {0}.", challengeData);
+        return cert.isWildcard()
+                ? new Dns01Challenge(acmeClient.getLogin(), challengeData)
+                : new Http01Challenge(acmeClient.getLogin(), challengeData);
     }
 
     private void checkDnsChallengeReachabilityForCertificate(Dns01Challenge challenge, CertificateData cert) throws AcmeException {
@@ -447,7 +414,7 @@ public class DynamicCertificatesManager implements Runnable {
         }
     }
 
-    private void checkChallengeResponseForCertificate(Challenge challenge, CertificateData cert) throws AcmeException, IOException {
+    private void checkChallengeResponseForCertificate(Challenge challenge, CertificateData cert) throws AcmeException {
         Status status = acmeClient.checkResponseForChallenge(challenge); // checks response and updates the challenge
         cert.setPendingChallengeData(challenge.getJSON());
         if (status == Status.VALID) {
