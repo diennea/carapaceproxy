@@ -78,8 +78,6 @@ public class RuntimeServerConfiguration {
     private int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
     private List<String> supportedSSLProtocols = null;
     private int ocspStaplingManagerPeriod = 0;
-    private String awsAccessKey;
-    private String awsSecretKey;
 
     public String getAccessLogPath() {
         return accessLogPath;
@@ -227,14 +225,6 @@ public class RuntimeServerConfiguration {
         return ocspStaplingManagerPeriod;
     }
 
-    public String getAwsAccessKey() {
-        return awsAccessKey;
-    }
-
-    public String getAwsSecretKey() {
-        return awsSecretKey;
-    }
-
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
         LOG.log(Level.INFO, "configuring from {0}", properties);
         this.maxConnectionsPerEndpoint = properties.getInt("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint);
@@ -279,11 +269,6 @@ public class RuntimeServerConfiguration {
         LOG.info("accesslog.flush.interval=" + accessLogFlushInterval);
         LOG.info("accesslog.failure.wait=" + accessLogWaitBetweenFailures);
 
-        awsAccessKey = properties.getString("aws.accesskey", null);
-        LOG.log(Level.INFO, "aws.accesskey={0}", awsAccessKey);
-        awsSecretKey = properties.getString("aws.secretkey", null);
-        LOG.log(Level.INFO, "aws.secretkey={0}", awsSecretKey);
-
         tryConfigureCertificates(properties);
         tryConfigureListeners(properties);
         tryConfigureFilters(properties);
@@ -323,11 +308,6 @@ public class RuntimeServerConfiguration {
                     SSLCertificateConfiguration config = new SSLCertificateConfiguration(hostname, file, pw, _mode);
                     if (config.isAcme()) {
                         config.setDaysBeforeRenewal(daysBeforeRenewal);
-                        if (config.isWildcard() && (awsAccessKey == null || awsSecretKey == null)) {
-                            throw new ConfigurationNotValidException(
-                                    "For ACME wildcards certificates AWS Route53 credentials has to be set"
-                            );
-                        }
                     }
                     this.addCertificate(config);
                 } catch (IllegalArgumentException e) {

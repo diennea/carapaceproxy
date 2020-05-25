@@ -37,6 +37,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
@@ -93,7 +94,7 @@ public class ManagersExecutionTest {
     }
 
     @Test
-    public void testDynamicCertificatesManagerExecution() {
+    public void testDynamicCertificatesManagerExecution() throws ConfigurationNotValidException {
         RuntimeServerConfiguration config = new RuntimeServerConfiguration();
         DynamicCertificatesManager man = new DynamicCertificatesManager(null);
 

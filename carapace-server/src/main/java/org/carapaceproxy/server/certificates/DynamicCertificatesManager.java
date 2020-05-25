@@ -58,6 +58,7 @@ import java.util.Base64;
 import java.util.logging.Level;
 import org.carapaceproxy.configstore.ConfigurationStoreException;
 import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
 import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.Status;
@@ -91,6 +92,8 @@ public class DynamicCertificatesManager implements Runnable {
     private Map<String, CertificateData> certificates = new ConcurrentHashMap();
     private ACMEClient acmeClient; // Let's Encrypt client
     private Route53Client r53Client;
+    private String awsAccessKey;
+    private String awsSecretKey;
     private final Map<String, Integer> dnsChallegeReachabilityChecks = new ConcurrentHashMap();
 
     private ScheduledExecutorService scheduler;
@@ -131,20 +134,25 @@ public class DynamicCertificatesManager implements Runnable {
         this.period = period;
     }
 
-    public synchronized void reloadConfiguration(RuntimeServerConfiguration configuration) {
+    public void initAWSClient(String awsAccessKey, String awsSecretKey) {
+        this.awsAccessKey = awsAccessKey;
+        this.awsSecretKey = awsSecretKey;
+        if (r53Client != null) {
+            r53Client.close();
+            r53Client = null;
+        }
+        if (awsAccessKey != null && awsSecretKey != null) {
+            r53Client = new Route53Client(awsAccessKey, awsSecretKey);
+        }
+    }
+
+    public synchronized void reloadConfiguration(RuntimeServerConfiguration configuration) throws ConfigurationNotValidException {
         if (store == null) {
             throw new DynamicCertificatesManagerException("ConfigurationStore not set.");
         }
         keyPairsSize = configuration.getKeyPairsSize();
         if (acmeClient == null) {
             acmeClient = new ACMEClient(loadOrCreateAcmeUserKeyPair(), TESTING_MODE);
-        }
-        if (r53Client == null) {
-            String awsAccessKey = configuration.getAwsAccessKey();
-            String awsSecretKey = configuration.getAwsSecretKey();
-            if (awsAccessKey != null && awsSecretKey != null) {
-                r53Client = new Route53Client(awsAccessKey, awsSecretKey);
-            }
         }
         loadCertificates(configuration.getCertificates());
         period = configuration.getDynamicCertificatesManagerPeriod();
@@ -168,7 +176,7 @@ public class DynamicCertificatesManager implements Runnable {
         return pair;
     }
 
-    private void loadCertificates(Map<String, SSLCertificateConfiguration> certificates) {
+    private void loadCertificates(Map<String, SSLCertificateConfiguration> certificates) throws ConfigurationNotValidException {
         try {
             ConcurrentHashMap _certificates = new ConcurrentHashMap();
             for (Entry<String, SSLCertificateConfiguration> e : certificates.entrySet()) {
@@ -176,6 +184,11 @@ public class DynamicCertificatesManager implements Runnable {
                 if (config.isDynamic()) {
                     String domain = config.getId(); // hostname or *.hostname
                     boolean wildcard = config.isWildcard();
+                    if (wildcard && (awsAccessKey == null || awsSecretKey == null)) {
+                        throw new ConfigurationNotValidException(
+                                "For ACME wildcards certificates AWS Route53 credentials has to be set"
+                        );
+                    }
                     boolean forceManual = MANUAL == config.getMode();
                     _certificates.put(domain, loadOrCreateDynamicCertificateForDomain(
                             domain, wildcard, forceManual, config.getDaysBeforeRenewal()

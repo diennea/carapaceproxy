@@ -98,6 +98,8 @@ public class ApplyConfigurationTest {
             {
                 Properties configuration = new Properties();
                 configuration.put("mapper.class", StaticEndpointMapper.class.getName());
+                configuration.put("aws.accesskey", "accesskey");
+                configuration.put("aws.secretkey", "secretkey");
                 server.configureAtBoot(new PropertiesConfigurationStore(configuration));
             }
 
