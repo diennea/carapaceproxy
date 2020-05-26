@@ -250,6 +250,7 @@ public class DynamicCertificatesManagerTest {
         Whitebox.setInternalState(man, ac);
 
         // Route53Cliente mocking
+        man.initAWSClient("access", "secret");
         Route53Client r53Client = mock(Route53Client.class);
         when(r53Client.createDnsChallengeForDomain(any(), any())).thenReturn(!runCase.startsWith("challenge_creation_failed"));
         when(r53Client.isDnsChallengeForDomainAvailable(any(), any())).thenReturn(!(runCase.equals("challenge_creation_failed_n_reboot") || runCase.equals("challenge_check_limit_expired")));
@@ -270,8 +271,6 @@ public class DynamicCertificatesManagerTest {
         props.setProperty("certificate.1.hostname", domain);
         props.setProperty("certificate.1.mode", "acme");
         props.setProperty("certificate.1.daysbeforerenewal", "0");
-        props.setProperty("aws.accesskey", "access");
-        props.setProperty("aws.secretkey", "secret");
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(configStore);
@@ -286,8 +285,8 @@ public class DynamicCertificatesManagerTest {
         man.run();
         verify(store, times(++saveCounter)).saveCertificate(any());
         if (runCase.equals("challenge_creation_failed")) {
-            // REQUEST_FAILED
-            assertThat(man.getStateOfCertificate(domain), is(REQUEST_FAILED));
+            // WAITING
+            assertThat(man.getStateOfCertificate(domain), is(WAITING));
         } else {
             // DNS_CHALLENGE_WAIT
             assertThat(man.getStateOfCertificate(domain), is(DNS_CHALLENGE_WAIT));

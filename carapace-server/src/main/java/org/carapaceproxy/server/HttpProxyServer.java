@@ -473,6 +473,12 @@ public class HttpProxyServer implements AutoCloseable {
         LOG.info("admin.advertised.host=" + adminAdvertisedServerHost);
         LOG.info("listener.offset.port=" + listenersOffsetPort);
         LOG.info("userrealm.class=" + userRealmClassname);
+
+        String awsAccessKey = properties.getString("aws.accesskey", null);
+        LOG.log(Level.INFO, "aws.accesskey={0}", awsAccessKey);
+        String awsSecretKey = properties.getString("aws.secretkey", null);
+        LOG.log(Level.INFO, "aws.secretkey={0}", awsSecretKey);
+        this.dynamicCertificatesManager.initAWSClient(awsAccessKey, awsSecretKey);
     }
 
     private static List<RequestFilter> buildFilters(RuntimeServerConfiguration currentConfiguration) throws ConfigurationNotValidException {

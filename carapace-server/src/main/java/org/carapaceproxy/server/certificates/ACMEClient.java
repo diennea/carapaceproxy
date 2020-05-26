@@ -78,10 +78,9 @@ public class ACMEClient {
      * {@link Session#getKeyIdentifier()} and store it somewhere. If you need to get access to your account later, reconnect to it via {@link Account#bind(Session, URI)} by using the stored location.
      *
      * @return
-     * @throws java.io.IOException
      * @throws org.shredzone.acme4j.exception.AcmeException
      */
-    public Login getLogin() throws IOException, AcmeException {
+    public Login getLogin() throws AcmeException {
         Session session = new Session(testingModeOn ? TESTING_CA : PRODUCTION_CA);
 
         return new AccountBuilder()
@@ -93,7 +92,7 @@ public class ACMEClient {
     /*
      * Methods for step-by-step certificate issuing
      */
-    public Order createOrderForDomain(String... domains) throws AcmeException, IOException {
+    public Order createOrderForDomain(String... domains) throws AcmeException {
         Account acct = getLogin().getAccount();
 
         return acct.newOrder().domains(domains).create();
@@ -167,7 +166,7 @@ public class ACMEClient {
         return challenge;
     }
 
-    public Status checkResponseForChallenge(Challenge challenge) throws AcmeException, IOException {
+    public Status checkResponseForChallenge(Challenge challenge) throws AcmeException {
         Status status = challenge.getStatus();
 
         // The authorization is already valid. No need to process a challenge.
@@ -200,7 +199,7 @@ public class ACMEClient {
         order.execute(csrb.getEncoded());
     }
 
-    public Status checkResponseForOrder(Order order) throws IOException, AcmeException {
+    public Status checkResponseForOrder(Order order) throws AcmeException {
         LOG.info("Certificate order checking for domain {}", order.getIdentifiers().get(0).getDomain());
         Status status = order.getStatus();
 
@@ -213,7 +212,7 @@ public class ACMEClient {
         return status;
     }
 
-    public Certificate fetchCertificateForOrder(Order order) throws AcmeException, IOException {
+    public Certificate fetchCertificateForOrder(Order order) throws AcmeException {
         Certificate certificate = order.getCertificate();
         String domain = order.getIdentifiers().get(0).getDomain();
         if (certificate == null) {

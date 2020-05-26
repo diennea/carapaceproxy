@@ -106,6 +106,8 @@ public class CertificatesTest extends UseAdminServer {
         config.put("config.type", "database");
         config.put("db.jdbc.url", "jdbc:herddb:localhost");
         config.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
+        config.put("aws.accesskey", "accesskey");
+        config.put("aws.secretkey", "secretkey");
         startServer(config);
 
         // Default certificate
