@@ -164,7 +164,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
             }
         });
         try {
-            connectFuture.get(parent.getConnectTimeout() * 2, TimeUnit.MILLISECONDS);
+            connectFuture.get(parent.getConnectTimeout() * 2, TimeUnit.MILLISECONDS); // we need to wait for socket timeout first and not for future one
         } catch (InterruptedException err) {
             Thread.currentThread().interrupt();
             throw new IOException(err);

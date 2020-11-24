@@ -58,7 +58,7 @@ public class RuntimeServerConfiguration {
     private int maxConnectionsPerEndpoint = 10;
     private int idleTimeout = 60000;
     private int stuckRequestTimeout = 120000;
-    private boolean backendsUnreachableOnStuckRequests = true;
+    private boolean backendsUnreachableOnStuckRequests = false;
     private int connectTimeout = 10000;
     private int borrowTimeout = 60000;
     private long cacheMaxSize = 0;

@@ -70,14 +70,16 @@ public class UnreachableBackendTest {
     @Rule
     public TemporaryFolder tmpDir = new TemporaryFolder();
 
-    private boolean variant = false;
+    private boolean testCaseTrue = false;
 
-    public UnreachableBackendTest(boolean variant) {
-        this.variant = variant;
+    public UnreachableBackendTest(boolean testCaseTrue) {
+        this.testCaseTrue = testCaseTrue;
     }
 
     @Test
     public void testWithUnreachableBackend() throws Exception {
+
+        final boolean useCache = testCaseTrue;
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -88,7 +90,7 @@ public class UnreachableBackendTest {
 
         int dummyport = wireMockRule.port();
         wireMockRule.stop();
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, variant);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
         ConnectionsManagerStats stats;
@@ -116,12 +118,14 @@ public class UnreachableBackendTest {
     @Test
     public void testEmptyResponse() throws Exception {
 
+        final boolean useCache = testCaseTrue;
+
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withFault(Fault.EMPTY_RESPONSE)));
 
         int dummyport = wireMockRule.port();
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, variant);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
         ConnectionsManagerStats stats;
@@ -161,12 +165,14 @@ public class UnreachableBackendTest {
     @Test
     public void testConnectionResetByPeer() throws Exception {
 
+        final boolean useCache = testCaseTrue;
+
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withFault(Fault.CONNECTION_RESET_BY_PEER)));
 
         int dummyport = wireMockRule.port();
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, variant);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
         ConnectionsManagerStats stats;
@@ -195,12 +201,14 @@ public class UnreachableBackendTest {
     @Test
     public void testNonHttpResponseThenClose() throws Exception {
 
+        final boolean useCache = testCaseTrue;
+
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withFault(Fault.RANDOM_DATA_THEN_CLOSE)));
 
         int dummyport = wireMockRule.port();
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, variant);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
         ConnectionsManagerStats stats;
@@ -227,7 +235,7 @@ public class UnreachableBackendTest {
                         + "    </body>        \n"
                         + "</html>\n", resp.getBodyString());
             }
-            assertFalse(server.getBackendHealthManager().isAvailable(key.getHostPort()));
+            assertTrue(server.getBackendHealthManager().isAvailable(key.getHostPort()));
             TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
         }
@@ -236,7 +244,7 @@ public class UnreachableBackendTest {
     @Test
     public void testStuckRequest() throws Exception {
 
-        final boolean backendsUnreachableOnStuckRequests = variant;
+        final boolean backendsUnreachableOnStuckRequests = testCaseTrue;
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -296,7 +304,7 @@ public class UnreachableBackendTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /good-index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                if (variant) {
+                if (testCaseTrue) {
                     assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
                     assertEquals("<html>\n"
                             + "    <body>\n"
