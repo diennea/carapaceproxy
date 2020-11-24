@@ -67,6 +67,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     private final GenericKeyedObjectPool<EndpointKey, EndpointConnectionImpl> connections;
     private int idleTimeout;
     private int stuckRequestTimeout;
+    private boolean backendsUnreachableOnStuckRequests;
     private int connectTimeout;
     private int borrowTimeout;
     private final ConcurrentHashMap<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
@@ -173,7 +174,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
                 RequestHandler requestHandler = entry.getValue();
                 requestHandler.failIfStuck(now, stuckRequestTimeout, () -> {
                     EndpointConnection connectionToEndpoint = requestHandler.getConnectionToEndpoint();
-                    if (connectionToEndpoint != null) {
+                    if (connectionToEndpoint != null && backendsUnreachableOnStuckRequests) {
                         backendHealthManager.reportBackendUnreachable(
                                 connectionToEndpoint.getKey().getHostPort(), now,
                                 "a request to " + requestHandler.getUri() + " for user " + requestHandler.getUserId() + " appears stuck");
@@ -196,6 +197,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         this.stuckRequestTimeout = configuration.getStuckRequestTimeout();
         this.connectTimeout = configuration.getConnectTimeout();
         this.borrowTimeout = configuration.getBorrowTimeout();
+        this.backendsUnreachableOnStuckRequests = configuration.isBackendsUnreachableOnStuckRequests();
         int maxConnectionsPerEndpoint = configuration.getMaxConnectionsPerEndpoint();
         connections.setMaxTotalPerKey(maxConnectionsPerEndpoint);
         connections.setMaxIdlePerKey(maxConnectionsPerEndpoint);
@@ -219,7 +221,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
 
         GenericKeyedObjectPoolConfig config = new GenericKeyedObjectPoolConfig();
-        config.setTestOnReturn(true);
+        config.setTestOnReturn(false); // avoid connections checking/recreation when returned to the pool.
         config.setTestOnBorrow(true);
         config.setTestWhileIdle(true);
         config.setBlockWhenExhausted(true);

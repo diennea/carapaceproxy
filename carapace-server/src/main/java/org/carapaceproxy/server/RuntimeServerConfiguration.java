@@ -58,6 +58,7 @@ public class RuntimeServerConfiguration {
     private int maxConnectionsPerEndpoint = 10;
     private int idleTimeout = 60000;
     private int stuckRequestTimeout = 120000;
+    private boolean backendsUnreachableOnStuckRequests = true;
     private int connectTimeout = 10000;
     private int borrowTimeout = 60000;
     private long cacheMaxSize = 0;
@@ -167,6 +168,14 @@ public class RuntimeServerConfiguration {
         this.stuckRequestTimeout = stuckRequestTimeout;
     }
 
+    public boolean isBackendsUnreachableOnStuckRequests() {
+        return backendsUnreachableOnStuckRequests;
+    }
+
+    public void setBackendsUnreachableOnStuckRequests(boolean backendsUnreachableOnStuckRequests) {
+        this.backendsUnreachableOnStuckRequests = backendsUnreachableOnStuckRequests;
+    }
+
     public int getConnectTimeout() {
         return connectTimeout;
     }
@@ -233,11 +242,13 @@ public class RuntimeServerConfiguration {
             throw new ConfigurationNotValidException("Invalid value '" + this.idleTimeout + "' for connectionsmanager.idletimeout");
         }
         this.stuckRequestTimeout = properties.getInt("connectionsmanager.stuckrequesttimeout", stuckRequestTimeout);
+        this.backendsUnreachableOnStuckRequests = properties.getBoolean("connectionsmanager.backendsunreachableonstuckrequests", backendsUnreachableOnStuckRequests);
         this.connectTimeout = properties.getInt("connectionsmanager.connecttimeout", connectTimeout);
         this.borrowTimeout = properties.getInt("connectionsmanager.borrowtimeout", borrowTimeout);
         LOG.info("connectionsmanager.maxconnectionsperendpoint=" + maxConnectionsPerEndpoint);
         LOG.info("connectionsmanager.idletimeout=" + idleTimeout);
         LOG.info("connectionsmanager.stuckrequesttimeout=" + stuckRequestTimeout);
+        LOG.info("connectionsmanager.backendsunreachableonstuckrequests=" + backendsUnreachableOnStuckRequests);
         LOG.info("connectionsmanager.connecttimeout=" + connectTimeout);
         LOG.info("connectionsmanager.borrowtimeout=" + borrowTimeout);
 
