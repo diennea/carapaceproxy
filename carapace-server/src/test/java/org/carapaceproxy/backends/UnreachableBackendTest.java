@@ -60,7 +60,7 @@ public class UnreachableBackendTest {
     @Parameters
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][]{
-            {false}
+            {true}, {false}
         });
     }
 
@@ -76,7 +76,7 @@ public class UnreachableBackendTest {
         this.variant = variant;
     }
 
-   // @Test
+    @Test
     public void testWithUnreachableBackend() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
@@ -113,7 +113,7 @@ public class UnreachableBackendTest {
         }
     }
 
-  //  @Test
+    @Test
     public void testEmptyResponse() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
@@ -158,7 +158,7 @@ public class UnreachableBackendTest {
         }
     }
 
-  //  @Test
+    @Test
     public void testConnectionResetByPeer() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
@@ -192,7 +192,7 @@ public class UnreachableBackendTest {
         }
     }
 
-  //  @Test
+    @Test
     public void testNonHttpResponseThenClose() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
@@ -236,6 +236,8 @@ public class UnreachableBackendTest {
     @Test
     public void testStuckRequest() throws Exception {
 
+        final boolean backendsUnreachableOnStuckRequests = variant;
+
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withFault(Fault.EMPTY_RESPONSE)));
@@ -260,13 +262,13 @@ public class UnreachableBackendTest {
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.newFolder());) {
             Properties properties = new Properties();
             properties.put("connectionsmanager.stuckrequesttimeout", "100"); // ms
-            properties.put("connectionsmanager.backendsunreachableonstuckrequests", variant);
+            properties.put("connectionsmanager.backendsunreachableonstuckrequests", backendsUnreachableOnStuckRequests + "");
             // configure resets all listeners configurations
             server.configureAtBoot(new PropertiesConfigurationStore(properties));
             server.addListener(new NetworkListenerConfiguration("localhost", 0));
             server.setMapper(mapper);
             assertEquals(100, server.getCurrentConfiguration().getStuckRequestTimeout());
-            assertEquals(variant, server.getCurrentConfiguration().isBackendsUnreachableOnStuckRequests());
+            assertEquals(backendsUnreachableOnStuckRequests, server.getCurrentConfiguration().isBackendsUnreachableOnStuckRequests());
             server.start();
             stats = server.getConnectionsManager().getStats();
             int port = server.getLocalPort();
@@ -288,7 +290,7 @@ public class UnreachableBackendTest {
             Double value = ((ConnectionsManagerImpl) server.getConnectionsManager()).getPENDING_REQUESTS_GAUGE().get();
             assertEquals(0, value.intValue());
 
-            assertEquals(variant, !server.getBackendHealthManager().isAvailable(key.getHostPort()));
+            assertEquals(backendsUnreachableOnStuckRequests, !server.getBackendHealthManager().isAvailable(key.getHostPort()));
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /good-index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
@@ -306,9 +308,6 @@ public class UnreachableBackendTest {
                     assertEquals("it <b>works</b> !!", resp.getBodyString());
                 }
             }
-
-
-
         }
     }
 
