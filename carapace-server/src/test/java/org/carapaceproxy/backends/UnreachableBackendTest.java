@@ -25,6 +25,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.junit.Assert.assertEquals;
 import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.util.Arrays;
@@ -36,9 +37,7 @@ import org.carapaceproxy.client.impl.ConnectionsManagerImpl;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
-import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import org.carapaceproxy.utils.RawHttpClient;
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import org.junit.Rule;
@@ -57,7 +56,7 @@ public class UnreachableBackendTest {
             {true /* useCache = true */}, {false /* useCache = false */}
         });
     }
-    
+
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
 
@@ -105,7 +104,7 @@ public class UnreachableBackendTest {
             TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
         }
-    }   
+    }
 
     @Test
     public void testEmptyResponse() throws Exception {
@@ -145,8 +144,8 @@ public class UnreachableBackendTest {
                         + "</html>\n", resp.getBodyString());
             }
             TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-            
-            Double value = ((ConnectionsManagerImpl) server.getConnectionsManager()).getPENDING_REQUESTS_GAUGE().get();            
+
+            Double value = ((ConnectionsManagerImpl) server.getConnectionsManager()).getPENDING_REQUESTS_GAUGE().get();
             assertEquals(0, value.intValue());
 
         }
@@ -221,10 +220,9 @@ public class UnreachableBackendTest {
                         + "    </body>        \n"
                         + "</html>\n", resp.getBodyString());
             }
-            assertFalse(server.getBackendHealthManager().isAvailable(key.getHostPort()));
+            assertTrue(server.getBackendHealthManager().isAvailable(key.getHostPort()));
             TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
         }
     }
-
 }
