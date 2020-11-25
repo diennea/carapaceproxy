@@ -25,7 +25,6 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.carapaceproxy.server.RequestHandler.PROPERTY_URI;
 import static org.junit.Assert.assertEquals;
 import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
@@ -41,12 +40,6 @@ import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import org.carapaceproxy.server.config.ActionConfiguration;
-import org.carapaceproxy.server.config.BackendConfiguration;
-import org.carapaceproxy.server.config.DirectorConfiguration;
-import org.carapaceproxy.server.config.RouteConfiguration;
-import org.carapaceproxy.server.mapper.StandardEndpointMapper;
-import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -60,7 +53,7 @@ public class UnreachableBackendTest {
     @Parameters
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][]{
-            {true}, {false}
+            {true /* useCache = true */}, {false /* useCache = false */}
         });
     }
 
@@ -70,16 +63,14 @@ public class UnreachableBackendTest {
     @Rule
     public TemporaryFolder tmpDir = new TemporaryFolder();
 
-    private boolean testCaseTrue = false;
+    private boolean useCache = false;
 
-    public UnreachableBackendTest(boolean testCaseTrue) {
-        this.testCaseTrue = testCaseTrue;
+    public UnreachableBackendTest(boolean useCache) {
+        this.useCache = useCache;
     }
 
     @Test
     public void testWithUnreachableBackend() throws Exception {
-
-        final boolean useCache = testCaseTrue;
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -117,8 +108,6 @@ public class UnreachableBackendTest {
 
     @Test
     public void testEmptyResponse() throws Exception {
-
-        final boolean useCache = testCaseTrue;
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -165,8 +154,6 @@ public class UnreachableBackendTest {
     @Test
     public void testConnectionResetByPeer() throws Exception {
 
-        final boolean useCache = testCaseTrue;
-
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withFault(Fault.CONNECTION_RESET_BY_PEER)));
@@ -200,8 +187,6 @@ public class UnreachableBackendTest {
 
     @Test
     public void testNonHttpResponseThenClose() throws Exception {
-
-        final boolean useCache = testCaseTrue;
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -240,83 +225,4 @@ public class UnreachableBackendTest {
 
         }
     }
-
-    @Test
-    public void testStuckRequest() throws Exception {
-
-        final boolean backendsUnreachableOnStuckRequests = testCaseTrue;
-
-        stubFor(get(urlEqualTo("/index.html"))
-                .willReturn(aResponse()
-                        .withFault(Fault.EMPTY_RESPONSE)));
-
-        stubFor(get(urlEqualTo("/good-index.html"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "text/html")
-                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                        .withBody("it <b>works</b> !!")));
-
-        final int theport =  wireMockRule.port();
-        EndpointKey key = new EndpointKey("localhost", theport);
-
-        StandardEndpointMapper mapper = new StandardEndpointMapper();
-        mapper.addBackend(new BackendConfiguration("backend-a", "localhost", theport, "/"));
-        mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
-        mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1));
-        mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index.html.*")));
-
-        ConnectionsManagerStats stats;
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.newFolder());) {
-            Properties properties = new Properties();
-            properties.put("connectionsmanager.stuckrequesttimeout", "100"); // ms
-            properties.put("connectionsmanager.backendsunreachableonstuckrequests", backendsUnreachableOnStuckRequests + "");
-            // configure resets all listeners configurations
-            server.configureAtBoot(new PropertiesConfigurationStore(properties));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0));
-            server.setMapper(mapper);
-            assertEquals(100, server.getCurrentConfiguration().getStuckRequestTimeout());
-            assertEquals(backendsUnreachableOnStuckRequests, server.getCurrentConfiguration().isBackendsUnreachableOnStuckRequests());
-            server.start();
-            stats = server.getConnectionsManager().getStats();
-            int port = server.getLocalPort();
-            assertTrue(port > 0);
-
-            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-                String s = resp.toString();
-                System.out.println("s:" + s);
-                assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
-                assertEquals("<html>\n"
-                        + "    <body>\n"
-                        + "        An internal error occurred\n"
-                        + "    </body>        \n"
-                        + "</html>\n", resp.getBodyString());
-            }
-            TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
-            Double value = ((ConnectionsManagerImpl) server.getConnectionsManager()).getPENDING_REQUESTS_GAUGE().get();
-            assertEquals(0, value.intValue());
-
-            assertEquals(backendsUnreachableOnStuckRequests, !server.getBackendHealthManager().isAvailable(key.getHostPort()));
-
-            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                RawHttpClient.HttpResponse resp = client.executeRequest("GET /good-index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-                String s = resp.toString();
-                System.out.println("s:" + s);
-                if (testCaseTrue) {
-                    assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
-                    assertEquals("<html>\n"
-                            + "    <body>\n"
-                            + "        An internal error occurred\n"
-                            + "    </body>        \n"
-                            + "</html>\n", resp.getBodyString());
-                } else {
-                    assertEquals("HTTP/1.1 200 OK\r\n", resp.getStatusLine());
-                    assertEquals("it <b>works</b> !!", resp.getBodyString());
-                }
-            }
-        }
-    }
-
 }
