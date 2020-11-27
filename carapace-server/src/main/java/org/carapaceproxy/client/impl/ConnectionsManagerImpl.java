@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -86,9 +87,14 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
             "stuck_requests_total",
             "stuck requests, this requests will be killed").register();
 
+    private static final int CONNECTIONS_MANAGER_THREADS_POOL_SIZE = Integer.getInteger("carapace.connectionsmanager.threadspool.size", 10);
+    private final ExecutorService threadsPool;
+
     public void returnConnection(EndpointConnectionImpl con) {
-        LOG.log(Level.FINE, "returnConnection:{0}", con);
-        connections.returnObject(con.getKey(), con);
+        threadsPool.submit(() -> {
+            LOG.log(Level.FINE, "returnConnection:{0}", con);
+            connections.returnObject(con.getKey(), con);
+        });
     }
 
     public int getConnectTimeout() {
@@ -219,6 +225,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     public ConnectionsManagerImpl(RuntimeServerConfiguration configuration, BackendHealthManager backendHealthManager) {
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
+        this.threadsPool = Executors.newFixedThreadPool(CONNECTIONS_MANAGER_THREADS_POOL_SIZE);
 
         GenericKeyedObjectPoolConfig config = new GenericKeyedObjectPoolConfig();
         config.setTestOnReturn(false); // avoid connections checking/recreation when returned to the pool.
@@ -227,7 +234,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         config.setBlockWhenExhausted(true);
         config.setJmxEnabled(false);
         group = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
-        eventLoopForOutboundConnections =  Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
+        eventLoopForOutboundConnections = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
         connections = new GenericKeyedObjectPool<>(new ConnectionsFactory(), config);
         this.backendHealthManager = backendHealthManager;
         applyNewConfiguration(configuration);
@@ -259,14 +266,14 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
                 });
             }
             throw new EndpointNotAvailableException("Too many connections to " + key
-                    + " and/or cannot create a new connection ("+ex.getMessage()+")", ex);
+                    + " and/or cannot create a new connection (" + ex.getMessage() + ")", ex);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
-            throw new EndpointNotAvailableException("Interrupted while borrowing a connection from the pool for key "+key, ex);
+            throw new EndpointNotAvailableException("Interrupted while borrowing a connection from the pool for key " + key, ex);
         } catch (ConnectException ex) {
-            throw new EndpointNotAvailableException("Endpoint error while borrowing a connection from the pool for key "+key, ex);
+            throw new EndpointNotAvailableException("Endpoint error while borrowing a connection from the pool for key " + key, ex);
         } catch (Exception ex) {
-            LOG.log(Level.SEVERE,"Internal error while borrowing a connection for " + key, ex);
+            LOG.log(Level.SEVERE, "Internal error while borrowing a connection for " + key, ex);
             throw new EndpointNotAvailableException(ex);
         }
     }
