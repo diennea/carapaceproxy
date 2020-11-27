@@ -87,11 +87,13 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
             "stuck_requests_total",
             "stuck requests, this requests will be killed").register();
 
-    private static final int CONNECTIONS_MANAGER_THREADS_POOL_SIZE = Integer.getInteger("carapace.connectionsmanager.threadspool.size", 10);
-    private final ExecutorService threadsPool;
+    private static final int CONNECTIONS_MANAGER_RETURN_CONNECTION_THREAD_POOL_SIZE = Integer.getInteger("carapace.connectionsmanager.returnconnectionthreadpool.size", 10);
+    private final ExecutorService returnConnectionThreadPool;
 
     public void returnConnection(EndpointConnectionImpl con) {
-        threadsPool.submit(() -> {
+        // We need to perform returnObject in dedicated thread in order to avoid deadlock in Netty evenLoop
+        // in case of connection re-creation
+        returnConnectionThreadPool.submit(() -> {
             LOG.log(Level.FINE, "returnConnection:{0}", con);
             connections.returnObject(con.getKey(), con);
         });
@@ -225,7 +227,8 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     public ConnectionsManagerImpl(RuntimeServerConfiguration configuration, BackendHealthManager backendHealthManager) {
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
-        this.threadsPool = Executors.newFixedThreadPool(CONNECTIONS_MANAGER_THREADS_POOL_SIZE);
+        LOG.log(Level.INFO, "Reading carapace.connectionsmanager.returnconnectionthreadpool.size=" + CONNECTIONS_MANAGER_RETURN_CONNECTION_THREAD_POOL_SIZE);
+        this.returnConnectionThreadPool = Executors.newFixedThreadPool(CONNECTIONS_MANAGER_RETURN_CONNECTION_THREAD_POOL_SIZE);
 
         GenericKeyedObjectPoolConfig config = new GenericKeyedObjectPoolConfig();
         config.setTestOnReturn(false); // avoid connections checking/recreation when returned to the pool.
