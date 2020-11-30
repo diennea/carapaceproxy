@@ -121,7 +121,6 @@ public class ConnectionPoolTest {
         }
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 
     @Test
