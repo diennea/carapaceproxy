@@ -20,6 +20,7 @@
 package org.carapaceproxy.client.impl;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.util.concurrent.MoreExecutors;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollEventLoopGroup;
@@ -33,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -88,12 +90,12 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
             "stuck requests, this requests will be killed").register();
 
     private static final int CONNECTIONS_MANAGER_RETURN_CONNECTION_THREAD_POOL_SIZE = Integer.getInteger("carapace.connectionsmanager.returnconnectionthreadpool.size", 10);
-    private final ExecutorService returnConnectionThreadPool;
+    private final Executor returnConnectionThreadPool;
 
     public void returnConnection(EndpointConnectionImpl con) {
         // We need to perform returnObject in dedicated thread in order to avoid deadlock in Netty evenLoop
         // in case of connection re-creation
-        returnConnectionThreadPool.submit(() -> {
+        returnConnectionThreadPool.execute(() -> {
             LOG.log(Level.FINE, "returnConnection:{0}", con);
             connections.returnObject(con.getKey(), con);
         });
@@ -228,7 +230,9 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     public ConnectionsManagerImpl(RuntimeServerConfiguration configuration, BackendHealthManager backendHealthManager) {
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
         LOG.log(Level.INFO, "Reading carapace.connectionsmanager.returnconnectionthreadpool.size=" + CONNECTIONS_MANAGER_RETURN_CONNECTION_THREAD_POOL_SIZE);
-        this.returnConnectionThreadPool = Executors.newFixedThreadPool(CONNECTIONS_MANAGER_RETURN_CONNECTION_THREAD_POOL_SIZE);
+        this.returnConnectionThreadPool = CONNECTIONS_MANAGER_RETURN_CONNECTION_THREAD_POOL_SIZE > 0
+                ? Executors.newFixedThreadPool(CONNECTIONS_MANAGER_RETURN_CONNECTION_THREAD_POOL_SIZE)
+                : MoreExecutors.directExecutor();
 
         GenericKeyedObjectPoolConfig config = new GenericKeyedObjectPoolConfig();
         config.setTestOnReturn(false); // avoid connections checking/recreation when returned to the pool.
@@ -313,12 +317,15 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         group.shutdownGracefully();
         eventLoopForOutboundConnections.shutdownGracefully();
 
-        try {
-            returnConnectionThreadPool.shutdown();
-            returnConnectionThreadPool.awaitTermination(10, TimeUnit.SECONDS);
-        } catch (InterruptedException ex) {
-            LOG.severe("Error wating for returnConnectionThreadPool termination: " + ex);
-            Thread.currentThread().interrupt();
+        if (returnConnectionThreadPool instanceof ExecutorService) {
+            try {
+                ExecutorService exe = (ExecutorService) returnConnectionThreadPool;
+                exe.shutdown();
+                exe.awaitTermination(10, TimeUnit.SECONDS);
+            } catch (InterruptedException ex) {
+                LOG.severe("Error wating for returnConnectionThreadPool termination: " + ex);
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
