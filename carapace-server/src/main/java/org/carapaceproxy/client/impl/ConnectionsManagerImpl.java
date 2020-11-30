@@ -312,6 +312,13 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         connections.close();
         group.shutdownGracefully();
         eventLoopForOutboundConnections.shutdownGracefully();
+
+        try {
+            returnConnectionThreadPool.shutdown();
+            returnConnectionThreadPool.awaitTermination(10, TimeUnit.SECONDS);
+        } catch (InterruptedException ex) {
+            LOG.severe("Error wating for returnConnectionThreadPool termination: " + ex);
+        }
     }
 
     final ConnectionsManagerStats stats = new ConnectionsManagerStats() {

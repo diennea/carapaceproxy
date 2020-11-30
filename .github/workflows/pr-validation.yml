@@ -37,6 +37,6 @@ jobs:
           key: 'cache'
           restore-keys: 'cache'
       - name: 'Build with Maven'
-        run: mvn verify -Pproduction -Dmaven.test.redirectTestOutputToFile=true -Dsurefire.rerunFailingTestsCount=5
+        run: mvn verify -Pproduction -Dmaven.test.redirectTestOutputToFile=true -Dsurefire.rerunFailingTestsCount=3
       - name: 'Remove Snapshots Before Caching'
         run: find ~/.m2 -name '*SNAPSHOT' | xargs rm -Rf
