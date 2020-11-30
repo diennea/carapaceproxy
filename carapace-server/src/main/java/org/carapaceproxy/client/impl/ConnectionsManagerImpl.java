@@ -318,6 +318,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
             returnConnectionThreadPool.awaitTermination(10, TimeUnit.SECONDS);
         } catch (InterruptedException ex) {
             LOG.severe("Error wating for returnConnectionThreadPool termination: " + ex);
+            Thread.currentThread().interrupt();
         }
     }
 
