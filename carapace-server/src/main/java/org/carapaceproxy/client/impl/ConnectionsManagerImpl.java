@@ -20,6 +20,7 @@
 package org.carapaceproxy.client.impl;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.util.concurrent.MoreExecutors;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollEventLoopGroup;
@@ -33,6 +34,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -86,9 +89,16 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
             "stuck_requests_total",
             "stuck requests, this requests will be killed").register();
 
+    private static final int CONNECTIONS_MANAGER_RETURN_CONNECTION_THREAD_POOL_SIZE = Integer.getInteger("carapace.connectionsmanager.returnconnectionthreadpool.size", 10);
+    private final Executor returnConnectionThreadPool;
+
     public void returnConnection(EndpointConnectionImpl con) {
-        LOG.log(Level.FINE, "returnConnection:{0}", con);
-        connections.returnObject(con.getKey(), con);
+        // We need to perform returnObject in dedicated thread in order to avoid deadlock in Netty evenLoop
+        // in case of connection re-creation
+        returnConnectionThreadPool.execute(() -> {
+            LOG.log(Level.FINE, "returnConnection:{0}", con);
+            connections.returnObject(con.getKey(), con);
+        });
     }
 
     public int getConnectTimeout() {
@@ -219,6 +229,10 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     public ConnectionsManagerImpl(RuntimeServerConfiguration configuration, BackendHealthManager backendHealthManager) {
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
+        LOG.log(Level.INFO, "Reading carapace.connectionsmanager.returnconnectionthreadpool.size=" + CONNECTIONS_MANAGER_RETURN_CONNECTION_THREAD_POOL_SIZE);
+        this.returnConnectionThreadPool = CONNECTIONS_MANAGER_RETURN_CONNECTION_THREAD_POOL_SIZE > 0
+                ? Executors.newFixedThreadPool(CONNECTIONS_MANAGER_RETURN_CONNECTION_THREAD_POOL_SIZE)
+                : MoreExecutors.directExecutor();
 
         GenericKeyedObjectPoolConfig config = new GenericKeyedObjectPoolConfig();
         config.setTestOnReturn(false); // avoid connections checking/recreation when returned to the pool.
@@ -227,7 +241,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         config.setBlockWhenExhausted(true);
         config.setJmxEnabled(false);
         group = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
-        eventLoopForOutboundConnections =  Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
+        eventLoopForOutboundConnections = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
         connections = new GenericKeyedObjectPool<>(new ConnectionsFactory(), config);
         this.backendHealthManager = backendHealthManager;
         applyNewConfiguration(configuration);
@@ -259,14 +273,14 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
                 });
             }
             throw new EndpointNotAvailableException("Too many connections to " + key
-                    + " and/or cannot create a new connection ("+ex.getMessage()+")", ex);
+                    + " and/or cannot create a new connection (" + ex.getMessage() + ")", ex);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
-            throw new EndpointNotAvailableException("Interrupted while borrowing a connection from the pool for key "+key, ex);
+            throw new EndpointNotAvailableException("Interrupted while borrowing a connection from the pool for key " + key, ex);
         } catch (ConnectException ex) {
-            throw new EndpointNotAvailableException("Endpoint error while borrowing a connection from the pool for key "+key, ex);
+            throw new EndpointNotAvailableException("Endpoint error while borrowing a connection from the pool for key " + key, ex);
         } catch (Exception ex) {
-            LOG.log(Level.SEVERE,"Internal error while borrowing a connection for " + key, ex);
+            LOG.log(Level.SEVERE, "Internal error while borrowing a connection for " + key, ex);
             throw new EndpointNotAvailableException(ex);
         }
     }
@@ -302,6 +316,17 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         connections.close();
         group.shutdownGracefully();
         eventLoopForOutboundConnections.shutdownGracefully();
+
+        if (returnConnectionThreadPool instanceof ExecutorService) {
+            try {
+                ExecutorService exe = (ExecutorService) returnConnectionThreadPool;
+                exe.shutdown();
+                exe.awaitTermination(10, TimeUnit.SECONDS);
+            } catch (InterruptedException ex) {
+                LOG.severe("Error wating for returnConnectionThreadPool termination: " + ex);
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 
     final ConnectionsManagerStats stats = new ConnectionsManagerStats() {
