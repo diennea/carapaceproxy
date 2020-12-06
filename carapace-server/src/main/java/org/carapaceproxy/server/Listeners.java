@@ -236,7 +236,7 @@ public class Listeners {
                         ClientConnectionHandler connHandler = new ClientConnectionHandler(parent.getMapper(),
                                 parent.getConnectionsManager(),
                                 parent.getFilters(), parent.getCache(),
-                                channel.remoteAddress(), parent.getStaticContentsManager(),
+                                channel.remoteAddress(),channel.localAddress().getAddress().getHostAddress(), parent.getStaticContentsManager(),
                                 () -> CURRENT_CONNECTED_CLIENTS_GAUGE.dec(),
                                 parent.getBackendHealthManager(),
                                 parent.getRequestsLogger(),

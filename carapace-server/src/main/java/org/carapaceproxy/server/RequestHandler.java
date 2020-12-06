@@ -157,7 +157,7 @@ public class RequestHandler implements MatchingContext {
     InetSocketAddress getLocalAddress() {
         return (InetSocketAddress) channelToClient.channel().localAddress();
     }
-
+    
     private void fireRequestFinished() {
         Runnable handler = onRequestFinished.getAndSet(null);
         if (handler != null) {
@@ -570,7 +570,7 @@ public class RequestHandler implements MatchingContext {
         connectionToClient.lastHttpContentSent(this);
         requestsLogger.logRequest(this);
     }
-
+    
     @Override
     public int hashCode() {
         int hash = 7;
@@ -822,6 +822,7 @@ public class RequestHandler implements MatchingContext {
     public static final String PROPERTY_HEADERS = "request.headers.";
     private static final int HEADERS_SUBSTRING_INDEX = PROPERTY_HEADERS.length();
     public static final String PROPERTY_LISTENER_ADDRESS = "listener.address";
+    public static final String PROPERTY_SERVER_IP = "request.serverip";
 
     @Override
     public String getProperty(String name) {
@@ -836,6 +837,8 @@ public class RequestHandler implements MatchingContext {
                     return request.method().name();
                 case PROPERTY_CONTENT_TYPE:
                     return request.headers().get(javax.ws.rs.core.HttpHeaders.CONTENT_TYPE, "");
+                case PROPERTY_SERVER_IP:
+                    return connectionToClient.getServerAddress();                    
                 case PROPERTY_LISTENER_ADDRESS: {
                     return connectionToClient.getListenerHost() + ":" + connectionToClient.getListenerPort();
                 }
