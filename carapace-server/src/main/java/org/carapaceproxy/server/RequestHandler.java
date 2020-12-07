@@ -838,7 +838,8 @@ public class RequestHandler implements MatchingContext {
                 case PROPERTY_CONTENT_TYPE:
                     return request.headers().get(javax.ws.rs.core.HttpHeaders.CONTENT_TYPE, "");
                 case PROPERTY_SERVER_IP:
-                    return connectionToClient.getServerAddress();                    
+                    InetSocketAddress address = (InetSocketAddress) connectionToClient.getServerAddress();
+                    return address.getAddress().getHostAddress();
                 case PROPERTY_LISTENER_ADDRESS: {
                     return connectionToClient.getListenerHost() + ":" + connectionToClient.getListenerPort();
                 }

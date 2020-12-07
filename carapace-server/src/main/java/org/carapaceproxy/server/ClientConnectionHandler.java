@@ -74,7 +74,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     private final boolean secure; // connection bind to https
     private String sslProtocol;
     private String cipherSuite;
-    final String serverAddress;
+    final SocketAddress serverAddress;
 
     public ClientConnectionHandler(
             EndpointMapper mapper,
@@ -82,7 +82,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             List<RequestFilter> filters,
             ContentsCache cache,
             SocketAddress clientAddress,
-            String serverAddress,
+            SocketAddress serverAddress,
             StaticContentsManager staticContentsManager,
             Runnable onClientDisconnected,
             BackendHealthManager backendHealthManager,
@@ -112,7 +112,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         return clientAddress;
     }
     
-    public String getServerAddress(){
+    public SocketAddress getServerAddress(){
         return serverAddress;
     }
 

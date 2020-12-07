@@ -23,6 +23,8 @@ import herddb.utils.TestUtils;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpVersion;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import javax.ws.rs.core.HttpHeaders;
 import org.carapaceproxy.server.ClientConnectionHandler;
 import org.carapaceproxy.server.RequestHandler;
@@ -224,12 +226,13 @@ public class RequestMatcherTest {
         request.headers().add(HttpHeaders.COOKIE, "test-cookie");
         request.headers().add(HttpHeaders.CONTENT_DISPOSITION, "inline");
         request.headers().add(HttpHeaders.CONTENT_TYPE, "text/html");
-
+        SocketAddress socketAddress = new InetSocketAddress("127.0.0.1", 0);
+        
         ClientConnectionHandler cch = mock(ClientConnectionHandler.class);
         when(cch.isSecure()).thenReturn(false);
         when(cch.getListenerHost()).thenReturn("localhost");
         when(cch.getListenerPort()).thenReturn(8080);
-        when(cch.getServerAddress()).thenReturn("127.0.0.1");
+        when(cch.getServerAddress()).thenReturn(socketAddress);
 
         RequestHandler handler = new RequestHandler(0, request, null, cch, null, null, null, null);
 
@@ -297,6 +300,10 @@ public class RequestMatcherTest {
         {
             RequestMatcher matcher = new RequestMatchParser("request.serverip = \"127.0.0.1\"").parse();
             assertTrue(matcher.matches(handler));
+        }
+        {
+            RequestMatcher matcher = new RequestMatchParser("request.serverip = \"127.0.1.1\"").parse();
+            assertFalse(matcher.matches(handler));
         }
     }
 }
