@@ -148,18 +148,20 @@ public class RequestsLogger implements Runnable, Closeable {
                 // File opening will be retried at next cycle start
                 
                 //Zip old file
-                gzipFile(newAccessLogPath.getPath(), newAccessLogPath.getPath()+".gzip");
+                gzipFile(newAccessLogPath.getPath(), newAccessLogPath.getPath()+".gzip", true);
             }
         }
     }
     
-    private void gzipFile(String source_filepath, String destination_zip_filepath) {
+    private void gzipFile(String source_filepath, String destination_zip_filepath, boolean deleteSource) {
         byte[] buffer = new byte[1024];
+        File source = new File(source_filepath);
+        File dest = new File(destination_zip_filepath);
         
         try {
-            FileOutputStream fileOutputStream = new FileOutputStream(destination_zip_filepath);
+            FileOutputStream fileOutputStream = new FileOutputStream(dest);
             try (GZIPOutputStream gzipOutputStream = new GZIPOutputStream(fileOutputStream)) {
-                try (FileInputStream fileInput = new FileInputStream(source_filepath)) {
+                try (FileInputStream fileInput = new FileInputStream(source)) {
                     int bytes_read;
                     
                     while ((bytes_read = fileInput.read(buffer)) > 0) {
@@ -168,6 +170,11 @@ public class RequestsLogger implements Runnable, Closeable {
                 }
                 gzipOutputStream.finish();
                 gzipOutputStream.close();
+                
+                //delete uncompressed file
+                if(deleteSource && dest.exists()){
+                    source.delete();
+                }
             }
             
             if(verbose){
