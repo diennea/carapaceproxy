@@ -23,6 +23,8 @@ import com.google.common.annotations.VisibleForTesting;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import java.io.BufferedWriter;
 import java.io.Closeable;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -36,6 +38,8 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.zip.GZIPOutputStream;
+import org.apache.commons.io.FileUtils;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.stringtemplate.v4.NoIndentWriter;
 import org.stringtemplate.v4.ST;
@@ -126,7 +130,54 @@ public class RequestsLogger implements Runnable, Closeable {
             os = null;
         }
     }
-
+    
+    private void rotateAccessLogFile() throws IOException {
+        String accesslogPath =  this.currentConfiguration.getAccessLogPath();
+        long maxSize = this.currentConfiguration.getAccessLogMaxSize();
+        
+        File file = new File(accesslogPath);
+        
+        if(file.exists()){            
+            long currentSize = file.length();
+            
+            if( currentSize >= maxSize){
+                LOG.info("Maximum access log size reached.");
+                File newAccessLogPath = new File(accesslogPath + "-" + System.currentTimeMillis());
+                file.renameTo(newAccessLogPath);
+                closeAccessLogFile();
+                // File opening will be retried at next cycle start
+                
+                //Zip old file
+                gzipFile(newAccessLogPath.getPath(), newAccessLogPath.getPath()+".gzip");
+            }
+        }
+    }
+    
+    private void gzipFile(String source_filepath, String destination_zip_filepath) {
+        byte[] buffer = new byte[1024];
+        
+        try {
+            FileOutputStream fileOutputStream = new FileOutputStream(destination_zip_filepath);
+            try (GZIPOutputStream gzipOutputStream = new GZIPOutputStream(fileOutputStream)) {
+                try (FileInputStream fileInput = new FileInputStream(source_filepath)) {
+                    int bytes_read;
+                    
+                    while ((bytes_read = fileInput.read(buffer)) > 0) {
+                        gzipOutputStream.write(buffer,0, bytes_read);
+                    }
+                }
+                gzipOutputStream.finish();
+                gzipOutputStream.close();
+            }
+            
+            if(verbose){
+               LOG.log(Level.INFO, "{0} was compressed successfully", source_filepath);
+            }
+        } catch (IOException ex) {
+            LOG.log(Level.SEVERE, "{0} Compression failed:  {1}", new Object[]{source_filepath, ex});
+        }
+    }
+    
     public void reloadConfiguration(RuntimeServerConfiguration newConfiguration) {
         this.newConfiguration = newConfiguration;
     }
@@ -249,6 +300,8 @@ public class RequestsLogger implements Runnable, Closeable {
                 if (System.currentTimeMillis() - lastFlush >= currentConfiguration.getAccessLogFlushInterval()) {
                     flushAccessLogFile();
                 }
+                //Check if is time to rotate 
+                rotateAccessLogFile();
 
             } catch (InterruptedException ex) {
                 LOG.log(Level.SEVERE, "Interrupt received");
