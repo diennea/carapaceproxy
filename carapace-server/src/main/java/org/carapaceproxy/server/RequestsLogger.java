@@ -29,9 +29,16 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.sql.Timestamp;
+import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -39,7 +46,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.zip.GZIPOutputStream;
-import org.apache.commons.io.FileUtils;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.stringtemplate.v4.NoIndentWriter;
 import org.stringtemplate.v4.ST;
@@ -134,22 +140,26 @@ public class RequestsLogger implements Runnable, Closeable {
     private void rotateAccessLogFile() throws IOException {
         String accesslogPath =  this.currentConfiguration.getAccessLogPath();
         long maxSize = this.currentConfiguration.getAccessLogMaxSize();
+        DateFormat date = new SimpleDateFormat("yyyy-MM-dd-ss");
+        String newAccessLogName = accesslogPath + "-" +date.format(new Date());
         
-        File file = new File(accesslogPath);
-        
-        if(file.exists()){            
-            long currentSize = file.length();
-            
-            if( currentSize >= maxSize){
-                LOG.info("Maximum access log size reached.");
-                File newAccessLogPath = new File(accesslogPath + "-" + System.currentTimeMillis());
-                file.renameTo(newAccessLogPath);
+        Path currentAccessLogPath = Paths.get(accesslogPath);
+        Path newAccessLogPath = Paths.get(newAccessLogName);
+        FileChannel LogFileChannel = FileChannel.open(currentAccessLogPath);
+
+        try {
+            long currentSize = LogFileChannel.size();
+            if(currentSize >= maxSize && maxSize > 0){
+                LOG.log(Level.INFO,"Maximum access log size reached. file: {0} , Size: {1} , maxSize: {2}" , new Object[]{accesslogPath,currentSize,maxSize});
+                Files.move(currentAccessLogPath, newAccessLogPath, StandardCopyOption.ATOMIC_MOVE);
                 closeAccessLogFile();
                 // File opening will be retried at next cycle start
-                
+
                 //Zip old file
-                gzipFile(newAccessLogPath.getPath(), newAccessLogPath.getPath()+".gzip", true);
+                gzipFile(newAccessLogName, newAccessLogName+".gzip", true);
             }
+        } catch (IOException e) {
+            LOG.log(Level.SEVERE , "Error: Unable to rename file {0} in {1}: " + e , new Object[]{accesslogPath, newAccessLogName});
         }
     }
     
