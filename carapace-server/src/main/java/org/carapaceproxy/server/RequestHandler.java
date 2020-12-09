@@ -821,8 +821,8 @@ public class RequestHandler implements MatchingContext {
     public static final String PROPERTY_CONTENT_TYPE = "request.content-type";
     public static final String PROPERTY_HEADERS = "request.headers.";
     private static final int HEADERS_SUBSTRING_INDEX = PROPERTY_HEADERS.length();
-    public static final String PROPERTY_LISTENER_ADDRESS = "listener.address";
-    public static final String PROPERTY_SERVER_IP = "request.serverip";
+    public static final String PROPERTY_LISTENER_HOST_PORT = "listener.address";
+    public static final String PROPERTY_LISTENER_IPADDRESS = "request.serverip";
 
     @Override
     public String getProperty(String name) {
@@ -837,10 +837,10 @@ public class RequestHandler implements MatchingContext {
                     return request.method().name();
                 case PROPERTY_CONTENT_TYPE:
                     return request.headers().get(javax.ws.rs.core.HttpHeaders.CONTENT_TYPE, "");
-                case PROPERTY_SERVER_IP:
+                case PROPERTY_LISTENER_IPADDRESS:
                     InetSocketAddress address = (InetSocketAddress) connectionToClient.getServerAddress();
                     return address.getAddress().getHostAddress();
-                case PROPERTY_LISTENER_ADDRESS: {
+                case PROPERTY_LISTENER_HOST_PORT: {
                     return connectionToClient.getListenerHost() + ":" + connectionToClient.getListenerPort();
                 }
                 default: {
