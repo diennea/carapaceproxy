@@ -57,7 +57,8 @@ public interface EndpointConnection {
      * Connection is no more useful for the RequestHandler.
      * @param forceClose
      * @param handler
+     * @param onReleasePerformed
      */
-    public void release(boolean forceClose, RequestHandler handler);
+    public void release(boolean forceClose, RequestHandler handler, Runnable onReleasePerformed);
 
 }

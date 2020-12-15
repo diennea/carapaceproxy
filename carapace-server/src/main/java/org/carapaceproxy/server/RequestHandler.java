@@ -86,7 +86,7 @@ public class RequestHandler implements MatchingContext {
     private MapResult action;
     private ContentsCache.ContentReceiver cacheReceiver;
     private ContentsCache.ContentSender cacheSender;
-    private AtomicReference<EndpointConnection> connectionToEndpoint = new AtomicReference<>();
+    private final AtomicReference<EndpointConnection> connectionToEndpoint = new AtomicReference<>();
     private final ClientConnectionHandler connectionToClient;
     private final ChannelHandlerContext channelToClient;
     private final AtomicReference<Runnable> onRequestFinished;
@@ -669,11 +669,11 @@ public class RequestHandler implements MatchingContext {
     }
 
     private boolean releaseConnectionToEndpoint(boolean forceClose, EndpointConnection current) {
-        if (connectionToEndpoint.compareAndSet(current, null)) {
+    if (connectionToEndpoint.get().equals(current)) {
             fireRequestFinished();
             if (current != null) {
-                // return the connection the pool
-                current.release(forceClose, this);
+                // return the connection the pool (async)
+                current.release(forceClose, this, () -> connectionToEndpoint.compareAndSet(current, null));
             }
             return true;
         } else {
@@ -795,7 +795,7 @@ public class RequestHandler implements MatchingContext {
     public void failIfStuck(long now, int stuckRequestTimeout, Runnable onStuck) {
         long delta = now - lastActivity;
         if (delta >= stuckRequestTimeout) {
-            LOG.log(Level.INFO, this + " connection appears stuck " + connectionToEndpoint + ", on request " + uri + " for userId: " + userId);
+            LOG.log(Level.INFO, "{0} connection appears stuck {1}, on request {2} for userId: {3}", new Object[]{this, connectionToEndpoint, uri, userId});
             onStuck.run();
             releaseConnectionToEndpoint(true, connectionToEndpoint.get());
             serveInternalErrorMessage(true);
