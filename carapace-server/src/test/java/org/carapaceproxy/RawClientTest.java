@@ -28,6 +28,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 
+import static org.hamcrest.CoreMatchers.containsString;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.IOException;
 import org.carapaceproxy.client.ConnectionsManagerStats;
@@ -43,11 +44,9 @@ import static org.junit.Assert.fail;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.carapaceproxy.client.impl.ConnectionsManagerImpl;
-import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -388,7 +387,7 @@ public class RawClientTest {
         }
     }
 
-     @Test
+    @Test
     public void testManyInflightRequests() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
@@ -414,7 +413,7 @@ public class RawClientTest {
             }
 
             int i = 0;
-            for (RawHttpClient client: clients) {
+            for (RawHttpClient client : clients) {
                 client.close();
                 i++;
             }
@@ -442,5 +441,50 @@ public class RawClientTest {
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
+    }
+
+    @Test
+    public void testConnectionCloseWhenErrorOnRequest() throws Exception {
+         stubFor(get(urlEqualTo("/index.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withBody("it <b>works</b> !!")));
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+            ConnectionsManagerImpl conMan = (ConnectionsManagerImpl) server.getConnectionsManager();
+            conMan.getConnections().setMaxTotalPerKey(1);
+            server.start();
+            int port = server.getLocalPort();
+            assertEquals(1, conMan.getConnections().getMaxTotalPerKey());
+
+            conMan.forceErrorOnRequest(true);
+
+            stats = server.getConnectionsManager().getStats();
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                assertThat(conMan.getConnections().getNumIdle(), is(0));
+                String s = client.get("/index.html").getBodyString();
+                System.out.println("s:" + s);
+                assertThat(s, containsString("An internal error occurred"));
+                assertNotNull(server.getConnectionsManager().getStats().getEndpoints().get(key));
+                assertThat(conMan.getConnections().getNumIdle(), is(1));
+            }
+            assertThat(conMan.getConnections().getNumIdle(), is(1));
+
+            TestUtils.waitForCondition(() -> {
+                EndpointStats epstats = stats.getEndpointStats(key);
+                System.out.println("stats: " + epstats);
+                return epstats.getTotalConnections().intValue() ==  1
+                        && epstats.getActiveConnections().intValue() == 0
+                        && epstats.getOpenConnections().intValue() == 0;
+            }, 100);
+            assertThat(conMan.getConnections().getNumIdle(), is(1));
+        }
+        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
     }
 }
