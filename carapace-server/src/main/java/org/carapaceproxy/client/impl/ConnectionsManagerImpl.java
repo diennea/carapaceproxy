@@ -92,6 +92,8 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     private static final int CONNECTIONS_MANAGER_RETURN_CONNECTION_THREAD_POOL_SIZE = Integer.getInteger("carapace.connectionsmanager.returnconnectionthreadpool.size", 10);
     private final Executor returnConnectionThreadPool;
 
+    private boolean forceErrorOnRequest = false;
+
     public void returnConnection(EndpointConnectionImpl con) {
         // We need to perform returnObject in dedicated thread in order to avoid deadlock in Netty evenLoop
         // in case of connection re-creation
@@ -111,6 +113,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         public PooledObject<EndpointConnectionImpl> makeObject(EndpointKey k) throws Exception {
             EndpointStats endpointstats = endpointsStats.computeIfAbsent(k, EndpointStats::new);
             EndpointConnectionImpl con = new EndpointConnectionImpl(k, ConnectionsManagerImpl.this, endpointstats);
+            con.forceErrorOnRequest(forceErrorOnRequest);
             LOG.log(Level.INFO, "opened new connection {0}", new Object[]{con});
             return new DefaultPooledObject<>(con);
         }
@@ -218,8 +221,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
         if (this.stuckRequestsReaperFuture != null && (oldIdleTimeout != idleTimeout)) {
             this.stuckRequestsReaperFuture.cancel(false);
-            LOG.log(Level.INFO,"Re-scheduling stuckRequestsReaper with period (idleTimeout/4):" +
-                    (idleTimeout / 4) + " ms");
+            LOG.log(Level.INFO, "Re-scheduling stuckRequestsReaper with period (idleTimeout/4):{0} ms", idleTimeout / 4);
             this.stuckRequestsReaperFuture =
                     this.scheduler.scheduleWithFixedDelay(new RequestHandlerChecker(), idleTimeout / 4, idleTimeout / 4,
                             TimeUnit.MILLISECONDS);
@@ -229,7 +231,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     public ConnectionsManagerImpl(RuntimeServerConfiguration configuration, BackendHealthManager backendHealthManager) {
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
-        LOG.log(Level.INFO, "Reading carapace.connectionsmanager.returnconnectionthreadpool.size=" + CONNECTIONS_MANAGER_RETURN_CONNECTION_THREAD_POOL_SIZE);
+        LOG.log(Level.INFO, "Reading carapace.connectionsmanager.returnconnectionthreadpool.size={0}", CONNECTIONS_MANAGER_RETURN_CONNECTION_THREAD_POOL_SIZE);
         this.returnConnectionThreadPool = CONNECTIONS_MANAGER_RETURN_CONNECTION_THREAD_POOL_SIZE > 0
                 ? Executors.newFixedThreadPool(CONNECTIONS_MANAGER_RETURN_CONNECTION_THREAD_POOL_SIZE)
                 : MoreExecutors.directExecutor();
@@ -288,7 +290,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     @Override
     public void start() {
-        LOG.log(Level.INFO, "Scheduling stuckRequestsReaper with period (idleTimeout/4):" + (idleTimeout / 4) + " ms");
+        LOG.log(Level.INFO, "Scheduling stuckRequestsReaper with period (idleTimeout/4):{0} ms", idleTimeout / 4);
         this.stuckRequestsReaperFuture =
                 this.scheduler.scheduleWithFixedDelay(new RequestHandlerChecker(), idleTimeout / 4, idleTimeout / 4,
                         TimeUnit.MILLISECONDS);
@@ -301,15 +303,15 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         }
         scheduler.shutdown();
         Map<String, List<DefaultPooledObjectInfo>> all = connections.listAllObjects();
-        LOG.fine("[POOL] numIdle: " + connections.getNumIdle() + " numActive: " + connections.getNumActive());
+        LOG.log(Level.FINE, "[POOL] numIdle: {0} numActive: {1}", new Object[]{connections.getNumIdle(), connections.getNumActive()});
         connections.clear();
-        LOG.info("[POOL] after close numIdle: " + connections.getNumIdle() + " numActive: " + connections.getNumActive());
+        LOG.log(Level.INFO, "[POOL] after close numIdle: {0} numActive: {1}", new Object[]{connections.getNumIdle(), connections.getNumActive()});
 
         all.forEach((key, value) -> {
-            LOG.fine("[POOL] " + key + " -> " + value.size() + " connections");
+            LOG.log(Level.FINE, "[POOL] {0} -> {1} connections", new Object[]{key, value.size()});
 
             for (DefaultPooledObjectInfo info : value) {
-                LOG.fine("[POOL] " + key + " -> " + info.getPooledObjectToString());
+                LOG.log(Level.FINE, "[POOL] {0} -> {1}", new Object[]{key, info.getPooledObjectToString()});
             }
         });
 
@@ -323,18 +325,13 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
                 exe.shutdown();
                 exe.awaitTermination(10, TimeUnit.SECONDS);
             } catch (InterruptedException ex) {
-                LOG.severe("Error wating for returnConnectionThreadPool termination: " + ex);
+                LOG.log(Level.SEVERE, "Error wating for returnConnectionThreadPool termination: {0}", ex);
                 Thread.currentThread().interrupt();
             }
         }
     }
 
-    final ConnectionsManagerStats stats = new ConnectionsManagerStats() {
-        @Override
-        public Map<EndpointKey, EndpointStats> getEndpoints() {
-            return Collections.unmodifiableMap(endpointsStats);
-        }
-    };
+    final ConnectionsManagerStats stats = () -> Collections.unmodifiableMap(endpointsStats);
 
     @Override
     public ConnectionsManagerStats getStats() {
@@ -359,6 +356,11 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     @VisibleForTesting
     public GenericKeyedObjectPool<EndpointKey, EndpointConnectionImpl> getConnections() {
         return connections;
+    }
+
+    @VisibleForTesting
+    public void forceErrorOnRequest(boolean force) {
+        forceErrorOnRequest = force;
     }
 
 }
