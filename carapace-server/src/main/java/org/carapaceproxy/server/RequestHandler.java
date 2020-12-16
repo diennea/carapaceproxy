@@ -669,7 +669,7 @@ public class RequestHandler implements MatchingContext {
     }
 
     private boolean releaseConnectionToEndpoint(boolean forceClose, EndpointConnection current) {
-    if (connectionToEndpoint.get().equals(current)) {
+        if (connectionToEndpoint.get() != null && connectionToEndpoint.get().equals(current)) {
             fireRequestFinished();
             if (current != null) {
                 // return the connection the pool (async)
