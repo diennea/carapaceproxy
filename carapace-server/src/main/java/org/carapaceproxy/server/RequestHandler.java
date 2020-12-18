@@ -821,8 +821,8 @@ public class RequestHandler implements MatchingContext {
     public static final String PROPERTY_CONTENT_TYPE = "request.content-type";
     public static final String PROPERTY_HEADERS = "request.headers.";
     private static final int HEADERS_SUBSTRING_INDEX = PROPERTY_HEADERS.length();
-    public static final String PROPERTY_LISTENER_HOST_PORT = "listener.address";
-    public static final String PROPERTY_LISTENER_IPADDRESS = "request.serverip";
+    public static final String PROPERTY_LISTENER_HOST_PORT = "listener.hostport";
+    public static final String PROPERTY_LISTENER_IPADDRESS = "listener.ipaddress";
 
     @Override
     public String getProperty(String name) {
