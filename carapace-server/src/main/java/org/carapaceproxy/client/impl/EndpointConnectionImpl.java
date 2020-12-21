@@ -58,6 +58,7 @@ import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.client.EndpointConnection;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.RequestHandler;
+import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.PrometheusUtils;
 
 public class EndpointConnectionImpl implements EndpointConnection {
@@ -190,7 +191,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         channelToEndpoint
                 .closeFuture()
                 .addListener((Future<? super Void> future) -> {
-                    LOG.log(Level.INFO, "channel connection {0} closed to {1}", new Object[]{this, key});
+                    CarapaceLogger.log("channel connection {0} closed to {1}", this, key);
                     endpointstats.getOpenConnections().decrementAndGet();
                     openConnectionsStats.dec();
                 });
@@ -375,7 +376,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         // this method can be called from RequestHandler eventLoop and from EndpointConnection eventloop
         executeInEndpointConnectionEventLoop(() -> {
             if (changeExpectedStateTo(ConnectionState.IDLE, ConnectionState.RELEASABLE, ConnectionState.DELAYED_RELEASE)) {
-                LOG.log(Level.FINE, "release {0} with destroy={1}", new Object[]{this, close});
+                CarapaceLogger.log("release {0} with destroy={1}", this, close);
                 checkHandler(clientSidePeerHandler);
                 connectionDeactivated();
                 if (close) {
@@ -504,7 +505,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     }
 
     private void logConnectionInfo(String s) {
-        LOG.log(Level.INFO, "{0}: {1}", new Object[]{EndpointConnectionImpl.this, s});
+        CarapaceLogger.log("{0}: {1}", EndpointConnectionImpl.this, s);
     }
 
 }
