@@ -190,7 +190,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         channelToEndpoint
                 .closeFuture()
                 .addListener((Future<? super Void> future) -> {
-                    LOG.log(Level.FINE, "channel closed to {0}", key);
+                    LOG.log(Level.INFO, "channel connection {0} closed to {1}", new Object[]{this, key});
                     endpointstats.getOpenConnections().decrementAndGet();
                     openConnectionsStats.dec();
                 });
@@ -199,6 +199,8 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     @Override
     public void sendRequest(HttpRequest request, RequestHandler clientSidePeerHandler) {
+        logConnectionInfo("sendRequest");
+
         if (assertNotInEndpointEventLoop(clientSidePeerHandler)) {
             return;
         }
@@ -235,6 +237,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         channelToEndpoint
                 .writeAndFlush(request)
                 .addListener((Future<? super Void> future) -> {
+                    logConnectionInfo("sendRequest COMPLETE");
                     // BEWARE THAT THE RESPONSE MAY ALREADY HAVE BEEN
                     // RECEIVED
                     RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
@@ -257,6 +260,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     @Override
     public void sendChunk(HttpContent msg, RequestHandler clientSidePeerHandler) {
+        logConnectionInfo("sendChunk");
         if (assertNotInEndpointEventLoop(clientSidePeerHandler)) {
             return;
         }
@@ -277,6 +281,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         channelToEndpoint
                 .writeAndFlush(msg)
                 .addListener((Future<? super Void> future) -> {
+                    logConnectionInfo("sendChunk COMPLETE");
                     if (!future.isSuccess()) {
                         changeExpectedStateTo(ConnectionState.RELEASABLE, ConnectionState.REQUEST_SENT);
                         boolean done = clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
@@ -290,6 +295,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     @Override
     public void sendLastHttpContent(LastHttpContent msg, RequestHandler clientSidePeerHandler) {
+        logConnectionInfo("sendLastHttpContent");
         if (assertNotInEndpointEventLoop(clientSidePeerHandler)) {
             return;
         }
@@ -309,6 +315,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         channelToEndpoint
                 .writeAndFlush(msg)
                 .addListener((Future<? super Void> future) -> {
+                    logConnectionInfo("sendLastHttpContent COMPLETE");
                     if (future.isSuccess()) {
                         boolean recover = false;
                         if (!changeExpectedStateTo(ConnectionState.RELEASABLE, ConnectionState.REQUEST_SENT)) {
@@ -428,9 +435,11 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 return;
             }
             if (msg instanceof HttpContent) {
+                logConnectionInfo("receivedFromRemote HttpContent");
                 HttpContent f = (HttpContent) msg;
                 _clientSidePeerHandler.receivedFromRemote(f.copy(), EndpointConnectionImpl.this);
             } else if (msg instanceof DefaultHttpResponse) {
+                logConnectionInfo("receivedFromRemote DefaultHttpResponse");
                 DefaultHttpResponse f = (DefaultHttpResponse) msg;
                 // DefaultHttpResponse has no "copy" method
                 _clientSidePeerHandler.receivedFromRemote(new DefaultHttpResponse(f.protocolVersion(), f.status(), f.headers()), EndpointConnectionImpl.this);
@@ -444,6 +453,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
             RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
             if (_clientSidePeerHandler != null) {
+                logConnectionInfo("channelReadComplete");
                 _clientSidePeerHandler.readCompletedFromRemote();
             }
         }
@@ -491,6 +501,10 @@ public class EndpointConnectionImpl implements EndpointConnection {
     @VisibleForTesting
     public void forceErrorOnRequest(boolean force) {
         forceErrorOnRequest = force;
+    }
+
+    private void logConnectionInfo(String s) {
+        LOG.log(Level.INFO, "{0}: {1}", new Object[]{EndpointConnectionImpl.this, s});
     }
 
 }

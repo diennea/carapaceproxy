@@ -147,12 +147,12 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
         @Override
         public void activateObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) throws Exception {
-//            LOG.log(Level.INFO, "activateObject {0} {1}", new Object[]{k, po.getObject()});
+            LOG.log(Level.INFO, "activateObject {0} {1}", new Object[]{k, po.getObject()});
         }
 
         @Override
         public void passivateObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) throws Exception {
-//            LOG.log(Level.INFO, "passivateObject {0} {1}", new Object[]{k, po.getObject()});
+            LOG.log(Level.INFO, "passivateObject {0} {1}", new Object[]{k, po.getObject()});
         }
 
     }
@@ -160,6 +160,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     void registerPendingRequest(RequestHandler handler) {
         pendingRequests.put(handler.getId(), handler);
         PENDING_REQUESTS_GAUGE.inc();
+        LOG.log(Level.INFO, "registerPendingRequest for {0}", handler.getConnectionToEndpoint());
     }
 
     void unregisterPendingRequest(RequestHandler clientSidePeerHandler) {
@@ -169,6 +170,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         RequestHandler removed = pendingRequests.remove(clientSidePeerHandler.getId());
         if (removed != null) {
             PENDING_REQUESTS_GAUGE.dec();
+            LOG.log(Level.INFO, "unregisterPendingRequest for {0}", removed.getConnectionToEndpoint());
         }
     }
 
