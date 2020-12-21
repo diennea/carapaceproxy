@@ -191,7 +191,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         channelToEndpoint
                 .closeFuture()
                 .addListener((Future<? super Void> future) -> {
-                    CarapaceLogger.log("channel connection {0} closed to {1}", this, key);
+                    CarapaceLogger.debug("channel to {0} closed. connection: {1}", key, this);
                     endpointstats.getOpenConnections().decrementAndGet();
                     openConnectionsStats.dec();
                 });
@@ -376,7 +376,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         // this method can be called from RequestHandler eventLoop and from EndpointConnection eventloop
         executeInEndpointConnectionEventLoop(() -> {
             if (changeExpectedStateTo(ConnectionState.IDLE, ConnectionState.RELEASABLE, ConnectionState.DELAYED_RELEASE)) {
-                CarapaceLogger.log("release {0} with destroy={1}", this, close);
+                CarapaceLogger.debug("release {0} with destroy={1}", this, close);
                 checkHandler(clientSidePeerHandler);
                 connectionDeactivated();
                 if (close) {
@@ -432,7 +432,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         public void channelRead0(ChannelHandlerContext ctx, HttpObject msg) {
             RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
             if (_clientSidePeerHandler == null) {
-                LOG.log(Level.INFO, "swallow content {0}: {1}, disconnected client", new Object[]{msg.getClass(), msg});
+                LOG.log(Level.INFO, "swallow content {0}: {1}, disconnected client. connection: {2}", new Object[]{msg.getClass(), msg, EndpointConnectionImpl.this});
                 return;
             }
             if (msg instanceof HttpContent) {
@@ -445,7 +445,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 // DefaultHttpResponse has no "copy" method
                 _clientSidePeerHandler.receivedFromRemote(new DefaultHttpResponse(f.protocolVersion(), f.status(), f.headers()), EndpointConnectionImpl.this);
             } else {
-                LOG.log(Level.SEVERE, "unknown message type {0}: {1}", new Object[]{msg.getClass(), msg});
+                LOG.log(Level.SEVERE, "unknown message type {0}: {1}. connection: {2}", new Object[]{msg.getClass(), msg, EndpointConnectionImpl.this});
             }
 
         }
@@ -505,7 +505,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     }
 
     private void logConnectionInfo(String s) {
-        CarapaceLogger.log("{0}: {1}", EndpointConnectionImpl.this, s);
+        CarapaceLogger.debug("{0}: {1}", s, EndpointConnectionImpl.this);
     }
 
 }

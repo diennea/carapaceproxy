@@ -29,19 +29,19 @@ public class CarapaceLogger {
 
     private static final java.util.logging.Logger LOG = java.util.logging.Logger.getLogger(CarapaceLogger.class.getName());
 
-    private static boolean loggingLevelFineVisible = false;
+    private static boolean loggingDebugEnabled = false;
 
     private CarapaceLogger()  {}
 
-    public static boolean isLoggingLevelFineVisible() {
-        return loggingLevelFineVisible;
+    public static boolean isLoggingDebugEnabled() {
+        return loggingDebugEnabled;
     }
 
-    public static void setLoggingLevelFineVisible(boolean loggingLevelFineVisible) {
-        loggingLevelFineVisible = loggingLevelFineVisible;
+    public static void setLoggingDebugEnabled(boolean loggingDebugEnabled) {
+        CarapaceLogger.loggingDebugEnabled = loggingDebugEnabled;
     }
 
-    public static void log(String s, Object ... o) {
-        LOG.log(loggingLevelFineVisible ? Level.INFO : Level.FINE, s, o);
+    public static void debug(String s, Object ... o) {
+        LOG.log(loggingDebugEnabled ? Level.INFO : Level.FINE, s, o);
     }
 }

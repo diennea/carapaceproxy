@@ -299,9 +299,9 @@ public class RuntimeServerConfiguration {
         ocspStaplingManagerPeriod = properties.getInt("ocspstaplingmanager.period", 0);
         LOG.info("ocspstaplingmanager.period=" + ocspStaplingManagerPeriod);
 
-        boolean loggingLevelFineVisible = properties.getBoolean("logging.level.fine.visible", false);
-        CarapaceLogger.setLoggingLevelFineVisible(loggingLevelFineVisible);
-        LOG.info("logging.level.fine.visible=" + loggingLevelFineVisible);
+        boolean loggingDebugEnabled = properties.getBoolean("logging.debug.enabled", false);
+        CarapaceLogger.setLoggingDebugEnabled(loggingDebugEnabled);
+        LOG.info("logging.debug.enabled=" + loggingDebugEnabled);
     }
 
     private void tryConfigureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
