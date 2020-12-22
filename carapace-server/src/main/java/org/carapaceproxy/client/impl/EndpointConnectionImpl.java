@@ -140,6 +140,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 .channel(Epoll.isAvailable() ? EpollSocketChannel.class : NioSocketChannel.class)
                 .option(ChannelOption.SO_KEEPALIVE, true)
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, parent.getConnectTimeout())
+                //.option(ChannelOption.ALLOW_HALF_CLOSURE, true) // avoid channel auto-closing with no data to read. NB: the inputstream is still closed.
                 .handler(new ChannelInitializer<SocketChannel>() {
                     @Override
                     public void initChannel(SocketChannel ch) throws Exception {
@@ -191,7 +192,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         channelToEndpoint
                 .closeFuture()
                 .addListener((Future<? super Void> future) -> {
-                    CarapaceLogger.debug("channel to {0} closed. connection: {1}", key, this);
+                    CarapaceLogger.debug("channel closed to {0}. connection: {1}", key, this);
                     endpointstats.getOpenConnections().decrementAndGet();
                     openConnectionsStats.dec();
                 });
@@ -427,6 +428,12 @@ public class EndpointConnectionImpl implements EndpointConnection {
     }
 
     private class ReadEndpointResponseHandler extends SimpleChannelInboundHandler<HttpObject> {
+
+        @Override
+        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+            logConnectionInfo("channelRead message: " + msg + "; discarded: " + !acceptInboundMessage(msg));
+            super.channelRead(ctx, msg);
+        }
 
         @Override
         public void channelRead0(ChannelHandlerContext ctx, HttpObject msg) {

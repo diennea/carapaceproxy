@@ -240,7 +240,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
                 : MoreExecutors.directExecutor();
 
         GenericKeyedObjectPoolConfig config = new GenericKeyedObjectPoolConfig();
-        config.setTestOnReturn(false); // avoid connections checking/recreation when returned to the pool.
+        config.setTestOnReturn(true);
         config.setTestOnBorrow(true);
         config.setTestWhileIdle(true);
         config.setBlockWhenExhausted(true);

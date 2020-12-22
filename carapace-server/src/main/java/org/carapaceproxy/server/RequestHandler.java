@@ -684,6 +684,7 @@ public class RequestHandler implements MatchingContext {
 
     public void readCompletedFromRemote() {
         channelToClient.flush();
+        releaseConnectionToEndpoint(false, connectionToEndpoint.get());
     }
 
     @Override
