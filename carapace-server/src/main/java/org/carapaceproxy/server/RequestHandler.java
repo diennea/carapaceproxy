@@ -66,7 +66,6 @@ import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.server.mapper.CustomHeader;
 import org.carapaceproxy.server.mapper.CustomHeader.HeaderMode;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchingContext;
-import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.PrometheusUtils;
 
 /**
@@ -685,12 +684,12 @@ public class RequestHandler implements MatchingContext {
 
     public void readCompletedFromRemote() {
         channelToClient.flush();
-        if (backendStartTs == 0) { // never read data from remote
-            CarapaceLogger.debug("readCompletedFromRemote > releaseConnectionToEndpoint({0}, {1})", false, connectionToEndpoint.get());
-            releaseConnectionToEndpoint(false, connectionToEndpoint.get());
-        } else {
-            CarapaceLogger.debug("readCompletedFromRemote > no release");
-        }
+//        if (backendStartTs == 0) { // never read data from remote
+//            CarapaceLogger.debug("readCompletedFromRemote > releaseConnectionToEndpoint({0}, {1})", false, connectionToEndpoint.get());
+//            releaseConnectionToEndpoint(false, connectionToEndpoint.get());
+//        } else {
+//            CarapaceLogger.debug("readCompletedFromRemote > no release");
+//        }
     }
 
     @Override
