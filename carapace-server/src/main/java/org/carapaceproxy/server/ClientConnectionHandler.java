@@ -74,6 +74,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     private final boolean secure; // connection bind to https
     private String sslProtocol;
     private String cipherSuite;
+    final SocketAddress serverAddress;
 
     public ClientConnectionHandler(
             EndpointMapper mapper,
@@ -81,6 +82,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             List<RequestFilter> filters,
             ContentsCache cache,
             SocketAddress clientAddress,
+            SocketAddress serverAddress,
             StaticContentsManager staticContentsManager,
             Runnable onClientDisconnected,
             BackendHealthManager backendHealthManager,
@@ -94,6 +96,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         this.connectionsManager = connectionsManager;
         this.filters = filters;
         this.clientAddress = clientAddress;
+        this.serverAddress = serverAddress;
         this.connectionStartsTs = System.nanoTime();
         this.onClientDisconnected = onClientDisconnected;
         this.backendHealthManager = backendHealthManager;
@@ -107,6 +110,10 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
 
     public SocketAddress getClientAddress() {
         return clientAddress;
+    }
+    
+    public SocketAddress getServerAddress(){
+        return serverAddress;
     }
 
     @Override
