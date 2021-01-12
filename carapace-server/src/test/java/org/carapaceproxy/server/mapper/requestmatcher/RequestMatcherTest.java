@@ -23,6 +23,8 @@ import herddb.utils.TestUtils;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpVersion;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import javax.ws.rs.core.HttpHeaders;
 import org.carapaceproxy.server.ClientConnectionHandler;
 import org.carapaceproxy.server.RequestHandler;
@@ -224,11 +226,13 @@ public class RequestMatcherTest {
         request.headers().add(HttpHeaders.COOKIE, "test-cookie");
         request.headers().add(HttpHeaders.CONTENT_DISPOSITION, "inline");
         request.headers().add(HttpHeaders.CONTENT_TYPE, "text/html");
-
+        SocketAddress socketAddress = new InetSocketAddress("127.0.0.1", 0);
+        
         ClientConnectionHandler cch = mock(ClientConnectionHandler.class);
         when(cch.isSecure()).thenReturn(false);
         when(cch.getListenerHost()).thenReturn("localhost");
         when(cch.getListenerPort()).thenReturn(8080);
+        when(cch.getServerAddress()).thenReturn(socketAddress);
 
         RequestHandler handler = new RequestHandler(0, request, null, cch, null, null, null, null);
 
@@ -276,21 +280,30 @@ public class RequestMatcherTest {
             matcher = new RequestMatchParser("not request.method = \"POST\" and request.method = \"GET\"").parse();
             assertTrue(matcher.matches(handler));
         }
-        // Test listener.address
+        // Test listener.hostport
         {
-            RequestMatcher matcher = new RequestMatchParser("listener.address = \"localhost:8080\"").parse();
+            RequestMatcher matcher = new RequestMatchParser("listener.hostport = \"localhost:8080\"").parse();
             assertTrue(matcher.matches(handler));
 
-            matcher = new RequestMatchParser("listener.address ~ \"localhost:.*\"").parse();
+            matcher = new RequestMatchParser("listener.hostport ~ \"localhost:.*\"").parse();
             assertTrue(matcher.matches(handler));
 
-            matcher = new RequestMatchParser("listener.address ~ \".*:8080\"").parse();
+            matcher = new RequestMatchParser("listener.hostport ~ \".*:8080\"").parse();
             assertTrue(matcher.matches(handler));
 
-            matcher = new RequestMatchParser("listener.address ~ \"loc.*:80.*\"").parse();
+            matcher = new RequestMatchParser("listener.hostport ~ \"loc.*:80.*\"").parse();
             assertTrue(matcher.matches(handler));
 
-            matcher = new RequestMatchParser("listener.address ~ \"some.*:8050\"").parse();
+            matcher = new RequestMatchParser("listener.hostport ~ \"some.*:8050\"").parse();
+            assertFalse(matcher.matches(handler));
+        }
+        // Test listener.ipaddress
+        {
+            RequestMatcher matcher = new RequestMatchParser("listener.ipaddress = \"127.0.0.1\"").parse();
+            assertTrue(matcher.matches(handler));
+        }
+        {
+            RequestMatcher matcher = new RequestMatchParser("listener.ipaddress = \"127.0.1.1\"").parse();
             assertFalse(matcher.matches(handler));
         }
     }
