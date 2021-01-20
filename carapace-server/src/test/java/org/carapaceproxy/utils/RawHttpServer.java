@@ -35,6 +35,7 @@ public class RawHttpServer implements AutoCloseable {
 
     private Server httpserver;
     private int port = 0; // start ephemeral
+    private long idleTimeout; // seconds
 
     private final HttpServlet servlet;
 
@@ -58,7 +59,10 @@ public class RawHttpServer implements AutoCloseable {
         contexts.addHandler(context);
         httpserver.start();
 
-        this.port = ((ServerConnector) httpserver.getConnectors()[0]).getLocalPort(); // keep same port on restart
+        ServerConnector conn = (ServerConnector) httpserver.getConnectors()[0];
+        conn.setIdleTimeout(idleTimeout * 1_000);
+        this.port = conn.getLocalPort(); // keep same port on restart
+
         return port;
     }
 
@@ -78,4 +82,13 @@ public class RawHttpServer implements AutoCloseable {
     public void close() throws Exception {
         stop();
     }
+
+    public long getIdleTimeout() {
+        return idleTimeout;
+    }
+
+    public void setIdleTimeout(long idleTimeout) {
+        this.idleTimeout = idleTimeout;
+    }
+
 }

@@ -62,10 +62,12 @@ import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import static org.carapaceproxy.server.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
+import io.netty.handler.codec.http.HttpMessage;
 import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.server.mapper.CustomHeader;
 import org.carapaceproxy.server.mapper.CustomHeader.HeaderMode;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchingContext;
+import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.PrometheusUtils;
 
 /**
@@ -102,7 +104,7 @@ public class RequestHandler implements MatchingContext {
     private UrlEncodedQueryString queryString;
     // this is useful only for debugging heap dumps in production
     private volatile RequestHandlerState clientState = RequestHandlerState.IDLE;
-    private boolean connectionsReuseEnabled = true;
+    private boolean closeAfterResponse = false;
 
     private static enum RequestHandlerState {
         IDLE,
@@ -624,10 +626,18 @@ public class RequestHandler implements MatchingContext {
                 cleanResponseForCachedData(httpMessage);
             }
         }
+        if (msg instanceof HttpMessage) {
+            boolean isKeepAlive = HttpUtil.isKeepAlive((HttpMessage) msg);
+            if (!isKeepAlive) {
+                closeAfterResponse = true;
+            }
+            CarapaceLogger.debug("Got response from remote ({0}), keep-alive: {1}, connection {2}",
+                    msg.getClass(), isKeepAlive, connectionToEndpoint.get());
+        }
 
         // endpoint finished his work, we can release the connection
         if (msg instanceof LastHttpContent) {
-            releaseConnectionToEndpoint(!connectionsReuseEnabled /*
+            releaseConnectionToEndpoint(closeAfterResponse /*
                      * force close
                      */, connection);
         }
@@ -858,9 +868,4 @@ public class RequestHandler implements MatchingContext {
     public boolean isSecure() {
         return connectionToClient.isSecure();
     }
-
-    void setConnectionsReuseEnabled(boolean connectionsReuseEnabled) {
-        this.connectionsReuseEnabled = connectionsReuseEnabled;
-    }
-
 }

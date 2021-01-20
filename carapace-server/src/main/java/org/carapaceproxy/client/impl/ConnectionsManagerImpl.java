@@ -1,21 +1,21 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.client.impl;
 
@@ -95,11 +95,11 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     private boolean forceErrorOnRequest = false;
 
-    public void returnConnection(EndpointConnectionImpl con) {
+    public void returnConnection(EndpointConnectionImpl con, String note) {
         // We need to perform returnObject in dedicated thread in order to avoid deadlock in Netty evenLoop
         // in case of connection re-creation
         returnConnectionThreadPool.execute(() -> {
-            CarapaceLogger.debug("returnConnection:{0}", con);
+            CarapaceLogger.debug("returnConnection due to {0}: {1}", note, con);
             connections.returnObject(con.getKey(), con);
         });
     }
@@ -127,21 +127,9 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
         @Override
         public boolean validateObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) {
-            PooledObjectState state = po.getState();
-            switch (state) {
-                case ABANDONED:
-                case IDLE:
-                case EVICTION:
-                    LOG.log(Level.INFO, "validateObject {2} {0} {1} ", new Object[]{k, po.getObject(), state});
-                    break;
-                default:
-                    if (LOG.isLoggable(Level.FINE)) {
-                        LOG.log(Level.FINE, "validateObject {2} {0} {1} ", new Object[]{k, po.getObject(), state});
-                    }
-            }
             String validationResult = po.getObject().validate();
             if (validationResult != null) {
-                LOG.log(Level.WARNING, "validateObject {0} {1}-> {2}", new Object[]{k, po.getObject(), validationResult});
+                LOG.log(Level.WARNING, "validateObject failed for endpoint {0} due to: {1}, {2} ", new Object[]{k, validationResult, po.getObject()});
             }
             return validationResult == null;
         }
@@ -240,7 +228,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
                 : MoreExecutors.directExecutor();
 
         GenericKeyedObjectPoolConfig config = new GenericKeyedObjectPoolConfig();
-        config.setTestOnReturn(false); // avoid connections checking/recreation when returned to the pool.
+        config.setTestOnReturn(true); // avoid connections checking/recreation when returned to the pool.
         config.setTestOnBorrow(true);
         config.setTestWhileIdle(true);
         config.setBlockWhenExhausted(true);

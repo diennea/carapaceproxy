@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.utils;
 
+import static org.graalvm.compiler.debug.DebugContext.counter;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -33,6 +34,7 @@ import java.security.cert.Certificate;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Random;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SNIServerName;
 import javax.net.ssl.SSLParameters;
@@ -228,7 +230,7 @@ public final class RawHttpClient implements AutoCloseable {
         }
 
         public String getBodyString() throws UnsupportedEncodingException {
-            return body.toString("utf-8");
+            return body.toString("windows-1252");
         }
 
         @Override
@@ -373,6 +375,14 @@ public final class RawHttpClient implements AutoCloseable {
 
     public HttpResponse executeRequest(String request) throws IOException {
         sendRequest(request.getBytes(StandardCharsets.UTF_8));
+        return consumeHttpResponseInput(socket.getInputStream());
+    }
+
+    public HttpResponse executeRequest(String request, boolean breakCon) throws IOException {
+        sendRequest(request.getBytes(StandardCharsets.UTF_8));
+        if (breakCon) {
+            socket.close();
+        }
         return consumeHttpResponseInput(socket.getInputStream());
     }
 
