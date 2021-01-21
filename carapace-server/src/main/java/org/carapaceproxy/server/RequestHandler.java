@@ -67,6 +67,7 @@ import org.carapaceproxy.server.mapper.CustomHeader;
 import org.carapaceproxy.server.mapper.CustomHeader.HeaderMode;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchingContext;
 import org.carapaceproxy.utils.PrometheusUtils;
+import org.carapaceproxy.utils.CarapaceLogger;
 
 /**
  * Keeps state for a single HttpRequest.
@@ -611,6 +612,8 @@ public class RequestHandler implements MatchingContext {
 
     }
 
+    private boolean readCompletedFromRemote = false;
+
     public void receivedFromRemote(HttpObject msg, EndpointConnection connection) {
         if (backendStartTs == 0) {
             backendStartTs = System.currentTimeMillis();
@@ -626,7 +629,7 @@ public class RequestHandler implements MatchingContext {
 
         // endpoint finished his work, we can release the connection
         if (msg instanceof LastHttpContent) {
-           releaseConnectionToEndpoint(false /*force close*/, connection);
+            readCompletedFromRemote = true;
         }
 
         addCustomResponseHeaders(msg, action.customHeaders);
@@ -684,12 +687,12 @@ public class RequestHandler implements MatchingContext {
 
     public void readCompletedFromRemote() {
         channelToClient.flush();
-//        if (backendStartTs == 0) { // never read data from remote
-//            CarapaceLogger.debug("readCompletedFromRemote > releaseConnectionToEndpoint({0}, {1})", false, connectionToEndpoint.get());
-//            releaseConnectionToEndpoint(false, connectionToEndpoint.get());
-//        } else {
-//            CarapaceLogger.debug("readCompletedFromRemote > no release");
-//        }
+        if (readCompletedFromRemote || backendStartTs == 0) { // never read data from remote
+            CarapaceLogger.debug("readCompletedFromRemote > releaseConnectionToEndpoint({0}, {1})", false, connectionToEndpoint.get());
+            releaseConnectionToEndpoint(false, connectionToEndpoint.get());
+        } else {
+            CarapaceLogger.debug("readCompletedFromRemote > no release");
+        }
     }
 
     @Override

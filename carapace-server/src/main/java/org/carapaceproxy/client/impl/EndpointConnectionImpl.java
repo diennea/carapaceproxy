@@ -140,7 +140,6 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 .channel(Epoll.isAvailable() ? EpollSocketChannel.class : NioSocketChannel.class)
                 .option(ChannelOption.SO_KEEPALIVE, true)
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, parent.getConnectTimeout())
-                //.option(ChannelOption.ALLOW_HALF_CLOSURE, true) // avoid channel auto-closing with no data to read. NB: the inputstream is still closed.
                 .handler(new ChannelInitializer<SocketChannel>() {
                     @Override
                     public void initChannel(SocketChannel ch) throws Exception {
