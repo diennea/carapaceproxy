@@ -1,21 +1,21 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.server;
 
@@ -102,6 +102,7 @@ public class RequestHandler implements MatchingContext {
     private UrlEncodedQueryString queryString;
     // this is useful only for debugging heap dumps in production
     private volatile RequestHandlerState clientState = RequestHandlerState.IDLE;
+    private boolean connectionsReuseEnabled = true;
 
     private static enum RequestHandlerState {
         IDLE,
@@ -157,7 +158,7 @@ public class RequestHandler implements MatchingContext {
     InetSocketAddress getLocalAddress() {
         return (InetSocketAddress) channelToClient.channel().localAddress();
     }
-    
+
     private void fireRequestFinished() {
         Runnable handler = onRequestFinished.getAndSet(null);
         if (handler != null) {
@@ -570,7 +571,7 @@ public class RequestHandler implements MatchingContext {
         connectionToClient.lastHttpContentSent(this);
         requestsLogger.logRequest(this);
     }
-    
+
     @Override
     public int hashCode() {
         int hash = 7;
@@ -626,7 +627,9 @@ public class RequestHandler implements MatchingContext {
 
         // endpoint finished his work, we can release the connection
         if (msg instanceof LastHttpContent) {
-            releaseConnectionToEndpoint(false /*force close*/, connection);
+            releaseConnectionToEndpoint(!connectionsReuseEnabled /*
+                     * force close
+                     */, connection);
         }
 
         addCustomResponseHeaders(msg, action.customHeaders);
@@ -854,6 +857,10 @@ public class RequestHandler implements MatchingContext {
     @Override
     public boolean isSecure() {
         return connectionToClient.isSecure();
+    }
+
+    void setConnectionsReuseEnabled(boolean connectionsReuseEnabled) {
+        this.connectionsReuseEnabled = connectionsReuseEnabled;
     }
 
 }
