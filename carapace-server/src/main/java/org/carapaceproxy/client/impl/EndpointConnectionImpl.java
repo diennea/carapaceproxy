@@ -58,6 +58,7 @@ import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.client.EndpointConnection;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.RequestHandler;
+import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.PrometheusUtils;
 
 public class EndpointConnectionImpl implements EndpointConnection {
@@ -190,7 +191,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         channelToEndpoint
                 .closeFuture()
                 .addListener((Future<? super Void> future) -> {
-                    LOG.log(Level.FINE, "channel closed to {0}", key);
+                    CarapaceLogger.debug("channel closed to {0}. connection: {1}", key, this);
                     endpointstats.getOpenConnections().decrementAndGet();
                     openConnectionsStats.dec();
                 });
@@ -199,6 +200,8 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     @Override
     public void sendRequest(HttpRequest request, RequestHandler clientSidePeerHandler) {
+        logConnectionInfo("sendRequest");
+
         if (assertNotInEndpointEventLoop(clientSidePeerHandler)) {
             return;
         }
@@ -235,6 +238,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         channelToEndpoint
                 .writeAndFlush(request)
                 .addListener((Future<? super Void> future) -> {
+                    logConnectionInfo("sendRequest COMPLETE");
                     // BEWARE THAT THE RESPONSE MAY ALREADY HAVE BEEN
                     // RECEIVED
                     RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
@@ -257,6 +261,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     @Override
     public void sendChunk(HttpContent msg, RequestHandler clientSidePeerHandler) {
+        logConnectionInfo("sendChunk");
         if (assertNotInEndpointEventLoop(clientSidePeerHandler)) {
             return;
         }
@@ -277,6 +282,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         channelToEndpoint
                 .writeAndFlush(msg)
                 .addListener((Future<? super Void> future) -> {
+                    logConnectionInfo("sendChunk COMPLETE");
                     if (!future.isSuccess()) {
                         changeExpectedStateTo(ConnectionState.RELEASABLE, ConnectionState.REQUEST_SENT);
                         boolean done = clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, future.cause());
@@ -290,6 +296,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     @Override
     public void sendLastHttpContent(LastHttpContent msg, RequestHandler clientSidePeerHandler) {
+        logConnectionInfo("sendLastHttpContent");
         if (assertNotInEndpointEventLoop(clientSidePeerHandler)) {
             return;
         }
@@ -309,6 +316,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         channelToEndpoint
                 .writeAndFlush(msg)
                 .addListener((Future<? super Void> future) -> {
+                    logConnectionInfo("sendLastHttpContent COMPLETE");
                     if (future.isSuccess()) {
                         boolean recover = false;
                         if (!changeExpectedStateTo(ConnectionState.RELEASABLE, ConnectionState.REQUEST_SENT)) {
@@ -368,7 +376,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         // this method can be called from RequestHandler eventLoop and from EndpointConnection eventloop
         executeInEndpointConnectionEventLoop(() -> {
             if (changeExpectedStateTo(ConnectionState.IDLE, ConnectionState.RELEASABLE, ConnectionState.DELAYED_RELEASE)) {
-                LOG.log(Level.FINE, "release {0} with destroy={1}", new Object[]{this, close});
+                CarapaceLogger.debug("release {0} with destroy={1}", this, close);
                 checkHandler(clientSidePeerHandler);
                 connectionDeactivated();
                 if (close) {
@@ -421,21 +429,29 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private class ReadEndpointResponseHandler extends SimpleChannelInboundHandler<HttpObject> {
 
         @Override
+        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+            logConnectionInfo("channelRead message: " + msg + "; discarded: " + !acceptInboundMessage(msg));
+            super.channelRead(ctx, msg);
+        }
+
+        @Override
         public void channelRead0(ChannelHandlerContext ctx, HttpObject msg) {
             RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
             if (_clientSidePeerHandler == null) {
-                LOG.log(Level.INFO, "swallow content {0}: {1}, disconnected client", new Object[]{msg.getClass(), msg});
+                LOG.log(Level.INFO, "swallow content {0}: {1}, disconnected client. connection: {2}", new Object[]{msg.getClass(), msg, EndpointConnectionImpl.this});
                 return;
             }
             if (msg instanceof HttpContent) {
+                logConnectionInfo("receivedFromRemote HttpContent");
                 HttpContent f = (HttpContent) msg;
                 _clientSidePeerHandler.receivedFromRemote(f.copy(), EndpointConnectionImpl.this);
             } else if (msg instanceof DefaultHttpResponse) {
+                logConnectionInfo("receivedFromRemote DefaultHttpResponse");
                 DefaultHttpResponse f = (DefaultHttpResponse) msg;
                 // DefaultHttpResponse has no "copy" method
                 _clientSidePeerHandler.receivedFromRemote(new DefaultHttpResponse(f.protocolVersion(), f.status(), f.headers()), EndpointConnectionImpl.this);
             } else {
-                LOG.log(Level.SEVERE, "unknown message type {0}: {1}", new Object[]{msg.getClass(), msg});
+                LOG.log(Level.SEVERE, "unknown message type {0}: {1}. connection: {2}", new Object[]{msg.getClass(), msg, EndpointConnectionImpl.this});
             }
 
         }
@@ -444,6 +460,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
             RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
             if (_clientSidePeerHandler != null) {
+                logConnectionInfo("channelReadComplete");
                 _clientSidePeerHandler.readCompletedFromRemote();
             }
         }
@@ -491,6 +508,10 @@ public class EndpointConnectionImpl implements EndpointConnection {
     @VisibleForTesting
     public void forceErrorOnRequest(boolean force) {
         forceErrorOnRequest = force;
+    }
+
+    private void logConnectionInfo(String s) {
+        CarapaceLogger.debug("{0}: {1}", s, EndpointConnectionImpl.this);
     }
 
 }

@@ -47,6 +47,7 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.carapaceproxy.client.impl.ConnectionsManagerImpl;
+import org.carapaceproxy.utils.CarapaceLogger;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -464,6 +465,8 @@ public class RawClientTest {
             assertEquals(1, conMan.getConnections().getMaxTotalPerKey());
 
             conMan.forceErrorOnRequest(true);
+
+            CarapaceLogger.setLoggingDebugEnabled(true);
 
             stats = server.getConnectionsManager().getStats();
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {

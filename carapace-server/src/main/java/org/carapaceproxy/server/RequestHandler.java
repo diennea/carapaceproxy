@@ -626,7 +626,7 @@ public class RequestHandler implements MatchingContext {
 
         // endpoint finished his work, we can release the connection
         if (msg instanceof LastHttpContent) {
-           releaseConnectionToEndpoint(false /*force close*/, connection);
+            releaseConnectionToEndpoint(false /*force close*/, connection);
         }
 
         addCustomResponseHeaders(msg, action.customHeaders);

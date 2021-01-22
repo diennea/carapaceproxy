@@ -58,6 +58,7 @@ import org.apache.commons.pool2.impl.DefaultPooledObject;
 import org.apache.commons.pool2.impl.DefaultPooledObjectInfo;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
+import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.PrometheusUtils;
 
 /**
@@ -98,7 +99,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         // We need to perform returnObject in dedicated thread in order to avoid deadlock in Netty evenLoop
         // in case of connection re-creation
         returnConnectionThreadPool.execute(() -> {
-            LOG.log(Level.FINE, "returnConnection:{0}", con);
+            CarapaceLogger.debug("returnConnection:{0}", con);
             connections.returnObject(con.getKey(), con);
         });
     }
@@ -147,12 +148,12 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
         @Override
         public void activateObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) throws Exception {
-//            LOG.log(Level.INFO, "activateObject {0} {1}", new Object[]{k, po.getObject()});
+            CarapaceLogger.debug("activateObject {0} {1}", k, po.getObject());
         }
 
         @Override
         public void passivateObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) throws Exception {
-//            LOG.log(Level.INFO, "passivateObject {0} {1}", new Object[]{k, po.getObject()});
+            CarapaceLogger.debug("passivateObject {0} {1}", k, po.getObject());
         }
 
     }
@@ -160,6 +161,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     void registerPendingRequest(RequestHandler handler) {
         pendingRequests.put(handler.getId(), handler);
         PENDING_REQUESTS_GAUGE.inc();
+        CarapaceLogger.debug("registerPendingRequest for {0}", handler.getConnectionToEndpoint());
     }
 
     void unregisterPendingRequest(RequestHandler clientSidePeerHandler) {
@@ -169,6 +171,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         RequestHandler removed = pendingRequests.remove(clientSidePeerHandler.getId());
         if (removed != null) {
             PENDING_REQUESTS_GAUGE.dec();
+            CarapaceLogger.debug("unregisterPendingRequest for {0}", removed.getConnectionToEndpoint());
         }
     }
 
