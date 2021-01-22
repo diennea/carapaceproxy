@@ -42,6 +42,7 @@ import javax.net.ssl.SSLContext;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
+import org.carapaceproxy.utils.CarapaceLogger;
 
 /**
  * Configuration
@@ -298,6 +299,9 @@ public class RuntimeServerConfiguration {
         ocspStaplingManagerPeriod = properties.getInt("ocspstaplingmanager.period", 0);
         LOG.info("ocspstaplingmanager.period=" + ocspStaplingManagerPeriod);
 
+        boolean loggingDebugEnabled = properties.getBoolean("logging.debug.enabled", false);
+        CarapaceLogger.setLoggingDebugEnabled(loggingDebugEnabled);
+        LOG.info("logging.debug.enabled=" + loggingDebugEnabled);
     }
 
     private void tryConfigureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
