@@ -80,6 +80,7 @@ public class RuntimeServerConfiguration {
     private int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
     private List<String> supportedSSLProtocols = null;
     private int ocspStaplingManagerPeriod = 0;
+    private boolean requestsHeaderDebugEnabled = false;
 
     public String getAccessLogPath() {
         return accessLogPath;
@@ -235,6 +236,15 @@ public class RuntimeServerConfiguration {
         return ocspStaplingManagerPeriod;
     }
 
+    public boolean isRequestsHeaderDebugEnabled() {
+        return requestsHeaderDebugEnabled;
+    }
+
+    @VisibleForTesting
+    public void setRequestsHeaderDebugEnabled(boolean requestsHeaderDebugEnabled) {
+        this.requestsHeaderDebugEnabled = requestsHeaderDebugEnabled;
+    }
+
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
         LOG.log(Level.INFO, "configuring from {0}", properties);
         this.maxConnectionsPerEndpoint = properties.getInt("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint);
@@ -302,6 +312,8 @@ public class RuntimeServerConfiguration {
         boolean loggingDebugEnabled = properties.getBoolean("logging.debug.enabled", false);
         CarapaceLogger.setLoggingDebugEnabled(loggingDebugEnabled);
         LOG.info("logging.debug.enabled=" + loggingDebugEnabled);
+        requestsHeaderDebugEnabled = properties.getBoolean("requests.header.debug.enabled", requestsHeaderDebugEnabled);
+        LOG.info("requests.header.debug.enabled=" + requestsHeaderDebugEnabled);
     }
 
     private void tryConfigureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {

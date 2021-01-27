@@ -40,7 +40,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.carapaceproxy.EndpointStats;
@@ -94,8 +93,8 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     private final Executor returnConnectionThreadPool;
 
     private boolean forceErrorOnRequest = false;
+    private boolean requestsHeaderDebugEnabled = false;
     final ConnectionsManagerStats stats = () -> Collections.unmodifiableMap(endpointsStats);
-    
 
     public void returnConnection(EndpointConnectionImpl con, String note) {
         if (!con.returningToPool.getAndSet(true)) {
@@ -107,6 +106,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
             });
         }
     }
+
     public int getConnectTimeout() {
         return connectTimeout;
     }
@@ -118,6 +118,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
             EndpointStats endpointstats = endpointsStats.computeIfAbsent(k, EndpointStats::new);
             EndpointConnectionImpl con = new EndpointConnectionImpl(k, ConnectionsManagerImpl.this, endpointstats);
             con.forceErrorOnRequest(forceErrorOnRequest);
+            con.setRequestsHeaderDebugEnabled(requestsHeaderDebugEnabled);
             LOG.log(Level.INFO, "opened new connection {0}", new Object[]{con});
             return new DefaultPooledObject<>(con);
         }
@@ -213,6 +214,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         connections.setSwallowedExceptionListener((Exception ex) -> {
             LOG.log(Level.SEVERE, "Internal endpoints connection pool error", ex);
         });
+        requestsHeaderDebugEnabled = configuration.isRequestsHeaderDebugEnabled();
 
         if (this.stuckRequestsReaperFuture != null && (oldIdleTimeout != idleTimeout)) {
             this.stuckRequestsReaperFuture.cancel(false);
@@ -354,6 +356,10 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     @VisibleForTesting
     public void forceErrorOnRequest(boolean force) {
         forceErrorOnRequest = force;
+    }
+
+    public void setRequestsHeaderDebugEnabled(boolean requestsHeaderDebugEnabled) {
+        this.requestsHeaderDebugEnabled = requestsHeaderDebugEnabled;
     }
 
 }
