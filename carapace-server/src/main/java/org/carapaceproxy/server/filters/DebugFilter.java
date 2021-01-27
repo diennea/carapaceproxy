@@ -25,14 +25,14 @@ import org.carapaceproxy.server.RequestHandler;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 
 /**
- * Adds some debug metadata.
+ * Adds a debug header.
  *
- * @author enrico.olivelli
+ * @author paolo.venturi
  */
 public class DebugFilter extends BasicRequestFilter {
 
     public static final String TYPE = "debug";
-    public static final String PREFIX_HEADERS = "X-Carapace-Debug-";
+    public static final String DEBUG_HEADER_NAME = "X-Carapace-Debug";
 
     public DebugFilter(RequestMatcher matcher) {
         super(matcher);
@@ -40,7 +40,7 @@ public class DebugFilter extends BasicRequestFilter {
 
     @Override
     public void applyFilter(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler) {
-        request.headers().add(PREFIX_HEADERS + "cid", requestHandler.getConnectionToEndpoint().getId());
+        request.headers().add(DEBUG_HEADER_NAME, "cid-" + requestHandler.getConnectionToEndpoint().getId());
     }
 
 }

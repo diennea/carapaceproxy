@@ -1,21 +1,21 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.server.filters;
 
@@ -32,8 +32,19 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import io.netty.handler.codec.http.HttpHeaders;
+import org.carapaceproxy.client.impl.EndpointConnectionImpl;
+import org.junit.Rule;
+import org.junit.rules.TemporaryFolder;
 
 public class SimpleFiltersTest {
+
+    @Rule
+    public WireMockRule wireMockRule = new WireMockRule(0);
+
+    @Rule
+    public TemporaryFolder tmpDir = new TemporaryFolder();
 
     @Test
     public void testRegexpMapUserIdFilter() {
@@ -101,6 +112,22 @@ public class SimpleFiltersTest {
             }
         });
 
+    }
+
+    @Test
+    public void testDebugFilter() throws Exception {
+        HttpHeaders headers = mock(HttpHeaders.class);
+        HttpRequest request = mock(HttpRequest.class);
+        when(request.uri()).thenReturn("/index.html");
+        when(request.headers()).thenReturn(headers);
+        RequestHandler requestHandler = mock(RequestHandler.class);
+        EndpointConnectionImpl conn = mock(EndpointConnectionImpl.class);
+        when(conn.getId()).thenReturn(1L);
+        when(requestHandler.getConnectionToEndpoint()).thenReturn(conn);
+
+        DebugFilter filter = new DebugFilter(new MatchAllRequestMatcher());
+        filter.apply(request, null, requestHandler);
+        verify(headers, times(1)).add(DebugFilter.DEBUG_HEADER_NAME, "cid-1");
     }
 
 }
