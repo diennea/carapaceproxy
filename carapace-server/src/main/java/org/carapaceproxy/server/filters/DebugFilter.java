@@ -20,54 +20,27 @@
 package org.carapaceproxy.server.filters;
 
 import io.netty.handler.codec.http.HttpRequest;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.carapaceproxy.server.ClientConnectionHandler;
 import org.carapaceproxy.server.RequestHandler;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 
 /**
- * Maps a parameter of the querystring to the tenant, using simple pattern matching
+ * Adds some debug metadata.
  *
  * @author enrico.olivelli
  */
-public class RegexpMapUserIdFilter extends BasicRequestFilter {
+public class DebugFilter extends BasicRequestFilter {
 
-    public static final String TYPE = "match-user-regexp";
+    public static final String TYPE = "debug";
+    public static final String PREFIX_HEADERS = "X-Carapace-Debug-";
 
-    private final String parameterName;
-    private final Pattern compiledPattern;
-
-    public RegexpMapUserIdFilter(String parameterName, String pattern, RequestMatcher matcher) {
+    public DebugFilter(RequestMatcher matcher) {
         super(matcher);
-        this.parameterName = parameterName;
-        this.compiledPattern = Pattern.compile(pattern);
-    }
-
-    public String getParameterName() {
-        return parameterName;
-    }
-
-    public Pattern getCompiledPattern() {
-        return compiledPattern;
     }
 
     @Override
     public void applyFilter(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler) {
-        UrlEncodedQueryString queryString = requestHandler.getQueryString();
-        String value = queryString.get(parameterName);
-        if (value == null) {
-            return;
-        }
-        Matcher matcher = compiledPattern.matcher(value);
-        if (!matcher.find()) {
-            return;
-        }
-        if (matcher.groupCount() <= 0) {
-            return;
-        }
-        String group = matcher.group(1);
-        requestHandler.setUserId(group);
+        request.headers().add(PREFIX_HEADERS + "cid", requestHandler.getConnectionToEndpoint().getId());
     }
 
 }

@@ -122,7 +122,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         @Override
         public void destroyObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) throws Exception {
             LOG.log(Level.INFO, "destroy con {0} {1}", new Object[]{k, po.getObject()});
-            po.getObject().destroy();
+            po.getObject().destroy(null);
         }
 
         @Override
