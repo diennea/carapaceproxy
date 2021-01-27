@@ -1,21 +1,21 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.client.impl;
 
@@ -94,6 +94,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     private final Executor returnConnectionThreadPool;
 
     private boolean forceErrorOnRequest = false;
+    private boolean requestsHeaderDebugEnabled = false;
 
     public void returnConnection(EndpointConnectionImpl con) {
         // We need to perform returnObject in dedicated thread in order to avoid deadlock in Netty evenLoop
@@ -115,6 +116,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
             EndpointStats endpointstats = endpointsStats.computeIfAbsent(k, EndpointStats::new);
             EndpointConnectionImpl con = new EndpointConnectionImpl(k, ConnectionsManagerImpl.this, endpointstats);
             con.forceErrorOnRequest(forceErrorOnRequest);
+            con.setRequestsHeaderDebugEnabled(requestsHeaderDebugEnabled);
             LOG.log(Level.INFO, "opened new connection {0}", new Object[]{con});
             return new DefaultPooledObject<>(con);
         }
@@ -221,6 +223,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         connections.setSwallowedExceptionListener((Exception ex) -> {
             LOG.log(Level.SEVERE, "Internal endpoints connection pool error", ex);
         });
+        requestsHeaderDebugEnabled = configuration.isRequestsHeaderDebugEnabled();
 
         if (this.stuckRequestsReaperFuture != null && (oldIdleTimeout != idleTimeout)) {
             this.stuckRequestsReaperFuture.cancel(false);
@@ -364,6 +367,10 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     @VisibleForTesting
     public void forceErrorOnRequest(boolean force) {
         forceErrorOnRequest = force;
+    }
+
+    public void setRequestsHeaderDebugEnabled(boolean requestsHeaderDebugEnabled) {
+        this.requestsHeaderDebugEnabled = requestsHeaderDebugEnabled;
     }
 
 }

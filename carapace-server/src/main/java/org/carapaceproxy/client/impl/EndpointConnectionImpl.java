@@ -63,6 +63,8 @@ import org.carapaceproxy.utils.PrometheusUtils;
 
 public class EndpointConnectionImpl implements EndpointConnection {
 
+    public static final String DEBUG_HEADER_NAME = "X-Carapace-Debug";
+
     private static final Logger LOG = Logger.getLogger(EndpointConnectionImpl.class.getName());
 
     private static final AtomicLong IDGENERATOR = new AtomicLong();
@@ -100,6 +102,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private final Counter.Child requestsStats;
 
     private boolean forceErrorOnRequest = false;
+    private boolean requestsHeaderDebugEnabled = false;
 
     private static enum ConnectionState {
         IDLE,
@@ -235,6 +238,11 @@ public class EndpointConnectionImpl implements EndpointConnection {
         // may have already been received !
         clientSidePeerHandler.messageSentToBackend(EndpointConnectionImpl.this);
         activityDone();
+
+        if (requestsHeaderDebugEnabled) {
+            request.headers().add(DEBUG_HEADER_NAME, "cid-" + id);
+        }
+
         channelToEndpoint
                 .writeAndFlush(request)
                 .addListener((Future<? super Void> future) -> {
@@ -516,13 +524,12 @@ public class EndpointConnectionImpl implements EndpointConnection {
         forceErrorOnRequest = force;
     }
 
-    private void logConnectionInfo(String s) {
-        CarapaceLogger.debug("{0}: {1}", s, EndpointConnectionImpl.this);
+    public void setRequestsHeaderDebugEnabled(boolean requestsHeaderDebugEnabled) {
+        this.requestsHeaderDebugEnabled = requestsHeaderDebugEnabled;
     }
 
-    @Override
-    public long getId() {
-        return id;
+    private void logConnectionInfo(String s) {
+        CarapaceLogger.debug("{0}: {1}", s, EndpointConnectionImpl.this);
     }
 
 }

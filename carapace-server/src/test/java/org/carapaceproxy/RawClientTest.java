@@ -1,23 +1,14 @@
 package org.carapaceproxy;
 
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one or more contributor license agreements. See the NOTICE file distributed with this work for additional information regarding copyright ownership. Diennea S.r.l.
+ * licenses this file to you under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+ * implied. See the License for the specific language governing permissions and limitations under the License.
+ *
  */
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
@@ -46,8 +37,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import org.carapaceproxy.client.impl.ConnectionsManagerImpl;
+import org.carapaceproxy.client.impl.EndpointConnectionImpl;
+import org.carapaceproxy.server.RuntimeServerConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;
+import org.carapaceproxy.utils.RawHttpServer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -446,7 +444,7 @@ public class RawClientTest {
 
     @Test
     public void testConnectionCloseWhenErrorOnRequest() throws Exception {
-         stubFor(get(urlEqualTo("/index.html"))
+        stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "text/html")
@@ -482,12 +480,48 @@ public class RawClientTest {
             TestUtils.waitForCondition(() -> {
                 EndpointStats epstats = stats.getEndpointStats(key);
                 System.out.println("stats: " + epstats);
-                return epstats.getTotalConnections().intValue() ==  1
+                return epstats.getTotalConnections().intValue() == 1
                         && epstats.getActiveConnections().intValue() == 0
                         && epstats.getOpenConnections().intValue() == 0;
             }, 100);
             assertThat(conMan.getConnections().getNumIdle(), is(1));
         }
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+    }
+
+    @Test
+    public void testRequestsDebugHeader() throws Exception {
+
+        RawHttpServer httpServer = new RawHttpServer(new HttpServlet() {
+            public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+                assertThat(request.getHeader(EndpointConnectionImpl.DEBUG_HEADER_NAME), containsString("1"));
+                response.getOutputStream().write("it <b>works</b> !!".getBytes());
+            }
+        });
+        int httpServerPort = httpServer.start();
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", httpServerPort);
+        EndpointKey key = new EndpointKey("localhost", httpServerPort);
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            server.start();
+            int port = server.getLocalPort();
+            assertTrue(port > 0);
+
+            RuntimeServerConfiguration currentConfiguration = server.getCurrentConfiguration();
+            currentConfiguration.setRequestsHeaderDebugEnabled(true);
+            server.getConnectionsManager().applyNewConfiguration(currentConfiguration);
+
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                for (int j = 0; j < 2; j++) {
+                    RawHttpClient.HttpResponse res = client.get("/index.html");
+                    String resp = res.getBodyString();
+                    assertTrue(resp.contains("it <b>works</b> !!"));
+                }
+            } catch (Exception e) {
+                System.out.println("EXCEPTION: " + e);
+            }
+        }
     }
 }

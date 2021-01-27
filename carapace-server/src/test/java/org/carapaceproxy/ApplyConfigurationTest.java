@@ -40,7 +40,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import org.carapaceproxy.server.filters.DebugFilter;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Rule;
@@ -404,13 +403,11 @@ public class ApplyConfigurationTest {
                 Properties configuration = new Properties();
                 configuration.put("filter.1.type", "add-x-forwarded-for");
                 configuration.put("filter.2.type", "match-user-regexp");
-                configuration.put("filter.3.type", "debug");
                 reloadConfiguration(configuration, server);
 
-                assertEquals(3, server.getFilters().size());
+                assertEquals(2, server.getFilters().size());
                 assertTrue(server.getFilters().get(0) instanceof XForwardedForRequestFilter);
                 assertTrue(server.getFilters().get(1) instanceof RegexpMapUserIdFilter);
-                assertTrue(server.getFilters().get(2) instanceof DebugFilter);
             }
 
             // remove a filter

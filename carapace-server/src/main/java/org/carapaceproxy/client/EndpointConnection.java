@@ -63,10 +63,4 @@ public interface EndpointConnection {
      */
     public void release(boolean forceClose, RequestHandler handler, Runnable onReleasePerformed);
 
-    /**
-     *
-     * @return connection id.
-     */
-    public long getId();
-
 }

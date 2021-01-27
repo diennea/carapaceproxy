@@ -81,6 +81,7 @@ public class RuntimeServerConfiguration {
     private List<String> supportedSSLProtocols = null;
     private int ocspStaplingManagerPeriod = 0;
     private boolean connectionsReuseEnabled = true;
+    private boolean requestsHeaderDebugEnabled = false;
 
     public String getAccessLogPath() {
         return accessLogPath;
@@ -244,6 +245,15 @@ public class RuntimeServerConfiguration {
         this.connectionsReuseEnabled = connectionsReuseEnabled;
     }
 
+    public boolean isRequestsHeaderDebugEnabled() {
+        return requestsHeaderDebugEnabled;
+    }
+
+    @VisibleForTesting
+    public void setRequestsHeaderDebugEnabled(boolean requestsHeaderDebugEnabled) {
+        this.requestsHeaderDebugEnabled = requestsHeaderDebugEnabled;
+    }
+
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
         LOG.log(Level.INFO, "configuring from {0}", properties);
         this.maxConnectionsPerEndpoint = properties.getInt("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint);
@@ -314,6 +324,9 @@ public class RuntimeServerConfiguration {
 
         connectionsReuseEnabled = properties.getBoolean("connections.reuse.enabled", connectionsReuseEnabled);
         LOG.info("connections.reuse.enabled=" + connectionsReuseEnabled);
+
+        requestsHeaderDebugEnabled = properties.getBoolean("requests.header.debug.enabled", requestsHeaderDebugEnabled);
+        LOG.info("requests.header.debug.enabled=" + requestsHeaderDebugEnabled);
     }
 
     private void tryConfigureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {

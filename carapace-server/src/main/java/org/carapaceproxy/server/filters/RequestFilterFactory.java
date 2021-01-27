@@ -58,9 +58,6 @@ public class RequestFilterFactory {
                 String regexp = filterConfig.getOrDefault("regexp", "(.*)").trim();
                 return new RegexpMapSessionIdFilter(param, regexp, matcher);
             }
-            case DebugFilter.TYPE: {
-                return new DebugFilter(matcher);
-            }
             default:
                 throw new ConfigurationNotValidException("bad filter type '" + type
                         + "' only 'add-x-forwarded-for', 'match-user-regexp'");

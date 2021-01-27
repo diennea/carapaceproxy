@@ -32,19 +32,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import io.netty.handler.codec.http.HttpHeaders;
-import org.carapaceproxy.client.impl.EndpointConnectionImpl;
-import org.junit.Rule;
-import org.junit.rules.TemporaryFolder;
 
 public class SimpleFiltersTest {
-
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
-
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
 
     @Test
     public void testRegexpMapUserIdFilter() {
@@ -112,22 +101,6 @@ public class SimpleFiltersTest {
             }
         });
 
-    }
-
-    @Test
-    public void testDebugFilter() throws Exception {
-        HttpHeaders headers = mock(HttpHeaders.class);
-        HttpRequest request = mock(HttpRequest.class);
-        when(request.uri()).thenReturn("/index.html");
-        when(request.headers()).thenReturn(headers);
-        RequestHandler requestHandler = mock(RequestHandler.class);
-        EndpointConnectionImpl conn = mock(EndpointConnectionImpl.class);
-        when(conn.getId()).thenReturn(1L);
-        when(requestHandler.getConnectionToEndpoint()).thenReturn(conn);
-
-        DebugFilter filter = new DebugFilter(new MatchAllRequestMatcher());
-        filter.apply(request, null, requestHandler);
-        verify(headers, times(1)).add(DebugFilter.DEBUG_HEADER_NAME, "cid-1");
     }
 
 }
