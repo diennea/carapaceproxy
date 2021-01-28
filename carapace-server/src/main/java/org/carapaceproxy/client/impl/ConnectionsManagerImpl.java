@@ -40,6 +40,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.carapaceproxy.EndpointStats;
@@ -95,11 +96,23 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     private boolean forceErrorOnRequest = false;
 
+    
+    public void returnConnectionIfNotClosed(EndpointConnectionImpl con, String note) {
+        returnConnection(con, note, false);
+    }
     public void returnConnection(EndpointConnectionImpl con, String note) {
+        returnConnection(con, note, true);
+    }
+    
+    private void returnConnection(EndpointConnectionImpl con, String note, boolean force) {
         // We need to perform returnObject in dedicated thread in order to avoid deadlock in Netty evenLoop
         // in case of connection re-creation
         returnConnectionThreadPool.execute(() -> {
-            CarapaceLogger.debug("returnConnection due to {0}: {1}", note, con);
+            if (!force && con.closed.get()) {
+                CarapaceLogger.debug("skip returnConnection due to {0}, con already returned to the pool {1}", note, con);
+                return;
+            }
+            CarapaceLogger.debug("returnConnection due to {0} {1}", note, con);
             connections.returnObject(con.getKey(), con);
         });
     }
@@ -109,6 +122,8 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     }
 
     private final class ConnectionsFactory implements KeyedPooledObjectFactory<EndpointKey, EndpointConnectionImpl> {
+
+        private final AtomicLong seed = new AtomicLong();
 
         @Override
         public PooledObject<EndpointConnectionImpl> makeObject(EndpointKey k) throws Exception {

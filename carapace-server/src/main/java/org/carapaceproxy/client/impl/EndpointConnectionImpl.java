@@ -76,7 +76,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private final ConnectionsManagerImpl parent;
     private final EndpointKey key;
     private final EndpointStats endpointstats;
-    private final AtomicBoolean closed = new AtomicBoolean();
+    final AtomicBoolean closed = new AtomicBoolean();
     private final AtomicBoolean active = new AtomicBoolean();
 
     private final Channel channelToEndpoint;
@@ -192,7 +192,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 .closeFuture()
                 .addListener((Future<? super Void> future) -> {
                     if (!insidePool) {
-                        parent.returnConnection(EndpointConnectionImpl.this, "channel closed by server");
+                        parent.returnConnectionIfNotClosed(EndpointConnectionImpl.this, "channel closed by server");
                     }
                     CarapaceLogger.debug("channel closed to {0}. connection: {1}", key, this);
                     endpointstats.getOpenConnections().decrementAndGet();

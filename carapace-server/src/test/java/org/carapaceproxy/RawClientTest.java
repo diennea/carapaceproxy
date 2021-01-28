@@ -571,7 +571,7 @@ public class RawClientTest {
         String host = "sviluppo24.sviluppo.dna";
         String auth =
                 "9189A4D2F408FA495665AF6CA8ED47DA56758A3E400F1FE3C35D2034A954BA400E01A15895781073F8AFF7A771EBF1572CD8EAB9853864017DAD5105687FBCC2FD1EF4C52B63C95B28808FAEC045402F4DAC5320A5DDDAF035CB6EF7A99D6C8B5FC9ECA8AA1D3E7EA72FF15517E1461E1698162CF3FC444704F34FA8EDE7DB05FCF49";
-        int threads = 10;
+        int threads = 2;
         final int requestsPerClient = 1000;
         TestEndpointMapper mapper = new TestEndpointMapper(host, 8443);
 //        TestEndpointMapper mapper = new TestEndpointMapper("ws-mn1.mag-news.it", 443);
