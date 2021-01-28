@@ -312,7 +312,6 @@ public class EndpointConnectionImpl implements EndpointConnection {
         // chunk has been sent, because 'after' the writeAndFlush (on the listener)
         // it will be too late and the response from the server
         // may have already been received !
-        //clientSidePeerHandler.messageSentToBackend(EndpointConnectionImpl.this);
         activityDone();
         channelToEndpoint
                 .writeAndFlush(msg)
