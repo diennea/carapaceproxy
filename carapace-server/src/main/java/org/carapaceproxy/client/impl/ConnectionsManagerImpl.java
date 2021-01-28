@@ -97,6 +97,10 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     private boolean forceErrorOnRequest = false;
 
     public void returnConnectionIfNotClosed(EndpointConnectionImpl con, String note) {
+        if (con.closed.get()) {
+            CarapaceLogger.debug("skip returnConnection due to {0}, con already returned to the pool {1}", note, con);
+            return;
+        }
         returnConnection(con, note, false);
     }
 
@@ -109,7 +113,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         // in case of connection re-creation
         returnConnectionThreadPool.execute(() -> {
             if (!force && con.closed.get()) {
-                CarapaceLogger.debug("skip returnConnection due to {0}, con already returned to the pool {1}", note, con);
+                CarapaceLogger.debug("skip returnConnection (inside thread) due to {0}, con already returned to the pool {1}", note, con);
                 return;
             }
             CarapaceLogger.debug("returnConnection due to {0} {1}", note, con);
