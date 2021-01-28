@@ -136,11 +136,13 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
         @Override
         public void activateObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) throws Exception {
+            po.getObject().insidePool = false;
             CarapaceLogger.debug("activateObject {0} {1}", k, po.getObject());
         }
 
         @Override
         public void passivateObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) throws Exception {
+            po.getObject().insidePool = true;
             CarapaceLogger.debug("passivateObject {0} {1}", k, po.getObject());
         }
 

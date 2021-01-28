@@ -29,7 +29,7 @@ public final class CarapaceLogger {
 
     private static final java.util.logging.Logger LOG = java.util.logging.Logger.getLogger(CarapaceLogger.class.getName());
 
-    private static boolean loggingDebugEnabled = true;
+    private static boolean loggingDebugEnabled = false;
 
     private CarapaceLogger()  {}
 

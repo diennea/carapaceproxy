@@ -376,14 +376,6 @@ public final class RawHttpClient implements AutoCloseable {
         return consumeHttpResponseInput(socket.getInputStream());
     }
 
-    public HttpResponse executeRequest(String request, boolean breakCon) throws IOException {
-        sendRequest(request.getBytes(StandardCharsets.UTF_8));
-        if (breakCon) {
-            socket.close();
-        }
-        return consumeHttpResponseInput(socket.getInputStream());
-    }
-
     public Socket getSocket() {
         return socket;
     }

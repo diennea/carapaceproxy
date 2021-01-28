@@ -511,17 +511,68 @@ public class RawClientTest {
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
     }
 
+    private static RawHttpClient.HttpResponse doBeLoginPage(RawHttpClient client, String host, String auth) throws IOException {
+        String uri = "/be/common/login.do";
+        RawHttpClient.HttpResponse response =
+                client.executeRequest("GET " + uri + " HTTP/1.1"
+                        + "\r\nHost: " + host
+                        //                        + "\r\nAuthorization: Bearer " + auth
+                        //                        + "\r\nAccept: *"
+                        + "\r\nAccept-Encoding: gzip, deflate, br"
+                        + "\r\nCache-Control: no-cache"
+                        + "\r\nPragma: no-cache"
+                        + "\r\nConnection: keep-alive"
+                        + "\r\n\r\n"
+                );
+        return response;
+
+    }
+
+    private static RawHttpClient.HttpResponse doFePage(RawHttpClient client, String host, String auth) throws IOException {
+        String uri = "/nl/pventuri_page7.mn";
+        RawHttpClient.HttpResponse response =
+                client.executeRequest("GET " + uri + " HTTP/1.1"
+                        + "\r\nHost: " + host
+                        //                        + "\r\nAuthorization: Bearer " + auth
+                        //                        + "\r\nAccept: *"
+                        + "\r\nAccept-Encoding: gzip, deflate, br"
+                        + "\r\nCache-Control: no-cache"
+                        + "\r\nPragma: no-cache"
+                        + "\r\nConnection: keep-alive"
+                        + "\r\n\r\n"
+                );
+        return response;
+
+    }
+
+    private static RawHttpClient.HttpResponse doWsSubscribe(RawHttpClient client, String host, String auth) throws IOException {
+        String uri = "/ws/rest/api/v19/contacts/subscribe";
+        String body = "{\"values\" : {\"email\" : \"newcontact-" + System.nanoTime() + "@localhost\"}, \"options\" : {\"iddatabase\" : 1}}";
+        RawHttpClient.HttpResponse response =
+                client.executeRequest("POST " + uri + " HTTP/1.1"
+                        + "\r\nHost: " + host
+                        + "\r\nAuthorization: Bearer " + auth
+                        + "\r\nAccept: application/json"
+                        + "\r\nAccept-Encoding: gzip, deflate, br"
+                        + "\r\nCache-Control: no-cache"
+                        + "\r\nConnection: keep-alive"
+                        + "\r\nContent-Type: application/json"
+                        + "\r\nContent-Length: " + body.length()
+                        + "\r\n\r\n"
+                        + body
+                );
+        return response;
+    }
+
     @Test
     public void testRequestsRealBackend() throws Exception {
+        CarapaceLogger.setLoggingDebugEnabled(true);
 
         String host = "sviluppo24.sviluppo.dna";
-        String baseUri = "/ws/rest/api/";
         String auth =
                 "9189A4D2F408FA495665AF6CA8ED47DA56758A3E400F1FE3C35D2034A954BA400E01A15895781073F8AFF7A771EBF1572CD8EAB9853864017DAD5105687FBCC2FD1EF4C52B63C95B28808FAEC045402F4DAC5320A5DDDAF035CB6EF7A99D6C8B5FC9ECA8AA1D3E7EA72FF15517E1461E1698162CF3FC444704F34FA8EDE7DB05FCF49";
-//        String auth =
-//                "2237A-4989BC148DC4123C1404C77E1164089662FB00EA34F976BF190E4D07B584DFB89BA424E99AE170445C6034F3479FA8BA1797E30649AA05F7DC45FE44AED87F6AB90CFD133E744EA34740E9FB6E4FBD089C37A6CF4BD17B3421202766C5584CA58073D39AF2CD183194EAE33B30DEED5E96DA7DF8E4BF7E61BC23384E939027E1";
-        int threads = 100;
-        final int requestsPerClient = 200;
+        int threads = 10;
+        final int requestsPerClient = 1000;
         TestEndpointMapper mapper = new TestEndpointMapper(host, 8443);
 //        TestEndpointMapper mapper = new TestEndpointMapper("ws-mn1.mag-news.it", 443);
         ExecutorService ex = Executors.newFixedThreadPool(threads);
@@ -529,15 +580,19 @@ public class RawClientTest {
         AtomicInteger countOk = new AtomicInteger();
         AtomicInteger countError = new AtomicInteger();
         AtomicBoolean stop = new AtomicBoolean();
+//        final String carapaceHost = "mn-carapace.sviluppo.dna";
+        final String carapaceHost = "localhost";
+        int port = 443;
+        boolean isLocal = carapaceHost.equals("localhost");
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 43558, mapper, tmpDir.newFolder())) {
-            server.getCurrentConfiguration().setMaxConnectionsPerEndpoint(15);
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+            server.getCurrentConfiguration().setMaxConnectionsPerEndpoint(5);
             server.getConnectionsManager().applyNewConfiguration(server.getCurrentConfiguration());
             server.start();
-            int port = server.getLocalPort();
-
-            String uri = "v19/contacts/subscribe";
-//            String uri = "version";
+            if (isLocal) {
+                port = server.getLocalPort();
+            }
+            final int carapaceport = port;
 
             try {
 
@@ -546,44 +601,49 @@ public class RawClientTest {
                     futures.add(ex.submit(() -> {
 
                         try {
-                            try (RawHttpClient client = new RawHttpClient("localhost", port, false)) {
-//                                client.getSocket().setKeepAlive(true);
-                                client.getSocket().setSoTimeout(1000 * 10);
+                            try (RawHttpClient client = new RawHttpClient(carapaceHost, carapaceport, !isLocal)) {
+                                client.getSocket().setKeepAlive(true);
+                                client.getSocket().setSoTimeout(1000 * 15);
                                 for (int rq = 0; rq < requestsPerClient; rq++) {
                                     if (stop.get()) {
                                         throw new RuntimeException("stopped");
                                     }
-//                                    if (rq == requestsPerClient - 1) {
-//                                        client.getSocket().close();
-//                                    }
-                                    String body = "{\"values\" : {\"email\" : \"newcontact-" + System.nanoTime() + rq + "@localhost\"}, \"options\" : {\"iddatabase\" : 1}}";
-                                    RawHttpClient.HttpResponse response =
-                                            client.executeRequest("POST " + baseUri + uri + " HTTP/1.1"
-                                                    + "\r\nHost: " + "localhost"
-                                                    + "\r\nAuthorization: Bearer " + auth
-                                                    + "\r\nAccept: application/json"
-                                                    + "\r\nAccept-Encoding: gzip, deflate, br"
-                                                    + "\r\nCache-Control: no-cache"
-                                                    + "\r\nConnection: keep-alive"
-                                                    + "\r\nContent-Type: application/json"
-                                                    + "\r\nContent-Length: " + body.length()
-                                                    + "\r\n\r\n"
-                                                    + body, false
-                                            );
+                                    {
+                                        RawHttpClient.HttpResponse response = doBeLoginPage(client, carapaceHost, auth);
+                                        String res = response.getBodyString();
+                                        if (response.getStatusLine().contains("200")) {
+                                            System.out.println("Thread " + Thread.currentThread().getName() + " DONE #" + rq);
+                                            countOk.incrementAndGet();
+                                        } else {
+                                            System.out.println("bad response:" + res + "\n" + response);
+                                            countError.incrementAndGet();
+                                            stop.set(true);
+                                        }
+                                    }
+                                    {
+                                        RawHttpClient.HttpResponse response = doWsSubscribe(client, carapaceHost, auth);
+                                        String res = response.getBodyString();
+                                        if (response.getStatusLine().contains("200")) {
+                                            System.out.println("Thread " + Thread.currentThread().getName() + " DONE #" + rq);
+                                            countOk.incrementAndGet();
+                                        } else {
+                                            System.out.println("bad response:" + res + "\n" + response);
+                                            countError.incrementAndGet();
+                                            stop.set(true);
+                                        }
+                                    }
 
-//                                            client.executeRequest("GET " + baseUri + uri + " HTTP/1.1"
-//                                                    + "\r\nHost: " + host
-//                                                    + "\r\nAuthorization: Bearer " + auth
-//                                                    + "\r\nConnection: keep-alive"
-//                                                    + "\r\n\r\n"
-//                                            );
-                                    String res = response.getBodyString();
-                                    if (response.getStatusLine().contains("200")) {
-                                        countOk.incrementAndGet();
-                                    } else {
-                                        System.out.println("bad response:" + res + "\n" + response);
-                                        countError.incrementAndGet();
-                                        stop.set(true);
+                                    {
+                                        RawHttpClient.HttpResponse response = doFePage(client, carapaceHost, auth);
+                                        String res = response.getBodyString();
+                                        if (response.getStatusLine().contains("200")) {
+                                            System.out.println("Thread " + Thread.currentThread().getName() + " DONE #" + rq);
+                                            countOk.incrementAndGet();
+                                        } else {
+                                            System.out.println("bad response:" + res + "\n" + response);
+                                            countError.incrementAndGet();
+                                            stop.set(true);
+                                        }
                                     }
 //                                    try {
 //                                        Thread.sleep(new Random().nextInt(5000));
@@ -592,7 +652,7 @@ public class RawClientTest {
 //                                        System.out.println("err while sleeping" + e);
 //                                        
 //                                    }
-                                    
+
                                 }
                             }
                         } catch (Throwable e) {
@@ -645,7 +705,7 @@ public class RawClientTest {
 
         long requests = 1_000_000;
 
-        int testCase = 3;
+        int testCase = 0;
         long clients = 100;
         int readTimeoutSeconds = 30;
 

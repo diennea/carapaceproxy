@@ -84,6 +84,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private AtomicReference<ConnectionState> state = new AtomicReference<>(ConnectionState.IDLE);
     private volatile boolean forcedInvalid = false;
     private volatile RequestHandler clientSidePeerHandler;
+    volatile boolean insidePool;
 
     // stats
     private static final Summary CONNECTION_STATS_SUMMARY = PrometheusUtils.createSummary("backends", "connection_time_ns",
@@ -190,6 +191,9 @@ public class EndpointConnectionImpl implements EndpointConnection {
         channelToEndpoint
                 .closeFuture()
                 .addListener((Future<? super Void> future) -> {
+                    if (!insidePool) {
+                        parent.returnConnection(EndpointConnectionImpl.this, "channel closed by server");
+                    }
                     CarapaceLogger.debug("channel closed to {0}. connection: {1}", key, this);
                     endpointstats.getOpenConnections().decrementAndGet();
                     openConnectionsStats.dec();
@@ -381,7 +385,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 connectionDeactivated();
                 if (close) {
                     destroy();
-                    parent.returnConnection(this, "connection release with closed channel");
+//                    parent.returnConnection(this, "connection release with closed channel");
                 } else {
                     parent.returnConnection(this, "end of activity, keeping channel open");
                 }
@@ -465,7 +469,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 logConnectionInfo("channelReadComplete, open: " + ctx.channel().isOpen());
                 _clientSidePeerHandler.readCompletedFromRemote();
                 // server said no more data will be sent to this channel, we must close it before netty does
-                release(true, clientSidePeerHandler, null);
+//                release(true, clientSidePeerHandler, null);
             }
         }
 
