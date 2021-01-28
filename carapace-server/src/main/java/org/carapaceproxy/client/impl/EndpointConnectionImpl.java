@@ -385,7 +385,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 connectionDeactivated();
                 if (close) {
                     destroy();
-//                    parent.returnConnection(this, "connection release with closed channel");
+                    parent.returnConnection(this, "connection release with closed channel");
                 } else {
                     parent.returnConnection(this, "end of activity, keeping channel open");
                 }
