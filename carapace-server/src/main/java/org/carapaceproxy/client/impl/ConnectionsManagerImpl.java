@@ -96,14 +96,14 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     private boolean forceErrorOnRequest = false;
 
-    
     public void returnConnectionIfNotClosed(EndpointConnectionImpl con, String note) {
         returnConnection(con, note, false);
     }
+
     public void returnConnection(EndpointConnectionImpl con, String note) {
         returnConnection(con, note, true);
     }
-    
+
     private void returnConnection(EndpointConnectionImpl con, String note, boolean force) {
         // We need to perform returnObject in dedicated thread in order to avoid deadlock in Netty evenLoop
         // in case of connection re-creation
@@ -122,8 +122,6 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     }
 
     private final class ConnectionsFactory implements KeyedPooledObjectFactory<EndpointKey, EndpointConnectionImpl> {
-
-        private final AtomicLong seed = new AtomicLong();
 
         @Override
         public PooledObject<EndpointConnectionImpl> makeObject(EndpointKey k) throws Exception {
@@ -151,13 +149,11 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
         @Override
         public void activateObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) throws Exception {
-            po.getObject().insidePool = false;
             CarapaceLogger.debug("activateObject {0} {1}", k, po.getObject());
         }
 
         @Override
         public void passivateObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) throws Exception {
-            po.getObject().insidePool = true;
             CarapaceLogger.debug("passivateObject {0} {1}", k, po.getObject());
         }
 

@@ -84,7 +84,6 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private AtomicReference<ConnectionState> state = new AtomicReference<>(ConnectionState.IDLE);
     private volatile boolean forcedInvalid = false;
     private volatile RequestHandler clientSidePeerHandler;
-    volatile boolean insidePool;
 
     // stats
     private static final Summary CONNECTION_STATS_SUMMARY = PrometheusUtils.createSummary("backends", "connection_time_ns",
@@ -191,9 +190,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         channelToEndpoint
                 .closeFuture()
                 .addListener((Future<? super Void> future) -> {
-                    if (!insidePool) {
-                        parent.returnConnectionIfNotClosed(EndpointConnectionImpl.this, "channel closed by server");
-                    }
+                    parent.returnConnectionIfNotClosed(EndpointConnectionImpl.this, "channel closed by server");
                     CarapaceLogger.debug("channel closed to {0}. connection: {1}", key, this);
                     endpointstats.getOpenConnections().decrementAndGet();
                     openConnectionsStats.dec();
