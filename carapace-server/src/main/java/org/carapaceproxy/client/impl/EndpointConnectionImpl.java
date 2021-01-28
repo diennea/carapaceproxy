@@ -100,6 +100,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private final Counter.Child requestsStats;
 
     private boolean forceErrorOnRequest = false;
+    final AtomicBoolean returningToPool = new AtomicBoolean();
 
     private static enum ConnectionState {
         IDLE,
@@ -190,12 +191,16 @@ public class EndpointConnectionImpl implements EndpointConnection {
         channelToEndpoint
                 .closeFuture()
                 .addListener((Future<? super Void> future) -> {
-                    parent.returnConnectionIfNotClosed(EndpointConnectionImpl.this, "channel closed by server");
+                    parent.returnConnection(EndpointConnectionImpl.this, "channel closed by server");
                     CarapaceLogger.debug("channel closed to {0}. connection: {1}", key, this);
                     endpointstats.getOpenConnections().decrementAndGet();
                     openConnectionsStats.dec();
                 });
 
+    }
+
+    void recycle() {
+        returningToPool.set(false);
     }
 
     @Override

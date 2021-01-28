@@ -40,7 +40,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.carapaceproxy.EndpointStats;
@@ -54,7 +54,6 @@ import org.carapaceproxy.server.RequestHandler;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.apache.commons.pool2.KeyedPooledObjectFactory;
 import org.apache.commons.pool2.PooledObject;
-import org.apache.commons.pool2.PooledObjectState;
 import org.apache.commons.pool2.impl.DefaultPooledObject;
 import org.apache.commons.pool2.impl.DefaultPooledObjectInfo;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
@@ -95,32 +94,19 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
     private final Executor returnConnectionThreadPool;
 
     private boolean forceErrorOnRequest = false;
-
-    public void returnConnectionIfNotClosed(EndpointConnectionImpl con, String note) {
-        if (con.closed.get()) {
-            CarapaceLogger.debug("skip returnConnection due to {0}, con already returned to the pool {1}", note, con);
-            return;
-        }
-        returnConnection(con, note, false);
-    }
+    final ConnectionsManagerStats stats = () -> Collections.unmodifiableMap(endpointsStats);
+    
 
     public void returnConnection(EndpointConnectionImpl con, String note) {
-        returnConnection(con, note, true);
+        if (!con.returningToPool.getAndSet(true)) {
+            // We need to perform returnObject in dedicated thread in order to avoid deadlock in Netty evenLoop
+            // in case of connection re-creation
+            returnConnectionThreadPool.execute(() -> {
+                CarapaceLogger.debug("returnConnection due to {0} {1}", note, con);
+                connections.returnObject(con.getKey(), con);
+            });
+        }
     }
-
-    private void returnConnection(EndpointConnectionImpl con, String note, boolean force) {
-        // We need to perform returnObject in dedicated thread in order to avoid deadlock in Netty evenLoop
-        // in case of connection re-creation
-        returnConnectionThreadPool.execute(() -> {
-            if (!force && con.closed.get()) {
-                CarapaceLogger.debug("skip returnConnection (inside thread) due to {0}, con already returned to the pool {1}", note, con);
-                return;
-            }
-            CarapaceLogger.debug("returnConnection due to {0} {1}", note, con);
-            connections.returnObject(con.getKey(), con);
-        });
-    }
-
     public int getConnectTimeout() {
         return connectTimeout;
     }
@@ -158,6 +144,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
         @Override
         public void passivateObject(EndpointKey k, PooledObject<EndpointConnectionImpl> po) throws Exception {
+            po.getObject().recycle();
             CarapaceLogger.debug("passivateObject {0} {1}", k, po.getObject());
         }
 
@@ -338,8 +325,6 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
             }
         }
     }
-
-    final ConnectionsManagerStats stats = () -> Collections.unmodifiableMap(endpointsStats);
 
     @Override
     public ConnectionsManagerStats getStats() {
