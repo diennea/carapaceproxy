@@ -42,7 +42,6 @@ import org.junit.rules.TemporaryFolder;
  *
  * @author nicolo.boschi
  */
-@Ignore
 public class RealBackendsTest {
 
     private static RawHttpClient.HttpResponse doGet(RawHttpClient client, String host, String uri) throws IOException {
@@ -81,6 +80,7 @@ public class RealBackendsTest {
     public TemporaryFolder tmpDir = new TemporaryFolder();
 
     @Test
+    @Ignore
     public void testRequestsRealBackend() throws Exception {
         CarapaceLogger.setLoggingDebugEnabled(true);
 
