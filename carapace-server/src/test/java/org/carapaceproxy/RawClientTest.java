@@ -28,9 +28,9 @@ import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.utils.RawHttpClient;
 
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -58,6 +58,8 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import org.carapaceproxy.client.impl.ConnectionsManagerImpl;
+import org.carapaceproxy.client.impl.EndpointConnectionImpl;
+import org.carapaceproxy.server.RuntimeServerConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.RawHttpServer;
 import org.junit.After;
@@ -692,6 +694,42 @@ public class RawClientTest {
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
             cause.printStackTrace();
             ctx.close();
+        }
+    }
+
+    @Test
+    public void testRequestsDebugHeader() throws Exception {
+
+        RawHttpServer httpServer = new RawHttpServer(new HttpServlet() {
+            public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+                assertThat(request.getHeader(EndpointConnectionImpl.DEBUG_HEADER_NAME), containsString("1"));
+                response.getOutputStream().write("it <b>works</b> !!".getBytes());
+            }
+        });
+        int httpServerPort = httpServer.start();
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", httpServerPort);
+        EndpointKey key = new EndpointKey("localhost", httpServerPort);
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            server.start();
+            int port = server.getLocalPort();
+            assertTrue(port > 0);
+
+            RuntimeServerConfiguration currentConfiguration = server.getCurrentConfiguration();
+            currentConfiguration.setRequestsHeaderDebugEnabled(true);
+            server.getConnectionsManager().applyNewConfiguration(currentConfiguration);
+
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                for (int j = 0; j < 2; j++) {
+                    RawHttpClient.HttpResponse res = client.get("/index.html");
+                    String resp = res.getBodyString();
+                    assertTrue(resp.contains("it <b>works</b> !!"));
+                }
+            } catch (Exception e) {
+                System.out.println("EXCEPTION: " + e);
+            }
         }
     }
 
