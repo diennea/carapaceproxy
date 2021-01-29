@@ -445,12 +445,6 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private class ReadEndpointResponseHandler extends SimpleChannelInboundHandler<HttpObject> {
 
         @Override
-        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-            logConnectionInfo("channelRead message: " + msg + "; discarded: " + !acceptInboundMessage(msg));
-            super.channelRead(ctx, msg);
-        }
-
-        @Override
         public void channelRead0(ChannelHandlerContext ctx, HttpObject msg) {
             RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
             if (_clientSidePeerHandler == null) {
