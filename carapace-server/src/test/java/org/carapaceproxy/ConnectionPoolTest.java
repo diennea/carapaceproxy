@@ -167,7 +167,7 @@ public class ConnectionPoolTest {
                 long delta = _end - _start;
                 assertTrue("ERROR AFTER: " + delta, delta >= expectedMaxWaitTimeout);
             } finally {
-                connectionsManager.returnConnection(connection1);
+                connectionsManager.returnConnection(connection1, "test");
             }
         }
 

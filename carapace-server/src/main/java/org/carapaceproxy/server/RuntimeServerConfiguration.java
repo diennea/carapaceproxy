@@ -80,7 +80,6 @@ public class RuntimeServerConfiguration {
     private int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
     private List<String> supportedSSLProtocols = null;
     private int ocspStaplingManagerPeriod = 0;
-    private boolean connectionsReuseEnabled = true;
 
     public String getAccessLogPath() {
         return accessLogPath;
@@ -236,14 +235,6 @@ public class RuntimeServerConfiguration {
         return ocspStaplingManagerPeriod;
     }
 
-    public boolean isConnectionsReuseEnabled() {
-        return connectionsReuseEnabled;
-    }
-
-    public void setConnectionsReuseEnabled(boolean connectionsReuseEnabled) {
-        this.connectionsReuseEnabled = connectionsReuseEnabled;
-    }
-
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
         LOG.log(Level.INFO, "configuring from {0}", properties);
         this.maxConnectionsPerEndpoint = properties.getInt("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint);
@@ -311,9 +302,6 @@ public class RuntimeServerConfiguration {
         boolean loggingDebugEnabled = properties.getBoolean("logging.debug.enabled", false);
         CarapaceLogger.setLoggingDebugEnabled(loggingDebugEnabled);
         LOG.info("logging.debug.enabled=" + loggingDebugEnabled);
-
-        connectionsReuseEnabled = properties.getBoolean("connections.reuse.enabled", connectionsReuseEnabled);
-        LOG.info("connections.reuse.enabled=" + connectionsReuseEnabled);
     }
 
     private void tryConfigureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
