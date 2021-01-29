@@ -75,7 +75,6 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     private String sslProtocol;
     private String cipherSuite;
     final SocketAddress serverAddress;
-    private boolean connectionsReuseEnabled = true;
 
     public ClientConnectionHandler(
             EndpointMapper mapper,
@@ -159,7 +158,6 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             totalRequests.inc();
             RequestHandler currentRequest = new RequestHandler(requestIdGenerator.incrementAndGet(),
                     request, filters, this, ctx, () -> RUNNING_REQUESTS_GAUGE.dec(), backendHealthManager, requestsLogger);
-            currentRequest.setConnectionsReuseEnabled(this.connectionsReuseEnabled);
             addPendingRequest(currentRequest);
             currentRequest.start();
         } else if (msg instanceof LastHttpContent) {
@@ -252,9 +250,4 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     void addPendingRequest(RequestHandler request) {
         pendingRequests.add(request);
     }
-
-    void setConnectionsReuseEnabled(boolean connectionsReuseEnabled) {
-        this.connectionsReuseEnabled = connectionsReuseEnabled;
-    }
-
 }

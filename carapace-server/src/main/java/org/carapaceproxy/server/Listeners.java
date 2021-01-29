@@ -244,7 +244,6 @@ public class Listeners {
                                 port,
                                 listener.isSsl()
                         );
-                        connHandler.setConnectionsReuseEnabled(currentConfiguration.isConnectionsReuseEnabled());
                         channel.pipeline().addLast(connHandler);
 
                         listenersHandlers.put(key, connHandler);

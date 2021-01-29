@@ -25,7 +25,7 @@ import java.util.logging.Level;
  *
  * @author paolo.venturi
  */
-public class CarapaceLogger {
+public final class CarapaceLogger {
 
     private static final java.util.logging.Logger LOG = java.util.logging.Logger.getLogger(CarapaceLogger.class.getName());
 

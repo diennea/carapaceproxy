@@ -1,21 +1,21 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.client.impl;
 
@@ -76,7 +76,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private final ConnectionsManagerImpl parent;
     private final EndpointKey key;
     private final EndpointStats endpointstats;
-    private final AtomicBoolean closed = new AtomicBoolean();
+    final AtomicBoolean closed = new AtomicBoolean();
     private final AtomicBoolean active = new AtomicBoolean();
 
     private final Channel channelToEndpoint;
@@ -100,6 +100,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private final Counter.Child requestsStats;
 
     private boolean forceErrorOnRequest = false;
+    final AtomicBoolean returningToPool = new AtomicBoolean();
 
     private static enum ConnectionState {
         IDLE,
@@ -149,7 +150,6 @@ public class EndpointConnectionImpl implements EndpointConnection {
                         ch.pipeline().addLast(new ReadEndpointResponseHandler());
                     }
                 });
-
         final ChannelFuture connectFuture = b.connect(key.getHost(), key.getPort());
 
         connectFuture.addListener((Future<Void> future) -> {
@@ -191,11 +191,16 @@ public class EndpointConnectionImpl implements EndpointConnection {
         channelToEndpoint
                 .closeFuture()
                 .addListener((Future<? super Void> future) -> {
+                    parent.returnConnection(EndpointConnectionImpl.this, "channel closed by server");
                     CarapaceLogger.debug("channel closed to {0}. connection: {1}", key, this);
                     endpointstats.getOpenConnections().decrementAndGet();
                     openConnectionsStats.dec();
                 });
 
+    }
+
+    void recycle() {
+        returningToPool.set(false);
     }
 
     @Override
@@ -223,7 +228,8 @@ public class EndpointConnectionImpl implements EndpointConnection {
         parent.registerPendingRequest(clientSidePeerHandler);
 
         if (!channelToEndpoint.isOpen() || forcedInvalid || forceErrorOnRequest) {
-            LOG.log(Level.SEVERE, "sendRequest {0} failed, choosen connection is not valid", request.getClass());
+            LOG.log(Level.SEVERE, "sendRequest {0} failed, choosen connection is not valid, {1}, {2}, {3}",
+                    new Object[]{request.getClass(), channelToEndpoint.isOpen(), forcedInvalid, forceErrorOnRequest});
             changeExpectedStateTo(ConnectionState.RELEASABLE, ConnectionState.REQUEST_SENT);
             clientSidePeerHandler.errorSendingRequest(EndpointConnectionImpl.this, new Exception("no more connected").fillInStackTrace());
             return;
@@ -376,13 +382,15 @@ public class EndpointConnectionImpl implements EndpointConnection {
         // this method can be called from RequestHandler eventLoop and from EndpointConnection eventloop
         executeInEndpointConnectionEventLoop(() -> {
             if (changeExpectedStateTo(ConnectionState.IDLE, ConnectionState.RELEASABLE, ConnectionState.DELAYED_RELEASE)) {
-                CarapaceLogger.debug("release {0} with destroy={1}", this, close);
+                CarapaceLogger.debug("release with destroy={1} {0}", this, close);
                 checkHandler(clientSidePeerHandler);
                 connectionDeactivated();
                 if (close) {
                     destroy();
+                    parent.returnConnection(this, "connection release with closed channel");
+                } else {
+                    parent.returnConnection(this, "end of activity, keeping channel open");
                 }
-                parent.returnConnection(this);
                 if (onReleasePerformed != null) {
                     onReleasePerformed.run();
                 }
@@ -460,8 +468,10 @@ public class EndpointConnectionImpl implements EndpointConnection {
         public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
             RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
             if (_clientSidePeerHandler != null) {
-                logConnectionInfo("channelReadComplete");
+                logConnectionInfo("channelReadComplete, open: " + ctx.channel().isOpen());
                 _clientSidePeerHandler.readCompletedFromRemote();
+                // server said no more data will be sent to this channel, we must close it before netty does
+//                release(true, clientSidePeerHandler, null);
             }
         }
 
