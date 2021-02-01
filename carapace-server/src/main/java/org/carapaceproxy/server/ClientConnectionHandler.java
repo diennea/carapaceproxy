@@ -41,6 +41,7 @@ import org.carapaceproxy.EndpointMapper;
 import org.carapaceproxy.client.impl.EndpointConnectionImpl;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.cache.ContentsCache;
+import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.PrometheusUtils;
 
 public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object> {
@@ -139,7 +140,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         if (evt instanceof IdleStateEvent) {
             IdleStateEvent e = (IdleStateEvent) evt;
             if (e.state() == IdleState.ALL_IDLE) {
-                LOG.log(Level.SEVERE, "Idle connection detected for client {0}. Channel closed.", new Object[]{clientAddress});
+                CarapaceLogger.debug("Idle connection detected for client {0}. Channel closed.", clientAddress);
                 ctx.close();
             }
         }
