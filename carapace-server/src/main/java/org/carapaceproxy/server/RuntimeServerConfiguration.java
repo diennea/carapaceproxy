@@ -81,6 +81,7 @@ public class RuntimeServerConfiguration {
     private List<String> supportedSSLProtocols = null;
     private int ocspStaplingManagerPeriod = 0;
     private boolean requestsHeaderDebugEnabled = false;
+    private int clientsIdleTimeoutSeconds = 120;
 
     public String getAccessLogPath() {
         return accessLogPath;
@@ -245,6 +246,15 @@ public class RuntimeServerConfiguration {
         this.requestsHeaderDebugEnabled = requestsHeaderDebugEnabled;
     }
 
+    public int getClientsIdleTimeoutSeconds() {
+        return clientsIdleTimeoutSeconds;
+    }
+
+    @VisibleForTesting
+    public void setClientsIdleTimeoutSeconds(int clientIdleTimeoutSeconds) {
+        this.clientsIdleTimeoutSeconds = clientIdleTimeoutSeconds;
+    }
+
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
         LOG.log(Level.INFO, "configuring from {0}", properties);
         this.maxConnectionsPerEndpoint = properties.getInt("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint);
@@ -314,6 +324,9 @@ public class RuntimeServerConfiguration {
         LOG.info("logging.debug.enabled=" + loggingDebugEnabled);
         requestsHeaderDebugEnabled = properties.getBoolean("requests.header.debug.enabled", requestsHeaderDebugEnabled);
         LOG.info("requests.header.debug.enabled=" + requestsHeaderDebugEnabled);
+
+        clientsIdleTimeoutSeconds = properties.getInt("clients.idle.timeout", clientsIdleTimeoutSeconds);
+        LOG.info("clients.idle.timeout=" + clientsIdleTimeoutSeconds);
     }
 
     private void tryConfigureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
