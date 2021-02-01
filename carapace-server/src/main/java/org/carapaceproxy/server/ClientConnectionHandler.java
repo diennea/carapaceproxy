@@ -27,6 +27,8 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.ssl.SslHandler;
+import io.netty.handler.timeout.IdleState;
+import io.netty.handler.timeout.IdleStateEvent;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import java.net.SocketAddress;
@@ -39,6 +41,7 @@ import org.carapaceproxy.EndpointMapper;
 import org.carapaceproxy.client.impl.EndpointConnectionImpl;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.cache.ContentsCache;
+import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.PrometheusUtils;
 
 public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object> {
@@ -130,6 +133,17 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
         super.exceptionCaught(ctx, cause);
         LOG.log(Level.SEVERE, "bad error", cause);
+    }
+
+    @Override
+    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+        if (evt instanceof IdleStateEvent) {
+            IdleStateEvent e = (IdleStateEvent) evt;
+            if (e.state() == IdleState.ALL_IDLE) {
+                CarapaceLogger.debug("Idle connection detected for client {0}. Channel closed.", clientAddress);
+                ctx.close();
+            }
+        }
     }
 
     @Override

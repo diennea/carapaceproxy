@@ -35,18 +35,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.github.tomakehurst.wiremock.client.WireMock;
-import io.netty.bootstrap.Bootstrap;
-import io.netty.buffer.ByteBuf;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.SocketChannel;
-import io.netty.channel.socket.nio.NioSocketChannel;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
@@ -638,65 +626,6 @@ public class RawClientTest {
         }
     }
 
-    private static class NoDataDummyServer extends ChannelInboundHandlerAdapter {
-
-        public NoDataDummyServer(String host, int port) throws InterruptedException {
-            EventLoopGroup workerGroup = new NioEventLoopGroup();
-            try {
-                Bootstrap b = new Bootstrap();
-                b.group(workerGroup);
-                b.channel(NioSocketChannel.class);
-                b.option(ChannelOption.SO_KEEPALIVE, true);
-                b.handler(new ChannelInitializer<SocketChannel>() {
-                    @Override
-                    public void initChannel(SocketChannel ch) throws Exception {
-                        ch.pipeline().addLast(this);
-                    }
-                });
-
-                // Start the client.
-                ChannelFuture f = b.connect(host, port).sync();
-
-                // Wait until the connection is closed.
-                f.channel().closeFuture().sync();
-            } finally {
-                workerGroup.shutdownGracefully();
-            }
-        }
-
-        @Override
-        public void channelActive(final ChannelHandlerContext ctx) {
-            final ByteBuf time = ctx.alloc().buffer(4);
-            time.writeInt((int) (System.currentTimeMillis() / 1000L + 2208988800L));
-            System.out.println("channelActive send: " + time);
-
-            final ChannelFuture f = ctx.writeAndFlush(time);
-            f.addListener(new ChannelFutureListener() {
-                @Override
-                public void operationComplete(ChannelFuture future) {
-                    ctx.close();
-                }
-            });
-        }
-
-        @Override
-        public void channelRead(ChannelHandlerContext ctx, Object msg) {
-            ByteBuf m = (ByteBuf) msg;
-            try {
-                System.out.println("channelRead: " + msg);
-                ctx.close();
-            } finally {
-                m.release();
-            }
-        }
-
-        @Override
-        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-            cause.printStackTrace();
-            ctx.close();
-        }
-    }
-
     @Test
     public void testRequestsDebugHeader() throws Exception {
 
@@ -731,6 +660,50 @@ public class RawClientTest {
                 System.out.println("EXCEPTION: " + e);
             }
         }
+    }
+
+    @Test
+    public void testClientsIdleTimeout() throws Exception {
+        stubFor(get(urlEqualTo("/index.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withBody("it <b>works</b> !!")));
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+
+        CarapaceLogger.setLoggingDebugEnabled(true);
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            server.start();
+            stats = server.getConnectionsManager().getStats();
+            int port = server.getLocalPort();
+            assertTrue(port > 0);
+
+            RuntimeServerConfiguration currentConfiguration = server.getCurrentConfiguration();
+            currentConfiguration.setClientsIdleTimeoutSeconds(10);
+            server.getConnectionsManager().applyNewConfiguration(currentConfiguration);
+
+            int request = 0;
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                for (request = 0; request < 2; request++) {
+                    RawHttpClient.HttpResponse res = client.get("/index.html");
+                    if (request == 1) { // second request should be failed due to server connection close.
+                        fail();
+                    }
+                    String resp = res.getBodyString();
+                    assertTrue(resp.contains("it <b>works</b> !!"));
+                    Thread.sleep(20_000);
+                }
+            } catch (Exception e) {
+                assertThat(request, is(1)); // second request failed due to server connection close.
+            }
+
+        }
+        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
     }
 
 }
