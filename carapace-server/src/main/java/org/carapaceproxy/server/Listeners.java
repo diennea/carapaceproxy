@@ -74,6 +74,7 @@ import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.PrometheusUtils;
 import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
+import io.netty.handler.timeout.IdleStateHandler;
 
 /**
  *
@@ -231,6 +232,7 @@ public class Listeners {
                             };
                             channel.pipeline().addLast(sni);
                         }
+                        channel.pipeline().addLast("idleStateHandler", new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds()));
                         channel.pipeline().addLast(new HttpRequestDecoder());
                         channel.pipeline().addLast(new HttpResponseEncoder());
                         ClientConnectionHandler connHandler = new ClientConnectionHandler(parent.getMapper(),

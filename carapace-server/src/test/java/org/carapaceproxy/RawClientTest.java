@@ -566,6 +566,49 @@ public class RawClientTest {
     }
 
     @Test
+    public void testClientsIdleTimeout() throws Exception {
+        stubFor(get(urlEqualTo("/index.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withBody("it <b>works</b> !!")));
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            server.start();
+            int port = server.getLocalPort();
+            assertTrue(port > 0);
+
+            RuntimeServerConfiguration currentConfiguration = server.getCurrentConfiguration();
+            currentConfiguration.setClientsIdleTimeoutSeconds(30);
+            server.getConnectionsManager().applyNewConfiguration(currentConfiguration);
+
+            stats = server.getConnectionsManager().getStats();
+
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                for (int j = 0; j < 2; j++) {
+                    RawHttpClient.HttpResponse res = client.get("/index.html");
+                    Thread.sleep(60_000);
+                }
+            } catch (Exception e) {
+                System.out.println("EXCEPTION: " + e);
+            }
+            TestUtils.waitForCondition(() -> {
+                EndpointStats epstats = stats.getEndpointStats(key);
+                System.out.println("stats: " + epstats);
+                return epstats.getTotalConnections().intValue() == 2
+                        && epstats.getActiveConnections().intValue() == 0
+                        && epstats.getOpenConnections().intValue() == 0;
+            }, 100);
+        }
+        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+    }
+
+    @Test
     public void testKeepAliveTimeout() throws Exception {
         RawHttpServer httpServer = new RawHttpServer(new HttpServlet() {
             public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

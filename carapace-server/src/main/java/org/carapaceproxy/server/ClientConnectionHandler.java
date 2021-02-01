@@ -27,6 +27,8 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.ssl.SslHandler;
+import io.netty.handler.timeout.IdleState;
+import io.netty.handler.timeout.IdleStateEvent;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import java.net.SocketAddress;
@@ -130,6 +132,17 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
         super.exceptionCaught(ctx, cause);
         LOG.log(Level.SEVERE, "bad error", cause);
+    }
+
+    @Override
+    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+        if (evt instanceof IdleStateEvent) {
+            IdleStateEvent e = (IdleStateEvent) evt;
+            if (e.state() == IdleState.ALL_IDLE) {
+                LOG.log(Level.SEVERE, "Idle connection detected for client {0}. Channel closed.", new Object[]{clientAddress});
+                ctx.close();
+            }
+        }
     }
 
     @Override
