@@ -137,7 +137,8 @@ public class RequestsLogger implements Runnable, Closeable {
         }
     }
     
-    private void rotateAccessLogFile() throws IOException {
+    @VisibleForTesting
+    void rotateAccessLogFile() throws IOException {
         String accesslogPath =  this.currentConfiguration.getAccessLogPath();
         long maxSize = this.currentConfiguration.getAccessLogMaxSize();
         DateFormat date = new SimpleDateFormat("yyyy-MM-dd-ss");
@@ -186,7 +187,6 @@ public class RequestsLogger implements Runnable, Closeable {
                     source.delete();
                 }
             }
-            
             if(verbose){
                LOG.log(Level.INFO, "{0} was compressed successfully", source_filepath);
             }
