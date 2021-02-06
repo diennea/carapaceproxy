@@ -21,6 +21,8 @@ jobs:
   build:
     runs-on: ubuntu-18.04
     steps:
+      - name: Check disk space
+        run: df -h
       - name: Cancel Previous Runs
         uses: styfle/cancel-workflow-action@0.6.0
         with:
