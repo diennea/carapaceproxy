@@ -24,7 +24,7 @@ jobs:
       - name: 'Check disk space'
         run: df -h
       - name: 'Remove part of preinstalled software'
-        run: sudo rm -rf "/usr/local/share/boost
+        run: sudo rm -rf "/usr/local/share/boost"
       - name: "Remove AGENT_TOOLSDIRECTORY "
         run: sudo rm -rf "$AGENT_TOOLSDIRECTORY"
       - name: Cancel Previous Runs
