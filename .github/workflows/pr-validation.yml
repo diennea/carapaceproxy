@@ -23,10 +23,8 @@ jobs:
     steps:
       - name: 'Check disk space'
         run: df -h
-      - name: 'Remove part of preinstalled software'
-        run: sudo rm -rf "/usr/local/share/boost"
-      - name: "Remove AGENT_TOOLSDIRECTORY "
-        run: sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+      - name: 'Check home disk usage'
+        run: du -hs /
       - name: Cancel Previous Runs
         uses: styfle/cancel-workflow-action@0.6.0
         with:
@@ -42,6 +40,10 @@ jobs:
           path: ~/.m2
           key: 'cache'
           restore-keys: 'cache'
+      - name: 'Check disk space'
+        run: df -h
+      - name: 'Check home disk usage'
+        run: du -hs /
       - name: 'Build with Maven'
         run: mvn verify -Pproduction -Dmaven.test.redirectTestOutputToFile=true -Dsurefire.rerunFailingTestsCount=3
       - name: 'Remove Snapshots Before Caching'
