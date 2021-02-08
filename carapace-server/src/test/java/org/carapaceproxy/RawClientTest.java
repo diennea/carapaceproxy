@@ -52,6 +52,7 @@ import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.RawHttpServer;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -83,7 +84,8 @@ public class RawClientTest {
     public void dumpTestNameEnd() throws Exception {
         LOG.log(Level.INFO, "End {0}", testName.getMethodName());
     }
-
+    
+    @Ignore
     @Test
     public void testClientsExpectsConnectionClose() throws Exception {
 
@@ -122,6 +124,7 @@ public class RawClientTest {
 
     }
 
+    @Ignore
     @Test
     public void testClientsExpectsConnectionCloseWithDownEndpoint() throws Exception {
 
@@ -160,6 +163,7 @@ public class RawClientTest {
 
     }
 
+    @Ignore
     @Test
     public void testClientsSendsRequestAndClose() throws Exception {
 
@@ -209,6 +213,7 @@ public class RawClientTest {
 
     }
 
+    @Ignore
     @Test
     public void testClientsSendsRequestAndCloseOnDownBackend() throws Exception {
 
@@ -256,6 +261,7 @@ public class RawClientTest {
 
     }
 
+    @Ignore
     @Test
     public void clientsKeepAliveSimpleTest() throws Exception {
 
@@ -332,6 +338,7 @@ public class RawClientTest {
 
     }
 
+    @Ignore
     @Test
     public void downloadSmallPayloadsTest() throws Exception {
 
@@ -376,6 +383,7 @@ public class RawClientTest {
 
     }
 
+    @Ignore
     @Test
     public void endpointKeyTest() throws Exception {
         {
@@ -390,6 +398,7 @@ public class RawClientTest {
         }
     }
 
+    @Ignore
     @Test
     public void testManyInflightRequests() throws Exception {
 
@@ -446,6 +455,7 @@ public class RawClientTest {
 
     }
 
+    @Ignore
     @Test
     public void testConnectionCloseWhenErrorOnRequest() throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
@@ -492,7 +502,8 @@ public class RawClientTest {
         }
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
     }
-
+    
+    @Ignore
     @Test
     public void testRequestsReadTimeout() throws Exception {
         String responseJson = "{\"property\" : \"value\"}";
@@ -553,6 +564,7 @@ public class RawClientTest {
         }
     }
 
+    @Ignore
     @Test
     public void testKeepAliveTimeout() throws Exception {
         RawHttpServer httpServer = new RawHttpServer(new HttpServlet() {
@@ -587,6 +599,7 @@ public class RawClientTest {
         }
     }
 
+    @Ignore
     @Test
     public void testEmptyDataFromServer() throws Exception {
 
@@ -626,6 +639,7 @@ public class RawClientTest {
         }
     }
 
+    @Ignore
     @Test
     public void testRequestsDebugHeader() throws Exception {
 
@@ -662,6 +676,7 @@ public class RawClientTest {
         }
     }
 
+    @Ignore
     @Test
     public void testClientsIdleTimeout() throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
