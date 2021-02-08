@@ -29,6 +29,18 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import io.netty.handler.codec.http.HttpHeaders;
+import java.sql.Timestamp;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Date;
+import java.util.Locale;
+import java.util.TimeZone;
+import static org.apache.http.client.utils.DateUtils.GMT;
 import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.utils.RawHttpClient;
@@ -39,6 +51,7 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+
 
 /**
  * NOTE: some of these test are heavily dependent from wiremock stub creation, that could take from 500ms to 1000ms or
@@ -61,7 +74,7 @@ public class CacheExpireTest {
 
         java.util.Date expire = new java.util.Date(System.currentTimeMillis() + 60000 * 2);
         String formatted = HttpUtils.formatDateHeader(expire);
-
+        
         stubFor(get(urlEqualTo("/index-with-expire.html"))
             .willReturn(aResponse()
                 .withStatus(200)
@@ -95,13 +108,19 @@ public class CacheExpireTest {
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
+                String expireHeader = resp.getHeaderLines().stream().filter(h -> h.startsWith("Expires")).findAny().get().substring("Expires:".length()).trim();
+                Date date = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", Locale.UK).parse(expireHeader);
+                Date date2 = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", Locale.UK).parse(formatted);
+                Timestamp ts1 = new java.sql.Timestamp(date.getTime());
+                Timestamp ts2 = new java.sql.Timestamp(date2.getTime());
+                
                 System.out.println("s:" + s);
                 assertTrue(s.endsWith("it <b>works</b> !!"));
                 resp.getHeaderLines().forEach(h -> {
                     System.out.println("HEADER LINE :" + h);
                 });
                 assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("X-Cached")));
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
+                assertEquals(ts1, ts2);
             }
 
             stats = server.getConnectionsManager().getStats();
