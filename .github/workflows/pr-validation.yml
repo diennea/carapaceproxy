@@ -40,8 +40,6 @@ jobs:
           restore-keys: 'cache'
       - name: 'Check disk space'
         run: df -h
-      - name: 'Check root space'
-        run: sudo du -hs /
       - name: 'Build with Maven'
         run: mvn verify -Pproduction -Dmaven.test.redirectTestOutputToFile=true -Dsurefire.rerunFailingTestsCount=3
       - name: 'Remove Snapshots Before Caching'
