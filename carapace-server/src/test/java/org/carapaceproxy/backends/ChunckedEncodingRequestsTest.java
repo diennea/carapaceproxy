@@ -97,7 +97,7 @@ public class ChunckedEncodingRequestsTest {
             return epstats.getTotalConnections().intValue() == 1
                 && epstats.getActiveConnections().intValue() == 0
                 && epstats.getOpenConnections().intValue() == 0;
-        }, 10);
+        }, 100);
         
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
