@@ -41,6 +41,6 @@ jobs:
       - name: 'Check disk space'
         run: df -h
       - name: 'Build with Maven'
-        run: mvn verify -Pproduction -Dmaven.test.redirectTestOutputToFile=true -Dsurefire.rerunFailingTestsCount=3
+        run: mvn verify -Pproduction -Dmaven.test.skip=true
       - name: 'Remove Snapshots Before Caching'
         run: find ~/.m2 -name '*SNAPSHOT' | xargs rm -Rf
