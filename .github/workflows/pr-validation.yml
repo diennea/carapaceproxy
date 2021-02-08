@@ -23,8 +23,6 @@ jobs:
     steps:
       - name: 'Check disk space'
         run: df -h
-      - name: 'Check home disk usage'
-        run: du -hs /
       - name: Cancel Previous Runs
         uses: styfle/cancel-workflow-action@0.6.0
         with:
@@ -42,8 +40,6 @@ jobs:
           restore-keys: 'cache'
       - name: 'Check disk space'
         run: df -h
-      - name: 'Check home disk usage'
-        run: du -hs /
       - name: 'Build with Maven'
         run: mvn verify -Pproduction -Dmaven.test.redirectTestOutputToFile=true -Dsurefire.rerunFailingTestsCount=3
       - name: 'Remove Snapshots Before Caching'
