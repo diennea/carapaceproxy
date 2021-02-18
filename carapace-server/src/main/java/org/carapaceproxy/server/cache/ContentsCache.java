@@ -124,8 +124,8 @@ public class ContentsCache {
 
     private boolean isCachable(HttpResponse response) {
         HttpHeaders headers = response.headers();
-        String cacheControl = headers.get(HttpHeaderNames.CACHE_CONTROL);
-        if ((cacheControl != null && CACHE_CONTROL_CACHE_DISABLED_VALUES.stream().anyMatch(v -> cacheControl.replaceAll(" ", "").toLowerCase().contains(v)))
+        String cacheControl = headers.get(HttpHeaderNames.CACHE_CONTROL, "").replaceAll(" ", "").toLowerCase();
+        if ((!cacheControl.isEmpty() && CACHE_CONTROL_CACHE_DISABLED_VALUES.stream().anyMatch(v -> cacheControl.contains(v)))
                 || headers.contains(HttpHeaderNames.PRAGMA, HttpHeaderValues.NO_CACHE, true)
                 || !isContentLengthCachable(headers)) {
             // never cache Pragma: no-cache, Cache-Control: nostore/no-cache
