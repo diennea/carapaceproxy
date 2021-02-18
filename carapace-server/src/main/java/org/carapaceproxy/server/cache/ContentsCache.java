@@ -36,6 +36,7 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import io.prometheus.client.Counter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,6 +58,13 @@ public class ContentsCache {
     private static final Logger LOG = Logger.getLogger(ContentsCache.class.getName());
 
     private static final Counter NO_CACHE_REQUESTS_COUNTER = PrometheusUtils.createCounter("cache", "non_cachable_requests_total", "not cachable requests").register();
+
+    public static final List<String> CACHE_CONTROL_CACHE_DISABLED_VALUES = Arrays.asList(
+            HttpHeaderValues.PRIVATE + "",
+            HttpHeaderValues.NO_CACHE + "",
+            HttpHeaderValues.NO_STORE + "",
+            HttpHeaderValues.MAX_AGE + "=0"
+    );
 
     private CacheImpl cache;
 
@@ -116,8 +124,8 @@ public class ContentsCache {
 
     private boolean isCachable(HttpResponse response) {
         HttpHeaders headers = response.headers();
-        String cacheControl = headers.get(HttpHeaderNames.CACHE_CONTROL, "");
-        if (cacheControl.contains(HttpHeaderValues.NO_CACHE) || cacheControl.contains(HttpHeaderValues.NO_STORE)
+        String cacheControl = headers.get(HttpHeaderNames.CACHE_CONTROL);
+        if ((cacheControl != null && CACHE_CONTROL_CACHE_DISABLED_VALUES.stream().anyMatch(v -> cacheControl.replaceAll(" ", "").contains(v)))
                 || headers.contains(HttpHeaderNames.PRAGMA, HttpHeaderValues.NO_CACHE, false)
                 || !isContentLengthCachable(headers)) {
             // never cache Pragma: no-cache, Cache-Control: nostore/no-cache
