@@ -125,8 +125,8 @@ public class ContentsCache {
     private boolean isCachable(HttpResponse response) {
         HttpHeaders headers = response.headers();
         String cacheControl = headers.get(HttpHeaderNames.CACHE_CONTROL);
-        if ((cacheControl != null && CACHE_CONTROL_CACHE_DISABLED_VALUES.stream().anyMatch(v -> cacheControl.replaceAll(" ", "").contains(v)))
-                || headers.contains(HttpHeaderNames.PRAGMA, HttpHeaderValues.NO_CACHE, false)
+        if ((cacheControl != null && CACHE_CONTROL_CACHE_DISABLED_VALUES.stream().anyMatch(v -> cacheControl.replaceAll(" ", "").toLowerCase().contains(v)))
+                || headers.contains(HttpHeaderNames.PRAGMA, HttpHeaderValues.NO_CACHE, true)
                 || !isContentLengthCachable(headers)) {
             // never cache Pragma: no-cache, Cache-Control: nostore/no-cache
             LOG.log(Level.FINER, "not cachable {0}", response);
@@ -155,7 +155,7 @@ public class ContentsCache {
                 return false;
         }
         boolean ctrlF5 = request.headers()
-                .containsValue(HttpHeaderNames.CACHE_CONTROL, HttpHeaderValues.NO_CACHE, false);
+                .containsValue(HttpHeaderNames.CACHE_CONTROL, HttpHeaderValues.NO_CACHE, true);
         if (ctrlF5) {
             if (registerNoCacheStat) {
                 NO_CACHE_REQUESTS_COUNTER.inc();

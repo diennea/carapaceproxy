@@ -622,6 +622,64 @@ public class CacheTest {
                 assertEquals(2, server.getCache().getStats().getMisses());
             }
 
+            // cache-control value caseInsensitive
+            {
+                stubFor(get(urlEqualTo("/index.png?_nocache"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withHeader(HttpHeaderNames.CACHE_CONTROL + "", "No-CacHe")
+                                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                                .withBody("it <b>works</b> !!")));
+
+                server.getCache().getStats().resetCacheMetrics();
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    String s = client.get("/index.png?_nocache").toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                }
+
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    String s = client.get("/index.png?_nocache").toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                }
+                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
+                assertNotNull(stats.getEndpoints().get(key));
+                assertEquals(0, server.getCache().getCacheSize());
+                assertEquals(0, server.getCache().getStats().getHits());
+                assertEquals(2, server.getCache().getStats().getMisses());
+            }
+
+            // pragma value caseInsensitive
+            {
+                stubFor(get(urlEqualTo("/index.png?_nocache"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withHeader(HttpHeaderNames.PRAGMA + "", "No-CacHe")
+                                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                                .withBody("it <b>works</b> !!")));
+
+                server.getCache().getStats().resetCacheMetrics();
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    String s = client.get("/index.png?_nocache").toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                }
+
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    String s = client.get("/index.png?_nocache").toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                }
+                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
+                assertNotNull(stats.getEndpoints().get(key));
+                assertEquals(0, server.getCache().getCacheSize());
+                assertEquals(0, server.getCache().getStats().getHits());
+                assertEquals(2, server.getCache().getStats().getMisses());
+            }
+
             // no cache-control set
             {
                 stubFor(get(urlEqualTo("/index.png?_nocache"))
