@@ -1,21 +1,21 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.server.cache;
 
@@ -36,6 +36,7 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import io.prometheus.client.Counter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,6 +58,13 @@ public class ContentsCache {
     private static final Logger LOG = Logger.getLogger(ContentsCache.class.getName());
 
     private static final Counter NO_CACHE_REQUESTS_COUNTER = PrometheusUtils.createCounter("cache", "non_cachable_requests_total", "not cachable requests").register();
+
+    public static final List<String> CACHE_CONTROL_CACHE_DISABLED_VALUES = Arrays.asList(
+            HttpHeaderValues.PRIVATE + "",
+            HttpHeaderValues.NO_CACHE + "",
+            HttpHeaderValues.NO_STORE + "",
+            HttpHeaderValues.MAX_AGE + "=0"
+    );
 
     private CacheImpl cache;
 
@@ -116,9 +124,9 @@ public class ContentsCache {
 
     private boolean isCachable(HttpResponse response) {
         HttpHeaders headers = response.headers();
-        if (headers.contains(HttpHeaderNames.CACHE_CONTROL, HttpHeaderValues.NO_CACHE, false)
-                || headers.contains(HttpHeaderNames.CACHE_CONTROL, HttpHeaderValues.NO_STORE, false)
-                || headers.contains(HttpHeaderNames.PRAGMA, HttpHeaderValues.NO_CACHE, false)
+        String cacheControl = headers.get(HttpHeaderNames.CACHE_CONTROL, "").replaceAll(" ", "").toLowerCase();
+        if ((!cacheControl.isEmpty() && CACHE_CONTROL_CACHE_DISABLED_VALUES.stream().anyMatch(v -> cacheControl.contains(v)))
+                || headers.contains(HttpHeaderNames.PRAGMA, HttpHeaderValues.NO_CACHE, true)
                 || !isContentLengthCachable(headers)) {
             // never cache Pragma: no-cache, Cache-Control: nostore/no-cache
             LOG.log(Level.FINER, "not cachable {0}", response);
@@ -147,7 +155,7 @@ public class ContentsCache {
                 return false;
         }
         boolean ctrlF5 = request.headers()
-                .containsValue(HttpHeaderNames.CACHE_CONTROL, HttpHeaderValues.NO_CACHE, false);
+                .containsValue(HttpHeaderNames.CACHE_CONTROL, HttpHeaderValues.NO_CACHE, true);
         if (ctrlF5) {
             if (registerNoCacheStat) {
                 NO_CACHE_REQUESTS_COUNTER.inc();
@@ -287,7 +295,8 @@ public class ContentsCache {
 
         @Override
         public String toString() {
-            return "ContentPayload{" + "chunks_n=" + chunks.size() + ", creationTs=" + new java.sql.Timestamp(creationTs) + ", lastModified=" + new java.sql.Timestamp(lastModified) + ", expiresTs=" + new java.sql.Timestamp(expiresTs) + ", size=" + (heapSize + directSize) + " (heap=" + heapSize + ", direct=" + directSize + ")" + '}';
+            return "ContentPayload{" + "chunks_n=" + chunks.size() + ", creationTs=" + new java.sql.Timestamp(creationTs) + ", lastModified=" + new java.sql.Timestamp(lastModified) + ", expiresTs=" + new java.sql.Timestamp(
+                    expiresTs) + ", size=" + (heapSize + directSize) + " (heap=" + heapSize + ", direct=" + directSize + ")" + '}';
         }
 
         public long getLastModified() {

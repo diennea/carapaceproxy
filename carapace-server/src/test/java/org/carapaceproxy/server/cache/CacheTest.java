@@ -1,28 +1,20 @@
 package org.carapaceproxy.server.cache;
 
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one or more contributor license agreements. See the NOTICE file distributed with this work for additional information regarding copyright ownership. Diennea S.r.l.
+ * licenses this file to you under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+ * implied. See the License for the specific language governing permissions and limitations under the License.
+ *
  */
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.carapaceproxy.server.cache.ContentsCache.CACHE_CONTROL_CACHE_DISABLED_VALUES;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +35,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
+import io.netty.handler.codec.http.HttpHeaderNames;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -533,6 +526,198 @@ public class CacheTest {
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
+    }
+
+    @Test
+    public void testNoCache() throws Exception {
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            server.start();
+            int port = server.getLocalPort();
+            for (String noCacheValue : CACHE_CONTROL_CACHE_DISABLED_VALUES) {
+                stubFor(get(urlEqualTo("/index.png?_nocache"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withHeader(HttpHeaderNames.CACHE_CONTROL + "", noCacheValue)
+                                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                                .withBody("it <b>works</b> !!")));
+
+                server.getCache().getStats().resetCacheMetrics();
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    String s = client.get("/index.png?_nocache").toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                }
+
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    String s = client.get("/index.png?_nocache").toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                }
+
+                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
+                assertNotNull(stats.getEndpoints().get(key));
+                assertEquals(0, server.getCache().getCacheSize());
+                assertEquals(0, server.getCache().getStats().getHits());
+                assertEquals(2, server.getCache().getStats().getMisses());
+            }
+
+            // multiple cache-control values
+            {
+                stubFor(get(urlEqualTo("/index.png?_nocache"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withHeader(HttpHeaderNames.CACHE_CONTROL + "", "no-cache, no-store")
+                                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                                .withBody("it <b>works</b> !!")));
+
+                server.getCache().getStats().resetCacheMetrics();
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    String s = client.get("/index.png?_nocache").toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                }
+
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    String s = client.get("/index.png?_nocache").toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                }
+                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
+                assertNotNull(stats.getEndpoints().get(key));
+                assertEquals(0, server.getCache().getCacheSize());
+                assertEquals(0, server.getCache().getStats().getHits());
+                assertEquals(2, server.getCache().getStats().getMisses());
+            }
+
+            // cache-control value with spaces
+            {
+                stubFor(get(urlEqualTo("/index.png?_nocache"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withHeader(HttpHeaderNames.CACHE_CONTROL + "", "max-age  = 0")
+                                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                                .withBody("it <b>works</b> !!")));
+
+                server.getCache().getStats().resetCacheMetrics();
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    String s = client.get("/index.png?_nocache").toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                }
+
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    String s = client.get("/index.png?_nocache").toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                }
+                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
+                assertNotNull(stats.getEndpoints().get(key));
+                assertEquals(0, server.getCache().getCacheSize());
+                assertEquals(0, server.getCache().getStats().getHits());
+                assertEquals(2, server.getCache().getStats().getMisses());
+            }
+
+            // cache-control value caseInsensitive
+            {
+                stubFor(get(urlEqualTo("/index.png?_nocache"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withHeader(HttpHeaderNames.CACHE_CONTROL + "", "No-CacHe")
+                                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                                .withBody("it <b>works</b> !!")));
+
+                server.getCache().getStats().resetCacheMetrics();
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    String s = client.get("/index.png?_nocache").toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                }
+
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    String s = client.get("/index.png?_nocache").toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                }
+                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
+                assertNotNull(stats.getEndpoints().get(key));
+                assertEquals(0, server.getCache().getCacheSize());
+                assertEquals(0, server.getCache().getStats().getHits());
+                assertEquals(2, server.getCache().getStats().getMisses());
+            }
+
+            // pragma value caseInsensitive
+            {
+                stubFor(get(urlEqualTo("/index.png?_nocache"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withHeader(HttpHeaderNames.PRAGMA + "", "No-CacHe")
+                                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                                .withBody("it <b>works</b> !!")));
+
+                server.getCache().getStats().resetCacheMetrics();
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    String s = client.get("/index.png?_nocache").toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                }
+
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    String s = client.get("/index.png?_nocache").toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                }
+                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
+                assertNotNull(stats.getEndpoints().get(key));
+                assertEquals(0, server.getCache().getCacheSize());
+                assertEquals(0, server.getCache().getStats().getHits());
+                assertEquals(2, server.getCache().getStats().getMisses());
+            }
+
+            // no cache-control set
+            {
+                stubFor(get(urlEqualTo("/index.png?_nocache"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                                .withBody("it <b>works</b> !!")));
+
+                server.getCache().getStats().resetCacheMetrics();
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    String s = client.get("/index.png?_nocache").toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                }
+
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    String s = client.get("/index.png?_nocache").toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                }
+                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
+                assertNotNull(stats.getEndpoints().get(key));
+                assertEquals(1, server.getCache().getCacheSize());
+                assertEquals(1, server.getCache().getStats().getHits());
+                assertEquals(1, server.getCache().getStats().getMisses());
+            }
+
+            ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
+            TestUtils.waitForCondition(() -> {
+                EndpointStats epstats = stats.getEndpointStats(key);
+                return epstats.getTotalConnections().intValue() >= 1
+                        && epstats.getActiveConnections().intValue() == 0
+                        && epstats.getOpenConnections().intValue() == 0;
+            }, 100);
+
+            TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+        }
     }
 
 }
