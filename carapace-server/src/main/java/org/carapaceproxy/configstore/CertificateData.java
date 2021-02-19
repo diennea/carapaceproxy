@@ -38,7 +38,6 @@ public class CertificateData {
     private DynamicCertificateState state;
     private String pendingOrderLocation;
     private String pendingChallengeData;
-    private boolean available;
 
     // Data available at run-time only
     private boolean wildcard;
@@ -46,14 +45,13 @@ public class CertificateData {
     private int daysBeforeRenewal;
 
     public CertificateData(String domain, String privateKey, String chain, DynamicCertificateState state,
-                           String orderLocation, String challengeData, boolean available) {
+                           String orderLocation, String challengeData) {
         this.domain = domain;
         this.privateKey = privateKey;
         this.chain = chain;
         this.state = state;
         this.pendingOrderLocation = orderLocation;
         this.pendingChallengeData = challengeData;
-        this.available = available;
     }
 
     public String getDomain() {
@@ -80,10 +78,6 @@ public class CertificateData {
         return pendingChallengeData;
     }
 
-    public boolean isAvailable() {
-        return available;
-    }
-
     public void setDomain(String domain) {
         this.domain = domain;
     }
@@ -98,10 +92,6 @@ public class CertificateData {
 
     public void setState(DynamicCertificateState state) {
         this.state = state;
-    }
-
-    public void setAvailable(boolean available) {
-        this.available = available;
     }
 
     public void setPendingOrderLocation(String orderLocation) {
@@ -153,7 +143,6 @@ public class CertificateData {
         hash = 89 * hash + Objects.hashCode(this.state);
         hash = 89 * hash + Objects.hashCode(this.pendingOrderLocation);
         hash = 89 * hash + Objects.hashCode(this.pendingChallengeData);
-        hash = 89 * hash + (this.available ? 1 : 0);
         hash = 89 * hash + (this.manual ? 1 : 0);
         hash = 89 * hash + this.daysBeforeRenewal;
         return hash;
@@ -171,9 +160,6 @@ public class CertificateData {
             return false;
         }
         final CertificateData other = (CertificateData) obj;
-        if (this.available != other.available) {
-            return false;
-        }
         if (this.manual != other.manual) {
             return false;
         }
@@ -203,7 +189,7 @@ public class CertificateData {
 
     @Override
     public String toString() {
-        return "CertificateData{" + "domain=" + domain + ", state=" + state + ", available=" + available + ", manual=" + manual + '}';
+        return "CertificateData{" + "domain=" + domain + ", state=" + state + ", manual=" + manual + '}';
     }
 
 }

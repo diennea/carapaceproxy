@@ -120,17 +120,21 @@ public class DynamicCertificatesManagerTest {
 
         // yet available certificate
         String d0 = "localhost0";
-        CertificateData cd0 = new CertificateData(d0, "", chain, AVAILABLE, "", "", false);
+        CertificateData cd0 = new CertificateData(d0, "", chain, AVAILABLE, "", "");
         when(store.loadCertificateForDomain(eq(d0))).thenReturn(cd0);
         // certificate to order
         String d1 = "localhost1";
-        CertificateData cd1 = new CertificateData(d1, "", "", WAITING, "", "", false);
+        CertificateData cd1 = new CertificateData(d1, "", "", WAITING, "", "");
         when(store.loadCertificateForDomain(eq(d1))).thenReturn(cd1);
         man.setConfigurationStore(store);
         // manual certificate
-        String d2 = "notacme";
-        CertificateData cd2 = new CertificateData(d2, "", "", AVAILABLE, "", "", true);
+        String d2 = "manual";
+        CertificateData cd2 = new CertificateData(d2, "", chain, AVAILABLE, "", "");
         when(store.loadCertificateForDomain(eq(d2))).thenReturn(cd2);
+        // empty manual certificate
+        String d3 = "emptymanual";
+        CertificateData cd3 = new CertificateData(d3, "", "", AVAILABLE, "", "");
+        when(store.loadCertificateForDomain(eq(d3))).thenReturn(cd3);
 
         man.setConfigurationStore(store);
 
@@ -145,6 +149,9 @@ public class DynamicCertificatesManagerTest {
         props.setProperty("certificate.2.hostname", d2);
         props.setProperty("certificate.2.mode", "manual");
         props.setProperty("certificate.2.daysbeforerenewal", "0");
+        props.setProperty("certificate.3.hostname", d3);
+        props.setProperty("certificate.3.mode", "manual");
+        props.setProperty("certificate.3.daysbeforerenewal", "0");
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(configStore);
@@ -152,7 +159,9 @@ public class DynamicCertificatesManagerTest {
 
         assertEquals(AVAILABLE, man.getStateOfCertificate(d0));
         assertEquals(AVAILABLE, man.getStateOfCertificate(d2));
+        assertEquals(AVAILABLE, man.getStateOfCertificate(d3));
         assertNotNull(man.getCertificateForDomain(d2));
+        assertNull(man.getCertificateForDomain(d3)); // empty
         man.setStateOfCertificate(d2, WAITING); // has not to be renewed by the manager (saveCounter = 1)
         assertEquals(WAITING, man.getStateOfCertificate(d2));
 
@@ -262,7 +271,7 @@ public class DynamicCertificatesManagerTest {
 
         // certificate to order
         String domain = "*.localhost";
-        CertificateData cd1 = new CertificateData(domain, "", "", WAITING, "", "", false);
+        CertificateData cd1 = new CertificateData(domain, "", "", WAITING, "", "");
         when(store.loadCertificateForDomain(eq(domain))).thenReturn(cd1);
         man.setConfigurationStore(store);
 

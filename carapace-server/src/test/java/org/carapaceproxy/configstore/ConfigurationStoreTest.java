@@ -30,11 +30,11 @@ import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.D
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import static org.carapaceproxy.utils.TestUtils.assertEqualsKey;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.collection.ArrayMatching.arrayContaining;
 import org.junit.After;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
 import org.carapaceproxy.utils.TestUtils;
 import org.hamcrest.core.IsNull;
 import org.junit.Rule;
@@ -259,12 +259,12 @@ public class ConfigurationStoreTest {
 
         // Certificates saving
         CertificateData cert1 = new CertificateData(
-                d1, "encodedPK1", "encodedChain1", DynamicCertificateState.AVAILABLE, order, challenge, true
+                d1, "encodedPK1", "encodedChain1", DynamicCertificateState.AVAILABLE, order, challenge
         );
         store.saveCertificate(cert1);
 
         CertificateData cert2 = new CertificateData(
-                d2, "encodedPK2", "encodedChain2", DynamicCertificateState.WAITING, null, null, false
+                d2, "encodedPK2", "encodedChain2", DynamicCertificateState.WAITING, null, null
         );
         store.saveCertificate(cert2);
 
@@ -273,7 +273,6 @@ public class ConfigurationStoreTest {
         assertEquals(cert2, store.loadCertificateForDomain(d2));
 
         // Cert Updating
-        cert1.setAvailable(false);
         cert1.setState(DynamicCertificateState.WAITING);
         cert1.setPendingOrderLocation(new URL("http://locallhost/updatedorder").toString());
         cert1.setPendingChallengeData(JSON.parse("{\"challenge\": \"updateddata\"}").toString());
