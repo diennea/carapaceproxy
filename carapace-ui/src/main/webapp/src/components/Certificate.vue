@@ -1,7 +1,7 @@
 <template>
     <div>
-        <div v-if="found">          
-            <h2>Certificate {{$route.params.id}}</h2>            
+        <div v-if="found">
+            <h2>Certificate {{$route.params.id}}</h2>
             <div class="panel panel-info">
                 <div class="panel-body">
                     <ul class="list-group">
@@ -10,19 +10,17 @@
                         <li class="list-group-item"><strong>Mode:</strong> {{certificate.mode}}</li>
                         <li class="list-group-item"><strong>Dynamic:</strong> {{certificate.dynamic | symbolFormat}}</li>
                         <li class="list-group-item"><strong>Status:</strong> {{certificate.status}}</li>
-                        <li v-if="certificate.dynamic" class="list-group-item"><strong>Expiring Date:</strong> {{certificate.expiringDate}}</li>
-                        <li v-if="certificate.mode == 'acme'" class="list-group-item"><strong>Days Before Renewal:</strong> {{certificate.daysBeforeRenewal}}</li>                        
-                        <li v-if="certificate.dynamic" class="list-group-item"><strong>Serial Number:</strong> {{certificate.serialNumber}}</li>
+                        <li class="list-group-item"><strong>Expiring Date:</strong> {{certificate.expiringDate}}</li>
+                        <li v-if="certificate.mode == 'acme'" class="list-group-item"><strong>Days Before Renewal:</strong> {{certificate.daysBeforeRenewal}}</li>
+                        <li class="list-group-item"><strong>Serial Number:</strong> {{certificate.serialNumber}}</li>
                         <li v-if="certificate.dynamic" class="p-2 text-center">
-                            <b-button
-                                :href="'/api/certificates/' + certificate.id + '/download'"
-                                variant="primary"
-                            >
+                            <b-button :href="'/api/certificates/' + certificate.id + '/download'"
+                                      variant="primary">
                                 Download
                             </b-button>
                         </li>
                         <li v-else class="list-group-item">
-                            <strong>SSL Certificate file: </strong>{{certificate.sslCertificateFile}}                            
+                            <strong>SSL Certificate file: </strong>{{certificate.sslCertificateFile}}
                         </li>
                     </ul>
                 </div>
