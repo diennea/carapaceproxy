@@ -33,7 +33,6 @@ import java.util.Arrays;
 import org.junit.Test;
 import org.shredzone.acme4j.util.KeyPairUtils;
 import static org.carapaceproxy.utils.CertificatesUtils.compareChains;
-import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.utils.CertificatesUtils;
 
 /**
@@ -61,7 +60,6 @@ public class CertificatesUtilsTest {
         }
         assertTrue(compareChains(originalChain, decodedChain));
 
-
         KeyPair endUserKeyPair2 = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         Certificate[] otherChain = generateSampleChain(endUserKeyPair2, false);
         assertFalse(compareChains(originalChain, otherChain));
@@ -72,26 +70,16 @@ public class CertificatesUtilsTest {
         {
             KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
             Certificate[] chain = generateSampleChain(endUserKeyPair, false); // not before == not after == today
-            String encodedChain = base64EncodeCertificateChain(chain, endUserKeyPair.getPrivate());
-            CertificateData cert = new CertificateData("localhost", null, encodedChain, DynamicCertificateState.AVAILABLE, null, null, true);
-            cert.setDaysBeforeRenewal(0);
-            assertFalse(CertificatesUtils.isCertificateExpired(cert));
-            cert.setDaysBeforeRenewal(-30);
-            assertTrue(CertificatesUtils.isCertificateExpired(cert)); // not before
-            cert.setDaysBeforeRenewal(30);
-            assertTrue(CertificatesUtils.isCertificateExpired(cert)); // not after
+            assertFalse(CertificatesUtils.isCertificateExpired(chain, 0));
+            assertTrue(CertificatesUtils.isCertificateExpired(chain, -30)); // not before
+            assertTrue(CertificatesUtils.isCertificateExpired(chain, 30)); // not after
         }
         {
             KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
             Certificate[] chain = generateSampleChain(endUserKeyPair, true); // not before == not after == today
-            String encodedChain = base64EncodeCertificateChain(chain, endUserKeyPair.getPrivate());
-            CertificateData cert = new CertificateData("localhost", null, encodedChain, DynamicCertificateState.AVAILABLE, null, null, true);
-            cert.setDaysBeforeRenewal(0);
-            assertTrue(CertificatesUtils.isCertificateExpired(cert));
-            cert.setDaysBeforeRenewal(-30);
-            assertTrue(CertificatesUtils.isCertificateExpired(cert)); // not before
-            cert.setDaysBeforeRenewal(30);
-            assertTrue(CertificatesUtils.isCertificateExpired(cert)); // not after
+            assertTrue(CertificatesUtils.isCertificateExpired(chain, 0));
+            assertTrue(CertificatesUtils.isCertificateExpired(chain, -30)); // not before
+            assertTrue(CertificatesUtils.isCertificateExpired(chain, 30)); // not after
         }
     }
 }
