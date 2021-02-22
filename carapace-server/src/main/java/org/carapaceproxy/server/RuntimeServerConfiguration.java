@@ -74,6 +74,7 @@ public class RuntimeServerConfiguration {
     private int accessLogMaxQueueCapacity = 2000;
     private int accessLogFlushInterval = 5000;
     private int accessLogWaitBetweenFailures = 10000;
+    private long accessLogMaxSize = 524288000;
     private String userRealmClassname;
     private int healthProbePeriod = 0;
     private int dynamicCertificatesManagerPeriod = 0;
@@ -129,6 +130,14 @@ public class RuntimeServerConfiguration {
 
     public void setAccessLogWaitBetweenFailures(int accessLogWaitBetweenFailures) {
         this.accessLogWaitBetweenFailures = accessLogWaitBetweenFailures;
+    }
+    
+    public long getAccessLogMaxSize() {
+        return accessLogMaxSize;
+    }
+
+    public void setAccessLogMaxSize(long accessLogMaxSize) {
+        this.accessLogMaxSize = accessLogMaxSize;
     }
 
     public String getMapperClassname() {
@@ -287,6 +296,7 @@ public class RuntimeServerConfiguration {
         this.accessLogMaxQueueCapacity = properties.getInt("accesslog.queue.maxcapacity", accessLogMaxQueueCapacity);
         this.accessLogFlushInterval = properties.getInt("accesslog.flush.interval", accessLogFlushInterval);
         this.accessLogWaitBetweenFailures = properties.getInt("accesslog.failure.wait", accessLogWaitBetweenFailures);
+        this.accessLogMaxSize =  properties.getLong("accesslog.maxsize", accessLogMaxSize);
         String tsFormatExample;
         try {
             SimpleDateFormat formatter = new SimpleDateFormat(this.accessLogTimestampFormat);
@@ -300,6 +310,7 @@ public class RuntimeServerConfiguration {
         LOG.info("accesslog.queue.maxcapacity=" + accessLogMaxQueueCapacity);
         LOG.info("accesslog.flush.interval=" + accessLogFlushInterval);
         LOG.info("accesslog.failure.wait=" + accessLogWaitBetweenFailures);
+        LOG.info("accesslog.maxsize=" + accessLogMaxSize);
 
         tryConfigureCertificates(properties);
         tryConfigureListeners(properties);
