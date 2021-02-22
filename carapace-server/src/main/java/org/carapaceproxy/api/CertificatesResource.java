@@ -176,7 +176,7 @@ public class CertificatesResource {
     private static void fillCertificateBean(CertificateBean bean, SSLCertificateConfiguration certificate, DynamicCertificatesManager dCManager, HttpProxyServer server) {
         try {
             Certificate[] chain;
-            DynamicCertificateState state;
+            DynamicCertificateState state = null;
             if (certificate.isDynamic()) {
                 CertificateData cert = dCManager.getCertificateDataForDomain(certificate.getId());
                 if (cert == null) {
@@ -190,17 +190,19 @@ public class CertificatesResource {
                     return;
                 }
                 chain = CertificatesUtils.readChainFromKeystore(keystore);
-                state = CertificatesUtils.isCertificateExpired(chain, 0) ? DynamicCertificateState.EXPIRED : DynamicCertificateState.AVAILABLE;
             }
             if (chain != null && chain.length > 0) {
                 X509Certificate _cert = ((X509Certificate) chain[0]);
                 bean.setExpiringDate(_cert.getNotAfter().toString());
                 bean.setSerialNumber(_cert.getSerialNumber().toString(16).toUpperCase()); // HEX
+                if (!certificate.isAcme()) {
+                    state = CertificatesUtils.isCertificateExpired(chain, 0) ? DynamicCertificateState.EXPIRED : DynamicCertificateState.AVAILABLE;
+                }
             }
-            bean.setStatus(certificateStateToString(state));
             if (certificate.isAcme()) {
                 bean.setDaysBeforeRenewal(certificate.getDaysBeforeRenewal() + "");
             }
+            bean.setStatus(certificateStateToString(state));
         } catch (GeneralSecurityException | IOException ex) {
             LOG.log(Level.SEVERE, "Unable to read Keystore for certificate {0}. Reason: {1}", new Object[]{certificate.getId(), ex});
         }

@@ -49,7 +49,7 @@ public final class CertificatesUtils {
 
     private static final String KEYSTORE_FORMAT = "PKCS12";
     private static final String KEYSTORE_CERT_ALIAS = "cert-chain";
-    private static final char[] KEYSTORE_PW = new char[0];
+    public static final char[] KEYSTORE_PW = new char[0];
 
     /**
      *
