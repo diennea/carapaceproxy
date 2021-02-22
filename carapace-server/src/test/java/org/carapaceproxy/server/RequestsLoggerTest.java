@@ -37,6 +37,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.List;
 import static junit.framework.Assert.assertEquals;
 import org.carapaceproxy.EndpointStats;
@@ -149,7 +150,7 @@ public class RequestsLoggerTest {
     @Test
     public void test() throws Exception {
 
-        final int FLUSH_WAIT_TIME = 300;
+        final int FLUSH_WAIT_TIME = 150;
 
         RuntimeServerConfiguration c = genConf();
         c.setAccessLogFlushInterval(FLUSH_WAIT_TIME);
@@ -536,20 +537,16 @@ public class RequestsLoggerTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        RuntimeServerConfiguration c = genConf();
-        c.setAccessLogPath(tmpDir.getRoot().getAbsolutePath() + "/access.log");
-        RequestsLogger reqLogger = new RequestsLogger(c);
-        reqLogger.setVerbose(true);
-
         try ( HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.getCurrentConfiguration().setAccessLogPath(tmpDir.getRoot().getAbsolutePath() + "/access.log");
             server.getCurrentConfiguration().setAccessLogMaxSize(1024);
             Path currentAccessLogPath = Paths.get(server.getCurrentConfiguration().getAccessLogPath());
             server.start();
             int port = server.getLocalPort();
-            FileChannel LogFileChannel = FileChannel.open(currentAccessLogPath);
+            System.out.println("CurrentAccessLogPath " + currentAccessLogPath);
+            FileChannel logFileChannel = FileChannel.open(currentAccessLogPath);
 
-            while (LogFileChannel.size() < 1024) {
+            while (logFileChannel.size() < 1024) {
                 try ( RawHttpClient client = new RawHttpClient("localhost", port)) {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                     String s = resp.toString();
@@ -570,15 +567,15 @@ public class RequestsLoggerTest {
                     }
                 }
             }
-
-            // test to see if a file exists
-            File file1 = new File(tmpDir.getRoot().getAbsolutePath() + "/access.log");
-            assertTrue(file1.exists());
-            
-            reqLogger.rotateAccessLogFile();
-            
+            //check if gzip file exist
             File[] f = new File(tmpDir.getRoot().getAbsolutePath()).listFiles((dir, name) -> name.startsWith("access") && name.endsWith(".gzip"));
-            assertEquals(f.length,1);
+            assertTrue(f.length == 1);
+            try ( RawHttpClient client = new RawHttpClient("localhost", port)) {
+                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                String s = resp.toString();
+                assertTrue(s.endsWith("it <b>works</b> !!"));
+            }
+            assertTrue(logFileChannel.size() > 0);
         }
     }
 }

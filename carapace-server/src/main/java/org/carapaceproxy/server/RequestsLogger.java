@@ -146,10 +146,10 @@ public class RequestsLogger implements Runnable, Closeable {
         
         Path currentAccessLogPath = Paths.get(accesslogPath);
         Path newAccessLogPath = Paths.get(newAccessLogName);
-        FileChannel LogFileChannel = FileChannel.open(currentAccessLogPath);
+        FileChannel logFileChannel = FileChannel.open(currentAccessLogPath);
 
         try {
-            long currentSize = LogFileChannel.size();
+            long currentSize = logFileChannel.size();
             if(currentSize >= maxSize && maxSize > 0){
                 LOG.log(Level.INFO,"Maximum access log size reached. file: {0} , Size: {1} , maxSize: {2}" , new Object[]{accesslogPath,currentSize,maxSize});
                 Files.move(currentAccessLogPath, newAccessLogPath, StandardCopyOption.ATOMIC_MOVE);

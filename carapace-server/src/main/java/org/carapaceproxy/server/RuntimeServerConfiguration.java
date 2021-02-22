@@ -275,7 +275,7 @@ public class RuntimeServerConfiguration {
         this.accessLogMaxQueueCapacity = properties.getInt("accesslog.queue.maxcapacity", accessLogMaxQueueCapacity);
         this.accessLogFlushInterval = properties.getInt("accesslog.flush.interval", accessLogFlushInterval);
         this.accessLogWaitBetweenFailures = properties.getInt("accesslog.failure.wait", accessLogWaitBetweenFailures);
-        this.accessLogMaxSize =  properties.getLong("accessLog.maxSize", accessLogMaxSize);
+        this.accessLogMaxSize =  properties.getLong("accesslog.maxsize", accessLogMaxSize);
         String tsFormatExample;
         try {
             SimpleDateFormat formatter = new SimpleDateFormat(this.accessLogTimestampFormat);
@@ -289,7 +289,7 @@ public class RuntimeServerConfiguration {
         LOG.info("accesslog.queue.maxcapacity=" + accessLogMaxQueueCapacity);
         LOG.info("accesslog.flush.interval=" + accessLogFlushInterval);
         LOG.info("accesslog.failure.wait=" + accessLogWaitBetweenFailures);
-        LOG.info("accessLog.maxSize=" + accessLogMaxSize);
+        LOG.info("accesslog.maxsize=" + accessLogMaxSize);
 
         tryConfigureCertificates(properties);
         tryConfigureListeners(properties);
