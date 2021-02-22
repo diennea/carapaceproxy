@@ -567,6 +567,7 @@ public class RequestsLoggerTest {
                     }
                 }
             }
+            Thread.sleep(3000);
             //check if gzip file exist
             File[] f = new File(tmpDir.getRoot().getAbsolutePath()).listFiles((dir, name) -> name.startsWith("access") && name.endsWith(".gzip"));
             assertTrue(f.length == 1);
