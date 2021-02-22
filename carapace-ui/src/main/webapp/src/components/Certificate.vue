@@ -9,15 +9,20 @@
                         <li class="list-group-item"><strong>Hostname:</strong> {{certificate.hostname}}</li>
                         <li class="list-group-item"><strong>Mode:</strong> {{certificate.mode}}</li>
                         <li class="list-group-item"><strong>Dynamic:</strong> {{certificate.dynamic | symbolFormat}}</li>
-                        <li class="list-group-item"><strong>Status:</strong> {{certificate.status}}</li>
+                        <li class="list-group-item">
+                            <strong>Status: </strong>
+                            <span class="badge-status" :class="[statusClass(certificate)]">
+                                {{certificate.status}}
+                            </span>
+                        </li>
                         <li class="list-group-item"><strong>Expiring Date:</strong> {{certificate.expiringDate}}</li>
                         <li v-if="certificate.mode == 'acme'" class="list-group-item"><strong>Days Before Renewal:</strong> {{certificate.daysBeforeRenewal}}</li>
                         <li class="list-group-item"><strong>Serial Number:</strong> {{certificate.serialNumber}}</li>
                         <li v-if="certificate.dynamic" class="p-2 text-center">
-                            <b-button :href="'/api/certificates/' + certificate.id + '/download'"
-                                      variant="primary">
-                                Download
-                            </b-button>
+                        <b-button :href="'/api/certificates/' + certificate.id + '/download'"
+                                  variant="primary">
+                            Download
+                        </b-button>
                         </li>
                         <li v-else class="list-group-item">
                             <strong>SSL Certificate file: </strong>{{certificate.sslCertificateFile}}
@@ -53,6 +58,17 @@
                     this.found = false
                 }
             })
+        },
+        methods: {
+            statusClass(cert) {
+                if (cert.status === 'available') {
+                    return "success"
+                }
+                if (cert.status === 'expired') {
+                    return "error"
+                }
+                return "info";
+            }
         }
     }
 </script>

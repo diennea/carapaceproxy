@@ -2,8 +2,8 @@
 
 /* Bootstrap colors overriding */
 $theme-colors: (
-    primary: $primary,
-    secondary: $primary-dark
+primary: $primary,
+secondary: $primary-dark
 );
 
 @import "./../node_modules/bootstrap/scss/bootstrap";
@@ -27,8 +27,9 @@ $theme-colors: (
 
 /* Other Styles */
 .box-warning {
+    display: inline-block;
     background-color: $warning;
-    padding: 0.3em;
+    padding: 0.75rem;
     margin: 0.3em auto;
     border-radius: 3px;
     border-left: 5px solid $warning-dark;
@@ -39,4 +40,27 @@ $theme-colors: (
     font-family: "Exo 2", sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+}
+
+
+.badge-status {
+    font-size: 13px;
+    color: $white;
+    border-radius: 2px;
+    text-transform: uppercase;
+    font-weight: bold;
+    text-align: center;
+    padding: 10px;
+
+    &.success {
+        background-color: $success;
+    }
+
+    &.error {
+        background-color: $error;
+    }
+
+    &.info {
+        background-color: $info;
+    }
 }
