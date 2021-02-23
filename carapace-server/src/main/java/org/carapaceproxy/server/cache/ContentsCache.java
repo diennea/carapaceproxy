@@ -145,7 +145,7 @@ public class ContentsCache {
 
     }
 
-    private boolean isCachable(HttpRequest request, boolean registerNoCacheStat) {
+    private boolean isCachable(HttpRequest request, boolean secure, boolean registerNoCacheStat) {
         switch (request.method().name()) {
             case "GET":
             case "HEAD":
@@ -154,14 +154,22 @@ public class ContentsCache {
             default:
                 return false;
         }
-        boolean ctrlF5 = request.headers()
-                .containsValue(HttpHeaderNames.CACHE_CONTROL, HttpHeaderValues.NO_CACHE, true);
+
+        final HttpHeaders headers = request.headers();
+        final String cacheControl = headers.get(HttpHeaderNames.CACHE_CONTROL, "").replaceAll(" ", "").toLowerCase();
+        boolean ctrlF5 = cacheControl.contains(HttpHeaderValues.NO_CACHE);
         if (ctrlF5) {
             if (registerNoCacheStat) {
                 NO_CACHE_REQUESTS_COUNTER.inc();
             }
             return false;
         }
+        if ((secure && !cacheControl.contains(HttpHeaderValues.PUBLIC)
+                || headers.contains(HttpHeaderNames.PRAGMA, HttpHeaderValues.NO_CACHE, true))) {
+            LOG.log(Level.FINER, "not cachable {0}", request);
+            return false;
+        }
+
         String uri = request.uri();
         String queryString = "";
         int question = uri.indexOf('?');
@@ -198,8 +206,8 @@ public class ContentsCache {
         new Evictor().run();
     }
 
-    public ContentReceiver startCachingResponse(HttpRequest request) {
-        if (!isCachable(request, true)) {
+    public ContentReceiver startCachingResponse(HttpRequest request, boolean secure) {
+        if (!isCachable(request, secure, true)) {
             return null;
         }
         return new ContentReceiver(new ContentKey(request));
@@ -271,7 +279,7 @@ public class ContentsCache {
     }
 
     public ContentSender serveFromCache(RequestHandler handler) {
-        if (!isCachable(handler.getRequest(), false)) {
+        if (!isCachable(handler.getRequest(), handler.isSecure(), false)) {
             return null;
         }
         ContentKey key = new ContentKey(handler.getRequest());

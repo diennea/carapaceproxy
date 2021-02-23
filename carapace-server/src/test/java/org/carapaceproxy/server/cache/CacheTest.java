@@ -256,15 +256,15 @@ public class CacheTest {
 
             try (RawHttpClient client = new RawHttpClient("localhost", port, true)) {
                 {
-                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: public\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
                     assertTrue(s.endsWith("it <b>works</b> !!"));
-                    assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                    assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
 
                 {
-                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: public\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
                     assertTrue(s.endsWith("it <b>works</b> !!"));
@@ -275,7 +275,7 @@ public class CacheTest {
             stats = server.getConnectionsManager().getStats();
             assertNotNull(stats.getEndpoints().get(key));
             assertEquals(1, server.getCache().getCacheSize());
-            assertEquals(2, server.getCache().getStats().getHits());
+            assertEquals(1, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
         }
 
