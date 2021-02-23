@@ -54,10 +54,10 @@ import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.carapaceproxy.utils.CertificatesUtils.KEYSTORE_PW;
 import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
 import static org.hamcrest.MatcherAssert.assertThat;
+import java.nio.file.Files;
 import java.security.KeyPair;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
-import org.apache.curator.shaded.com.google.common.io.Files;
 import org.junit.Rule;
 import org.junit.rules.TemporaryFolder;
 import org.shredzone.acme4j.util.KeyPairUtils;
@@ -290,7 +290,7 @@ public class StartAPIServerTest extends UseAdminServer {
         String expiringDate1 = certificate.getNotAfter().toString();
         byte[] keystoreData = createKeystore(originalChain, endUserKeyPair.getPrivate());
         File mock1 = tmpFolder.newFile("mock1.p12");
-        Files.write(keystoreData, mock1);
+        Files.write(mock1.toPath(), keystoreData);
         properties.put("certificate.1.hostname", "localhost");
         properties.put("certificate.1.file", mock1.getAbsolutePath());
         properties.put("certificate.1.password", KEYSTORE_PW);
@@ -302,7 +302,7 @@ public class StartAPIServerTest extends UseAdminServer {
         String expiringDate2 = certificate.getNotAfter().toString();
         keystoreData = createKeystore(originalChain, endUserKeyPair.getPrivate());
         File mock2 = tmpFolder.newFile("mock2.p12");
-        Files.write(keystoreData, mock2);
+        Files.write(mock2.toPath(), keystoreData);
         properties.put("certificate.2.hostname", "127.0.0.1");
         properties.put("certificate.2.file", mock2.getAbsolutePath());
         properties.put("certificate.2.password", KEYSTORE_PW);
@@ -323,7 +323,7 @@ public class StartAPIServerTest extends UseAdminServer {
         String serialNumber = certificate.getSerialNumber().toString(16).toUpperCase();
         String expiringDate = certificate.getNotAfter().toString();
         String dynChain = Base64.getEncoder().encodeToString(createKeystore(originalChain, endUserKeyPair.getPrivate()));
-        store.saveCertificate(new CertificateData(dynDomain, "", dynChain, WAITING, "", "", false));
+        store.saveCertificate(new CertificateData(dynDomain, "", dynChain, WAITING, "", ""));
         man.setStateOfCertificate(dynDomain, WAITING); // this reloads certificates from the store
 
         // Static certificates

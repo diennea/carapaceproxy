@@ -207,7 +207,7 @@ public class DynamicCertificatesManager implements Runnable {
                                                                     int daysBeforeRenewal) throws GeneralSecurityException, MalformedURLException {
         CertificateData cert = store.loadCertificateForDomain(domain);
         if (cert == null) {
-            cert = new CertificateData(domain, "", "", WAITING, "", "", false);
+            cert = new CertificateData(domain, "", "", WAITING, "", "");
         }
         cert.setWildcard(wildcard);
         cert.setManual(forceManual);
@@ -309,7 +309,6 @@ public class DynamicCertificatesManager implements Runnable {
                             PrivateKey key = loadOrCreateKeyPairForDomain(domain).getPrivate();
                             String chain = base64EncodeCertificateChain(certificateChain.toArray(new Certificate[0]), key);
                             cert.setChain(chain);
-                            cert.setAvailable(true);
                             cert.setState(AVAILABLE);
                             notifyCertAvailChanged = true; // all other peers need to know that this cert is available.
                             LOG.log(Level.INFO, "Certificate issuing for domain: {0} SUCCEED. Certificate AVAILABLE.", domain);
@@ -325,7 +324,6 @@ public class DynamicCertificatesManager implements Runnable {
                     }
                     case AVAILABLE: { // certificate saved/available/not expired
                         if (isCertificateExpired(base64DecodeCertificateChain(cert.getChain()), cert.getDaysBeforeRenewal())) {
-                            cert.setAvailable(false);
                             cert.setState(EXPIRED);
                             notifyCertAvailChanged = true; // all other peers need to know that this cert is expired.
                         } else {
@@ -472,13 +470,11 @@ public class DynamicCertificatesManager implements Runnable {
         if (certificates.containsKey(id)) {
             CertificateData cert = store.loadCertificateForDomain(id);
             if (cert != null) {
-                boolean prevAvail = cert.isAvailable();
                 cert.setState(state);
-                cert.setAvailable(DynamicCertificateState.AVAILABLE.equals(state));
                 store.saveCertificate(cert);
                 // remember that events  are not delivered to the local JVM
                 reloadCertificatesFromDB();
-                if (prevAvail != cert.isAvailable() && groupMembershipHandler != null) {
+                if (groupMembershipHandler != null) {
                     groupMembershipHandler.fireEvent(EVENT_CERT_AVAIL_CHANGED);
                 }
             }
@@ -492,12 +488,8 @@ public class DynamicCertificatesManager implements Runnable {
      */
     public byte[] getCertificateForDomain(String domain) throws GeneralSecurityException {
         CertificateData cert = certificates.get(domain); // certs always retrived from cache
-        if (cert == null) {
-            LOG.log(Level.SEVERE, "No dynamic certificate for domain {0}", domain);
-            return null;
-        }
-        if (!cert.isAvailable()) {
-            LOG.log(Level.SEVERE, "Dynamic certificate for domain {0} is not available: {1}", new Object[]{domain, cert});
+        if (cert == null || cert.getChain() == null || cert.getChain().isEmpty()) {
+            LOG.log(Level.SEVERE, "No dynamic certificate available for domain {0}", domain);
             return null;
         }
         return Base64.getDecoder().decode(cert.getChain());

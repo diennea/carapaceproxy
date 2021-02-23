@@ -285,13 +285,11 @@ public class CertificatesResource {
 
             String encodedData = "";
             DynamicCertificateState state = WAITING;
-            boolean available = false;
             if (data != null && data.length > 0) {
                 encodedData = Base64.getEncoder().encodeToString(data);
-                available = true;
                 state = AVAILABLE;
             }
-            CertificateData cert = new CertificateData(domain, "", encodedData, state, "", "", available);
+            CertificateData cert = new CertificateData(domain, "", encodedData, state, "", "");
             cert.setManual(MANUAL.equals(certType));
             cert.setDaysBeforeRenewal(daysbeforerenewal != null ? daysbeforerenewal : DEFAULT_DAYS_BEFORE_RENEWAL);
             HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");

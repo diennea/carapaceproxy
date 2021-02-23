@@ -1,21 +1,21 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.server.certificates;
 
@@ -199,7 +199,7 @@ public class CertificatesTest extends UseAdminServer {
             data = dynCertMan.getCertificateDataForDomain("localhost");
             assertNotNull(data);
             assertTrue(data.isManual());
-            assertTrue(data.isAvailable());
+            assertTrue(data.getState() == DynamicCertificateState.AVAILABLE);
         }
 
         // Request #2: expected uploaded certificate
@@ -224,7 +224,7 @@ public class CertificatesTest extends UseAdminServer {
             data = dynCertMan.getCertificateDataForDomain("localhost");
             assertNotNull(data);
             assertTrue(data.isManual());
-            assertTrue(data.isAvailable());
+            assertTrue(data.getState() == DynamicCertificateState.AVAILABLE);
         }
 
         // Request #3: expected last uploaded certificate
@@ -262,8 +262,7 @@ public class CertificatesTest extends UseAdminServer {
                 CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost");
                 assertNotNull(data);
                 assertFalse(data.isManual());
-                assertFalse(data.isAvailable()); // no certificate-data uploaded
-                assertEquals(DynamicCertificateState.WAITING, dynCertsMan.getStateOfCertificate("localhost"));
+                assertEquals(DynamicCertificateState.WAITING, dynCertsMan.getStateOfCertificate("localhost")); // no certificate-data uploaded
             }
         }
 
@@ -277,7 +276,6 @@ public class CertificatesTest extends UseAdminServer {
             CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost");
             assertNotNull(data);
             assertEquals(type.equals("manual"), data.isManual());
-            assertTrue(data.isAvailable());
             assertEquals(DynamicCertificateState.AVAILABLE, dynCertsMan.getStateOfCertificate("localhost"));
 
             // check uploaded certificate
@@ -307,7 +305,6 @@ public class CertificatesTest extends UseAdminServer {
             CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost");
             assertNotNull(data);
             assertEquals(otherType.equals("manual"), data.isManual());
-            assertTrue(data.isAvailable());
             assertEquals(DynamicCertificateState.AVAILABLE, dynCertsMan.getStateOfCertificate("localhost"));
 
             // check uploaded certificate
@@ -325,8 +322,7 @@ public class CertificatesTest extends UseAdminServer {
                 data = dynCertsMan.getCertificateDataForDomain("localhost");
                 assertNotNull(data);
                 assertFalse(data.isManual());
-                assertFalse(data.isAvailable()); // no certificate-data uploaded
-                assertEquals(DynamicCertificateState.WAITING, dynCertsMan.getStateOfCertificate("localhost"));
+                assertEquals(DynamicCertificateState.WAITING, dynCertsMan.getStateOfCertificate("localhost")); // no certificate-data uploaded
             }
         }
     }
@@ -425,7 +421,7 @@ public class CertificatesTest extends UseAdminServer {
             CertificateData data = dynCertMan.getCertificateDataForDomain("localhost");
             assertNotNull(data);
             assertTrue(data.isManual());
-            assertTrue(data.isAvailable());
+            assertTrue(data.getState() == DynamicCertificateState.AVAILABLE);
         }
         // check ocsp response
         try (RawHttpClient c = new RawHttpClient("localhost", port, true, "localhost")) {
@@ -480,7 +476,6 @@ public class CertificatesTest extends UseAdminServer {
             assertTrue(resp.getBodyString().contains("SUCCESS"));
             CertificateData data = dcMan.getCertificateDataForDomain("localhost");
             assertNotNull(data);
-            assertTrue(data.isAvailable());
             assertEquals(DynamicCertificateState.AVAILABLE, data.getState());
             assertEquals(45, data.getDaysBeforeRenewal());
             assertFalse(data.isManual());
@@ -500,11 +495,11 @@ public class CertificatesTest extends UseAdminServer {
         ConfigurationStore store = dcMan.getConfigurationStore();
         store.saveKeyPairForDomain(keyPair, "localhost", false);
         CertificateData cert = store.loadCertificateForDomain("localhost");
-        cert.setAvailable(false);
         cert.setState(DynamicCertificateState.ORDERING);
         cert.setPendingOrderLocation("https://localhost/orderlocation");
         store.saveCertificate(cert);
         assertEquals(DynamicCertificateState.ORDERING, dcMan.getStateOfCertificate("localhost"));
+        assertNotNull(dcMan.getCertificateForDomain("localhost"));
 
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
@@ -521,7 +516,6 @@ public class CertificatesTest extends UseAdminServer {
         dcMan.run();
         CertificateData updated = dcMan.getCertificateDataForDomain("localhost");
         assertNotNull(updated);
-        assertTrue(updated.isAvailable());
         assertEquals(DynamicCertificateState.AVAILABLE, updated.getState());
         assertEquals(45, updated.getDaysBeforeRenewal());
         assertFalse(updated.isManual());
