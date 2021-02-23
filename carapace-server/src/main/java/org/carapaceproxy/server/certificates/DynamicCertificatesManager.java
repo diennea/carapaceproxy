@@ -103,7 +103,7 @@ public class DynamicCertificatesManager implements Runnable {
     private static final int DOMAINS_REACHABILITY_CHECKER_THREAD_POOL_SIZE = Integer.getInteger("carapace.acme.domainsreachabilitychecker.threadpool.size", 10);
     public static final int DOMAINS_REACHABILITY_CHECKER_TIMEOUT = Integer.getInteger("carapace.acme.domainsreachabilitychecker.timeout", 10_000);
     private int domainsReachabilityCheckerTimeout;
-    private ExecutorService domainsReachabiliyChecker;
+    private ExecutorService domainsReachabiliyChecker = Executors.newFixedThreadPool(DOMAINS_REACHABILITY_CHECKER_THREAD_POOL_SIZE);
     private final Set<String> reachableDomains = new HashSet<>();
 
     private ScheduledExecutorService scheduler;
@@ -233,38 +233,39 @@ public class DynamicCertificatesManager implements Runnable {
         if (period <= 0) {
             return;
         }
-        domainsReachabiliyChecker = Executors.newFixedThreadPool(DOMAINS_REACHABILITY_CHECKER_THREAD_POOL_SIZE);
-
+        if (domainsReachabiliyChecker == null) {
+            domainsReachabiliyChecker = Executors.newFixedThreadPool(DOMAINS_REACHABILITY_CHECKER_THREAD_POOL_SIZE);
+        }
         if (scheduler == null) {
             scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat(THREAD_NAME).build());
         }
-
         LOG.log(Level.INFO, "Starting DynamicCertificatesManager, period: {0} seconds{1}", new Object[]{period, TESTING_MODE ? " (TESTING_MODE)" : ""});
         scheduledFuture = scheduler.scheduleWithFixedDelay(this, 0, period, TimeUnit.SECONDS);
     }
 
     public synchronized void stop() {
         started = false;
+        if (domainsReachabiliyChecker != null) {
+            try {
+                domainsReachabiliyChecker.shutdown();
+                domainsReachabiliyChecker.awaitTermination(10, TimeUnit.SECONDS);
+                domainsReachabiliyChecker = null;
+            } catch (InterruptedException ex) {
+                LOG.log(Level.SEVERE, "Error wating for domainsReachabiliyChecker termination: {0}", ex);
+            }
+        }
         if (scheduler != null) {
             scheduler.shutdown();
+            if (r53Client != null) {
+                r53Client.close();
+            }
             try {
                 scheduler.awaitTermination(10, TimeUnit.SECONDS);
                 scheduler = null;
                 scheduledFuture = null;
-                if (r53Client != null) {
-                    r53Client.close();
-                }
             } catch (InterruptedException err) {
                 Thread.currentThread().interrupt();
             }
-        }
-
-        try {
-            this.domainsReachabiliyChecker.shutdown();
-            this.domainsReachabiliyChecker.awaitTermination(10, TimeUnit.SECONDS);
-        } catch (InterruptedException ex) {
-            LOG.log(Level.SEVERE, "Error wating for domainsReachabiliyChecker termination: {0}", ex);
-            Thread.currentThread().interrupt();
         }
     }
 
@@ -380,18 +381,22 @@ public class DynamicCertificatesManager implements Runnable {
     }
 
     private void launchDomainReachabilityChecking(String domain) throws AcmeException {
-        domainsReachabiliyChecker.execute(() -> {
-            try {
-                InetAddress check = InetAddress.getByName(domain);
-                if (domainsReachabilityCheckerTimeout <= 0 || check.isReachable(domainsReachabilityCheckerTimeout)) {
-                    reachableDomains.add(domain);
-                } else {
-                    LOG.log(Level.SEVERE, "Domain {0} seems unreachable. Unable to create certificate order.", new Object[]{domain});
+        if (domainsReachabilityCheckerTimeout > 0) {
+            domainsReachabiliyChecker.execute(() -> {
+                try {
+                    InetAddress check = InetAddress.getByName(domain);
+                    if (check.isReachable(domainsReachabilityCheckerTimeout)) {
+                        reachableDomains.add(domain);
+                    } else {
+                        LOG.log(Level.SEVERE, "Domain {0} seems unreachable. Unable to create certificate order.", new Object[]{domain});
+                    }
+                } catch (IOException ex) {
+                    LOG.log(Level.SEVERE, "Reachability test failed for domain {0}: {1}", new Object[]{domain, ex});
                 }
-            } catch (IOException ex) {
-                LOG.log(Level.SEVERE, "Reachability test failed for domain {0}: {1}", new Object[]{domain, ex});
-            }
-        });
+            });
+        } else {
+            reachableDomains.add(domain);
+        }
     }
 
     private Order createOrderForCertificate(CertificateData cert) throws AcmeException {

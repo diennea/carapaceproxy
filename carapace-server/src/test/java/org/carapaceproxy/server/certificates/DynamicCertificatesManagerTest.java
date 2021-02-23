@@ -43,7 +43,10 @@ import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAIT
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.hamcrest.CoreMatchers.is;
-import static org.junit.Assert.*;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertEquals;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import static org.mockito.ArgumentMatchers.any;
@@ -152,6 +155,7 @@ public class DynamicCertificatesManagerTest {
         props.setProperty("certificate.3.hostname", d3);
         props.setProperty("certificate.3.mode", "manual");
         props.setProperty("certificate.3.daysbeforerenewal", "0");
+        props.setProperty("dynamiccertificatesmanager.domainsreachabilitychecker.timeout", "0");
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(configStore);
@@ -169,7 +173,9 @@ public class DynamicCertificatesManagerTest {
 
         // WAITING
         assertEquals(WAITING, man.getStateOfCertificate(d1));
-        man.run();
+        man.run(); // checking domain reachability
+        verify(store, times(++saveCounter)).saveCertificate(any());
+        man.run(); // domain reachable
         assertEquals(runCase.equals("challenge_null") ? VERIFIED : VERIFYING, man.getStateOfCertificate(d1));
         verify(store, times(++saveCounter)).saveCertificate(any());
 
@@ -280,6 +286,7 @@ public class DynamicCertificatesManagerTest {
         props.setProperty("certificate.1.hostname", domain);
         props.setProperty("certificate.1.mode", "acme");
         props.setProperty("certificate.1.daysbeforerenewal", "0");
+        props.setProperty("dynamiccertificatesmanager.domainsreachabilitychecker.timeout", "0");
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(configStore);
@@ -291,7 +298,9 @@ public class DynamicCertificatesManagerTest {
 
         // WAITING
         assertEquals(WAITING, man.getStateOfCertificate(domain));
-        man.run();
+        man.run(); // checking domain reachability
+        verify(store, times(++saveCounter)).saveCertificate(any());
+        man.run(); // domain reachable
         verify(store, times(++saveCounter)).saveCertificate(any());
         if (runCase.equals("challenge_creation_failed")) {
             // WAITING
