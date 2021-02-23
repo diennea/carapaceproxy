@@ -1,21 +1,21 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.cluster.impl;
 
@@ -34,6 +34,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 import org.apache.curator.ensemble.fixed.FixedEnsembleProvider;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
@@ -56,8 +57,7 @@ import org.apache.zookeeper.data.Stat;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 
 /**
- * Implementation based on ZooKeeper. This class is very simple, we are not
- * expecting heavy traffic on ZooKeeper. We have two systems:
+ * Implementation based on ZooKeeper. This class is very simple, we are not expecting heavy traffic on ZooKeeper. We have two systems:
  * <ul>
  * <li>Peer discovery
  * <li>Configuration changes event broadcast
@@ -77,13 +77,14 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     private final CuratorFramework client;
     private final String peerId; // of the local one
     private final Map<String, String> peerInfo; // of the local one
+    private final Map<String, Boolean> peers = new ConcurrentHashMap<>();
     private final CopyOnWriteArrayList<PathChildrenCache> watchedEvents = new CopyOnWriteArrayList<>();
     private final ConcurrentHashMap<String, InterProcessMutex> mutexes = new ConcurrentHashMap<>();
     private final ExecutorService callbacksExecutor = Executors.newSingleThreadExecutor();
 
     public ZooKeeperGroupMembershipHandler(String zkAddress, int zkTimeout, boolean zkAcl,
-            String peerId, Map<String, String> peerInfo,
-            Properties zkProperties) {
+                                           String peerId, Map<String, String> peerInfo,
+                                           Properties zkProperties) {
         ACLProvider aclProvider = new DefaultACLProvider();
         if (zkAcl) {
             aclProvider = new ACLProvider() {
@@ -150,6 +151,10 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
                 }
                 // Setting up local peer info
                 storeLocalPeerInfo(peerInfo);
+                // Getting online peers
+                client.getChildren().forPath("/proxy/peers").forEach(peer -> {
+                    this.peers.put(peer, true);
+                });
             }
             {
                 final String path = "/proxy/events";
@@ -192,7 +197,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
         } catch (Exception ex) {
             LOG.log(Level.SEVERE, "Cannot load info for peer " + id, ex);
         }
-        return null;
+        return Collections.emptyMap();
     }
 
     @Override
@@ -259,13 +264,15 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     }
 
     @Override
-    public List<String> getPeers() {
+    public Map<String, Boolean> getPeers() {
         try {
-            return client.getChildren().forPath("/proxy/peers");
+            List<String> onlinePeers = client.getChildren().forPath("/proxy/peers");
+            this.peers.entrySet().forEach(e -> e.setValue(false));
+            this.peers.putAll(onlinePeers.stream().collect(Collectors.toMap(peer -> peer, peer -> true)));
         } catch (Exception ex) {
-            LOG.log(Level.SEVERE, "Cannot list peers", ex);
-            return Collections.emptyList();
+            LOG.log(Level.SEVERE, "Cannot fetch online peers", ex);
         }
+        return new HashMap<>(this.peers);
     }
 
     @Override

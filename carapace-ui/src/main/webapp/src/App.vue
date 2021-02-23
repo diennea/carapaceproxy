@@ -2,8 +2,7 @@
     <div id="app">
         <navbar logo="assets/logo-small.png" label="arapace" :nodeId="nodeId" />
         <div id="nav-space" class="d-flex">
-            <sidebar
-                :elements="[
+            <sidebar :elements="[
                     {
                         label: 'Backends',
                         icoName: 'server',
@@ -60,9 +59,9 @@
                         href: '/metrics',
                     },
                     {
-                        label: 'Peers',
+                        label: 'Nodes',
                         icoName: 'network-wired',
-                        href: '/peers',
+                        href: '/nodes',
                     },
                     {
                         label: 'Configuration',
@@ -93,7 +92,7 @@ export default {
         };
     },
     created() {
-        doGet("/api/cluster/localpeer", data => {
+        doGet("/api/cluster/local", data => {
             this.nodeId = data.id;
             document.title = this.nodeId;
         });

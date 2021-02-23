@@ -1,25 +1,24 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.cluster;
 
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -56,7 +55,7 @@ public interface GroupMembershipHandler {
      */
     void fireEvent(String eventId);
 
-     /**
+    /**
      * To execute code in mutual exclusion to other peers.
      *
      * Whether the peer fails to acquire/release the mutex code passed will be skipped and no exceptions will be thrown.
@@ -73,11 +72,11 @@ public interface GroupMembershipHandler {
     String getLocalPeer();
 
     /**
-     * List current peers
+     * List of peers and status (true: online)
      *
      * @return
      */
-    List<String> getPeers();
+    Map<String, Boolean> getPeers();
 
     /**
      * Textual description of a Peer
@@ -87,15 +86,16 @@ public interface GroupMembershipHandler {
      */
     String describePeer(String peerId);
 
-
     /**
-     * To store some key-value info for the local peer.     
+     * To store some key-value info for the local peer.
+     *
      * @param info properties of the peer.
      */
     void storeLocalPeerInfo(Map<String, String> info);
 
     /**
      * To load info associated to the peer.
+     *
      * @param id
      * @return properties of the peer
      */
@@ -104,8 +104,8 @@ public interface GroupMembershipHandler {
     interface EventCallback {
 
         /**
-         * Called whenever an event is fired. This method should not access external resources and it must not be
-         * expensive. Inside this method you cannot call other methods of the same {@link GroupMembershipHandler}.
+         * Called whenever an event is fired. This method should not access external resources and it must not be expensive. Inside this method you cannot call other methods of the same
+         * {@link GroupMembershipHandler}.
          *
          * @param eventId
          */

@@ -21,10 +21,8 @@ package org.carapaceproxy.cluster.impl;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -36,7 +34,6 @@ import org.carapaceproxy.utils.TestUtils;
 import org.junit.AfterClass;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Rule;
@@ -98,10 +95,10 @@ public class ZookKeeperACLTest {
                             6000, true /*acl */, peerId2, Collections.EMPTY_MAP, new Properties())) {
                 peer1.start();
                 peer2.start();
-                List<String> peersFrom1 = peer1.getPeers();
-                List<String> peersFrom2 = peer2.getPeers();
-                assertEquals(Arrays.asList(peerId1, peerId2), peersFrom1);
-                assertEquals(Arrays.asList(peerId1, peerId2), peersFrom2);
+                Map<String, Boolean> peersFrom1 = peer1.getPeers();
+                Map<String, Boolean> peersFrom2 = peer2.getPeers();
+                assertEquals(Map.of(peerId1, true, peerId2, true), peersFrom1);
+                assertEquals(Map.of(peerId1, true, peerId2, true), peersFrom2);
 
                 AtomicInteger eventFired2 = new AtomicInteger();
                 peer2.watchEvent("foo", new GroupMembershipHandler.EventCallback() {

@@ -4,7 +4,7 @@
             <img id="logo" :src="logo" height="45px" width="45px" />
             <span id="label">{{label}}</span>
         </a>
-        <router-link to="/peers">
+        <router-link to="/nodes">
             <b>Node:</b> {{nodeId}}
         </router-link>
     </nav>

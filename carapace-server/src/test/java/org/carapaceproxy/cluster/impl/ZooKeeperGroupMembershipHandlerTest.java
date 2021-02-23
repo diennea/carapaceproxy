@@ -19,9 +19,7 @@
  */
 package org.carapaceproxy.cluster.impl;
 
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -53,27 +51,27 @@ public class ZooKeeperGroupMembershipHandlerTest {
                             6000, false /*acl */, peerId2, Collections.EMPTY_MAP, new Properties())) {
                 peer1.start();
                 peer2.start();
-                List<String> peersFrom1 = peer1.getPeers();
-                List<String> peersFrom2 = peer2.getPeers();
-                assertEquals(Arrays.asList(peerId1, peerId2), peersFrom1);
-                assertEquals(Arrays.asList(peerId1, peerId2), peersFrom2);
+                Map<String, Boolean> peersFrom1 = peer1.getPeers();
+                Map<String, Boolean> peersFrom2 = peer2.getPeers();
+                assertEquals(Map.of(peerId1, true, peerId2, true), peersFrom1);
+                assertEquals(Map.of(peerId1, true, peerId2, true), peersFrom2);
 
                 try (ZooKeeperGroupMembershipHandler peer3 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
                         6000, false /*acl */, peerId3, Collections.EMPTY_MAP, new Properties())) {
                     peer3.start();
                     peersFrom1 = peer1.getPeers();
                     peersFrom2 = peer2.getPeers();
-                    List<String> peersFrom3 = peer3.getPeers();
-                    assertEquals(Arrays.asList(peerId1, peerId2, peerId3), peersFrom1);
-                    assertEquals(Arrays.asList(peerId1, peerId2, peerId3), peersFrom2);
-                    assertEquals(Arrays.asList(peerId1, peerId2, peerId3), peersFrom3);
+                    Map<String, Boolean> peersFrom3 = peer3.getPeers();
+                    assertEquals(Map.of(peerId1, true, peerId2, true, peerId3, true), peersFrom1);
+                    assertEquals(Map.of(peerId1, true, peerId2, true, peerId3, true), peersFrom2);
+                    assertEquals(Map.of(peerId1, true, peerId2, true, peerId3, true), peersFrom3);
                 }
 
                 // peer3 exits
                 peersFrom1 = peer1.getPeers();
                 peersFrom2 = peer2.getPeers();
-                assertEquals(Arrays.asList(peerId1, peerId2), peersFrom1);
-                assertEquals(Arrays.asList(peerId1, peerId2), peersFrom2);
+                assertEquals(Map.of(peerId1, true, peerId2, true, peerId3, false), peersFrom1);
+                assertEquals(Map.of(peerId1, true, peerId2, true, peerId3, false), peersFrom2);
 
             }
         }
@@ -89,10 +87,10 @@ public class ZooKeeperGroupMembershipHandlerTest {
                             6000, false /*acl */, peerId2, Collections.EMPTY_MAP, new Properties())) {
                 peer1.start();
                 peer2.start();
-                List<String> peersFrom1 = peer1.getPeers();
-                List<String> peersFrom2 = peer2.getPeers();
-                assertEquals(Arrays.asList(peerId1, peerId2), peersFrom1);
-                assertEquals(Arrays.asList(peerId1, peerId2), peersFrom2);
+                Map<String, Boolean> peersFrom1 = peer1.getPeers();
+                Map<String, Boolean> peersFrom2 = peer2.getPeers();
+                assertEquals(Map.of(peerId1, true, peerId2, true), peersFrom1);
+                assertEquals(Map.of(peerId1, true, peerId2, true), peersFrom2);
 
                 AtomicInteger eventFired2 = new AtomicInteger();;
                 peer2.watchEvent("foo", new GroupMembershipHandler.EventCallback() {
