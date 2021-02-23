@@ -297,7 +297,7 @@ public class DynamicCertificatesManager implements Runnable {
                 CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, data.isWildcard(), false, data.getDaysBeforeRenewal());
                 switch (cert.getState()) {
                     case WAITING: { // certificate waiting to be issues/renew
-                        LOG.log(Level.INFO, "Certificate ISSUING process for domain: {0} STARTED.", domain);
+                        LOG.log(Level.INFO, "WAITING certificate issuing process start for domain: {0}.", domain);
                         if (reachableDomains.remove(domain)) {
                             Order order = createOrderForCertificate(cert);
                             createChallengeForCertificateOrder(cert, order);

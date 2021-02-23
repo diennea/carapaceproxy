@@ -337,4 +337,79 @@ public class DynamicCertificatesManagerTest {
         }
     }
 
+    @Test
+    @Parameters({
+        "0", "10000",})
+    public void testDomainReachabilityCheck(int timeout) throws Exception {
+        Session session = mock(Session.class);
+        when(session.connect()).thenReturn(mock(Connection.class));
+        Login login = mock(Login.class);
+        when(login.getSession()).thenReturn(session);
+        when(login.getKeyPair()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE));
+
+        // ACME mocking
+        ACMEClient ac = mock(ACMEClient.class);
+        Order o = mock(Order.class);
+        when(o.getLocation()).thenReturn(new URL("https://localhost/index"));
+        when(ac.getLogin()).thenReturn(login);
+        when(ac.createOrderForDomain(any())).thenReturn(o);
+
+        Http01Challenge c = mock(Http01Challenge.class);
+        when(c.getToken()).thenReturn("");
+        when(c.getJSON()).thenReturn(JSON.parse(
+                "{\"url\": \"https://localhost/index\", \"type\": \"http-01\", \"token\": \"mytoken\"}"
+        ));
+        when(c.getAuthorization()).thenReturn("");
+        when(ac.getChallengeForOrder(any(), eq(true))).thenReturn(c);
+        when(ac.checkResponseForChallenge(any())).thenReturn(VALID);
+
+        KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        Certificate cert = mock(Certificate.class);
+        X509Certificate _cert = (X509Certificate) generateSampleChain(keyPair, false)[0];
+        when(cert.getCertificateChain()).thenReturn(Arrays.asList(_cert));
+        when(ac.fetchCertificateForOrder(any())).thenReturn(cert);
+
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        when(parent.getListeners()).thenReturn(mock(Listeners.class));
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
+        Whitebox.setInternalState(man, ac);
+
+        // Store mocking
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        when(store.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
+
+        // certificate to order
+        String domain = "google.it";
+        CertificateData cd1 = new CertificateData(domain, "", "", WAITING, "", "");
+        when(store.loadCertificateForDomain(eq(domain))).thenReturn(cd1);
+        man.setConfigurationStore(store);
+
+        // Manager setup
+        Properties props = new Properties();
+        props.setProperty("certificate.1.hostname", domain);
+        props.setProperty("certificate.1.mode", "acme");
+        props.setProperty("dynamiccertificatesmanager.domainsreachabilitychecker.timeout", timeout + "");
+        ConfigurationStore configStore = new PropertiesConfigurationStore(props);
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(configStore);
+        man.reloadConfiguration(conf);
+
+        int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
+
+        // WAITING
+        assertEquals(WAITING, man.getStateOfCertificate(domain));
+        man.run(); // checking domain reachability
+        verify(store, times(++saveCounter)).saveCertificate(any());
+        man.run();
+        verify(store, times(++saveCounter)).saveCertificate(any());
+        if (timeout > 0) {
+            assertThat(man.getStateOfCertificate(domain), is(WAITING));
+            Thread.sleep(timeout);
+            man.run();
+            verify(store, times(++saveCounter)).saveCertificate(any());
+        }
+        assertThat(man.getStateOfCertificate(domain), is(VERIFIED));
+    }
+
 }
