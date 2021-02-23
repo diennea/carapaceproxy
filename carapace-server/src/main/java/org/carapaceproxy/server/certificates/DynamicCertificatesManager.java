@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.server.certificates;
 
+import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.DNS_CHALLENGE_WAIT;
@@ -322,7 +323,7 @@ public class DynamicCertificatesManager implements Runnable {
                         break;
                     }
                     case AVAILABLE: { // certificate saved/available/not expired
-                        if (isCertificateExpired(cert)) {
+                        if (isCertificateExpired(base64DecodeCertificateChain(cert.getChain()), cert.getDaysBeforeRenewal())) {
                             cert.setState(EXPIRED);
                             notifyCertAvailChanged = true; // all other peers need to know that this cert is expired.
                         } else {

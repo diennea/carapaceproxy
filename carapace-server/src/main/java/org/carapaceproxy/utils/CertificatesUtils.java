@@ -1,33 +1,37 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.utils;
 
-import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateEncodingException;
+import java.security.cert.CertificateException;
 import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.X509Certificate;
@@ -35,7 +39,6 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Iterator;
-import org.carapaceproxy.configstore.CertificateData;
 
 /**
  * Utilitis for Certificates storing as Keystores
@@ -46,7 +49,7 @@ public final class CertificatesUtils {
 
     private static final String KEYSTORE_FORMAT = "PKCS12";
     private static final String KEYSTORE_CERT_ALIAS = "cert-chain";
-    private static final char[] KEYSTORE_PW = new char[0];
+    public static final char[] KEYSTORE_PW = new char[0];
 
     /**
      *
@@ -99,6 +102,7 @@ public final class CertificatesUtils {
                 return chain;
             }
         }
+
         return new Certificate[0];
     }
 
@@ -117,17 +121,40 @@ public final class CertificatesUtils {
         }
     }
 
-    public static boolean isCertificateExpired(CertificateData cert) throws GeneralSecurityException {
+    public static KeyStore loadKeyStoreFromFile(String filename, String password, File basePath)
+            throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException {
+        if (filename == null || filename.isEmpty()) {
+            return null;
+        }
+
+        File sslCertFile = filename.startsWith("/") ? new File(filename) : new File(basePath, filename);
+        sslCertFile = sslCertFile.getAbsoluteFile();
+        KeyStore ks = KeyStore.getInstance(KEYSTORE_FORMAT);
+        try (FileInputStream in = new FileInputStream(sslCertFile)) {
+            ks.load(in, password.trim().toCharArray());
+        }
+
+        return ks;
+    }
+
+    public static KeyStore loadKeyStoreData(byte[] data, String password)
+            throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException {
+        KeyStore ks = KeyStore.getInstance(KEYSTORE_FORMAT);
+        try (ByteArrayInputStream is = new ByteArrayInputStream(data)) {
+            ks.load(is, password.trim().toCharArray());
+        }
+        return ks;
+    }
+
+    public static boolean isCertificateExpired(Certificate[] chain, int daysBeforeRenewal) throws GeneralSecurityException {
+        if (chain == null || chain.length == 0) {
+            return false;
+        }
         try {
-            Certificate[] chain = base64DecodeCertificateChain(cert.getChain());
-            if (chain != null && chain.length > 0) {
-                Calendar cal = Calendar.getInstance();
-                cal.setTime(new Date());
-                cal.add(Calendar.DATE, cert.getDaysBeforeRenewal());
-                ((X509Certificate) chain[0]).checkValidity(cal.getTime());
-            } else {
-                return true;
-            }
+            Calendar cal = Calendar.getInstance();
+            cal.setTime(new Date());
+            cal.add(Calendar.DATE, daysBeforeRenewal);
+            ((X509Certificate) chain[0]).checkValidity(cal.getTime());
         } catch (CertificateNotYetValidException | CertificateExpiredException ex) {
             return true;
         }
@@ -159,4 +186,5 @@ public final class CertificatesUtils {
         }
         return true;
     }
+
 }

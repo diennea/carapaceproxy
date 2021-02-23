@@ -46,16 +46,20 @@ import static org.hamcrest.CoreMatchers.not;
 import org.junit.Assert;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 import static org.carapaceproxy.utils.APIUtils.certificateStateToString;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
+import static org.carapaceproxy.utils.CertificatesUtils.KEYSTORE_PW;
 import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
+import static org.hamcrest.MatcherAssert.assertThat;
+import java.nio.file.Files;
 import java.security.KeyPair;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
+import org.junit.Rule;
+import org.junit.rules.TemporaryFolder;
 import org.shredzone.acme4j.util.KeyPairUtils;
 
 /**
@@ -63,6 +67,9 @@ import org.shredzone.acme4j.util.KeyPairUtils;
  * @author enrico.olivelli
  */
 public class StartAPIServerTest extends UseAdminServer {
+
+    @Rule
+    public TemporaryFolder tmpFolder = new TemporaryFolder();
 
     @Test
     public void test() throws Exception {
@@ -276,13 +283,29 @@ public class StartAPIServerTest extends UseAdminServer {
         final String dynDomain = "dynamic.test.tld";
         Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
 
+        KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        Certificate[] originalChain = generateSampleChain(endUserKeyPair, false);
+        X509Certificate certificate = (X509Certificate) originalChain[0];
+        String serialNumber1 = certificate.getSerialNumber().toString(16).toUpperCase();
+        String expiringDate1 = certificate.getNotAfter().toString();
+        byte[] keystoreData = createKeystore(originalChain, endUserKeyPair.getPrivate());
+        File mock1 = tmpFolder.newFile("mock1.p12");
+        Files.write(mock1.toPath(), keystoreData);
         properties.put("certificate.1.hostname", "localhost");
-        properties.put("certificate.1.file", "conf/mock1.file");
-        properties.put("certificate.1.password", "pass");
+        properties.put("certificate.1.file", mock1.getAbsolutePath());
+        properties.put("certificate.1.password", KEYSTORE_PW);
 
+        endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        originalChain = generateSampleChain(endUserKeyPair, true);
+        certificate = (X509Certificate) originalChain[0];
+        String serialNumber2 = certificate.getSerialNumber().toString(16).toUpperCase();
+        String expiringDate2 = certificate.getNotAfter().toString();
+        keystoreData = createKeystore(originalChain, endUserKeyPair.getPrivate());
+        File mock2 = tmpFolder.newFile("mock2.p12");
+        Files.write(mock2.toPath(), keystoreData);
         properties.put("certificate.2.hostname", "127.0.0.1");
-        properties.put("certificate.2.file", "conf/mock2.file");
-        properties.put("certificate.2.password", "pass");
+        properties.put("certificate.2.file", mock2.getAbsolutePath());
+        properties.put("certificate.2.password", KEYSTORE_PW);
 
         // Acme certificate
         properties.put("certificate.3.hostname", dynDomain);
@@ -294,9 +317,11 @@ public class StartAPIServerTest extends UseAdminServer {
 
         // need to explicitly add 'cause DynamicCertificatesManager never run
         ConfigurationStore store = server.getDynamicConfigurationStore();
-        KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
-        Certificate[] originalChain = generateSampleChain(endUserKeyPair, false);
-        String serialNumber = ((X509Certificate) originalChain[0]).getSerialNumber().toString(16).toUpperCase();
+        endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        originalChain = generateSampleChain(endUserKeyPair, false);
+        certificate = (X509Certificate) originalChain[0];
+        String serialNumber = certificate.getSerialNumber().toString(16).toUpperCase();
+        String expiringDate = certificate.getNotAfter().toString();
         String dynChain = Base64.getEncoder().encodeToString(createKeystore(originalChain, endUserKeyPair.getPrivate()));
         store.saveCertificate(new CertificateData(dynDomain, "", dynChain, WAITING, "", ""));
         man.setStateOfCertificate(dynDomain, WAITING); // this reloads certificates from the store
@@ -311,14 +336,18 @@ public class StartAPIServerTest extends UseAdminServer {
             assertThat(json, containsString("localhost"));
             assertThat(json, containsString("\"mode\":\"static\""));
             assertThat(json, containsString("\"dynamic\":false"));
-            assertThat(json, containsString("\"status\":null"));
-            assertThat(json, containsString("conf/mock1.file"));
+            assertThat(json, containsString("\"status\":\"available\""));
+            assertThat(json, containsString("\"sslCertificateFile\":\"" + mock1.getAbsolutePath() + "\""));
+            assertThat(json, containsString("\"serialNumber\":\"" + serialNumber1 + "\""));
+            assertThat(json, containsString("\"expiringDate\":\"" + expiringDate1 + "\""));
 
             assertThat(json, containsString("127.0.0.1"));
-            assertThat(json, containsString("\"mode\":\"acme\""));
-            assertThat(json, containsString("\"dynamic\":true"));
-            assertThat(json, containsString("\"status\":null"));
-            assertThat(json, containsString("conf/mock2.file"));
+            assertThat(json, containsString("\"mode\":\"static\""));
+            assertThat(json, containsString("\"dynamic\":false"));
+            assertThat(json, containsString("\"status\":\"expired\""));
+            assertThat(json, containsString("\"sslCertificateFile\":\"" + mock2.getAbsolutePath() + "\""));
+            assertThat(json, containsString("\"serialNumber\":\"" + serialNumber2 + "\""));
+            assertThat(json, containsString("\"expiringDate\":\"" + expiringDate2 + "\""));
 
             // single cert request to /{certId}
             response = client.get("/api/certificates/127.0.0.1", credentials);
@@ -326,8 +355,10 @@ public class StartAPIServerTest extends UseAdminServer {
             assertThat(json, not(containsString("localhost")));
             assertThat(json, containsString("\"mode\":\"static\""));
             assertThat(json, containsString("\"dynamic\":false"));
-            assertThat(json, containsString("\"status\":null"));
-            assertThat(json, not(containsString("conf/mock1.file")));
+            assertThat(json, containsString("\"status\":\"expired\""));
+            assertThat(json, containsString("\"sslCertificateFile\":\"" + mock2.getAbsolutePath() + "\""));
+            assertThat(json, containsString("\"serialNumber\":\"" + serialNumber2 + "\""));
+            assertThat(json, containsString("\"expiringDate\":\"" + expiringDate2 + "\""));
         }
 
         // Acme certificate
@@ -342,6 +373,7 @@ public class StartAPIServerTest extends UseAdminServer {
             assertThat(json, containsString("\"dynamic\":true"));
             assertThat(json, containsString("\"status\":\"waiting\""));
             assertThat(json, containsString("\"serialNumber\":\"" + serialNumber + "\""));
+            assertThat(json, containsString("\"expiringDate\":\"" + expiringDate + "\""));
 
             // single cert request to /{certId}
             response = client.get("/api/certificates/" + dynDomain, credentials);
@@ -351,6 +383,7 @@ public class StartAPIServerTest extends UseAdminServer {
             assertThat(json, containsString("\"dynamic\":true"));
             assertThat(json, containsString("\"status\":\"waiting\""));
             assertThat(json, containsString("\"serialNumber\":\"" + serialNumber + "\""));
+            assertThat(json, containsString("\"expiringDate\":\"" + expiringDate + "\""));
 
             // Changing dynamic certificate state
             for (DynamicCertificateState state : DynamicCertificateState.values()) {
@@ -393,7 +426,9 @@ public class StartAPIServerTest extends UseAdminServer {
             // Uploading real certificate
             endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
             originalChain = generateSampleChain(endUserKeyPair, false);
-            serialNumber = ((X509Certificate) originalChain[0]).getSerialNumber().toString(16).toUpperCase();
+            certificate = (X509Certificate) originalChain[0];
+            serialNumber = certificate.getSerialNumber().toString(16).toUpperCase();
+            expiringDate = certificate.getNotAfter().toString();
             byte[] chain1 = createKeystore(originalChain, endUserKeyPair.getPrivate());
             resp = uploadCertificate(manualDomain, null, chain1, client, credentials);
             s = resp.getBodyString();
@@ -411,6 +446,7 @@ public class StartAPIServerTest extends UseAdminServer {
             assertThat(json, containsString("\"dynamic\":true"));
             assertThat(json, containsString("\"status\":\"available\""));
             assertThat(json, containsString("\"serialNumber\":\"" + serialNumber + "\""));
+            assertThat(json, containsString("\"expiringDate\":\"" + expiringDate + "\""));
 
             // single cert request to /{certId}
             response = client.get("/api/certificates/" + manualDomain, credentials);
@@ -420,6 +456,7 @@ public class StartAPIServerTest extends UseAdminServer {
             assertThat(json, containsString("\"dynamic\":true"));
             assertThat(json, containsString("\"status\":\"available\""));
             assertThat(json, containsString("\"serialNumber\":\"" + serialNumber + "\""));
+            assertThat(json, containsString("\"expiringDate\":\"" + expiringDate + "\""));
 
             // Downloading
             response = client.get("/api/certificates/" + manualDomain + "/download", credentials);
@@ -428,8 +465,10 @@ public class StartAPIServerTest extends UseAdminServer {
             // Certificate updating
             // Uploading
             endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
-            originalChain = generateSampleChain(endUserKeyPair, false);
-            serialNumber = ((X509Certificate) originalChain[0]).getSerialNumber().toString(16).toUpperCase();
+            originalChain = generateSampleChain(endUserKeyPair, true);
+            certificate = (X509Certificate) originalChain[0];
+            serialNumber = certificate.getSerialNumber().toString(16).toUpperCase();
+            expiringDate = certificate.getNotAfter().toString();
             byte[] chain2 = createKeystore(originalChain, endUserKeyPair.getPrivate());
             assertFalse(Arrays.equals(chain1, chain2));
             resp = uploadCertificate(manualDomain, null, chain2, client, credentials);
@@ -447,8 +486,9 @@ public class StartAPIServerTest extends UseAdminServer {
             assertThat(json, containsString(manualDomain));
             assertThat(json, containsString("\"mode\":\"manual\""));
             assertThat(json, containsString("\"dynamic\":true"));
-            assertThat(json, containsString("\"status\":\"available\""));
+            assertThat(json, containsString("\"status\":\"expired\""));
             assertThat(json, containsString("\"serialNumber\":\"" + serialNumber + "\""));
+            assertThat(json, containsString("\"expiringDate\":\"" + expiringDate + "\""));
 
             // single cert request to /{certId}
             response = client.get("/api/certificates/" + manualDomain, credentials);
@@ -456,8 +496,9 @@ public class StartAPIServerTest extends UseAdminServer {
             assertThat(json, containsString(manualDomain));
             assertThat(json, containsString("\"mode\":\"manual\""));
             assertThat(json, containsString("\"dynamic\":true"));
-            assertThat(json, containsString("\"status\":\"available\""));
+            assertThat(json, containsString("\"status\":\"expired\""));
             assertThat(json, containsString("\"serialNumber\":\"" + serialNumber + "\""));
+            assertThat(json, containsString("\"expiringDate\":\"" + expiringDate + "\""));
 
             // Downloading
             response = client.get("/api/certificates/" + manualDomain + "/download", credentials);

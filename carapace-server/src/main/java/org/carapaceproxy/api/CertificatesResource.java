@@ -55,6 +55,9 @@ import static org.carapaceproxy.utils.APIUtils.stringToCertificateMode;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
+import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
+import java.io.IOException;
+import java.security.KeyStore;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -152,7 +155,7 @@ public class CertificatesResource {
     public Map<String, CertificateBean> getAllCertificates() {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         RuntimeServerConfiguration conf = server.getCurrentConfiguration();
-        DynamicCertificatesManager dynamicCertificateManager = server.getDynamicCertificatesManager();
+        DynamicCertificatesManager dCManager = server.getDynamicCertificatesManager();
         Map<String, CertificateBean> res = new HashMap<>();
         for (Map.Entry<String, SSLCertificateConfiguration> certificateEntry : conf.getCertificates().entrySet()) {
             SSLCertificateConfiguration certificate = certificateEntry.getValue();
@@ -163,33 +166,45 @@ public class CertificatesResource {
                     certificate.isDynamic(),
                     certificate.getFile()
             );
-            if (certificate.isDynamic()) {
-                certBean.setStatus(certificateStateToString(dynamicCertificateManager.getStateOfCertificate(certificate.getId())));
-                try {
-                    CertificateData cert = dynamicCertificateManager.getCertificateDataForDomain(certificate.getId());
-                    fillDynamicCertificateBean(certBean, cert);
-                } catch (GeneralSecurityException e) {
-                    LOG.log(Level.SEVERE, "Unable to read Keystore for certificate {0}. Reason: {1}", new Object[]{certificate.getId(), e});
-                }
-            }
+            fillCertificateBean(certBean, certificate, dCManager, server);
             res.put(certificateEntry.getKey(), certBean);
         }
 
         return res;
     }
 
-    private void fillDynamicCertificateBean(CertificateBean bean, CertificateData cert) throws GeneralSecurityException {
-        if (cert == null) {
-            return;
-        }
-        Certificate[] chain = base64DecodeCertificateChain(cert.getChain());
-        if (chain != null && chain.length > 0) {
-            X509Certificate _cert = ((X509Certificate) chain[0]);
-            bean.setExpiringDate(_cert.getNotAfter().toString());
-            bean.setSerialNumber(_cert.getSerialNumber().toString(16).toUpperCase()); // HEX
-        }
-        if (!cert.isManual()) { // ACME
-            bean.setDaysBeforeRenewal(cert.getDaysBeforeRenewal() + "");
+    private static void fillCertificateBean(CertificateBean bean, SSLCertificateConfiguration certificate, DynamicCertificatesManager dCManager, HttpProxyServer server) {
+        try {
+            Certificate[] chain;
+            DynamicCertificateState state = null;
+            if (certificate.isDynamic()) {
+                CertificateData cert = dCManager.getCertificateDataForDomain(certificate.getId());
+                if (cert == null) {
+                    return;
+                }
+                chain = base64DecodeCertificateChain(cert.getChain());
+                state = cert.getState();
+            } else {
+                KeyStore keystore = loadKeyStoreFromFile(certificate.getFile(), certificate.getPassword(), server.getBasePath());
+                if (keystore == null) {
+                    return;
+                }
+                chain = CertificatesUtils.readChainFromKeystore(keystore);
+            }
+            if (chain != null && chain.length > 0) {
+                X509Certificate _cert = ((X509Certificate) chain[0]);
+                bean.setExpiringDate(_cert.getNotAfter().toString());
+                bean.setSerialNumber(_cert.getSerialNumber().toString(16).toUpperCase()); // HEX
+                if (!certificate.isAcme()) {
+                    state = CertificatesUtils.isCertificateExpired(chain, 0) ? DynamicCertificateState.EXPIRED : DynamicCertificateState.AVAILABLE;
+                }
+            }
+            if (certificate.isAcme()) {
+                bean.setDaysBeforeRenewal(certificate.getDaysBeforeRenewal() + "");
+            }
+            bean.setStatus(certificateStateToString(state));
+        } catch (GeneralSecurityException | IOException ex) {
+            LOG.log(Level.SEVERE, "Unable to read Keystore for certificate {0}. Reason: {1}", new Object[]{certificate.getId(), ex});
         }
     }
 
@@ -220,6 +235,7 @@ public class CertificatesResource {
     private CertificateBean findCertificateById(String certId) {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         SSLCertificateConfiguration certificate = server.getCurrentConfiguration().getCertificates().get(certId);
+        DynamicCertificatesManager dCManager = server.getDynamicCertificatesManager();
         if (certificate != null) {
             CertificateBean certBean = new CertificateBean(
                     certificate.getId(),
@@ -228,15 +244,7 @@ public class CertificatesResource {
                     certificate.isDynamic(),
                     certificate.getFile()
             );
-            if (certificate.isDynamic()) {
-                certBean.setStatus(certificateStateToString(server.getDynamicCertificatesManager().getStateOfCertificate(certificate.getId())));
-                try {
-                    CertificateData cert = server.getDynamicCertificatesManager().getCertificateDataForDomain(certificate.getId());
-                    fillDynamicCertificateBean(certBean, cert);
-                } catch (GeneralSecurityException e) {
-                    LOG.log(Level.SEVERE, "Unable to read Keystore for certificate {0}. Reason: {1}", new Object[]{certificate.getId(), e});
-                }
-            }
+            fillCertificateBean(certBean, certificate, dCManager, server);
             return certBean;
         }
 

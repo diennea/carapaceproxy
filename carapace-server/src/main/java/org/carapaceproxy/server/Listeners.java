@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.server;
 
+import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreData;
 import com.google.common.annotations.VisibleForTesting;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.netty.bootstrap.ServerBootstrap;
@@ -47,18 +48,12 @@ import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
 import io.netty.util.concurrent.Promise;
 import io.prometheus.client.Gauge;
-import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.UnrecoverableKeyException;
 import java.security.cert.Certificate;
-import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -75,6 +70,7 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.PrometheusUtils;
 import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
 import io.netty.handler.timeout.IdleStateHandler;
+import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
 
 /**
  *
@@ -122,24 +118,14 @@ public class Listeners {
         int port = listener.getPort() + parent.getListenersOffsetPort();
         String sslCiphers = listener.getSslCiphers();
 
-        String trustStrorePassword = listener.getSslTrustorePassword();
-        String trustStoreFile = listener.getSslTrustoreFile();
-        File trustStoreCertFile = null;
-        boolean caFileConfigured = trustStoreFile != null && !trustStoreFile.isEmpty();
-        if (caFileConfigured) {
-            trustStoreCertFile = trustStoreFile.startsWith("/") ? new File(trustStoreFile) : new File(basePath, trustStoreFile);
-            trustStoreCertFile = trustStoreCertFile.getAbsoluteFile();
-        }
-
         try {
-            KeyManagerFactory keyFactory;
+
             // Try to find certificate data on db
             byte[] keystoreContent = parent.getDynamicCertificatesManager().getCertificateForDomain(certificate.getId());
-            Certificate[] chain;
+            KeyStore keystore;
             if (keystoreContent != null) {
                 LOG.log(Level.INFO, "start SSL with dynamic certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + port + " OCSP " + listener.isOcsp());
-                chain = readChainFromKeystore(loadKeyStore("PKCS12", keystoreContent, certificate.getPassword()));
-                keyFactory = initKeyManagerFactory("PKCS12", keystoreContent, certificate.getPassword());
+                keystore = loadKeyStoreData(keystoreContent, certificate.getPassword());
             } else {
                 if (certificate.isDynamic()) { // fallback to default certificate
                     certificate = currentConfiguration.getCertificates().get(listener.getDefaultCertificate());
@@ -147,18 +133,20 @@ public class Listeners {
                         throw new ConfigurationNotValidException("Unable to boot SSL context for listener " + listener.getHost() + ": no default certificate setup.");
                     }
                 }
-                String certificateFile = certificate.getFile();
-                File sslCertFile = certificateFile.startsWith("/") ? new File(certificateFile) : new File(basePath, certificateFile);
-                sslCertFile = sslCertFile.getAbsoluteFile();
-                LOG.log(Level.INFO, "start SSL with certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + port + " file=" + sslCertFile + " OCSP " + listener.isOcsp());
-                chain = readChainFromKeystore(loadKeyStore("PKCS12", sslCertFile, certificate.getPassword()));
-                keyFactory = initKeyManagerFactory("PKCS12", sslCertFile, certificate.getPassword());
+                LOG.log(Level.INFO, "start SSL with certificate id {0}, on listener {1}:{2} file={3} OCSP {4}",
+                        new Object[]{certificate.getId(), listener.getHost(), port, certificate.getFile(), listener.isOcsp()}
+                );
+                keystore = loadKeyStoreFromFile(certificate.getFile(), certificate.getPassword(), basePath);
             }
+            KeyManagerFactory keyFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+            keyFactory.init(keystore, certificate.getPassword().toCharArray());
 
+            LOG.log(Level.INFO, "loading trustore from {0}", listener.getSslTrustoreFile());
             TrustManagerFactory trustManagerFactory = null;
-            if (caFileConfigured) {
-                LOG.log(Level.INFO, "loading trustore from " + trustStoreCertFile);
-                trustManagerFactory = initTrustManagerFactory("PKCS12", trustStoreCertFile, trustStrorePassword);
+            KeyStore truststore = loadKeyStoreFromFile(listener.getSslTrustoreFile(), listener.getSslTrustorePassword(), basePath);
+            if (truststore != null) {
+                trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+                trustManagerFactory.init(truststore);
             }
 
             List<String> ciphers = null;
@@ -174,6 +162,7 @@ public class Listeners {
                     .protocols(listener.getSslProtocols())
                     .ciphers(ciphers).build();
 
+            Certificate[] chain = readChainFromKeystore(keystore);
             if (listener.isOcsp() && OpenSsl.isOcspSupported() && chain != null && chain.length > 0) {
                 parent.getOcspStaplingManager().addCertificateForStapling(chain);
                 Attribute<Object> attr = sslContext.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN));
@@ -258,57 +247,6 @@ public class Listeners {
         listeningChannels.put(key, channel);
         LOG.log(Level.INFO, "started listener at {0}: {1}", new Object[]{key, channel});
 
-    }
-
-    private KeyManagerFactory initKeyManagerFactory(String keyStoreType, File keyStoreLocation,
-                                                    String keyStorePassword) throws SecurityException, KeyStoreException, NoSuchAlgorithmException,
-            CertificateException, IOException, UnrecoverableKeyException {
-        KeyStore ks = loadKeyStore(keyStoreType, keyStoreLocation, keyStorePassword);
-        KeyManagerFactory kmf = KeyManagerFactory
-                .getInstance(KeyManagerFactory.getDefaultAlgorithm());
-        kmf.init(ks, keyStorePassword.toCharArray());
-        return kmf;
-    }
-
-    private KeyManagerFactory initKeyManagerFactory(String keyStoreType, byte[] keyStoreData,
-                                                    String keyStorePassword) throws SecurityException, KeyStoreException, NoSuchAlgorithmException,
-            CertificateException, IOException, UnrecoverableKeyException {
-        KeyStore ks = loadKeyStore(keyStoreType, keyStoreData, keyStorePassword);
-        KeyManagerFactory kmf = KeyManagerFactory
-                .getInstance(KeyManagerFactory.getDefaultAlgorithm());
-        kmf.init(ks, keyStorePassword.toCharArray());
-        return kmf;
-    }
-
-    private TrustManagerFactory initTrustManagerFactory(String trustStoreType, File trustStoreLocation,
-                                                        String trustStorePassword)
-            throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException, SecurityException {
-        TrustManagerFactory tmf;
-
-        // Initialize trust store
-        KeyStore ts = loadKeyStore(trustStoreType, trustStoreLocation, trustStorePassword);
-        tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-        tmf.init(ts);
-
-        return tmf;
-    }
-
-    private static KeyStore loadKeyStore(String keyStoreType, File keyStoreLocation, String keyStorePassword)
-            throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException {
-        KeyStore ks = KeyStore.getInstance(keyStoreType);
-        try (FileInputStream in = new FileInputStream(keyStoreLocation)) {
-            ks.load(in, keyStorePassword.trim().toCharArray());
-        }
-        return ks;
-    }
-
-    private static KeyStore loadKeyStore(String keyStoreType, byte[] keyStoreData, String keyStorePassword)
-            throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException {
-        KeyStore ks = KeyStore.getInstance(keyStoreType);
-        try (ByteArrayInputStream is = new ByteArrayInputStream(keyStoreData)) {
-            ks.load(is, keyStorePassword.trim().toCharArray());
-        }
-        return ks;
     }
 
     public int getLocalPort() {
