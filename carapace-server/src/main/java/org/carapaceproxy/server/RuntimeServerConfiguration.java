@@ -41,6 +41,7 @@ import java.util.Arrays;
 import javax.net.ssl.SSLContext;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DOMAINS_REACHABILITY_CHECKER_TIMEOUT;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import org.carapaceproxy.utils.CarapaceLogger;
 
@@ -79,6 +80,7 @@ public class RuntimeServerConfiguration {
     private int healthProbePeriod = 0;
     private int dynamicCertificatesManagerPeriod = 0;
     private int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
+    private int domainsReachabilityCheckerTimeout = DOMAINS_REACHABILITY_CHECKER_TIMEOUT; // millis
     private List<String> supportedSSLProtocols = null;
     private int ocspStaplingManagerPeriod = 0;
     private boolean requestsHeaderDebugEnabled = false;
@@ -131,7 +133,7 @@ public class RuntimeServerConfiguration {
     public void setAccessLogWaitBetweenFailures(int accessLogWaitBetweenFailures) {
         this.accessLogWaitBetweenFailures = accessLogWaitBetweenFailures;
     }
-    
+
     public long getAccessLogMaxSize() {
         return accessLogMaxSize;
     }
@@ -264,6 +266,10 @@ public class RuntimeServerConfiguration {
         this.clientsIdleTimeoutSeconds = clientIdleTimeoutSeconds;
     }
 
+    public int getDomainsReachabilityCheckerTimeout() {
+        return domainsReachabilityCheckerTimeout;
+    }
+
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
         LOG.log(Level.INFO, "configuring from {0}", properties);
         this.maxConnectionsPerEndpoint = properties.getInt("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint);
@@ -296,7 +302,7 @@ public class RuntimeServerConfiguration {
         this.accessLogMaxQueueCapacity = properties.getInt("accesslog.queue.maxcapacity", accessLogMaxQueueCapacity);
         this.accessLogFlushInterval = properties.getInt("accesslog.flush.interval", accessLogFlushInterval);
         this.accessLogWaitBetweenFailures = properties.getInt("accesslog.failure.wait", accessLogWaitBetweenFailures);
-        this.accessLogMaxSize =  properties.getLong("accesslog.maxsize", accessLogMaxSize);
+        this.accessLogMaxSize = properties.getLong("accesslog.maxsize", accessLogMaxSize);
         String tsFormatExample;
         try {
             SimpleDateFormat formatter = new SimpleDateFormat(this.accessLogTimestampFormat);
@@ -326,6 +332,8 @@ public class RuntimeServerConfiguration {
         LOG.info("dynamiccertificatesmanager.period=" + dynamicCertificatesManagerPeriod);
         keyPairsSize = properties.getInt("dynamiccertificatesmanager.keypairssize", DEFAULT_KEYPAIRS_SIZE);
         LOG.info("dynamiccertificatesmanager.keypairssize=" + keyPairsSize);
+        domainsReachabilityCheckerTimeout = properties.getInt("dynamiccertificatesmanager.domainsreachabilitychecker.timeout", domainsReachabilityCheckerTimeout);
+        LOG.info("dynamiccertificatesmanager.domainsreachabilitychecker.timeout=" + domainsReachabilityCheckerTimeout);
 
         ocspStaplingManagerPeriod = properties.getInt("ocspstaplingmanager.period", 0);
         LOG.info("ocspstaplingmanager.period=" + ocspStaplingManagerPeriod);

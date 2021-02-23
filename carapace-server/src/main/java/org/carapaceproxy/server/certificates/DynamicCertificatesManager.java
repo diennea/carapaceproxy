@@ -37,7 +37,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -51,11 +50,16 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.MANUAL;
 import static org.carapaceproxy.utils.CertificatesUtils.isCertificateExpired;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URL;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.logging.Level;
 import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
@@ -95,6 +99,12 @@ public class DynamicCertificatesManager implements Runnable {
     private String awsAccessKey;
     private String awsSecretKey;
     private final Map<String, Integer> dnsChallegeReachabilityChecks = new ConcurrentHashMap();
+
+    private static final int DOMAINS_REACHABILITY_CHECKER_THREAD_POOL_SIZE = Integer.getInteger("carapace.acme.domainsreachabilitychecker.threadpool.size", 10);
+    public static final int DOMAINS_REACHABILITY_CHECKER_TIMEOUT = Integer.getInteger("carapace.acme.domainsreachabilitychecker.timeout", 10_000);
+    private int domainsReachabilityCheckerTimeout;
+    private ExecutorService domainsReachabiliyChecker;
+    private final Set<String> reachableDomains = new HashSet<>();
 
     private ScheduledExecutorService scheduler;
     private ScheduledFuture<?> scheduledFuture;
@@ -154,6 +164,7 @@ public class DynamicCertificatesManager implements Runnable {
         if (acmeClient == null) {
             acmeClient = new ACMEClient(loadOrCreateAcmeUserKeyPair(), TESTING_MODE);
         }
+        domainsReachabilityCheckerTimeout = configuration.getDomainsReachabilityCheckerTimeout();
         loadCertificates(configuration.getCertificates());
         period = configuration.getDynamicCertificatesManagerPeriod();
         if (scheduledFuture != null) {
@@ -222,6 +233,8 @@ public class DynamicCertificatesManager implements Runnable {
         if (period <= 0) {
             return;
         }
+        domainsReachabiliyChecker = Executors.newFixedThreadPool(DOMAINS_REACHABILITY_CHECKER_THREAD_POOL_SIZE);
+
         if (scheduler == null) {
             scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat(THREAD_NAME).build());
         }
@@ -244,6 +257,14 @@ public class DynamicCertificatesManager implements Runnable {
             } catch (InterruptedException err) {
                 Thread.currentThread().interrupt();
             }
+        }
+
+        try {
+            this.domainsReachabiliyChecker.shutdown();
+            this.domainsReachabiliyChecker.awaitTermination(10, TimeUnit.SECONDS);
+        } catch (InterruptedException ex) {
+            LOG.log(Level.SEVERE, "Error wating for domainsReachabiliyChecker termination: {0}", ex);
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -276,8 +297,12 @@ public class DynamicCertificatesManager implements Runnable {
                 switch (cert.getState()) {
                     case WAITING: { // certificate waiting to be issues/renew
                         LOG.log(Level.INFO, "Certificate ISSUING process for domain: {0} STARTED.", domain);
-                        Order order = createOrderForCertificate(cert);
-                        createChallengeForCertificateOrder(cert, order);
+                        if (reachableDomains.remove(domain)) {
+                            Order order = createOrderForCertificate(cert);
+                            createChallengeForCertificateOrder(cert, order);
+                        } else {
+                            launchDomainReachabilityChecking(domain);
+                        }
                         break;
                     }
                     case DNS_CHALLENGE_WAIT: { // waiting for full dns propagation
@@ -352,6 +377,21 @@ public class DynamicCertificatesManager implements Runnable {
                 LOG.log(Level.SEVERE, "Error while handling dynamic certificate for domain " + domain, ex);
             }
         }
+    }
+
+    private void launchDomainReachabilityChecking(String domain) throws AcmeException {
+        domainsReachabiliyChecker.execute(() -> {
+            try {
+                InetAddress check = InetAddress.getByName(domain);
+                if (domainsReachabilityCheckerTimeout <= 0 || check.isReachable(domainsReachabilityCheckerTimeout)) {
+                    reachableDomains.add(domain);
+                } else {
+                    LOG.log(Level.SEVERE, "Domain {0} seems unreachable. Unable to create certificate order.", new Object[]{domain});
+                }
+            } catch (IOException ex) {
+                LOG.log(Level.SEVERE, "Reachability test failed for domain {0}: {1}", new Object[]{domain, ex});
+            }
+        });
     }
 
     private Order createOrderForCertificate(CertificateData cert) throws AcmeException {
