@@ -7,13 +7,13 @@
                 <div
                     class="label"
                     :class="[item.isAvailable ? 'label-success' : 'label-error']"
-                >{{item.isAvailable | backendStatusFormat}}</div>
+                    >{{item.isAvailable | backendStatusFormat}}</div>
             </template>
             <template v-slot:reportedAsUnreachable="{ item }">
                 <div
                     v-if="item.reportedAsUnreachableTs && item.reportedAsUnreachable"
                     class="label label-error"
-                >{{item.reportedAsUnreachable | unreachableFormat}}</div>
+                    >{{item.reportedAsUnreachable | unreachableFormat}}</div>
                 <div v-else></div>
             </template>
             <template v-slot:lastProbeSuccess="{ item }">
@@ -21,7 +21,7 @@
                     v-if="item.lastProbeTs"
                     class="label"
                     :class="[item.lastProbeSuccess ? 'label-success' : 'label-error']"
-                >{{item.lastProbeSuccess | probeSuccessFormat}}</div>
+                    >{{item.lastProbeSuccess | probeSuccessFormat}}</div>
                 <div v-else></div>
             </template>
             <template v-slot:httpResponse="{ item }">
@@ -34,126 +34,126 @@
 </template>
 
 <script>
-import { doGet } from "./../mockserver";
-import { formatTimestamp } from "./../lib/formatter";
-export default {
-    name: "Backends",
-    data() {
-        return {
-            backends: []
-        };
-    },
-    created() {
-        doGet("/api/backends", data => {
-            this.backends = Object.values(data || {});
-        });
-    },
-    computed: {
-        fields() {
-            return [
-                { key: "id", label: "ID", sortable: true },
-                { key: "host", label: "Host:Port", sortable: true },
-                {
-                    key: "openConnections",
-                    label: "Open connections",
-                    sortable: true
-                },
-                {
-                    key: "totalRequests",
-                    label: "Total Requests",
-                    sortable: true
-                },
-                {
-                    key: "lastActivityTs",
-                    label: "Last Activity (Timestamp)",
-                    sortable: true,
-                    formatter: formatTimestamp
-                },
-                { key: "isAvailable", label: "Status", sortable: true },
-                {
-                    key: "reportedAsUnreachable",
-                    label: "Reported as Unreachable",
-                    sortable: true
-                },
-                {
-                    key: "reportedAsUnreachableTs",
-                    label: "Reported as Unreachable (Timestamp)",
-                    sortable: true,
-                    formatter: formatTimestamp
-                },
-                { key: "lastProbePath", label: "Probe path", sortable: true },
-                {
-                    key: "lastProbeSuccess",
-                    label: "Last probe (Status)",
-                    sortable: true
-                },
-                {
-                    key: "lastProbeTs",
-                    label: "Last probe (Timestamp)",
-                    sortable: true,
-                    formatter: formatTimestamp
-                },
-                {
-                    key: "httpResponse",
-                    label: "Last probe (Result)",
-                    sortable: true
+    import { doGet } from "./../mockserver";
+    import { formatTimestamp } from "./../lib/formatter";
+    export default {
+        name: "Backends",
+        data() {
+            return {
+                backends: []
+            };
+        },
+        created() {
+            doGet("/api/backends", data => {
+                this.backends = Object.values(data || {});
+            });
+        },
+        computed: {
+            fields() {
+                return [
+                    {key: "id", label: "ID", sortable: true},
+                    {key: "host", label: "Host:Port", sortable: true},
+                    {
+                        key: "openConnections",
+                        label: "Open conn",
+                        sortable: true
+                    },
+                    {
+                        key: "totalRequests",
+                        label: "Req",
+                        sortable: true
+                    },
+                    {key: "isAvailable", label: "Status", sortable: true},
+                    {
+                        key: "lastActivityTs",
+                        label: "Last Activity (TS)",
+                        sortable: true,
+                        formatter: formatTimestamp
+                    },
+                    {
+                        key: "reportedAsUnreachable",
+                        label: "Unreachable",
+                        sortable: true
+                    },
+                    {
+                        key: "reportedAsUnreachableTs",
+                        label: "Unreachable (TS)",
+                        sortable: true,
+                        formatter: formatTimestamp
+                    },
+                    {
+                        key: "lastProbeSuccess",
+                        label: "Probe Status",
+                        sortable: true
+                    },
+                    {
+                        key: "lastProbeTs",
+                        label: "Probe (TS)",
+                        sortable: true,
+                        formatter: formatTimestamp
+                    },
+                    {key: "lastProbePath", label: "Probe (path)", sortable: true},
+                    {
+                        key: "httpResponse",
+                        label: "Probe (Result)",
+                        sortable: true
+                    }
+                ];
+            }
+        },
+        filters: {
+            unreachableFormat(status) {
+                if (status === true) {
+                    return "UNREACHABLE";
                 }
-            ];
-        }
-    },
-    filters: {
-        unreachableFormat(status) {
-            if (status === true) {
-                return "UNREACHABLE";
+            },
+            backendStatusFormat(status) {
+                if (status === true) {
+                    return "UP";
+                }
+                return "DOWN";
+            },
+            probeSuccessFormat(status) {
+                if (status === true) {
+                    return "SUCCESS";
+                }
+                return "ERROR";
             }
         },
-        backendStatusFormat(status) {
-            if (status === true) {
-                return "UP";
+        methods: {
+            openDetail(detail) {
+                window
+                        .open("", "", "width=900,height=600")
+                        .document.write(detail ? detail : "");
             }
-            return "DOWN";
-        },
-        probeSuccessFormat(status) {
-            if (status === true) {
-                return "SUCCESS";
-            }
-            return "ERROR";
         }
-    },
-    methods: {
-        openDetail(detail) {
-            window
-                .open("", "", "width=900,height=600")
-                .document.write(detail ? detail : "");
-        }
-    }
-};
+    };
 </script>
 
 <style lang="scss" scoped>
-@import "../variables.scss";
+    @import "../variables.scss";
 
-table th {
-    font-size: 13px;
-}
-
-table tr td {
-    & .label {
-        font-size: 13px;        
-        border-radius: 2px;
-        text-transform: uppercase;
-        text-align: center;
-        font-weight: bold;
-        color: $white;
-        padding: 10px;
-    } 
-    
-    & .label-success {
-        background-color: $success;
+    table th {
+        font-size: 13px;
     }
 
-    & .label-error {
-        background-color: $error;
+    table tr td {
+        & .label {
+            font-size: 13px;
+            border-radius: 2px;
+            text-transform: uppercase;
+            text-align: center;
+            font-weight: bold;
+            color: $white;
+            padding: 10px;
+        }
+
+        & .label-success {
+            background-color: $success;
+        }
+
+        & .label-error {
+            background-color: $error;
+        }
     }
-}
 </style>
