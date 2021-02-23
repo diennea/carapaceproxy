@@ -1,21 +1,21 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.configstore;
 
@@ -85,12 +85,12 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     private static final String DIGITAL_CERTIFICATES_TABLE_NAME = "digital_certificates";
     private static final String CREATE_DIGITAL_CERTIFICATES_TABLE = "CREATE TABLE " + DIGITAL_CERTIFICATES_TABLE_NAME
             + "(domain string primary key, privateKey string, chain string, "
-            + "state string, pendingOrder string, pendingChallenge string, available tinyint)";
+            + "state string, pendingOrder string, pendingChallenge string)";
     private static final String SELECT_FROM_DIGITAL_CERTIFICATES_TABLE = "SELECT * from " + DIGITAL_CERTIFICATES_TABLE_NAME + " WHERE domain=?";
     private static final String UPDATE_DIGITAL_CERTIFICATES_TABLE = "UPDATE " + DIGITAL_CERTIFICATES_TABLE_NAME
-            + " SET privateKey=?, chain=?, state=?, pendingOrder=?, pendingChallenge=?, available=? WHERE domain=?";
+            + " SET privateKey=?, chain=?, state=?, pendingOrder=?, pendingChallenge=? WHERE domain=?";
     private static final String INSERT_INTO_DIGITAL_CERTIFICATES_TABLE = "INSERT INTO " + DIGITAL_CERTIFICATES_TABLE_NAME
-            + "(domain, privateKey, chain, state, pendingOrder, pendingChallenge, available) values (?, ?, ?, ?, ?, ?, ?)";
+            + "(domain, privateKey, chain, state, pendingOrder, pendingChallenge) values (?, ?, ?, ?, ?, ?)";
 
     // Table for ACME challenge tokens
     private static final String ACME_CHALLENGE_TOKENS_TABLE_NAME = "acme_challenge_tokens";
@@ -380,15 +380,13 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                         String state = rs.getString(4);
                         String pendingOrder = rs.getString(5);
                         String pendigChallenge = rs.getString(6);
-                        boolean available = rs.getInt(7) == 1;
                         return new CertificateData(
                                 domain,
                                 privateKey,
                                 chain,
                                 DynamicCertificateState.fromStorableFormat(state),
                                 pendingOrder,
-                                pendigChallenge,
-                                available
+                                pendigChallenge
                         );
                     }
                 }
@@ -411,15 +409,13 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             String state = cert.getState().toStorableFormat();
             String pendingOrder = cert.getPendingOrderLocation();
             String pendigChallenge = cert.getPendingChallengeData();
-            int available = cert.isAvailable() ? 1 : 0;
 
             psUpdate.setString(1, privateKey);
             psUpdate.setString(2, chain);
             psUpdate.setString(3, state);
             psUpdate.setString(4, pendingOrder);
             psUpdate.setString(5, pendigChallenge);
-            psUpdate.setInt(6, available);
-            psUpdate.setString(7, domain);
+            psUpdate.setString(6, domain);
             if (psUpdate.executeUpdate() == 0) {
                 psInsert.setString(1, domain);
                 psInsert.setString(2, privateKey);
@@ -427,7 +423,6 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 psInsert.setString(4, state);
                 psInsert.setString(5, pendingOrder);
                 psInsert.setString(6, pendigChallenge);
-                psInsert.setInt(7, available);
                 psInsert.executeUpdate();
             }
 

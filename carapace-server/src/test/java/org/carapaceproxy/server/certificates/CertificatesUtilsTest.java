@@ -61,7 +61,6 @@ public class CertificatesUtilsTest {
         }
         assertTrue(compareChains(originalChain, decodedChain));
 
-
         KeyPair endUserKeyPair2 = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         Certificate[] otherChain = generateSampleChain(endUserKeyPair2, false);
         assertFalse(compareChains(originalChain, otherChain));
@@ -73,7 +72,7 @@ public class CertificatesUtilsTest {
             KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
             Certificate[] chain = generateSampleChain(endUserKeyPair, false); // not before == not after == today
             String encodedChain = base64EncodeCertificateChain(chain, endUserKeyPair.getPrivate());
-            CertificateData cert = new CertificateData("localhost", null, encodedChain, DynamicCertificateState.AVAILABLE, null, null, true);
+            CertificateData cert = new CertificateData("localhost", null, encodedChain, DynamicCertificateState.AVAILABLE, null, null);
             cert.setDaysBeforeRenewal(0);
             assertFalse(CertificatesUtils.isCertificateExpired(cert));
             cert.setDaysBeforeRenewal(-30);
@@ -85,7 +84,7 @@ public class CertificatesUtilsTest {
             KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
             Certificate[] chain = generateSampleChain(endUserKeyPair, true); // not before == not after == today
             String encodedChain = base64EncodeCertificateChain(chain, endUserKeyPair.getPrivate());
-            CertificateData cert = new CertificateData("localhost", null, encodedChain, DynamicCertificateState.AVAILABLE, null, null, true);
+            CertificateData cert = new CertificateData("localhost", null, encodedChain, DynamicCertificateState.AVAILABLE, null, null);
             cert.setDaysBeforeRenewal(0);
             assertTrue(CertificatesUtils.isCertificateExpired(cert));
             cert.setDaysBeforeRenewal(-30);
