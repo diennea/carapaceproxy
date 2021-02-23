@@ -4,25 +4,23 @@
         <datatable-list :fields="fields" :items="backends">
             <template v-slot:host="{ item }">{{item.host}}:{{item.port}}</template>
             <template v-slot:isAvailable="{ item }">
-                <div
-                    class="label"
-                    :class="[item.isAvailable ? 'label-success' : 'label-error']"
-                >{{item.isAvailable | backendStatusFormat}}</div>
+                <span class="badge-status"
+                      :class="[item.isAvailable ? 'success' : 'error']">
+                    {{item.isAvailable | backendStatusFormat}}
+                </span>
             </template>
             <template v-slot:reportedAsUnreachable="{ item }">
-                <div
-                    v-if="item.reportedAsUnreachableTs && item.reportedAsUnreachable"
-                    class="label label-error"
-                >{{item.reportedAsUnreachable | unreachableFormat}}</div>
-                <div v-else></div>
+                <span v-if="item.reportedAsUnreachableTs && item.reportedAsUnreachable"
+                      class="badge-status error">
+                    {{item.reportedAsUnreachable | unreachableFormat}}
+                </span>
             </template>
             <template v-slot:lastProbeSuccess="{ item }">
-                <div
-                    v-if="item.lastProbeTs"
-                    class="label"
-                    :class="[item.lastProbeSuccess ? 'label-success' : 'label-error']"
-                >{{item.lastProbeSuccess | probeSuccessFormat}}</div>
-                <div v-else></div>
+                <span v-if="item.lastProbeTs"
+                      class="badge-status"
+                      :class="[item.lastProbeSuccess ? 'success' : 'error']">
+                    {{item.lastProbeSuccess | probeSuccessFormat}}
+                </span>
             </template>
             <template v-slot:httpResponse="{ item }">
                 <b>{{item.httpResponse}}</b>
@@ -34,127 +32,98 @@
 </template>
 
 <script>
-import { doGet } from "./../mockserver";
-import { formatTimestamp } from "./../lib/formatter";
-export default {
-    name: "Backends",
-    data() {
-        return {
-            backends: []
-        };
-    },
-    created() {
-        doGet("/api/backends", data => {
-            this.backends = Object.values(data || {});
-        });
-    },
-    computed: {
-        fields() {
-            return [
-                { key: "id", label: "ID", sortable: true },
-                { key: "host", label: "Host:Port", sortable: true },
-                {
-                    key: "openConnections",
-                    label: "Open connections",
-                    sortable: true
-                },
-                {
-                    key: "totalRequests",
-                    label: "Total Requests",
-                    sortable: true
-                },
-                {
-                    key: "lastActivityTs",
-                    label: "Last Activity (Timestamp)",
-                    sortable: true,
-                    formatter: formatTimestamp
-                },
-                { key: "isAvailable", label: "Status", sortable: true },
-                {
-                    key: "reportedAsUnreachable",
-                    label: "Reported as Unreachable",
-                    sortable: true
-                },
-                {
-                    key: "reportedAsUnreachableTs",
-                    label: "Reported as Unreachable (Timestamp)",
-                    sortable: true,
-                    formatter: formatTimestamp
-                },
-                { key: "lastProbePath", label: "Probe path", sortable: true },
-                {
-                    key: "lastProbeSuccess",
-                    label: "Last probe (Status)",
-                    sortable: true
-                },
-                {
-                    key: "lastProbeTs",
-                    label: "Last probe (Timestamp)",
-                    sortable: true,
-                    formatter: formatTimestamp
-                },
-                {
-                    key: "httpResponse",
-                    label: "Last probe (Result)",
-                    sortable: true
+    import { doGet } from "./../mockserver";
+    import { formatTimestamp } from "./../lib/formatter";
+    export default {
+        name: "Backends",
+        data() {
+            return {
+                backends: []
+            };
+        },
+        created() {
+            doGet("/api/backends", data => {
+                this.backends = Object.values(data || {});
+            });
+        },
+        computed: {
+            fields() {
+                return [
+                    {key: "id", label: "ID", sortable: true},
+                    {key: "host", label: "Host:Port", sortable: true},
+                    {
+                        key: "openConnections",
+                        label: "Open connections",
+                        sortable: true
+                    },
+                    {
+                        key: "totalRequests",
+                        label: "Total Requests",
+                        sortable: true
+                    },
+                    {
+                        key: "lastActivityTs",
+                        label: "Last Activity (Timestamp)",
+                        sortable: true,
+                        formatter: formatTimestamp
+                    },
+                    {key: "isAvailable", label: "Status", sortable: true},
+                    {
+                        key: "reportedAsUnreachable",
+                        label: "Reported as Unreachable",
+                        sortable: true
+                    },
+                    {
+                        key: "reportedAsUnreachableTs",
+                        label: "Reported as Unreachable (Timestamp)",
+                        sortable: true,
+                        formatter: formatTimestamp
+                    },
+                    {key: "lastProbePath", label: "Probe path", sortable: true},
+                    {
+                        key: "lastProbeSuccess",
+                        label: "Last probe (Status)",
+                        sortable: true
+                    },
+                    {
+                        key: "lastProbeTs",
+                        label: "Last probe (Timestamp)",
+                        sortable: true,
+                        formatter: formatTimestamp
+                    },
+                    {
+                        key: "httpResponse",
+                        label: "Last probe (Result)",
+                        sortable: true
+                    }
+                ];
+            }
+        },
+        filters: {
+            unreachableFormat(status) {
+                if (status === true) {
+                    return "UNREACHABLE";
                 }
-            ];
-        }
-    },
-    filters: {
-        unreachableFormat(status) {
-            if (status === true) {
-                return "UNREACHABLE";
+            },
+            backendStatusFormat(status) {
+                if (status === true) {
+                    return "UP";
+                }
+                return "DOWN";
+            },
+            probeSuccessFormat(status) {
+                if (status === true) {
+                    return "SUCCESS";
+                }
+                return "ERROR";
             }
         },
-        backendStatusFormat(status) {
-            if (status === true) {
-                return "UP";
+        methods: {
+            openDetail(detail) {
+                window
+                        .open("", "", "width=900,height=600")
+                        .document.write(detail ? detail : "");
             }
-            return "DOWN";
-        },
-        probeSuccessFormat(status) {
-            if (status === true) {
-                return "SUCCESS";
-            }
-            return "ERROR";
         }
-    },
-    methods: {
-        openDetail(detail) {
-            window
-                .open("", "", "width=900,height=600")
-                .document.write(detail ? detail : "");
-        }
-    }
-};
+    };
 </script>
-
-<style scoped>
-table th,
-table tr td .label {
-    font-size: 13px;
-}
-table tr td .label-error {
-    background-color: #f44336;
-    border-radius: 2px;
-
-    text-transform: uppercase;
-    text-align: center;
-    font-weight: bold;
-    color: white;
-
-    padding: 10px;
-}
-table tr td .label-success {
-    background-color: #4caf50;
-    border-radius: 2px;
-
-    text-transform: uppercase;
-    font-weight: bold;
-    text-align: center;
-    color: white;
-
-    padding: 10px;
-}
-</style>
