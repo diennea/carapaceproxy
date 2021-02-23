@@ -23,19 +23,29 @@ import com.google.common.annotations.VisibleForTesting;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import java.io.BufferedWriter;
 import java.io.Closeable;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.sql.Timestamp;
+import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.zip.GZIPOutputStream;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.stringtemplate.v4.NoIndentWriter;
 import org.stringtemplate.v4.ST;
@@ -126,7 +136,65 @@ public class RequestsLogger implements Runnable, Closeable {
             os = null;
         }
     }
+    
+    @VisibleForTesting
+    void rotateAccessLogFile() throws IOException {
+        String accesslogPath =  this.currentConfiguration.getAccessLogPath();
+        long maxSize = this.currentConfiguration.getAccessLogMaxSize();
+        DateFormat date = new SimpleDateFormat("yyyy-MM-dd-ss");
+        String newAccessLogName = accesslogPath + "-" +date.format(new Date());
+        
+        Path currentAccessLogPath = Paths.get(accesslogPath);
+        Path newAccessLogPath = Paths.get(newAccessLogName);
+        FileChannel logFileChannel = FileChannel.open(currentAccessLogPath);
 
+        try {
+            long currentSize = logFileChannel.size();
+            if(currentSize >= maxSize && maxSize > 0){
+                LOG.log(Level.INFO,"Maximum access log size reached. file: {0} , Size: {1} , maxSize: {2}" , new Object[]{accesslogPath,currentSize,maxSize});
+                Files.move(currentAccessLogPath, newAccessLogPath, StandardCopyOption.ATOMIC_MOVE);
+                closeAccessLogFile();
+                // File opening will be retried at next cycle start
+
+                //Zip old file
+                gzipFile(newAccessLogName, newAccessLogName+".gzip", true);
+            }
+        } catch (IOException e) {
+            LOG.log(Level.SEVERE , "Error: Unable to rename file {0} in {1}: " + e , new Object[]{accesslogPath, newAccessLogName});
+        }
+    }
+    
+    private void gzipFile(String source_filepath, String destination_zip_filepath, boolean deleteSource) {
+        byte[] buffer = new byte[1024];
+        File source = new File(source_filepath);
+        File dest = new File(destination_zip_filepath);
+        
+        try {
+            FileOutputStream fileOutputStream = new FileOutputStream(dest);
+            try (GZIPOutputStream gzipOutputStream = new GZIPOutputStream(fileOutputStream)) {
+                try (FileInputStream fileInput = new FileInputStream(source)) {
+                    int bytes_read;
+                    
+                    while ((bytes_read = fileInput.read(buffer)) > 0) {
+                        gzipOutputStream.write(buffer,0, bytes_read);
+                    }
+                }
+                gzipOutputStream.finish();
+                gzipOutputStream.close();
+                
+                //delete uncompressed file
+                if(deleteSource && dest.exists()){
+                    source.delete();
+                }
+            }
+            if(verbose){
+               LOG.log(Level.INFO, "{0} was compressed successfully", source_filepath);
+            }
+        } catch (IOException ex) {
+            LOG.log(Level.SEVERE, "{0} Compression failed:  {1}", new Object[]{source_filepath, ex});
+        }
+    }
+    
     public void reloadConfiguration(RuntimeServerConfiguration newConfiguration) {
         this.newConfiguration = newConfiguration;
     }
@@ -249,6 +317,8 @@ public class RequestsLogger implements Runnable, Closeable {
                 if (System.currentTimeMillis() - lastFlush >= currentConfiguration.getAccessLogFlushInterval()) {
                     flushAccessLogFile();
                 }
+                //Check if is time to rotate 
+                rotateAccessLogFile();
 
             } catch (InterruptedException ex) {
                 LOG.log(Level.SEVERE, "Interrupt received");
