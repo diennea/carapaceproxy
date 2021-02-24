@@ -164,9 +164,12 @@ public class ContentsCache {
             }
             return false;
         }
-        if ((secure && !cacheControl.contains(HttpHeaderValues.PUBLIC)
-                || headers.contains(HttpHeaderNames.PRAGMA, HttpHeaderValues.NO_CACHE, true))) {
-            LOG.log(Level.FINER, "not cachable {0}", request);
+        if (secure && !cacheControl.equals(HttpHeaderValues.PUBLIC + "")) {
+            return false;
+        }
+        if ((!cacheControl.isEmpty() && CACHE_CONTROL_CACHE_DISABLED_VALUES.stream().anyMatch(v -> cacheControl.contains(v)))
+                || headers.contains(HttpHeaderNames.PRAGMA, HttpHeaderValues.NO_CACHE, true)) {
+            // never cache Pragma: no-cache, Cache-Control: nostore/no-cache
             return false;
         }
 

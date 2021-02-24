@@ -36,10 +36,13 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import io.netty.handler.codec.http.HttpHeaderNames;
+import junitparams.JUnitParamsRunner;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
 
+@RunWith(JUnitParamsRunner.class)
 public class CacheTest {
 
     @Rule
@@ -260,7 +263,7 @@ public class CacheTest {
                     String s = resp.toString();
                     System.out.println("s:" + s);
                     assertTrue(s.endsWith("it <b>works</b> !!"));
-                    assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                    assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached"))); // not cached due to cache-control: public header absence in first request
                 }
 
                 {
@@ -268,7 +271,7 @@ public class CacheTest {
                     String s = resp.toString();
                     System.out.println("s:" + s);
                     assertTrue(s.endsWith("it <b>works</b> !!"));
-                    assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                    assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached"))); // cached due to cache-control: public header presence in second request
                 }
             }
 
@@ -529,7 +532,7 @@ public class CacheTest {
     }
 
     @Test
-    public void testNoCache() throws Exception {
+    public void testNoCacheResponse() throws Exception {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
@@ -698,6 +701,210 @@ public class CacheTest {
 
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     String s = client.get("/index.png?_nocache").toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                }
+                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
+                assertNotNull(stats.getEndpoints().get(key));
+                assertEquals(1, server.getCache().getCacheSize());
+                assertEquals(1, server.getCache().getStats().getHits());
+                assertEquals(1, server.getCache().getStats().getMisses());
+            }
+
+            ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
+            TestUtils.waitForCondition(() -> {
+                EndpointStats epstats = stats.getEndpointStats(key);
+                return epstats.getTotalConnections().intValue() >= 1
+                        && epstats.getActiveConnections().intValue() == 0
+                        && epstats.getOpenConnections().intValue() == 0;
+            }, 100);
+
+            TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+        }
+    }
+
+    @Test
+    public void testNoCacheRequest() throws Exception {
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            server.start();
+            int port = server.getLocalPort();
+            for (String noCacheValue : CACHE_CONTROL_CACHE_DISABLED_VALUES) {
+                stubFor(get(urlEqualTo("/index.html"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                                .withBody("it <b>works</b> !!")));
+
+                server.getCache().getStats().resetCacheMetrics();
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: " + noCacheValue + "\r\n\r\n");
+                    String s = resp.toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                }
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: " + noCacheValue + "\r\n\r\n");
+                    String s = resp.toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                }
+
+                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
+                assertNotNull(stats.getEndpoints().get(key));
+                assertEquals(0, server.getCache().getCacheSize());
+                assertEquals(0, server.getCache().getStats().getHits());
+                assertEquals(0, server.getCache().getStats().getMisses());
+            }
+
+            // multiple cache-control values
+            {
+                stubFor(get(urlEqualTo("/index.html"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                                .withBody("it <b>works</b> !!")));
+
+                server.getCache().getStats().resetCacheMetrics();
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: no-cache, no-store\r\n\r\n");
+                    String s = resp.toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                }
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: no-cache, no-store\r\n\r\n");
+                    String s = resp.toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                }
+
+                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
+                assertNotNull(stats.getEndpoints().get(key));
+                assertEquals(0, server.getCache().getCacheSize());
+                assertEquals(0, server.getCache().getStats().getHits());
+                assertEquals(0, server.getCache().getStats().getMisses());
+            }
+
+            // cache-control value with spaces
+            {
+                stubFor(get(urlEqualTo("/index.html"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                                .withBody("it <b>works</b> !!")));
+
+                server.getCache().getStats().resetCacheMetrics();
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: max-age  = 0\r\n\r\n");
+                    String s = resp.toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                }
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: max-age  = 0\r\n\r\n");
+                    String s = resp.toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                }
+
+                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
+                assertNotNull(stats.getEndpoints().get(key));
+                assertEquals(0, server.getCache().getCacheSize());
+                assertEquals(0, server.getCache().getStats().getHits());
+                assertEquals(0, server.getCache().getStats().getMisses());
+            }
+
+            // cache-control value caseInsensitive
+            {
+                stubFor(get(urlEqualTo("/index.html"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                                .withBody("it <b>works</b> !!")));
+
+                server.getCache().getStats().resetCacheMetrics();
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: No-CacHe\r\n\r\n");
+                    String s = resp.toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                }
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: No-CacHe\r\n\r\n");
+                    String s = resp.toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                }
+                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
+                assertNotNull(stats.getEndpoints().get(key));
+                assertEquals(0, server.getCache().getCacheSize());
+                assertEquals(0, server.getCache().getStats().getHits());
+                assertEquals(0, server.getCache().getStats().getMisses());
+            }
+
+            // pragma value caseInsensitive
+            {
+                stubFor(get(urlEqualTo("/index.html"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                                .withBody("it <b>works</b> !!")));
+
+                server.getCache().getStats().resetCacheMetrics();
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nPragma: No-CacHe\r\n\r\n");
+                    String s = resp.toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                }
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nPragma: No-CacHe\r\n\r\n");
+                    String s = resp.toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                }
+                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
+                assertNotNull(stats.getEndpoints().get(key));
+                assertEquals(0, server.getCache().getCacheSize());
+                assertEquals(0, server.getCache().getStats().getHits());
+                assertEquals(0, server.getCache().getStats().getMisses());
+            }
+
+            // no cache-control set
+            {
+                stubFor(get(urlEqualTo("/index.html"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                                .withBody("it <b>works</b> !!")));
+
+                server.getCache().getStats().resetCacheMetrics();
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    String s = client.get("/index.html").toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                }
+
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    String s = client.get("/index.html").toString();
                     System.out.println("s:" + s);
                     assertTrue(s.endsWith("it <b>works</b> !!"));
                 }
