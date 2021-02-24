@@ -80,7 +80,7 @@ public class RuntimeServerConfiguration {
     private int healthProbePeriod = 0;
     private int dynamicCertificatesManagerPeriod = 0;
     private int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
-    private Set<String> domainsReachabilityCheckerIPAddresses;
+    private Set<String> domainsCheckerIPAddresses;
     private List<String> supportedSSLProtocols = null;
     private int ocspStaplingManagerPeriod = 0;
     private boolean requestsHeaderDebugEnabled = false;
@@ -266,8 +266,8 @@ public class RuntimeServerConfiguration {
         this.clientsIdleTimeoutSeconds = clientIdleTimeoutSeconds;
     }
 
-    public Set<String> getDomainsReachabilityCheckerIPAddresses() {
-        return domainsReachabilityCheckerIPAddresses;
+    public Set<String> getDomainsCheckerIPAddresses() {
+        return domainsCheckerIPAddresses;
     }
 
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
@@ -333,8 +333,8 @@ public class RuntimeServerConfiguration {
         keyPairsSize = properties.getInt("dynamiccertificatesmanager.keypairssize", DEFAULT_KEYPAIRS_SIZE);
         LOG.info("dynamiccertificatesmanager.keypairssize=" + keyPairsSize);
 
-        domainsReachabilityCheckerIPAddresses = Set.of(properties.getArray("dynamiccertificatesmanager.domainsreachabilitychecker.ipaddresses", new String[]{}));
-        LOG.info("dynamiccertificatesmanager.domainsreachabilitychecker.ipaddresses=" + domainsReachabilityCheckerIPAddresses);
+        domainsCheckerIPAddresses = Set.of(properties.getArray("dynamiccertificatesmanager.domainschecker.ipaddresses", new String[]{}));
+        LOG.info("dynamiccertificatesmanager.domainschecker.ipaddresses=" + domainsCheckerIPAddresses);
 
         ocspStaplingManagerPeriod = properties.getInt("ocspstaplingmanager.period", 0);
         LOG.info("ocspstaplingmanager.period=" + ocspStaplingManagerPeriod);

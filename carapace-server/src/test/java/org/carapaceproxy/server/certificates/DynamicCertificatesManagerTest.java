@@ -172,9 +172,7 @@ public class DynamicCertificatesManagerTest {
 
         // WAITING
         assertEquals(WAITING, man.getStateOfCertificate(d1));
-        man.run(); // checking domain reachability
-        verify(store, times(++saveCounter)).saveCertificate(any());
-        man.run(); // domain reachable
+        man.run();
         assertEquals(runCase.equals("challenge_null") ? VERIFIED : VERIFYING, man.getStateOfCertificate(d1));
         verify(store, times(++saveCounter)).saveCertificate(any());
 
@@ -296,9 +294,7 @@ public class DynamicCertificatesManagerTest {
 
         // WAITING
         assertEquals(WAITING, man.getStateOfCertificate(domain));
-        man.run(); // checking domain reachability
-        verify(store, times(++saveCounter)).saveCertificate(any());
-        man.run(); // domain reachable
+        man.run();
         verify(store, times(++saveCounter)).saveCertificate(any());
         if (runCase.equals("challenge_creation_failed")) {
             // WAITING
@@ -389,10 +385,10 @@ public class DynamicCertificatesManagerTest {
         props.setProperty("certificate.1.hostname", domain);
         props.setProperty("certificate.1.mode", "acme");
         if (domainCase.equals("localhost-ip-check-partial")) {
-            props.setProperty("dynamiccertificatesmanager.domainsreachabilitychecker.ipaddresses", "127.0.0.1");
+            props.setProperty("dynamiccertificatesmanager.domainschecker.ipaddresses", "127.0.0.1");
         }
         if (domainCase.equals("localhost-ip-check-full")) {
-            props.setProperty("dynamiccertificatesmanager.domainsreachabilitychecker.ipaddresses", "127.0.0.1, 0:0:0:0:0:0:0:1");
+            props.setProperty("dynamiccertificatesmanager.domainschecker.ipaddresses", "127.0.0.1, 0:0:0:0:0:0:0:1");
         }
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
@@ -403,15 +399,10 @@ public class DynamicCertificatesManagerTest {
 
         // WAITING
         assertEquals(WAITING, man.getStateOfCertificate(domain));
-        man.run(); // checking domain reachability
-        verify(store, times(++saveCounter)).saveCertificate(any());
-        assertThat(man.getStateOfCertificate(domain), is(WAITING));
-        Thread.sleep(10_000);
-        man.run();
+        man.run(); // checking domain
         verify(store, times(++saveCounter)).saveCertificate(any());
         if (domainCase.equals("localhost-ip-check-partial")) {
             assertThat(man.getStateOfCertificate(domain), is(WAITING));
-            Thread.sleep(10_000);
             man.run();
             verify(store, times(++saveCounter)).saveCertificate(any());
             assertThat(man.getStateOfCertificate(domain), is(WAITING));
