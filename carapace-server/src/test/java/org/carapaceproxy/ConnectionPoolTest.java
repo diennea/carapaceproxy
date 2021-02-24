@@ -58,6 +58,8 @@ import org.junit.rules.TemporaryFolder;
 
 public class ConnectionPoolTest {
 
+    public static final long KEEP_ALIVE_TIMEOUT = 30_000;
+
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
 
@@ -77,6 +79,7 @@ public class ConnectionPoolTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
+        long start = System.currentTimeMillis();
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
@@ -92,7 +95,8 @@ public class ConnectionPoolTest {
             EndpointStats epstats = stats.getEndpointStats(key);
             System.out.println("STATS: " + epstats);
             assertNotNull(epstats);
-            assertEquals(1, epstats.getTotalConnections().intValue());
+            long diff = System.currentTimeMillis() - start;
+            assertEquals(diff > KEEP_ALIVE_TIMEOUT ? 2 : 1, epstats.getTotalConnections().intValue());
             assertEquals(0, epstats.getActiveConnections().intValue());
             assertEquals(1, epstats.getOpenConnections().intValue());
             assertEquals(1, epstats.getTotalRequests().intValue());
@@ -102,7 +106,8 @@ public class ConnectionPoolTest {
             }
             TestUtils.waitForCondition(TestUtils.NO_ACTIVE_CONNECTION(stats), 100);
             System.out.println("STATS: " + epstats);
-            assertEquals(1, epstats.getTotalConnections().intValue());
+            diff = System.currentTimeMillis() - start;
+            assertEquals(diff > KEEP_ALIVE_TIMEOUT ? 2 : 1, epstats.getTotalConnections().intValue());
             assertEquals(0, epstats.getActiveConnections().intValue());
             assertEquals(1, epstats.getOpenConnections().intValue());
             assertEquals(2, epstats.getTotalRequests().intValue());
@@ -112,7 +117,8 @@ public class ConnectionPoolTest {
                         toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8"));
                 TestUtils.waitForCondition(TestUtils.NO_ACTIVE_CONNECTION(stats), 100);
                 System.out.println("STATS: " + epstats);
-                assertEquals(1, epstats.getTotalConnections().intValue());
+                diff = System.currentTimeMillis() - start;
+                assertEquals(diff > KEEP_ALIVE_TIMEOUT ? 2 : 1, epstats.getTotalConnections().intValue());
                 assertEquals(0, epstats.getActiveConnections().intValue());
                 assertEquals(1, epstats.getOpenConnections().intValue());
                 assertEquals(i + 3, epstats.getTotalRequests().intValue());

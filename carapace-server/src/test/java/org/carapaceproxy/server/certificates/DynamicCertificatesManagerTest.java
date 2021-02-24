@@ -43,7 +43,10 @@ import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAIT
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.hamcrest.CoreMatchers.is;
-import static org.junit.Assert.*;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertEquals;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import static org.mockito.ArgumentMatchers.any;
@@ -325,6 +328,86 @@ public class DynamicCertificatesManagerTest {
                     verify(r53Client, times(1)).deleteDnsChallengeForDomain(any(), any());
                 }
             }
+        }
+    }
+
+    @Test
+    @Parameters({
+        "localhost-no-ip-check", "localhost-ip-check-partial", "localhost-ip-check-full"
+    })
+    public void testDomainReachabilityCheck(String domainCase) throws Exception {
+        String domain = domainCase.contains("localhost") ? "localhost" : domainCase;
+        Session session = mock(Session.class);
+        when(session.connect()).thenReturn(mock(Connection.class));
+        Login login = mock(Login.class);
+        when(login.getSession()).thenReturn(session);
+        when(login.getKeyPair()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE));
+
+        // ACME mocking
+        ACMEClient ac = mock(ACMEClient.class);
+        Order o = mock(Order.class);
+        when(o.getLocation()).thenReturn(new URL("https://localhost/index"));
+        when(ac.getLogin()).thenReturn(login);
+        when(ac.createOrderForDomain(any())).thenReturn(o);
+
+        Http01Challenge c = mock(Http01Challenge.class);
+        when(c.getToken()).thenReturn("");
+        when(c.getJSON()).thenReturn(JSON.parse(
+                "{\"url\": \"https://localhost/index\", \"type\": \"http-01\", \"token\": \"mytoken\"}"
+        ));
+        when(c.getAuthorization()).thenReturn("");
+        when(ac.getChallengeForOrder(any(), eq(true))).thenReturn(c);
+        when(ac.checkResponseForChallenge(any())).thenReturn(VALID);
+
+        KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        Certificate cert = mock(Certificate.class);
+        X509Certificate _cert = (X509Certificate) generateSampleChain(keyPair, false)[0];
+        when(cert.getCertificateChain()).thenReturn(Arrays.asList(_cert));
+        when(ac.fetchCertificateForOrder(any())).thenReturn(cert);
+
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        when(parent.getListeners()).thenReturn(mock(Listeners.class));
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
+        Whitebox.setInternalState(man, ac);
+
+        // Store mocking
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        when(store.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
+
+        // certificate to order
+        CertificateData cd1 = new CertificateData(domain, "", "", WAITING, "", "");
+        when(store.loadCertificateForDomain(eq(domain))).thenReturn(cd1);
+        man.setConfigurationStore(store);
+
+        // Properties setup
+        Properties props = new Properties();
+        props.setProperty("certificate.1.hostname", domain);
+        props.setProperty("certificate.1.mode", "acme");
+        if (domainCase.equals("localhost-ip-check-partial")) {
+            props.setProperty("dynamiccertificatesmanager.domainschecker.ipaddresses", "127.0.0.1");
+        }
+        if (domainCase.equals("localhost-ip-check-full")) {
+            props.setProperty("dynamiccertificatesmanager.domainschecker.ipaddresses", "127.0.0.1, 0:0:0:0:0:0:0:1");
+        }
+        ConfigurationStore configStore = new PropertiesConfigurationStore(props);
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(configStore);
+        man.reloadConfiguration(conf);
+
+        int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
+
+        // WAITING
+        assertEquals(WAITING, man.getStateOfCertificate(domain));
+        man.run(); // checking domain
+        verify(store, times(++saveCounter)).saveCertificate(any());
+        if (domainCase.equals("localhost-ip-check-partial")) {
+            assertThat(man.getStateOfCertificate(domain), is(WAITING));
+            man.run();
+            verify(store, times(++saveCounter)).saveCertificate(any());
+            assertThat(man.getStateOfCertificate(domain), is(WAITING));
+        } else {
+            assertThat(man.getStateOfCertificate(domain), is(VERIFIED));
         }
     }
 

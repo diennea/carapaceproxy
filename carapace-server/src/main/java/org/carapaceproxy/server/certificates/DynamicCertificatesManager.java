@@ -37,7 +37,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -51,11 +50,14 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.MANUAL;
 import static org.carapaceproxy.utils.CertificatesUtils.isCertificateExpired;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URL;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
+import java.util.Set;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.logging.Level;
 import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
@@ -95,6 +97,8 @@ public class DynamicCertificatesManager implements Runnable {
     private String awsAccessKey;
     private String awsSecretKey;
     private final Map<String, Integer> dnsChallegeReachabilityChecks = new ConcurrentHashMap();
+
+    private Set<String> domainsCheckerIPAddresses;
 
     private ScheduledExecutorService scheduler;
     private ScheduledFuture<?> scheduledFuture;
@@ -154,6 +158,7 @@ public class DynamicCertificatesManager implements Runnable {
         if (acmeClient == null) {
             acmeClient = new ACMEClient(loadOrCreateAcmeUserKeyPair(), TESTING_MODE);
         }
+        domainsCheckerIPAddresses = configuration.getDomainsCheckerIPAddresses();
         loadCertificates(configuration.getCertificates());
         period = configuration.getDynamicCertificatesManagerPeriod();
         if (scheduledFuture != null) {
@@ -225,7 +230,6 @@ public class DynamicCertificatesManager implements Runnable {
         if (scheduler == null) {
             scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat(THREAD_NAME).build());
         }
-
         LOG.log(Level.INFO, "Starting DynamicCertificatesManager, period: {0} seconds{1}", new Object[]{period, TESTING_MODE ? " (TESTING_MODE)" : ""});
         scheduledFuture = scheduler.scheduleWithFixedDelay(this, 0, period, TimeUnit.SECONDS);
     }
@@ -234,13 +238,13 @@ public class DynamicCertificatesManager implements Runnable {
         started = false;
         if (scheduler != null) {
             scheduler.shutdown();
+            if (r53Client != null) {
+                r53Client.close();
+            }
             try {
                 scheduler.awaitTermination(10, TimeUnit.SECONDS);
                 scheduler = null;
                 scheduledFuture = null;
-                if (r53Client != null) {
-                    r53Client.close();
-                }
             } catch (InterruptedException err) {
                 Thread.currentThread().interrupt();
             }
@@ -275,9 +279,11 @@ public class DynamicCertificatesManager implements Runnable {
                 CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, data.isWildcard(), false, data.getDaysBeforeRenewal());
                 switch (cert.getState()) {
                     case WAITING: { // certificate waiting to be issues/renew
-                        LOG.log(Level.INFO, "Certificate ISSUING process for domain: {0} STARTED.", domain);
-                        Order order = createOrderForCertificate(cert);
-                        createChallengeForCertificateOrder(cert, order);
+                        LOG.log(Level.INFO, "WAITING for certificate issuing process start for domain: {0}.", domain);
+                        if (checkDomain(domain)) {
+                            Order order = createOrderForCertificate(cert);
+                            createChallengeForCertificateOrder(cert, order);
+                        }
                         break;
                     }
                     case DNS_CHALLENGE_WAIT: { // waiting for full dns propagation
@@ -352,6 +358,23 @@ public class DynamicCertificatesManager implements Runnable {
                 LOG.log(Level.SEVERE, "Error while handling dynamic certificate for domain " + domain, ex);
             }
         }
+    }
+
+    private boolean checkDomain(String domain) throws AcmeException {
+        if (!domainsCheckerIPAddresses.isEmpty()) {
+            try {
+                for (InetAddress address : InetAddress.getAllByName(domain)) {
+                    if (!domainsCheckerIPAddresses.contains(address.getHostAddress())) {
+                        return false;
+                    }
+                }
+            } catch (IOException ex) {
+                LOG.log(Level.SEVERE, "Domain checking failed for {0}: {1}", new Object[]{domain, ex});
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private Order createOrderForCertificate(CertificateData cert) throws AcmeException {
