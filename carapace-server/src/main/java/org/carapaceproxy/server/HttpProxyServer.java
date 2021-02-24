@@ -39,7 +39,6 @@ import java.util.logging.Logger;
 import javax.naming.ConfigurationException;
 import javax.servlet.DispatcherType;
 import org.apache.bookkeeper.stats.*;
-import org.apache.bookkeeper.stats.prometheus.*;
 import org.apache.commons.configuration.PropertiesConfiguration;
 import org.carapaceproxy.EndpointMapper;
 import org.carapaceproxy.api.ApplicationConfig;
@@ -83,6 +82,7 @@ import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.webapp.WebAppContext;
 import org.glassfish.jersey.servlet.ServletContainer;
 import static org.glassfish.jersey.servlet.ServletProperties.JAXRS_APPLICATION_CLASS;
+import org.apache.bookkeeper.stats.prometheus.PrometheusMetricsProvider;
 import org.carapaceproxy.server.certificates.ocsp.OcspStaplingManager;
 
 public class HttpProxyServer implements AutoCloseable {
