@@ -41,8 +41,8 @@ import java.util.Arrays;
 import javax.net.ssl.SSLContext;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
-import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DOMAINS_REACHABILITY_CHECKER_TIMEOUT;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
+import java.util.Set;
 import org.carapaceproxy.utils.CarapaceLogger;
 
 /**
@@ -80,7 +80,7 @@ public class RuntimeServerConfiguration {
     private int healthProbePeriod = 0;
     private int dynamicCertificatesManagerPeriod = 0;
     private int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
-    private int domainsReachabilityCheckerTimeout = DOMAINS_REACHABILITY_CHECKER_TIMEOUT; // millis
+    private Set<String> domainsReachabilityCheckerIPAddresses;
     private List<String> supportedSSLProtocols = null;
     private int ocspStaplingManagerPeriod = 0;
     private boolean requestsHeaderDebugEnabled = false;
@@ -266,8 +266,8 @@ public class RuntimeServerConfiguration {
         this.clientsIdleTimeoutSeconds = clientIdleTimeoutSeconds;
     }
 
-    public int getDomainsReachabilityCheckerTimeout() {
-        return domainsReachabilityCheckerTimeout;
+    public Set<String> getDomainsReachabilityCheckerIPAddresses() {
+        return domainsReachabilityCheckerIPAddresses;
     }
 
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
@@ -332,8 +332,9 @@ public class RuntimeServerConfiguration {
         LOG.info("dynamiccertificatesmanager.period=" + dynamicCertificatesManagerPeriod);
         keyPairsSize = properties.getInt("dynamiccertificatesmanager.keypairssize", DEFAULT_KEYPAIRS_SIZE);
         LOG.info("dynamiccertificatesmanager.keypairssize=" + keyPairsSize);
-        domainsReachabilityCheckerTimeout = properties.getInt("dynamiccertificatesmanager.domainsreachabilitychecker.timeout", domainsReachabilityCheckerTimeout);
-        LOG.info("dynamiccertificatesmanager.domainsreachabilitychecker.timeout=" + domainsReachabilityCheckerTimeout);
+
+        domainsReachabilityCheckerIPAddresses = Set.of(properties.getArray("dynamiccertificatesmanager.domainsreachabilitychecker.ipaddresses", new String[]{}));
+        LOG.info("dynamiccertificatesmanager.domainsreachabilitychecker.ipaddresses=" + domainsReachabilityCheckerIPAddresses);
 
         ocspStaplingManagerPeriod = properties.getInt("ocspstaplingmanager.period", 0);
         LOG.info("ocspstaplingmanager.period=" + ocspStaplingManagerPeriod);

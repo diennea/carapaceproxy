@@ -155,7 +155,6 @@ public class DynamicCertificatesManagerTest {
         props.setProperty("certificate.3.hostname", d3);
         props.setProperty("certificate.3.mode", "manual");
         props.setProperty("certificate.3.daysbeforerenewal", "0");
-        props.setProperty("dynamiccertificatesmanager.domainsreachabilitychecker.timeout", "0");
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(configStore);
@@ -286,7 +285,6 @@ public class DynamicCertificatesManagerTest {
         props.setProperty("certificate.1.hostname", domain);
         props.setProperty("certificate.1.mode", "acme");
         props.setProperty("certificate.1.daysbeforerenewal", "0");
-        props.setProperty("dynamiccertificatesmanager.domainsreachabilitychecker.timeout", "0");
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(configStore);
@@ -339,8 +337,10 @@ public class DynamicCertificatesManagerTest {
 
     @Test
     @Parameters({
-        "0", "10000",})
-    public void testDomainReachabilityCheck(int timeout) throws Exception {
+        "localhost-no-ip-check", "localhost-ip-check-partial", "localhost-ip-check-full"
+    })
+    public void testDomainReachabilityCheck(String domainCase) throws Exception {
+        String domain = domainCase.contains("localhost") ? "localhost" : domainCase;
         Session session = mock(Session.class);
         when(session.connect()).thenReturn(mock(Connection.class));
         Login login = mock(Login.class);
@@ -380,16 +380,20 @@ public class DynamicCertificatesManagerTest {
         when(store.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
 
         // certificate to order
-        String domain = "google.it";
         CertificateData cd1 = new CertificateData(domain, "", "", WAITING, "", "");
         when(store.loadCertificateForDomain(eq(domain))).thenReturn(cd1);
         man.setConfigurationStore(store);
 
-        // Manager setup
+        // Properties setup
         Properties props = new Properties();
         props.setProperty("certificate.1.hostname", domain);
         props.setProperty("certificate.1.mode", "acme");
-        props.setProperty("dynamiccertificatesmanager.domainsreachabilitychecker.timeout", timeout + "");
+        if (domainCase.equals("localhost-ip-check-partial")) {
+            props.setProperty("dynamiccertificatesmanager.domainsreachabilitychecker.ipaddresses", "127.0.0.1");
+        }
+        if (domainCase.equals("localhost-ip-check-full")) {
+            props.setProperty("dynamiccertificatesmanager.domainsreachabilitychecker.ipaddresses", "127.0.0.1, 0:0:0:0:0:0:0:1");
+        }
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(configStore);
@@ -401,15 +405,19 @@ public class DynamicCertificatesManagerTest {
         assertEquals(WAITING, man.getStateOfCertificate(domain));
         man.run(); // checking domain reachability
         verify(store, times(++saveCounter)).saveCertificate(any());
+        assertThat(man.getStateOfCertificate(domain), is(WAITING));
+        Thread.sleep(10_000);
         man.run();
         verify(store, times(++saveCounter)).saveCertificate(any());
-        if (timeout > 0) {
+        if (domainCase.equals("localhost-ip-check-partial")) {
             assertThat(man.getStateOfCertificate(domain), is(WAITING));
-            Thread.sleep(timeout);
+            Thread.sleep(10_000);
             man.run();
             verify(store, times(++saveCounter)).saveCertificate(any());
+            assertThat(man.getStateOfCertificate(domain), is(WAITING));
+        } else {
+            assertThat(man.getStateOfCertificate(domain), is(VERIFIED));
         }
-        assertThat(man.getStateOfCertificate(domain), is(VERIFIED));
     }
 
 }

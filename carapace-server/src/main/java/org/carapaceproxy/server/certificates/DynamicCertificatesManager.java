@@ -101,10 +101,9 @@ public class DynamicCertificatesManager implements Runnable {
     private final Map<String, Integer> dnsChallegeReachabilityChecks = new ConcurrentHashMap();
 
     private static final int DOMAINS_REACHABILITY_CHECKER_THREAD_POOL_SIZE = Integer.getInteger("carapace.acme.domainsreachabilitychecker.threadpool.size", 10);
-    public static final int DOMAINS_REACHABILITY_CHECKER_TIMEOUT = Integer.getInteger("carapace.acme.domainsreachabilitychecker.timeout", 10_000);
-    private int domainsReachabilityCheckerTimeout;
     private ExecutorService domainsReachabiliyChecker = Executors.newFixedThreadPool(DOMAINS_REACHABILITY_CHECKER_THREAD_POOL_SIZE);
     private final Set<String> reachableDomains = new HashSet<>();
+    private Set<String> domainsReachabilityCheckerIPAddresses;
 
     private ScheduledExecutorService scheduler;
     private ScheduledFuture<?> scheduledFuture;
@@ -164,7 +163,7 @@ public class DynamicCertificatesManager implements Runnable {
         if (acmeClient == null) {
             acmeClient = new ACMEClient(loadOrCreateAcmeUserKeyPair(), TESTING_MODE);
         }
-        domainsReachabilityCheckerTimeout = configuration.getDomainsReachabilityCheckerTimeout();
+        domainsReachabilityCheckerIPAddresses = configuration.getDomainsReachabilityCheckerIPAddresses();
         loadCertificates(configuration.getCertificates());
         period = configuration.getDynamicCertificatesManagerPeriod();
         if (scheduledFuture != null) {
@@ -381,21 +380,21 @@ public class DynamicCertificatesManager implements Runnable {
     }
 
     private void launchDomainReachabilityChecking(String domain) throws AcmeException {
-        if (domainsReachabilityCheckerTimeout > 0) {
+        if (domainsReachabilityCheckerIPAddresses.isEmpty()) {
+            reachableDomains.add(domain);
+        } else {
             domainsReachabiliyChecker.execute(() -> {
                 try {
-                    InetAddress check = InetAddress.getByName(domain);
-                    if (check.isReachable(domainsReachabilityCheckerTimeout)) {
-                        reachableDomains.add(domain);
-                    } else {
-                        LOG.log(Level.SEVERE, "Domain {0} seems unreachable. Unable to create certificate order.", new Object[]{domain});
+                    for (InetAddress address : InetAddress.getAllByName(domain)) {
+                        if (!domainsReachabilityCheckerIPAddresses.contains(address.getHostAddress())) {
+                            return;
+                        }
                     }
+                    reachableDomains.add(domain);
                 } catch (IOException ex) {
                     LOG.log(Level.SEVERE, "Reachability test failed for domain {0}: {1}", new Object[]{domain, ex});
                 }
             });
-        } else {
-            reachableDomains.add(domain);
         }
     }
 
