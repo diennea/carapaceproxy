@@ -252,7 +252,7 @@ public class RequestHandler implements MatchingContext {
                     return;
                 }
                 connectionToEndpoint.set(connection);
-                cacheReceiver = connectionToClient.cache.startCachingResponse(request);
+                cacheReceiver = connectionToClient.cache.startCachingResponse(request, isSecure());
                 if (cacheReceiver != null) {
                     // https://tools.ietf.org/html/rfc7234#section-4.3.4
                     cleanRequestFromCacheValidators(request);
