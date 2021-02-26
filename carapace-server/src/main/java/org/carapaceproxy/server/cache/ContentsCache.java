@@ -78,8 +78,11 @@ public class ContentsCache {
         this.stats = new CacheStats();
         this.threadPool = Executors.newSingleThreadScheduledExecutor();
 
-        this.currentConfiguration = new CacheRuntimeConfiguration(currentConfiguration.getCacheMaxSize(), currentConfiguration.getCacheMaxFileSize());
-
+        this.currentConfiguration = new CacheRuntimeConfiguration(
+                currentConfiguration.getCacheMaxSize(),
+                currentConfiguration.getCacheMaxFileSize(),
+                currentConfiguration.isCacheDisabledForSecureRequestsWithoutPublic()
+        );
         this.cache = new CaffeineCacheImpl(stats, currentConfiguration.getCacheMaxSize(), LOG);
     }
 
@@ -157,14 +160,15 @@ public class ContentsCache {
 
         final HttpHeaders headers = request.headers();
         final String cacheControl = headers.get(HttpHeaderNames.CACHE_CONTROL, "").replaceAll(" ", "").toLowerCase();
-        boolean ctrlF5 = cacheControl.contains(HttpHeaderValues.NO_CACHE);
+        boolean ctrlF5 = cacheControl.contains(HttpHeaderValues.NO_CACHE + "");
         if (ctrlF5) {
             if (registerNoCacheStat) {
                 NO_CACHE_REQUESTS_COUNTER.inc();
             }
             return false;
         }
-        if (secure && !cacheControl.equals(HttpHeaderValues.PUBLIC + "")) {
+        if (this.currentConfiguration.isCacheDisabledForSecureRequestsWithoutPublic()
+                && secure && !cacheControl.contains(HttpHeaderValues.PUBLIC + "")) {
             return false;
         }
         if ((!cacheControl.isEmpty() && CACHE_CONTROL_CACHE_DISABLED_VALUES.stream().anyMatch(v -> cacheControl.contains(v)))
@@ -247,7 +251,10 @@ public class ContentsCache {
 
     public void reloadConfiguration(RuntimeServerConfiguration newConfiguration) {
         CacheRuntimeConfiguration newCacheConfiguration = new CacheRuntimeConfiguration(
-                newConfiguration.getCacheMaxSize(), newConfiguration.getCacheMaxFileSize());
+                newConfiguration.getCacheMaxSize(),
+                newConfiguration.getCacheMaxFileSize(),
+                newConfiguration.isCacheDisabledForSecureRequestsWithoutPublic()
+        );
         if (newCacheConfiguration.equals(currentConfiguration)) {
             LOG.info("Cache configuration not changed during hot reload");
             return;

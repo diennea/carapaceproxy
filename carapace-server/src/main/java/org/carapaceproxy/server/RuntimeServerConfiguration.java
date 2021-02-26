@@ -64,6 +64,7 @@ public class RuntimeServerConfiguration {
     private int borrowTimeout = 60000;
     private long cacheMaxSize = 0;
     private long cacheMaxFileSize = 0;
+    private boolean cacheDisabledForSecureRequestsWithoutPublic = false;
     private String mapperClassname;
     private String accessLogPath = "access.log";
     private String accessLogTimestampFormat = "yyyy-MM-dd HH:mm:ss.SSS";
@@ -131,7 +132,7 @@ public class RuntimeServerConfiguration {
     public void setAccessLogWaitBetweenFailures(int accessLogWaitBetweenFailures) {
         this.accessLogWaitBetweenFailures = accessLogWaitBetweenFailures;
     }
-    
+
     public long getAccessLogMaxSize() {
         return accessLogMaxSize;
     }
@@ -220,6 +221,14 @@ public class RuntimeServerConfiguration {
         this.cacheMaxFileSize = cacheMaxFileSize;
     }
 
+    public boolean isCacheDisabledForSecureRequestsWithoutPublic() {
+        return cacheDisabledForSecureRequestsWithoutPublic;
+    }
+
+    public void setCacheDisabledForSecureRequestsWithoutPublic(boolean cacheDisabledForSecureRequestsWithoutPublic) {
+        this.cacheDisabledForSecureRequestsWithoutPublic = cacheDisabledForSecureRequestsWithoutPublic;
+    }
+
     public int getHealthProbePeriod() {
         return healthProbePeriod;
     }
@@ -287,8 +296,10 @@ public class RuntimeServerConfiguration {
 
         this.cacheMaxSize = properties.getLong("cache.maxsize", cacheMaxSize);
         this.cacheMaxFileSize = properties.getLong("cache.maxfilesize", cacheMaxFileSize);
+        this.cacheDisabledForSecureRequestsWithoutPublic = properties.getBoolean("cache.requests.secure.disablewithoutpublic", cacheDisabledForSecureRequestsWithoutPublic);
         LOG.info("cache.maxsize=" + cacheMaxSize);
         LOG.info("cache.maxfilesize=" + cacheMaxFileSize);
+        LOG.info("cache.requests.secure.disablewithoutpublic=" + cacheDisabledForSecureRequestsWithoutPublic);
 
         this.accessLogPath = properties.getString("accesslog.path", accessLogPath);
         this.accessLogTimestampFormat = properties.getString("accesslog.format.timestamp", accessLogTimestampFormat);
@@ -296,7 +307,7 @@ public class RuntimeServerConfiguration {
         this.accessLogMaxQueueCapacity = properties.getInt("accesslog.queue.maxcapacity", accessLogMaxQueueCapacity);
         this.accessLogFlushInterval = properties.getInt("accesslog.flush.interval", accessLogFlushInterval);
         this.accessLogWaitBetweenFailures = properties.getInt("accesslog.failure.wait", accessLogWaitBetweenFailures);
-        this.accessLogMaxSize =  properties.getLong("accesslog.maxsize", accessLogMaxSize);
+        this.accessLogMaxSize = properties.getLong("accesslog.maxsize", accessLogMaxSize);
         String tsFormatExample;
         try {
             SimpleDateFormat formatter = new SimpleDateFormat(this.accessLogTimestampFormat);
