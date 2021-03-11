@@ -236,6 +236,7 @@ public class Listeners {
                                 listener.isSsl()
                         );
                         channel.pipeline().addLast(connHandler);
+                        parent.getFullHttpMessageLogger().attachHandler(channel, connHandler.getPendingRequest());
 
                         listenersHandlers.put(key, connHandler);
                     }

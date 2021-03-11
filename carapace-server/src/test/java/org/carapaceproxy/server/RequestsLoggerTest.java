@@ -1,21 +1,21 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.server;
 
@@ -37,9 +37,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.List;
-import static junit.framework.Assert.assertEquals;
 import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.MapResult;
 import org.carapaceproxy.client.ConnectionsManagerStats;
@@ -480,19 +478,19 @@ public class RequestsLoggerTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
-        try ( HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.getCurrentConfiguration().setAccessLogPath(tmpDir.getRoot().getAbsolutePath() + "/access.log");
             server.start();
             int port = server.getLocalPort();
 
-            try ( RawHttpClient client = new RawHttpClient("localhost", port)) {
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
                 assertTrue(s.endsWith("it <b>works</b> !!"));
                 assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
             }
 
-            try ( RawHttpClient client = new RawHttpClient("localhost", port)) {
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                     String s = resp.toString();
@@ -537,7 +535,7 @@ public class RequestsLoggerTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        try ( HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.getCurrentConfiguration().setAccessLogPath(tmpDir.getRoot().getAbsolutePath() + "/access.log");
             server.getCurrentConfiguration().setAccessLogMaxSize(1024);
             Path currentAccessLogPath = Paths.get(server.getCurrentConfiguration().getAccessLogPath());
@@ -547,13 +545,13 @@ public class RequestsLoggerTest {
             FileChannel logFileChannel = FileChannel.open(currentAccessLogPath);
 
             while (logFileChannel.size() < 1024) {
-                try ( RawHttpClient client = new RawHttpClient("localhost", port)) {
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                     String s = resp.toString();
                     assertTrue(s.endsWith("it <b>works</b> !!"));
                 }
 
-                try ( RawHttpClient client = new RawHttpClient("localhost", port)) {
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     {
                         RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                         String s = resp.toString();
@@ -571,7 +569,7 @@ public class RequestsLoggerTest {
             //check if gzip file exist
             File[] f = new File(tmpDir.getRoot().getAbsolutePath()).listFiles((dir, name) -> name.startsWith("access") && name.endsWith(".gzip"));
             assertTrue(f.length == 1);
-            try ( RawHttpClient client = new RawHttpClient("localhost", port)) {
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
                 assertTrue(s.endsWith("it <b>works</b> !!"));
@@ -579,4 +577,5 @@ public class RequestsLoggerTest {
             assertTrue(logFileChannel.size() > 0);
         }
     }
+
 }
