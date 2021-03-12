@@ -26,8 +26,6 @@ import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.File;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
@@ -35,7 +33,6 @@ import static org.junit.Assert.assertTrue;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import java.nio.file.Files;
 import org.carapaceproxy.utils.CarapaceLogger;
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -46,20 +43,11 @@ import org.junit.rules.TemporaryFolder;
  */
 public class FullHttpMessageLoggerTest {
 
-    private static final boolean DEBUG = true;
-
-    private String accessLogFilePath;
-
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
 
     @Rule
     public TemporaryFolder tmpDir = new TemporaryFolder();
-
-    @Before
-    public void before() {
-        accessLogFilePath = tmpDir.getRoot().getAbsolutePath() + "/access.log";
-    }
 
     @Test
     public void testGetMessageLog() throws Exception {
@@ -77,7 +65,9 @@ public class FullHttpMessageLoggerTest {
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.getCurrentConfiguration().setAccessLogPath(tmpDir.getRoot().getAbsolutePath() + "/access.log");
-            Path path = Paths.get(server.getCurrentConfiguration().getAccessLogPath() + ".full");
+            server.getCurrentConfiguration().setAccessLogAdvancedEnabled(true);
+            server.getCurrentConfiguration().setAccessLogTimestampFormat("dd-MM-yyyy HH:mm:ss.SSS");
+            server.getFullHttpMessageLogger().reloadConfiguration(server.getCurrentConfiguration());
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -117,7 +107,9 @@ public class FullHttpMessageLoggerTest {
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.getCurrentConfiguration().setAccessLogPath(tmpDir.getRoot().getAbsolutePath() + "/access.log");
-            Path path = Paths.get(server.getCurrentConfiguration().getAccessLogPath() + ".full");
+            server.getCurrentConfiguration().setAccessLogAdvancedEnabled(true);
+            server.getCurrentConfiguration().setAccessLogAdvancedBodySize(5);
+            server.getFullHttpMessageLogger().reloadConfiguration(server.getCurrentConfiguration());
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {

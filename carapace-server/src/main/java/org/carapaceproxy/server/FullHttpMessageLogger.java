@@ -20,7 +20,6 @@
 package org.carapaceproxy.server;
 
 import static org.stringtemplate.v4.STGroup.verbose;
-import com.google.common.annotations.VisibleForTesting;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -28,6 +27,7 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.DecoderResult;
 import io.netty.handler.codec.http.FullHttpMessage;
 import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import java.io.BufferedWriter;
@@ -38,8 +38,8 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -74,6 +74,10 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
     private PrintWriter pw = null;
 
     public long lastFlush = 0;
+
+    private boolean accessLogAdvancedEnabled;
+    private SimpleDateFormat tsFormatter;
+    private int bodySize;
 
     public FullHttpMessageLogger(RuntimeServerConfiguration currentConfiguration) {
         this.currentConfiguration = currentConfiguration;
@@ -118,6 +122,9 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
 
     public void reloadConfiguration(RuntimeServerConfiguration newConfiguration) {
         this.newConfiguration = newConfiguration;
+        accessLogAdvancedEnabled = newConfiguration.isAccessLogAdvancedEnabled();
+        tsFormatter = new SimpleDateFormat(newConfiguration.getAccessLogTimestampFormat());
+        bodySize = newConfiguration.getAccessLogAdvancedBodySize();
     }
 
     private void _reloadConfiguration() throws IOException {
@@ -160,7 +167,6 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
         }
     }
 
-    @VisibleForTesting
     void flushAccessLogFile() throws IOException {
         if (verbose) {
             LOG.log(Level.INFO, "Flushed");
@@ -254,8 +260,10 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
     }
 
     public void attachHandler(SocketChannel channel, AtomicReference<RequestHandler> reqHandler) {
-        channel.pipeline().addLast(new HttpObjectAggregator(Integer.MAX_VALUE));
-        channel.pipeline().addLast(new FullHttpMessageLoggerHandler(reqHandler));
+        if (accessLogAdvancedEnabled) {
+            channel.pipeline().addLast(new HttpObjectAggregator(Integer.MAX_VALUE));
+            channel.pipeline().addLast(new FullHttpMessageLoggerHandler(reqHandler));
+        }
     }
 
     public class FullHttpMessageLoggerHandler extends SimpleChannelInboundHandler<FullHttpMessage> {
@@ -276,10 +284,7 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
 
             RequestHandler request = reqHandler.get();
             if (request != null) {
-                FullHttpMessageLogEntry entry = new FullHttpMessageLogEntry(
-                        request.getId(), msg, currentConfiguration.getAccessLogTimestampFormat()
-                );
-
+                FullHttpMessageLogEntry entry = new FullHttpMessageLogEntry(request.getId(), request.getStartTs(), msg);
                 logMessageEntry(entry);
             }
         }
@@ -302,24 +307,28 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
     private class FullHttpMessageLogEntry {
 
         private final long requestId;
-        private final String time;
+        private final String timestamp;
         private boolean request;
         private String method;
         private String uri;
+        private String statusCode;
         private final String protocolVersion;
         private final String headers;
         private final String trailingHeaders;
         private final String data;
 
-        FullHttpMessageLogEntry(long requestId, FullHttpMessage msg, String timestampFormat) {
-
+        FullHttpMessageLogEntry(long requestId, long startTs, FullHttpMessage msg) {
             this.requestId = requestId;
-            this.time = new SimpleDateFormat(timestampFormat).format(new Date());
+            timestamp = tsFormatter.format(new Timestamp(startTs));
             if (msg instanceof FullHttpRequest) {
                 this.request = true;
                 FullHttpRequest request = (FullHttpRequest) msg;
                 method = request.method().toString();
                 uri = request.uri();
+            }
+            if (msg instanceof FullHttpResponse) {
+                FullHttpResponse response = (FullHttpResponse) msg;
+                statusCode = response.status().codeAsText() + "";
             }
 
             protocolVersion = msg.protocolVersion().toString();
@@ -330,18 +339,20 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
         }
 
         void write() throws IOException {
-            String opening = ">>>>>>>>>>>>>>>>>>>>[ SERVER RESPONSE (requestId: " + requestId + ") ]>>>>>>>>>>>>>>>>>>>>";
-            String closing = ">>>>>>>>>>>>>>>>>>>>[ SERVER RESPONSE END (requestId: " + requestId + ") ]>>>>>>>>>>>>>>>>>>>>";
+            String opening = ">>>>>>>>>>>>>>>>>>>>[ SERVER RESPONSE (rid: " + requestId + ") ]>>>>>>>>>>>>>>>>>>>>";
+            String closing = ">>>>>>>>>>>>>>>>>>>>[ SERVER RESPONSE END (rid: " + requestId + ") ]>>>>>>>>>>>>>>>>>>>>";
             if (request) {
-                opening = "<<<<<<<<<<<<<<<<<<<<[ CLIENT REQUEST (requestId: " + requestId + ") ]<<<<<<<<<<<<<<<<<<<<";
-                closing = "<<<<<<<<<<<<<<<<<<<<[ CLIENT REQUEST END (requestId: " + requestId + ") ]<<<<<<<<<<<<<<<<<<<<";
+                opening = "<<<<<<<<<<<<<<<<<<<<[ CLIENT REQUEST (rid: " + requestId + ") ]<<<<<<<<<<<<<<<<<<<<";
+                closing = "<<<<<<<<<<<<<<<<<<<<[ CLIENT REQUEST END (rid: " + requestId + ") ]<<<<<<<<<<<<<<<<<<<<";
             }
             pw.println(opening);
-            pw.println("Time: " + time);
+            pw.println("Timestamp: " + timestamp);
             pw.println("HTTP Version: " + protocolVersion);
             if (request) {
                 pw.println("HTTP Method: " + method);
                 pw.println("URI: " + uri);
+            } else {
+                pw.println("Status code: " + statusCode);
             }
             pw.println("--------------------[ HEADERS ]--------------------");
             pw.println(headers);
@@ -349,8 +360,8 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
                 pw.println(trailingHeaders);
             }
             if (data != null && !data.isEmpty()) {
-                pw.println("--------------------[ DATA ]--------------------");
-                pw.println(data);
+                pw.println("--------------------[ BODY ]--------------------");
+                pw.println(bodySize > 0 ? data.substring(0, Math.min(data.length(), bodySize)) : data);
             }
             pw.println(closing);
             pw.println("\n");
@@ -375,7 +386,8 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
 
         @Override
         public String toString() {
-            return "FullHttpMessageLogEntry{" + "requestId=" + requestId + ", time=" + time + ", request=" + request + ", method=" + method + ", uri=" + uri + '}';
+            return "FullHttpMessageLogEntry{" + "requestId=" + requestId + ", timestamp=" + timestamp + ", request=" + request + ", method=" + method + ", uri=" + uri + ", statusCode=" + statusCode + '}';
         }
+
     }
 }

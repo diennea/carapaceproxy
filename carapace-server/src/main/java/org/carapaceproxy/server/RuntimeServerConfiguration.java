@@ -77,6 +77,8 @@ public class RuntimeServerConfiguration {
     private int accessLogFlushInterval = 5000;
     private int accessLogWaitBetweenFailures = 10000;
     private long accessLogMaxSize = 524288000;
+    private boolean accessLogAdvancedEnabled = false;
+    private int accessLogAdvancedBodySize = 1_000; // bytes
     private String userRealmClassname;
     private int healthProbePeriod = 0;
     private int dynamicCertificatesManagerPeriod = 0;
@@ -141,6 +143,22 @@ public class RuntimeServerConfiguration {
 
     public void setAccessLogMaxSize(long accessLogMaxSize) {
         this.accessLogMaxSize = accessLogMaxSize;
+    }
+
+    public boolean isAccessLogAdvancedEnabled() {
+        return accessLogAdvancedEnabled;
+    }
+
+    public void setAccessLogAdvancedEnabled(boolean accessLogAdvancedEnabled) {
+        this.accessLogAdvancedEnabled = accessLogAdvancedEnabled;
+    }
+
+    public int getAccessLogAdvancedBodySize() {
+        return accessLogAdvancedBodySize;
+    }
+
+    public void setAccessLogAdvancedBodySize(int accessLogAdvancedBodySize) {
+        this.accessLogAdvancedBodySize = accessLogAdvancedBodySize;
     }
 
     public String getMapperClassname() {
@@ -328,6 +346,11 @@ public class RuntimeServerConfiguration {
         LOG.info("accesslog.flush.interval=" + accessLogFlushInterval);
         LOG.info("accesslog.failure.wait=" + accessLogWaitBetweenFailures);
         LOG.info("accesslog.maxsize=" + accessLogMaxSize);
+
+        accessLogAdvancedEnabled = properties.getBoolean("accesslog.advanced.enabled", accessLogAdvancedEnabled);
+        accessLogAdvancedBodySize = properties.getInt("accesslog.advanced.body.size", accessLogAdvancedBodySize);
+        LOG.info("accesslog.advanced.enabled=" + accessLogAdvancedEnabled);
+        LOG.info("accesslog.advanced.body.size=" + accessLogAdvancedBodySize);
 
         tryConfigureCertificates(properties);
         tryConfigureListeners(properties);
