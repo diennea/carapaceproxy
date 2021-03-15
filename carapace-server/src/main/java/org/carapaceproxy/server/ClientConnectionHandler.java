@@ -72,7 +72,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     volatile boolean keepAlive = true;
     volatile boolean refuseOtherRequests;
     private final AtomicReference<RequestHandler> pendingRequest = new AtomicReference<>();
-    private volatile boolean requestFinished = false;
+    private volatile boolean requestRunning;
     final Runnable onClientDisconnected;
     private final String listenerHost;
     private final int listenerPort;
@@ -175,26 +175,26 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             RequestHandler currentRequest = new RequestHandler(requestIdGenerator.incrementAndGet(),
                     request, filters, this, ctx, () -> RUNNING_REQUESTS_GAUGE.dec(), backendHealthManager, requestsLogger);
             pendingRequest.set(currentRequest);
-            requestFinished = false;
+            requestRunning = true;
             currentRequest.start();
         } else if (msg instanceof LastHttpContent) {
-            if (requestFinished) {
-                LOG.log(Level.INFO, "{0} swallow {1}, no more pending requests", new Object[]{this, msg});
-                refuseOtherRequests = true;
-                ctx.close();
-            } else {
+            if (requestRunning) {
                 LastHttpContent trailer = (LastHttpContent) msg;
                 pendingRequest.get().clientRequestFinished(trailer);
-            }
-        } else if (msg instanceof HttpContent) {
-            if (requestFinished) {
+            } else {
                 LOG.log(Level.INFO, "{0} swallow {1}, no more pending requests", new Object[]{this, msg});
                 refuseOtherRequests = true;
                 ctx.close();
-            } else {
+            }
+        } else if (msg instanceof HttpContent) {
+            if (requestRunning) {
                 // for example chunks from client
                 HttpContent httpContent = (HttpContent) msg;
                 pendingRequest.get().continueClientRequest(httpContent);
+            } else {
+                LOG.log(Level.INFO, "{0} swallow {1}, no more pending requests", new Object[]{this, msg});
+                refuseOtherRequests = true;
+                ctx.close();
             }
         }
 
@@ -250,13 +250,13 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     }
 
     public void errorSendingRequest(RequestHandler request, EndpointConnectionImpl endpointConnection, ChannelHandlerContext peerChannel, Throwable error) {
-        requestFinished = true;
+        requestRunning = false;
         mapper.endpointFailed(endpointConnection.getKey(), error);
         LOG.log(Level.INFO, error, () -> this + " errorSendingRequest " + endpointConnection);
     }
 
     public void lastHttpContentSent(RequestHandler requestHandler) {
-        requestFinished = true;
+        requestRunning = false;
     }
 
     @Override
