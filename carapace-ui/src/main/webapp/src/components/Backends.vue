@@ -4,23 +4,21 @@
         <datatable-list :fields="fields" :items="backends">
             <template v-slot:host="{ item }">{{item.host}}:{{item.port}}</template>
             <template v-slot:isAvailable="{ item }">
-                <span class="badge-status"
-                      :class="[item.isAvailable ? 'success' : 'error']">
+                <div class="badge-status" :class="[item.isAvailable ? 'success' : 'error']">
                     {{item.isAvailable | backendStatusFormat}}
-                </span>
+                </div>
             </template>
             <template v-slot:reportedAsUnreachable="{ item }">
-                <span v-if="item.reportedAsUnreachableTs && item.reportedAsUnreachable"
-                      class="badge-status error">
-                    {{item.reportedAsUnreachable | unreachableFormat}}
-                </span>
+                <div class="badge-status" :class="[item.reportedAsUnreachable ? 'error' : '']">
+                    {{ item.reportedAsUnreachable | unreachableFormat}}
+                </div>
             </template>
             <template v-slot:lastProbeSuccess="{ item }">
-                <span v-if="item.lastProbeTs"
-                      class="badge-status"
-                      :class="[item.lastProbeSuccess ? 'success' : 'error']">
+                <div v-if="item.lastProbeTs" class="badge-status"
+                     :class="[item.lastProbeSuccess ? 'success' : 'error']">
                     {{item.lastProbeSuccess | probeSuccessFormat}}
-                </span>
+                </div>
+                <div v-else></div>
             </template>
             <template v-slot:httpResponse="{ item }">
                 <b>{{item.httpResponse}}</b>
@@ -104,6 +102,7 @@
                 if (status === true) {
                     return "UNREACHABLE";
                 }
+                return ""
             },
             backendStatusFormat(status) {
                 if (status === true) {
@@ -120,9 +119,7 @@
         },
         methods: {
             openDetail(detail) {
-                window
-                        .open("", "", "width=900,height=600")
-                        .document.write(detail ? detail : "");
+                window.open("", "", "width=900,height=600").document.write(detail ? detail : "");
             }
         }
     };

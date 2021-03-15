@@ -21,6 +21,7 @@ package org.carapaceproxy.utils;
 
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.DNS_CHALLENGE_WAIT;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.DOMAIN_UNREACHABLE;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.EXPIRED;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.ORDERING;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.REQUEST_FAILED;
@@ -53,6 +54,8 @@ public abstract class APIUtils {
         switch (state) {
             case WAITING:
                 return "waiting"; // certificate waiting for issuing/renews
+            case DOMAIN_UNREACHABLE:
+                return "domain unreachable"; // certificate domain reported as unreachable for issuing/renewing
             case DNS_CHALLENGE_WAIT:
                 return "dns-challenge-wait"; // dns challenge waiting to be visible before CA checking
             case VERIFYING:
@@ -79,6 +82,8 @@ public abstract class APIUtils {
         switch (state.toLowerCase()) {
             case "waiting":
                 return WAITING;
+            case "domain unreachable":
+                return DOMAIN_UNREACHABLE;
             case "dns-challenge-wait":
                 return DNS_CHALLENGE_WAIT;
             case "verifying":

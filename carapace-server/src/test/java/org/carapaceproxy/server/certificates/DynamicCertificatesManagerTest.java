@@ -34,6 +34,7 @@ import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.DNS_CHALLENGE_WAIT;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.DOMAIN_UNREACHABLE;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.EXPIRED;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.ORDERING;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.REQUEST_FAILED;
@@ -402,10 +403,10 @@ public class DynamicCertificatesManagerTest {
         man.run(); // checking domain
         verify(store, times(++saveCounter)).saveCertificate(any());
         if (domainCase.equals("localhost-ip-check-partial")) {
-            assertThat(man.getStateOfCertificate(domain), is(WAITING));
+            assertThat(man.getStateOfCertificate(domain), is(DOMAIN_UNREACHABLE));
             man.run();
             verify(store, times(++saveCounter)).saveCertificate(any());
-            assertThat(man.getStateOfCertificate(domain), is(WAITING));
+            assertThat(man.getStateOfCertificate(domain), is(DOMAIN_UNREACHABLE));
         } else {
             assertThat(man.getStateOfCertificate(domain), is(VERIFIED));
         }
