@@ -40,6 +40,7 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
+import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
@@ -85,7 +86,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     private AtomicReference<ConnectionState> state = new AtomicReference<>(ConnectionState.IDLE);
     private volatile boolean forcedInvalid = false;
-    private volatile RequestHandler clientSidePeerHandler;
+    private volatile AtomicReference<RequestHandler> clientSidePeerHandler = new AtomicReference<>();
 
     // stats
     private static final Summary CONNECTION_STATS_SUMMARY = PrometheusUtils.createSummary("backends", "connection_time_ns",
@@ -104,6 +105,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     private boolean forceErrorOnRequest = false;
     final AtomicBoolean returningToPool = new AtomicBoolean();
     private boolean requestsHeaderDebugEnabled = false;
+    private volatile boolean requestRunning;
 
     private static enum ConnectionState {
         IDLE,
@@ -151,6 +153,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
                         ch.pipeline().addLast("writeTimeoutHandler", new WriteTimeoutHandler(parent.getIdleTimeout() / 2));
                         ch.pipeline().addLast("client-codec", new HttpClientCodec());
                         ch.pipeline().addLast(new ReadEndpointResponseHandler());
+                        parent.getFullHttpMessageLogger().attachHandler(ch, clientSidePeerHandler);
                     }
                 });
         final ChannelFuture connectFuture = b.connect(key.getHost(), key.getPort());
@@ -213,7 +216,11 @@ public class EndpointConnectionImpl implements EndpointConnection {
         if (assertNotInEndpointEventLoop(clientSidePeerHandler)) {
             return;
         }
-        checkHandler(null);
+        if (requestRunning) {
+            throw new IllegalStateException("A previous request is still running!");
+        }
+        requestRunning = true;
+        this.clientSidePeerHandler.set(clientSidePeerHandler);
         if (!active.compareAndSet(false, true)) {
             throw new IllegalStateException("this connection is already active!");
         }
@@ -223,7 +230,6 @@ public class EndpointConnectionImpl implements EndpointConnection {
         }
 
         // these have to be set before calling clientSidePeerHandler.errorSendingRequest which will perform a release
-        this.clientSidePeerHandler = clientSidePeerHandler;
         endpointstats.getActiveConnections().incrementAndGet();
         activeConnectionsStats.inc();
         endpointstats.getTotalRequests().incrementAndGet();
@@ -434,8 +440,10 @@ public class EndpointConnectionImpl implements EndpointConnection {
         if (active.compareAndSet(true, false)) {
             endpointstats.getActiveConnections().decrementAndGet();
             activeConnectionsStats.dec();
-            parent.unregisterPendingRequest(clientSidePeerHandler);
-            clientSidePeerHandler = null;
+            if (requestRunning) {
+                parent.unregisterPendingRequest(clientSidePeerHandler.get());
+                requestRunning = false;
+            }
         } else {
             LOG.log(Level.SEVERE, "connectionDeactivated on a non active connection! {0}", this);
         }
@@ -446,8 +454,8 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
         @Override
         public void channelRead0(ChannelHandlerContext ctx, HttpObject msg) {
-            RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
-            if (_clientSidePeerHandler == null) {
+            RequestHandler _clientSidePeerHandler = clientSidePeerHandler.get();
+            if (_clientSidePeerHandler == null || !requestRunning) {
                 LOG.log(Level.INFO, "swallow content {0}: {1}, disconnected client. connection: {2}", new Object[]{msg.getClass(), msg, EndpointConnectionImpl.this});
                 return;
             }
@@ -464,12 +472,13 @@ public class EndpointConnectionImpl implements EndpointConnection {
                 LOG.log(Level.SEVERE, "unknown message type {0}: {1}. connection: {2}", new Object[]{msg.getClass(), msg, EndpointConnectionImpl.this});
             }
 
+            ctx.fireChannelRead(ReferenceCountUtil.retain(msg));
         }
 
         @Override
         public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
-            RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
-            if (_clientSidePeerHandler != null) {
+            RequestHandler _clientSidePeerHandler = clientSidePeerHandler.get();
+            if (_clientSidePeerHandler != null && requestRunning) {
                 logConnectionInfo("channelReadComplete, open: " + ctx.channel().isOpen());
                 _clientSidePeerHandler.readCompletedFromRemote();
                 // server said no more data will be sent to this channel, we must close it before netty does
@@ -481,9 +490,9 @@ public class EndpointConnectionImpl implements EndpointConnection {
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
             LOG.log(Level.SEVERE, "I/O error on endpoint " + key, cause);
             parent.backendHealthManager.reportBackendUnreachable(key.getHostPort(), System.currentTimeMillis(), "I/O error: " + cause);
-            RequestHandler _clientSidePeerHandler = clientSidePeerHandler;
+            RequestHandler _clientSidePeerHandler = clientSidePeerHandler.get();
 
-            if (_clientSidePeerHandler != null) {
+            if (_clientSidePeerHandler != null && requestRunning) {
                 _clientSidePeerHandler.badErrorOnRemote(cause);
             }
             invalidate();
@@ -499,7 +508,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     }
 
     private void checkHandler(RequestHandler handler) throws IllegalStateException {
-        if (this.clientSidePeerHandler != handler) {
+        if (this.clientSidePeerHandler.get() != handler || !requestRunning) {
             throw new IllegalStateException("connection is bound to " + this.clientSidePeerHandler + " cannot be managed by " + handler);
         }
     }

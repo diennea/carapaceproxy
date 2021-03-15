@@ -99,6 +99,7 @@ public class HttpProxyServer implements AutoCloseable {
     private final PrometheusMetricsProvider statsProvider;
     private final PropertiesConfiguration statsProviderConfig = new PropertiesConfiguration();
     private final RequestsLogger requestsLogger;
+    private final FullHttpMessageLogger fullHttpMessageLogger;
 
     private String peerId = "localhost";
     private String zkAddress;
@@ -151,7 +152,8 @@ public class HttpProxyServer implements AutoCloseable {
         this.listeners = new Listeners(this);
         this.cache = new ContentsCache(currentConfiguration);
         this.requestsLogger = new RequestsLogger(currentConfiguration);
-        this.connectionsManager = new ConnectionsManagerImpl(currentConfiguration, backendHealthManager);
+        this.fullHttpMessageLogger = new FullHttpMessageLogger(currentConfiguration);
+        this.connectionsManager = new ConnectionsManagerImpl(currentConfiguration, backendHealthManager, fullHttpMessageLogger);
         this.dynamicCertificatesManager = new DynamicCertificatesManager(this);
         if (mapper != null) {
             mapper.setDynamicCertificateManager(dynamicCertificatesManager);
@@ -289,6 +291,7 @@ public class HttpProxyServer implements AutoCloseable {
             connectionsManager.start();
             cache.start();
             requestsLogger.start();
+            fullHttpMessageLogger.start();
             listeners.start();
             backendHealthManager.start();
             dynamicCertificatesManager.attachGroupMembershipHandler(groupMembershipHandler);
@@ -348,6 +351,9 @@ public class HttpProxyServer implements AutoCloseable {
         if (requestsLogger != null) {
             requestsLogger.stop();
         }
+        if (fullHttpMessageLogger != null) {
+            fullHttpMessageLogger.stop();
+        }
         if (cache != null) {
             cache.close();
         }
@@ -373,6 +379,10 @@ public class HttpProxyServer implements AutoCloseable {
 
     public RequestsLogger getRequestsLogger() {
         return requestsLogger;
+    }
+
+    public FullHttpMessageLogger getFullHttpMessageLogger() {
+        return fullHttpMessageLogger;
     }
 
     private static EndpointMapper buildMapper(String className, ConfigurationStore properties) throws ConfigurationNotValidException {
@@ -644,6 +654,7 @@ public class HttpProxyServer implements AutoCloseable {
             this.listeners.reloadConfiguration(newConfiguration);
             this.cache.reloadConfiguration(newConfiguration);
             this.requestsLogger.reloadConfiguration(newConfiguration);
+            this.fullHttpMessageLogger.reloadConfiguration(newConfiguration);
             this.connectionsManager.applyNewConfiguration(newConfiguration);
 
             this.currentConfiguration = newConfiguration;

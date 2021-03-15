@@ -29,12 +29,13 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
+import io.netty.util.ReferenceCountUtil;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import java.net.SocketAddress;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.carapaceproxy.EndpointMapper;
@@ -70,7 +71,8 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     final long connectionStartsTs;
     volatile boolean keepAlive = true;
     volatile boolean refuseOtherRequests;
-    private final List<RequestHandler> pendingRequests = new CopyOnWriteArrayList<>();
+    private final AtomicReference<RequestHandler> pendingRequest = new AtomicReference<>();
+    private volatile boolean requestRunning;
     final Runnable onClientDisconnected;
     private final String listenerHost;
     private final int listenerPort;
@@ -172,30 +174,31 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             totalRequests.inc();
             RequestHandler currentRequest = new RequestHandler(requestIdGenerator.incrementAndGet(),
                     request, filters, this, ctx, () -> RUNNING_REQUESTS_GAUGE.dec(), backendHealthManager, requestsLogger);
-            addPendingRequest(currentRequest);
+            pendingRequest.set(currentRequest);
+            requestRunning = true;
             currentRequest.start();
         } else if (msg instanceof LastHttpContent) {
-            LastHttpContent trailer = (LastHttpContent) msg;
-            try {
-                RequestHandler currentRequest = pendingRequests.get(0);
-                currentRequest.clientRequestFinished(trailer);
-            } catch (java.lang.ArrayIndexOutOfBoundsException noMorePendingRequests) {
+            if (requestRunning) {
+                LastHttpContent trailer = (LastHttpContent) msg;
+                pendingRequest.get().clientRequestFinished(trailer);
+            } else {
                 LOG.log(Level.INFO, "{0} swallow {1}, no more pending requests", new Object[]{this, msg});
                 refuseOtherRequests = true;
                 ctx.close();
             }
         } else if (msg instanceof HttpContent) {
-            // for example chunks from client
-            HttpContent httpContent = (HttpContent) msg;
-            try {
-                RequestHandler currentRequest = pendingRequests.get(0);
-                currentRequest.continueClientRequest(httpContent);
-            } catch (java.lang.ArrayIndexOutOfBoundsException noMorePendingRequests) {
+            if (requestRunning) {
+                // for example chunks from client
+                HttpContent httpContent = (HttpContent) msg;
+                pendingRequest.get().continueClientRequest(httpContent);
+            } else {
                 LOG.log(Level.INFO, "{0} swallow {1}, no more pending requests", new Object[]{this, msg});
                 refuseOtherRequests = true;
                 ctx.close();
             }
         }
+
+        ctx.fireChannelRead(ReferenceCountUtil.retain(msg));
     }
 
     private void detectSSLProperties(ChannelHandlerContext ctx) {
@@ -247,13 +250,13 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     }
 
     public void errorSendingRequest(RequestHandler request, EndpointConnectionImpl endpointConnection, ChannelHandlerContext peerChannel, Throwable error) {
-        pendingRequests.remove(request);
+        requestRunning = false;
         mapper.endpointFailed(endpointConnection.getKey(), error);
         LOG.log(Level.INFO, error, () -> this + " errorSendingRequest " + endpointConnection);
     }
 
     public void lastHttpContentSent(RequestHandler requestHandler) {
-        pendingRequests.remove(requestHandler);
+        requestRunning = false;
     }
 
     @Override
@@ -261,7 +264,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         return "ClientConnectionHandler{chid=" + id + ",ka=" + keepAlive + '}';
     }
 
-    void addPendingRequest(RequestHandler request) {
-        pendingRequests.add(request);
+    public AtomicReference<RequestHandler> getPendingRequest() {
+        return pendingRequest;
     }
 }

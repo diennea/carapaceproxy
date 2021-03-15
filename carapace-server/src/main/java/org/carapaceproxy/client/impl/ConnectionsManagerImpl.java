@@ -57,6 +57,7 @@ import org.apache.commons.pool2.impl.DefaultPooledObject;
 import org.apache.commons.pool2.impl.DefaultPooledObjectInfo;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
 import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
+import org.carapaceproxy.server.FullHttpMessageLogger;
 import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.PrometheusUtils;
 
@@ -82,6 +83,8 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     final BackendHealthManager backendHealthManager;
     final ScheduledExecutorService scheduler;
+
+    private final FullHttpMessageLogger fullHttpMessageLogger;
 
     private static final Gauge PENDING_REQUESTS_GAUGE = PrometheusUtils.createGauge("backends", "pending_requests",
             "pending requests").register();
@@ -226,7 +229,8 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     }
 
-    public ConnectionsManagerImpl(RuntimeServerConfiguration configuration, BackendHealthManager backendHealthManager) {
+    public ConnectionsManagerImpl(RuntimeServerConfiguration configuration,
+                                  BackendHealthManager backendHealthManager, FullHttpMessageLogger fullHttpMessageLogger) {
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
         LOG.log(Level.INFO, "Reading carapace.connectionsmanager.returnconnectionthreadpool.size={0}", CONNECTIONS_MANAGER_RETURN_CONNECTION_THREAD_POOL_SIZE);
         this.returnConnectionThreadPool = CONNECTIONS_MANAGER_RETURN_CONNECTION_THREAD_POOL_SIZE > 0
@@ -243,6 +247,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         eventLoopForOutboundConnections = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
         connections = new GenericKeyedObjectPool<>(new ConnectionsFactory(), config);
         this.backendHealthManager = backendHealthManager;
+        this.fullHttpMessageLogger = fullHttpMessageLogger;
         applyNewConfiguration(configuration);
     }
 
@@ -360,6 +365,10 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
 
     public void setRequestsHeaderDebugEnabled(boolean requestsHeaderDebugEnabled) {
         this.requestsHeaderDebugEnabled = requestsHeaderDebugEnabled;
+    }
+
+    public FullHttpMessageLogger getFullHttpMessageLogger() {
+        return fullHttpMessageLogger;
     }
 
 }
