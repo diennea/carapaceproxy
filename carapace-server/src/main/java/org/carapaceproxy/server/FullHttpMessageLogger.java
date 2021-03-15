@@ -306,7 +306,7 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
         private final String protocolVersion;
         private final String headers;
         private final String trailingHeaders;
-        private final String data;
+        private String data;
 
         FullHttpMessageLogEntry(RequestHandler requestHandler, FullHttpMessage msg) {
             rid = requestHandler.getId();
@@ -326,8 +326,10 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
             protocolVersion = msg.protocolVersion().toString();
             headers = formatHeaders(msg.headers());
             trailingHeaders = formatHeaders(msg.trailingHeaders());
-            ByteBuf data = msg.content();
-            this.data = data.toString(StandardCharsets.UTF_8);
+            if (bodySize > 0) {
+                ByteBuf data = msg.content();
+                this.data = data.toString(data.readerIndex(), Math.min(data.readableBytes(), bodySize), StandardCharsets.UTF_8);
+            }
         }
 
         void write() throws IOException {
@@ -353,7 +355,7 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
             }
             if (data != null && !data.isEmpty()) {
                 pw.println("--------------------[ BODY ]--------------------");
-                pw.println(bodySize > 0 ? data.substring(0, Math.min(data.length(), bodySize)) : data);
+                pw.println(data);
             }
             pw.println(closing);
             pw.println("\n");
