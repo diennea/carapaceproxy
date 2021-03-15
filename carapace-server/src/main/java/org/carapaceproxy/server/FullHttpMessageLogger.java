@@ -103,17 +103,6 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
 
     private void closeAccessLogFile() throws IOException {
         LOG.log(Level.INFO, "Closing file");
-        if (pw != null) {
-            pw = null;
-        }
-        if (bw != null) {
-            bw.close();
-            bw = null;
-        }
-        if (osw != null) {
-            osw.close();
-            osw = null;
-        }
         if (os != null) {
             os.close();
             os = null;
@@ -164,6 +153,7 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
             thread.join(60_000);
         } catch (InterruptedException ex) {
             LOG.log(Level.SEVERE, "Interrupted while stopping");
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -237,7 +227,7 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
                     LOG.log(Level.SEVERE, null, ex1);
                 }
                 closed = true;
-
+                Thread.currentThread().interrupt();
             } catch (IOException ex) {
                 LOG.log(Level.SEVERE, "Exception while writing on access log file");
                 LOG.log(Level.SEVERE, null, ex);
@@ -254,6 +244,7 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
                     lastFlush = System.currentTimeMillis();
                 } catch (InterruptedException ex1) {
                     closed = true;
+                    Thread.currentThread().interrupt();
                 }
             }
         }
