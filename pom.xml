@@ -120,6 +120,8 @@
         <libs.stringtemplate>4.0.8</libs.stringtemplate>
         <libs.herddb>0.22.0</libs.herddb>
         <libs.prometheus>0.6.0</libs.prometheus>
+        <libs.prometheus.metrics>4.13.0</libs.prometheus.metrics>
+        <libs.awssdk>2.16.18</libs.awssdk>
         <javacc-maven-plugin.version>2.4</javacc-maven-plugin.version>
     </properties>
     <repositories>
