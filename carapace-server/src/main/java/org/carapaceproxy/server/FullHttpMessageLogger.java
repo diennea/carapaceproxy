@@ -284,7 +284,7 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
 
             RequestHandler request = reqHandler.get();
             if (request != null) {
-                FullHttpMessageLogEntry entry = new FullHttpMessageLogEntry(request.getId(), request.getStartTs(), msg);
+                FullHttpMessageLogEntry entry = new FullHttpMessageLogEntry(request, msg);
                 logMessageEntry(entry);
             }
         }
@@ -306,7 +306,7 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
 
     private class FullHttpMessageLogEntry {
 
-        private final long requestId;
+        private final long rid; // request id
         private final String timestamp;
         private boolean request;
         private String method;
@@ -317,11 +317,12 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
         private final String trailingHeaders;
         private final String data;
 
-        FullHttpMessageLogEntry(long requestId, long startTs, FullHttpMessage msg) {
-            this.requestId = requestId;
-            timestamp = tsFormatter.format(new Timestamp(startTs));
+        FullHttpMessageLogEntry(RequestHandler requestHandler, FullHttpMessage msg) {
+            rid = requestHandler.getId();
+            long refTime = System.currentTimeMillis();
             if (msg instanceof FullHttpRequest) {
-                this.request = true;
+                request = true;
+                refTime = requestHandler.getStartTs();
                 FullHttpRequest request = (FullHttpRequest) msg;
                 method = request.method().toString();
                 uri = request.uri();
@@ -330,7 +331,7 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
                 FullHttpResponse response = (FullHttpResponse) msg;
                 statusCode = response.status().codeAsText() + "";
             }
-
+            timestamp = tsFormatter.format(new Timestamp(refTime));
             protocolVersion = msg.protocolVersion().toString();
             headers = formatHeaders(msg.headers());
             trailingHeaders = formatHeaders(msg.trailingHeaders());
@@ -339,11 +340,11 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
         }
 
         void write() throws IOException {
-            String opening = ">>>>>>>>>>>>>>>>>>>>[ SERVER RESPONSE (rid: " + requestId + ") ]>>>>>>>>>>>>>>>>>>>>";
-            String closing = ">>>>>>>>>>>>>>>>>>>>[ SERVER RESPONSE END (rid: " + requestId + ") ]>>>>>>>>>>>>>>>>>>>>";
+            String opening = ">>>>>>>>>>>>>>>>>>>>[ SERVER RESPONSE (rid: " + rid + ") ]>>>>>>>>>>>>>>>>>>>>";
+            String closing = ">>>>>>>>>>>>>>>>>>>>[ SERVER RESPONSE END (rid: " + rid + ") ]>>>>>>>>>>>>>>>>>>>>";
             if (request) {
-                opening = "<<<<<<<<<<<<<<<<<<<<[ CLIENT REQUEST (rid: " + requestId + ") ]<<<<<<<<<<<<<<<<<<<<";
-                closing = "<<<<<<<<<<<<<<<<<<<<[ CLIENT REQUEST END (rid: " + requestId + ") ]<<<<<<<<<<<<<<<<<<<<";
+                opening = "<<<<<<<<<<<<<<<<<<<<[ CLIENT REQUEST (rid: " + rid + ") ]<<<<<<<<<<<<<<<<<<<<";
+                closing = "<<<<<<<<<<<<<<<<<<<<[ CLIENT REQUEST END (rid: " + rid + ") ]<<<<<<<<<<<<<<<<<<<<";
             }
             pw.println(opening);
             pw.println("Timestamp: " + timestamp);
@@ -386,7 +387,7 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
 
         @Override
         public String toString() {
-            return "FullHttpMessageLogEntry{" + "requestId=" + requestId + ", timestamp=" + timestamp + ", request=" + request + ", method=" + method + ", uri=" + uri + ", statusCode=" + statusCode + '}';
+            return "FullHttpMessageLogEntry{" + "rid=" + rid + ", timestamp=" + timestamp + ", request=" + request + ", method=" + method + ", uri=" + uri + ", statusCode=" + statusCode + '}';
         }
 
     }
