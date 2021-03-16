@@ -19,9 +19,9 @@
                         <li v-if="certificate.mode == 'acme'" class="list-group-item"><strong>Days Before Renewal:</strong> {{certificate.daysBeforeRenewal}}</li>
                         <li class="list-group-item"><strong>Serial Number:</strong> {{certificate.serialNumber}}</li>
                         <li v-if="certificate.dynamic" class="p-2 text-center">
-                            <b-button :href="'/api/certificates/' + certificate.id + '/download'" variant="primary">
-                                Download
-                            </b-button>
+                        <b-button :href="'/api/certificates/' + certificate.id + '/download'" variant="primary">
+                            Download
+                        </b-button>
                         </li>
                         <li v-else class="list-group-item">
                             <strong>SSL Certificate file: </strong>{{certificate.sslCertificateFile}}
@@ -62,6 +62,9 @@
             statusClass(cert) {
                 if (cert.status === 'available') {
                     return "success"
+                }
+                if (cert.status === 'domain unreachable') {
+                    return "warning"
                 }
                 if (cert.status === 'expired') {
                     return "error"

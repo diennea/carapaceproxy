@@ -23,6 +23,7 @@ import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64Decode
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.DNS_CHALLENGE_WAIT;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.DOMAIN_UNREACHABLE;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.EXPIRED;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.ORDERING;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.REQUEST_FAILED;
@@ -278,11 +279,14 @@ public class DynamicCertificatesManager implements Runnable {
             try {
                 CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, data.isWildcard(), false, data.getDaysBeforeRenewal());
                 switch (cert.getState()) {
-                    case WAITING: { // certificate waiting to be issues/renew
+                    case WAITING: // certificate waiting to be issues/renew
+                    case DOMAIN_UNREACHABLE: { // certificate domain reported as unreachable for issuing/renewing
                         LOG.log(Level.INFO, "WAITING for certificate issuing process start for domain: {0}.", domain);
                         if (checkDomain(domain)) {
                             Order order = createOrderForCertificate(cert);
                             createChallengeForCertificateOrder(cert, order);
+                        } else {
+                            cert.setState(DOMAIN_UNREACHABLE);
                         }
                         break;
                     }
