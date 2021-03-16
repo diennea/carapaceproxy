@@ -90,7 +90,7 @@ public class DynamicCertificatesManager implements Runnable {
     private static final int DNS_CHALLENGE_REACHABILITY_CHECKS_LIMIT = Integer.getInteger("carapace.acme.dnschallengereachabilitycheck.limit", 10);
 
     private static final Logger LOG = Logger.getLogger(DynamicCertificatesManager.class.getName());
-    private static final String EVENT_CERT_AVAIL_CHANGED = "certAvailChanged";
+    private static final String EVENT_CERTIFICATE_STATUS_CHANGED = "certificate_status_changed";
 
     private Map<String, CertificateData> certificates = new ConcurrentHashMap();
     private ACMEClient acmeClient; // Let's Encrypt client
@@ -126,7 +126,7 @@ public class DynamicCertificatesManager implements Runnable {
 
     public void attachGroupMembershipHandler(GroupMembershipHandler groupMembershipHandler) {
         this.groupMembershipHandler = groupMembershipHandler;
-        groupMembershipHandler.watchEvent(EVENT_CERT_AVAIL_CHANGED, new CertAvailChangeCallback());
+        groupMembershipHandler.watchEvent(EVENT_CERTIFICATE_STATUS_CHANGED, new OnCertificateStatusChanged());
     }
 
     @VisibleForTesting
@@ -273,8 +273,7 @@ public class DynamicCertificatesManager implements Runnable {
                 .map(e -> e.getValue())
                 .collect(Collectors.toList());
         for (CertificateData data : _certificates) {
-            boolean updateDB = true;
-            boolean notifyCertAvailChanged = false;
+            boolean updateCertificate = true;
             final String domain = data.getDomain();
             try {
                 CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, data.isWildcard(), false, data.getDaysBeforeRenewal());
@@ -328,7 +327,6 @@ public class DynamicCertificatesManager implements Runnable {
                             String chain = base64EncodeCertificateChain(certificateChain.toArray(new Certificate[0]), key);
                             cert.setChain(chain);
                             cert.setState(AVAILABLE);
-                            notifyCertAvailChanged = true; // all other peers need to know that this cert is available.
                             LOG.log(Level.INFO, "Certificate issuing for domain: {0} SUCCEED. Certificate AVAILABLE.", domain);
                         } else if (status == Status.INVALID) {
                             cert.setState(REQUEST_FAILED);
@@ -343,9 +341,8 @@ public class DynamicCertificatesManager implements Runnable {
                     case AVAILABLE: { // certificate saved/available/not expired
                         if (isCertificateExpired(base64DecodeCertificateChain(cert.getChain()), cert.getDaysBeforeRenewal())) {
                             cert.setState(EXPIRED);
-                            notifyCertAvailChanged = true; // all other peers need to know that this cert is expired.
                         } else {
-                            updateDB = false;
+                            updateCertificate = false;
                         }
                         break;
                     }
@@ -357,14 +354,12 @@ public class DynamicCertificatesManager implements Runnable {
                     default:
                         throw new IllegalStateException();
                 }
-                if (updateDB) {
+                if (updateCertificate) {
                     LOG.log(Level.INFO, "Save certificate request status for domain {0}", domain);
                     store.saveCertificate(cert);
-                }
-                if (notifyCertAvailChanged) {
                     // remember that events  are not delivered to the local JVM
                     reloadCertificatesFromDB();
-                    groupMembershipHandler.fireEvent(EVENT_CERT_AVAIL_CHANGED);
+                    groupMembershipHandler.fireEvent(EVENT_CERTIFICATE_STATUS_CHANGED);
                 }
             } catch (AcmeException | IOException | GeneralSecurityException | IllegalStateException ex) {
                 LOG.log(Level.SEVERE, "Error while handling dynamic certificate for domain " + domain, ex);
@@ -510,7 +505,7 @@ public class DynamicCertificatesManager implements Runnable {
                 // remember that events  are not delivered to the local JVM
                 reloadCertificatesFromDB();
                 if (groupMembershipHandler != null) {
-                    groupMembershipHandler.fireEvent(EVENT_CERT_AVAIL_CHANGED);
+                    groupMembershipHandler.fireEvent(EVENT_CERTIFICATE_STATUS_CHANGED);
                 }
             }
         }
@@ -534,7 +529,7 @@ public class DynamicCertificatesManager implements Runnable {
         return certificates.get(domain);
     }
 
-    private class CertAvailChangeCallback implements GroupMembershipHandler.EventCallback {
+    private class OnCertificateStatusChanged implements GroupMembershipHandler.EventCallback {
 
         @Override
         public void eventFired(String eventId) {
