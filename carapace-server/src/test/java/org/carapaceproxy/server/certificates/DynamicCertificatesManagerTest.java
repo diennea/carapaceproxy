@@ -53,6 +53,7 @@ import org.junit.runner.RunWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -66,9 +67,11 @@ import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.Listeners;
 import org.powermock.reflect.Whitebox;
 import org.shredzone.acme4j.Session;
+import org.shredzone.acme4j.Status;
 import org.shredzone.acme4j.challenge.Dns01Challenge;
 import org.shredzone.acme4j.challenge.Http01Challenge;
 import org.shredzone.acme4j.connector.Connection;
+import org.shredzone.acme4j.exception.AcmeException;
 import org.shredzone.acme4j.toolbox.JSON;
 import org.shredzone.acme4j.util.KeyPairUtils;
 
@@ -84,6 +87,8 @@ public class DynamicCertificatesManagerTest {
     @Parameters({
         "challenge_null",
         "challenge_status_invalid",
+        "order_already_valid",
+        "order_finalization_error",
         "order_response_error",
         "available_to_expired",
         "all_ok"
@@ -93,7 +98,12 @@ public class DynamicCertificatesManagerTest {
         ACMEClient ac = mock(ACMEClient.class);
         Order o = mock(Order.class);
         when(o.getLocation()).thenReturn(new URL("https://localhost/index"));
-        when(ac.getLogin()).thenReturn(mock(Login.class));
+        if (runCase.equals("order_already_valid")) {
+            when(o.getStatus()).thenReturn(Status.VALID);
+        }
+        Login login = mock(Login.class);
+        when(login.bindOrder(any())).thenReturn(o);
+        when(ac.getLogin()).thenReturn(login);
         when(ac.createOrderForDomain(any())).thenReturn(o);
         Http01Challenge c = mock(Http01Challenge.class);
         when(c.getToken()).thenReturn("");
@@ -104,6 +114,9 @@ public class DynamicCertificatesManagerTest {
         when(ac.getChallengeForOrder(any(), eq(false))).thenReturn(runCase.equals("challenge_null") ? null : c);
         when(ac.checkResponseForChallenge(any())).thenReturn(runCase.equals("challenge_status_invalid") ? INVALID : VALID);
         when(ac.checkResponseForOrder(any())).thenReturn(runCase.equals("order_response_error") ? INVALID : VALID);
+        if (runCase.equals("order_already_valid") || runCase.equals("order_finalization_error")) {
+            doThrow(AcmeException.class).when(ac).orderCertificate(any(), any());
+        }
 
         KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         Certificate cert = mock(Certificate.class);
@@ -178,37 +191,45 @@ public class DynamicCertificatesManagerTest {
         verify(store, times(++saveCounter)).saveCertificate(any());
 
         man.run();
+        verify(store, times(++saveCounter)).saveCertificate(any());
         if (runCase.equals("challenge_null")) { // VERIFIED
             assertEquals(ORDERING, man.getStateOfCertificate(d1));
-            verify(store, times(++saveCounter)).saveCertificate(any());
         } else { // VERIFYING
             assertEquals(runCase.equals("challenge_status_invalid") ? REQUEST_FAILED : VERIFIED, man.getStateOfCertificate(d1));
-            verify(store, times(++saveCounter)).saveCertificate(any());
             man.run();
-            assertEquals(runCase.equals("challenge_status_invalid") ? WAITING : ORDERING, man.getStateOfCertificate(d1));
             verify(store, times(++saveCounter)).saveCertificate(any());
+            if (runCase.equals("challenge_status_invalid")) {
+                assertEquals(WAITING, man.getStateOfCertificate(d1));
+                return;
+            } else if (runCase.equals("order_finalization_error")) {
+                assertEquals(REQUEST_FAILED, man.getStateOfCertificate(d1));
+                man.run();
+                verify(store, times(++saveCounter)).saveCertificate(any());
+                assertEquals(WAITING, man.getStateOfCertificate(d1));
+                return;
+            } else {
+                assertEquals(ORDERING, man.getStateOfCertificate(d1));
+            }
         }
         // ORDERING
-        if (!runCase.equals("challenge_status_invalid")) {
-            man.run();
-            assertEquals(runCase.equals("order_response_error") ? REQUEST_FAILED : AVAILABLE, man.getStateOfCertificate(d1));
+        man.run();
+        assertEquals(runCase.equals("order_response_error") ? REQUEST_FAILED : AVAILABLE, man.getStateOfCertificate(d1));
+        verify(store, times(++saveCounter)).saveCertificate(any());
+        man.run();
+        if (runCase.equals("order_response_error")) { // REQUEST_FAILED
+            assertEquals(WAITING, man.getStateOfCertificate(d1));
             verify(store, times(++saveCounter)).saveCertificate(any());
-            man.run();
-            if (runCase.equals("order_response_error")) { // REQUEST_FAILED
-                assertEquals(WAITING, man.getStateOfCertificate(d1));
-                verify(store, times(++saveCounter)).saveCertificate(any());
-            } else { // AVAILABLE
-                DynamicCertificateState state = man.getStateOfCertificate(d1);
-                assertEquals(runCase.equals("available_to_expired") ? EXPIRED : AVAILABLE, state);
-                saveCounter += AVAILABLE.equals(state) ? 0 : 1; // only with state AVAILABLE the certificate hasn't to be saved.
-                verify(store, times(saveCounter)).saveCertificate(any());
+        } else { // AVAILABLE
+            DynamicCertificateState state = man.getStateOfCertificate(d1);
+            assertEquals(runCase.equals("available_to_expired") ? EXPIRED : AVAILABLE, state);
+            saveCounter += AVAILABLE.equals(state) ? 0 : 1; // only with state AVAILABLE the certificate hasn't to be saved.
+            verify(store, times(saveCounter)).saveCertificate(any());
 
-                man.run();
-                state = man.getStateOfCertificate(d1);
-                assertEquals(runCase.equals("available_to_expired") ? WAITING : AVAILABLE, state);
-                saveCounter += AVAILABLE.equals(state) ? 0 : 1; // only with state AVAILABLE the certificate hasn't to be saved.
-                verify(store, times(saveCounter)).saveCertificate(any());
-            }
+            man.run();
+            state = man.getStateOfCertificate(d1);
+            assertEquals(runCase.equals("available_to_expired") ? WAITING : AVAILABLE, state);
+            saveCounter += AVAILABLE.equals(state) ? 0 : 1; // only with state AVAILABLE the certificate hasn't to be saved.
+            verify(store, times(saveCounter)).saveCertificate(any());
         }
     }
 
@@ -228,18 +249,22 @@ public class DynamicCertificatesManagerTest {
     public void testWidlcardCertificateStateManagement(String runCase) throws Exception {
         System.setProperty("carapace.acme.dnschallengereachabilitycheck.limit", "2");
 
-        Session session = mock(Session.class);
-        when(session.connect()).thenReturn(mock(Connection.class));
-        Login login = mock(Login.class);
-        when(login.getSession()).thenReturn(session);
-        when(login.getKeyPair()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE));
-
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
         Order o = mock(Order.class);
         when(o.getLocation()).thenReturn(new URL("https://localhost/index"));
+        Login login = mock(Login.class);
+        when(login.bindOrder(any())).thenReturn(o);
         when(ac.getLogin()).thenReturn(login);
         when(ac.createOrderForDomain(any())).thenReturn(o);
+        Session session = mock(Session.class);
+        Connection conn = mock(Connection.class);
+        when(conn.readJsonResponse()).thenReturn(JSON.parse(
+                "{\"url\": \"https://localhost/index\", \"type\": \"dns-01\"}"
+        ));
+        when(session.connect()).thenReturn(conn);
+        when(login.getSession()).thenReturn(session);
+        when(login.getKeyPair()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE));
 
         Dns01Challenge c = mock(Dns01Challenge.class);
         when(c.getDigest()).thenReturn("");
@@ -338,18 +363,19 @@ public class DynamicCertificatesManagerTest {
     })
     public void testDomainReachabilityCheck(String domainCase) throws Exception {
         String domain = domainCase.contains("localhost") ? "localhost" : domainCase;
-        Session session = mock(Session.class);
-        when(session.connect()).thenReturn(mock(Connection.class));
-        Login login = mock(Login.class);
-        when(login.getSession()).thenReturn(session);
-        when(login.getKeyPair()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE));
 
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
         Order o = mock(Order.class);
         when(o.getLocation()).thenReturn(new URL("https://localhost/index"));
+        Login login = mock(Login.class);
+        when(login.bindOrder(any())).thenReturn(o);
         when(ac.getLogin()).thenReturn(login);
         when(ac.createOrderForDomain(any())).thenReturn(o);
+        Session session = mock(Session.class);
+        when(session.connect()).thenReturn(mock(Connection.class));
+        when(login.getSession()).thenReturn(session);
+        when(login.getKeyPair()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE));
 
         Http01Challenge c = mock(Http01Challenge.class);
         when(c.getToken()).thenReturn("");

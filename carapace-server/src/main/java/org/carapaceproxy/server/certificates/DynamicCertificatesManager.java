@@ -305,8 +305,16 @@ public class DynamicCertificatesManager implements Runnable {
                     case VERIFIED: { // challenge succeded
                         LOG.log(Level.INFO, "Certificate for domain {0} VERIFIED.", domain);
                         Order pendingOrder = acmeClient.getLogin().bindOrder(new URL(cert.getPendingOrderLocation()));
-                        KeyPair keys = loadOrCreateKeyPairForDomain(domain);
-                        acmeClient.orderCertificate(pendingOrder, keys);
+                        if (pendingOrder.getStatus() != Status.VALID) { // whether the order is already valid we have to skip finalization
+                            try {
+                                KeyPair keys = loadOrCreateKeyPairForDomain(domain);
+                                acmeClient.orderCertificate(pendingOrder, keys);
+                            } catch (AcmeException ex) { // order finalization failed
+                                LOG.log(Level.SEVERE, "Certificate order finalization for domain {0} FAILED.", domain);
+                                cert.setState(REQUEST_FAILED);
+                                break;
+                            }
+                        }
                         cert.setState(ORDERING);
                         break;
                     }
