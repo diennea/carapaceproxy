@@ -11,9 +11,9 @@
         </div>
         <datatable-list :fields="fields" :items="certificates" :rowClicked="showCertDetail" :loading="loading">
             <template v-slot:status="{ item }">
-                <span class="badge-status" :class="[statusClass(item)]">
+                <div class="badge-status" :class="[statusClass(item)]">
                     {{item.status}}
-                </span>
+                </div>
             </template>
         </datatable-list>
     </div>
@@ -70,6 +70,9 @@
             statusClass(cert) {
                 if (cert.status === "available") {
                     return "success"
+                }
+                if (cert.status === 'domain unreachable') {
+                    return "warning"
                 }
                 if (cert.status === "expired") {
                     return "error"

@@ -122,6 +122,8 @@
         <libs.prometheus>0.6.0</libs.prometheus>
         <libs.acme4j>2.11</libs.acme4j>
         <libs.bouncycastle>1.66</libs.bouncycastle>
+        <libs.prometheus.metrics>4.13.0</libs.prometheus.metrics>
+        <libs.awssdk>2.16.18</libs.awssdk>
         <javacc-maven-plugin.version>2.4</javacc-maven-plugin.version>
     </properties>
     <repositories>

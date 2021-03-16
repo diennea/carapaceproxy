@@ -2,7 +2,7 @@
     <div>
         <h2>Routes</h2>
         <div class="box-warning">
-            With no route matching the request, NOT-FOUND action will be performed.
+            With no route matching the request, NOT-FOUND action will be performed
         </div>
         <datatable-list :fields="fields" :items="routes"></datatable-list>
     </div>

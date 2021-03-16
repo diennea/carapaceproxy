@@ -34,6 +34,7 @@ import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.RuntimeServerConfiguration;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.DNS_CHALLENGE_WAIT;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.DOMAIN_UNREACHABLE;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.EXPIRED;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.ORDERING;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.REQUEST_FAILED;
@@ -92,7 +93,9 @@ public class DynamicCertificatesManagerTest {
         ACMEClient ac = mock(ACMEClient.class);
         Order o = mock(Order.class);
         when(o.getLocation()).thenReturn(new URL("https://localhost/index"));
-        when(ac.getLogin()).thenReturn(mock(Login.class));
+        Login login = mock(Login.class);
+        when(login.bindOrder(any())).thenReturn(o);
+        when(ac.getLogin()).thenReturn(login);
         when(ac.createOrderForDomain(any())).thenReturn(o);
         Http01Challenge c = mock(Http01Challenge.class);
         when(c.getToken()).thenReturn("");
@@ -227,18 +230,22 @@ public class DynamicCertificatesManagerTest {
     public void testWidlcardCertificateStateManagement(String runCase) throws Exception {
         System.setProperty("carapace.acme.dnschallengereachabilitycheck.limit", "2");
 
-        Session session = mock(Session.class);
-        when(session.connect()).thenReturn(mock(Connection.class));
-        Login login = mock(Login.class);
-        when(login.getSession()).thenReturn(session);
-        when(login.getKeyPair()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE));
-
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
         Order o = mock(Order.class);
         when(o.getLocation()).thenReturn(new URL("https://localhost/index"));
+        Login login = mock(Login.class);
+        when(login.bindOrder(any())).thenReturn(o);
         when(ac.getLogin()).thenReturn(login);
         when(ac.createOrderForDomain(any())).thenReturn(o);
+        Session session = mock(Session.class);
+        Connection conn = mock(Connection.class);
+        when(conn.readJsonResponse()).thenReturn(JSON.parse(
+                "{\"url\": \"https://localhost/index\", \"type\": \"dns-01\"}"
+        ));
+        when(session.connect()).thenReturn(conn);
+        when(login.getSession()).thenReturn(session);
+        when(login.getKeyPair()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE));
 
         Dns01Challenge c = mock(Dns01Challenge.class);
         when(c.getDigest()).thenReturn("");
@@ -337,18 +344,19 @@ public class DynamicCertificatesManagerTest {
     })
     public void testDomainReachabilityCheck(String domainCase) throws Exception {
         String domain = domainCase.contains("localhost") ? "localhost" : domainCase;
-        Session session = mock(Session.class);
-        when(session.connect()).thenReturn(mock(Connection.class));
-        Login login = mock(Login.class);
-        when(login.getSession()).thenReturn(session);
-        when(login.getKeyPair()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE));
 
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
         Order o = mock(Order.class);
         when(o.getLocation()).thenReturn(new URL("https://localhost/index"));
+        Login login = mock(Login.class);
+        when(login.bindOrder(any())).thenReturn(o);
         when(ac.getLogin()).thenReturn(login);
         when(ac.createOrderForDomain(any())).thenReturn(o);
+        Session session = mock(Session.class);
+        when(session.connect()).thenReturn(mock(Connection.class));
+        when(login.getSession()).thenReturn(session);
+        when(login.getKeyPair()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE));
 
         Http01Challenge c = mock(Http01Challenge.class);
         when(c.getToken()).thenReturn("");
@@ -402,10 +410,10 @@ public class DynamicCertificatesManagerTest {
         man.run(); // checking domain
         verify(store, times(++saveCounter)).saveCertificate(any());
         if (domainCase.equals("localhost-ip-check-partial")) {
-            assertThat(man.getStateOfCertificate(domain), is(WAITING));
+            assertThat(man.getStateOfCertificate(domain), is(DOMAIN_UNREACHABLE));
             man.run();
             verify(store, times(++saveCounter)).saveCertificate(any());
-            assertThat(man.getStateOfCertificate(domain), is(WAITING));
+            assertThat(man.getStateOfCertificate(domain), is(DOMAIN_UNREACHABLE));
         } else {
             assertThat(man.getStateOfCertificate(domain), is(VERIFIED));
         }
