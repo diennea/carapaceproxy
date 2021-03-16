@@ -33,14 +33,14 @@
                 <slot :name="field.key" v-bind:item="data.item">{{data.value}}</slot>
             </template>
         </b-table>
-        <b-pagination
-            align="center"
-            class="m-0"
-            pills
-            v-model="currentPage"
-            :total-rows="totalRows"
-            :per-page="perPage"
-            ></b-pagination>
+        <b-pagination v-if="perPage > 0"
+                      v-model="currentPage"
+                      :total-rows="totalRows"
+                      :per-page="perPage"
+                      align="center"
+                      class="m-0"
+                      pills>
+        </b-pagination>
     </div>
 </template>
 
