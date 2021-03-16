@@ -120,6 +120,8 @@
         <libs.stringtemplate>4.0.8</libs.stringtemplate>
         <libs.herddb>0.22.0</libs.herddb>
         <libs.prometheus>0.6.0</libs.prometheus>
+        <libs.acme4j>2.11</libs.acme4j>
+        <libs.bouncycastle>1.66</libs.bouncycastle>
         <javacc-maven-plugin.version>2.4</javacc-maven-plugin.version>
     </properties>
     <repositories>
