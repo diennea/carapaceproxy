@@ -315,6 +315,7 @@ public class DynamicCertificatesManagerTest {
         props.setProperty("certificate.1.hostname", domain);
         props.setProperty("certificate.1.mode", "acme");
         props.setProperty("certificate.1.daysbeforerenewal", "0");
+        props.setProperty("dynamiccertificatesmanager.domainschecker.ipaddresses", "127.0.0.1, 0:0:0:0:0:0:0:1");
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(configStore);
