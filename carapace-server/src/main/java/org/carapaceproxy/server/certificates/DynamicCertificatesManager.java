@@ -282,7 +282,7 @@ public class DynamicCertificatesManager implements Runnable {
                     case WAITING: // certificate waiting to be issues/renew
                     case DOMAIN_UNREACHABLE: { // certificate domain reported as unreachable for issuing/renewing
                         LOG.log(Level.INFO, "WAITING for certificate issuing process start for domain: {0}.", domain);
-                        if (checkDomain(domain)) {
+                        if (cert.isWildcard() || checkDomain(domain)) {
                             Order order = createOrderForCertificate(cert);
                             createChallengeForCertificateOrder(cert, order);
                         } else {
