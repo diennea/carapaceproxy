@@ -7,7 +7,7 @@
 *.pyc
 dependency-reduced-pom.xml
 **/nbproject/
-**/access.log
+**/access.log*
 **/pom.xml.releaseBackup
 release.properties
 **/*.p12
