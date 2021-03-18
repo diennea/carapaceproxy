@@ -40,7 +40,6 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
-import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
@@ -471,8 +470,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
             } else {
                 LOG.log(Level.SEVERE, "unknown message type {0}: {1}. connection: {2}", new Object[]{msg.getClass(), msg, EndpointConnectionImpl.this});
             }
-
-            ctx.fireChannelRead(ReferenceCountUtil.retain(msg));
+            parent.getFullHttpMessageLogger().fireChannelRead(ctx, msg);
         }
 
         @Override
