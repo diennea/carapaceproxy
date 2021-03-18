@@ -30,6 +30,7 @@ import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObjectAggregator;
+import io.netty.util.ReferenceCountUtil;
 import java.io.BufferedWriter;
 import java.io.Closeable;
 import java.io.FileOutputStream;
@@ -254,6 +255,12 @@ public class FullHttpMessageLogger implements Runnable, Closeable {
         if (accessLogAdvancedEnabled) {
             channel.pipeline().addLast(new HttpObjectAggregator(Integer.MAX_VALUE));
             channel.pipeline().addLast(new FullHttpMessageLoggerHandler(reqHandler));
+        }
+    }
+
+    public void fireChannelRead(ChannelHandlerContext ctx, Object msg) {
+        if (accessLogAdvancedEnabled) {
+            ctx.fireChannelRead(ReferenceCountUtil.retain(msg));
         }
     }
 

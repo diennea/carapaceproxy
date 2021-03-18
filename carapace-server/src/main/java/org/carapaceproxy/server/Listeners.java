@@ -231,6 +231,7 @@ public class Listeners {
                                 () -> CURRENT_CONNECTED_CLIENTS_GAUGE.dec(),
                                 parent.getBackendHealthManager(),
                                 parent.getRequestsLogger(),
+                                parent.getFullHttpMessageLogger(),
                                 listener.getHost(),
                                 port,
                                 listener.isSsl()
