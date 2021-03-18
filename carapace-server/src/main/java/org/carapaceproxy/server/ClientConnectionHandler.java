@@ -29,7 +29,6 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
-import io.netty.util.ReferenceCountUtil;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import java.net.SocketAddress;
@@ -68,6 +67,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     final ContentsCache cache;
     final StaticContentsManager staticContentsManager;
     final RequestsLogger requestsLogger;
+    final FullHttpMessageLogger fullHttpMessageLogger;
     final long connectionStartsTs;
     volatile boolean keepAlive = true;
     volatile boolean refuseOtherRequests;
@@ -92,6 +92,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             Runnable onClientDisconnected,
             BackendHealthManager backendHealthManager,
             RequestsLogger requestsLogger,
+            FullHttpMessageLogger fullHttpMessageLogger,
             String listenerHost,
             int listenerPort,
             boolean secure) {
@@ -106,6 +107,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         this.onClientDisconnected = onClientDisconnected;
         this.backendHealthManager = backendHealthManager;
         this.requestsLogger = requestsLogger;
+        this.fullHttpMessageLogger = fullHttpMessageLogger;
         this.listenerHost = listenerHost;
         this.listenerPort = listenerPort;
         this.secure = secure;
@@ -198,7 +200,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             }
         }
 
-        ctx.fireChannelRead(ReferenceCountUtil.retain(msg));
+        fullHttpMessageLogger.fireChannelRead(ctx, msg);
     }
 
     private void detectSSLProperties(ChannelHandlerContext ctx) {
