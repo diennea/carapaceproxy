@@ -391,14 +391,15 @@ public class EndpointConnectionImpl implements EndpointConnection {
     }
 
     @Override
-    public void release(boolean close, RequestHandler clientSidePeerHandler, Runnable onReleasePerformed) {
+    public void release(boolean forceClose, RequestHandler clientSidePeerHandler, Runnable onReleasePerformed) {
         // this method can be called from RequestHandler eventLoop and from EndpointConnection eventloop
         executeInEndpointConnectionEventLoop(() -> {
-            if (changeExpectedStateTo(ConnectionState.IDLE, ConnectionState.RELEASABLE, ConnectionState.DELAYED_RELEASE)) {
-                CarapaceLogger.debug("release with destroy={1} {0}", this, close);
+            if (forceClose || changeExpectedStateTo(ConnectionState.IDLE, ConnectionState.RELEASABLE, ConnectionState.DELAYED_RELEASE)) {
+                CarapaceLogger.debug("release with destroy={1} {0}", this, forceClose);
                 checkHandler(clientSidePeerHandler);
                 connectionDeactivated();
-                if (close) {
+                if (forceClose) {
+                    state.set(ConnectionState.IDLE);
                     destroy();
                     parent.returnConnection(this, "connection release with closed channel");
                 } else {

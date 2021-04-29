@@ -707,4 +707,47 @@ public class RawClientTest {
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
     }
 
+    @Test
+    public void testClientConnectionClose() throws Exception {
+        stubFor(get(urlEqualTo("/index.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withHeader("Connection", "close")
+                        .withBody("it <b>works</b> !!")));
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+
+        CarapaceLogger.setLoggingDebugEnabled(true);
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            server.start();
+            stats = server.getConnectionsManager().getStats();
+            int port = server.getLocalPort();
+            assertTrue(port > 0);
+
+            RuntimeServerConfiguration currentConfiguration = server.getCurrentConfiguration();
+            server.getConnectionsManager().applyNewConfiguration(currentConfiguration);
+
+            int request = 0;
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                for (request = 0; request < 2; request++) {
+                    RawHttpClient.HttpResponse res = client.get("/index.html");
+                    if (request == 1) { // second request should be failed due to server connection close.
+                        fail();
+                    }
+                    String resp = res.getBodyString();
+                    assertTrue(resp.contains("it <b>works</b> !!"));
+                }
+            } catch (Exception e) {
+                assertThat(request, is(1)); // second request failed due to server connection close.
+            }
+
+        }
+        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+    }
+
 }
