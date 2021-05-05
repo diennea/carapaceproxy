@@ -184,7 +184,7 @@ public class CertificatesResource {
                 state = certificate.isAcme()
                         ? cert.getState()
                         : CertificatesUtils.isCertificateExpired(cert.getExpiringDate(), 0) ? DynamicCertificateState.EXPIRED : DynamicCertificateState.AVAILABLE;
-                bean.setExpiringDate(cert.getExpiringDate().toString());
+                bean.setExpiringDate(cert.getExpiringDate() != null ? cert.getExpiringDate().toString() : "");
                 bean.setSerialNumber(cert.getSerialNumber());
             } else {
                 KeyStore keystore = loadKeyStoreFromFile(certificate.getFile(), certificate.getPassword(), server.getBasePath());

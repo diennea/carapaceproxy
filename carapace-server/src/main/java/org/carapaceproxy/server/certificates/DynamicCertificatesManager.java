@@ -19,7 +19,6 @@
  */
 package org.carapaceproxy.server.certificates;
 
-import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.DNS_CHALLENGE_WAIT;
@@ -63,7 +62,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.logging.Level;
 import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
-import org.carapaceproxy.utils.CertificatesUtils;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
 import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.Status;

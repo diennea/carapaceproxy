@@ -405,11 +405,12 @@ public class StartAPIServerTest extends UseAdminServer {
 
             // Downloading
             CertificateData cert = store.loadCertificateForDomain(dynDomain);
-            cert.setChain(Base64.getEncoder().encodeToString("CHAIN".getBytes()));
+            byte[] newKeystore = createKeystore(generateSampleChain(endUserKeyPair, false), KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE).getPrivate());
+            cert.setChain(Base64.getEncoder().encodeToString(newKeystore));
             store.saveCertificate(cert);
             man.setStateOfCertificate(dynDomain, DynamicCertificateState.AVAILABLE);
             response = client.get("/api/certificates/" + dynDomain + "/download", credentials);
-            assertEquals("CHAIN", response.getBodyString());
+            assertTrue(Arrays.equals(newKeystore, response.getBody()));
         }
 
         // Manual certificate
