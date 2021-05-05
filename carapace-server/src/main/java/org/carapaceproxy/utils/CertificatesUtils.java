@@ -146,19 +146,14 @@ public final class CertificatesUtils {
         return ks;
     }
 
-    public static boolean isCertificateExpired(Certificate[] chain, int daysBeforeRenewal) throws GeneralSecurityException {
-        if (chain == null || chain.length == 0) {
+    public static boolean isCertificateExpired(Date expiringDate, int daysBeforeRenewal) throws GeneralSecurityException {
+        if (expiringDate == null) {
             return false;
         }
-        try {
-            Calendar cal = Calendar.getInstance();
-            cal.setTime(new Date());
-            cal.add(Calendar.DATE, daysBeforeRenewal);
-            ((X509Certificate) chain[0]).checkValidity(cal.getTime());
-        } catch (CertificateNotYetValidException | CertificateExpiredException ex) {
-            return true;
-        }
-        return false;
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(new Date());
+        cal.add(Calendar.DATE, daysBeforeRenewal);
+        return cal.getTime().after(expiringDate);
     }
 
     /**

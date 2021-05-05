@@ -20,6 +20,7 @@
 package org.carapaceproxy.configstore;
 
 import java.net.URL;
+import java.util.Date;
 import java.util.Objects;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.shredzone.acme4j.toolbox.JSON;
@@ -35,7 +36,7 @@ public class CertificateData {
     private String domain;
     private String privateKey; // base64 encoded string.
     private String chain; // base64 encoded string of the KeyStore.
-    private DynamicCertificateState state;
+    private volatile DynamicCertificateState state;
     private String pendingOrderLocation;
     private String pendingChallengeData;
 
@@ -43,6 +44,9 @@ public class CertificateData {
     private boolean wildcard;
     private boolean manual;
     private int daysBeforeRenewal;
+    private Date expiringDate;
+    private String serialNumber; // hex
+    private byte[] keystoreData; // decoded chain
 
     public CertificateData(String domain, String privateKey, String chain, DynamicCertificateState state,
                            String orderLocation, String challengeData) {
@@ -132,6 +136,30 @@ public class CertificateData {
 
     public void setDaysBeforeRenewal(int daysBeforeRenewal) {
         this.daysBeforeRenewal = daysBeforeRenewal;
+    }
+
+    public Date getExpiringDate() {
+        return expiringDate;
+    }
+
+    public void setExpiringDate(Date expiringDate) {
+        this.expiringDate = expiringDate;
+    }
+
+    public String getSerialNumber() {
+        return serialNumber;
+    }
+
+    public void setSerialNumber(String serialNumber) {
+        this.serialNumber = serialNumber;
+    }
+
+    public byte[] getKeystoreData() {
+        return keystoreData;
+    }
+
+    public void setKeystoreData(byte[] keystoreData) {
+        this.keystoreData = keystoreData;
     }
 
     @Override

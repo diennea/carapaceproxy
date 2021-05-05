@@ -50,6 +50,7 @@ import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAIT
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.MANUAL;
 import static org.carapaceproxy.utils.CertificatesUtils.isCertificateExpired;
+import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.URL;
@@ -62,6 +63,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.logging.Level;
 import org.carapaceproxy.server.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.carapaceproxy.utils.CertificatesUtils;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
 import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.Status;
@@ -214,6 +216,15 @@ public class DynamicCertificatesManager implements Runnable {
         CertificateData cert = store.loadCertificateForDomain(domain);
         if (cert == null) {
             cert = new CertificateData(domain, "", "", WAITING, "", "");
+        } else if (cert.getChain() != null && !cert.getChain().isEmpty()) {
+            byte[] keystoreData = Base64.getDecoder().decode(cert.getChain());
+            cert.setKeystoreData(keystoreData);
+            Certificate[] chain = readChainFromKeystore(keystoreData);
+            if (chain != null && chain.length > 0) {
+                X509Certificate _cert = ((X509Certificate) chain[0]);
+                cert.setExpiringDate(_cert.getNotAfter());
+                cert.setSerialNumber(_cert.getSerialNumber().toString(16).toUpperCase()); // HEX
+            }
         }
         cert.setWildcard(wildcard);
         cert.setManual(forceManual);
@@ -273,11 +284,10 @@ public class DynamicCertificatesManager implements Runnable {
                 .sorted((e1, e2) -> e1.getKey().compareTo(e2.getKey()))
                 .map(e -> e.getValue())
                 .collect(Collectors.toList());
-        for (CertificateData data : _certificates) {
+        for (CertificateData cert : _certificates) {
             boolean updateCertificate = true;
-            final String domain = data.getDomain();
+            final String domain = cert.getDomain();
             try {
-                CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, data.isWildcard(), false, data.getDaysBeforeRenewal());
                 switch (cert.getState()) {
                     case WAITING: // certificate waiting to be issues/renew
                     case DOMAIN_UNREACHABLE: { // certificate domain reported as unreachable for issuing/renewing
@@ -340,7 +350,7 @@ public class DynamicCertificatesManager implements Runnable {
                         break;
                     }
                     case AVAILABLE: { // certificate saved/available/not expired
-                        if (isCertificateExpired(base64DecodeCertificateChain(cert.getChain()), cert.getDaysBeforeRenewal())) {
+                        if (isCertificateExpired(cert.getExpiringDate(), cert.getDaysBeforeRenewal())) {
                             cert.setState(EXPIRED);
                         } else {
                             updateCertificate = false;
@@ -522,11 +532,11 @@ public class DynamicCertificatesManager implements Runnable {
      */
     public byte[] getCertificateForDomain(String domain) throws GeneralSecurityException {
         CertificateData cert = certificates.get(domain); // certs always retrived from cache
-        if (cert == null || cert.getChain() == null || cert.getChain().isEmpty()) {
+        if (cert == null || cert.getKeystoreData() == null || cert.getKeystoreData().length == 0) {
             LOG.log(Level.SEVERE, "No dynamic certificate available for domain {0}", domain);
             return null;
         }
-        return Base64.getDecoder().decode(cert.getChain());
+        return cert.getKeystoreData();
     }
 
     public CertificateData getCertificateDataForDomain(String domain) throws GeneralSecurityException {

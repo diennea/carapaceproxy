@@ -33,6 +33,8 @@ import java.util.Arrays;
 import org.junit.Test;
 import org.shredzone.acme4j.util.KeyPairUtils;
 import static org.carapaceproxy.utils.CertificatesUtils.compareChains;
+import java.security.cert.X509Certificate;
+import java.util.Date;
 import org.carapaceproxy.utils.CertificatesUtils;
 
 /**
@@ -70,16 +72,16 @@ public class CertificatesUtilsTest {
         {
             KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
             Certificate[] chain = generateSampleChain(endUserKeyPair, false); // not before == not after == today
-            assertFalse(CertificatesUtils.isCertificateExpired(chain, 0));
-            assertTrue(CertificatesUtils.isCertificateExpired(chain, -30)); // not before
-            assertTrue(CertificatesUtils.isCertificateExpired(chain, 30)); // not after
+            Date expiringDate = ((X509Certificate) chain[0]).getNotAfter();
+            assertFalse(CertificatesUtils.isCertificateExpired(expiringDate, 0));
+            assertTrue(CertificatesUtils.isCertificateExpired(expiringDate, 30)); // not after
         }
         {
             KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
             Certificate[] chain = generateSampleChain(endUserKeyPair, true); // not before == not after == today
-            assertTrue(CertificatesUtils.isCertificateExpired(chain, 0));
-            assertTrue(CertificatesUtils.isCertificateExpired(chain, -30)); // not before
-            assertTrue(CertificatesUtils.isCertificateExpired(chain, 30)); // not after
+            Date expiringDate = ((X509Certificate) chain[0]).getNotAfter();
+            assertTrue(CertificatesUtils.isCertificateExpired(expiringDate, 0));
+            assertTrue(CertificatesUtils.isCertificateExpired(expiringDate, 30)); // not after
         }
     }
 }
