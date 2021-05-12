@@ -494,12 +494,12 @@ public class CertificatesTest extends UseAdminServer {
 
         ConfigurationStore store = dcMan.getConfigurationStore();
         store.saveKeyPairForDomain(keyPair, "localhost", false);
-        CertificateData cert = store.loadCertificateForDomain("localhost");
+        CertificateData cert = dcMan.getCertificateDataForDomain("localhost");
         cert.setState(DynamicCertificateState.ORDERING);
         cert.setPendingOrderLocation("https://localhost/orderlocation");
-        store.saveCertificate(cert);
-        assertEquals(DynamicCertificateState.ORDERING, dcMan.getStateOfCertificate("localhost"));
-        assertNotNull(dcMan.getCertificateForDomain("localhost"));
+        cert = dcMan.getCertificateDataForDomain("localhost");
+        assertNotNull(cert);
+        assertEquals(DynamicCertificateState.ORDERING, cert.getState());
 
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);

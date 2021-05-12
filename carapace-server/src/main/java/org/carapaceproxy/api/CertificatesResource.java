@@ -175,28 +175,30 @@ public class CertificatesResource {
 
     private static void fillCertificateBean(CertificateBean bean, SSLCertificateConfiguration certificate, DynamicCertificatesManager dCManager, HttpProxyServer server) {
         try {
-            Certificate[] chain;
             DynamicCertificateState state = null;
             if (certificate.isDynamic()) {
                 CertificateData cert = dCManager.getCertificateDataForDomain(certificate.getId());
                 if (cert == null) {
                     return;
                 }
-                chain = base64DecodeCertificateChain(cert.getChain());
-                state = cert.getState();
+                state = certificate.isAcme()
+                        ? cert.getState()
+                        : CertificatesUtils.isCertificateExpired(cert.getExpiringDate(), 0) ? DynamicCertificateState.EXPIRED : DynamicCertificateState.AVAILABLE;
+                bean.setExpiringDate(cert.getExpiringDate() != null ? cert.getExpiringDate().toString() : "");
+                bean.setSerialNumber(cert.getSerialNumber());
             } else {
                 KeyStore keystore = loadKeyStoreFromFile(certificate.getFile(), certificate.getPassword(), server.getBasePath());
                 if (keystore == null) {
                     return;
                 }
-                chain = CertificatesUtils.readChainFromKeystore(keystore);
-            }
-            if (chain != null && chain.length > 0) {
-                X509Certificate _cert = ((X509Certificate) chain[0]);
-                bean.setExpiringDate(_cert.getNotAfter().toString());
-                bean.setSerialNumber(_cert.getSerialNumber().toString(16).toUpperCase()); // HEX
-                if (!certificate.isAcme()) {
-                    state = CertificatesUtils.isCertificateExpired(chain, 0) ? DynamicCertificateState.EXPIRED : DynamicCertificateState.AVAILABLE;
+                Certificate[] chain = CertificatesUtils.readChainFromKeystore(keystore);
+                if (chain != null && chain.length > 0) {
+                    X509Certificate _cert = ((X509Certificate) chain[0]);
+                    bean.setExpiringDate(_cert.getNotAfter().toString());
+                    bean.setSerialNumber(_cert.getSerialNumber().toString(16).toUpperCase()); // HEX
+                    if (!certificate.isAcme()) {
+                        state = CertificatesUtils.isCertificateExpired(_cert.getNotAfter(), 0) ? DynamicCertificateState.EXPIRED : DynamicCertificateState.AVAILABLE;
+                    }
                 }
             }
             if (certificate.isAcme()) {
