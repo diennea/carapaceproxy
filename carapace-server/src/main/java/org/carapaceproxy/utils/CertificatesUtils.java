@@ -32,11 +32,7 @@ import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
-import java.security.cert.CertificateExpiredException;
-import java.security.cert.CertificateNotYetValidException;
-import java.security.cert.X509Certificate;
 import java.util.Arrays;
-import java.util.Calendar;
 import java.util.Date;
 import java.util.Iterator;
 
@@ -50,6 +46,8 @@ public final class CertificatesUtils {
     private static final String KEYSTORE_FORMAT = "PKCS12";
     private static final String KEYSTORE_CERT_ALIAS = "cert-chain";
     public static final char[] KEYSTORE_PW = new char[0];
+
+    private static final long DAY_TO_MILLIS = 24 * 60 * 60 * 1_000;
 
     /**
      *
@@ -146,19 +144,12 @@ public final class CertificatesUtils {
         return ks;
     }
 
-    public static boolean isCertificateExpired(Certificate[] chain, int daysBeforeRenewal) throws GeneralSecurityException {
-        if (chain == null || chain.length == 0) {
+    public static boolean isCertificateExpired(Date expiringDate, int daysBeforeRenewal) throws GeneralSecurityException {
+        if (expiringDate == null) {
             return false;
         }
-        try {
-            Calendar cal = Calendar.getInstance();
-            cal.setTime(new Date());
-            cal.add(Calendar.DATE, daysBeforeRenewal);
-            ((X509Certificate) chain[0]).checkValidity(cal.getTime());
-        } catch (CertificateNotYetValidException | CertificateExpiredException ex) {
-            return true;
-        }
-        return false;
+
+        return System.currentTimeMillis() + (daysBeforeRenewal * DAY_TO_MILLIS) >= expiringDate.getTime();
     }
 
     /**
