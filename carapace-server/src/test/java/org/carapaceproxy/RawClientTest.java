@@ -477,11 +477,11 @@ public class RawClientTest {
                 System.out.println("s:" + s);
                 assertThat(s, containsString("An internal error occurred"));
                 assertNotNull(server.getConnectionsManager().getStats().getEndpoints().get(key));
-                assertThat(conMan.getConnections().getNumActive(), is(0));
-                assertThat(conMan.getConnections().getNumIdle(), is(0));
+
+                TestUtils.waitForCondition(() -> {
+                    return conMan.getConnections().getNumActive() == 0 && conMan.getConnections().getNumIdle() == 0;
+                }, 100);
             }
-            assertThat(conMan.getConnections().getNumActive(), is(0));
-            assertThat(conMan.getConnections().getNumIdle(), is(0));
 
             TestUtils.waitForCondition(() -> {
                 EndpointStats epstats = stats.getEndpointStats(key);
@@ -490,8 +490,6 @@ public class RawClientTest {
                         && epstats.getActiveConnections().intValue() == 0
                         && epstats.getOpenConnections().intValue() == 0;
             }, 100);
-            assertThat(conMan.getConnections().getNumActive(), is(0));
-            assertThat(conMan.getConnections().getNumIdle(), is(0));
         }
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
     }
