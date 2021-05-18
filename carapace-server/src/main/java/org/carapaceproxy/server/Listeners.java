@@ -71,6 +71,7 @@ import org.carapaceproxy.utils.PrometheusUtils;
 import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
 import io.netty.handler.timeout.IdleStateHandler;
 import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
+import io.netty.handler.ssl.OpenSslCachingX509KeyManagerFactory;
 
 /**
  *
@@ -138,7 +139,7 @@ public class Listeners {
                 );
                 keystore = loadKeyStoreFromFile(certificate.getFile(), certificate.getPassword(), basePath);
             }
-            KeyManagerFactory keyFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+            KeyManagerFactory keyFactory = new OpenSslCachingX509KeyManagerFactory(KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()));
             keyFactory.init(keystore, certificate.getPassword().toCharArray());
 
             LOG.log(Level.INFO, "loading trustore from {0}", listener.getSslTrustoreFile());

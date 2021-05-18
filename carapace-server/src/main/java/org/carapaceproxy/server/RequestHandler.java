@@ -656,9 +656,12 @@ public class RequestHandler implements MatchingContext {
                         connectionToClient.keepAlive = false;
                     }
                 }
+                if (closeAfterResponse) {
+                    connectionToClient.keepAlive = false;
+                }
             }
             // LOG.log(Level.INFO, this + " returnConnection:" + returnConnection + ", keepAlive1:" + keepAlive1 + " connecton " + connectionToEndpoint);
-            if (msg instanceof LastHttpContent && future.isSuccess()) {
+            if (msg instanceof LastHttpContent && (future.isSuccess() || closeAfterResponse)) {
                 connectionToClient.closeIfNotKeepAlive(channelToClient);
             }
         });
