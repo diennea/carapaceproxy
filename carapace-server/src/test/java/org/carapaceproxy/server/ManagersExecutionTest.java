@@ -56,7 +56,7 @@ public class ManagersExecutionTest {
 
     @Test
     public void testBackendHealthManagerExecution() {
-        RuntimeServerConfiguration config = new RuntimeServerConfiguration();
+        RuntimeServerConfiguration config = new RuntimeServerConfiguration(null);
         BackendHealthManager man = new BackendHealthManager(config, mock(EndpointMapper.class));
 
         ScheduledExecutorService timer = mock(ScheduledExecutorService.class);
@@ -95,7 +95,7 @@ public class ManagersExecutionTest {
 
     @Test
     public void testDynamicCertificatesManagerExecution() throws ConfigurationNotValidException {
-        RuntimeServerConfiguration config = new RuntimeServerConfiguration();
+        RuntimeServerConfiguration config = new RuntimeServerConfiguration(null);
         DynamicCertificatesManager man = new DynamicCertificatesManager(null);
 
         man.setConfigurationStore(mock(ConfigurationStore.class));

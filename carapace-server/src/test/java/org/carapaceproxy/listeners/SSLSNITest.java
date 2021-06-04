@@ -74,9 +74,13 @@ public class SSLSNITest {
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
 
-            server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
+            SSLCertificateConfiguration certConfig = new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC);
+            certConfig.loadKeyStore(server.getBasePath());
+            server.addCertificate(certConfig);
 
-            server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost /* default */, null, null));
+            server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost /*
+                     * default
+                     */, null, null));
 
             server.start();
             stats = server.getConnectionsManager().getStats();
@@ -165,8 +169,12 @@ public class SSLSNITest {
 
         // TLS 1.3 support checking
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
-            server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
-            server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, null, null, "TLSv1.3"));
+            SSLCertificateConfiguration certConfig = new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC);
+            certConfig.loadKeyStore(server.getBasePath());
+            server.addCertificate(certConfig);
+            NetworkListenerConfiguration listener = new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, null, null, "TLSv1.3");
+            listener.loadTrustStore(server.getBasePath());
+            server.addListener(listener);
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
@@ -178,10 +186,14 @@ public class SSLSNITest {
         }
 
         // default ssl protocol version support checking
-        for (String proto: DEFAULT_SSL_PROTOCOLS) {
+        for (String proto : DEFAULT_SSL_PROTOCOLS) {
             try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
-                server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
-                server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, null, null, proto));
+                SSLCertificateConfiguration certConfig = new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC);
+                certConfig.loadKeyStore(server.getBasePath());
+                server.addCertificate(certConfig);
+                NetworkListenerConfiguration listener = new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, null, null, proto);
+                listener.loadTrustStore(server.getBasePath());
+                server.addListener(listener);
                 server.start();
                 int port = server.getLocalPort();
                 try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
@@ -193,8 +205,12 @@ public class SSLSNITest {
             }
         }
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
-            server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
-            server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, null, null));
+            SSLCertificateConfiguration certConfig = new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC);
+            certConfig.loadKeyStore(server.getBasePath());
+            server.addCertificate(certConfig);
+            NetworkListenerConfiguration listener = new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, null, null);
+            listener.loadTrustStore(server.getBasePath());
+            server.addListener(listener);
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
@@ -208,8 +224,12 @@ public class SSLSNITest {
         // wrong ssl protocol version checking
         TestUtils.assertThrows(ConfigurationNotValidException.class, () -> {
             try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
-                server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
-                server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, null, null, "TLSvWRONG"));
+                SSLCertificateConfiguration certConfig = new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC);
+                certConfig.loadKeyStore(server.getBasePath());
+                server.addCertificate(certConfig);
+                NetworkListenerConfiguration listener = new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, null, null, "TLSvWRONG");
+                listener.loadTrustStore(server.getBasePath());
+                server.addListener(listener);
             }
         });
     }

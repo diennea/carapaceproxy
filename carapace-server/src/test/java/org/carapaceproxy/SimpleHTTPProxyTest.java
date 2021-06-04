@@ -130,8 +130,13 @@ public class SimpleHTTPProxyTest {
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
 
-            server.addCertificate(new SSLCertificateConfiguration("localhost", certificate, "changeit", STATIC));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0, true, false, null, "localhost", cacertificate, "changeit"));
+            SSLCertificateConfiguration cert = new SSLCertificateConfiguration("localhost", certificate, "changeit", STATIC);
+            cert.loadKeyStore(server.getBasePath());
+            server.addCertificate(cert);
+
+            NetworkListenerConfiguration listener = new NetworkListenerConfiguration("localhost", 0, true, false, null, "localhost", cacertificate, "changeit");
+            listener.loadTrustStore(server.getBasePath());
+            server.addListener(listener);
 
             server.start();
             int port = server.getLocalPort();

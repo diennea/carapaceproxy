@@ -78,7 +78,7 @@ public class RequestsLoggerTest {
     }
 
     private RuntimeServerConfiguration genConf() {
-        RuntimeServerConfiguration c = new RuntimeServerConfiguration();
+        RuntimeServerConfiguration c = new RuntimeServerConfiguration(null);
         c.setAccessLogPath(accessLogFilePath);
         return c;
     }

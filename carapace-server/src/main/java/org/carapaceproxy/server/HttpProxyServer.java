@@ -147,7 +147,7 @@ public class HttpProxyServer implements AutoCloseable {
         this.mainLogger = statsProvider.getStatsLogger("");
 
         this.filters = new ArrayList<>();
-        this.currentConfiguration = new RuntimeServerConfiguration();
+        this.currentConfiguration = new RuntimeServerConfiguration(basePath);
         this.backendHealthManager = new BackendHealthManager(currentConfiguration, mapper);
         this.listeners = new Listeners(this);
         this.cache = new ContentsCache(currentConfiguration);
@@ -564,7 +564,7 @@ public class HttpProxyServer implements AutoCloseable {
     }
 
     public RuntimeServerConfiguration buildValidConfiguration(ConfigurationStore simpleStore) throws ConfigurationNotValidException {
-        RuntimeServerConfiguration newConfiguration = new RuntimeServerConfiguration();
+        RuntimeServerConfiguration newConfiguration = new RuntimeServerConfiguration(basePath);
 
         // Try to perform a service configuration from the passed store.
         newConfiguration.configure(simpleStore);

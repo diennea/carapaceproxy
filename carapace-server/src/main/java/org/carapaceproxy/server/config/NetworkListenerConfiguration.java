@@ -19,6 +19,11 @@
  */
 package org.carapaceproxy.server.config;
 
+import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
+import java.io.File;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -40,6 +45,7 @@ public class NetworkListenerConfiguration {
     private final String sslTrustoreFile;
     private final String sslTrustorePassword;
     private String[] sslProtocols = new String[0];
+    private KeyStore trustStore;
 
     public HostPort getKey() {
         return new HostPort(host, port);
@@ -129,7 +135,7 @@ public class NetworkListenerConfiguration {
         this.sslTrustorePassword = sslTrustorePassword;
         if (ssl) {
             this.sslProtocols = sslProtocols;
-       }
+        }
     }
 
     public String getSslTrustoreFile() {
@@ -170,6 +176,14 @@ public class NetworkListenerConfiguration {
 
     public void setSslProtocols(String[] sslProtocols) {
         this.sslProtocols = sslProtocols;
+    }
+
+    public void loadTrustStore(File basePath) throws GeneralSecurityException, IOException {
+        trustStore = loadKeyStoreFromFile(sslTrustoreFile, sslTrustorePassword, basePath);
+    }
+
+    public KeyStore getTrustStore() {
+        return trustStore;
     }
 
     @Override

@@ -171,7 +171,7 @@ public class DynamicCertificatesManagerTest {
         props.setProperty("certificate.3.mode", "manual");
         props.setProperty("certificate.3.daysbeforerenewal", "0");
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
-        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration(null);
         conf.configure(configStore);
         man.reloadConfiguration(conf);
 
@@ -317,7 +317,7 @@ public class DynamicCertificatesManagerTest {
         props.setProperty("certificate.1.daysbeforerenewal", "0");
         props.setProperty("dynamiccertificatesmanager.domainschecker.ipaddresses", "127.0.0.1, 0:0:0:0:0:0:0:1");
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
-        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration(null);
         conf.configure(configStore);
         man.reloadConfiguration(conf);
 
@@ -425,7 +425,7 @@ public class DynamicCertificatesManagerTest {
             props.setProperty("dynamiccertificatesmanager.domainschecker.ipaddresses", "127.0.0.1, 0:0:0:0:0:0:0:1");
         }
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
-        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration(null);
         conf.configure(configStore);
         man.reloadConfiguration(conf);
 

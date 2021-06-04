@@ -42,6 +42,10 @@ import javax.net.ssl.SSLContext;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
+import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.MANUAL;
+import java.io.File;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.util.Set;
 import org.carapaceproxy.utils.CarapaceLogger;
 
@@ -88,6 +92,12 @@ public class RuntimeServerConfiguration {
     private int ocspStaplingManagerPeriod = 0;
     private boolean requestsHeaderDebugEnabled = false;
     private int clientsIdleTimeoutSeconds = 120;
+
+    private final File basePath;
+
+    public RuntimeServerConfiguration(File basePath) {
+        this.basePath = basePath;
+    }
 
     public String getAccessLogPath() {
         return accessLogPath;
@@ -402,9 +412,11 @@ public class RuntimeServerConfiguration {
                     SSLCertificateConfiguration config = new SSLCertificateConfiguration(hostname, file, pw, _mode);
                     if (config.isAcme()) {
                         config.setDaysBeforeRenewal(daysBeforeRenewal);
+                    } else if (MANUAL.equals(config.getMode())) {
+                        config.loadKeyStore(basePath);
                     }
                     this.addCertificate(config);
-                } catch (IllegalArgumentException e) {
+                } catch (IllegalArgumentException | GeneralSecurityException | IOException e) {
                     throw new ConfigurationNotValidException(
                             "Invalid value of '" + mode + "' for " + prefix + "mode. Supperted ones: static, acme, manual"
                     );
@@ -431,6 +443,11 @@ public class RuntimeServerConfiguration {
                 );
                 if (ssl) {
                     config.setSslProtocols(properties.getArray(prefix + "sslprotocols", DEFAULT_SSL_PROTOCOLS.toArray(new String[0])));
+                }
+                try {
+                    config.loadTrustStore(basePath);
+                } catch (GeneralSecurityException | IOException ex) {
+                    throw new ConfigurationNotValidException(ex);
                 }
                 this.addListener(config);
             }

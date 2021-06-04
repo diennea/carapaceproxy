@@ -61,7 +61,7 @@ public class HealthCheckTest {
         backends.put(b1conf.getHostPort(), b1conf);
 
         EndpointMapper mapper = new TestEndpointMapper(null, 0, false, backends);
-        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration(tmpDir.getRoot());
 
         BackendHealthManager hman = new BackendHealthManager(conf, mapper);
 

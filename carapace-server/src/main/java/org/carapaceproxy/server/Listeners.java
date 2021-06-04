@@ -48,7 +48,6 @@ import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
 import io.netty.util.concurrent.Promise;
 import io.prometheus.client.Gauge;
-import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.security.GeneralSecurityException;
@@ -70,7 +69,6 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.PrometheusUtils;
 import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
 import io.netty.handler.timeout.IdleStateHandler;
-import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
 import io.netty.handler.ssl.OpenSslCachingX509KeyManagerFactory;
 
 /**
@@ -92,7 +90,6 @@ public class Listeners {
     private final Map<String, SslContext> sslContexts = new ConcurrentHashMap<>();
     private final Map<HostPort, Channel> listeningChannels = new ConcurrentHashMap<>();
     private final Map<HostPort, ClientConnectionHandler> listenersHandlers = new ConcurrentHashMap<>();
-    private final File basePath;
     private boolean started;
 
     private RuntimeServerConfiguration currentConfiguration;
@@ -100,7 +97,6 @@ public class Listeners {
     public Listeners(HttpProxyServer parent) {
         this.parent = parent;
         this.currentConfiguration = parent.getCurrentConfiguration();
-        this.basePath = parent.getBasePath();
         if (Epoll.isAvailable()) {
             this.bossGroup = new EpollEventLoopGroup();
             this.workerGroup = new EpollEventLoopGroup();
@@ -137,14 +133,14 @@ public class Listeners {
                 LOG.log(Level.INFO, "start SSL with certificate id {0}, on listener {1}:{2} file={3} OCSP {4}",
                         new Object[]{certificate.getId(), listener.getHost(), port, certificate.getFile(), listener.isOcsp()}
                 );
-                keystore = loadKeyStoreFromFile(certificate.getFile(), certificate.getPassword(), basePath);
+                keystore = certificate.getKeyStore();
             }
             KeyManagerFactory keyFactory = new OpenSslCachingX509KeyManagerFactory(KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()));
             keyFactory.init(keystore, certificate.getPassword().toCharArray());
 
             LOG.log(Level.INFO, "loading trustore from {0}", listener.getSslTrustoreFile());
             TrustManagerFactory trustManagerFactory = null;
-            KeyStore truststore = loadKeyStoreFromFile(listener.getSslTrustoreFile(), listener.getSslTrustorePassword(), basePath);
+            KeyStore truststore = listener.getTrustStore();
             if (truststore != null) {
                 trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
                 trustManagerFactory.init(truststore);

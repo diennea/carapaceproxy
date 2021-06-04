@@ -21,6 +21,11 @@ package org.carapaceproxy.server.config;
 
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.ACME;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
+import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
+import java.io.File;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
 
 /**
  * Configuration for a TLS Certificate
@@ -42,6 +47,7 @@ public class SSLCertificateConfiguration {
     private final boolean wildcard;
     private final CertificateMode mode;
     private int daysBeforeRenewal;
+    private KeyStore keyStore;
 
     public SSLCertificateConfiguration(String hostname, String file, String password, CertificateMode mode) {
         this.id = hostname;
@@ -102,6 +108,14 @@ public class SSLCertificateConfiguration {
 
     public void setDaysBeforeRenewal(int daysBeforeRenewal) {
         this.daysBeforeRenewal = daysBeforeRenewal;
+    }
+
+    public void loadKeyStore(File basePath) throws GeneralSecurityException, IOException {
+        keyStore = loadKeyStoreFromFile(file, password, basePath);
+    }
+
+    public KeyStore getKeyStore() {
+        return keyStore;
     }
 
     @Override
