@@ -72,6 +72,7 @@ import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
 import io.netty.handler.timeout.IdleStateHandler;
 import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
 import io.netty.handler.ssl.OpenSslCachingX509KeyManagerFactory;
+import io.netty.util.concurrent.Future;
 
 /**
  *
@@ -181,15 +182,7 @@ public class Listeners {
         int port = listener.getPort() + parent.getListenersOffsetPort();
         LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{listener.getHost(), port, listener.isSsl()});
 
-        AsyncMapping<String, SslContext> sniMappings = (String sniHostname, Promise<SslContext> promise) -> {
-            try {
-                SslContext sslContext = resolveSslContext(listener, sniHostname);
-                return promise.setSuccess(sslContext);
-            } catch (ConfigurationNotValidException err) {
-                LOG.log(Level.SEVERE, "Error booting certificate for SNI hostname {0}, on listener {1}", new Object[]{sniHostname, listener});
-                return promise.setFailure(err);
-            }
-        };
+        AsyncMapping<String, SslContext> sniMappings = new ListenerSniMapping(listener, port);
 
         HostPort key = new HostPort(listener.getHost(), port);
         ServerBootstrap b = new ServerBootstrap();
@@ -282,33 +275,59 @@ public class Listeners {
         }
     }
 
-    private SslContext resolveSslContext(NetworkListenerConfiguration listener, String sniHostname) throws ConfigurationNotValidException {
-        int port = listener.getPort() + parent.getListenersOffsetPort();
-        String key = listener.getHost() + ":" + port + "+" + sniHostname;
-        if (LOG.isLoggable(Level.FINER)) {
-            LOG.log(Level.FINER, "resolve SNI mapping " + sniHostname + ", key: " + key);
+    private final class ListenerSniMapping implements io.netty.util.AsyncMapping<String, SslContext> {
+
+        private final Map<String, SslContext> listenerSslContexts = new ConcurrentHashMap<>();
+        private final NetworkListenerConfiguration listener;
+        private final int port;
+
+        public ListenerSniMapping(NetworkListenerConfiguration listener, int port) {
+            this.listener = listener;
+            this.port = port;
         }
-        try {
-            return sslContexts.computeIfAbsent(key, (k) -> {
+
+        @Override
+        public Future<SslContext> map(String sniHostname, Promise<SslContext> promise) {
+            try {
+                String key = listener.getHost() + ":" + port + "+" + sniHostname;
+                if (LOG.isLoggable(Level.FINER)) {
+                    LOG.log(Level.FINER, "resolve SNI mapping " + sniHostname + ", key: " + key);
+                }
                 try {
+                    SslContext sslContext = listenerSslContexts.get(key);
+                    if (sslContext != null) {
+                        return promise.setSuccess(sslContext);
+                    }
+
+                    sslContext = sslContexts.get(key);
+                    if (sslContext != null) {
+                        listenerSslContexts.put(key, sslContext);
+                        return promise.setSuccess(sslContext);
+                    }
+
                     SSLCertificateConfiguration choosen = chooseCertificate(sniHostname, listener.getDefaultCertificate());
                     if (choosen == null) {
                         throw new ConfigurationNotValidException("cannot find a certificate for snihostname " + sniHostname
                                 + ", with default cert for listener as '" + listener.getDefaultCertificate()
                                 + "', available " + currentConfiguration.getCertificates().keySet());
                     }
-                    return bootSslContext(listener, choosen);
-                } catch (ConfigurationNotValidException err) {
-                    throw new RuntimeException(err);
+                    sslContext = bootSslContext(listener, choosen);
+                    listenerSslContexts.put(key, sslContext);
+                    sslContexts.put(key, sslContext);
+                    return promise.setSuccess(sslContext);
+                } catch (ConfigurationNotValidException | RuntimeException err) {
+                    if (err.getCause() instanceof ConfigurationNotValidException) {
+                        throw (ConfigurationNotValidException) err.getCause();
+                    } else {
+                        throw new ConfigurationNotValidException(err);
+                    }
                 }
-            });
-        } catch (RuntimeException err) {
-            if (err.getCause() instanceof ConfigurationNotValidException) {
-                throw (ConfigurationNotValidException) err.getCause();
-            } else {
-                throw new ConfigurationNotValidException(err);
+            } catch (ConfigurationNotValidException err) {
+                LOG.log(Level.SEVERE, "Error booting certificate for SNI hostname {0}, on listener {1}", new Object[]{sniHostname, listener});
+                return promise.setFailure(err);
             }
         }
+
     }
 
     @VisibleForTesting
