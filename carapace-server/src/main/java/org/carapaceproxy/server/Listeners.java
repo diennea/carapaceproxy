@@ -73,6 +73,7 @@ import io.netty.handler.timeout.IdleStateHandler;
 import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
 import io.netty.handler.ssl.OpenSslCachingX509KeyManagerFactory;
 import io.netty.util.concurrent.Future;
+import java.util.HashMap;
 
 /**
  *
@@ -277,7 +278,7 @@ public class Listeners {
 
     private final class ListenerSniMapping implements io.netty.util.AsyncMapping<String, SslContext> {
 
-        private final Map<String, SslContext> listenerSslContexts = new ConcurrentHashMap<>();
+        private final Map<String, SslContext> listenerSslContexts = new HashMap<>();
         private final NetworkListenerConfiguration listener;
         private final int port;
 
@@ -299,23 +300,23 @@ public class Listeners {
                         return promise.setSuccess(sslContext);
                     }
 
-                    sslContext = sslContexts.get(key);
-                    if (sslContext != null) {
-                        listenerSslContexts.put(key, sslContext);
-                        return promise.setSuccess(sslContext);
-                    }
-
-                    SSLCertificateConfiguration choosen = chooseCertificate(sniHostname, listener.getDefaultCertificate());
-                    if (choosen == null) {
-                        throw new ConfigurationNotValidException("cannot find a certificate for snihostname " + sniHostname
-                                + ", with default cert for listener as '" + listener.getDefaultCertificate()
-                                + "', available " + currentConfiguration.getCertificates().keySet());
-                    }
-                    sslContext = bootSslContext(listener, choosen);
+                    sslContext = sslContexts.computeIfAbsent(key, (k) -> {
+                        try {
+                            SSLCertificateConfiguration choosen = chooseCertificate(sniHostname, listener.getDefaultCertificate());
+                            if (choosen == null) {
+                                throw new ConfigurationNotValidException("cannot find a certificate for snihostname " + sniHostname
+                                        + ", with default cert for listener as '" + listener.getDefaultCertificate()
+                                        + "', available " + currentConfiguration.getCertificates().keySet());
+                            }
+                            return bootSslContext(listener, choosen);
+                        } catch (ConfigurationNotValidException ex) {
+                            throw new RuntimeException(ex);
+                        }
+                    });
                     listenerSslContexts.put(key, sslContext);
-                    sslContexts.put(key, sslContext);
+
                     return promise.setSuccess(sslContext);
-                } catch (ConfigurationNotValidException | RuntimeException err) {
+                } catch (RuntimeException err) {
                     if (err.getCause() instanceof ConfigurationNotValidException) {
                         throw (ConfigurationNotValidException) err.getCause();
                     } else {
