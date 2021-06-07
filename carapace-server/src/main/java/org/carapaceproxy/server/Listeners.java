@@ -43,7 +43,6 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslProvider;
-import io.netty.util.AsyncMapping;
 import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
 import io.netty.util.concurrent.Promise;
@@ -74,6 +73,7 @@ import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
 import io.netty.handler.ssl.OpenSslCachingX509KeyManagerFactory;
 import io.netty.util.concurrent.Future;
 import java.util.HashMap;
+import java.util.Map.Entry;
 
 /**
  *
@@ -92,7 +92,7 @@ public class Listeners {
     private final EventLoopGroup workerGroup;
     private final HttpProxyServer parent;
     private final Map<String, SslContext> sslContexts = new ConcurrentHashMap<>();
-    private final Map<HostPort, Channel> listeningChannels = new ConcurrentHashMap<>();
+    private final Map<HostPort, ListeningChannel> listeningChannels = new ConcurrentHashMap<>();
     private final Map<HostPort, ClientConnectionHandler> listenersHandlers = new ConcurrentHashMap<>();
     private final File basePath;
     private boolean started;
@@ -179,13 +179,13 @@ public class Listeners {
         }
     }
 
-    private void bootListener(NetworkListenerConfiguration listener) throws InterruptedException {
-        int port = listener.getPort() + parent.getListenersOffsetPort();
-        LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{listener.getHost(), port, listener.isSsl()});
+    private void bootListener(NetworkListenerConfiguration config) throws InterruptedException {
+        int port = config.getPort() + parent.getListenersOffsetPort();
+        LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{config.getHost(), port, config.isSsl()});
 
-        AsyncMapping<String, SslContext> sniMappings = new ListenerSniMapping(listener, port);
+        ListeningChannel listeningChannel = new ListeningChannel(config, port);
 
-        HostPort key = new HostPort(listener.getHost(), port);
+        HostPort key = new HostPort(config.getHost(), port);
         ServerBootstrap b = new ServerBootstrap();
         b.group(bossGroup, workerGroup)
                 .channel(Epoll.isAvailable() ? EpollServerSocketChannel.class : NioServerSocketChannel.class)
@@ -193,12 +193,12 @@ public class Listeners {
                     @Override
                     public void initChannel(SocketChannel channel) throws Exception {
                         CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
-                        if (listener.isSsl()) {
-                            SniHandler sni = new SniHandler(sniMappings) {
+                        if (config.isSsl()) {
+                            SniHandler sni = new SniHandler(listeningChannel) {
                                 @Override
                                 protected SslHandler newSslHandler(SslContext context, ByteBufAllocator allocator) {
                                     SslHandler handler = super.newSslHandler(context, allocator);
-                                    if (listener.isOcsp() && OpenSsl.isOcspSupported()) {
+                                    if (config.isOcsp() && OpenSsl.isOcspSupported()) {
                                         Certificate cert = (Certificate) context.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN)).get();
                                         if (cert != null) {
                                             try {
@@ -227,9 +227,9 @@ public class Listeners {
                                 parent.getBackendHealthManager(),
                                 parent.getRequestsLogger(),
                                 parent.getFullHttpMessageLogger(),
-                                listener.getHost(),
+                                config.getHost(),
                                 port,
-                                listener.isSsl()
+                                config.isSsl()
                         );
                         channel.pipeline().addLast(connHandler);
                         parent.getFullHttpMessageLogger().attachHandler(channel, connHandler.getPendingRequest());
@@ -239,16 +239,16 @@ public class Listeners {
                 })
                 .option(ChannelOption.SO_BACKLOG, 128)
                 .childOption(ChannelOption.SO_KEEPALIVE, true);
-        Channel channel = b.bind(listener.getHost(), port).sync().channel();
-
-        listeningChannels.put(key, channel);
+        Channel channel = b.bind(config.getHost(), port).sync().channel();
+        listeningChannel.setChannel(channel);
+        listeningChannels.put(key, listeningChannel);
         LOG.log(Level.INFO, "started listener at {0}: {1}", new Object[]{key, channel});
 
     }
 
     public int getLocalPort() {
-        for (Channel c : listeningChannels.values()) {
-            InetSocketAddress addr = (InetSocketAddress) c.localAddress();
+        for (ListeningChannel c : listeningChannels.values()) {
+            InetSocketAddress addr = (InetSocketAddress) c.getChannel().localAddress();
             return addr.getPort();
         }
         return -1;
@@ -276,21 +276,30 @@ public class Listeners {
         }
     }
 
-    private final class ListenerSniMapping implements io.netty.util.AsyncMapping<String, SslContext> {
+    private final class ListeningChannel implements io.netty.util.AsyncMapping<String, SslContext> {
 
-        private final Map<String, SslContext> listenerSslContexts = new HashMap<>();
-        private final NetworkListenerConfiguration listener;
+        private final NetworkListenerConfiguration config;
         private final int port;
+        private final Map<String, SslContext> listenerSslContexts = new HashMap<>();
+        Channel channel;
 
-        public ListenerSniMapping(NetworkListenerConfiguration listener, int port) {
-            this.listener = listener;
+        public ListeningChannel(NetworkListenerConfiguration config, int port) {
+            this.config = config;
             this.port = port;
+        }
+
+        public Channel getChannel() {
+            return channel;
+        }
+
+        public void setChannel(Channel channel) {
+            this.channel = channel;
         }
 
         @Override
         public Future<SslContext> map(String sniHostname, Promise<SslContext> promise) {
             try {
-                String key = listener.getHost() + ":" + port + "+" + sniHostname;
+                String key = config.getHost() + ":" + port + "+" + sniHostname;
                 if (LOG.isLoggable(Level.FINER)) {
                     LOG.log(Level.FINER, "resolve SNI mapping " + sniHostname + ", key: " + key);
                 }
@@ -302,13 +311,13 @@ public class Listeners {
 
                     sslContext = sslContexts.computeIfAbsent(key, (k) -> {
                         try {
-                            SSLCertificateConfiguration choosen = chooseCertificate(sniHostname, listener.getDefaultCertificate());
+                            SSLCertificateConfiguration choosen = chooseCertificate(sniHostname, config.getDefaultCertificate());
                             if (choosen == null) {
                                 throw new ConfigurationNotValidException("cannot find a certificate for snihostname " + sniHostname
-                                        + ", with default cert for listener as '" + listener.getDefaultCertificate()
+                                        + ", with default cert for listener as '" + config.getDefaultCertificate()
                                         + "', available " + currentConfiguration.getCertificates().keySet());
                             }
-                            return bootSslContext(listener, choosen);
+                            return bootSslContext(config, choosen);
                         } catch (ConfigurationNotValidException ex) {
                             throw new RuntimeException(ex);
                         }
@@ -324,9 +333,13 @@ public class Listeners {
                     }
                 }
             } catch (ConfigurationNotValidException err) {
-                LOG.log(Level.SEVERE, "Error booting certificate for SNI hostname {0}, on listener {1}", new Object[]{sniHostname, listener});
+                LOG.log(Level.SEVERE, "Error booting certificate for SNI hostname {0}, on listener {1}", new Object[]{sniHostname, config});
                 return promise.setFailure(err);
             }
+        }
+
+        public void clear() {
+            this.listenerSslContexts.clear();
         }
 
     }
@@ -384,9 +397,9 @@ public class Listeners {
         List<HostPort> listenersToStop = new ArrayList<>();
         List<HostPort> listenersToStart = new ArrayList<>();
         List<HostPort> listenersToRestart = new ArrayList<>();
-        for (HostPort key : listeningChannels.keySet()) {
+        for (Entry<HostPort, ListeningChannel> channel : listeningChannels.entrySet()) {
+            HostPort key = channel.getKey();
             NetworkListenerConfiguration actualListenerConfig = currentConfiguration.getListener(key);
-
             NetworkListenerConfiguration newConfigurationForListener = newConfiguration.getListener(key);
             if (newConfigurationForListener == null) {
                 LOG.log(Level.INFO, "listener: {0} is to be shut down", key);
@@ -395,6 +408,8 @@ public class Listeners {
                 LOG.log(Level.INFO, "listener: {0} is to be restarted", key);
                 listenersToRestart.add(key);
             }
+
+            channel.getValue().clear();
         }
         for (NetworkListenerConfiguration config : newConfiguration.getListeners()) {
             HostPort key = config.getKey();
@@ -433,9 +448,9 @@ public class Listeners {
     }
 
     private void stopListener(HostPort hostport) throws InterruptedException {
-        Channel channel = listeningChannels.remove(hostport);
+        ListeningChannel channel = listeningChannels.remove(hostport);
         if (channel != null) {
-            channel.close().sync();
+            channel.channel.close().sync();
         }
         listenersHandlers.remove(hostport);
     }
