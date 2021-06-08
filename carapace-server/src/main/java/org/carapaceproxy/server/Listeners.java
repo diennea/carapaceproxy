@@ -127,7 +127,7 @@ public class Listeners {
             byte[] keystoreContent = parent.getDynamicCertificatesManager().getCertificateForDomain(certificate.getId());
             KeyStore keystore;
             if (keystoreContent != null) {
-                LOG.log(Level.INFO, "start SSL with dynamic certificate id " + certificate.getId() + ", on listener " + listener.getHost() + ":" + port + " OCSP " + listener.isOcsp());
+                LOG.log(Level.FINE, "start SSL with dynamic certificate id {0}, on listener {1}:{2} OCSP {3}", new Object[]{certificate.getId(), listener.getHost(), port, listener.isOcsp()});
                 keystore = loadKeyStoreData(keystoreContent, certificate.getPassword());
             } else {
                 if (certificate.isDynamic()) { // fallback to default certificate
@@ -136,7 +136,7 @@ public class Listeners {
                         throw new ConfigurationNotValidException("Unable to boot SSL context for listener " + listener.getHost() + ": no default certificate setup.");
                     }
                 }
-                LOG.log(Level.INFO, "start SSL with certificate id {0}, on listener {1}:{2} file={3} OCSP {4}",
+                LOG.log(Level.FINE, "start SSL with certificate id {0}, on listener {1}:{2} file={3} OCSP {4}",
                         new Object[]{certificate.getId(), listener.getHost(), port, certificate.getFile(), listener.isOcsp()}
                 );
                 keystore = loadKeyStoreFromFile(certificate.getFile(), certificate.getPassword(), basePath);
@@ -144,7 +144,7 @@ public class Listeners {
             KeyManagerFactory keyFactory = new OpenSslCachingX509KeyManagerFactory(KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()));
             keyFactory.init(keystore, certificate.getPassword().toCharArray());
 
-            LOG.log(Level.INFO, "loading trustore from {0}", listener.getSslTrustoreFile());
+            LOG.log(Level.FINE, "loading trustore from {0}", listener.getSslTrustoreFile());
             TrustManagerFactory trustManagerFactory = null;
             KeyStore truststore = loadKeyStoreFromFile(listener.getSslTrustoreFile(), listener.getSslTrustorePassword(), basePath);
             if (truststore != null) {
@@ -154,7 +154,7 @@ public class Listeners {
 
             List<String> ciphers = null;
             if (sslCiphers != null && !sslCiphers.isEmpty()) {
-                LOG.log(Level.INFO, "required sslCiphers " + sslCiphers);
+                LOG.log(Level.FINE, "required sslCiphers {0}", sslCiphers);
                 ciphers = Arrays.asList(sslCiphers.split(","));
             }
             SslContext sslContext = SslContextBuilder
@@ -301,7 +301,7 @@ public class Listeners {
             try {
                 String key = config.getHost() + ":" + port + "+" + sniHostname;
                 if (LOG.isLoggable(Level.FINER)) {
-                    LOG.log(Level.FINER, "resolve SNI mapping " + sniHostname + ", key: " + key);
+                    LOG.log(Level.FINER, "resolve SNI mapping {0}, key: {1}", new Object[]{sniHostname, key});
                 }
                 try {
                     SslContext sslContext = listenerSslContexts.get(key);
