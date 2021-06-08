@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.carapaceproxy</groupId>
     <artifactId>carapace-parent</artifactId>
-    <version>1.6.4-SNAPSHOT</version>
+    <version>1.6.4</version>
     <packaging>pom</packaging>
     <modules>
         <module>carapace-server</module>
@@ -22,7 +22,7 @@
         <url>https://github.com/diennea/carapaceproxy.git</url>
         <connection>scm:git:https://github.com/diennea/carapaceproxy.git</connection>
         <developerConnection>scm:git:https://github.com/diennea/carapaceproxy.git</developerConnection>
-        <tag>release/1.6</tag>
+        <tag>v1.6.4</tag>
     </scm>
     <developers>
         <developer>
