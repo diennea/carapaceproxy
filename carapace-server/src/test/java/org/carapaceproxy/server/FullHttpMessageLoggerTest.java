@@ -67,6 +67,7 @@ public class FullHttpMessageLoggerTest {
             server.getCurrentConfiguration().setAccessLogPath(tmpDir.getRoot().getAbsolutePath() + "/access.log");
             server.getCurrentConfiguration().setAccessLogAdvancedEnabled(true);
             server.getCurrentConfiguration().setAccessLogTimestampFormat("dd-MM-yyyy HH:mm:ss.SSS");
+            server.getCurrentConfiguration().setMaxConnectionsPerEndpoint(1);
             server.getFullHttpMessageLogger().reloadConfiguration(server.getCurrentConfiguration());
             server.start();
             int port = server.getLocalPort();

@@ -248,7 +248,7 @@ public final class RawHttpClient implements AutoCloseable {
         }
     }
 
-    private static HttpResponse consumeHttpResponseInput(final InputStream in) throws IOException {
+    public static HttpResponse consumeHttpResponseInput(final InputStream in) throws IOException {
 
         HttpResponse result = new HttpResponse();
 
