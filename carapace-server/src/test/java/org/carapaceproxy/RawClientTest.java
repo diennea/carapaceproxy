@@ -844,10 +844,15 @@ public class RawClientTest {
                             oo.flush();
 
                             String resp = consumeHttpResponseInput(socket.getInputStream()).getBodyString();
-                            System.out.println("RESP trigger: " + resp);
+                            System.out.println("RESP client1: " + resp);
                             if (!resp.contains("HTTP/1.1 100 Continue")) {
                                 failed.set(true);
                             }
+//                            resp = consumeHttpResponseInput(socket.getInputStream()).getBodyString();
+//                            System.out.println("RESP2 client1: " + resp);
+//                            if (!resp.contains("HTTP/1.1 100 Continue")) {
+//                                failed.set(true);
+//                            }
                         } catch (Exception e) {
                             System.out.println("EXCEPTION: " + e);
                             failed.set(true);
@@ -860,8 +865,8 @@ public class RawClientTest {
                                 responseEnabled.set(true);
                                 RawHttpClient.HttpResponse res = client2.get("/index.html");
                                 String resp = res.getBodyString();
-                                System.out.println("RESP NOtrigger: " + resp);
-                                if (!resp.contains("resp=continue")) { // this resp should been received by client1 not client2
+                                System.out.println("RESP client2: " + resp);
+                                if (!resp.contains("resp=client2")) {
                                     failed.set(true);
                                 }
                             }
@@ -948,7 +953,7 @@ public class RawClientTest {
                                         boolean keepAlive = HttpUtil.isKeepAlive(request);
                                         DefaultFullHttpResponse response = new DefaultFullHttpResponse(
                                                 HTTP_1_1, HttpResponseStatus.OK,
-                                                Unpooled.copiedBuffer("resp=" + request.headers().get("trigger"), Charset.forName("utf-8"))
+                                                Unpooled.copiedBuffer("resp=" + (request.headers().contains("trigger") ? "client1" : "client2"), Charset.forName("utf-8"))
                                         );
                                         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8");
 

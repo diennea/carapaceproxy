@@ -105,6 +105,7 @@ public class RequestHandler implements MatchingContext {
     // this is useful only for debugging heap dumps in production
     private volatile RequestHandlerState clientState = RequestHandlerState.IDLE;
     private boolean closeAfterResponse = false;
+    private boolean continueRequest = false;
 
     private static enum RequestHandlerState {
         IDLE,
@@ -618,7 +619,10 @@ public class RequestHandler implements MatchingContext {
         if (backendStartTs == 0) {
             backendStartTs = System.currentTimeMillis();
         }
-        if (cacheReceiver != null) {
+        if (msg instanceof DefaultHttpResponse && ((DefaultHttpResponse) msg).status().code() == HttpResponseStatus.CONTINUE.code()) {
+            continueRequest = true;
+        }
+        if (cacheReceiver != null && !continueRequest) {
             // msg object won't be cached as-is but the cache will retain a clone of it
             cacheReceiver.receivedFromRemote(msg);
             if (msg instanceof HttpResponse) {
@@ -637,9 +641,11 @@ public class RequestHandler implements MatchingContext {
 
         // endpoint finished his work, we can release the connection
         if (msg instanceof LastHttpContent) {
-            releaseConnectionToEndpoint(closeAfterResponse /*
-                     * force close
-                     */, connection);
+            if (continueRequest) {
+                continueRequest = false;
+            } else {
+                releaseConnectionToEndpoint(closeAfterResponse, connection);
+            }
         }
 
         addCustomResponseHeaders(msg, action.customHeaders);

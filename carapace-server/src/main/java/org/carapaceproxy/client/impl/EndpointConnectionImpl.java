@@ -457,7 +457,8 @@ public class EndpointConnectionImpl implements EndpointConnection {
         public void channelRead0(ChannelHandlerContext ctx, HttpObject msg) {
             RequestHandler _clientSidePeerHandler = clientSidePeerHandler.get();
             if (_clientSidePeerHandler == null || !requestRunning) {
-                LOG.log(Level.INFO, "swallow content {0}: {1}, disconnected client. connection: {2}", new Object[]{msg.getClass(), msg, EndpointConnectionImpl.this});
+                final String cause = _clientSidePeerHandler == null ? "no more client connected" : "request stopped";
+                LOG.log(Level.INFO, id + ": swallow content {0}: {1}, disconnected client due to {2}. connection: {3}", new Object[]{msg.getClass(), msg, cause, EndpointConnectionImpl.this});
                 return;
             }
             if (msg instanceof HttpContent) {
@@ -479,7 +480,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
         public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
             RequestHandler _clientSidePeerHandler = clientSidePeerHandler.get();
             if (_clientSidePeerHandler != null && requestRunning) {
-                logConnectionInfo("channelReadComplete, open: " + ctx.channel().isOpen(), "");
+                logConnectionInfo("channelReadComplete, open: " + ctx.channel().isOpen());
                 _clientSidePeerHandler.readCompletedFromRemote();
             }
         }
