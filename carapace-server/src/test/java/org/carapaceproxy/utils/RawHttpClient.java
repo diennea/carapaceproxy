@@ -45,7 +45,7 @@ import javax.net.ssl.SSLSocketFactory;
  */
 public final class RawHttpClient implements AutoCloseable {
 
-    private static boolean DEBUG = true;
+    private static boolean DEBUG = false;
 
     private final Socket socket;
     private final String host;

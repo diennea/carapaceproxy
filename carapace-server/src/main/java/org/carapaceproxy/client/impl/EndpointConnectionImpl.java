@@ -539,7 +539,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
     }
 
     private void logConnectionInfo(String desc, Object info) {
-        if (info != null && info instanceof HttpContent) {
+        if (CarapaceLogger.isLoggingDebugEnabled() && info != null && info instanceof HttpContent) {
             HttpContent content = (HttpContent) info;
             info = content.content().asReadOnly().readCharSequence(content.content().readableBytes(), Charset.forName("utf-8")).toString();
         }

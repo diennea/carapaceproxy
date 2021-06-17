@@ -62,13 +62,11 @@ import io.netty.handler.codec.http.HttpResponseEncoder;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.LastHttpContent;
-import java.io.File;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -795,7 +793,6 @@ public class RawClientTest {
         try (DummyServer server = new DummyServer("localhost", 8086, responseEnabled)) {
 
             TestEndpointMapper mapper = new TestEndpointMapper("localhost", 8086);
-            EndpointKey key = new EndpointKey("localhost", 8086);
 
             ExecutorService ex = Executors.newFixedThreadPool(2);
             List<Future> futures = new ArrayList<>();
@@ -805,12 +802,8 @@ public class RawClientTest {
             ConnectionsManagerStats stats;
             try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
                 proxy.getCurrentConfiguration().setMaxConnectionsPerEndpoint(1);
-                proxy.getCurrentConfiguration().setAccessLogPath(tmpDir.getRoot().getAbsolutePath() + "/access.log");
-                proxy.getCurrentConfiguration().setAccessLogAdvancedEnabled(true);
                 proxy.getCurrentConfiguration().setRequestsHeaderDebugEnabled(true);
-                proxy.getCurrentConfiguration().setAccessLogTimestampFormat("dd-MM-yyyy HH:mm:ss.SSS");
                 proxy.getConnectionsManager().applyNewConfiguration(proxy.getCurrentConfiguration());
-                proxy.getFullHttpMessageLogger().reloadConfiguration(proxy.getCurrentConfiguration());
                 proxy.start();
                 stats = proxy.getConnectionsManager().getStats();
                 int port = proxy.getLocalPort();
@@ -820,6 +813,7 @@ public class RawClientTest {
                 proxy.getConnectionsManager().applyNewConfiguration(currentConfiguration);
 
                 AtomicBoolean failed = new AtomicBoolean();
+                AtomicBoolean c2go = new AtomicBoolean();
                 try {
                     futures.add(ex.submit(() -> {
                         try (RawHttpClient client1 = new RawHttpClient("localhost", port)) {
@@ -829,7 +823,6 @@ public class RawClientTest {
                                     + "\r\nConnection: keep-alive"
                                     + "\r\nContent-Type: text/plain"
                                     + "\r\n" + HttpHeaderNames.EXPECT + ": " + HttpHeaderValues.CONTINUE
-                                    + "\r\ntrigger: continue"
                                     + "\r\nContent-Length: " + body.length()
                                     + "\r\n\r\n";
 
@@ -838,21 +831,17 @@ public class RawClientTest {
 
                             oo.write(request.getBytes(StandardCharsets.UTF_8));
                             oo.flush();
-                            Thread.sleep(1_000);
+                            Thread.sleep(5_000);
+                            c2go.set(true);
 
                             oo.write(body.getBytes(StandardCharsets.UTF_8));
                             oo.flush();
 
                             String resp = consumeHttpResponseInput(socket.getInputStream()).getBodyString();
-                            System.out.println("RESP client1: " + resp);
-                            if (!resp.contains("HTTP/1.1 100 Continue")) {
+                            System.out.println("### RESP client1: " + resp);
+                            if (!resp.contains("resp=client1")) {
                                 failed.set(true);
                             }
-//                            resp = consumeHttpResponseInput(socket.getInputStream()).getBodyString();
-//                            System.out.println("RESP2 client1: " + resp);
-//                            if (!resp.contains("HTTP/1.1 100 Continue")) {
-//                                failed.set(true);
-//                            }
                         } catch (Exception e) {
                             System.out.println("EXCEPTION: " + e);
                             failed.set(true);
@@ -860,12 +849,14 @@ public class RawClientTest {
                     }));
                     futures.add(ex.submit(() -> {
                         try {
-                            Thread.sleep(10_000);
+                            while (!c2go.get()) {
+                                Thread.sleep(1_000);
+                            }
                             try (RawHttpClient client2 = new RawHttpClient("localhost", port)) {
                                 responseEnabled.set(true);
                                 RawHttpClient.HttpResponse res = client2.get("/index.html");
                                 String resp = res.getBodyString();
-                                System.out.println("RESP client2: " + resp);
+                                System.out.println("### RESP client2: " + resp);
                                 if (!resp.contains("resp=client2")) {
                                     failed.set(true);
                                 }
@@ -888,10 +879,6 @@ public class RawClientTest {
                     ex.awaitTermination(1, TimeUnit.MINUTES);
                 }
                 assertThat(failed.get(), is(false));
-
-                File[] f = new File(tmpDir.getRoot().getAbsolutePath()).listFiles((dir, name) -> name.startsWith("access") && name.endsWith(".full"));
-                assertTrue(f.length == 1);
-                Files.readAllLines(f[0].toPath()).forEach(l -> System.out.println(l));
             }
             TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
         }
@@ -922,15 +909,18 @@ public class RawClientTest {
                             channel.pipeline().addLast(new HttpRequestDecoder());
                             channel.pipeline().addLast(new HttpResponseEncoder());
                             channel.pipeline().addLast(new SimpleChannelInboundHandler<Object>() {
-                                private HttpRequest request;
+
+                                private boolean keepAlive;
+                                private boolean continueRequest;
 
                                 @Override
                                 protected void channelRead0(ChannelHandlerContext ctx, Object msg) {
                                     if (msg instanceof HttpRequest) {
-                                        request = (HttpRequest) msg;
+                                        HttpRequest request = (HttpRequest) msg;
                                         System.out.println("[DummyServer] HttpRequest: " + request);
-
-                                        if (request.headers().get("trigger") != null) {
+                                        keepAlive = HttpUtil.isKeepAlive(request);
+                                        continueRequest = HttpUtil.is100ContinueExpected(request);
+                                        if (continueRequest) {
                                             DefaultFullHttpResponse response = new DefaultFullHttpResponse(
                                                     HTTP_1_1, HttpResponseStatus.CONTINUE,
                                                     Unpooled.EMPTY_BUFFER
@@ -950,10 +940,9 @@ public class RawClientTest {
                                         String trailer = lastContent.content().asReadOnly().readCharSequence(lastContent.content().readableBytes(), Charset.forName("utf-8")).toString();
                                         System.out.println("[DummyServer] LastHttpContent: " + trailer);
 
-                                        boolean keepAlive = HttpUtil.isKeepAlive(request);
                                         DefaultFullHttpResponse response = new DefaultFullHttpResponse(
                                                 HTTP_1_1, HttpResponseStatus.OK,
-                                                Unpooled.copiedBuffer("resp=" + (request.headers().contains("trigger") ? "client1" : "client2"), Charset.forName("utf-8"))
+                                                Unpooled.copiedBuffer("resp=" + (continueRequest ? "client1" : "client2"), Charset.forName("utf-8"))
                                         );
                                         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8");
 
