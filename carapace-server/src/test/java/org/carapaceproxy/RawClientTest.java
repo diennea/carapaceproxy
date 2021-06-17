@@ -20,6 +20,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 
+import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
+import static org.carapaceproxy.utils.RawHttpClient.consumeHttpResponseInput;
 import static org.hamcrest.CoreMatchers.containsString;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.IOException;
@@ -35,10 +37,45 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.github.tomakehurst.wiremock.client.WireMock;
+import io.netty.bootstrap.ServerBootstrap;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.channel.epoll.Epoll;
+import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.epoll.EpollServerSocketChannel;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.HttpContent;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaderValues;
+import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpRequestDecoder;
+import io.netty.handler.codec.http.HttpResponseEncoder;
+import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpUtil;
+import io.netty.handler.codec.http.LastHttpContent;
+import java.io.OutputStream;
 import java.io.PrintWriter;
+import java.net.Socket;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.servlet.ServletException;
@@ -748,6 +785,209 @@ public class RawClientTest {
 
         }
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+    }
+
+    @Test
+    public void testServerRequestContinue() throws Exception {
+        AtomicBoolean responseEnabled = new AtomicBoolean();
+        try (DummyServer server = new DummyServer("localhost", 8086, responseEnabled)) {
+
+            TestEndpointMapper mapper = new TestEndpointMapper("localhost", 8086);
+
+            ExecutorService ex = Executors.newFixedThreadPool(2);
+            List<Future> futures = new ArrayList<>();
+
+            CarapaceLogger.setLoggingDebugEnabled(true);
+
+            ConnectionsManagerStats stats;
+            try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+                proxy.getCurrentConfiguration().setMaxConnectionsPerEndpoint(1);
+                proxy.getCurrentConfiguration().setRequestsHeaderDebugEnabled(true);
+                proxy.getConnectionsManager().applyNewConfiguration(proxy.getCurrentConfiguration());
+                proxy.start();
+                stats = proxy.getConnectionsManager().getStats();
+                int port = proxy.getLocalPort();
+                assertTrue(port > 0);
+
+                RuntimeServerConfiguration currentConfiguration = proxy.getCurrentConfiguration();
+                proxy.getConnectionsManager().applyNewConfiguration(currentConfiguration);
+
+                AtomicBoolean failed = new AtomicBoolean();
+                AtomicBoolean c2go = new AtomicBoolean();
+                try {
+                    futures.add(ex.submit(() -> {
+                        try (RawHttpClient client1 = new RawHttpClient("localhost", port)) {
+                            String body = "filler-content";
+                            String request = "POST /index.html HTTP/1.1"
+                                    + "\r\nHost: localhost"
+                                    + "\r\nConnection: keep-alive"
+                                    + "\r\nContent-Type: text/plain"
+                                    + "\r\n" + HttpHeaderNames.EXPECT + ": " + HttpHeaderValues.CONTINUE
+                                    + "\r\nContent-Length: " + body.length()
+                                    + "\r\n\r\n";
+
+                            Socket socket = client1.getSocket();
+                            OutputStream oo = socket.getOutputStream();
+
+                            oo.write(request.getBytes(StandardCharsets.UTF_8));
+                            oo.flush();
+                            Thread.sleep(5_000);
+                            c2go.set(true);
+
+                            oo.write(body.getBytes(StandardCharsets.UTF_8));
+                            oo.flush();
+
+                            String resp = consumeHttpResponseInput(socket.getInputStream()).getBodyString();
+                            System.out.println("### RESP client1: " + resp);
+                            if (!resp.contains("resp=client1")) {
+                                failed.set(true);
+                            }
+                        } catch (Exception e) {
+                            System.out.println("EXCEPTION: " + e);
+                            failed.set(true);
+                        }
+                    }));
+                    futures.add(ex.submit(() -> {
+                        try {
+                            while (!c2go.get()) {
+                                Thread.sleep(1_000);
+                            }
+                            try (RawHttpClient client2 = new RawHttpClient("localhost", port)) {
+                                responseEnabled.set(true);
+                                RawHttpClient.HttpResponse res = client2.get("/index.html");
+                                String resp = res.getBodyString();
+                                System.out.println("### RESP client2: " + resp);
+                                if (!resp.contains("resp=client2")) {
+                                    failed.set(true);
+                                }
+                            }
+                        } catch (Exception e) {
+                            System.out.println("EXCEPTION: " + e);
+                            failed.set(true);
+                        }
+                    }));
+                } finally {
+                    for (Future future : futures) {
+                        try {
+                            future.get();
+                        } catch (InterruptedException | ExecutionException e) {
+                            System.out.println("ERR" + e);
+                            System.out.println(e);
+                        }
+                    }
+                    ex.shutdown();
+                    ex.awaitTermination(1, TimeUnit.MINUTES);
+                }
+                assertThat(failed.get(), is(false));
+            }
+            TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+        }
+    }
+
+    private static class DummyServer implements AutoCloseable {
+
+        private final EventLoopGroup bossGroup;
+        private final EventLoopGroup workerGroup;
+        private final Channel channel;
+        private final AtomicBoolean responseEnabled;
+
+        public DummyServer(String host, int port, AtomicBoolean responseEnabled) throws InterruptedException {
+            this.responseEnabled = responseEnabled == null ? new AtomicBoolean(true) : responseEnabled;
+            if (Epoll.isAvailable()) {
+                bossGroup = new EpollEventLoopGroup();
+                workerGroup = new EpollEventLoopGroup();
+            } else { // For windows devs
+                bossGroup = new NioEventLoopGroup();
+                workerGroup = new NioEventLoopGroup();
+            }
+            ServerBootstrap b = new ServerBootstrap();
+            b.group(bossGroup, workerGroup)
+                    .channel(Epoll.isAvailable() ? EpollServerSocketChannel.class : NioServerSocketChannel.class)
+                    .childHandler(new ChannelInitializer<SocketChannel>() {
+                        @Override
+                        public void initChannel(SocketChannel channel) throws Exception {
+                            channel.pipeline().addLast(new HttpRequestDecoder());
+                            channel.pipeline().addLast(new HttpResponseEncoder());
+                            channel.pipeline().addLast(new SimpleChannelInboundHandler<Object>() {
+
+                                private boolean keepAlive;
+                                private boolean continueRequest;
+
+                                @Override
+                                protected void channelRead0(ChannelHandlerContext ctx, Object msg) {
+                                    if (msg instanceof HttpRequest) {
+                                        HttpRequest request = (HttpRequest) msg;
+                                        System.out.println("[DummyServer] HttpRequest: " + request);
+                                        keepAlive = HttpUtil.isKeepAlive(request);
+                                        continueRequest = HttpUtil.is100ContinueExpected(request);
+                                        if (continueRequest) {
+                                            DefaultFullHttpResponse response = new DefaultFullHttpResponse(
+                                                    HTTP_1_1, HttpResponseStatus.CONTINUE,
+                                                    Unpooled.EMPTY_BUFFER
+                                            );
+                                            ctx.write(response);
+                                        }
+                                    } else if (msg instanceof LastHttpContent) {
+                                        try {
+                                            while (!responseEnabled.get()) {
+                                                Thread.sleep(1_000);
+                                            }
+                                        } catch (Exception ex) {
+
+                                        }
+
+                                        LastHttpContent lastContent = (LastHttpContent) msg;
+                                        String trailer = lastContent.content().asReadOnly().readCharSequence(lastContent.content().readableBytes(), Charset.forName("utf-8")).toString();
+                                        System.out.println("[DummyServer] LastHttpContent: " + trailer);
+
+                                        DefaultFullHttpResponse response = new DefaultFullHttpResponse(
+                                                HTTP_1_1, HttpResponseStatus.OK,
+                                                Unpooled.copiedBuffer("resp=" + (continueRequest ? "client1" : "client2"), Charset.forName("utf-8"))
+                                        );
+                                        response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8");
+
+                                        if (keepAlive) {
+                                            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+                                            response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
+                                        }
+
+                                        ctx.write(response);
+                                        if (!keepAlive) {
+                                            ctx.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+                                        }
+                                    } else if (msg instanceof HttpContent) {
+                                        HttpContent content = (HttpContent) msg;
+                                        String httpContent = content.content().asReadOnly().readCharSequence(content.content().readableBytes(), Charset.forName("utf-8")).toString();
+                                        System.out.println("[DummyServer] HttpContent: " + httpContent);
+                                    }
+                                }
+
+                                @Override
+                                public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
+                                    ctx.flush();
+                                }
+
+                            });
+                        }
+                    })
+                    .option(ChannelOption.SO_BACKLOG, 128)
+                    .childOption(ChannelOption.SO_KEEPALIVE, true);
+
+            channel = b.bind(host, port).sync().channel();
+        }
+
+        @Override
+        public void close() throws Exception {
+            if (channel != null) {
+                channel.close().sync();
+            }
+            if (workerGroup != null) {
+                workerGroup.shutdownGracefully();
+            }
+            if (bossGroup != null) {
+                bossGroup.shutdownGracefully();
+            }
+        }
     }
 
 }

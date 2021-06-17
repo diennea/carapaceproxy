@@ -45,6 +45,7 @@ import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import io.prometheus.client.Summary;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -210,7 +211,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     @Override
     public void sendRequest(HttpRequest request, RequestHandler clientSidePeerHandler) {
-        logConnectionInfo("sendRequest");
+        logConnectionInfo("sendRequest", request);
 
         if (assertNotInEndpointEventLoop(clientSidePeerHandler)) {
             return;
@@ -280,7 +281,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     @Override
     public void sendChunk(HttpContent msg, RequestHandler clientSidePeerHandler) {
-        logConnectionInfo("sendChunk");
+        logConnectionInfo("sendChunk", msg);
         if (assertNotInEndpointEventLoop(clientSidePeerHandler)) {
             return;
         }
@@ -315,7 +316,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
 
     @Override
     public void sendLastHttpContent(LastHttpContent msg, RequestHandler clientSidePeerHandler) {
-        logConnectionInfo("sendLastHttpContent");
+        logConnectionInfo("sendLastHttpContent", msg);
         if (assertNotInEndpointEventLoop(clientSidePeerHandler)) {
             return;
         }
@@ -456,15 +457,16 @@ public class EndpointConnectionImpl implements EndpointConnection {
         public void channelRead0(ChannelHandlerContext ctx, HttpObject msg) {
             RequestHandler _clientSidePeerHandler = clientSidePeerHandler.get();
             if (_clientSidePeerHandler == null || !requestRunning) {
-                LOG.log(Level.INFO, "swallow content {0}: {1}, disconnected client. connection: {2}", new Object[]{msg.getClass(), msg, EndpointConnectionImpl.this});
+                final String cause = _clientSidePeerHandler == null ? "no more client connected" : "request stopped";
+                LOG.log(Level.INFO, id + ": swallow content {0}: {1}, disconnected client due to {2}. connection: {3}", new Object[]{msg.getClass(), msg, cause, EndpointConnectionImpl.this});
                 return;
             }
             if (msg instanceof HttpContent) {
-                logConnectionInfo("receivedFromRemote HttpContent");
+                logConnectionInfo("receivedFromRemote HttpContent", msg);
                 HttpContent f = (HttpContent) msg;
                 _clientSidePeerHandler.receivedFromRemote(f.copy(), EndpointConnectionImpl.this);
             } else if (msg instanceof DefaultHttpResponse) {
-                logConnectionInfo("receivedFromRemote DefaultHttpResponse");
+                logConnectionInfo("receivedFromRemote DefaultHttpResponse", msg);
                 DefaultHttpResponse f = (DefaultHttpResponse) msg;
                 // DefaultHttpResponse has no "copy" method
                 _clientSidePeerHandler.receivedFromRemote(new DefaultHttpResponse(f.protocolVersion(), f.status(), f.headers()), EndpointConnectionImpl.this);
@@ -480,8 +482,6 @@ public class EndpointConnectionImpl implements EndpointConnection {
             if (_clientSidePeerHandler != null && requestRunning) {
                 logConnectionInfo("channelReadComplete, open: " + ctx.channel().isOpen());
                 _clientSidePeerHandler.readCompletedFromRemote();
-                // server said no more data will be sent to this channel, we must close it before netty does
-//                release(true, clientSidePeerHandler, null);
             }
         }
 
@@ -534,8 +534,16 @@ public class EndpointConnectionImpl implements EndpointConnection {
         this.requestsHeaderDebugEnabled = requestsHeaderDebugEnabled;
     }
 
-    private void logConnectionInfo(String s) {
-        CarapaceLogger.debug("{0}: {1}", s, EndpointConnectionImpl.this);
+    private void logConnectionInfo(String desc) {
+        logConnectionInfo(desc, "");
+    }
+
+    private void logConnectionInfo(String desc, Object info) {
+        if (CarapaceLogger.isLoggingDebugEnabled() && info != null && info instanceof HttpContent) {
+            HttpContent content = (HttpContent) info;
+            info = content.content().asReadOnly().readCharSequence(content.content().readableBytes(), Charset.forName("utf-8")).toString();
+        }
+        CarapaceLogger.debug("{0}: {1} \nEndpointConnectionImpl={2}", desc, info, EndpointConnectionImpl.this);
     }
 
 }
