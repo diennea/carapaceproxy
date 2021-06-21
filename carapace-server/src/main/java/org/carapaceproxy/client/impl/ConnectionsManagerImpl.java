@@ -243,6 +243,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         config.setTestWhileIdle(true);
         config.setBlockWhenExhausted(true);
         config.setJmxEnabled(false);
+        config.setLifo(false); // connections borrowed as FIFO
         group = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
         eventLoopForOutboundConnections = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
         connections = new GenericKeyedObjectPool<>(new ConnectionsFactory(), config);
