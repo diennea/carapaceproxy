@@ -801,7 +801,7 @@ public class RawClientTest {
 
             ConnectionsManagerStats stats;
             try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
-                proxy.getCurrentConfiguration().setMaxConnectionsPerEndpoint(1);
+                proxy.getCurrentConfiguration().setMaxConnectionsPerEndpoint(2);
                 proxy.getCurrentConfiguration().setRequestsHeaderDebugEnabled(true);
                 proxy.getConnectionsManager().applyNewConfiguration(proxy.getCurrentConfiguration());
                 proxy.start();

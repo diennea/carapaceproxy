@@ -183,7 +183,7 @@ public class ConnectionPoolTest {
 
             // tewaking configuration
             server.getCurrentConfiguration().setMaxConnectionsPerEndpoint(1);
-            server.getCurrentConfiguration().setBorrowTimeout(1000);
+            server.getCurrentConfiguration().setBorrowTimeout(30_000);
             server.getConnectionsManager().applyNewConfiguration(server.getCurrentConfiguration());
             server.start();
             stats = server.getConnectionsManager().getStats();
@@ -194,16 +194,13 @@ public class ConnectionPoolTest {
             try {
                 List<Future<?>> all = new ArrayList<>();
                 for (int i = 0; i < 5; i++) {
-                    all.add(
-                            threadPool.submit(() -> {
-                                try {
-                                    assertEquals("ok", IOUtils.
-                                            toString(new URL("http://localhost:" + port + "/index.html").toURI(),
-                                                    "utf-8"));
-                                } catch (Exception err) {
-                                    throw new RuntimeException(err);
-                                }
-                            }));
+                    all.add(threadPool.submit(() -> {
+                        try {
+                            assertEquals("ok", IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8"));
+                        } catch (Exception err) {
+                            throw new RuntimeException(err);
+                        }
+                    }));
 
                 }
                 for (Future<?> handle : all) {

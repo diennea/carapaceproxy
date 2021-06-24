@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.carapaceproxy.EndpointMapper;
+import org.carapaceproxy.client.EndpointConnection;
 import org.carapaceproxy.client.impl.EndpointConnectionImpl;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.cache.ContentsCache;
@@ -80,6 +81,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     private String sslProtocol;
     private String cipherSuite;
     final SocketAddress serverAddress;
+    private EndpointConnection connectionToEndpoint;
 
     public ClientConnectionHandler(
             EndpointMapper mapper,
@@ -113,6 +115,10 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         this.secure = secure;
 
         this.totalRequests = TOTAL_REQUESTS_COUNTER_PER_LISTENER.labels(this.listenerHost + "_" + this.listenerPort);
+    }
+
+    public long getId() {
+        return id;
     }
 
     public SocketAddress getClientAddress() {
@@ -261,12 +267,21 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         requestRunning = false;
     }
 
+    public AtomicReference<RequestHandler> getPendingRequest() {
+        return pendingRequest;
+    }
+
+    public EndpointConnection getConnectionToEndpoint() {
+        return connectionToEndpoint;
+    }
+
+    public void setConnectionToEndpoint(EndpointConnection connectionToEndpoint) {
+        this.connectionToEndpoint = connectionToEndpoint;
+    }
+
     @Override
     public String toString() {
         return "ClientConnectionHandler{chid=" + id + ",ka=" + keepAlive + '}';
     }
 
-    public AtomicReference<RequestHandler> getPendingRequest() {
-        return pendingRequest;
-    }
 }
