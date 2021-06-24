@@ -870,4 +870,9 @@ public class RequestHandler implements MatchingContext {
     public boolean isSecure() {
         return connectionToClient.isSecure();
     }
+
+    public void setCloseAfterResponse(boolean closeAfterResponse) {
+        this.closeAfterResponse = closeAfterResponse;
+    }
+
 }

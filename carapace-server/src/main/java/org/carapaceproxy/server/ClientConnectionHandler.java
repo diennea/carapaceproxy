@@ -151,7 +151,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             IdleStateEvent e = (IdleStateEvent) evt;
             if (e.state() == IdleState.ALL_IDLE) {
                 CarapaceLogger.debug("Idle connection detected for client {0}. Channel closed.", clientAddress);
-                ctx.close();
+                forceClose(ctx);
             }
         }
     }
@@ -166,7 +166,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
                 if (LOG.isLoggable(Level.FINE)) {
                     LOG.log(Level.FINE, "{0} refuseOtherRequests", this);
                 }
-                ctx.close();
+                forceClose(ctx);
                 return;
             }
             HttpRequest request = (HttpRequest) msg;
@@ -192,7 +192,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             } else {
                 LOG.log(Level.INFO, "{0} swallow {1}, no more pending requests", new Object[]{this, msg});
                 refuseOtherRequests = true;
-                ctx.close();
+                forceClose(ctx);
             }
         } else if (msg instanceof HttpContent) {
             if (requestRunning) {
@@ -202,7 +202,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             } else {
                 LOG.log(Level.INFO, "{0} swallow {1}, no more pending requests", new Object[]{this, msg});
                 refuseOtherRequests = true;
-                ctx.close();
+                forceClose(ctx);
             }
         }
 
@@ -282,6 +282,14 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     @Override
     public String toString() {
         return "ClientConnectionHandler{chid=" + id + ",ka=" + keepAlive + '}';
+    }
+
+    private void forceClose(ChannelHandlerContext ctx) {
+        RequestHandler request = pendingRequest.get();
+        if (request != null) {
+            request.setCloseAfterResponse(true);
+        }
+        ctx.close();
     }
 
 }
