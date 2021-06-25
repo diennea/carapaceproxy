@@ -81,7 +81,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     private String sslProtocol;
     private String cipherSuite;
     final SocketAddress serverAddress;
-    private EndpointConnection connectionToEndpoint;
+    private final AtomicReference<EndpointConnection> connectionToEndpoint = new AtomicReference<>();
 
     public ClientConnectionHandler(
             EndpointMapper mapper,
@@ -150,7 +150,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         if (evt instanceof IdleStateEvent) {
             IdleStateEvent e = (IdleStateEvent) evt;
             if (e.state() == IdleState.ALL_IDLE) {
-                CarapaceLogger.debug("Idle connection detected for client {0}. Channel closed.", clientAddress);
+                CarapaceLogger.debug("Idle connection detected for client {0} {1}. Closing channel.", id, clientAddress);
                 forceClose(ctx);
             }
         }
@@ -272,11 +272,15 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     }
 
     public EndpointConnection getConnectionToEndpoint() {
-        return connectionToEndpoint;
+        return connectionToEndpoint.get();
     }
 
     public void setConnectionToEndpoint(EndpointConnection connectionToEndpoint) {
-        this.connectionToEndpoint = connectionToEndpoint;
+        this.connectionToEndpoint.set(connectionToEndpoint);
+    }
+
+    public void resetConnectionToEndpoint() {
+        connectionToEndpoint.set(null);
     }
 
     @Override

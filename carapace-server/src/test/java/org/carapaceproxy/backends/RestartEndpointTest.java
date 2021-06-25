@@ -24,8 +24,6 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.MatcherAssert.assertThat;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -40,6 +38,7 @@ import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertEquals;
+import org.carapaceproxy.utils.CarapaceLogger;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -168,6 +167,8 @@ public class RestartEndpointTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
+        CarapaceLogger.setLoggingDebugEnabled(true);
+
         ConnectionsManagerStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
@@ -182,7 +183,7 @@ public class RestartEndpointTest {
                 System.out.println("*********************************************************");
                 // ensure that wiremock started again
                 IOUtils.toByteArray(new URL("http://localhost:" + wireMockRule.port() + "/index.html"));
-                assertThat(client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString(), containsString("An internal error occurred"));
+                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
             }
 
             stats = server.getConnectionsManager().getStats();

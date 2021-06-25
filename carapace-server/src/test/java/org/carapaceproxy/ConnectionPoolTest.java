@@ -102,9 +102,9 @@ public class ConnectionPoolTest {
                 assertEquals("ok", IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8"));
                 TestUtils.waitForCondition(TestUtils.NO_ACTIVE_CONNECTION(stats), 100);
                 System.out.println("STATS: " + epstats);
-                assertTrue(epstats.getTotalConnections().intValue() <= 2);
+                assertEquals(epstats.getTotalConnections().intValue(), 1);
                 assertEquals(0, epstats.getActiveConnections().intValue());
-                assertTrue(epstats.getOpenConnections().intValue() <= 2);
+                assertEquals(epstats.getOpenConnections().intValue(), 1);
                 assertEquals(i + 3, epstats.getTotalRequests().intValue());
             }
 

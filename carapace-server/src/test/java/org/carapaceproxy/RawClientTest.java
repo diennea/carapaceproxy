@@ -10,16 +10,16 @@ package org.carapaceproxy;
  * implied. See the License for the specific language governing permissions and limitations under the License.
  *
  */
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
 import org.carapaceproxy.server.HttpProxyServer;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
+
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 import static org.carapaceproxy.utils.RawHttpClient.consumeHttpResponseInput;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -801,7 +801,9 @@ public class RawClientTest {
 
             ConnectionsManagerStats stats;
             try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
-                proxy.getCurrentConfiguration().setMaxConnectionsPerEndpoint(2);
+                proxy.getCurrentConfiguration().setMaxConnectionsPerEndpoint(1);
+                proxy.getCurrentConfiguration().setClientsIdleTimeoutSeconds(300);
+                proxy.getCurrentConfiguration().setBorrowTimeout(300_000);
                 proxy.getCurrentConfiguration().setRequestsHeaderDebugEnabled(true);
                 proxy.getConnectionsManager().applyNewConfiguration(proxy.getCurrentConfiguration());
                 proxy.start();
@@ -1090,6 +1092,62 @@ public class RawClientTest {
                 ex.awaitTermination(1, TimeUnit.MINUTES);
             }
             assertThat(failed.get(), is(false));
+        }
+        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+    }
+
+    @Test
+    public void testClientConnectionReuseResetOnConfigurationReload() throws Exception {
+        stubFor(get(urlEqualTo("/index.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")
+                        .withHeader("Content-Length", "it <b>works</b> !!".getBytes(StandardCharsets.UTF_8).length + "")
+                ));
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+
+        CarapaceLogger.setLoggingDebugEnabled(true);
+
+        ConnectionsManagerStats stats;
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            server.start();
+            int port = server.getLocalPort();
+
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
+                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
+                TestUtils.waitForCondition(() -> {
+                    EndpointStats epstats = server.getConnectionsManager().getStats().getEndpointStats(key);
+                    System.out.println("getTotalConnections: " + epstats.getTotalConnections().intValue());
+                    System.out.println("getActiveConnections: " + epstats.getActiveConnections().intValue());
+                    System.out.println("getOpenConnections: " + epstats.getOpenConnections().intValue());
+                    return epstats.getTotalConnections().intValue() == 1
+                            && epstats.getActiveConnections().intValue() == 1
+                            && epstats.getOpenConnections().intValue() == 1;
+                }, 100);
+
+                // reload configuration gonna reset extisting endpoint-connection > new connection created
+                server.getConnectionsManager().applyNewConfiguration(server.getCurrentConfiguration());
+
+                System.out.println("*********************************************************");
+                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
+                TestUtils.waitForCondition(() -> {
+                    EndpointStats epstats = server.getConnectionsManager().getStats().getEndpointStats(key);
+                    return epstats.getTotalConnections().intValue() == 2
+                            && epstats.getActiveConnections().intValue() == 2
+                            && epstats.getOpenConnections().intValue() == 2;
+                }, 100);
+            }
+            TestUtils.waitForCondition(() -> {
+                EndpointStats epstats = server.getConnectionsManager().getStats().getEndpointStats(key);
+                return epstats.getTotalConnections().intValue() == 2
+                        && epstats.getActiveConnections().intValue() == 0
+                        && epstats.getOpenConnections().intValue() == 0;
+            }, 100);
+            stats = server.getConnectionsManager().getStats();
         }
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
     }

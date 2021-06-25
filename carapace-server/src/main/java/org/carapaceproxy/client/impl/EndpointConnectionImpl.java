@@ -193,6 +193,10 @@ public class EndpointConnectionImpl implements EndpointConnection {
         channelToEndpoint
                 .closeFuture()
                 .addListener((Future<? super Void> future) -> {
+                    RequestHandler pendingRequest = this.clientSidePeerHandler.get();
+                    if (pendingRequest != null) {
+                        pendingRequest.getClientConnectionHandler().resetConnectionToEndpoint();
+                    }
                     parent.returnConnection(EndpointConnectionImpl.this, "channel closed by server");
                     CarapaceLogger.debug("channel closed to {0}. connection: {1}", key, this);
                     endpointstats.getOpenConnections().decrementAndGet();
@@ -387,6 +391,7 @@ public class EndpointConnectionImpl implements EndpointConnection {
             endpointstats.getActiveConnections().decrementAndGet();
             activeConnectionsStats.dec();
             parent.unregisterPendingRequest(_clientSidePeerHandler);
+            _clientSidePeerHandler.getClientConnectionHandler().resetConnectionToEndpoint();
             clientSidePeerHandler.set(null);
         } else {
             LOG.log(Level.SEVERE, "connectionDeactivated on a non active connection! {0}", this);
