@@ -24,6 +24,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.MatcherAssert.assertThat;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -180,7 +182,7 @@ public class RestartEndpointTest {
                 System.out.println("*********************************************************");
                 // ensure that wiremock started again
                 IOUtils.toByteArray(new URL("http://localhost:" + wireMockRule.port() + "/index.html"));
-                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
+                assertThat(client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString(), containsString("An internal error occurred"));
             }
 
             stats = server.getConnectionsManager().getStats();
