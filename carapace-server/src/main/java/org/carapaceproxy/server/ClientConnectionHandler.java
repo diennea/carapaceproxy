@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.carapaceproxy.EndpointMapper;
+import org.carapaceproxy.client.EndpointConnection;
 import org.carapaceproxy.client.impl.EndpointConnectionImpl;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.cache.ContentsCache;
@@ -80,6 +81,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
     private String sslProtocol;
     private String cipherSuite;
     final SocketAddress serverAddress;
+    private final AtomicReference<EndpointConnection> connectionToEndpoint = new AtomicReference<>();
 
     public ClientConnectionHandler(
             EndpointMapper mapper,
@@ -115,6 +117,10 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         this.totalRequests = TOTAL_REQUESTS_COUNTER_PER_LISTENER.labels(this.listenerHost + "_" + this.listenerPort);
     }
 
+    public long getId() {
+        return id;
+    }
+
     public SocketAddress getClientAddress() {
         return clientAddress;
     }
@@ -144,8 +150,8 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         if (evt instanceof IdleStateEvent) {
             IdleStateEvent e = (IdleStateEvent) evt;
             if (e.state() == IdleState.ALL_IDLE) {
-                CarapaceLogger.debug("Idle connection detected for client {0}. Channel closed.", clientAddress);
-                ctx.close();
+                CarapaceLogger.debug("Idle connection detected for client {0} {1}. Closing channel.", id, clientAddress);
+                forceClose(ctx);
             }
         }
     }
@@ -160,7 +166,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
                 if (LOG.isLoggable(Level.FINE)) {
                     LOG.log(Level.FINE, "{0} refuseOtherRequests", this);
                 }
-                ctx.close();
+                forceClose(ctx);
                 return;
             }
             HttpRequest request = (HttpRequest) msg;
@@ -186,7 +192,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             } else {
                 LOG.log(Level.INFO, "{0} swallow {1}, no more pending requests", new Object[]{this, msg});
                 refuseOtherRequests = true;
-                ctx.close();
+                forceClose(ctx);
             }
         } else if (msg instanceof HttpContent) {
             if (requestRunning) {
@@ -196,7 +202,7 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
             } else {
                 LOG.log(Level.INFO, "{0} swallow {1}, no more pending requests", new Object[]{this, msg});
                 refuseOtherRequests = true;
-                ctx.close();
+                forceClose(ctx);
             }
         }
 
@@ -261,12 +267,33 @@ public class ClientConnectionHandler extends SimpleChannelInboundHandler<Object>
         requestRunning = false;
     }
 
+    public AtomicReference<RequestHandler> getPendingRequest() {
+        return pendingRequest;
+    }
+
+    public EndpointConnection getConnectionToEndpoint() {
+        return connectionToEndpoint.get();
+    }
+
+    public void setConnectionToEndpoint(EndpointConnection connectionToEndpoint) {
+        this.connectionToEndpoint.set(connectionToEndpoint);
+    }
+
+    public void resetConnectionToEndpoint() {
+        connectionToEndpoint.set(null);
+    }
+
     @Override
     public String toString() {
         return "ClientConnectionHandler{chid=" + id + ",ka=" + keepAlive + '}';
     }
 
-    public AtomicReference<RequestHandler> getPendingRequest() {
-        return pendingRequest;
+    private void forceClose(ChannelHandlerContext ctx) {
+        RequestHandler request = pendingRequest.get();
+        if (request != null) {
+            request.setCloseAfterResponse(true);
+        }
+        ctx.close();
     }
+
 }

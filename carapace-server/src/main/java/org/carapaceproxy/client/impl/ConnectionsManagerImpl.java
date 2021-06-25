@@ -189,7 +189,8 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
                     if (connectionToEndpoint != null && backendsUnreachableOnStuckRequests) {
                         backendHealthManager.reportBackendUnreachable(
                                 connectionToEndpoint.getKey().getHostPort(), now,
-                                "a request to " + requestHandler.getUri() + " for user " + requestHandler.getUserId() + " appears stuck");
+                                "a request to " + requestHandler.getUri() + " for user " + requestHandler.getUserId() + " appears stuck"
+                        );
                     }
                     STUCK_REQUESTS_COUNTER.inc();
                     toRemove.add(entry.getValue());
@@ -199,7 +200,6 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
                 unregisterPendingRequest(r);
             });
         }
-
     }
 
     @Override
@@ -222,10 +222,18 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         if (this.stuckRequestsReaperFuture != null && (oldIdleTimeout != idleTimeout)) {
             this.stuckRequestsReaperFuture.cancel(false);
             LOG.log(Level.INFO, "Re-scheduling stuckRequestsReaper with period (idleTimeout/4):{0} ms", idleTimeout / 4);
-            this.stuckRequestsReaperFuture =
-                    this.scheduler.scheduleWithFixedDelay(new RequestHandlerChecker(), idleTimeout / 4, idleTimeout / 4,
-                            TimeUnit.MILLISECONDS);
+            this.stuckRequestsReaperFuture = this.scheduler.scheduleWithFixedDelay(
+                    new RequestHandlerChecker(),
+                    idleTimeout / 4,
+                    idleTimeout / 4,
+                    TimeUnit.MILLISECONDS
+            );
         }
+
+        // reset clients endpoint-connection reuse for next request
+        pendingRequests.values().forEach(request -> {
+            request.getClientConnectionHandler().resetConnectionToEndpoint();
+        });
 
     }
 
@@ -243,6 +251,7 @@ public class ConnectionsManagerImpl implements ConnectionsManager, AutoCloseable
         config.setTestWhileIdle(true);
         config.setBlockWhenExhausted(true);
         config.setJmxEnabled(false);
+        config.setLifo(false); // connections borrowed as FIFO
         group = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
         eventLoopForOutboundConnections = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
         connections = new GenericKeyedObjectPool<>(new ConnectionsFactory(), config);
