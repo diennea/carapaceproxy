@@ -204,7 +204,6 @@ public class RequestHandler implements MatchingContext {
             LOG.log(Level.INFO, "Mapper returned NULL action for {0}", this);
             action = MapResult.INTERNAL_ERROR(MapResult.NO_ROUTE);
         }
-        //LOG.info("map " + request.uri() + " to " + action.action);
         Counter.Child requestsPerUser;
         if (userId != null) {
             requestsPerUser = USER_REQUESTS_COUNTER.labels(userId);
@@ -226,7 +225,6 @@ public class RequestHandler implements MatchingContext {
             case PROXY: {
                 EndpointConnection connection;
                 try {
-//                    LOG.log(Level.SEVERE, "TIME"+TIME_TRACKER.incrementAndGet()+" start " + this + " thread " + Thread.currentThread().getName());
                     connection = connectionToClient.connectionsManager.getConnection(new EndpointKey(action.host, action.port));
                 } catch (EndpointNotAvailableException err) {
                     fireRequestFinished();
@@ -244,7 +242,6 @@ public class RequestHandler implements MatchingContext {
                 }
                 EndpointConnection connection;
                 try {
-//                    LOG.log(Level.SEVERE, "TIME"+TIME_TRACKER.incrementAndGet()+" startc " + this + " thread " + Thread.currentThread().getName());
                     connection = connectionToClient.connectionsManager.getConnection(new EndpointKey(
                             action.host, action.port));
                 } catch (EndpointNotAvailableException err) {
@@ -666,7 +663,6 @@ public class RequestHandler implements MatchingContext {
                     connectionToClient.keepAlive = false;
                 }
             }
-            // LOG.log(Level.INFO, this + " returnConnection:" + returnConnection + ", keepAlive1:" + keepAlive1 + " connecton " + connectionToEndpoint);
             if (msg instanceof LastHttpContent && (future.isSuccess() || closeAfterResponse)) {
                 connectionToClient.closeIfNotKeepAlive(channelToClient);
             }
