@@ -36,6 +36,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import java.text.SimpleDateFormat;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -59,7 +60,7 @@ public class CacheExpireTest {
     @Test
     public void testHandleExpiresFromServer() throws Exception {
 
-        java.util.Date expire = new java.util.Date(System.currentTimeMillis() + 60000 * 2);
+        java.util.Date expire = new SimpleDateFormat("dd/MM/yyyy").parse("31/12/2030");
         String formatted = HttpUtils.formatDateHeader(expire);
 
         stubFor(get(urlEqualTo("/index-with-expire.html"))
@@ -101,7 +102,8 @@ public class CacheExpireTest {
                     System.out.println("HEADER LINE :" + h);
                 });
                 assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("X-Cached")));
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
+                System.out.println("Expires: " + formatted);
+                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("Expires: " + formatted)));
             }
 
             stats = server.getConnectionsManager().getStats();
