@@ -33,7 +33,6 @@ import org.carapaceproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import org.carapaceproxy.utils.CarapaceLogger;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -53,61 +52,58 @@ public class ChunkedEncodingResponseTest {
     @Test
     public void testSimpleChunckedResponseNoCache() throws Exception {
         wireMockRule.stubFor(
-                get(urlEqualTo("/index.html")).
-                        willReturn(aResponse()
-                                .withStatus(200)
-                                .withHeader("Content-Type", "text/html")
-                                .withBody("it <b>works</b> !!"))
+            get(urlEqualTo("/index.html")).
+                willReturn(aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "text/html")
+                    .withBody("it <b>works</b> !!"))
         );
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         ConnectionsManagerStats stats;
-        CarapaceLogger.setLoggingDebugEnabled(true);
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                RawHttpClient.HttpResponse resp = client
+                    .executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertTrue(s.endsWith("12\r\n"
-                        + "it <b>works</b> !!\r\n"
-                        + "0\r\n\r\n"));
+                    + "it <b>works</b> !!\r\n"
+                    + "0\r\n\r\n"));
                 assertTrue(resp.getBodyString().equals("it <b>works</b> !!"));
 
-                resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                resp = client
+                    .executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 System.out.println("s:" + resp);
                 assertTrue(resp.toString().endsWith("12\r\n"
-                        + "it <b>works</b> !!\r\n"
-                        + "0\r\n\r\n"));
+                    + "it <b>works</b> !!\r\n"
+                    + "0\r\n\r\n"));
                 assertTrue(resp.getBodyString().equals("it <b>works</b> !!"));
             }
-            stats = server.getConnectionsManager().getStats();
-            TestUtils.waitForCondition(() -> {
-                EndpointStats epstats = stats.getEndpointStats(key);
-                return epstats.getTotalConnections().intValue() == 1
-                        && epstats.getActiveConnections().intValue() == 0
-                        && epstats.getOpenConnections().intValue() == 0;
-            }, 100);
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").toString();
+                String s = client
+                    .executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").toString();
                 System.out.println("s:" + s);
                 assertTrue(s.endsWith("12\r\n"
-                        + "it <b>works</b> !!\r\n"
-                        + "0\r\n\r\n"));
+                    + "it <b>works</b> !!\r\n"
+                    + "0\r\n\r\n"));
             }
+            stats = server.getConnectionsManager().getStats();
             assertNotNull(stats.getEndpoints().get(key));
             assertEquals(0, server.getCache().getCacheSize());
-            TestUtils.waitForCondition(() -> {
-                EndpointStats epstats = stats.getEndpointStats(key);
-                return epstats.getTotalConnections().intValue() == 2
-                        && epstats.getActiveConnections().intValue() == 0
-                        && epstats.getOpenConnections().intValue() == 0;
-            }, 100);
         }
+
+        TestUtils.waitForCondition(() -> {
+            EndpointStats epstats = stats.getEndpointStats(key);
+            return epstats.getTotalConnections().intValue() == 1
+                && epstats.getActiveConnections().intValue() == 0
+                && epstats.getOpenConnections().intValue() == 0;
+        }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
@@ -116,11 +112,11 @@ public class ChunkedEncodingResponseTest {
     @Test
     public void testSimpleChunckedResponseWithCache() throws Exception {
         wireMockRule.stubFor(
-                get(urlEqualTo("/index.html")).
-                        willReturn(aResponse()
-                                .withStatus(200)
-                                .withHeader("Content-Type", "text/html")
-                                .withBody("it <b>works</b> !!"))
+            get(urlEqualTo("/index.html")).
+                willReturn(aResponse()
+                    .withStatus(200)
+                    .withHeader("Content-Type", "text/html")
+                    .withBody("it <b>works</b> !!"))
         );
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
@@ -132,30 +128,30 @@ public class ChunkedEncodingResponseTest {
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client
-                        .executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                    .executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertTrue(s.endsWith("12\r\n"
-                        + "it <b>works</b> !!\r\n"
-                        + "0\r\n\r\n"));
+                    + "it <b>works</b> !!\r\n"
+                    + "0\r\n\r\n"));
                 assertTrue(resp.getBodyString().equals("it <b>works</b> !!"));
 
                 resp = client
-                        .executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                    .executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 System.out.println("s:" + resp);
                 assertTrue(resp.toString().endsWith("12\r\n"
-                        + "it <b>works</b> !!\r\n"
-                        + "0\r\n\r\n"));
+                    + "it <b>works</b> !!\r\n"
+                    + "0\r\n\r\n"));
                 assertTrue(resp.getBodyString().equals("it <b>works</b> !!"));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client
-                        .executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").toString();
+                    .executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").toString();
                 System.out.println("s:" + s);
                 assertTrue(s.endsWith("12\r\n"
-                        + "it <b>works</b> !!\r\n"
-                        + "0\r\n\r\n"));
+                    + "it <b>works</b> !!\r\n"
+                    + "0\r\n\r\n"));
             }
             stats = server.getConnectionsManager().getStats();
             assertNotNull(stats.getEndpoints().get(key));
@@ -167,8 +163,8 @@ public class ChunkedEncodingResponseTest {
         TestUtils.waitForCondition(() -> {
             EndpointStats epstats = stats.getEndpointStats(key);
             return epstats.getTotalConnections().intValue() == 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
+                && epstats.getActiveConnections().intValue() == 0
+                && epstats.getOpenConnections().intValue() == 0;
         }, 100);
 
         TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);

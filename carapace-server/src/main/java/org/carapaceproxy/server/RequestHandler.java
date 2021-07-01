@@ -204,6 +204,7 @@ public class RequestHandler implements MatchingContext {
             LOG.log(Level.INFO, "Mapper returned NULL action for {0}", this);
             action = MapResult.INTERNAL_ERROR(MapResult.NO_ROUTE);
         }
+        //LOG.info("map " + request.uri() + " to " + action.action);
         Counter.Child requestsPerUser;
         if (userId != null) {
             requestsPerUser = USER_REQUESTS_COUNTER.labels(userId);
@@ -223,29 +224,17 @@ public class RequestHandler implements MatchingContext {
             case REDIRECT:
                 return;
             case PROXY: {
-                connectionToEndpoint.set(connectionToClient.getConnectionToEndpoint()); // existing client2endpoint connection
-                if (connectionToEndpoint.get() == null) {
-                    try {
-                        connectionToEndpoint.set(connectionToClient.connectionsManager.getConnection(new EndpointKey(action.host, action.port)));
-                        connectionToClient.setConnectionToEndpoint(connectionToEndpoint.get());
-                        channelToClient.channel().closeFuture().addListener((Future<? super Void> future) -> {
-                            CarapaceLogger.debug("Closing channel to client id={0}.", connectionToClient.getId());
-                            EndpointConnection endpointConn = connectionToEndpoint.get();
-                            if (endpointConn != null) {
-                                fireRequestFinished();
-                                // return the connection the pool (async)
-                                endpointConn.release(closeAfterResponse, this, () -> connectionToEndpoint.compareAndSet(endpointConn, null));
-                            } else {
-                                LOG.log(Level.SEVERE, "{0} CANNOT release connection {1}, closeAfterResponse {2}", new Object[]{this, connectionToEndpoint, closeAfterResponse});
-                            }
-                        });
-                    } catch (EndpointNotAvailableException err) {
-                        fireRequestFinished();
-                        LOG.log(Level.INFO, "{0} error on endpoint {1}: {2}", new Object[]{this, action, err});
-                        return;
-                    }
+                EndpointConnection connection;
+                try {
+//                    LOG.log(Level.SEVERE, "TIME"+TIME_TRACKER.incrementAndGet()+" start " + this + " thread " + Thread.currentThread().getName());
+                    connection = connectionToClient.connectionsManager.getConnection(new EndpointKey(action.host, action.port));
+                } catch (EndpointNotAvailableException err) {
+                    fireRequestFinished();
+                    LOG.log(Level.INFO, "{0} error on endpoint {1}: {2}", new Object[]{this, action, err});
+                    return;
                 }
-                connectionToEndpoint.get().sendRequest(request, this);
+                connectionToEndpoint.set(connection);
+                connection.sendRequest(request, this);
                 return;
             }
             case CACHE: {
@@ -253,34 +242,23 @@ public class RequestHandler implements MatchingContext {
                 if (cacheSender != null) {
                     return;
                 }
-                connectionToEndpoint.set(connectionToClient.getConnectionToEndpoint()); // existing client2endpoint connection
-                if (connectionToEndpoint.get() == null) {
-                    try {
-                        connectionToEndpoint.set(connectionToClient.connectionsManager.getConnection(new EndpointKey(action.host, action.port)));
-                        connectionToClient.setConnectionToEndpoint(connectionToEndpoint.get());
-                        channelToClient.channel().closeFuture().addListener((Future<? super Void> future) -> {
-                            CarapaceLogger.debug("Closing channel to client id={0}.", connectionToClient.getId());
-                            EndpointConnection endpointConn = connectionToEndpoint.get();
-                            if (endpointConn != null) {
-                                fireRequestFinished();
-                                // return the connection the pool (async)
-                                endpointConn.release(closeAfterResponse, this, () -> connectionToEndpoint.compareAndSet(endpointConn, null));
-                            } else {
-                                LOG.log(Level.SEVERE, "{0} CANNOT release connection {1}, closeAfterResponse {2}", new Object[]{this, connectionToEndpoint, closeAfterResponse});
-                            }
-                        });
-                    } catch (EndpointNotAvailableException err) {
-                        fireRequestFinished();
-                        LOG.log(Level.INFO, "{0} error on endpoint {1}: {2}", new Object[]{this, action, err});
-                        return;
-                    }
+                EndpointConnection connection;
+                try {
+//                    LOG.log(Level.SEVERE, "TIME"+TIME_TRACKER.incrementAndGet()+" startc " + this + " thread " + Thread.currentThread().getName());
+                    connection = connectionToClient.connectionsManager.getConnection(new EndpointKey(
+                            action.host, action.port));
+                } catch (EndpointNotAvailableException err) {
+                    fireRequestFinished();
+                    LOG.log(Level.INFO, "{0} error on endpoint {1}: {2}", new Object[]{this, action, err});
+                    return;
                 }
+                connectionToEndpoint.set(connection);
                 cacheReceiver = connectionToClient.cache.startCachingResponse(request, isSecure());
                 if (cacheReceiver != null) {
                     // https://tools.ietf.org/html/rfc7234#section-4.3.4
                     cleanRequestFromCacheValidators(request);
                 }
-                connectionToEndpoint.get().sendRequest(request, this);
+                connection.sendRequest(request, this);
                 return;
             }
 
@@ -401,9 +379,7 @@ public class RequestHandler implements MatchingContext {
 
     private void forceCloseChannelToClient() {
         // If keep-alive is off, close the connection once the content is fully written.
-        closeAfterResponse = true;
-        channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER)
-                .addListener(ChannelFutureListener.CLOSE);
+        channelToClient.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
     }
 
     private void serveInternalErrorMessage(boolean forceClose) {
@@ -577,18 +553,20 @@ public class RequestHandler implements MatchingContext {
     }
 
     private void sendServiceNotAvailable() {
+//        LOG.info(this + " sendServiceNotAvailable due to " + cause + " to " + ctx);
         FullHttpResponse response = connectionToClient.staticContentsManager.buildResponse(500, DEFAULT_INTERNAL_SERVER_ERROR);
         clientState = RequestHandlerState.WRITING;
         channelToClient.writeAndFlush(response).addListener(new GenericFutureListener<Future<? super Void>>() {
             @Override
             public void operationComplete(Future<? super Void> future) throws Exception {
                 clientState = RequestHandlerState.IDLE;
-                lastHttpContentSent();
                 LOG.log(Level.INFO, "{0} sendServiceNotAvailable result: {1}, cause {2}",
                         new Object[]{this, future.isSuccess(), future.cause()});
-                forceCloseChannelToClient();
+                channelToClient.close();
+                lastHttpContentSent();
             }
         });
+
     }
 
     public void lastHttpContentSent() {
@@ -628,10 +606,13 @@ public class RequestHandler implements MatchingContext {
 
     public boolean errorSendingRequest(EndpointConnectionImpl connection, Throwable cause) {
         LOG.log(Level.INFO, "errorSendingRequest to " + connection, cause);
-        connectionToClient.errorSendingRequest(this, connection, channelToClient, cause);
-        sendServiceNotAvailable();
+        boolean ok = releaseConnectionToEndpoint(true, connection);
+        if (ok) {
+            connectionToClient.errorSendingRequest(this, connection, channelToClient, cause);
+            sendServiceNotAvailable();
+        }
+        return ok;
 
-        return true;
     }
 
     public void receivedFromRemote(HttpObject msg, EndpointConnection connection) {
@@ -658,6 +639,15 @@ public class RequestHandler implements MatchingContext {
                     msg.getClass(), isKeepAlive, connectionToEndpoint.get());
         }
 
+        // endpoint finished his work, we can release the connection
+        if (msg instanceof LastHttpContent) {
+            if (continueRequest) {
+                continueRequest = false;
+            } else {
+                releaseConnectionToEndpoint(closeAfterResponse, connection);
+            }
+        }
+
         addCustomResponseHeaders(msg, action.customHeaders);
         clientState = RequestHandlerState.WRITING;
         channelToClient.writeAndFlush(msg).addListener((Future<? super Void> future) -> {
@@ -676,7 +666,8 @@ public class RequestHandler implements MatchingContext {
                     connectionToClient.keepAlive = false;
                 }
             }
-            if (msg instanceof LastHttpContent) {
+            // LOG.log(Level.INFO, this + " returnConnection:" + returnConnection + ", keepAlive1:" + keepAlive1 + " connecton " + connectionToEndpoint);
+            if (msg instanceof LastHttpContent && (future.isSuccess() || closeAfterResponse)) {
                 connectionToClient.closeIfNotKeepAlive(channelToClient);
             }
         });
@@ -696,6 +687,20 @@ public class RequestHandler implements MatchingContext {
                     headers.add(customHeader.getName(), customHeader.getValue());
                 }
             });
+        }
+    }
+
+    private boolean releaseConnectionToEndpoint(boolean forceClose, EndpointConnection current) {
+        if (connectionToEndpoint.get() != null && connectionToEndpoint.get().equals(current)) {
+            fireRequestFinished();
+            if (current != null) {
+                // return the connection the pool (async)
+                current.release(forceClose, this, () -> connectionToEndpoint.compareAndSet(current, null));
+            }
+            return true;
+        } else {
+            LOG.log(Level.SEVERE, "{0} CANNOT release connection {1}, forceClose {2}, current {3}", new Object[]{this, connectionToEndpoint, forceClose, current});
+            return false;
         }
     }
 
@@ -814,6 +819,7 @@ public class RequestHandler implements MatchingContext {
         if (delta >= stuckRequestTimeout) {
             LOG.log(Level.INFO, "{0} connection appears stuck {1}, on request {2} for userId: {3}", new Object[]{this, connectionToEndpoint, uri, userId});
             onStuck.run();
+            releaseConnectionToEndpoint(true, connectionToEndpoint.get());
             serveInternalErrorMessage(true);
         }
     }
@@ -824,6 +830,7 @@ public class RequestHandler implements MatchingContext {
 
     public void badErrorOnRemote(Throwable cause) {
         LOG.log(Level.INFO, "{0} badErrorOnRemote {1}", new Object[]{this, cause});
+        releaseConnectionToEndpoint(true, connectionToEndpoint.get());
         serveInternalErrorMessage(true);
     }
 
@@ -870,9 +877,4 @@ public class RequestHandler implements MatchingContext {
     public boolean isSecure() {
         return connectionToClient.isSecure();
     }
-
-    public void setCloseAfterResponse(boolean closeAfterResponse) {
-        this.closeAfterResponse = closeAfterResponse;
-    }
-
 }

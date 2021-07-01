@@ -10,16 +10,16 @@ package org.carapaceproxy;
  * implied. See the License for the specific language governing permissions and limitations under the License.
  *
  */
-import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
 import org.carapaceproxy.server.HttpProxyServer;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
-
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 import static org.carapaceproxy.utils.RawHttpClient.consumeHttpResponseInput;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -802,8 +802,6 @@ public class RawClientTest {
             ConnectionsManagerStats stats;
             try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
                 proxy.getCurrentConfiguration().setMaxConnectionsPerEndpoint(1);
-                proxy.getCurrentConfiguration().setClientsIdleTimeoutSeconds(300);
-                proxy.getCurrentConfiguration().setBorrowTimeout(300_000);
                 proxy.getCurrentConfiguration().setRequestsHeaderDebugEnabled(true);
                 proxy.getConnectionsManager().applyNewConfiguration(proxy.getCurrentConfiguration());
                 proxy.start();
@@ -990,166 +988,6 @@ public class RawClientTest {
                 bossGroup.shutdownGracefully();
             }
         }
-    }
-
-    @Test
-    public void testMultiClientTimeout() throws Exception {
-        stubFor(post(urlEqualTo("/index.html"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "text/html")
-                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                        .withBody("it <b>works</b> !!")));
-
-        stubFor(get(urlEqualTo("/index.html"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "text/html")
-                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                        .withBody("it <b>works</b> !!")));
-
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-
-        ExecutorService ex = Executors.newFixedThreadPool(2);
-        List<Future> futures = new ArrayList<>();
-
-        CarapaceLogger.setLoggingDebugEnabled(true);
-
-        ConnectionsManagerStats stats;
-        try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
-            proxy.getCurrentConfiguration().setMaxConnectionsPerEndpoint(1);
-            proxy.getCurrentConfiguration().setRequestsHeaderDebugEnabled(true);
-            proxy.getCurrentConfiguration().setClientsIdleTimeoutSeconds(10);
-            proxy.getConnectionsManager().applyNewConfiguration(proxy.getCurrentConfiguration());
-            proxy.start();
-            stats = proxy.getConnectionsManager().getStats();
-            int port = proxy.getLocalPort();
-            assertTrue(port > 0);
-
-            RuntimeServerConfiguration currentConfiguration = proxy.getCurrentConfiguration();
-            proxy.getConnectionsManager().applyNewConfiguration(currentConfiguration);
-
-            AtomicBoolean failed = new AtomicBoolean();
-            AtomicBoolean c2go = new AtomicBoolean();
-            try {
-                futures.add(ex.submit(() -> {
-                    try (RawHttpClient client1 = new RawHttpClient("localhost", port)) {
-                        String body = "filler-content";
-                        String request = "POST /index.html HTTP/1.1"
-                                + "\r\nHost: localhost"
-                                + "\r\nConnection: keep-alive"
-                                + "\r\nContent-Type: text/plain"
-                                + "\r\n" + HttpHeaderNames.EXPECT + ": " + HttpHeaderValues.CONTINUE
-                                + "\r\nContent-Length: " + body.length()
-                                + "\r\n\r\n";
-
-                        Socket socket = client1.getSocket();
-                        OutputStream oo = socket.getOutputStream();
-
-                        oo.write(request.getBytes(StandardCharsets.UTF_8));
-                        oo.flush();
-                        Thread.sleep(5_000);
-                        c2go.set(true);
-                        Thread.sleep(10_000); // should trigger timeout
-
-                        String resp = consumeHttpResponseInput(socket.getInputStream()).getBodyString();
-                        System.out.println("### RESP client1: " + resp);
-                        if (!resp.isEmpty()) {
-                            failed.set(true);
-                        }
-                    } catch (Throwable e) {
-                        System.out.println("EXCEPTION: " + e);
-                    }
-                }));
-                futures.add(ex.submit(() -> {
-                    try {
-                        while (!c2go.get()) {
-                            Thread.sleep(1_000);
-                        }
-                        try (RawHttpClient client2 = new RawHttpClient("localhost", port)) {
-                            RawHttpClient.HttpResponse res = client2.get("/index.html");
-                            String resp = res.getBodyString();
-                            System.out.println("### RESP client2: " + resp);
-                            if (!resp.contains("it <b>works</b> !!")) {
-                                failed.set(true);
-                            }
-                        }
-                    } catch (Exception e) {
-                        System.out.println("EXCEPTION: " + e);
-                        failed.set(true);
-                    }
-                }));
-            } finally {
-                for (Future future : futures) {
-                    try {
-                        future.get();
-                    } catch (InterruptedException | ExecutionException e) {
-                        System.out.println("ERR" + e);
-                    }
-                }
-                ex.shutdown();
-                ex.awaitTermination(1, TimeUnit.MINUTES);
-            }
-            assertThat(failed.get(), is(false));
-        }
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-    }
-
-    @Test
-    public void testClientConnectionReuseResetOnConfigurationReload() throws Exception {
-        stubFor(get(urlEqualTo("/index.html"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "text/html")
-                        .withBody("it <b>works</b> !!")
-                        .withHeader("Content-Length", "it <b>works</b> !!".getBytes(StandardCharsets.UTF_8).length + "")
-                ));
-
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-
-        CarapaceLogger.setLoggingDebugEnabled(true);
-
-        ConnectionsManagerStats stats;
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
-            server.start();
-            int port = server.getLocalPort();
-
-            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
-                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
-                TestUtils.waitForCondition(() -> {
-                    EndpointStats epstats = server.getConnectionsManager().getStats().getEndpointStats(key);
-                    System.out.println("getTotalConnections: " + epstats.getTotalConnections().intValue());
-                    System.out.println("getActiveConnections: " + epstats.getActiveConnections().intValue());
-                    System.out.println("getOpenConnections: " + epstats.getOpenConnections().intValue());
-                    return epstats.getTotalConnections().intValue() == 1
-                            && epstats.getActiveConnections().intValue() == 1
-                            && epstats.getOpenConnections().intValue() == 1;
-                }, 100);
-
-                // reload configuration gonna reset extisting endpoint-connection > new connection created
-                server.getConnectionsManager().applyNewConfiguration(server.getCurrentConfiguration());
-
-                System.out.println("*********************************************************");
-                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
-                TestUtils.waitForCondition(() -> {
-                    EndpointStats epstats = server.getConnectionsManager().getStats().getEndpointStats(key);
-                    return epstats.getTotalConnections().intValue() == 2
-                            && epstats.getActiveConnections().intValue() == 2
-                            && epstats.getOpenConnections().intValue() == 2;
-                }, 100);
-            }
-            TestUtils.waitForCondition(() -> {
-                EndpointStats epstats = server.getConnectionsManager().getStats().getEndpointStats(key);
-                return epstats.getTotalConnections().intValue() == 2
-                        && epstats.getActiveConnections().intValue() == 0
-                        && epstats.getOpenConnections().intValue() == 0;
-            }, 100);
-            stats = server.getConnectionsManager().getStats();
-        }
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
     }
 
 }

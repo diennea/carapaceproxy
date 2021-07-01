@@ -38,9 +38,6 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelHandlerContext;
 
 /**
  *
@@ -51,17 +48,12 @@ public class RequestMatcherTest {
     @Test
     public void test() throws Exception {
 
-        Channel ch = mock(Channel.class);
-        when(ch.closeFuture()).thenReturn(mock(ChannelFuture.class));
-        ChannelHandlerContext chc = mock(ChannelHandlerContext.class);
-        when(chc.channel()).thenReturn(ch);
-
         ClientConnectionHandler cch = mock(ClientConnectionHandler.class);
         when(cch.isSecure()).thenReturn(true);
 
         DefaultHttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/test.html");
 
-        RequestHandler handler = new RequestHandler(0, request, null, cch, chc, null, null, null);
+        RequestHandler handler = new RequestHandler(0, request, null, cch, null, null, null, null);
 
         {
             RequestMatcher matcher = new RequestMatchParser("all").parse();
@@ -216,16 +208,16 @@ public class RequestMatcherTest {
             assertFalse(matcher.matches(handler));
             assertEquals("not secure request", matcher.getDescription());
         }
-        {
+        {            
             RequestMatcher matcher = new RequestMatchParser("not secure request.uri ~\".*test.*\"").parse();
             assertFalse(matcher.matches(handler));
             assertEquals("not secure request", matcher.getDescription());
         }
-        {
+        {            
             RequestMatcher matcher = new RequestMatchParser("request.uri ~\".*test.*\" all").parse();
             assertTrue(matcher.matches(handler));
             assertEquals("request.uri ~ \".*test.*\"", matcher.getDescription());
-        }
+        }        
     }
 
     @Test
@@ -235,19 +227,14 @@ public class RequestMatcherTest {
         request.headers().add(HttpHeaders.CONTENT_DISPOSITION, "inline");
         request.headers().add(HttpHeaders.CONTENT_TYPE, "text/html");
         SocketAddress socketAddress = new InetSocketAddress("127.0.0.1", 0);
-
-        Channel ch = mock(Channel.class);
-        when(ch.closeFuture()).thenReturn(mock(ChannelFuture.class));
-        ChannelHandlerContext chc = mock(ChannelHandlerContext.class);
-        when(chc.channel()).thenReturn(ch);
-
+        
         ClientConnectionHandler cch = mock(ClientConnectionHandler.class);
         when(cch.isSecure()).thenReturn(false);
         when(cch.getListenerHost()).thenReturn("localhost");
         when(cch.getListenerPort()).thenReturn(8080);
         when(cch.getServerAddress()).thenReturn(socketAddress);
 
-        RequestHandler handler = new RequestHandler(0, request, null, cch, chc, null, null, null);
+        RequestHandler handler = new RequestHandler(0, request, null, cch, null, null, null, null);
 
         // Test headers
         {
