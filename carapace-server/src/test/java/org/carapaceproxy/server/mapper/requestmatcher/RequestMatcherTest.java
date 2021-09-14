@@ -26,8 +26,8 @@ import io.netty.handler.codec.http.HttpVersion;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import javax.ws.rs.core.HttpHeaders;
-import org.carapaceproxy.server.ClientConnectionHandler;
-import org.carapaceproxy.server.RequestHandler;
+import org.carapaceproxy.core.ClientConnectionHandler;
+import org.carapaceproxy.core.ProxyRequestsManager;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.ParseException;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.RequestMatchParser;
@@ -61,7 +61,7 @@ public class RequestMatcherTest {
 
         DefaultHttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/test.html");
 
-        RequestHandler handler = new RequestHandler(0, request, null, cch, chc, null, null, null);
+        ProxyRequestsManager handler = new ProxyRequestsManager(0, request.uri(), request, null, cch, chc, null, null, null);
 
         {
             RequestMatcher matcher = new RequestMatchParser("all").parse();
@@ -247,7 +247,7 @@ public class RequestMatcherTest {
         when(cch.getListenerPort()).thenReturn(8080);
         when(cch.getServerAddress()).thenReturn(socketAddress);
 
-        RequestHandler handler = new RequestHandler(0, request, null, cch, chc, null, null, null);
+        ProxyRequestsManager handler = new ProxyRequestsManager(0, request.uri(), request, null, cch, chc, null, null, null);
 
         // Test headers
         {

@@ -19,14 +19,14 @@
  */
 package org.carapaceproxy.server.filters;
 
-import org.carapaceproxy.server.RequestFilter;
-import org.carapaceproxy.server.RequestHandler;
+import org.carapaceproxy.core.ProxyRequest;
+import org.carapaceproxy.core.RequestFilter;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 
 /**
  *
  * Root class for all RequestFilters
- * 
+ *
  * @author paolo.venturi
  */
 public abstract class BasicRequestFilter implements RequestFilter {
@@ -37,8 +37,8 @@ public abstract class BasicRequestFilter implements RequestFilter {
         this.matcher = matcher;
     }
 
-    boolean checkRequestMatching(RequestHandler handler) {
-        return matcher.matches(handler);
+    boolean checkRequestMatching(ProxyRequest request) {
+        return matcher.matches(request);
     }
 
 }

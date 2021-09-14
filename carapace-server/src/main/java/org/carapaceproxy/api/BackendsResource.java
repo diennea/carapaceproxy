@@ -19,16 +19,17 @@
  */
 package org.carapaceproxy.api;
 
+import static org.carapaceproxy.core.ProxyRequestsManager.ENDPOINTS_STATS;
 import java.util.HashMap;
 import java.util.Map;
 import javax.servlet.ServletContext;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import lombok.Data;
 import org.carapaceproxy.EndpointStats;
-import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
-import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.backends.BackendHealthCheck;
 import org.carapaceproxy.server.backends.BackendHealthStatus;
 import org.carapaceproxy.server.config.BackendConfiguration;
@@ -45,6 +46,7 @@ public class BackendsResource {
     @javax.ws.rs.core.Context
     ServletContext context;
 
+    @Data
     public static final class BackendBean {
 
         private final String id;
@@ -69,68 +71,11 @@ public class BackendsResource {
             this.port = port;
         }
 
-        public String getId() {
-            return id;
-        }
-
-        public long getOpenConnections() {
-            return openConnections;
-        }
-
-        public long getTotalRequests() {
-            return totalRequests;
-        }
-
-        public long getLastActivityTs() {
-            return lastActivityTs;
-        }
-
-        public String getHost() {
-            return host;
-        }
-
-        public int getPort() {
-            return port;
-        }
-
-        public boolean isIsAvailable() {
-            return isAvailable;
-        }
-
-        public boolean isReportedAsUnreachable() {
-            return reportedAsUnreachable;
-        }
-
-        public long getReportedAsUnreachableTs() {
-            return reportedAsUnreachableTs;
-        }
-
-        public String getLastProbePath() {
-            return lastProbePath;
-        }
-
-        public long getLastProbeTs() {
-            return lastProbeTs;
-        }
-
-        public boolean isLastProbeSuccess() {
-            return lastProbeSuccess;
-        }
-
-        public String getHttpResponse() {
-            return httpResponse;
-        }
-
-        public String getHttpBody() {
-            return httpBody;
-        }
-
     }
 
     @GET
     public Map<String, BackendBean> getAll() {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-        ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
         Map<String, BackendHealthStatus> backendsSnapshot = server.getBackendHealthManager().getBackendsSnapshot();
         Map<String, BackendBean> res = new HashMap<>();
 
@@ -139,7 +84,7 @@ public class BackendsResource {
             String hostPort = backendConf.getHostPort();
             BackendBean bean = new BackendBean(id, backendConf.getHost(), backendConf.getPort());
             bean.lastProbePath = backendConf.getProbePath();
-            EndpointStats epstats = stats.getEndpointStats(EndpointKey.make(hostPort));
+            EndpointStats epstats = ENDPOINTS_STATS.get(EndpointKey.make(hostPort));
             if (epstats != null) {
                 bean.openConnections = epstats.getOpenConnections().longValue();
                 bean.totalRequests = epstats.getTotalRequests().longValue();

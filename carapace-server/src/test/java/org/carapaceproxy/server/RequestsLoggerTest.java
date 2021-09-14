@@ -19,6 +19,10 @@
  */
 package org.carapaceproxy.server;
 
+import org.carapaceproxy.core.ProxyRequestsManager;
+import org.carapaceproxy.core.RuntimeServerConfiguration;
+import org.carapaceproxy.core.RequestsLogger;
+import org.carapaceproxy.core.HttpProxyServer;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
@@ -39,7 +43,7 @@ import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.List;
 import org.carapaceproxy.EndpointStats;
-import org.carapaceproxy.MapResult;
+import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.utils.RawHttpClient;
@@ -106,7 +110,7 @@ public class RequestsLoggerTest {
         String sessionid;
     }
 
-    private static RequestHandler createMockRequestHandler(
+    private static ProxyRequestsManager createMockRequestHandler(
             MockRequestHandler r
     ) throws Exception {
 
@@ -119,7 +123,7 @@ public class RequestsLoggerTest {
         when(hr.method()).thenReturn(r.reqMethod);
         when(hr.headers()).thenReturn(hh);
 
-        RequestHandler rh = mock(RequestHandler.class);
+        ProxyRequestsManager rh = mock(ProxyRequestsManager.class);
         when(rh.getRequest()).thenReturn(hr);
         when(rh.getUri()).thenReturn(r.reqUri);
         when(rh.getAction()).thenReturn(r.action);

@@ -20,7 +20,7 @@
 package org.carapaceproxy.server.filters;
 
 import java.util.Map;
-import org.carapaceproxy.server.RequestFilter;
+import org.carapaceproxy.core.RequestFilter;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;

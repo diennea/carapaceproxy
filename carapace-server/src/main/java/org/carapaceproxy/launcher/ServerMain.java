@@ -30,7 +30,7 @@ import java.util.logging.LogManager;
 import java.util.logging.Logger;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
-import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.core.HttpProxyServer;
 
 /**
  * @autor enrico.olivelli

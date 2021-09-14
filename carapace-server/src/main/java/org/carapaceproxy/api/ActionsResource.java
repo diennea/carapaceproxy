@@ -26,7 +26,7 @@ import javax.servlet.ServletContext;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
-import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import static org.carapaceproxy.server.config.ActionConfiguration.TYPE_ACME_CHALLENGE;
 import static org.carapaceproxy.server.config.ActionConfiguration.TYPE_CACHE;

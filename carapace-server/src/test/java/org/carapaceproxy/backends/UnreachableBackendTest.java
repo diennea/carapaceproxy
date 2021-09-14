@@ -35,7 +35,7 @@ import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.client.impl.ConnectionsManagerImpl;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
-import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertFalse;

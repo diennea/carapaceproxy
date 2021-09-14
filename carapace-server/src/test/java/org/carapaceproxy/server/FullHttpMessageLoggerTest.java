@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.server;
 
+import org.carapaceproxy.core.HttpProxyServer;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;

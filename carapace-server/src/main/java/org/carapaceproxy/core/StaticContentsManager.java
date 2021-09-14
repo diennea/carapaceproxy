@@ -17,7 +17,7 @@
  under the License.
 
  */
-package org.carapaceproxy.server;
+package org.carapaceproxy.core;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;

@@ -19,7 +19,7 @@
  */
 package org.carapaceproxy.client;
 
-import org.carapaceproxy.server.RuntimeServerConfiguration;
+import org.carapaceproxy.core.RuntimeServerConfiguration;
 
 /**
  * Handles connection to all the endpoints

@@ -1,5 +1,3 @@
-package org.carapaceproxy;
-
 /*
  Licensed to Diennea S.r.l. under one
  or more contributor license agreements. See the NOTICE file
@@ -19,6 +17,8 @@ package org.carapaceproxy;
  under the License.
 
  */
+package org.carapaceproxy;
+
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
@@ -32,7 +32,7 @@ import java.util.concurrent.ScheduledFuture;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.client.impl.ConnectionsManagerImpl;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
-import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;

@@ -13,8 +13,8 @@ package org.carapaceproxy;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
-import org.carapaceproxy.server.HttpProxyServer;
 
+import org.carapaceproxy.core.HttpProxyServer;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 
@@ -84,7 +84,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import org.carapaceproxy.client.impl.ConnectionsManagerImpl;
 import org.carapaceproxy.client.impl.EndpointConnectionImpl;
-import org.carapaceproxy.server.RuntimeServerConfiguration;
+import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.RawHttpServer;
 import org.junit.After;

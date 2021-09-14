@@ -44,7 +44,7 @@ import org.bouncycastle.cert.ocsp.OCSPException;
 import org.bouncycastle.cert.ocsp.OCSPReq;
 import org.bouncycastle.cert.ocsp.OCSPResp;
 import org.bouncycastle.cert.ocsp.SingleResp;
-import org.carapaceproxy.server.RuntimeServerConfiguration;
+import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
 
 /**

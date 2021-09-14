@@ -26,7 +26,7 @@ import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
-import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.core.HttpProxyServer;
 import static org.junit.Assert.assertNotNull;
 import org.junit.Rule;
 import org.junit.Test;

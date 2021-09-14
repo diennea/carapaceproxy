@@ -17,7 +17,7 @@
  * under the License.
  *
  */
-package org.carapaceproxy.server;
+package org.carapaceproxy.core;
 
 import com.google.common.annotations.VisibleForTesting;
 import java.sql.Timestamp;

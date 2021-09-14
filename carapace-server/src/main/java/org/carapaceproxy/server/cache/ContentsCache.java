@@ -1,21 +1,21 @@
 /*
- * Licensed to Diennea S.r.l. under one
- * or more contributor license agreements. See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership. Diennea S.r.l. licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- *
+ Licensed to Diennea S.r.l. under one
+ or more contributor license agreements. See the NOTICE file
+ distributed with this work for additional information
+ regarding copyright ownership. Diennea S.r.l. licenses this file
+ to you under the Apache License, Version 2.0 (the
+ "License"); you may not use this file except in compliance
+ with the License.  You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing,
+ software distributed under the License is distributed on an
+ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ KIND, either express or implied.  See the License for the
+ specific language governing permissions and limitations
+ under the License.
+
  */
 package org.carapaceproxy.server.cache;
 
@@ -29,7 +29,6 @@ import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
 import static io.netty.handler.codec.http.HttpStatusClass.REDIRECTION;
 import io.netty.handler.codec.http.LastHttpContent;
@@ -46,9 +45,11 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.carapaceproxy.server.RequestHandler;
-import org.carapaceproxy.server.RuntimeServerConfiguration;
+import org.carapaceproxy.core.ProxyRequest;
+import org.carapaceproxy.core.ProxyRequestsManager;
+import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.utils.PrometheusUtils;
+import reactor.netty.http.server.HttpServerRequest;
 
 /**
  * Keeps contents in cache
@@ -148,8 +149,8 @@ public class ContentsCache {
 
     }
 
-    private boolean isCachable(HttpRequest request, boolean secure, boolean registerNoCacheStat) {
-        switch (request.method().name()) {
+    private boolean isCachable(ProxyRequest request, boolean secure, boolean registerNoCacheStat) {
+        switch (request.getMethod().name()) {
             case "GET":
             case "HEAD":
                 // got haed and cache
@@ -158,7 +159,7 @@ public class ContentsCache {
                 return false;
         }
 
-        final HttpHeaders headers = request.headers();
+        final HttpHeaders headers = request.getRequestHeaders();
         final String cacheControl = headers.get(HttpHeaderNames.CACHE_CONTROL, "").replaceAll(" ", "").toLowerCase();
         boolean ctrlF5 = cacheControl.contains(HttpHeaderValues.NO_CACHE + "");
         if (ctrlF5) {
@@ -177,7 +178,7 @@ public class ContentsCache {
             return false;
         }
 
-        String uri = request.uri();
+        String uri = request.getUri();
         String queryString = "";
         int question = uri.indexOf('?');
         if (question > 0) {
@@ -213,7 +214,7 @@ public class ContentsCache {
         new Evictor().run();
     }
 
-    public ContentReceiver startCachingResponse(HttpRequest request, boolean secure) {
+    public ContentReceiver startCachingResponse(ProxyRequest request, boolean secure) {
         if (!isCachable(request, secure, true)) {
             return null;
         }
@@ -288,11 +289,11 @@ public class ContentsCache {
 
     }
 
-    public ContentSender serveFromCache(RequestHandler handler) {
-        if (!isCachable(handler.getRequest(), handler.isSecure(), false)) {
+    public ContentSender serveFromCache(ProxyRequest request) {
+        if (!isCachable(request, request.isSecure(), false)) {
             return null;
         }
-        ContentKey key = new ContentKey(handler.getRequest());
+        ContentKey key = new ContentKey(request);
         ContentPayload cached = cache.get(key);
         if (cached == null) {
             return null;
@@ -446,10 +447,10 @@ public class ContentsCache {
             this.uri = uri;
         }
 
-        public ContentKey(HttpRequest request) {
-            this.method = request.method().name();
-            this.host = request.headers().getAsString(HttpHeaderNames.HOST);
-            this.uri = request.uri();
+        public ContentKey(ProxyRequest request) {
+            this.method = request.getMethod().name();
+            this.host = request.getRequestHeaders().getAsString(HttpHeaderNames.HOST);
+            this.uri = request.getUri();
         }
 
         public long getMemUsage() {

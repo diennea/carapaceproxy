@@ -29,7 +29,7 @@ import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
-import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;

@@ -24,9 +24,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import org.carapaceproxy.EndpointMapper;
-import org.carapaceproxy.MapResult;
-import org.carapaceproxy.server.RequestHandler;
+import org.carapaceproxy.server.mapper.EndpointMapper;
+import org.carapaceproxy.server.mapper.MapResult;
+import org.carapaceproxy.RequestInfo;
+import org.carapaceproxy.core.ProxyRequestsManager;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
@@ -61,8 +62,8 @@ public class TestEndpointMapper extends EndpointMapper {
     }
 
     @Override
-    public MapResult map(HttpRequest request, String userId, String sessionId, BackendHealthManager backendHealthManager, RequestHandler requestHandler) {
-        String uri = request.uri();
+    public MapResult map(RequestInfo info, BackendHealthManager backendHealthManager, ProxyRequestsManager requestHandler) {
+        String uri = info.getUri();
         if (uri.contains("not-found")) {
             return MapResult.NOT_FOUND(MapResult.NO_ROUTE);
         } else if (uri.contains("debug")) {
@@ -97,6 +98,5 @@ public class TestEndpointMapper extends EndpointMapper {
     public List<CustomHeader> getHeaders() {
         return headers;
     }
-
 
 }

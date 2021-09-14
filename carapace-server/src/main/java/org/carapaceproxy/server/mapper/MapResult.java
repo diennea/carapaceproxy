@@ -17,7 +17,7 @@
  under the License.
 
  */
-package org.carapaceproxy;
+package org.carapaceproxy.server.mapper;
 
 import java.util.List;
 import org.carapaceproxy.server.mapper.CustomHeader;
