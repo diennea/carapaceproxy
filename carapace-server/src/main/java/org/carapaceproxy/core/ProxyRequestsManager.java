@@ -50,16 +50,20 @@ public class ProxyRequestsManager {
 
     private static final Logger LOGGER = Logger.getLogger(ProxyRequestsManager.class.getName());
 
-    public static final Gauge RUNNING_REQUESTS_GAUGE = PrometheusUtils.createGauge(
-            "listeners", "running_requests", "running requests"
-    ).register();
-
     public static final Counter USER_REQUESTS_COUNTER = PrometheusUtils.createCounter(
             "listeners", "user_requests_total", "inbound requests count", "userId"
     ).register();
 
+    public static final Gauge PENDING_REQUESTS_GAUGE = PrometheusUtils.createGauge(
+            "backends", "pending_requests", "pending requests"
+    ).register();
+
     public static final Counter TOTAL_REQUESTS_COUNTER = PrometheusUtils.createCounter(
             "backends", "sent_requests_total", "sent requests", "host"
+    ).register();
+
+    public static final Counter STUCK_REQUESTS_COUNTER = PrometheusUtils.createCounter(
+            "backends", "stuck_requests_total", "stuck requests, this requests will be killed"
     ).register();
 
     private final HttpProxyServer parent;
@@ -75,8 +79,8 @@ public class ProxyRequestsManager {
     }
 
     public void reloadConfiguration(RuntimeServerConfiguration newConfiguration) {
-        if (newConfiguration.getBorrowTimeout() != parent.getCurrentConfiguration().getBorrowTimeout()
-                || newConfiguration.getMaxConnectionsPerEndpoint() != parent.getCurrentConfiguration().getMaxConnectionsPerEndpoint()) {
+        if (connectionProvider == null || (newConfiguration.getBorrowTimeout() != parent.getCurrentConfiguration().getBorrowTimeout()
+                || newConfiguration.getMaxConnectionsPerEndpoint() != parent.getCurrentConfiguration().getMaxConnectionsPerEndpoint())) {
             close();
             ConnectionProvider.Builder builder = ConnectionProvider.builder("custom")
                     .pendingAcquireTimeout(Duration.ofSeconds(newConfiguration.getBorrowTimeout()));
@@ -97,9 +101,11 @@ public class ProxyRequestsManager {
     public Publisher<Void> processRequest(ProxyRequest request) {
         request.setStartTs(System.currentTimeMillis());
         request.setLastActivity(request.getStartTs());
+
         for (RequestFilter filter : parent.getFilters()) {
             filter.apply(request);
         }
+
         MapResult action = parent.getMapper().map(request);
         if (action == null) {
             LOGGER.log(Level.INFO, "Mapper returned NULL action for {0}", this);
@@ -107,19 +113,18 @@ public class ProxyRequestsManager {
         }
         request.setAction(action);
 
-        String endpointHost = action.host;
-        int endpointPort = action.port;
-
-        Counter.Child requestsPerUser;
-        if (request.getUserId() != null) {
-            requestsPerUser = USER_REQUESTS_COUNTER.labels(request.getUserId());
-        } else {
-            requestsPerUser = USER_REQUESTS_COUNTER.labels("anonymous");
-        }
-        requestsPerUser.inc();
         if (LOGGER.isLoggable(Level.FINER)) {
             LOGGER.log(Level.FINER, "{0} Mapped {1} to {2}, userid {3}", new Object[]{this, request.getUri(), action, request.getUserId()});
         }
+
+        String endpointHost = action.host;
+        int endpointPort = action.port;
+
+        Counter.Child requestsPerUser = request.getUserId() != null
+                ? USER_REQUESTS_COUNTER.labels(request.getUserId())
+                : USER_REQUESTS_COUNTER.labels("anonymous");
+        Counter.Child totalRequests = TOTAL_REQUESTS_COUNTER.labels(request.getHostPort() + "");
+
         switch (action.action) {
             case NOTFOUND:
 //                serveNotFoundMessage();
@@ -146,18 +151,19 @@ public class ProxyRequestsManager {
                             channel.pipeline().addFirst("writeTimeoutHandler", new WriteTimeoutHandler(parent.getCurrentConfiguration().getIdleTimeout() / 2));
                         })
                         .doOnRequest((req, conn) -> {
-                            RUNNING_REQUESTS_GAUGE.inc();
-                            TOTAL_REQUESTS_COUNTER.inc();
+                            requestsPerUser.inc();
+                            PENDING_REQUESTS_GAUGE.inc();
+                            totalRequests.inc();
                             endpointStats.getTotalRequests().incrementAndGet();
                             endpointStats.getLastActivity().set(System.currentTimeMillis());
                             parent.getRequestsLogger().logRequest(request);
                         })
                         .doOnRequestError((req, err) -> {
-                            RUNNING_REQUESTS_GAUGE.dec();
+                            PENDING_REQUESTS_GAUGE.dec();
 //                            errorSendingRequest(err);
                         })
                         .doAfterResponseSuccess((resp, conn) -> {
-                            RUNNING_REQUESTS_GAUGE.dec();
+                            PENDING_REQUESTS_GAUGE.dec();
                             endpointStats.getLastActivity().set(System.currentTimeMillis());
                         })
                         .doOnResponseError((req, err)
@@ -536,5 +542,31 @@ public class ProxyRequestsManager {
 //    public void badErrorOnRemote(Throwable cause) {
 //        LOGGER.log(Level.INFO, "{0} badErrorOnRemote {1}", new Object[]{this, cause});
 //        serveInternalErrorMessage(true);
+//    }
+//
+//    private class RequestHandlerChecker implements Runnable {
+//
+//        @Override
+//        public void run() {
+//            long now = System.currentTimeMillis();
+//            List<RequestHandler> toRemove = new ArrayList<>();
+//            for (Map.Entry<Long, RequestHandler> entry : pendingRequests.entrySet()) {
+//                RequestHandler requestHandler = entry.getValue();
+//                requestHandler.failIfStuck(now, stuckRequestTimeout, () -> {
+//                    EndpointConnection connectionToEndpoint = requestHandler.getConnectionToEndpoint();
+//                    if (connectionToEndpoint != null && backendsUnreachableOnStuckRequests) {
+//                        backendHealthManager.reportBackendUnreachable(
+//                                connectionToEndpoint.getKey().getHostPort(), now,
+//                                "a request to " + requestHandler.getUri() + " for user " + requestHandler.getUserId() + " appears stuck"
+//                        );
+//                    }
+//                    STUCK_REQUESTS_COUNTER.inc();
+//                    toRemove.add(entry.getValue());
+//                });
+//            }
+//            toRemove.forEach(r -> {
+//                unregisterPendingRequest(r);
+//            });
+//        }
 //    }
 }

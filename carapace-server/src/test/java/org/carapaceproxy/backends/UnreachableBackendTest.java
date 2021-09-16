@@ -144,7 +144,7 @@ public class UnreachableBackendTest {
                         + "    </body>        \n"
                         + "</html>\n", resp.getBodyString());
             }
-            assertThat((int) ProxyRequestsManager.RUNNING_REQUESTS_GAUGE.get(), is(0));
+            assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
 
