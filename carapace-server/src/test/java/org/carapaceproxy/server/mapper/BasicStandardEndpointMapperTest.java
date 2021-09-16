@@ -1,5 +1,3 @@
-package org.carapaceproxy.server.mapper;
-
 /*
  Licensed to Diennea S.r.l. under one
  or more contributor license agreements. See the NOTICE file
@@ -19,11 +17,13 @@ package org.carapaceproxy.server.mapper;
  under the License.
 
  */
+package org.carapaceproxy.server.mapper;
+
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.carapaceproxy.core.ProxyRequestsManager.PROPERTY_URI;
+import static org.carapaceproxy.core.ProxyRequest.PROPERTY_URI;
 import static org.carapaceproxy.core.StaticContentsManager.CLASSPATH_RESOURCE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -43,7 +43,6 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.util.Properties;
 import org.apache.commons.io.IOUtils;
-import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.StaticContentsManager;
@@ -54,7 +53,6 @@ import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
-import org.carapaceproxy.utils.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -113,11 +111,9 @@ public class BasicStandardEndpointMapperTest {
         mapper.addRoute(new RouteConfiguration("route-2-not-found", "not-found-custom", true, new RegexpRequestMatcher(PROPERTY_URI, ".*notfound.html.*")));
         mapper.addRoute(new RouteConfiguration("route-3-error", "error-custom", true, new RegexpRequestMatcher(PROPERTY_URI, ".*error.html.*")));
         mapper.addRoute(new RouteConfiguration("route-4-static", "static-custom", true, new RegexpRequestMatcher(PROPERTY_URI, ".*static.html.*")));
-        ConnectionsManagerStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
-            stats = server.getConnectionsManager().getStats();
             {
                 // proxy on director 1
                 String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8");
@@ -163,8 +159,6 @@ public class BasicStandardEndpointMapperTest {
             } catch (FileNotFoundException ok) {
             }
         }
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 
     @Test
@@ -321,7 +315,6 @@ public class BasicStandardEndpointMapperTest {
         mapper.addRoute(new RouteConfiguration("route-down", "cache-down", true, new RegexpRequestMatcher(PROPERTY_URI, ".*down.html.*")));
         mapper.addRoute(new RouteConfiguration("route-default", "cache", true, new RegexpRequestMatcher(PROPERTY_URI, ".*html")));
 
-        ConnectionsManagerStats stats;
         BackendHealthManager bhMan = mock(BackendHealthManager.class);
         when(bhMan.isAvailable(eq("localhost:" + backendPort))).thenReturn(true);
         when(bhMan.isAvailable(eq("localhost-down:" + backendPort))).thenReturn(false); // simulate unreachable backend -> expected 500 error
@@ -330,7 +323,6 @@ public class BasicStandardEndpointMapperTest {
             server.setBackendHealthManager(bhMan);
             server.start();
             int port = server.getLocalPort();
-            stats = server.getConnectionsManager().getStats();
             // index.html matches with route
             {
                 String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8");
@@ -348,8 +340,6 @@ public class BasicStandardEndpointMapperTest {
             } catch (IOException ok) {
             }
         }
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 
     @Test

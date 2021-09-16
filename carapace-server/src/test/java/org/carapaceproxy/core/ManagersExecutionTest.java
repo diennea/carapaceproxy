@@ -17,7 +17,7 @@
  under the License.
 
  */
-package org.carapaceproxy.server;
+package org.carapaceproxy.core;
 
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import java.util.concurrent.Executors;

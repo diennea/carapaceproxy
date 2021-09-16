@@ -1,28 +1,24 @@
 /*
- * Licensed to Diennea S.r.l. under one
- * or more contributor license agreements. See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership. Diennea S.r.l. licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- *
- */
-package org.carapaceproxy.server;
+ Licensed to Diennea S.r.l. under one
+ or more contributor license agreements. See the NOTICE file
+ distributed with this work for additional information
+ regarding copyright ownership. Diennea S.r.l. licenses this file
+ to you under the Apache License, Version 2.0 (the
+ "License"); you may not use this file except in compliance
+ with the License.  You may obtain a copy of the License at
 
-import org.carapaceproxy.core.ProxyRequestsManager;
-import org.carapaceproxy.core.RuntimeServerConfiguration;
-import org.carapaceproxy.core.RequestsLogger;
-import org.carapaceproxy.core.HttpProxyServer;
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing,
+ software distributed under the License is distributed on an
+ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ KIND, either express or implied.  See the License for the
+ specific language governing permissions and limitations
+ under the License.
+
+ */
+package org.carapaceproxy.core;
+
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
@@ -32,7 +28,6 @@ import com.google.common.io.Files;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpRequest;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -44,13 +39,13 @@ import java.text.SimpleDateFormat;
 import java.util.List;
 import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.server.mapper.MapResult;
-import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import org.junit.Before;
@@ -59,6 +54,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import reactor.netty.http.server.HttpServerRequest;
 
 /**
  *
@@ -95,7 +91,7 @@ public class RequestsLoggerTest {
         return content;
     }
 
-    private static final class MockRequestHandler {
+    private static final class MockProxyRequest {
 
         HttpMethod reqMethod;
         String reqHost;
@@ -110,20 +106,18 @@ public class RequestsLoggerTest {
         String sessionid;
     }
 
-    private static ProxyRequestsManager createMockRequestHandler(
-            MockRequestHandler r
-    ) throws Exception {
+    private static ProxyRequest createMockRequestHandler(MockProxyRequest r) throws Exception {
 
         SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
 
         HttpHeaders hh = mock(HttpHeaders.class);
         when(hh.getAsString(HttpHeaderNames.HOST)).thenReturn(r.reqHost);
 
-        HttpRequest hr = mock(HttpRequest.class);
+        HttpServerRequest hr = mock(HttpServerRequest.class);
         when(hr.method()).thenReturn(r.reqMethod);
-        when(hr.headers()).thenReturn(hh);
+        when(hr.requestHeaders()).thenReturn(hh);
 
-        ProxyRequestsManager rh = mock(ProxyRequestsManager.class);
+        ProxyRequest rh = mock(ProxyRequest.class);
         when(rh.getRequest()).thenReturn(hr);
         when(rh.getUri()).thenReturn(r.reqUri);
         when(rh.getAction()).thenReturn(r.action);
@@ -177,7 +171,7 @@ public class RequestsLoggerTest {
         {
             // Request to log 1
 
-            MockRequestHandler r1 = new MockRequestHandler();
+            MockProxyRequest r1 = new MockProxyRequest();
             r1.reqMethod = HttpMethod.GET;
             r1.reqHost = "thehost";
             r1.reqUri = "/index.html";
@@ -209,7 +203,7 @@ public class RequestsLoggerTest {
             System.out.println("Sleeping 100ms");
             Thread.sleep(100);
 
-            MockRequestHandler r2 = new MockRequestHandler();
+            MockProxyRequest r2 = new MockProxyRequest();
             r2.reqMethod = HttpMethod.POST;
             r2.reqHost = "thehost2";
             r2.reqUri = "/index2.html";
@@ -258,7 +252,7 @@ public class RequestsLoggerTest {
         {
             // First request will be logged with old format (new conf will be evaluated at next cycle run)
 
-            MockRequestHandler r1 = new MockRequestHandler();
+            MockProxyRequest r1 = new MockProxyRequest();
             r1.reqMethod = HttpMethod.GET;
             r1.reqHost = "thehost";
             r1.reqUri = "/index.html";
@@ -286,7 +280,7 @@ public class RequestsLoggerTest {
                     + "server=234.234.234.234, act=CACHE, route=routeid_1, backend=host:1111. time t=1012ms b=542ms"));
 
             // This request will be taken in with the new conf
-            MockRequestHandler r2 = new MockRequestHandler();
+            MockProxyRequest r2 = new MockProxyRequest();
             r2.reqMethod = HttpMethod.GET;
             r2.reqHost = "thehost";
             r2.reqUri = "/index.html";
@@ -326,7 +320,7 @@ public class RequestsLoggerTest {
         reqLogger.reloadConfiguration(c3);
 
         {
-            MockRequestHandler r1 = new MockRequestHandler();
+            MockProxyRequest r1 = new MockProxyRequest();
             r1.reqMethod = HttpMethod.GET;
             r1.reqHost = "thehost";
             r1.reqUri = "/index1.html";
@@ -351,7 +345,7 @@ public class RequestsLoggerTest {
             assertThat(rows1.size(), is(4));
 
             // Other 2 requests. Only r1 and r2 will be retained (max queue capacity = 2). r3 should be discarded
-            MockRequestHandler r2 = new MockRequestHandler();
+            MockProxyRequest r2 = new MockProxyRequest();
             r2.reqMethod = HttpMethod.GET;
             r2.reqHost = "thehost";
             r2.reqUri = "/index2.html";
@@ -366,7 +360,7 @@ public class RequestsLoggerTest {
 
             reqLogger.logRequest(createMockRequestHandler(r2));
 
-            MockRequestHandler r3 = new MockRequestHandler();
+            MockProxyRequest r3 = new MockProxyRequest();
             r3.reqMethod = HttpMethod.GET;
             r3.reqHost = "thehost";
             r3.reqUri = "/index3.html";
@@ -412,7 +406,7 @@ public class RequestsLoggerTest {
         {
             // r1 will be taken into before close, so it must be writed on access log
 
-            MockRequestHandler r1 = new MockRequestHandler();
+            MockProxyRequest r1 = new MockProxyRequest();
             r1.reqMethod = HttpMethod.GET;
             r1.reqHost = "thehost";
             r1.reqUri = "/index1.html";
@@ -431,7 +425,7 @@ public class RequestsLoggerTest {
             reqLogger.close();
 
             // r2 will be discarded
-            MockRequestHandler r2 = new MockRequestHandler();
+            MockProxyRequest r2 = new MockProxyRequest();
             r2.reqMethod = HttpMethod.GET;
             r2.reqHost = "thehost";
             r2.reqUri = "/index2.html";
@@ -481,7 +475,7 @@ public class RequestsLoggerTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        ConnectionsManagerStats stats;
+        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.getCurrentConfiguration().setAccessLogPath(tmpDir.getRoot().getAbsolutePath() + "/access.log");
             server.start();
@@ -510,21 +504,17 @@ public class RequestsLoggerTest {
                 }
             }
 
-            stats = server.getConnectionsManager().getStats();
-
+            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
         }
 
         List<String> content = readFile(accessLogFilePath);
 
         TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() == 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
+            return stats.getTotalConnections().intValue() == 1
+                    && stats.getActiveConnections().intValue() == 0
+                    && stats.getOpenConnections().intValue() == 0;
         }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 
     @Test

@@ -1,25 +1,24 @@
 /*
- * Licensed to Diennea S.r.l. under one
- * or more contributor license agreements. See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership. Diennea S.r.l. licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- *
+ Licensed to Diennea S.r.l. under one
+ or more contributor license agreements. See the NOTICE file
+ distributed with this work for additional information
+ regarding copyright ownership. Diennea S.r.l. licenses this file
+ to you under the Apache License, Version 2.0 (the
+ "License"); you may not use this file except in compliance
+ with the License.  You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing,
+ software distributed under the License is distributed on an
+ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ KIND, either express or implied.  See the License for the
+ specific language governing permissions and limitations
+ under the License.
+
  */
 package org.carapaceproxy.core;
 
-import com.google.common.annotations.VisibleForTesting;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -43,6 +42,7 @@ import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import java.util.Set;
+import lombok.Data;
 import org.carapaceproxy.utils.CarapaceLogger;
 
 /**
@@ -50,6 +50,7 @@ import org.carapaceproxy.utils.CarapaceLogger;
  *
  * @author enrico.olivelli
  */
+@Data
 public class RuntimeServerConfiguration {
 
     private static final Logger LOG = Logger.getLogger(RuntimeServerConfiguration.class.getName());
@@ -88,214 +89,6 @@ public class RuntimeServerConfiguration {
     private int ocspStaplingManagerPeriod = 0;
     private boolean requestsHeaderDebugEnabled = false;
     private int clientsIdleTimeoutSeconds = 120;
-
-    public String getAccessLogPath() {
-        return accessLogPath;
-    }
-
-    public void setAccessLogPath(String accessLogPath) {
-        this.accessLogPath = accessLogPath;
-    }
-
-    public String getAccessLogTimestampFormat() {
-        return accessLogTimestampFormat;
-    }
-
-    public void setAccessLogTimestampFormat(String accessLogTimestampFormat) {
-        this.accessLogTimestampFormat = accessLogTimestampFormat;
-    }
-
-    public String getAccessLogFormat() {
-        return accessLogFormat;
-    }
-
-    public void setAccessLogFormat(String accessLogFormat) {
-        this.accessLogFormat = accessLogFormat;
-    }
-
-    public int getAccessLogMaxQueueCapacity() {
-        return accessLogMaxQueueCapacity;
-    }
-
-    public void setAccessLogMaxQueueCapacity(int accessLogMaxQueueCapacity) {
-        this.accessLogMaxQueueCapacity = accessLogMaxQueueCapacity;
-    }
-
-    public int getAccessLogFlushInterval() {
-        return accessLogFlushInterval;
-    }
-
-    public void setAccessLogFlushInterval(int accessLogFlushInterval) {
-        this.accessLogFlushInterval = accessLogFlushInterval;
-    }
-
-    public int getAccessLogWaitBetweenFailures() {
-        return accessLogWaitBetweenFailures;
-    }
-
-    public void setAccessLogWaitBetweenFailures(int accessLogWaitBetweenFailures) {
-        this.accessLogWaitBetweenFailures = accessLogWaitBetweenFailures;
-    }
-
-    public long getAccessLogMaxSize() {
-        return accessLogMaxSize;
-    }
-
-    public void setAccessLogMaxSize(long accessLogMaxSize) {
-        this.accessLogMaxSize = accessLogMaxSize;
-    }
-
-    public boolean isAccessLogAdvancedEnabled() {
-        return accessLogAdvancedEnabled;
-    }
-
-    public void setAccessLogAdvancedEnabled(boolean accessLogAdvancedEnabled) {
-        this.accessLogAdvancedEnabled = accessLogAdvancedEnabled;
-    }
-
-    public int getAccessLogAdvancedBodySize() {
-        return accessLogAdvancedBodySize;
-    }
-
-    public void setAccessLogAdvancedBodySize(int accessLogAdvancedBodySize) {
-        this.accessLogAdvancedBodySize = accessLogAdvancedBodySize;
-    }
-
-    public String getMapperClassname() {
-        return mapperClassname;
-    }
-
-    public void setMapperClassname(String mapperClassname) {
-        this.mapperClassname = mapperClassname;
-    }
-
-    public String getUserRealmClassname() {
-        return userRealmClassname;
-    }
-
-    public void setUserRealmClassname(String userRealmClassname) {
-        this.userRealmClassname = userRealmClassname;
-    }
-
-    public int getMaxConnectionsPerEndpoint() {
-        return maxConnectionsPerEndpoint;
-    }
-
-    public void setMaxConnectionsPerEndpoint(int maxConnectionsPerEndpoint) {
-        this.maxConnectionsPerEndpoint = maxConnectionsPerEndpoint;
-    }
-
-    public int getIdleTimeout() {
-        return idleTimeout;
-    }
-
-    public void setIdleTimeout(int idleTimeout) {
-        this.idleTimeout = idleTimeout;
-    }
-
-    public int getStuckRequestTimeout() {
-        return stuckRequestTimeout;
-    }
-
-    public void setStuckRequestTimeout(int stuckRequestTimeout) {
-        this.stuckRequestTimeout = stuckRequestTimeout;
-    }
-
-    public boolean isBackendsUnreachableOnStuckRequests() {
-        return backendsUnreachableOnStuckRequests;
-    }
-
-    public void setBackendsUnreachableOnStuckRequests(boolean backendsUnreachableOnStuckRequests) {
-        this.backendsUnreachableOnStuckRequests = backendsUnreachableOnStuckRequests;
-    }
-
-    public int getConnectTimeout() {
-        return connectTimeout;
-    }
-
-    public void setConnectTimeout(int connectTimeout) {
-        this.connectTimeout = connectTimeout;
-    }
-
-    public int getBorrowTimeout() {
-        return borrowTimeout;
-    }
-
-    public void setBorrowTimeout(int borrowTimeout) {
-        this.borrowTimeout = borrowTimeout;
-    }
-
-    public long getCacheMaxSize() {
-        return cacheMaxSize;
-    }
-
-    public void setCacheMaxSize(long cacheMaxSize) {
-        this.cacheMaxSize = cacheMaxSize;
-    }
-
-    public long getCacheMaxFileSize() {
-        return cacheMaxFileSize;
-    }
-
-    public void setCacheMaxFileSize(long cacheMaxFileSize) {
-        this.cacheMaxFileSize = cacheMaxFileSize;
-    }
-
-    public boolean isCacheDisabledForSecureRequestsWithoutPublic() {
-        return cacheDisabledForSecureRequestsWithoutPublic;
-    }
-
-    public void setCacheDisabledForSecureRequestsWithoutPublic(boolean cacheDisabledForSecureRequestsWithoutPublic) {
-        this.cacheDisabledForSecureRequestsWithoutPublic = cacheDisabledForSecureRequestsWithoutPublic;
-    }
-
-    public int getHealthProbePeriod() {
-        return healthProbePeriod;
-    }
-
-    @VisibleForTesting
-    public void setHealthProbePeriod(int healthProbePeriod) {
-        this.healthProbePeriod = healthProbePeriod;
-    }
-
-    public int getDynamicCertificatesManagerPeriod() {
-        return dynamicCertificatesManagerPeriod;
-    }
-
-    @VisibleForTesting
-    public void setDynamicCertificatesManagerPeriod(int dynamicCertificatesManagerPeriod) {
-        this.dynamicCertificatesManagerPeriod = dynamicCertificatesManagerPeriod;
-    }
-
-    public int getKeyPairsSize() {
-        return keyPairsSize;
-    }
-
-    public int getOcspStaplingManagerPeriod() {
-        return ocspStaplingManagerPeriod;
-    }
-
-    public boolean isRequestsHeaderDebugEnabled() {
-        return requestsHeaderDebugEnabled;
-    }
-
-    @VisibleForTesting
-    public void setRequestsHeaderDebugEnabled(boolean requestsHeaderDebugEnabled) {
-        this.requestsHeaderDebugEnabled = requestsHeaderDebugEnabled;
-    }
-
-    public int getClientsIdleTimeoutSeconds() {
-        return clientsIdleTimeoutSeconds;
-    }
-
-    @VisibleForTesting
-    public void setClientsIdleTimeoutSeconds(int clientIdleTimeoutSeconds) {
-        this.clientsIdleTimeoutSeconds = clientIdleTimeoutSeconds;
-    }
-
-    public Set<String> getDomainsCheckerIPAddresses() {
-        return domainsCheckerIPAddresses;
-    }
 
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
         LOG.log(Level.INFO, "configuring from {0}", properties);

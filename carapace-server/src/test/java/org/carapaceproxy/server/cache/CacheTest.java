@@ -1,15 +1,24 @@
-package org.carapaceproxy.server.cache;
-
 /*
- * Licensed to Diennea S.r.l. under one or more contributor license agreements. See the NOTICE file distributed with this work for additional information regarding copyright ownership. Diennea S.r.l.
- * licenses this file to you under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
- * implied. See the License for the specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  *
  */
+package org.carapaceproxy.server.cache;
+
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
@@ -19,7 +28,6 @@ import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.util.List;
 import java.util.Map;
 import org.carapaceproxy.EndpointStats;
-import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -66,7 +74,7 @@ public class CacheTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        ConnectionsManagerStats stats;
+        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -103,8 +111,8 @@ public class CacheTest {
                 }
             }
 
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
+            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(2, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
@@ -125,13 +133,10 @@ public class CacheTest {
         }
 
         TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() >= 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
+            return stats.getTotalConnections().intValue() >= 1
+                    && stats.getActiveConnections().intValue() == 0
+                    && stats.getOpenConnections().intValue() == 0;
         }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
     }
 
@@ -148,7 +153,7 @@ public class CacheTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        ConnectionsManagerStats stats;
+        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -184,21 +189,18 @@ public class CacheTest {
                 }
             }
 
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
+            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(1, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
         }
 
         TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() >= 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
+            return stats.getTotalConnections().intValue() >= 1
+                    && stats.getActiveConnections().intValue() == 0
+                    && stats.getOpenConnections().intValue() == 0;
         }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
     }
 
@@ -217,7 +219,7 @@ public class CacheTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        ConnectionsManagerStats stats;
+        EndpointStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", 0, true, false, null, "localhost", null, null));
@@ -241,7 +243,7 @@ public class CacheTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        ConnectionsManagerStats stats;
+        EndpointStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", 0, true, false, null, "localhost", null, null));
@@ -278,8 +280,8 @@ public class CacheTest {
                     assertEquals(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")), !cacheDisabledForSecureRequestsWithoutPublic);
                 }
             }
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
+            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
             int expected = cacheDisabledForSecureRequestsWithoutPublic ? 0 : 1;
             assertEquals(expected, server.getCache().getCacheSize());
             assertEquals(expected, server.getCache().getStats().getHits());
@@ -304,8 +306,6 @@ public class CacheTest {
                     assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached"))); // cached due to cache-control: public header presence in second request
                 }
             }
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(1, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
@@ -329,8 +329,6 @@ public class CacheTest {
                     assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
             }
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(1, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
@@ -354,20 +352,15 @@ public class CacheTest {
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
             }
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
             assertEquals(0, server.getCache().getCacheSize());
             assertEquals(0, server.getCache().getStats().getHits());
             assertEquals(0, server.getCache().getStats().getMisses());
 
             TestUtils.waitForCondition(() -> {
-                EndpointStats epstats = server.getConnectionsManager().getStats().getEndpointStats(key);
-                return epstats.getTotalConnections().intValue() >= 1
-                        && epstats.getActiveConnections().intValue() == 0
-                        && epstats.getOpenConnections().intValue() == 0;
+                return stats.getTotalConnections().intValue() >= 1
+                        && stats.getActiveConnections().intValue() == 0
+                        && stats.getOpenConnections().intValue() == 0;
             }, 100);
-
-            TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
         }
     }
 
@@ -383,7 +376,7 @@ public class CacheTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        ConnectionsManagerStats stats;
+        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -424,21 +417,18 @@ public class CacheTest {
                 }
             }
 
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
+            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(2, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
         }
 
         TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() >= 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
+            return stats.getTotalConnections().intValue() >= 1
+                    && stats.getActiveConnections().intValue() == 0
+                    && stats.getOpenConnections().intValue() == 0;
         }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
     }
 
@@ -454,7 +444,7 @@ public class CacheTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        ConnectionsManagerStats stats;
+        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -495,21 +485,18 @@ public class CacheTest {
                 }
             }
 
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
+            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(2, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
         }
 
         TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() >= 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
+            return stats.getTotalConnections().intValue() >= 1
+                    && stats.getActiveConnections().intValue() == 0
+                    && stats.getOpenConnections().intValue() == 0;
         }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
     }
 
@@ -525,7 +512,7 @@ public class CacheTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        ConnectionsManagerStats stats;
+        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -543,21 +530,18 @@ public class CacheTest {
                 assertTrue(s.endsWith("it <b>works</b> !!"));
             }
 
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
+            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
             assertEquals(0, server.getCache().getCacheSize());
             assertEquals(0, server.getCache().getStats().getHits());
             assertEquals(0, server.getCache().getStats().getMisses());
         }
 
         TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() >= 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
+            return stats.getTotalConnections().intValue() >= 1
+                    && stats.getActiveConnections().intValue() == 0
+                    && stats.getOpenConnections().intValue() == 0;
         }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
     }
 
@@ -573,7 +557,7 @@ public class CacheTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        ConnectionsManagerStats stats;
+        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -591,21 +575,18 @@ public class CacheTest {
                 assertTrue(s.endsWith("it <b>works</b> !!"));
             }
 
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
+            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(1, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
         }
 
         TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() >= 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
+            return stats.getTotalConnections().intValue() >= 1
+                    && stats.getActiveConnections().intValue() == 0
+                    && stats.getOpenConnections().intValue() == 0;
         }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
 
     }
 
@@ -613,7 +594,8 @@ public class CacheTest {
     public void testNoCacheResponse() throws Exception {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        EndpointStats stats;
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.start();
             int port = server.getLocalPort();
             for (String noCacheValue : CACHE_CONTROL_CACHE_DISABLED_VALUES) {
@@ -637,9 +619,6 @@ public class CacheTest {
                     System.out.println("s:" + s);
                     assertTrue(s.endsWith("it <b>works</b> !!"));
                 }
-
-                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
-                assertNotNull(stats.getEndpoints().get(key));
                 assertEquals(0, server.getCache().getCacheSize());
                 assertEquals(0, server.getCache().getStats().getHits());
                 assertEquals(2, server.getCache().getStats().getMisses());
@@ -667,8 +646,6 @@ public class CacheTest {
                     System.out.println("s:" + s);
                     assertTrue(s.endsWith("it <b>works</b> !!"));
                 }
-                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
-                assertNotNull(stats.getEndpoints().get(key));
                 assertEquals(0, server.getCache().getCacheSize());
                 assertEquals(0, server.getCache().getStats().getHits());
                 assertEquals(2, server.getCache().getStats().getMisses());
@@ -696,8 +673,6 @@ public class CacheTest {
                     System.out.println("s:" + s);
                     assertTrue(s.endsWith("it <b>works</b> !!"));
                 }
-                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
-                assertNotNull(stats.getEndpoints().get(key));
                 assertEquals(0, server.getCache().getCacheSize());
                 assertEquals(0, server.getCache().getStats().getHits());
                 assertEquals(2, server.getCache().getStats().getMisses());
@@ -725,8 +700,6 @@ public class CacheTest {
                     System.out.println("s:" + s);
                     assertTrue(s.endsWith("it <b>works</b> !!"));
                 }
-                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
-                assertNotNull(stats.getEndpoints().get(key));
                 assertEquals(0, server.getCache().getCacheSize());
                 assertEquals(0, server.getCache().getStats().getHits());
                 assertEquals(2, server.getCache().getStats().getMisses());
@@ -754,8 +727,6 @@ public class CacheTest {
                     System.out.println("s:" + s);
                     assertTrue(s.endsWith("it <b>works</b> !!"));
                 }
-                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
-                assertNotNull(stats.getEndpoints().get(key));
                 assertEquals(0, server.getCache().getCacheSize());
                 assertEquals(0, server.getCache().getStats().getHits());
                 assertEquals(2, server.getCache().getStats().getMisses());
@@ -782,29 +753,26 @@ public class CacheTest {
                     System.out.println("s:" + s);
                     assertTrue(s.endsWith("it <b>works</b> !!"));
                 }
-                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
-                assertNotNull(stats.getEndpoints().get(key));
                 assertEquals(1, server.getCache().getCacheSize());
                 assertEquals(1, server.getCache().getStats().getHits());
                 assertEquals(1, server.getCache().getStats().getMisses());
             }
 
-            ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
-            TestUtils.waitForCondition(() -> {
-                EndpointStats epstats = stats.getEndpointStats(key);
-                return epstats.getTotalConnections().intValue() >= 1
-                        && epstats.getActiveConnections().intValue() == 0
-                        && epstats.getOpenConnections().intValue() == 0;
-            }, 100);
-
-            TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
         }
+        TestUtils.waitForCondition(() -> {
+            return stats.getTotalConnections().intValue() >= 1
+                    && stats.getActiveConnections().intValue() == 0
+                    && stats.getOpenConnections().intValue() == 0;
+        }, 100);
     }
 
     @Test
     public void testNoCacheRequest() throws Exception {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -832,8 +800,8 @@ public class CacheTest {
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
 
-                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
-                assertNotNull(stats.getEndpoints().get(key));
+                EndpointStats epstats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+                assertNotNull(epstats);
                 assertEquals(0, server.getCache().getCacheSize());
                 assertEquals(0, server.getCache().getStats().getHits());
                 assertEquals(0, server.getCache().getStats().getMisses());
@@ -864,8 +832,6 @@ public class CacheTest {
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
 
-                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
-                assertNotNull(stats.getEndpoints().get(key));
                 assertEquals(0, server.getCache().getCacheSize());
                 assertEquals(0, server.getCache().getStats().getHits());
                 assertEquals(0, server.getCache().getStats().getMisses());
@@ -896,8 +862,6 @@ public class CacheTest {
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
 
-                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
-                assertNotNull(stats.getEndpoints().get(key));
                 assertEquals(0, server.getCache().getCacheSize());
                 assertEquals(0, server.getCache().getStats().getHits());
                 assertEquals(0, server.getCache().getStats().getMisses());
@@ -927,8 +891,6 @@ public class CacheTest {
                     assertTrue(s.endsWith("it <b>works</b> !!"));
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
-                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
-                assertNotNull(stats.getEndpoints().get(key));
                 assertEquals(0, server.getCache().getCacheSize());
                 assertEquals(0, server.getCache().getStats().getHits());
                 assertEquals(0, server.getCache().getStats().getMisses());
@@ -958,8 +920,6 @@ public class CacheTest {
                     assertTrue(s.endsWith("it <b>works</b> !!"));
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
-                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
-                assertNotNull(stats.getEndpoints().get(key));
                 assertEquals(0, server.getCache().getCacheSize());
                 assertEquals(0, server.getCache().getStats().getHits());
                 assertEquals(0, server.getCache().getStats().getMisses());
@@ -986,23 +946,19 @@ public class CacheTest {
                     System.out.println("s:" + s);
                     assertTrue(s.endsWith("it <b>works</b> !!"));
                 }
-                ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
-                assertNotNull(stats.getEndpoints().get(key));
                 assertEquals(1, server.getCache().getCacheSize());
                 assertEquals(1, server.getCache().getStats().getHits());
                 assertEquals(1, server.getCache().getStats().getMisses());
             }
 
-            ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
-            TestUtils.waitForCondition(() -> {
-                EndpointStats epstats = stats.getEndpointStats(key);
-                return epstats.getTotalConnections().intValue() >= 1
-                        && epstats.getActiveConnections().intValue() == 0
-                        && epstats.getOpenConnections().intValue() == 0;
-            }, 100);
-
-            TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
+            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
         }
+        TestUtils.waitForCondition(() -> {
+            return stats.getTotalConnections().intValue() >= 1
+                    && stats.getActiveConnections().intValue() == 0
+                    && stats.getOpenConnections().intValue() == 0;
+        }, 100);
     }
 
 }

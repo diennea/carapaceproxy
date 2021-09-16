@@ -1,5 +1,3 @@
-package org.carapaceproxy.toolbox;
-
 /*
  Licensed to Diennea S.r.l. under one
  or more contributor license agreements. See the NOTICE file
@@ -19,12 +17,13 @@ package org.carapaceproxy.toolbox;
  under the License.
 
  */
+package org.carapaceproxy.toolbox;
+
 import java.net.URL;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.EndpointStats;
-import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import static org.junit.Assert.assertNotNull;
@@ -47,7 +46,7 @@ public class ProxyLocalTomcat {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", 8086);
         EndpointKey key = new EndpointKey("localhost", 8086);
 
-        ConnectionsManagerStats stats;
+        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -55,28 +54,20 @@ public class ProxyLocalTomcat {
             String s = IOUtils.toString(new URL("http://localhost:" + port + "/be/admin").toURI(), "utf-8");
             System.out.println("s:" + s);
 
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
+            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
             TestUtils.waitForCondition(() -> {
-                stats.getEndpoints().values().forEach((EndpointStats st) -> {
-                    System.out.println("st2:" + st);
-                });
-                EndpointStats epstats = stats.getEndpointStats(key);
-                return epstats.getTotalConnections().intValue() == 1
-                        && epstats.getActiveConnections().intValue() == 0
-                        && epstats.getOpenConnections().intValue() == 1;
+                return stats.getTotalConnections().intValue() == 1
+                        && stats.getActiveConnections().intValue() == 0
+                        && stats.getOpenConnections().intValue() == 1;
             }, 100);
         }
 
         TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() == 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
+            return stats.getTotalConnections().intValue() == 1
+                    && stats.getActiveConnections().intValue() == 0
+                    && stats.getOpenConnections().intValue() == 0;
         }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 
 }

@@ -22,8 +22,7 @@ package org.carapaceproxy.server.filters;
 import io.netty.handler.codec.http.HttpRequest;
 import java.util.HashMap;
 import java.util.Map;
-import org.carapaceproxy.core.ClientConnectionHandler;
-import org.carapaceproxy.core.ProxyRequestsManager;
+import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchAllRequestMatcher;
 import org.junit.Test;
 import org.mockito.ArgumentMatchers;
@@ -32,6 +31,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import reactor.netty.http.server.HttpServerRequest;
 
 public class SimpleFiltersTest {
 
@@ -51,22 +51,18 @@ public class SimpleFiltersTest {
         cases.put("/be/xxx/index.do?sSID=H*90s856faxe0tbq", "H");
 
         cases.forEach((uri, userId) -> {
-            HttpRequest request = mock(HttpRequest.class);
-            ProxyRequestsManager requestHandler = mock(ProxyRequestsManager.class);
-            ClientConnectionHandler client = null;
-            UrlEncodedQueryString queryString = ProxyRequestsManager.parseQueryString(uri);
-            when(request.uri()).thenReturn(uri);
-            when(requestHandler.getQueryString()).thenReturn(queryString);
+            HttpServerRequest serverRequest = mock(HttpServerRequest.class);
+            when(serverRequest.uri()).thenReturn(uri);
+            ProxyRequest request = new ProxyRequest(serverRequest, null, null);
 
             RegexpMapUserIdFilter instance = new RegexpMapUserIdFilter("sSID", "([\\w\\d]+)([*])", new MatchAllRequestMatcher());
-            //instance.apply(request, requestHandler);
+            instance.apply(request);
             if (userId != null) {
-                verify(requestHandler, times(1)).setUserId(eq(userId));
+                verify(request, times(1)).setUserId(eq(userId));
             } else {
-                verify(requestHandler, times(0)).setUserId(ArgumentMatchers.anyString());
+                verify(request, times(0)).setUserId(ArgumentMatchers.anyString());
             }
         });
-
     }
 
     @Test
@@ -85,22 +81,17 @@ public class SimpleFiltersTest {
         cases.put("/be/xxx/index.do?sSID=H*90s856faxe0tbq", "H*90s856faxe0tbq");
 
         cases.forEach((uri, sessionId) -> {
-            HttpRequest request = mock(HttpRequest.class);
-            ProxyRequestsManager requestHandler = mock(ProxyRequestsManager.class);
-            ClientConnectionHandler client = null;
-            UrlEncodedQueryString queryString = ProxyRequestsManager.parseQueryString(uri);
-            when(request.uri()).thenReturn(uri);
-            when(requestHandler.getQueryString()).thenReturn(queryString);
-
+            HttpServerRequest serverRequest = mock(HttpServerRequest.class);
+            when(serverRequest.uri()).thenReturn(uri);
+            ProxyRequest request = new ProxyRequest(serverRequest, null, null);
             RegexpMapSessionIdFilter instance = new RegexpMapSessionIdFilter("sSID", "(.+)", new MatchAllRequestMatcher());
-//            instance.apply(request, client, requestHandler);
+            instance.apply(request);
             if (sessionId != null) {
-                verify(requestHandler, times(1)).setSessionId(eq(sessionId));
+                verify(request, times(1)).setSessionId(eq(sessionId));
             } else {
-                verify(requestHandler, times(0)).setSessionId(ArgumentMatchers.anyString());
+                verify(request, times(0)).setSessionId(ArgumentMatchers.anyString());
             }
         });
-
     }
 
 }

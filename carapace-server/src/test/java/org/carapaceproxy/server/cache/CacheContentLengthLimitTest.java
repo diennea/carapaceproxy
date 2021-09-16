@@ -26,15 +26,14 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.IOException;
 import org.carapaceproxy.EndpointStats;
-import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import org.junit.Rule;
 import org.junit.Test;
@@ -85,8 +84,6 @@ public class CacheContentLengthLimitTest {
             String body, boolean chunked, EndpointKey key, HttpProxyServer server, boolean cached, int cacheSize) throws IOException {
 
         int port = server.getLocalPort();
-        ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
-
         try (RawHttpClient client = new RawHttpClient("localhost", port)) {
             RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
             String s = resp.toString();
@@ -101,7 +98,8 @@ public class CacheContentLengthLimitTest {
             }
             assertThat(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")), is(cached));
 
-            assertNotNull(stats.getEndpoints().get(key));
+            EndpointStats stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
             assertThat(server.getCache().getCacheSize(), is(cacheSize));
         }
     }
@@ -113,14 +111,14 @@ public class CacheContentLengthLimitTest {
 
         // No size checking
         {
-            ConnectionsManagerStats stats;
-
+            EndpointStats stats;
             try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(0);
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
                 server.start();
 
-                stats = server.getConnectionsManager().getStats();
+                stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+                assertNotNull(stats);
 
                 // First request
                 requestAndTestCached(body, chunked, key, server, false, 1);
@@ -130,25 +128,22 @@ public class CacheContentLengthLimitTest {
             }
 
             TestUtils.waitForCondition(() -> {
-                EndpointStats epstats = stats.getEndpointStats(key);
-                return epstats.getTotalConnections().intValue() == 1
-                        && epstats.getActiveConnections().intValue() == 0
-                        && epstats.getOpenConnections().intValue() == 0;
+                return stats.getTotalConnections().intValue() == 1
+                        && stats.getActiveConnections().intValue() == 0
+                        && stats.getOpenConnections().intValue() == 0;
             });
-
-            TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats));
         }
 
         // Max size set to current content size
         {
-            ConnectionsManagerStats stats;
-
+            EndpointStats stats;
             try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(body.length());
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
                 server.start();
 
-                stats = server.getConnectionsManager().getStats();
+                stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+                assertNotNull(stats);
 
                 // First request
                 requestAndTestCached(body, chunked, key, server, false, 1);
@@ -158,25 +153,22 @@ public class CacheContentLengthLimitTest {
             }
 
             TestUtils.waitForCondition(() -> {
-                EndpointStats epstats = stats.getEndpointStats(key);
-                return epstats.getTotalConnections().intValue() == 1
-                        && epstats.getActiveConnections().intValue() == 0
-                        && epstats.getOpenConnections().intValue() == 0;
+                return stats.getTotalConnections().intValue() == 1
+                        && stats.getActiveConnections().intValue() == 0
+                        && stats.getOpenConnections().intValue() == 0;
             });
-
-            TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats));
         }
 
         // Max size set to drop current content
         {
-            ConnectionsManagerStats stats;
-
+            EndpointStats stats;
             try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(body.length() - 1);
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
                 server.start();
 
-                stats = server.getConnectionsManager().getStats();
+                stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+                assertNotNull(stats);
 
                 // First request
                 requestAndTestCached(body, chunked, key, server, false, 0);
@@ -186,13 +178,10 @@ public class CacheContentLengthLimitTest {
             }
 
             TestUtils.waitForCondition(() -> {
-                EndpointStats epstats = stats.getEndpointStats(key);
-                return epstats.getTotalConnections().intValue() == 1
-                        && epstats.getActiveConnections().intValue() == 0
-                        && epstats.getOpenConnections().intValue() == 0;
+                return stats.getTotalConnections().intValue() == 1
+                        && stats.getActiveConnections().intValue() == 0
+                        && stats.getOpenConnections().intValue() == 0;
             });
-
-            TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats));
         }
     }
 

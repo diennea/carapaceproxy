@@ -29,7 +29,6 @@ import java.io.FileNotFoundException;
 import java.net.URL;
 import java.util.Collections;
 import org.apache.commons.io.IOUtils;
-import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -69,7 +68,7 @@ public class SimpleHTTPProxyTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        ConnectionsManagerStats stats;
+        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -95,19 +94,15 @@ public class SimpleHTTPProxyTest {
                 assertEquals("it <b>works</b> !!", s);
             }
 
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
+            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
         }
 
         TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() == 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
+            return stats.getTotalConnections().intValue() == 1
+                    && stats.getActiveConnections().intValue() == 0
+                    && stats.getOpenConnections().intValue() == 0;
         }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 
     @Test
@@ -127,7 +122,7 @@ public class SimpleHTTPProxyTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        ConnectionsManagerStats stats;
+        EndpointStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
 
             server.addCertificate(new SSLCertificateConfiguration("localhost", certificate, "changeit", STATIC));
@@ -157,19 +152,15 @@ public class SimpleHTTPProxyTest {
                 assertEquals("it <b>works</b> !!", s);
             }
 
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
+            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
         }
 
         TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() == 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
+            return stats.getTotalConnections().intValue() == 1
+                    && stats.getActiveConnections().intValue() == 0
+                    && stats.getOpenConnections().intValue() == 0;
         }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 
     @Test
@@ -180,7 +171,7 @@ public class SimpleHTTPProxyTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", badPort);
         EndpointKey key = new EndpointKey("localhost", badPort);
 
-        ConnectionsManagerStats stats;
+        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -191,18 +182,14 @@ public class SimpleHTTPProxyTest {
 //            String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8");
 //            System.out.println("s:" + s);
 
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
+            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
         }
 
         TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() == 0
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
+            return stats.getTotalConnections().intValue() == 0
+                    && stats.getActiveConnections().intValue() == 0
+                    && stats.getOpenConnections().intValue() == 0;
         }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 }

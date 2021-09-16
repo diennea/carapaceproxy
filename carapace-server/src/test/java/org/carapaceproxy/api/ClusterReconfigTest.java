@@ -21,7 +21,6 @@ package org.carapaceproxy.api;
 
 import java.util.Properties;
 import org.apache.curator.test.TestingServer;
-import org.carapaceproxy.client.impl.ConnectionsManagerImpl;
 import org.carapaceproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -62,8 +61,7 @@ public class ClusterReconfigTest extends UseAdminServer {
             stopServer();
             buildNewServer();
             startServer(configuration);
-            ConnectionsManagerImpl impl = (ConnectionsManagerImpl) server.getConnectionsManager();
-            assertEquals(8000, impl.getConnectTimeout());
+            assertEquals(8000, server.getCurrentConfiguration().getConnectTimeout());
             assertEquals(25, server.getBackendHealthManager().getPeriod());
             try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
                 String body = "connectionsmanager.connecttimeout=9000\n"
@@ -80,16 +78,14 @@ public class ClusterReconfigTest extends UseAdminServer {
                 assertTrue(s.equals("{\"ok\":true,\"error\":\"\"}"));
 
             }
-            assertEquals(9000, impl.getConnectTimeout());
+            assertEquals(9000, server.getCurrentConfiguration().getConnectTimeout());
             assertEquals(30, server.getBackendHealthManager().getPeriod());
             // restart, same "static" confguration
             stopServer();
             buildNewServer();
             startServer(configuration);
-            impl = (ConnectionsManagerImpl) server.getConnectionsManager();
-            assertEquals(9000, impl.getConnectTimeout());
+            assertEquals(9000, server.getCurrentConfiguration().getConnectTimeout());
             assertEquals(30, server.getBackendHealthManager().getPeriod());
-
         }
     }
 }

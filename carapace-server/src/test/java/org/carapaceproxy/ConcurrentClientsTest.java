@@ -32,7 +32,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 import org.apache.commons.io.IOUtils;
-import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.TestEndpointMapper;
@@ -50,6 +49,8 @@ import org.junit.rules.TemporaryFolder;
  * @author enrico.olivelli
  */
 public class ConcurrentClientsTest {
+
+    private static final Logger LOG = Logger.getLogger(ConcurrentClientsTest.class.getName());
 
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
@@ -71,7 +72,7 @@ public class ConcurrentClientsTest {
 
         int size = 100;
         int concurrentClients = 4;
-        ConnectionsManagerStats stats;
+        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -103,21 +104,17 @@ public class ConcurrentClientsTest {
                 fail("error! " + oneError.get());
             }
 
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
+            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
         }
 
         TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            LOG.info("stats: " + epstats.getKey() + " " + (System.currentTimeMillis() - epstats.getLastActivity().longValue()) + " ms");
-            return epstats.getTotalConnections().intValue() > 0
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+            LOG.info("stats: " + stats.getKey() + " " + (System.currentTimeMillis() - stats.getLastActivity().longValue()) + " ms");
+            return stats.getTotalConnections().intValue() > 0
+                && stats.getActiveConnections().intValue() == 0
+                && stats.getOpenConnections().intValue() == 0;
         }, 100);
 
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
-    private static final Logger LOG = Logger.getLogger(ConcurrentClientsTest.class.getName());
 
 }

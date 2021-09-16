@@ -1,5 +1,3 @@
-package org.carapaceproxy.utils;
-
 /*
  Licensed to Diennea S.r.l. under one
  or more contributor license agreements. See the NOTICE file
@@ -19,18 +17,19 @@ package org.carapaceproxy.utils;
  under the License.
 
  */
-import io.netty.handler.codec.http.HttpRequest;
+package org.carapaceproxy.utils;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import org.carapaceproxy.configstore.ConfigurationStore;
+import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.server.mapper.EndpointMapper;
 import org.carapaceproxy.server.mapper.MapResult;
-import org.carapaceproxy.RequestInfo;
-import org.carapaceproxy.core.ProxyRequestsManager;
-import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.mapper.CustomHeader;
@@ -62,8 +61,8 @@ public class TestEndpointMapper extends EndpointMapper {
     }
 
     @Override
-    public MapResult map(RequestInfo info, BackendHealthManager backendHealthManager, ProxyRequestsManager requestHandler) {
-        String uri = info.getUri();
+    public MapResult map(ProxyRequest request) {
+        String uri = request.getUri();
         if (uri.contains("not-found")) {
             return MapResult.NOT_FOUND(MapResult.NO_ROUTE);
         } else if (uri.contains("debug")) {
@@ -97,6 +96,11 @@ public class TestEndpointMapper extends EndpointMapper {
 
     public List<CustomHeader> getHeaders() {
         return headers;
+    }
+
+    @Override
+    public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
 }

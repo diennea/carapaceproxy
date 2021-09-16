@@ -28,9 +28,7 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Properties;
-import java.util.concurrent.ScheduledFuture;
 import org.apache.commons.io.IOUtils;
-import org.carapaceproxy.client.impl.ConnectionsManagerImpl;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
@@ -44,9 +42,7 @@ import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUserRealm;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import org.junit.BeforeClass;
@@ -332,64 +328,6 @@ public class ApplyConfigurationTest {
             userRealm = (TestUserRealm) server.getRealm(); // realm re-created at each configuration reload
             assertEquals(3, userRealm.listUsers().size());
             assertNotNull(userRealm.login("test3", "pass3"));
-        }
-    }
-
-    @Test
-    public void testChangeConnectionManagerConfiguration() throws Exception {
-
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
-
-            {
-                Properties configuration = new Properties();
-                configuration.put("connectionsmanager.connecttimeout", "9473");
-                configuration.put("connectionsmanager.idletimeout", "1000");
-                server.configureAtBoot(new PropertiesConfigurationStore(configuration));
-            }
-
-            {
-                ConnectionsManagerImpl cnnManager = (ConnectionsManagerImpl) server.getConnectionsManager();
-                assertNull(cnnManager.getStuckRequestsReaperFuture());
-            }
-            server.start();
-
-            ScheduledFuture<?> stuckRequestsReaperFuture;
-            {
-                ConnectionsManagerImpl cnnManager = (ConnectionsManagerImpl) server.getConnectionsManager();
-                assertEquals(9473, cnnManager.getConnectTimeout());
-                assertEquals(1000, cnnManager.getIdleTimeout());
-                stuckRequestsReaperFuture = cnnManager.getStuckRequestsReaperFuture();
-                assertNotNull(stuckRequestsReaperFuture);
-            }
-
-            // change connecttimeout
-            {
-                Properties configuration = new Properties();
-                configuration.put("connectionsmanager.connecttimeout", "9479");
-                configuration.put("connectionsmanager.idletimeout", "1000");
-                reloadConfiguration(configuration, server);
-
-                ConnectionsManagerImpl cnnManager = (ConnectionsManagerImpl) server.getConnectionsManager();
-                assertEquals(9479, cnnManager.getConnectTimeout());
-                assertEquals(1000, cnnManager.getIdleTimeout());
-                // this should not change
-                assertSame(stuckRequestsReaperFuture, cnnManager.getStuckRequestsReaperFuture());
-            }
-
-            // change idletimeout, this will reschedule stuck request reaper
-            {
-                Properties configuration = new Properties();
-                configuration.put("connectionsmanager.idletimeout", "2000");
-                reloadConfiguration(configuration, server);
-
-                ConnectionsManagerImpl cnnManager = (ConnectionsManagerImpl) server.getConnectionsManager();
-                assertEquals(2000, cnnManager.getIdleTimeout());
-                // this should change
-                assertNotSame(stuckRequestsReaperFuture, cnnManager.getStuckRequestsReaperFuture());
-                // first stuckRequestsReaperFuture should have been cancelled
-                assertTrue(stuckRequestsReaperFuture.isCancelled());
-            }
-
         }
     }
 

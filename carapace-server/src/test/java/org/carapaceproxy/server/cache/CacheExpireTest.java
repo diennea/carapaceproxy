@@ -1,5 +1,3 @@
-package org.carapaceproxy.server.cache;
-
 /*
  Licensed to Diennea S.r.l. under one
  or more contributor license agreements. See the NOTICE file
@@ -19,6 +17,8 @@ package org.carapaceproxy.server.cache;
  under the License.
 
  */
+package org.carapaceproxy.server.cache;
+
 import org.carapaceproxy.utils.HttpUtils;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
@@ -29,7 +29,6 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertEquals;
@@ -41,10 +40,8 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 /**
- * NOTE: some of these test are heavily dependent from wiremock stub creation, that could take from 500ms to 1000ms or
- * more, depending on various factors.
- * Executing all tests in this class will hide the issue because the first test to be executed (and probably warm up
- * wiremock) is testHandleExpiresFromServer, that is not affected by a delay of 1000ms.
+ * NOTE: some of these test are heavily dependent from wiremock stub creation, that could take from 500ms to 1000ms or more, depending on various factors. Executing all tests in this class will hide
+ * the issue because the first test to be executed (and probably warm up wiremock) is testHandleExpiresFromServer, that is not affected by a delay of 1000ms.
  *
  * In order to fix the issue test should be refactored to start wiremock (and by the way HttpProxyServer) in a @Before rule
  */
@@ -63,18 +60,18 @@ public class CacheExpireTest {
         String formatted = HttpUtils.formatDateHeader(expire);
 
         stubFor(get(urlEqualTo("/index-with-expire.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                .withHeader("Expires", formatted)
-                .withBody("it <b>works</b> !!"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withHeader("Expires", formatted)
+                        .withBody("it <b>works</b> !!"))
         );
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        ConnectionsManagerStats stats;
+        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -104,8 +101,8 @@ public class CacheExpireTest {
                 assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
             }
 
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
+            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(1, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
@@ -114,30 +111,27 @@ public class CacheExpireTest {
         }
 
         TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+            return stats.getTotalConnections().intValue() == 1
+                    && stats.getActiveConnections().intValue() == 0
+                    && stats.getOpenConnections().intValue() == 0;
         }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
     }
 
     @Test
     public void testHandleExpiresMissingFromServer() throws Exception {
 
         stubFor(get(urlEqualTo("/index-no-expire.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                .withBody("it <b>works</b> !!"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withBody("it <b>works</b> !!"))
         );
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        ConnectionsManagerStats stats;
+        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -168,22 +162,18 @@ public class CacheExpireTest {
                 assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith(expires)));
             }
 
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
+            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(1, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
         }
 
         TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+            return stats.getTotalConnections().intValue() == 1
+                    && stats.getActiveConnections().intValue() == 0
+                    && stats.getOpenConnections().intValue() == 0;
         }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 
     @Test
@@ -193,18 +183,18 @@ public class CacheExpireTest {
         String formatted = HttpUtils.formatDateHeader(expire);
 
         stubFor(get(urlEqualTo("/index-with-expire.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                .withHeader("Expires", formatted)
-                .withBody("it <b>works</b> !!"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withHeader("Expires", formatted)
+                        .withBody("it <b>works</b> !!"))
         );
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        ConnectionsManagerStats stats;
+        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -234,21 +224,18 @@ public class CacheExpireTest {
                 assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
             }
 
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
+            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
             assertEquals(0, server.getCache().getCacheSize());
             assertEquals(0, server.getCache().getStats().getHits());
             assertEquals(2, server.getCache().getStats().getMisses());
         }
 
         TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() >= 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+            return stats.getTotalConnections().intValue() >= 1
+                    && stats.getActiveConnections().intValue() == 0
+                    && stats.getOpenConnections().intValue() == 0;
         }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
     }
 
     @Test
@@ -257,7 +244,7 @@ public class CacheExpireTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        ConnectionsManagerStats stats;
+        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -268,12 +255,12 @@ public class CacheExpireTest {
             String formatted = HttpUtils.formatDateHeader(expire);
 
             stubFor(get(urlEqualTo("/index-with-expire.html"))
-                .willReturn(aResponse()
-                    .withStatus(200)
-                    .withHeader("Content-Type", "text/html")
-                    .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                    .withHeader("Expires", formatted)
-                    .withBody("it <b>works</b> !!"))
+                    .willReturn(aResponse()
+                            .withStatus(200)
+                            .withHeader("Content-Type", "text/html")
+                            .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                            .withHeader("Expires", formatted)
+                            .withBody("it <b>works</b> !!"))
             );
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -288,8 +275,8 @@ public class CacheExpireTest {
                 assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
             }
 
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
+            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(0, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
@@ -309,20 +296,16 @@ public class CacheExpireTest {
                 assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
             }
 
-            assertNotNull(stats.getEndpoints().get(key));
             assertEquals(0, server.getCache().getCacheSize());
             assertEquals(0, server.getCache().getStats().getHits());
             assertEquals(2, server.getCache().getStats().getMisses());
         }
 
         TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+            return stats.getTotalConnections().intValue() == 1
+                    && stats.getActiveConnections().intValue() == 0
+                    && stats.getOpenConnections().intValue() == 0;
         }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 200);
     }
 
     @Test
@@ -331,7 +314,7 @@ public class CacheExpireTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        ConnectionsManagerStats stats;
+        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -343,12 +326,12 @@ public class CacheExpireTest {
             String formatted = HttpUtils.formatDateHeader(expire);
 
             stubFor(get(urlEqualTo("/index-with-expire.html"))
-                .willReturn(aResponse()
-                    .withStatus(200)
-                    .withHeader("Content-Type", "text/html")
-                    .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                    .withHeader("Expires", formatted)
-                    .withBody("it <b>works</b> !!"))
+                    .willReturn(aResponse()
+                            .withStatus(200)
+                            .withHeader("Content-Type", "text/html")
+                            .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                            .withHeader("Expires", formatted)
+                            .withBody("it <b>works</b> !!"))
             );
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -363,8 +346,8 @@ public class CacheExpireTest {
                 assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
             }
 
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
+            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(0, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
@@ -377,12 +360,9 @@ public class CacheExpireTest {
         }
 
         TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
+            return stats.getTotalConnections().intValue() == 1
+                    && stats.getActiveConnections().intValue() == 0
+                    && stats.getOpenConnections().intValue() == 0;
         }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
     }
 }

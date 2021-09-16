@@ -1,21 +1,21 @@
 /*
- * Licensed to Diennea S.r.l. under one
- * or more contributor license agreements. See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership. Diennea S.r.l. licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- *
+ Licensed to Diennea S.r.l. under one
+ or more contributor license agreements. See the NOTICE file
+ distributed with this work for additional information
+ regarding copyright ownership. Diennea S.r.l. licenses this file
+ to you under the Apache License, Version 2.0 (the
+ "License"); you may not use this file except in compliance
+ with the License.  You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing,
+ software distributed under the License is distributed on an
+ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ KIND, either express or implied.  See the License for the
+ specific language governing permissions and limitations
+ under the License.
+
  */
 package org.carapaceproxy.core;
 
@@ -48,25 +48,30 @@ import reactor.netty.resources.ConnectionProvider;
  */
 public class ProxyRequestsManager {
 
-    public static final ConcurrentHashMap<EndpointKey, EndpointStats> ENDPOINTS_STATS = new ConcurrentHashMap<>();
-
     private static final Logger LOGGER = Logger.getLogger(ProxyRequestsManager.class.getName());
 
-    private static final Gauge RUNNING_REQUESTS_GAUGE = PrometheusUtils.createGauge(
+    public static final Gauge RUNNING_REQUESTS_GAUGE = PrometheusUtils.createGauge(
             "listeners", "running_requests", "running requests"
     ).register();
-    private static final Counter USER_REQUESTS_COUNTER = PrometheusUtils.createCounter(
+
+    public static final Counter USER_REQUESTS_COUNTER = PrometheusUtils.createCounter(
             "listeners", "user_requests_total", "inbound requests count", "userId"
     ).register();
-    private static final Counter TOTAL_REQUESTS_COUNTER = PrometheusUtils.createCounter(
+
+    public static final Counter TOTAL_REQUESTS_COUNTER = PrometheusUtils.createCounter(
             "backends", "sent_requests_total", "sent requests", "host"
     ).register();
 
     private final HttpProxyServer parent;
     private ConnectionProvider connectionProvider;
+    private final ConcurrentHashMap<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
 
     public ProxyRequestsManager(HttpProxyServer parent) {
         this.parent = parent;
+    }
+
+    public ConcurrentHashMap<EndpointKey, EndpointStats> getEndpointsStats() {
+        return endpointsStats;
     }
 
     public void reloadConfiguration(RuntimeServerConfiguration newConfiguration) {
@@ -130,7 +135,7 @@ public class ProxyRequestsManager {
 //                serveRedirect();
                 break;
             case PROXY: {
-                final EndpointStats endpointStats = ENDPOINTS_STATS.computeIfAbsent(EndpointKey.make(endpointHost, endpointPort), EndpointStats::new);
+                final EndpointStats endpointStats = endpointsStats.computeIfAbsent(EndpointKey.make(endpointHost, endpointPort), EndpointStats::new);
                 HttpClient client = HttpClient.create(connectionProvider)
                         .host(action.host)
                         .port(action.port)
