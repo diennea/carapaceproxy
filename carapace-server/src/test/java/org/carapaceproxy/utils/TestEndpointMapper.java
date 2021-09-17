@@ -64,13 +64,26 @@ public class TestEndpointMapper extends EndpointMapper {
     public MapResult map(ProxyRequest request) {
         String uri = request.getUri();
         if (uri.contains("not-found")) {
-            return MapResult.NOT_FOUND(MapResult.NO_ROUTE);
+            return MapResult.notFound(MapResult.NO_ROUTE);
         } else if (uri.contains("debug")) {
-            return new MapResult(null, 0, MapResult.Action.SYSTEM, MapResult.NO_ROUTE);
+            return MapResult.builder()
+                    .action(MapResult.Action.SYSTEM)
+                    .routeId(MapResult.NO_ROUTE)
+                    .build();
         } else if (cacheAll) {
-            return new MapResult(host, port, MapResult.Action.CACHE, MapResult.NO_ROUTE);
+            return MapResult.builder()
+                    .host(host)
+                    .port(port)
+                    .action(MapResult.Action.CACHE)
+                    .routeId(MapResult.NO_ROUTE)
+                    .build();
         } else {
-            return new MapResult(host, port, MapResult.Action.PROXY, MapResult.NO_ROUTE);
+            return MapResult.builder()
+                    .host(host)
+                    .port(port)
+                    .action(MapResult.Action.PROXY)
+                    .routeId(MapResult.NO_ROUTE)
+                    .build();
         }
     }
 

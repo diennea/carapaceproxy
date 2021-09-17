@@ -30,6 +30,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
@@ -48,6 +49,10 @@ public class StaticContentsManager {
     public static final String DEFAULT_INTERNAL_SERVER_ERROR = CLASSPATH_RESOURCE + "/default-error-pages/500_internalservererror.html";
 
     private final ConcurrentHashMap<String, ByteBuf> contents = new ConcurrentHashMap<>();
+
+    public DefaultFullHttpResponse buildServiceNotAvailableResponse() {
+        return buildResponse(500, DEFAULT_INTERNAL_SERVER_ERROR);
+    }
 
     public DefaultFullHttpResponse buildResponse(int code, String resource) {
         if (code <= 0) {
@@ -91,7 +96,7 @@ public class StaticContentsManager {
                 throw new IOException("cannot load resource " + resource + ", path must start with " + FILE_RESOURCE + " or " + CLASSPATH_RESOURCE);
             }
         } catch (IOException | NullPointerException err) {
-            LOG.severe("Cannot load resource " + resource + ": " + err);
+            LOG.log(Level.SEVERE, "Cannot load resource {0}: {1}", new Object[]{resource, err});
             return null;
         }
     }

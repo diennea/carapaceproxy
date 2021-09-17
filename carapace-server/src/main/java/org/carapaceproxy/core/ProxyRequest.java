@@ -23,6 +23,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpScheme;
 import io.netty.handler.codec.http.cookie.Cookie;
 import io.netty.handler.ssl.SslHandler;
@@ -151,6 +152,10 @@ public class ProxyRequest implements MatchingContext {
         return request.requestHeaders();
     }
 
+    public HttpHeaders getResponseHeaders() {
+        return request.requestHeaders();
+    }
+
     public void setResponseHeaders(HttpHeaders headers) {
         response.headers(headers);
     }
@@ -177,6 +182,10 @@ public class ProxyRequest implements MatchingContext {
 
     public NettyOutbound sendResponseData(Publisher<? extends ByteBuf> data) {
         return response.send(data);
+    }
+
+    public void setResponseStatus(HttpResponseStatus status) {
+        response.status(status);
     }
 
     public boolean isKeepAlive() {

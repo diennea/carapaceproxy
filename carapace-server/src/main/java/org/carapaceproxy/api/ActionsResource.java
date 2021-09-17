@@ -33,6 +33,7 @@ import static org.carapaceproxy.server.config.ActionConfiguration.TYPE_CACHE;
 import static org.carapaceproxy.server.config.ActionConfiguration.TYPE_PROXY;
 import static org.carapaceproxy.server.config.ActionConfiguration.TYPE_REDIRECT;
 import static org.carapaceproxy.server.config.ActionConfiguration.TYPE_STATIC;
+import lombok.Data;
 
 /**
  * Access to configured actions
@@ -46,6 +47,7 @@ public class ActionsResource {
     @javax.ws.rs.core.Context
     ServletContext context;
 
+    @Data
     public static final class ActionBean {
 
         private final String id;
@@ -61,26 +63,6 @@ public class ActionsResource {
             this.headers = headers;
             this.errorcode = errorcode > 0 ? (errorcode + "") : "";
         }
-
-        public String getId() {
-            return id;
-        }
-
-        public String getType() {
-            return type;
-        }
-
-        public String getDescription() {
-            return description;
-        }
-
-        public String getHeaders() {
-            return headers;
-        }
-
-        public String getErrorcode() {
-            return errorcode;
-        }
     }
 
     @GET
@@ -90,7 +72,7 @@ public class ActionsResource {
         server.getMapper().getActions().forEach(action -> {
             if (!TYPE_ACME_CHALLENGE.equals(action.getType())) {
                 String headers = action.getCustomHeaders().stream().map(h -> h.getId()).collect(Collectors.joining(","));
-                actions.add(new ActionBean(action.getId(), action.getType(), computeDescription(action), headers, action.getErrorcode()));
+                actions.add(new ActionBean(action.getId(), action.getType(), computeDescription(action), headers, action.getErrorCode()));
             }
         });
 
@@ -119,7 +101,7 @@ public class ActionsResource {
                 return "redirect to: " + redirectLocation;
             }
             default:
-                throw new IllegalStateException("For action " +  action);
+                throw new IllegalStateException("For action " + action);
         }
     }
 

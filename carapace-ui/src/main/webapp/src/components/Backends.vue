@@ -3,9 +3,9 @@
         <h2>Backends</h2>
         <datatable-list :fields="fields" :items="backends">
             <template v-slot:host="{ item }">{{item.host}}:{{item.port}}</template>
-            <template v-slot:isAvailable="{ item }">
-                <div class="badge-status" :class="[item.isAvailable ? 'success' : 'error']">
-                    {{item.isAvailable | backendStatusFormat}}
+            <template v-slot:available="{ item }">
+                <div class="badge-status" :class="[item.available ? 'success' : 'error']">
+                    {{item.available | backendStatusFormat}}
                 </div>
             </template>
             <template v-slot:reportedAsUnreachable="{ item }">
@@ -65,7 +65,7 @@
                         sortable: true,
                         formatter: formatTimestamp
                     },
-                    {key: "isAvailable", label: "Status", sortable: true},
+                    {key: "available", label: "Status", sortable: true},
                     {
                         key: "reportedAsUnreachable",
                         label: "Reported as Unreachable",

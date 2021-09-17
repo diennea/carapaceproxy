@@ -381,7 +381,7 @@ public class RequestsLogger implements Runnable, Closeable {
             this.format.add("timestamp", tsFormatter.format(new Timestamp(request.getStartTs())));
             this.format.add("total_time", request.getLastActivity() - request.getStartTs());
             this.format.add("action_id", request.getAction().action);
-            this.format.add("route_id", request.getAction().routeid);
+            this.format.add("route_id", request.getAction().routeId);
             this.format.add("user_id", request.getUserId());
             this.format.add("session_id", request.getSessionId());
             if (!request.isServedFromCache()) {

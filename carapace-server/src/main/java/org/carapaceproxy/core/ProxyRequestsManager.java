@@ -19,7 +19,16 @@
  */
 package org.carapaceproxy.core;
 
+import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTP;
+import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTPS;
 import io.netty.channel.ChannelOption;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaderValues;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.cookie.Cookie;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
@@ -28,13 +37,16 @@ import io.prometheus.client.Gauge;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import org.carapaceproxy.EndpointStats;
+import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.server.mapper.CustomHeader;
 import org.carapaceproxy.utils.PrometheusUtils;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
@@ -109,7 +121,7 @@ public class ProxyRequestsManager {
         MapResult action = parent.getMapper().map(request);
         if (action == null) {
             LOGGER.log(Level.INFO, "Mapper returned NULL action for {0}", this);
-            action = MapResult.INTERNAL_ERROR(MapResult.NO_ROUTE);
+            action = MapResult.internalError(MapResult.NO_ROUTE);
         }
         request.setAction(action);
 
@@ -127,18 +139,18 @@ public class ProxyRequestsManager {
 
         switch (action.action) {
             case NOTFOUND:
-//                serveNotFoundMessage();
-                break;
+                return serveNotFoundMessage(request);
+
             case INTERNAL_ERROR:
-//                serveInternalErrorMessage(false);
-                break;
+                return serveInternalErrorMessage(request);
+
             case STATIC:
             case ACME_CHALLENGE:
-//                serveStaticMessage();
-                break;
+                return serveStaticMessage(request);
+
             case REDIRECT:
-//                serveRedirect();
-                break;
+                return serveRedirect(request);
+
             case PROXY: {
                 final EndpointStats endpointStats = endpointsStats.computeIfAbsent(EndpointKey.make(endpointHost, endpointPort), EndpointStats::new);
                 HttpClient client = HttpClient.create(connectionProvider)
@@ -159,8 +171,9 @@ public class ProxyRequestsManager {
                             parent.getRequestsLogger().logRequest(request);
                         })
                         .doOnRequestError((req, err) -> {
+                            LOGGER.log(Level.INFO, "errorSendingRequest to " + request.getAction().host + ":" + request.getAction().port, err);
                             PENDING_REQUESTS_GAUGE.dec();
-//                            errorSendingRequest(err);
+                            serveServiceNotAvailable(request);
                         })
                         .doAfterResponseSuccess((resp, conn) -> {
                             PENDING_REQUESTS_GAUGE.dec();
@@ -180,7 +193,9 @@ public class ProxyRequestsManager {
                         .uri(request.getUri())
                         .send(request.getRequestData()) // client request body
                         .response((resp, flux) -> { // endpoint response
+                            request.setResponseStatus(resp.status());
                             request.setResponseHeaders(resp.responseHeaders()); // headers from endpoint to client
+                            addCustomResponseHeaders(request, request.getAction().customHeaders);
                             request.setResponseCookies(resp.cookies().values().stream() // cookies from endpoint to client
                                     .flatMap(Collection::stream)
                                     .collect(Collectors.toList())
@@ -190,8 +205,10 @@ public class ProxyRequestsManager {
                                 endpointStats.getLastActivity().set(System.currentTimeMillis());
                             }));
                         });
+
             }
-//            case CACHE: {
+
+            case CACHE: {
 //                cacheSender = connectionToClient.cache.serveFromCache(this);
 //                if (cacheSender != null) {
 //                    return;
@@ -228,225 +245,160 @@ public class ProxyRequestsManager {
 
 //            if (cacheSender != null) {
 //            serveFromCache();
-//            return;
-//        }
-//            }
-            default:
-                throw new IllegalStateException("not yet implemented");
-        }
+//if (request.getc != null && !continueRequest) {
+//                                // msg object won't be cached as-is but the cache will retain a clone of it
+//                                cacheReceiver.receivedFromRemote(msg);
+//                                if (msg instanceof HttpResponse) {
+//                                    HttpResponse httpMessage = (HttpResponse) msg;
+//                                    cleanResponseForCachedData(httpMessage);
+//                                }
+//                            }
+                return Mono.empty();
+            }
 
-        return Mono.empty();
+            default:
+                throw new IllegalStateException("Action %s not supported".formatted(action.action));
+        }
     }
 
-//    private void serveNotFoundMessage() {
-//        SimpleHTTPResponse res = mapper.mapPageNotFound(action.routeid);
-//        int code = 0;
-//        String resource = null;
-//        List<CustomHeader> customHeaders = null;
-//        if (res != null) {
-//            code = res.getErrorcode();
-//            resource = res.getResource();
-//            customHeaders = res.getCustomHeaders();
-//        }
-//        if (resource == null) {
-//            resource = StaticContentsManager.DEFAULT_NOT_FOUND;
-//        }
-//        if (code <= 0) {
-//            code = 404;
-//        }
-//
-//        FullHttpResponse response = staticContentsManager.buildResponse(code, resource);
-//        addCustomResponseHeaders(response, customHeaders);
-//        if (!writeSimpleResponse(response)) {
-//            forceCloseChannelToClient();
-//        }
-//    }
-//
-//    private void serveInternalErrorMessage(boolean forceClose) {
-//        SimpleHTTPResponse res = mapper.mapInternalError(action.routeid);
-//        int code = 0;
-//        String resource = null;
-//        List<CustomHeader> customHeaders = null;
-//        if (res != null) {
-//            code = res.getErrorcode();
-//            resource = res.getResource();
-//            customHeaders = res.getCustomHeaders();
-//        }
-//        if (resource == null) {
-//            resource = StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
-//        }
-//        if (code <= 0) {
-//            code = 500;
-//        }
-//
-//        FullHttpResponse response = staticContentsManager.buildResponse(code, resource);
-//        addCustomResponseHeaders(response, customHeaders);
-//        if (!writeSimpleResponse(response) || forceClose) {
-//            // If keep-alive is off, close the connection once the content is fully written.
-//            forceCloseChannelToClient();
-//        }
-//    }
-//
-//    private void serveStaticMessage() {
-//        FullHttpResponse response = staticContentsManager.buildResponse(action.errorcode, action.resource);
-//        addCustomResponseHeaders(response, action.customHeaders);
-//        if (!writeSimpleResponse(response)) {
-//            // If keep-alive is off, close the connection once the content is fully written.
-//            forceCloseChannelToClient();
-//        }
-//    }
-//
-//    private void serveRedirect() {
-//        DefaultFullHttpResponse res = new DefaultFullHttpResponse(
-//                HttpVersion.HTTP_1_1,
-//                HttpResponseStatus.valueOf(action.errorcode < 0 ? 302 : action.errorcode) // redirect: 3XX
-//        );
-//        addCustomResponseHeaders(res, action.customHeaders);
-//        res.headers().set(HttpHeaderNames.CACHE_CONTROL, "no-cache");
-//
-//        String location = action.redirectLocation;
-//
-//        String host = request.headers().get(HttpHeaderNames.HOST, "localhost");
-//        String port = host.contains(":") ? host.replaceFirst(".*:", ":") : "";
-//        host = host.split(":")[0];
-//        String path = request.uri();
-//        if (location == null || location.isEmpty()) {
-//            if (!action.host.isEmpty()) {
-//                host = action.host;
-//            }
-//            if (action.port > 0) {
-//                port = ":" + action.port;
-//            } else if (PROTO_HTTPS.equals(action.redirectProto)) {
-//                port = ""; // default https port
-//            }
-//            if (!action.redirectPath.isEmpty()) {
-//                path = action.redirectPath;
-//            }
-//            location = host + port + path; // - custom redirection
-//        } else if (location.startsWith("/")) {
-//            location = host + port + location; // - relative redirection
-//        } // else: implicit absolute redirection
-//
-//        // - redirect to https
-//        location = (PROTO_HTTPS.equals(action.redirectProto) ? PROTO_HTTPS : PROTO_HTTP) + "://" + location.replaceFirst("http.?:\\/\\/", "");
-//
-//        res.headers().set(HttpHeaderNames.LOCATION, location);
-//        writeSimpleResponse(res);
-//    }
-//
-//    private boolean writeSimpleResponse(FullHttpResponse response) {
-//        fireRequestFinished();
-//
+    private Publisher<Void> serveNotFoundMessage(ProxyRequest request) {
+        SimpleHTTPResponse res = parent.getMapper().mapPageNotFound(request.getAction().routeId);
+        int code = 0;
+        String resource = null;
+        List<CustomHeader> customHeaders = null;
+        if (res != null) {
+            code = res.getErrorcode();
+            resource = res.getResource();
+            customHeaders = res.getCustomHeaders();
+        }
+        if (resource == null) {
+            resource = StaticContentsManager.DEFAULT_NOT_FOUND;
+        }
+        if (code <= 0) {
+            code = 404;
+        }
+        FullHttpResponse response = parent.getStaticContentsManager().buildResponse(code, resource);
+
+        return writeSimpleResponse(request, response, customHeaders);
+    }
+
+    private Publisher<Void> serveInternalErrorMessage(ProxyRequest request) {
+        SimpleHTTPResponse res = parent.getMapper().mapInternalError(request.getAction().routeId);
+        int code = 0;
+        String resource = null;
+        List<CustomHeader> customHeaders = null;
+        if (res != null) {
+            code = res.getErrorcode();
+            resource = res.getResource();
+            customHeaders = res.getCustomHeaders();
+        }
+        if (resource == null) {
+            resource = StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
+        }
+        if (code <= 0) {
+            code = 500;
+        }
+        FullHttpResponse response = parent.getStaticContentsManager().buildResponse(code, resource);
+
+        return writeSimpleResponse(request, response, customHeaders);
+    }
+
+    private Publisher<Void> serveStaticMessage(ProxyRequest request) {
+        FullHttpResponse response = parent.getStaticContentsManager()
+                .buildResponse(request.getAction().errorCode, request.getAction().resource);
+
+        return writeSimpleResponse(request, response);
+    }
+
+    private Publisher<Void> serveRedirect(ProxyRequest request) {
+        MapResult action = request.getAction();
+
+        DefaultFullHttpResponse response = new DefaultFullHttpResponse(
+                HttpVersion.HTTP_1_1,
+                HttpResponseStatus.valueOf(action.errorCode < 0 ? 302 : action.errorCode) // redirect: 3XX
+        );
+        response.headers().set(HttpHeaderNames.CACHE_CONTROL, "no-cache");
+
+        String location = action.redirectLocation;
+        String host = request.getRequestHeaders().get(HttpHeaderNames.HOST, "localhost");
+        String port = host.contains(":") ? host.replaceFirst(".*:", ":") : "";
+        host = host.split(":")[0];
+        String path = request.getUri();
+        if (location == null || location.isEmpty()) {
+            if (!action.host.isEmpty()) {
+                host = action.host;
+            }
+            if (action.port > 0) {
+                port = ":" + action.port;
+            } else if (REDIRECT_PROTO_HTTPS.equals(action.redirectProto)) {
+                port = ""; // default https port
+            }
+            if (!action.redirectPath.isEmpty()) {
+                path = action.redirectPath;
+            }
+            location = host + port + path; // - custom redirection
+        } else if (location.startsWith("/")) {
+            location = host + port + location; // - relative redirection
+        } // else: implicit absolute redirection
+
+        // - redirect to https
+        location = (REDIRECT_PROTO_HTTPS.equals(action.redirectProto) ? REDIRECT_PROTO_HTTPS : REDIRECT_PROTO_HTTP)
+                + "://" + location.replaceFirst("http.?:\\/\\/", "");
+        response.headers().set(HttpHeaderNames.LOCATION, location);
+
+        return writeSimpleResponse(request, response);
+    }
+
+    private Publisher<Void> serveServiceNotAvailable(ProxyRequest request) {
+        FullHttpResponse response = parent.getStaticContentsManager().buildServiceNotAvailableResponse();
+        return writeSimpleResponse(request, response);
+    }
+
+    private static Publisher<Void> writeSimpleResponse(ProxyRequest request, FullHttpResponse response) {
+        return writeSimpleResponse(request, response, request.getAction().customHeaders);
+    }
+
+    private static Publisher<Void> writeSimpleResponse(ProxyRequest request, FullHttpResponse response, List<CustomHeader> customHeaders) {
 //        if (headerSent) {
 //            LOGGER.log(Level.INFO, "{0}: headers for already sent to client, cannot send static response", this);
 //            return true;
 //        }
-//
-//        // Decide whether to close the connection or not.
-//        boolean keepAlive = HttpUtil.isKeepAlive(request);
-//
-//        // Build the response object.
-//        if (keepAlive) {
-//            // Add 'Content-Length' header only for a keep-alive connection.
-//            if (response.content() != null) {
-//                response.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
-//            }
-//            // Add keep alive header as per:
-//            // - http://www.w3.org/Protocols/HTTP/1.1/draft-ietf-http-v11-spec-01.html#Connection
-//            response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
-//        }
-//
-//        // Write the response.
-//        clientState = ProxyRequestsManager.RequestHandlerState.WRITING;
-//        channelToClient.writeAndFlush(response).addListener(future -> {
-//            clientState = ProxyRequestsManager.RequestHandlerState.IDLE;
-//            requestComplete();
-//        });
-//
-//        return keepAlive;
-//    }
-//
-//    private void sendServiceNotAvailable() {
-//        FullHttpResponse response = connectionToClient.staticContentsManager.buildResponse(500, DEFAULT_INTERNAL_SERVER_ERROR);
-//        clientState = ProxyRequestsManager.RequestHandlerState.WRITING;
-//        channelToClient.writeAndFlush(response).addListener(new GenericFutureListener<Future<? super Void>>() {
-//            @Override
-//            public void operationComplete(Future<? super Void> future) throws Exception {
-//                clientState = ProxyRequestsManager.RequestHandlerState.IDLE;
-//                requestComplete();
-//                LOGGER.log(Level.INFO, "{0} sendServiceNotAvailable result: {1}, cause {2}",
-//                        new Object[]{this, future.isSuccess(), future.cause()});
-//                forceCloseChannelToClient();
-//            }
-//        });
-//    }
-//
-//    private void errorSendingRequest(Throwable cause) {
-//        LOGGER.log(Level.INFO, "errorSendingRequest to " + action.host + ":" + action.port, cause);
-//        sendServiceNotAvailable();
-//    }
-//
-//    public void receivedFromRemote(HttpObject msg, EndpointConnection connection) {
-//        if (backendStartTs == 0) {
-//            backendStartTs = System.currentTimeMillis();
-//        }
-//        if (cacheReceiver != null && !continueRequest) {
-//            // msg object won't be cached as-is but the cache will retain a clone of it
-//            cacheReceiver.receivedFromRemote(msg);
-//            if (msg instanceof HttpResponse) {
-//                HttpResponse httpMessage = (HttpResponse) msg;
-//                cleanResponseForCachedData(httpMessage);
-//            }
-//        }
-//        if (msg instanceof HttpMessage) {
-//            boolean isKeepAlive = HttpUtil.isKeepAlive((HttpMessage) msg);
-//            if (!isKeepAlive) {
-//                closeAfterResponse = true;
-//            }
-//            CarapaceLogger.debug("Got response from remote ({0}), keep-alive: {1}, connection {2}",
-//                    msg.getClass(), isKeepAlive, connectionToEndpoint.get());
-//        }
-//
-//        addCustomResponseHeaders(msg, action.customHeaders);
-//        clientState = ProxyRequestsManager.RequestHandlerState.WRITING;
-//        channelToClient.writeAndFlush(msg).addListener((Future<? super Void> future) -> {
-//            clientState = ProxyRequestsManager.RequestHandlerState.IDLE;
-//            if (msg instanceof HttpResponse) {
-//                headerSent = true;
-//                HttpResponse httpMessage = (HttpResponse) msg;
-//                if (SUCCESS == httpMessage.status().codeClass()) {
-//                    long contentLength = HttpUtil.getContentLength(httpMessage, -1);
-//                    String transferEncoding = httpMessage.headers().get(HttpHeaderNames.TRANSFER_ENCODING);
-//                    if (contentLength < 0 && !"chunked".equals(transferEncoding)) {
-//                        connectionToClient.keepAlive = false;
-//                    }
-//                }
-//                if (closeAfterResponse) {
-//                    connectionToClient.keepAlive = false;
-//                }
-//            }
-//            if (msg instanceof LastHttpContent) {
-//                connectionToClient.closeIfNotKeepAlive(channelToClient);
-//            }
-//        });
-//    }
-//
-//    private void addCustomResponseHeaders(HttpObject msg, List<CustomHeader> customHeaders) {
-//        // Custom response Headers
-//        if (msg instanceof HttpResponse && customHeaders != null) {
-//            HttpHeaders headers = ((HttpResponse) msg).headers();
-//            customHeaders.forEach(customHeader -> {
-//                if (CustomHeader.HeaderMode.SET.equals(customHeader.getMode())
-//                        || CustomHeader.HeaderMode.REMOVE.equals(customHeader.getMode())) {
-//                    headers.remove(customHeader.getName());
-//                }
-//                if (CustomHeader.HeaderMode.SET.equals(customHeader.getMode())
-//                        || CustomHeader.HeaderMode.ADD.equals(customHeader.getMode())) {
-//                    headers.add(customHeader.getName(), customHeader.getValue());
-//                }
-//            });
-//        }
-//    }
+
+        // Prepare the response
+        if (request.isKeepAlive()) {
+            // Add 'Content-Length' header only for a keep-alive connection.
+            if (response.content() != null) {
+                response.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+            }
+            // Add keep alive header as per:
+            // - http://www.w3.org/Protocols/HTTP/1.1/draft-ietf-http-v11-spec-01.html#Connection
+            response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
+        }
+        request.setResponseStatus(response.status());
+        request.setResponseHeaders(response.headers());
+        addCustomResponseHeaders(request, customHeaders);
+
+        // Write the response
+        return request.sendResponseData(Mono.just(response.content()).doFinally(f -> request.setLastActivity(System.currentTimeMillis())));
+    }
+
+    private static void addCustomResponseHeaders(ProxyRequest request, List<CustomHeader> customHeaders) {
+        if (customHeaders == null || customHeaders.isEmpty()) {
+            return;
+        }
+        HttpHeaders headers = request.getResponseHeaders();
+        customHeaders.forEach(customHeader -> {
+            if (CustomHeader.HeaderMode.SET.equals(customHeader.getMode())
+                    || CustomHeader.HeaderMode.REMOVE.equals(customHeader.getMode())) {
+                headers.remove(customHeader.getName());
+            }
+            if (CustomHeader.HeaderMode.SET.equals(customHeader.getMode())
+                    || CustomHeader.HeaderMode.ADD.equals(customHeader.getMode())) {
+                headers.add(customHeader.getName(), customHeader.getValue());
+            }
+        });
+    }
+
 //
 //    public void serveFromCache() {
 //        ContentsCache.ContentPayload payload = cacheSender.getCached();

@@ -1,21 +1,21 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.server.mapper;
 
@@ -50,6 +50,7 @@ import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import org.carapaceproxy.server.mapper.CustomHeader.HeaderMode;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.ParseException;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.RequestMatchParser;
+import reactor.core.Exceptions;
 
 /**
  * Standard Endpoint mapping
@@ -123,32 +124,42 @@ public class StandardEndpointMapper extends EndpointMapper {
                 ActionConfiguration action = actions.get(route.getAction());
                 if (action == null) {
                     LOG.log(Level.INFO, "no action ''{0}'' -> not-found for {1}, valid {2}", new Object[]{route.getAction(), request.getUri(), actions.keySet()});
-                    return MapResult.INTERNAL_ERROR(route.getId());
+                    return MapResult.internalError(route.getId());
                 }
-
                 if (ActionConfiguration.TYPE_REDIRECT.equals(action.getType())) {
-                    return new MapResult(action.getRedirectHost(), action.getRedirectPort(), MapResult.Action.REDIRECT, route.getId())
-                            .setRedirectLocation(action.getRedirectLocation())
-                            .setRedirectProto(action.getRedirectProto())
-                            .setRedirectPath(action.getRedirectPath())
-                            .setErrorcode(action.getErrorcode())
-                            .setCustomHeaders(action.getCustomHeaders());
+                    return MapResult.builder()
+                            .host(action.getRedirectHost())
+                            .port(action.getRedirectPort())
+                            .action(MapResult.Action.REDIRECT)
+                            .routeId(route.getId())
+                            .redirectLocation(action.getRedirectLocation())
+                            .redirectProto(action.getRedirectProto())
+                            .redirectPath(action.getRedirectPath())
+                            .errorCode(action.getErrorCode())
+                            .customHeaders(action.getCustomHeaders())
+                            .build();
                 }
                 if (ActionConfiguration.TYPE_STATIC.equals(action.getType())) {
-                    return new MapResult(null, -1, MapResult.Action.STATIC, route.getId())
-                            .setResource(action.getFile())
-                            .setErrorcode(action.getErrorcode())
-                            .setCustomHeaders(action.getCustomHeaders());
+                    return MapResult.builder()
+                            .action(MapResult.Action.STATIC)
+                            .routeId(route.getId())
+                            .resource(action.getFile())
+                            .errorCode(action.getErrorCode())
+                            .customHeaders(action.getCustomHeaders())
+                            .build();
                 }
                 if (ActionConfiguration.TYPE_ACME_CHALLENGE.equals(action.getType())) {
                     String tokenName = request.getUri().replaceFirst(".*" + ACME_CHALLENGE_URI_PATTERN, "");
                     String tokenData = parent.getDynamicCertificatesManager().getChallengeToken(tokenName);
                     if (tokenData == null) {
-                        return MapResult.NOT_FOUND(route.getId());
+                        return MapResult.notFound(route.getId());
                     }
-                    return new MapResult(null, -1, MapResult.Action.ACME_CHALLENGE, route.getId())
-                            .setResource(IN_MEMORY_RESOURCE + tokenData)
-                            .setErrorcode(action.getErrorcode());
+                    return MapResult.builder()
+                            .action(MapResult.Action.ACME_CHALLENGE)
+                            .routeId(route.getId())
+                            .resource(IN_MEMORY_RESOURCE + tokenData)
+                            .errorCode(action.getErrorCode())
+                            .build();
                 }
                 UrlEncodedQueryString queryString = request.getQueryString();
                 String director = action.getDirector();
@@ -178,7 +189,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                             selectedAction = MapResult.Action.CACHE;
                             break;
                         default:
-                            return MapResult.INTERNAL_ERROR(route.getId());
+                            return MapResult.internalError(route.getId());
                     }
 
                     BackendConfiguration backend = this.backends.get(backendId);
@@ -192,18 +203,23 @@ public class StandardEndpointMapper extends EndpointMapper {
                                     + backendId;
                             customHeaders.add(new CustomHeader(DEBUGGING_HEADER_ID, debuggingHeaderName, routingPath, HeaderMode.ADD));
                         }
-                        return new MapResult(backend.getHost(), backend.getPort(), selectedAction, route.getId())
-                                .setCustomHeaders(customHeaders);
+                        return MapResult.builder()
+                                .host(backend.getHost())
+                                .port(backend.getPort())
+                                .action(selectedAction)
+                                .routeId(route.getId())
+                                .customHeaders(customHeaders)
+                                .build();
                     }
                 }
                 // none of selected backends available
                 if (!selectedBackends.isEmpty()) {
-                    return MapResult.INTERNAL_ERROR(route.getId());
+                    return MapResult.internalError(route.getId());
                 }
             }
         }
         // no one route matched
-        return MapResult.NOT_FOUND(MapResult.NO_ROUTE);
+        return MapResult.notFound(MapResult.NO_ROUTE);
     }
 
     @Override
@@ -222,7 +238,7 @@ public class StandardEndpointMapper extends EndpointMapper {
             errorAction = actions.get(defaultInternalErrorAction);
         }
         if (errorAction != null) {
-            return new SimpleHTTPResponse(errorAction.getErrorcode(), errorAction.getFile(), errorAction.getCustomHeaders());
+            return new SimpleHTTPResponse(errorAction.getErrorCode(), errorAction.getFile(), errorAction.getCustomHeaders());
         }
         // fallback
         return super.mapInternalError(routeid);
@@ -234,7 +250,7 @@ public class StandardEndpointMapper extends EndpointMapper {
         if (defaultNotFoundAction != null) {
             ActionConfiguration errorAction = actions.get(defaultNotFoundAction);
             if (errorAction != null) {
-                return new SimpleHTTPResponse(errorAction.getErrorcode(), errorAction.getFile(), errorAction.getCustomHeaders());
+                return new SimpleHTTPResponse(errorAction.getErrorCode(), errorAction.getFile(), errorAction.getCustomHeaders());
             }
         }
         // fallback

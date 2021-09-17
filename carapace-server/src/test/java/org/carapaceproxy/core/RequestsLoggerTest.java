@@ -180,7 +180,12 @@ public class RequestsLoggerTest {
             r1.startTs = "2018-10-23 10:10:10.000";
             r1.backendStartTs = "2018-10-23 10:10:10.542";
             r1.endTs = "2018-10-23 10:10:11.012";
-            r1.action = new MapResult("host", 1111, MapResult.Action.CACHE, "routeid_1");
+            r1.action = MapResult.builder()
+                    .host("host")
+                    .port(1111)
+                    .action(MapResult.Action.CACHE)
+                    .routeId("routeid_1")
+                    .build();
             r1.userid = "uid_1";
             r1.sessionid = "sid_1";
 
@@ -212,7 +217,12 @@ public class RequestsLoggerTest {
             r2.startTs = "2018-10-23 11:10:10.000";
             r2.backendStartTs = "2018-10-23 11:10:10.142";
             r2.endTs = "2018-10-23 11:10:10.912";
-            r2.action = new MapResult("host2", 2222, MapResult.Action.PROXY, "routeid_2");
+            r2.action = MapResult.builder()
+                    .host("host2")
+                    .port(2222)
+                    .action(MapResult.Action.PROXY)
+                    .routeId("routeid_2")
+                    .build();
             r2.userid = "uid_2";
             r2.sessionid = "sid_2";
 
@@ -261,7 +271,12 @@ public class RequestsLoggerTest {
             r1.startTs = "2018-10-23 10:10:10.000";
             r1.backendStartTs = "2018-10-23 10:10:10.542";
             r1.endTs = "2018-10-23 10:10:11.012";
-            r1.action = new MapResult("host", 1111, MapResult.Action.CACHE, "routeid_1");
+            r1.action = MapResult.builder()
+                    .host("host")
+                    .port(1111)
+                    .action(MapResult.Action.CACHE)
+                    .routeId("routeid_1")
+                    .build();
             r1.userid = "uid_1";
             r1.sessionid = "sid_1";
 
@@ -289,7 +304,12 @@ public class RequestsLoggerTest {
             r2.startTs = "2018-10-23 10:10:10.000";
             r2.backendStartTs = "2018-10-23 10:10:10.542";
             r2.endTs = "2018-10-23 10:10:11.012";
-            r2.action = new MapResult("host", 1111, MapResult.Action.CACHE, "routeid_1");
+            r2.action = MapResult.builder()
+                    .host("host")
+                    .port(1111)
+                    .action(MapResult.Action.CACHE)
+                    .routeId("routeid_1")
+                    .build();
             r2.userid = "uid_1";
             r2.sessionid = "sid_1";
 
@@ -329,7 +349,12 @@ public class RequestsLoggerTest {
             r1.startTs = "2018-10-23 11:10:10.000";
             r1.backendStartTs = "2018-10-23 11:10:10.542";
             r1.endTs = "2018-10-23 11:10:11.012";
-            r1.action = new MapResult("host", 1111, MapResult.Action.CACHE, "routeid_1");
+            r1.action = MapResult.builder()
+                    .host("host")
+                    .port(1111)
+                    .action(MapResult.Action.CACHE)
+                    .routeId("routeid_1")
+                    .build();
             r1.userid = "uid_1";
             r1.sessionid = "sid_1";
 
@@ -354,7 +379,12 @@ public class RequestsLoggerTest {
             r2.startTs = "2018-10-23 11:10:10.000";
             r2.backendStartTs = "2018-10-23 11:10:10.542";
             r2.endTs = "2018-10-23 11:10:11.012";
-            r2.action = new MapResult("host", 1111, MapResult.Action.CACHE, "routeid_1");
+            r2.action = MapResult.builder()
+                    .host("host")
+                    .port(1111)
+                    .action(MapResult.Action.CACHE)
+                    .routeId("routeid_1")
+                    .build();
             r2.userid = "uid_1";
             r2.sessionid = "sid_1";
 
@@ -369,7 +399,12 @@ public class RequestsLoggerTest {
             r3.startTs = "2018-10-23 11:10:10.000";
             r3.backendStartTs = "2018-10-23 11:10:10.542";
             r3.endTs = "2018-10-23 11:10:11.012";
-            r3.action = new MapResult("host", 1111, MapResult.Action.CACHE, "routeid_1");
+            r3.action = MapResult.builder()
+                    .host("host")
+                    .port(1111)
+                    .action(MapResult.Action.CACHE)
+                    .routeId("routeid_1")
+                    .build();
             r3.userid = "uid_1";
             r3.sessionid = "sid_1";
 
@@ -415,7 +450,12 @@ public class RequestsLoggerTest {
             r1.startTs = "2018-10-23 10:10:10.000";
             r1.backendStartTs = "2018-10-23 10:10:10.542";
             r1.endTs = "2018-10-23 10:10:11.012";
-            r1.action = new MapResult("host", 1111, MapResult.Action.CACHE, "routeid_1");
+            r1.action = MapResult.builder()
+                    .host("host")
+                    .port(1111)
+                    .action(MapResult.Action.CACHE)
+                    .routeId("routeid_1")
+                    .build();
             r1.userid = "uid_1";
             r1.sessionid = "sid_1";
 
@@ -434,7 +474,12 @@ public class RequestsLoggerTest {
             r2.startTs = "2018-10-23 10:10:10.000";
             r2.backendStartTs = "2018-10-23 10:10:10.542";
             r2.endTs = "2018-10-23 10:10:11.012";
-            r2.action = new MapResult("host", 1111, MapResult.Action.CACHE, "routeid_1");
+            r2.action = MapResult.builder()
+                    .host("host")
+                    .port(1111)
+                    .action(MapResult.Action.CACHE)
+                    .routeId("routeid_1")
+                    .build();
             r2.userid = "uid_1";
             r2.sessionid = "sid_1";
 

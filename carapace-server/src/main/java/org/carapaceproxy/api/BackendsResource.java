@@ -56,7 +56,7 @@ public class BackendsResource {
         private long totalRequests;
         private long lastActivityTs;
 
-        private boolean isAvailable;
+        private boolean available;
         private boolean reportedAsUnreachable;
         private long reportedAsUnreachableTs;
         private String lastProbePath;
@@ -93,7 +93,7 @@ public class BackendsResource {
             }
             BackendHealthStatus bhs = backendsSnapshot.get(hostPort);
             if (bhs != null) {
-                bean.isAvailable = bhs.isAvailable();
+                bean.available = bhs.isAvailable();
                 bean.reportedAsUnreachable = bhs.isReportedAsUnreachable();
                 bean.reportedAsUnreachableTs = bhs.getReportedAsUnreachableTs();
                 BackendHealthCheck lastProbe = bhs.getLastProbe();
