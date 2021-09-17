@@ -23,13 +23,13 @@ import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTP;
 import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTPS;
 import io.netty.channel.ChannelOption;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
-import io.netty.handler.codec.http.cookie.Cookie;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
 import io.prometheus.client.Counter;
@@ -46,11 +46,14 @@ import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.mapper.CustomHeader;
 import org.carapaceproxy.utils.PrometheusUtils;
 import org.reactivestreams.Publisher;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.http.client.HttpClient;
+import reactor.netty.http.client.HttpClientResponse;
 import reactor.netty.resources.ConnectionProvider;
 
 /**
@@ -59,8 +62,6 @@ import reactor.netty.resources.ConnectionProvider;
  * @author paolo.venturi
  */
 public class ProxyRequestsManager {
-
-    private static final Logger LOGGER = Logger.getLogger(ProxyRequestsManager.class.getName());
 
     public static final Counter USER_REQUESTS_COUNTER = PrometheusUtils.createCounter(
             "listeners", "user_requests_total", "inbound requests count", "userId"
@@ -78,6 +79,8 @@ public class ProxyRequestsManager {
             "backends", "stuck_requests_total", "stuck requests, this requests will be killed"
     ).register();
 
+    private static final Logger LOGGER = Logger.getLogger(ProxyRequestsManager.class.getName());
+
     private final HttpProxyServer parent;
     private ConnectionProvider connectionProvider;
     private final ConcurrentHashMap<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
@@ -86,8 +89,8 @@ public class ProxyRequestsManager {
         this.parent = parent;
     }
 
-    public ConcurrentHashMap<EndpointKey, EndpointStats> getEndpointsStats() {
-        return endpointsStats;
+    public EndpointStats getEndpointStats(EndpointKey key) {
+        return endpointsStats.get(key);
     }
 
     public void reloadConfiguration(RuntimeServerConfiguration newConfiguration) {
@@ -114,9 +117,7 @@ public class ProxyRequestsManager {
         request.setStartTs(System.currentTimeMillis());
         request.setLastActivity(request.getStartTs());
 
-        for (RequestFilter filter : parent.getFilters()) {
-            filter.apply(request);
-        }
+        parent.getFilters().forEach(filter -> filter.apply(request));
 
         MapResult action = parent.getMapper().map(request);
         if (action == null) {
@@ -128,14 +129,6 @@ public class ProxyRequestsManager {
         if (LOGGER.isLoggable(Level.FINER)) {
             LOGGER.log(Level.FINER, "{0} Mapped {1} to {2}, userid {3}", new Object[]{this, request.getUri(), action, request.getUserId()});
         }
-
-        String endpointHost = action.host;
-        int endpointPort = action.port;
-
-        Counter.Child requestsPerUser = request.getUserId() != null
-                ? USER_REQUESTS_COUNTER.labels(request.getUserId())
-                : USER_REQUESTS_COUNTER.labels("anonymous");
-        Counter.Child totalRequests = TOTAL_REQUESTS_COUNTER.labels(request.getHostPort() + "");
 
         switch (action.action) {
             case NOTFOUND:
@@ -152,108 +145,22 @@ public class ProxyRequestsManager {
                 return serveRedirect(request);
 
             case PROXY: {
-                final EndpointStats endpointStats = endpointsStats.computeIfAbsent(EndpointKey.make(endpointHost, endpointPort), EndpointStats::new);
-                HttpClient client = HttpClient.create(connectionProvider)
-                        .host(action.host)
-                        .port(action.port)
-                        .option(ChannelOption.SO_KEEPALIVE, true)
-                        .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, parent.getCurrentConfiguration().getConnectTimeout())
-                        .doOnChannelInit((observer, channel, remoteAddress) -> {
-                            channel.pipeline().addFirst("readTimeoutHandler", new ReadTimeoutHandler(parent.getCurrentConfiguration().getIdleTimeout() / 2));
-                            channel.pipeline().addFirst("writeTimeoutHandler", new WriteTimeoutHandler(parent.getCurrentConfiguration().getIdleTimeout() / 2));
-                        })
-                        .doOnRequest((req, conn) -> {
-                            requestsPerUser.inc();
-                            PENDING_REQUESTS_GAUGE.inc();
-                            totalRequests.inc();
-                            endpointStats.getTotalRequests().incrementAndGet();
-                            endpointStats.getLastActivity().set(System.currentTimeMillis());
-                            parent.getRequestsLogger().logRequest(request);
-                        })
-                        .doOnRequestError((req, err) -> {
-                            LOGGER.log(Level.INFO, "errorSendingRequest to " + request.getAction().host + ":" + request.getAction().port, err);
-                            PENDING_REQUESTS_GAUGE.dec();
-                            serveServiceNotAvailable(request);
-                        })
-                        .doAfterResponseSuccess((resp, conn) -> {
-                            PENDING_REQUESTS_GAUGE.dec();
-                            endpointStats.getLastActivity().set(System.currentTimeMillis());
-                        })
-                        .doOnResponseError((req, err)
-                                -> parent.getBackendHealthManager().reportBackendUnreachable(endpointHost + ":" + endpointPort, System.currentTimeMillis(), "Response failed: " + err)
-                        )
-                        .followRedirect(true)
-                        .headers(h -> h.add(request.getRequestHeaders()));
-
-                for (Cookie cookie : request.getRequestCookies()) {
-                    client = client.cookie(cookie);
-                }
-
-                return client.request(request.getMethod())
-                        .uri(request.getUri())
-                        .send(request.getRequestData()) // client request body
-                        .response((resp, flux) -> { // endpoint response
-                            request.setResponseStatus(resp.status());
-                            request.setResponseHeaders(resp.responseHeaders()); // headers from endpoint to client
-                            addCustomResponseHeaders(request, request.getAction().customHeaders);
-                            request.setResponseCookies(resp.cookies().values().stream() // cookies from endpoint to client
-                                    .flatMap(Collection::stream)
-                                    .collect(Collectors.toList())
-                            );
-                            return request.sendResponseData(flux.retain().doOnNext(data -> { // response data
-                                request.setLastActivity(System.currentTimeMillis());
-                                endpointStats.getLastActivity().set(System.currentTimeMillis());
-                            }));
-                        });
-
+                RequestForwarder forwarder = new RequestForwarder(request, null);
+                return forwarder.forward();
             }
 
             case CACHE: {
-//                cacheSender = connectionToClient.cache.serveFromCache(this);
-//                if (cacheSender != null) {
-//                    return;
-//                }
-//                connectionToEndpoint.set(connectionToClient.getConnectionToEndpoint()); // existing client2endpoint connection
-//                if (connectionToEndpoint.get() == null) {
-//                    try {
-//                        connectionToEndpoint.set(connectionToClient.connectionsManager.getConnection(new EndpointKey(action.host, action.port)));
-//                        connectionToClient.setConnectionToEndpoint(connectionToEndpoint.get());
-//                        channelToClient.channel().closeFuture().addListener((Future<? super Void> future) -> {
-//                            CarapaceLogger.debug("Closing channel to client id={0}.", connectionToClient.getId());
-//                            EndpointConnection endpointConn = connectionToEndpoint.get();
-//                            if (endpointConn != null) {
-//                                fireRequestFinished();
-//                                // return the connection the pool (async)
-//                                endpointConn.release(closeAfterResponse, this, () -> connectionToEndpoint.compareAndSet(endpointConn, null));
-//                            } else {
-//                                LOG.log(Level.SEVERE, "{0} CANNOT release connection {1}, closeAfterResponse {2}", new Object[]{this, connectionToEndpoint, closeAfterResponse});
-//                            }
-//                        });
-//                    } catch (EndpointNotAvailableException err) {
-//                        fireRequestFinished();
-//                        LOG.log(Level.INFO, "{0} error on endpoint {1}: {2}", new Object[]{this, action, err});
-//                        return;
-//                    }
-//                }
-//                cacheReceiver = connectionToClient.cache.startCachingResponse(request, isSecure());
-//                if (cacheReceiver != null) {
-//                    // https://tools.ietf.org/html/rfc7234#section-4.3.4
-//                    cleanRequestFromCacheValidators(request);
-//                }
-//                connectionToEndpoint.get().sendRequest(request, this);
-//                return;
-
-//            if (cacheSender != null) {
-//            serveFromCache();
-//if (request.getc != null && !continueRequest) {
-//                                // msg object won't be cached as-is but the cache will retain a clone of it
-//                                cacheReceiver.receivedFromRemote(msg);
-//                                if (msg instanceof HttpResponse) {
-//                                    HttpResponse httpMessage = (HttpResponse) msg;
-//                                    cleanResponseForCachedData(httpMessage);
-//                                }
-//                            }
-                return Mono.empty();
+                ContentsCache.ContentSender cacheSender = parent.getCache().getCacheSender(request);
+                if (cacheSender != null) {
+                    return serveFromCache(request, cacheSender); // cached content
+                }
+                ContentsCache.ContentReceiver cacheReceiver = parent.getCache().createCacheReceiver(request);
+                if (cacheReceiver != null) { // cacheable
+                    // https://tools.ietf.org/html/rfc7234#section-4.3.4
+                    cleanRequestFromCacheValidators(request);
+                }
+                RequestForwarder forwarder = new RequestForwarder(request, cacheReceiver);
+                return forwarder.forward();
             }
 
             default:
@@ -349,11 +256,6 @@ public class ProxyRequestsManager {
         return writeSimpleResponse(request, response);
     }
 
-    private Publisher<Void> serveServiceNotAvailable(ProxyRequest request) {
-        FullHttpResponse response = parent.getStaticContentsManager().buildServiceNotAvailableResponse();
-        return writeSimpleResponse(request, response);
-    }
-
     private static Publisher<Void> writeSimpleResponse(ProxyRequest request, FullHttpResponse response) {
         return writeSimpleResponse(request, response, request.getAction().customHeaders);
     }
@@ -375,7 +277,7 @@ public class ProxyRequestsManager {
             response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
         }
         request.setResponseStatus(response.status());
-        request.setResponseHeaders(response.headers());
+        request.setResponseHeaders(response.headers().copy());
         addCustomResponseHeaders(request, customHeaders);
 
         // Write the response
@@ -399,88 +301,149 @@ public class ProxyRequestsManager {
         });
     }
 
-//
-//    public void serveFromCache() {
-//        ContentsCache.ContentPayload payload = cacheSender.getCached();
-//        sendCachedChunk(payload, 0);
-//    }
-//
-//    private void sendCachedChunk(ContentsCache.ContentPayload payload, int i) {
-//        int size = payload.getChunks().size();
-//        HttpObject object = payload.getChunks().get(i);
-//        boolean notModified;
-//        boolean isLastHttpContent = object instanceof LastHttpContent;
-//        if (object instanceof HttpResponse) {
-//
-//            HttpHeaders requestHeaders = request.headers();
-//            long ifModifiedSince = requestHeaders.getTimeMillis(HttpHeaderNames.IF_MODIFIED_SINCE, -1);
-//            if (ifModifiedSince != -1 && payload.getLastModified() > 0 && ifModifiedSince >= payload.getLastModified()) {
-//                HttpHeaders newHeaders = new DefaultHttpHeaders();
-//                newHeaders.set("Last-Modified", new java.util.Date(payload.getLastModified()));
-//                newHeaders.set("Expires", new java.util.Date(payload.getExpiresTs()));
-//                newHeaders.add("X-Cached", "yes; ts=" + payload.getCreationTs());
-//                FullHttpResponse resp = new DefaultFullHttpResponse(HTTP_1_1, HttpResponseStatus.NOT_MODIFIED,
-//                        Unpooled.EMPTY_BUFFER, newHeaders, new DefaultHttpHeaders());
-//                object = resp;
-//                notModified = true;
-//            } else {
-//                HttpResponse resp = (HttpResponse) object;
-//                HttpHeaders headers = new DefaultHttpHeaders();
-//                headers.add(resp.headers());
-//                headers.remove(HttpHeaderNames.EXPIRES);
-//                headers.remove(HttpHeaderNames.ACCEPT_RANGES);
-//                headers.remove(HttpHeaderNames.ETAG);
-//                headers.add("X-Cached", "yes; ts=" + payload.getCreationTs());
-//                headers.add("Expires", new java.util.Date(payload.getExpiresTs()));
-//
-//                object = new DefaultHttpResponse(resp.protocolVersion(), resp.status(), headers);
-//                long contentLength = HttpUtil.getContentLength(resp, -1);
-//                String transferEncoding = resp.headers().get(HttpHeaderNames.TRANSFER_ENCODING);
-//                if (contentLength < 0 && !"chunked".equals(transferEncoding)) {
-//                    connectionToClient.keepAlive = false;
-//                    LOGGER.log(Level.SEVERE, uri + " response without contentLength{0} and with Transfer-Encoding {1}. keepalive will be disabled " + resp,
-//                            new Object[]{contentLength, transferEncoding});
-//                }
-//                notModified = false;
-//            }
-//        } else {
-//            object = ContentsCache.cloneHttpObject(object);
-//            notModified = false;
-//        }
-//        HttpObject _object = object;
-//        clientState = ProxyRequestsManager.RequestHandlerState.WRITING;
-//        channelToClient.writeAndFlush(_object)
-//                .addListener((g) -> {
-//                    clientState = ProxyRequestsManager.RequestHandlerState.IDLE;
-//                    if (isLastHttpContent || notModified) {
-//                        requestComplete();
-//                        connectionToClient.closeIfNotKeepAlive(channelToClient);
-//                    }
-//                    if (i + 1 < size && g.isSuccess() && !notModified) {
-//                        sendCachedChunk(payload, i + 1);
-//                    } else {
-//                        fireRequestFinished();
-//                    }
-//                });
-//    }
-//
-//    private void cleanRequestFromCacheValidators(HttpRequest request) {
-//        HttpHeaders headers = request.headers();
-//        headers.remove(HttpHeaderNames.IF_MATCH);
-//        headers.remove(HttpHeaderNames.IF_MODIFIED_SINCE);
-//        headers.remove(HttpHeaderNames.IF_NONE_MATCH);
-//        headers.remove(HttpHeaderNames.IF_RANGE);
-//        headers.remove(HttpHeaderNames.IF_UNMODIFIED_SINCE);
-//        headers.remove(HttpHeaderNames.ETAG);
-//        headers.remove(HttpHeaderNames.CONNECTION);
-//    }
-//
-//    private void cleanResponseForCachedData(HttpResponse httpMessage) {
-//        HttpHeaders headers = httpMessage.headers();
-//        if (!headers.contains(HttpHeaderNames.EXPIRES)) {
-//            headers.add("Expires", new java.util.Date(connectionToClient.cache.computeDefaultExpireDate()));
-//        }
-//    }
+    private final class RequestForwarder {
+
+        private final ProxyRequest request;
+        private final ContentsCache.ContentReceiver cacheReceiver;
+        private final EndpointStats endpointStats;
+        private HttpClient client;
+
+        private RequestForwarder(ProxyRequest request, ContentsCache.ContentReceiver cacheReceiver) {
+            this.request = request;
+            this.cacheReceiver = cacheReceiver;
+            String endpointHost = request.getAction().host;
+            int endpointPort = request.getAction().port;
+            endpointStats = endpointsStats.computeIfAbsent(EndpointKey.make(endpointHost, endpointPort), EndpointStats::new);
+
+            Counter.Child requestsPerUser = request.getUserId() != null
+                    ? USER_REQUESTS_COUNTER.labels(request.getUserId())
+                    : USER_REQUESTS_COUNTER.labels("anonymous");
+
+            Counter.Child totalRequests = TOTAL_REQUESTS_COUNTER.labels(request.getHostPort() + "");
+
+            client = HttpClient.create(connectionProvider)
+                    .host(request.getAction().host)
+                    .port(request.getAction().port)
+                    .option(ChannelOption.SO_KEEPALIVE, true)
+                    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, parent.getCurrentConfiguration().getConnectTimeout())
+                    .doOnChannelInit((observer, channel, remoteAddress) -> {
+                        channel.pipeline().addFirst("readTimeoutHandler", new ReadTimeoutHandler(parent.getCurrentConfiguration().getIdleTimeout() / 2));
+                        channel.pipeline().addFirst("writeTimeoutHandler", new WriteTimeoutHandler(parent.getCurrentConfiguration().getIdleTimeout() / 2));
+                    })
+                    .doOnRequest((req, conn) -> {
+                        requestsPerUser.inc();
+                        PENDING_REQUESTS_GAUGE.inc();
+                        totalRequests.inc();
+                        endpointStats.getTotalRequests().incrementAndGet();
+                        endpointStats.getLastActivity().set(System.currentTimeMillis());
+                        parent.getRequestsLogger().logRequest(request);
+                    })
+                    .doOnRequestError((req, err) -> {
+                        LOGGER.log(Level.INFO, "errorSendingRequest to " + request.getAction().host + ":" + request.getAction().port, err);
+                        PENDING_REQUESTS_GAUGE.dec();
+                        serveServiceNotAvailable(request);
+                    })
+                    .doAfterResponseSuccess((resp, conn) -> {
+                        PENDING_REQUESTS_GAUGE.dec();
+                        endpointStats.getLastActivity().set(System.currentTimeMillis());
+                    })
+                    .doOnResponseError((req, err)
+                            -> parent.getBackendHealthManager().reportBackendUnreachable(endpointHost + ":" + endpointPort, System.currentTimeMillis(),
+                            "Response failed: " + err)
+                    )
+                    .followRedirect(true)
+                    .headers(h -> h.add(request.getRequestHeaders().copy()));
+
+            request.getRequestCookies().forEach(cookie -> client = client.cookie(cookie));
+        }
+
+        public Publisher<Void> forward() {
+            return client.request(request.getMethod())
+                    .uri(request.getUri())
+                    .send(request.getRequestData()) // client request body
+                    .response((resp, flux) -> { // endpoint response
+                        boolean cacheable = cacheReceiver != null && parent.getCache().isCacheable(resp);
+                        request.setResponseStatus(resp.status());
+                        request.setResponseHeaders(resp.responseHeaders().copy()); // headers from endpoint to client
+                        if (cacheable) {
+                            cacheReceiver.receivedFromRemote(resp);
+                            addCachedResponseHeaders(request);
+                        }
+                        addCustomResponseHeaders(request, request.getAction().customHeaders);
+                        request.setResponseCookies(resp.cookies().values().stream() // cookies from endpoint to client
+                                .flatMap(Collection::stream)
+                                .collect(Collectors.toList())
+                        );
+                        return request.sendResponseData(flux.retain().doOnNext(data -> { // response data
+                            request.setLastActivity(System.currentTimeMillis());
+                            endpointStats.getLastActivity().set(System.currentTimeMillis());
+                            if (cacheable) {
+                                cacheReceiver.receivedFromRemote(data);
+                            }
+                        }).doOnComplete(() -> parent.getCache().cacheContent(cacheReceiver)));
+                    });
+        }
+    }
+
+    private Publisher<Void> serveServiceNotAvailable(ProxyRequest request) {
+        FullHttpResponse response = parent.getStaticContentsManager().buildServiceNotAvailableResponse();
+        return writeSimpleResponse(request, response);
+    }
+
+    private static void cleanRequestFromCacheValidators(ProxyRequest request) {
+        HttpHeaders headers = request.getRequestHeaders();
+        headers.remove(HttpHeaderNames.IF_MATCH);
+        headers.remove(HttpHeaderNames.IF_MODIFIED_SINCE);
+        headers.remove(HttpHeaderNames.IF_NONE_MATCH);
+        headers.remove(HttpHeaderNames.IF_RANGE);
+        headers.remove(HttpHeaderNames.IF_UNMODIFIED_SINCE);
+        headers.remove(HttpHeaderNames.ETAG);
+        headers.remove(HttpHeaderNames.CONNECTION);
+    }
+
+    private void addCachedResponseHeaders(ProxyRequest request) {
+        HttpHeaders headers = request.getResponseHeaders();
+        if (!headers.contains(HttpHeaderNames.EXPIRES)) {
+            headers.add(HttpHeaderNames.EXPIRES, new java.util.Date(parent.getCache().computeDefaultExpireDate()));
+        }
+    }
+
+    public Publisher<Void> serveFromCache(ProxyRequest request, ContentsCache.ContentSender cacheSender) {
+        ContentsCache.CachedContent content = cacheSender.getCached();
+        HttpClientResponse response = content.getResponse();
+
+        // content not modified
+        long ifModifiedSince = request.getRequestHeaders().getTimeMillis(HttpHeaderNames.IF_MODIFIED_SINCE, -1);
+        if (ifModifiedSince != -1 && content.getLastModified() > 0 && ifModifiedSince >= content.getLastModified()) {
+            request.setResponseStatus(HttpResponseStatus.NOT_MODIFIED);
+            HttpHeaders headers = new DefaultHttpHeaders();
+            headers.set("Last-Modified", new java.util.Date(content.getLastModified()));
+            headers.set("Expires", new java.util.Date(content.getExpiresTs()));
+            headers.add("X-Cached", "yes; ts=" + content.getCreationTs());
+            request.setResponseHeaders(headers);
+            return request.send();
+        } else { // content modified
+            request.setResponseStatus(response.status());
+            HttpHeaders headers = response.responseHeaders().copy();
+            headers.remove(HttpHeaderNames.EXPIRES);
+            headers.remove(HttpHeaderNames.ACCEPT_RANGES);
+            headers.remove(HttpHeaderNames.ETAG);
+            headers.add("X-Cached", "yes; ts=" + content.getCreationTs());
+            headers.add(HttpHeaderNames.EXPIRES, new java.util.Date(content.getExpiresTs()));
+            request.setResponseHeaders(headers);
+            addCustomResponseHeaders(request, request.getAction().customHeaders);
+            // cookies
+            request.setResponseCookies(response.cookies().values().stream() // cached cookies from endpoint to client
+                    .flatMap(Collection::stream)
+                    .collect(Collectors.toList())
+            );
+            // body
+            return request.sendResponseData(Flux.fromIterable(content.getChunks()).doOnNext(data -> { // response data
+                request.setLastActivity(System.currentTimeMillis());
+            }));
+        }
+    }
+
 //
 //    public void failIfStuck(long now, int stuckRequestTimeout, Runnable onStuck) {
 //        long delta = now - lastActivity;

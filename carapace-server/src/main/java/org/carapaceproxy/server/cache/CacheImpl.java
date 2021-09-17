@@ -20,7 +20,7 @@
 package org.carapaceproxy.server.cache;
 
 import org.carapaceproxy.server.cache.ContentsCache.ContentKey;
-import org.carapaceproxy.server.cache.ContentsCache.ContentPayload;
+import org.carapaceproxy.server.cache.ContentsCache.CachedContent;
 
 /**
  *
@@ -30,10 +30,10 @@ interface CacheImpl {
 
     /**
      * Sets cache to verbose
-     * @param verbose 
+     * @param verbose
      */
     public void setVerbose(boolean verbose);
-    
+
     /**
      * Gets the esteemed number entries in cache
      * @return
@@ -42,40 +42,40 @@ interface CacheImpl {
 
     /**
      * Gets the esteemed memory consumption of cache contents
-     * @return 
+     * @return
      */
     public long getMemSize();
 
     /**
      * Adds an element to cache and updates the stats
      * @param key
-     * @param payload 
+     * @param payload
      */
-    public void put(ContentKey key, ContentPayload payload);
+    public void put(ContentKey key, CachedContent payload);
 
     /**
      * Gets an element from cache if presents and updates the stats
      * @param key
      * @return Cached element or null if key was not found in cache
      */
-    public ContentPayload get(ContentKey key);
+    public CachedContent get(ContentKey key);
 
     /**
      * Removes an element from cache, frees its resources and updates the stats
-     * 
+     *
      * NOTE: removal will eventually erase key and payload, so if the cached element has been previously got from the
      * cache ti will no longer be usable after calling this method
-     * 
+     *
      * @param key
      * @return The removed element
      */
     public void remove(ContentKey key);
-    
+
     /**
      * Tries to force eviction on cache
      */
     public void evict();
-    
+
     /**
      * Removes all elements from cache
      * @return Esteemed number of elements removed
@@ -86,15 +86,15 @@ interface CacheImpl {
      * Clears the cache and free all its resources
      */
     public void close();
-    
+
     interface CacheEntriesSink {
-        public void accept(ContentKey key, ContentPayload payload);
-    } 
-    
+        public void accept(ContentKey key, CachedContent payload);
+    }
+
     /**
      * Calls "sink" for every current element in cache
-     * @param sink 
+     * @param sink
      */
     public void inspectCache(CacheEntriesSink sink);
-    
+
 }

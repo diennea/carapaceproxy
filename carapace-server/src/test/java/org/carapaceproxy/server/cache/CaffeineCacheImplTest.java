@@ -29,7 +29,7 @@ import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.carapaceproxy.server.cache.ContentsCache.ContentKey;
-import org.carapaceproxy.server.cache.ContentsCache.ContentPayload;
+import org.carapaceproxy.server.cache.ContentsCache.CachedContent;
 import org.carapaceproxy.utils.TestUtils;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
@@ -80,7 +80,7 @@ public class CaffeineCacheImplTest {
         cache.setVerbose(true);
 
         cache.setRemovalListener((key, payload, cause) -> {
-            CacheEntry e = new CacheEntry((ContentKey) key, (ContentPayload) payload, true);
+            CacheEntry e = new CacheEntry((ContentKey) key, (CachedContent) payload, true);
             e.removalCause = cause;
             evictedResources.add(e);
         });
@@ -89,16 +89,16 @@ public class CaffeineCacheImplTest {
     private static final class CacheEntry {
 
         final ContentKey key;
-        final ContentPayload payload;
+        final CachedContent payload;
         RemovalCause removalCause;
 
-        public CacheEntry(ContentKey key, ContentPayload payload, boolean copy) {
+        public CacheEntry(ContentKey key, CachedContent payload, boolean copy) {
             if (copy) {
                 this.key = key;
                 this.payload = payload;
             } else {
                 this.key = key;
-                this.payload = new ContentPayload();
+                this.payload = new CachedContent();
                 this.payload.chunks.addAll(payload.chunks);
                 TestUtils.setFinalField(this.payload, "creationTs", payload.creationTs);
                 this.payload.directSize = payload.directSize;
@@ -149,7 +149,7 @@ public class CaffeineCacheImplTest {
 
     private static CacheEntry genCacheEntry(String resource, int payloadLength, long expireTs) {
         ContentKey key = new ContentKey("", "", resource);
-        ContentPayload payload = new ContentPayload();
+        CachedContent payload = new CachedContent();
         payload.chunks.add(null);
         payload.chunks.add(null);
         payload.directSize = payloadLength / 2;

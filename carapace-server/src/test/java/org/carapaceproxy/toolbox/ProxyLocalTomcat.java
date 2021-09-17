@@ -54,7 +54,7 @@ public class ProxyLocalTomcat {
             String s = IOUtils.toString(new URL("http://localhost:" + port + "/be/admin").toURI(), "utf-8");
             System.out.println("s:" + s);
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
             TestUtils.waitForCondition(() -> {
                 return stats.getTotalConnections().intValue() == 1

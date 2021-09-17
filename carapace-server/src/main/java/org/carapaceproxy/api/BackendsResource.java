@@ -21,7 +21,6 @@ package org.carapaceproxy.api;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import javax.servlet.ServletContext;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -32,7 +31,6 @@ import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.backends.BackendHealthCheck;
 import org.carapaceproxy.server.backends.BackendHealthStatus;
-import org.carapaceproxy.server.config.BackendConfiguration;
 
 /**
  * Access to backends status
@@ -78,14 +76,13 @@ public class BackendsResource {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         Map<String, BackendHealthStatus> backendsSnapshot = server.getBackendHealthManager().getBackendsSnapshot();
         Map<String, BackendBean> res = new HashMap<>();
-        ConcurrentHashMap<EndpointKey, EndpointStats> endpointsStats = server.getProxyRequestsManager().getEndpointsStats();
 
-        for (BackendConfiguration backendConf : server.getMapper().getBackends().values()) {
+        server.getMapper().getBackends().values().forEach(backendConf -> {
             String id = backendConf.getId();
             String hostPort = backendConf.getHostPort();
             BackendBean bean = new BackendBean(id, backendConf.getHost(), backendConf.getPort());
             bean.lastProbePath = backendConf.getProbePath();
-            EndpointStats epstats = endpointsStats.get(EndpointKey.make(hostPort));
+            EndpointStats epstats = server.getProxyRequestsManager().getEndpointStats(EndpointKey.make(hostPort));
             if (epstats != null) {
                 bean.openConnections = epstats.getOpenConnections().longValue();
                 bean.totalRequests = epstats.getTotalRequests().longValue();
@@ -105,7 +102,7 @@ public class BackendsResource {
                 }
             }
             res.put(id, bean);
-        }
+        });
 
         return res;
     }

@@ -87,7 +87,7 @@ public class ChunckedEncodingRequestsTest {
                 assertTrue(s.endsWith("it <b>works</b> !!"));
             }
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
         }
 
@@ -138,7 +138,7 @@ public class ChunckedEncodingRequestsTest {
                 assertTrue(s.endsWith("it <b>works</b> !!"));
             }
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
         }
 

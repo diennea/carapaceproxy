@@ -39,7 +39,6 @@ import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchingContext;
 import org.reactivestreams.Publisher;
 import reactor.netty.ByteBufFlux;
-import reactor.netty.NettyOutbound;
 import reactor.netty.http.server.HttpServerRequest;
 import reactor.netty.http.server.HttpServerResponse;
 
@@ -180,7 +179,11 @@ public class ProxyRequest implements MatchingContext {
         return request.receive().retain();
     }
 
-    public NettyOutbound sendResponseData(Publisher<? extends ByteBuf> data) {
+    public Publisher<Void> send() {
+        return response.send();
+    }
+
+    public Publisher<Void> sendResponseData(Publisher<? extends ByteBuf> data) {
         return response.send(data);
     }
 

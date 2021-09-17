@@ -111,7 +111,7 @@ public class CacheTest {
                 }
             }
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(2, server.getCache().getStats().getHits());
@@ -189,7 +189,7 @@ public class CacheTest {
                 }
             }
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(1, server.getCache().getStats().getHits());
@@ -280,7 +280,7 @@ public class CacheTest {
                     assertEquals(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")), !cacheDisabledForSecureRequestsWithoutPublic);
                 }
             }
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
             int expected = cacheDisabledForSecureRequestsWithoutPublic ? 0 : 1;
             assertEquals(expected, server.getCache().getCacheSize());
@@ -417,7 +417,7 @@ public class CacheTest {
                 }
             }
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(2, server.getCache().getStats().getHits());
@@ -485,7 +485,7 @@ public class CacheTest {
                 }
             }
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(2, server.getCache().getStats().getHits());
@@ -530,7 +530,7 @@ public class CacheTest {
                 assertTrue(s.endsWith("it <b>works</b> !!"));
             }
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
             assertEquals(0, server.getCache().getCacheSize());
             assertEquals(0, server.getCache().getStats().getHits());
@@ -575,7 +575,7 @@ public class CacheTest {
                 assertTrue(s.endsWith("it <b>works</b> !!"));
             }
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(1, server.getCache().getStats().getHits());
@@ -758,7 +758,7 @@ public class CacheTest {
                 assertEquals(1, server.getCache().getStats().getMisses());
             }
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
         }
         TestUtils.waitForCondition(() -> {
@@ -800,7 +800,7 @@ public class CacheTest {
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
 
-                EndpointStats epstats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+                EndpointStats epstats = server.getProxyRequestsManager().getEndpointStats(key);
                 assertNotNull(epstats);
                 assertEquals(0, server.getCache().getCacheSize());
                 assertEquals(0, server.getCache().getStats().getHits());
@@ -951,7 +951,7 @@ public class CacheTest {
                 assertEquals(1, server.getCache().getStats().getMisses());
             }
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
         }
         TestUtils.waitForCondition(() -> {

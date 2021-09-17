@@ -81,7 +81,7 @@ public class SSLSNITest {
                      */, null, null));
 
             server.start();
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
             int port = server.getLocalPort();
 

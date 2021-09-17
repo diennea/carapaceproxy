@@ -92,7 +92,7 @@ public class NotModifiedTest {
                 }
             }
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(1, server.getCache().getStats().getHits());

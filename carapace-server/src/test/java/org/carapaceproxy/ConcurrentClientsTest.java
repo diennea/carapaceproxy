@@ -1,5 +1,3 @@
-package org.carapaceproxy;
-
 /*
  Licensed to Diennea S.r.l. under one
  or more contributor license agreements. See the NOTICE file
@@ -19,6 +17,8 @@ package org.carapaceproxy;
  under the License.
 
  */
+package org.carapaceproxy;
+
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
@@ -40,6 +40,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import java.util.logging.Level;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -104,12 +105,12 @@ public class ConcurrentClientsTest {
                 fail("error! " + oneError.get());
             }
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
         }
 
         TestUtils.waitForCondition(() -> {
-            LOG.info("stats: " + stats.getKey() + " " + (System.currentTimeMillis() - stats.getLastActivity().longValue()) + " ms");
+            LOG.log(Level.INFO, "stats: {0} {1} ms", new Object[]{stats.getKey(), System.currentTimeMillis() - stats.getLastActivity().longValue()});
             return stats.getTotalConnections().intValue() > 0
                 && stats.getActiveConnections().intValue() == 0
                 && stats.getOpenConnections().intValue() == 0;

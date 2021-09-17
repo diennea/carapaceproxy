@@ -197,7 +197,7 @@ public class RawClientTest {
 
             }
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
         }
 

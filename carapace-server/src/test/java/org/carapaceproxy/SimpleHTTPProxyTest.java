@@ -94,7 +94,7 @@ public class SimpleHTTPProxyTest {
                 assertEquals("it <b>works</b> !!", s);
             }
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
         }
 
@@ -152,7 +152,7 @@ public class SimpleHTTPProxyTest {
                 assertEquals("it <b>works</b> !!", s);
             }
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
         }
 
@@ -182,7 +182,7 @@ public class SimpleHTTPProxyTest {
 //            String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8");
 //            System.out.println("s:" + s);
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
         }
 

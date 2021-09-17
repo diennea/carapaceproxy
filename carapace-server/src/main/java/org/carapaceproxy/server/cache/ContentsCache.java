@@ -21,18 +21,10 @@ package org.carapaceproxy.server.cache;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.netty.buffer.ByteBuf;
-import io.netty.handler.codec.http.DefaultHttpContent;
-import io.netty.handler.codec.http.DefaultHttpResponse;
-import io.netty.handler.codec.http.DefaultLastHttpContent;
-import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.codec.http.HttpResponse;
 import static io.netty.handler.codec.http.HttpStatusClass.REDIRECTION;
-import io.netty.handler.codec.http.LastHttpContent;
-import io.netty.util.ReferenceCountUtil;
 import io.prometheus.client.Counter;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -45,11 +37,12 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
+import lombok.Data;
 import org.carapaceproxy.core.ProxyRequest;
-import org.carapaceproxy.core.ProxyRequestsManager;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.utils.PrometheusUtils;
-import reactor.netty.http.server.HttpServerRequest;
+import reactor.netty.http.client.HttpClientResponse;
 
 /**
  * Keeps contents in cache
@@ -58,7 +51,7 @@ public class ContentsCache {
 
     private static final Logger LOG = Logger.getLogger(ContentsCache.class.getName());
 
-    private static final Counter NO_CACHE_REQUESTS_COUNTER = PrometheusUtils.createCounter("cache", "non_cachable_requests_total", "not cachable requests").register();
+    private static final Counter NO_CACHE_REQUESTS_COUNTER = PrometheusUtils.createCounter("cache", "non_cacheable_requests_total", "not cacheable requests").register();
 
     public static final List<String> CACHE_CONTROL_CACHE_DISABLED_VALUES = Arrays.asList(
             HttpHeaderValues.PRIVATE + "",
@@ -101,16 +94,12 @@ public class ContentsCache {
         this.cache.close();
     }
 
-    private boolean isContentLengthCachable(long contentLength) {
-        if (currentConfiguration.getCacheMaxFileSize() > 0
-                && contentLength > currentConfiguration.getCacheMaxFileSize()) {
-            return false;
-        } else {
-            return true;
-        }
+    private boolean isContentLengthCacheable(long contentLength) {
+        return !(currentConfiguration.getCacheMaxFileSize() > 0
+                && contentLength > currentConfiguration.getCacheMaxFileSize());
     }
 
-    private boolean isContentLengthCachable(HttpHeaders headers) {
+    private boolean isContentLengthCacheable(HttpHeaders headers) {
         if (currentConfiguration.getCacheMaxFileSize() <= 0) {
             return true;
         }
@@ -126,14 +115,14 @@ public class ContentsCache {
         }
     }
 
-    private boolean isCachable(HttpResponse response) {
-        HttpHeaders headers = response.headers();
+    public boolean isCacheable(HttpClientResponse response) {
+        HttpHeaders headers = response.responseHeaders();
         String cacheControl = headers.get(HttpHeaderNames.CACHE_CONTROL, "").replaceAll(" ", "").toLowerCase();
         if ((!cacheControl.isEmpty() && CACHE_CONTROL_CACHE_DISABLED_VALUES.stream().anyMatch(v -> cacheControl.contains(v)))
                 || headers.contains(HttpHeaderNames.PRAGMA, HttpHeaderValues.NO_CACHE, true)
-                || !isContentLengthCachable(headers)) {
+                || !isContentLengthCacheable(headers)) {
             // never cache Pragma: no-cache, Cache-Control: nostore/no-cache
-            LOG.log(Level.FINER, "not cachable {0}", response);
+            LOG.log(Level.FINER, "not cacheable {0}", response);
             return false;
         }
         switch (response.status().codeClass()) {
@@ -149,7 +138,7 @@ public class ContentsCache {
 
     }
 
-    private boolean isCachable(ProxyRequest request, boolean secure, boolean registerNoCacheStat) {
+    private boolean isCacheable(ProxyRequest request, boolean registerNoCacheStat) {
         switch (request.getMethod().name()) {
             case "GET":
             case "HEAD":
@@ -169,7 +158,7 @@ public class ContentsCache {
             return false;
         }
         if (this.currentConfiguration.isCacheDisabledForSecureRequestsWithoutPublic()
-                && secure && !cacheControl.contains(HttpHeaderValues.PUBLIC + "")) {
+                && request.isSecure() && !cacheControl.contains(HttpHeaderValues.PUBLIC + "")) {
             return false;
         }
         if ((!cacheControl.isEmpty() && CACHE_CONTROL_CACHE_DISABLED_VALUES.stream().anyMatch(v -> cacheControl.contains(v)))
@@ -214,12 +203,8 @@ public class ContentsCache {
         new Evictor().run();
     }
 
-    public ContentReceiver startCachingResponse(ProxyRequest request, boolean secure) {
-        if (!isCachable(request, secure, true)) {
-            return null;
-        }
-        return new ContentReceiver(new ContentKey(request));
-
+    public ContentReceiver createCacheReceiver(ProxyRequest request) {
+        return isCacheable(request, true) ? new ContentReceiver(new ContentKey(request)) : null;
     }
 
     public final long computeDefaultExpireDate() {
@@ -272,9 +257,9 @@ public class ContentsCache {
     public static final class ContentSender {
 
         private final ContentKey key;
-        private final ContentPayload cached;
+        private final CachedContent cached;
 
-        private ContentSender(ContentKey key, ContentPayload cached) {
+        private ContentSender(ContentKey key, CachedContent cached) {
             this.key = key;
             this.cached = cached;
         }
@@ -283,28 +268,28 @@ public class ContentsCache {
             return key;
         }
 
-        public ContentPayload getCached() {
+        public CachedContent getCached() {
             return cached;
         }
 
     }
 
-    public ContentSender serveFromCache(ProxyRequest request) {
-        if (!isCachable(request, request.isSecure(), false)) {
+    public ContentSender getCacheSender(ProxyRequest request) {
+        if (!isCacheable(request, false)) {
             return null;
         }
-        ContentKey key = new ContentKey(request);
-        ContentPayload cached = cache.get(key);
-        if (cached == null) {
-            return null;
-        }
-        return new ContentSender(key, cached);
 
+        ContentKey key = new ContentKey(request);
+        CachedContent cached = cache.get(key);
+
+        return cached != null ? new ContentSender(key, cached) : null;
     }
 
-    public static class ContentPayload {
+    @Data
+    public static class CachedContent {
 
-        final List<HttpObject> chunks = new ArrayList<>();
+        HttpClientResponse response;
+        final List<ByteBuf> chunks = new ArrayList<>();
         final long creationTs = System.currentTimeMillis();
         long lastModified;
         long expiresTs = -1;
@@ -312,34 +297,24 @@ public class ContentsCache {
         long directSize;
         int hits;
 
-        @Override
-        public String toString() {
-            return "ContentPayload{" + "chunks_n=" + chunks.size() + ", creationTs=" + new java.sql.Timestamp(creationTs) + ", lastModified=" + new java.sql.Timestamp(lastModified) + ", expiresTs=" + new java.sql.Timestamp(
-                    expiresTs) + ", size=" + (heapSize + directSize) + " (heap=" + heapSize + ", direct=" + directSize + ")" + '}';
+        private void addChunk(ByteBuf chunk) {
+            chunks.add(chunk.copy().retain());
+            if (chunk.isDirect()) {
+                directSize += chunk.capacity();
+            } else {
+                heapSize += chunk.capacity();
+            }
         }
 
-        public long getLastModified() {
-            return lastModified;
+        void clear() {
+            chunks.forEach(ByteBuf::release);
+            chunks.clear();
         }
 
-        public long getExpiresTs() {
-            return expiresTs;
-        }
-
-        public long getCreationTs() {
-            return creationTs;
-        }
-
-        public long getHeapSize() {
-            return heapSize;
-        }
-
-        public long getDirectSize() {
-            return directSize;
-        }
-
-        public int getHits() {
-            return hits;
+        public List<ByteBuf> getChunks() {
+            return chunks.stream()
+                    .map(c -> c.copy())
+                    .collect(Collectors.toList());
         }
 
         public long getMemUsage() {
@@ -351,66 +326,10 @@ public class ContentsCache {
                     4 * 1;
         }
 
-        public List<HttpObject> getChunks() {
-            return chunks;
-        }
-
-        void clear() {
-            for (HttpObject o : chunks) {
-                ReferenceCountUtil.release(o);
-            }
-            chunks.clear();
-        }
-
-        private void addChunk(HttpObject msg) {
-            chunks.add(msg);
-            heapSize += getHttpObjectHeapSize(msg);
-            directSize += getHttpObjectDirectSize(msg);
-        }
-
         @Override
-        public int hashCode() {
-            int hash = 7;
-            hash = 41 * hash + Objects.hashCode(this.chunks);
-            hash = 41 * hash + (int) (this.creationTs ^ (this.creationTs >>> 32));
-            hash = 41 * hash + (int) (this.lastModified ^ (this.lastModified >>> 32));
-            hash = 41 * hash + (int) (this.expiresTs ^ (this.expiresTs >>> 32));
-            hash = 41 * hash + (int) (this.heapSize ^ (this.heapSize >>> 32));
-            hash = 41 * hash + (int) (this.directSize ^ (this.directSize >>> 32));
-            return hash;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (obj == null) {
-                return false;
-            }
-            if (getClass() != obj.getClass()) {
-                return false;
-            }
-            final ContentPayload other = (ContentPayload) obj;
-            if (this.creationTs != other.creationTs) {
-                return false;
-            }
-            if (this.lastModified != other.lastModified) {
-                return false;
-            }
-            if (this.expiresTs != other.expiresTs) {
-                return false;
-            }
-            if (this.heapSize != other.heapSize) {
-                return false;
-            }
-            if (this.directSize != other.directSize) {
-                return false;
-            }
-            if (!Objects.equals(this.chunks, other.chunks)) {
-                return false;
-            }
-            return true;
+        public String toString() {
+            return "ContentPayload{" + "chunks_n=" + chunks.size() + ", creationTs=" + new java.sql.Timestamp(creationTs) + ", lastModified=" + new java.sql.Timestamp(lastModified) + ", expiresTs=" + new java.sql.Timestamp(
+                    expiresTs) + ", size=" + (heapSize + directSize) + " (heap=" + heapSize + ", direct=" + directSize + ")" + '}';
         }
 
     }
@@ -532,10 +451,13 @@ public class ContentsCache {
         return stats;
     }
 
-    private void cacheContent(ContentReceiver receiver) {
-        ContentPayload content = receiver.content;
+    public void cacheContent(ContentReceiver receiver) {
+        if (receiver == null) {
+            return;
+        }
+        CachedContent content = receiver.content;
         // Now we have the actual content size
-        if (!isContentLengthCachable(content.heapSize + content.directSize)) {
+        if (!isContentLengthCacheable(content.heapSize + content.directSize)) {
             cache.remove(receiver.key); // just for make sure
             return;
         }
@@ -545,12 +467,12 @@ public class ContentsCache {
     public class ContentReceiver {
 
         private final ContentKey key;
-        private final ContentPayload content;
-        private boolean notReallyCachable = false;
+        private final CachedContent content;
+        private boolean notReallyCacheable = false;
 
         public ContentReceiver(ContentKey key) {
             this.key = key;
-            this.content = new ContentPayload();
+            this.content = new CachedContent();
         }
 
         public void abort() {
@@ -558,94 +480,36 @@ public class ContentsCache {
             content.clear();
         }
 
-        public void receivedFromRemote(HttpObject msg) {
-            if (msg instanceof HttpResponse) {
-                HttpResponse response = (HttpResponse) msg;
-                if (!isCachable(response)) {
-                    notReallyCachable = true;
-                }
-                long expiresTs = response.headers().getTimeMillis(HttpHeaderNames.EXPIRES, -1);
-                if (expiresTs == -1) {
-                    expiresTs = computeDefaultExpireDate();
-                } else if (expiresTs < System.currentTimeMillis()) {
-                    // already expired ?
-                    notReallyCachable = true;
-                }
-                content.expiresTs = expiresTs;
-                long lastModified = response.headers().getTimeMillis(HttpHeaderNames.LAST_MODIFIED, -1);
-                content.lastModified = lastModified;
+        public void receivedFromRemote(HttpClientResponse response) {
+            if (!isCacheable(response)) {
+                notReallyCacheable = true;
             }
-            if (notReallyCachable) {
-                LOG.log(Level.FINEST, "{0} rejecting non-cachable response", key);
+            long expiresTs = response.requestHeaders().getTimeMillis(HttpHeaderNames.EXPIRES, -1);
+            if (expiresTs == -1) {
+                expiresTs = computeDefaultExpireDate();
+            } else if (expiresTs < System.currentTimeMillis()) {
+                // already expired ?
+                notReallyCacheable = true;
+            }
+            content.expiresTs = expiresTs;
+            long lastModified = response.requestHeaders().getTimeMillis(HttpHeaderNames.LAST_MODIFIED, -1);
+            content.lastModified = lastModified;
+            if (notReallyCacheable) {
+                LOG.log(Level.FINEST, "{0} rejecting non-cacheable response", key);
                 abort();
                 return;
             }
-            msg = cloneHttpObject(msg);
-//            LOG.info(key + " accepting chunk " + msg);
 
-            content.addChunk(msg);
-            if (msg instanceof LastHttpContent) {
-                cacheContent(this);
-            }
+            content.setResponse(response);
         }
-    }
 
-    public static long getHttpObjectHeapSize(HttpObject msg) {
-        if (msg instanceof HttpResponse) {
-            return 0;
-        } else if (msg instanceof DefaultHttpContent) {
-            DefaultHttpContent df = (DefaultHttpContent) msg;
-            ByteBuf content = df.content();
-            if (content.isDirect()) {
-                return 0;
-            } else {
-                return content.capacity();
+        public void receivedFromRemote(ByteBuf chunk) {
+            if (notReallyCacheable) {
+                LOG.log(Level.FINEST, "{0} rejecting non-cacheable response", key);
+                abort();
+                return;
             }
-        } else if (msg instanceof LastHttpContent) {
-            // EmptyLastHttpContent
-            return 0;
-        } else {
-            throw new IllegalStateException("cannot estimate HttpObject " + msg);
-        }
-    }
-
-    public static long getHttpObjectDirectSize(HttpObject msg) {
-        if (msg instanceof HttpResponse) {
-            return 0;
-        } else if (msg instanceof DefaultHttpContent) {
-            DefaultHttpContent df = (DefaultHttpContent) msg;
-            ByteBuf content = df.content();
-            if (content.isDirect()) {
-                return content.capacity();
-            } else {
-                return 0;
-            }
-        } else if (msg instanceof LastHttpContent) {
-            // EmptyLastHttpContent
-            return 0;
-        } else {
-            throw new IllegalStateException("cannot estimate HttpObject " + msg);
-        }
-    }
-
-    public static HttpObject cloneHttpObject(HttpObject msg) {
-        if (msg instanceof FullHttpResponse) {
-            FullHttpResponse fr = (FullHttpResponse) msg;
-            return fr.copy();
-        } else if (msg instanceof DefaultHttpResponse) {
-            DefaultHttpResponse fr = (DefaultHttpResponse) msg;
-            return new DefaultHttpResponse(fr.protocolVersion(), fr.status(), fr.headers());
-        } else if (msg instanceof DefaultLastHttpContent) {
-            DefaultLastHttpContent df = (DefaultLastHttpContent) msg;
-            return df.copy();
-        } else if (msg instanceof DefaultHttpContent) {
-            DefaultHttpContent df = (DefaultHttpContent) msg;
-            return df.copy();
-        } else if (msg instanceof LastHttpContent) {
-            return ((LastHttpContent) msg).copy();
-        } else {
-            LOG.severe("cannot duplicate HttpObject " + msg);
-            throw new IllegalStateException("cannot duplicate HttpObject " + msg);
+            content.addChunk(chunk);
         }
     }
 

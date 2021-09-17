@@ -98,7 +98,7 @@ public class CacheContentLengthLimitTest {
             }
             assertThat(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")), is(cached));
 
-            EndpointStats stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            EndpointStats stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
             assertThat(server.getCache().getCacheSize(), is(cacheSize));
         }
@@ -117,7 +117,7 @@ public class CacheContentLengthLimitTest {
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
                 server.start();
 
-                stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+                stats = server.getProxyRequestsManager().getEndpointStats(key);
                 assertNotNull(stats);
 
                 // First request
@@ -142,7 +142,7 @@ public class CacheContentLengthLimitTest {
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
                 server.start();
 
-                stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+                stats = server.getProxyRequestsManager().getEndpointStats(key);
                 assertNotNull(stats);
 
                 // First request
@@ -167,7 +167,7 @@ public class CacheContentLengthLimitTest {
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
                 server.start();
 
-                stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+                stats = server.getProxyRequestsManager().getEndpointStats(key);
                 assertNotNull(stats);
 
                 // First request

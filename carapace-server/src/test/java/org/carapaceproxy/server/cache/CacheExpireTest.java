@@ -101,7 +101,7 @@ public class CacheExpireTest {
                 assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
             }
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(1, server.getCache().getStats().getHits());
@@ -162,7 +162,7 @@ public class CacheExpireTest {
                 assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith(expires)));
             }
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(1, server.getCache().getStats().getHits());
@@ -224,7 +224,7 @@ public class CacheExpireTest {
                 assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
             }
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
             assertEquals(0, server.getCache().getCacheSize());
             assertEquals(0, server.getCache().getStats().getHits());
@@ -275,7 +275,7 @@ public class CacheExpireTest {
                 assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
             }
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(0, server.getCache().getStats().getHits());
@@ -346,7 +346,7 @@ public class CacheExpireTest {
                 assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
             }
 
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(0, server.getCache().getStats().getHits());

@@ -83,7 +83,7 @@ public class ChunkedEncodingResponseTest {
                         + "0\r\n\r\n"));
                 assertTrue(resp.getBodyString().equals("it <b>works</b> !!"));
             }
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
             TestUtils.waitForCondition(() -> {
                 return stats.getTotalConnections().intValue() == 1
@@ -151,7 +151,7 @@ public class ChunkedEncodingResponseTest {
                         + "it <b>works</b> !!\r\n"
                         + "0\r\n\r\n"));
             }
-            stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+            stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(2, server.getCache().getStats().getHits());

@@ -201,7 +201,7 @@ public class BigUploadTest {
                 }
                 con.disconnect();
 
-                stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+                stats = server.getProxyRequestsManager().getEndpointStats(key);
                 assertNotNull(stats);
             }
 
@@ -243,7 +243,7 @@ public class BigUploadTest {
                 }
                 con.disconnect();
 
-                stats = server.getProxyRequestsManager().getEndpointsStats().get(key);
+                stats = server.getProxyRequestsManager().getEndpointStats(key);
                 assertNotNull(stats);
             }
 
