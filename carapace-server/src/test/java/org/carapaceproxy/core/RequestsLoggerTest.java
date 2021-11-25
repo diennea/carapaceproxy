@@ -42,7 +42,6 @@ import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -54,6 +53,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import org.carapaceproxy.utils.TestUtils;
 import reactor.netty.http.server.HttpServerRequest;
 
 /**
@@ -553,13 +553,8 @@ public class RequestsLoggerTest {
             assertNotNull(stats);
         }
 
-        List<String> content = readFile(accessLogFilePath);
-
-        TestUtils.waitForCondition(() -> {
-            return stats.getTotalConnections().intValue() == 1
-                    && stats.getActiveConnections().intValue() == 0
-                    && stats.getOpenConnections().intValue() == 0;
-        }, 100);
+        readFile(accessLogFilePath);
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test

@@ -1,24 +1,26 @@
 /*
- * Licensed to Diennea S.r.l. under one
- * or more contributor license agreements. See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership. Diennea S.r.l. licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- *
+ Licensed to Diennea S.r.l. under one
+ or more contributor license agreements. See the NOTICE file
+ distributed with this work for additional information
+ regarding copyright ownership. Diennea S.r.l. licenses this file
+ to you under the Apache License, Version 2.0 (the
+ "License"); you may not use this file except in compliance
+ with the License.  You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing,
+ software distributed under the License is distributed on an
+ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ KIND, either express or implied.  See the License for the
+ specific language governing permissions and limitations
+ under the License.
+
  */
 package org.carapaceproxy.utils;
 
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaderValues;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -45,7 +47,8 @@ import javax.net.ssl.SSLSocketFactory;
  */
 public final class RawHttpClient implements AutoCloseable {
 
-    private static boolean DEBUG = false;
+    private static final boolean DEBUG = false;
+    private static final int SOCKET_SO_TIMEOUT = 10_000; // millis
 
     private final Socket socket;
     private final String host;
@@ -84,7 +87,7 @@ public final class RawHttpClient implements AutoCloseable {
         } else {
             socket = new Socket(host, port);
         }
-        socket.setSoTimeout(300 * 000);
+        socket.setSoTimeout(SOCKET_SO_TIMEOUT);
     }
 
     public static RawHttpClient withEnabledSSLProtocols(String host, int port, String... protocols) throws IOException {
@@ -111,15 +114,15 @@ public final class RawHttpClient implements AutoCloseable {
 
     public HttpResponse get(String uri) throws IOException {
         return executeRequest("GET " + uri + " HTTP/1.1"
-                + "\r\nHost:" + host
-                + "\r\nConnection: keep-alive"
+                + "\r\n" + HttpHeaderNames.HOST + ": " + host
+                + "\r\n" + HttpHeaderNames.CONNECTION + ": " + HttpHeaderValues.KEEP_ALIVE
                 + "\r\n\r\n");
     }
 
     public HttpResponse get(String uri, BasicAuthCredentials credentials) throws IOException {
         return executeRequest("GET " + uri + " HTTP/1.1"
-                + "\r\nHost:" + host
-                + "\r\nConnection: keep-alive"
+                + "\r\n" + HttpHeaderNames.HOST + ": " + host
+                + "\r\n" + HttpHeaderNames.CONNECTION + ": " + HttpHeaderValues.KEEP_ALIVE
                 + "\r\nAuthorization: Basic " + credentials.toBase64()
                 + "\r\n\r\n");
     }
@@ -261,6 +264,10 @@ public final class RawHttpClient implements AutoCloseable {
             throw new IOException("bad response, does not start with HTTP/1.1. Received: " + result.statusLine);
         }
 
+        if (!result.statusLine.startsWith("HTTP/1.1 ")) {
+            throw new IOException("bad response, does not start with HTTP/1.1. Received: " + result.statusLine);
+        }
+
         // header
         while (true) {
             BufferedStream counter = new BufferedStream(result.rawResponse);
@@ -274,12 +281,12 @@ public final class RawHttpClient implements AutoCloseable {
             } else {
 
                 result.headerLines.add(line);
-                if (line.startsWith("Content-Length: ")) {
-                    result.expectedContentLength = Integer.parseInt(line.substring("Content-Length: ".length()).trim());
+                if (line.toLowerCase().startsWith("content-length: ")) {
+                    result.expectedContentLength = Integer.parseInt(line.toLowerCase().substring("content-length: ".length()).trim());
                     println("expectedContentLength:" + result.expectedContentLength);
                 }
-                if (line.startsWith("Transfer-Encoding: ")) {
-                    result.transferEncoding = line.substring("Transfer-Encoding: ".length()).trim();
+                if (line.toLowerCase().startsWith("transfer-encoding: ")) {
+                    result.transferEncoding = line.toLowerCase().substring("transfer-encoding: ".length()).trim();
                 }
             }
         }
@@ -289,6 +296,10 @@ public final class RawHttpClient implements AutoCloseable {
         }
         if (result.statusLine.startsWith("HTTP/1.1 304 ")) {
             // not modified
+            return result;
+        }
+        if (result.statusLine.startsWith("HTTP/1.1 100 Continue")) {
+            // continue
             return result;
         }
         boolean chunked = "chunked".equals(result.transferEncoding);

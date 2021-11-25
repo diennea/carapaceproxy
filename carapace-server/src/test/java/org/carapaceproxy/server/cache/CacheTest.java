@@ -132,12 +132,7 @@ public class CacheTest {
             assertThat(inspect.get(0).get("hits"), is(2));
         }
 
-        TestUtils.waitForCondition(() -> {
-            return stats.getTotalConnections().intValue() >= 1
-                    && stats.getActiveConnections().intValue() == 0
-                    && stats.getOpenConnections().intValue() == 0;
-        }, 100);
-
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -196,12 +191,7 @@ public class CacheTest {
             assertEquals(1, server.getCache().getStats().getMisses());
         }
 
-        TestUtils.waitForCondition(() -> {
-            return stats.getTotalConnections().intValue() >= 1
-                    && stats.getActiveConnections().intValue() == 0
-                    && stats.getOpenConnections().intValue() == 0;
-        }, 100);
-
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -356,11 +346,7 @@ public class CacheTest {
             assertEquals(0, server.getCache().getStats().getHits());
             assertEquals(0, server.getCache().getStats().getMisses());
 
-            TestUtils.waitForCondition(() -> {
-                return stats.getTotalConnections().intValue() >= 1
-                        && stats.getActiveConnections().intValue() == 0
-                        && stats.getOpenConnections().intValue() == 0;
-            }, 100);
+            TestUtils.waitForAllConnectionsClosed(stats);
         }
     }
 
@@ -424,12 +410,7 @@ public class CacheTest {
             assertEquals(1, server.getCache().getStats().getMisses());
         }
 
-        TestUtils.waitForCondition(() -> {
-            return stats.getTotalConnections().intValue() >= 1
-                    && stats.getActiveConnections().intValue() == 0
-                    && stats.getOpenConnections().intValue() == 0;
-        }, 100);
-
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -492,12 +473,7 @@ public class CacheTest {
             assertEquals(1, server.getCache().getStats().getMisses());
         }
 
-        TestUtils.waitForCondition(() -> {
-            return stats.getTotalConnections().intValue() >= 1
-                    && stats.getActiveConnections().intValue() == 0
-                    && stats.getOpenConnections().intValue() == 0;
-        }, 100);
-
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -537,12 +513,7 @@ public class CacheTest {
             assertEquals(0, server.getCache().getStats().getMisses());
         }
 
-        TestUtils.waitForCondition(() -> {
-            return stats.getTotalConnections().intValue() >= 1
-                    && stats.getActiveConnections().intValue() == 0
-                    && stats.getOpenConnections().intValue() == 0;
-        }, 100);
-
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -582,12 +553,7 @@ public class CacheTest {
             assertEquals(1, server.getCache().getStats().getMisses());
         }
 
-        TestUtils.waitForCondition(() -> {
-            return stats.getTotalConnections().intValue() >= 1
-                    && stats.getActiveConnections().intValue() == 0
-                    && stats.getOpenConnections().intValue() == 0;
-        }, 100);
-
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -761,11 +727,8 @@ public class CacheTest {
             stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
         }
-        TestUtils.waitForCondition(() -> {
-            return stats.getTotalConnections().intValue() >= 1
-                    && stats.getActiveConnections().intValue() == 0
-                    && stats.getOpenConnections().intValue() == 0;
-        }, 100);
+
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -954,11 +917,8 @@ public class CacheTest {
             stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
         }
-        TestUtils.waitForCondition(() -> {
-            return stats.getTotalConnections().intValue() >= 1
-                    && stats.getActiveConnections().intValue() == 0
-                    && stats.getOpenConnections().intValue() == 0;
-        }, 100);
+
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
 }

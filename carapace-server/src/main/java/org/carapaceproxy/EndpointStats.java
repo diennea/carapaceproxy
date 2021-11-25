@@ -21,53 +21,35 @@ package org.carapaceproxy;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import lombok.Getter;
+import lombok.ToString;
 import org.carapaceproxy.client.EndpointKey;
+import reactor.netty.resources.ConnectionPoolMetrics;
 
 /**
  * Stats about an endpoint
  *
  * @author enrico.olivelli
  */
+@Getter
+@ToString
 public class EndpointStats {
 
-    private final AtomicInteger openConnections = new AtomicInteger();
-    private final AtomicInteger activeConnections = new AtomicInteger();
-    private final AtomicInteger totalConnections = new AtomicInteger();
+    private final EndpointKey key;
+    private ConnectionPoolMetrics connectionPoolMetrics;
     private final AtomicInteger totalRequests = new AtomicInteger();
     private final AtomicLong lastActivity = new AtomicLong();
-    private final EndpointKey key;
 
     public EndpointStats(EndpointKey key) {
         this.key = key;
     }
 
-    public AtomicLong getLastActivity() {
-        return lastActivity;
+    public int getOpenConnections() {
+        return connectionPoolMetrics.acquiredSize();
     }
 
-    public AtomicInteger getTotalRequests() {
-        return totalRequests;
-    }
-
-    public AtomicInteger getOpenConnections() {
-        return openConnections;
-    }
-
-    public AtomicInteger getActiveConnections() {
-        return activeConnections;
-    }
-
-    public AtomicInteger getTotalConnections() {
-        return totalConnections;
-    }
-
-    public EndpointKey getKey() {
-        return key;
-    }
-
-    @Override
-    public String toString() {
-        return "EndpointStats{" + "openConnections=" + openConnections + ", activeConnections=" + activeConnections + ", totalConnections=" + totalConnections + ", totalRequests=" + totalRequests + ", lastActivity=" + lastActivity + ", key=" + key + '}';
+    public void setConnectionPoolMetrics(ConnectionPoolMetrics connectionPoolMetrics) {
+        this.connectionPoolMetrics = connectionPoolMetrics;
     }
 
 }

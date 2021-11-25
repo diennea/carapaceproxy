@@ -19,7 +19,6 @@
  */
 package org.carapaceproxy.server.filters;
 
-import io.netty.handler.codec.http.HttpRequest;
 import java.util.HashMap;
 import java.util.Map;
 import org.carapaceproxy.core.ProxyRequest;
@@ -31,7 +30,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import reactor.netty.http.server.HttpServerRequest;
 
 public class SimpleFiltersTest {
 
@@ -51,9 +49,8 @@ public class SimpleFiltersTest {
         cases.put("/be/xxx/index.do?sSID=H*90s856faxe0tbq", "H");
 
         cases.forEach((uri, userId) -> {
-            HttpServerRequest serverRequest = mock(HttpServerRequest.class);
-            when(serverRequest.uri()).thenReturn(uri);
-            ProxyRequest request = new ProxyRequest(serverRequest, null, null);
+            ProxyRequest request = mock(ProxyRequest.class);
+            when(request.getQueryString()).thenReturn(ProxyRequest.parseQueryString(uri));
 
             RegexpMapUserIdFilter instance = new RegexpMapUserIdFilter("sSID", "([\\w\\d]+)([*])", new MatchAllRequestMatcher());
             instance.apply(request);
@@ -81,9 +78,9 @@ public class SimpleFiltersTest {
         cases.put("/be/xxx/index.do?sSID=H*90s856faxe0tbq", "H*90s856faxe0tbq");
 
         cases.forEach((uri, sessionId) -> {
-            HttpServerRequest serverRequest = mock(HttpServerRequest.class);
-            when(serverRequest.uri()).thenReturn(uri);
-            ProxyRequest request = new ProxyRequest(serverRequest, null, null);
+            ProxyRequest request = mock(ProxyRequest.class);
+            when(request.getQueryString()).thenReturn(ProxyRequest.parseQueryString(uri));
+
             RegexpMapSessionIdFilter instance = new RegexpMapSessionIdFilter("sSID", "(.+)", new MatchAllRequestMatcher());
             instance.apply(request);
             if (sessionId != null) {

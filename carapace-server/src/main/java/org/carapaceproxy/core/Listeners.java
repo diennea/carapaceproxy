@@ -83,11 +83,9 @@ public class Listeners {
     private static final Gauge CURRENT_CONNECTED_CLIENTS_GAUGE = PrometheusUtils.createGauge(
             "clients", "current_connected", "currently connected clients"
     ).register();
+
     private static final Counter TOTAL_REQUESTS_PER_LISTENER_COUNTER = PrometheusUtils.createCounter(
             "listeners", "requests_total", "total requests", "listener"
-    ).register();
-    private static final Gauge RUNNING_REQUESTS_GAUGE = PrometheusUtils.createGauge(
-            "listeners", "running_requests", "running requests"
     ).register();
 
     private final HttpProxyServer parent;
@@ -231,7 +229,6 @@ public class Listeners {
                                     if (cert != null) {
                                         try {
                                             ReferenceCountedOpenSslEngine engine = (ReferenceCountedOpenSslEngine) handler.engine();
-
                                             engine.setOcspResponse(parent.getOcspStaplingManager().getOcspResponseForCertificate(cert)); // setting proper ocsp response
                                         } catch (IOException ex) {
                                             LOG.log(Level.SEVERE, "Error setting OCSP response.", ex);
@@ -246,13 +243,16 @@ public class Listeners {
                         channel.pipeline().addFirst(sni);
                     }
                 })
-                .doOnConnection(conn -> CURRENT_CONNECTED_CLIENTS_GAUGE.inc())
+                .doOnConnection(conn -> {
+                    CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
+                    conn.channel().closeFuture().addListener(e -> CURRENT_CONNECTED_CLIENTS_GAUGE.dec());
+                })
                 .handle((request, response) -> { // Custom request-response handling
                     ListeningChannel channel = listeningChannels.get(hostPort);
                     if (channel != null) {
                         channel.incRequests();
                     }
-                    ProxyRequest proxyRequest = new ProxyRequest(request, response, hostPort);
+                    ProxyRequest proxyRequest = new ProxyRequest(request, response, hostPort);                    
                     return parent.getProxyRequestsManager().processRequest(proxyRequest);
                 });
 

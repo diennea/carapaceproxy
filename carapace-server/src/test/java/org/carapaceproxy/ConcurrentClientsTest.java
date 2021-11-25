@@ -30,7 +30,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.logging.Logger;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
@@ -40,7 +39,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import java.util.logging.Level;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -50,8 +48,6 @@ import org.junit.rules.TemporaryFolder;
  * @author enrico.olivelli
  */
 public class ConcurrentClientsTest {
-
-    private static final Logger LOG = Logger.getLogger(ConcurrentClientsTest.class.getName());
 
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
@@ -87,7 +83,6 @@ public class ConcurrentClientsTest {
                     public void run() {
                         try {
                             String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8");
-//                            System.out.println("s:" + s);
                             assertEquals("it <b>works</b> !!", s);
                         } catch (Throwable t) {
                             t.printStackTrace();
@@ -109,13 +104,7 @@ public class ConcurrentClientsTest {
             assertNotNull(stats);
         }
 
-        TestUtils.waitForCondition(() -> {
-            LOG.log(Level.INFO, "stats: {0} {1} ms", new Object[]{stats.getKey(), System.currentTimeMillis() - stats.getLastActivity().longValue()});
-            return stats.getTotalConnections().intValue() > 0
-                && stats.getActiveConnections().intValue() == 0
-                && stats.getOpenConnections().intValue() == 0;
-        }, 100);
-
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
 }

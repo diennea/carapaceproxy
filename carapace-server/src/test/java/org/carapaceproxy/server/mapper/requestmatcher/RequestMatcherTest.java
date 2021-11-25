@@ -35,7 +35,6 @@ import org.junit.Test;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
-import io.netty.handler.codec.http.HttpRequest;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
 import reactor.netty.http.server.HttpServerRequest;
 
@@ -162,14 +161,11 @@ public class RequestMatcherTest {
             assertEquals("not request.uri ~ \".*\\.css*\" and not (not request.uri ~ \".*\\.html\")", matcher.getDescription());
         }
 
-        // property name does not exist -> empty
+        // property name does not exist -> error
         {
             RequestMatcher matcher = new RequestMatchParser("request.notex ~\".*test.*\"").parse();
-            assertFalse(matcher.matches(request));
             assertEquals("request.notex ~ \".*test.*\"", matcher.getDescription());
-            matcher = new RequestMatchParser("request.notex = \"\"").parse();
-            assertTrue(matcher.matches(request));
-            assertEquals("request.notex = ", matcher.getDescription());
+            TestUtils.assertThrows(IllegalArgumentException.class, () -> matcher.matches(request));
         }
         // Broken one: invalid regexp syntax
         TestUtils.assertThrows(TokenMgrError.class, () -> {
@@ -231,6 +227,7 @@ public class RequestMatcherTest {
         when(serverRequest.method()).thenReturn(HttpMethod.GET);
         when(serverRequest.scheme()).thenReturn("http");
         when(serverRequest.remoteAddress()).thenReturn(new InetSocketAddress("127.0.0.1", 0));
+        when(serverRequest.hostAddress()).thenReturn(new InetSocketAddress("127.0.0.2", 0));
         when(serverRequest.requestHeaders()).thenReturn(headers);
 
         ProxyRequest request = new ProxyRequest(serverRequest, null, new HostPort("localhost", 8080));
@@ -298,11 +295,11 @@ public class RequestMatcherTest {
         }
         // Test listener.ipaddress
         {
-            RequestMatcher matcher = new RequestMatchParser("listener.ipaddress = \"127.0.0.1\"").parse();
+            RequestMatcher matcher = new RequestMatchParser("listener.ipaddress = \"127.0.0.2\"").parse();
             assertTrue(matcher.matches(request));
         }
         {
-            RequestMatcher matcher = new RequestMatchParser("listener.ipaddress = \"127.0.1.1\"").parse();
+            RequestMatcher matcher = new RequestMatchParser("listener.ipaddress = \"127.0.1.2\"").parse();
             assertFalse(matcher.matches(request));
         }
     }

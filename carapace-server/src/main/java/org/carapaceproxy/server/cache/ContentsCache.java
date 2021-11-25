@@ -480,11 +480,11 @@ public class ContentsCache {
             content.clear();
         }
 
-        public void receivedFromRemote(HttpClientResponse response) {
+        public boolean receivedFromRemote(HttpClientResponse response) {
             if (!isCacheable(response)) {
                 notReallyCacheable = true;
             }
-            long expiresTs = response.requestHeaders().getTimeMillis(HttpHeaderNames.EXPIRES, -1);
+            long expiresTs = response.responseHeaders().getTimeMillis(HttpHeaderNames.EXPIRES, -1);
             if (expiresTs == -1) {
                 expiresTs = computeDefaultExpireDate();
             } else if (expiresTs < System.currentTimeMillis()) {
@@ -492,15 +492,16 @@ public class ContentsCache {
                 notReallyCacheable = true;
             }
             content.expiresTs = expiresTs;
-            long lastModified = response.requestHeaders().getTimeMillis(HttpHeaderNames.LAST_MODIFIED, -1);
+            long lastModified = response.responseHeaders().getTimeMillis(HttpHeaderNames.LAST_MODIFIED, -1);
             content.lastModified = lastModified;
             if (notReallyCacheable) {
                 LOG.log(Level.FINEST, "{0} rejecting non-cacheable response", key);
                 abort();
-                return;
+                return false;
             }
-
             content.setResponse(response);
+
+            return true;
         }
 
         public void receivedFromRemote(ByteBuf chunk) {

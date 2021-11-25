@@ -98,11 +98,7 @@ public class SimpleHTTPProxyTest {
             assertNotNull(stats);
         }
 
-        TestUtils.waitForCondition(() -> {
-            return stats.getTotalConnections().intValue() == 1
-                    && stats.getActiveConnections().intValue() == 0
-                    && stats.getOpenConnections().intValue() == 0;
-        }, 100);
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -156,11 +152,7 @@ public class SimpleHTTPProxyTest {
             assertNotNull(stats);
         }
 
-        TestUtils.waitForCondition(() -> {
-            return stats.getTotalConnections().intValue() == 1
-                    && stats.getActiveConnections().intValue() == 0
-                    && stats.getOpenConnections().intValue() == 0;
-        }, 100);
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -179,17 +171,11 @@ public class SimpleHTTPProxyTest {
             HttpUtils.ResourceInfos result = HttpUtils.downloadFromUrl(new URL("http://localhost:" + port + "/index.html"),
                     new ByteArrayOutputStream(), Collections.singletonMap("return_errors", "true"));
             assertEquals(500, result.responseCode);
-//            String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8");
-//            System.out.println("s:" + s);
 
             stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
         }
 
-        TestUtils.waitForCondition(() -> {
-            return stats.getTotalConnections().intValue() == 0
-                    && stats.getActiveConnections().intValue() == 0
-                    && stats.getOpenConnections().intValue() == 0;
-        }, 100);
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 }

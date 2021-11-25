@@ -30,11 +30,11 @@ import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
-import io.netty.handler.timeout.ReadTimeoutHandler;
-import io.netty.handler.timeout.WriteTimeoutHandler;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
+import java.net.ConnectException;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
@@ -54,6 +54,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.http.client.HttpClientResponse;
+import reactor.netty.resources.ConnectionPoolMetrics;
 import reactor.netty.resources.ConnectionProvider;
 
 /**
@@ -97,11 +98,24 @@ public class ProxyRequestsManager {
         if (connectionProvider == null || (newConfiguration.getBorrowTimeout() != parent.getCurrentConfiguration().getBorrowTimeout()
                 || newConfiguration.getMaxConnectionsPerEndpoint() != parent.getCurrentConfiguration().getMaxConnectionsPerEndpoint())) {
             close();
+
             ConnectionProvider.Builder builder = ConnectionProvider.builder("custom")
-                    .pendingAcquireTimeout(Duration.ofSeconds(newConfiguration.getBorrowTimeout()));
-            parent.getMapper().getBackends().values().forEach(be -> {
-                builder.forRemoteHost(new InetSocketAddress(be.getHost(), be.getPort()), spec -> spec.maxConnections(newConfiguration.getMaxConnectionsPerEndpoint()));
+                    .pendingAcquireTimeout(Duration.ofSeconds(newConfiguration.getBorrowTimeout()))
+                    .metrics(true, () -> (String poolName, String id, SocketAddress remoteAddress, ConnectionPoolMetrics metrics) -> {
+                String[] hostPort = remoteAddress.toString().split(":");
+                EndpointStats stats = endpointsStats.computeIfAbsent(EndpointKey.make(hostPort[0], Integer.parseInt(hostPort[1])), EndpointStats::new);
+                stats.setConnectionPoolMetrics(metrics);
             });
+
+            // max connections per endpoint limit setup
+            parent.getMapper().getBackends().values().forEach(be -> {
+                builder.forRemoteHost(new InetSocketAddress(
+                        be.getHost(),
+                        be.getPort()),
+                        spec -> spec.maxConnections(newConfiguration.getMaxConnectionsPerEndpoint())
+                );
+            });
+
             connectionProvider = builder.build();
         }
     }
@@ -125,6 +139,7 @@ public class ProxyRequestsManager {
             action = MapResult.internalError(MapResult.NO_ROUTE);
         }
         request.setAction(action);
+        parent.getRequestsLogger().logRequest(request);
 
         if (LOGGER.isLoggable(Level.FINER)) {
             LOGGER.log(Level.FINER, "{0} Mapped {1} to {2}, userid {3}", new Object[]{this, request.getUri(), action, request.getUserId()});
@@ -164,7 +179,7 @@ public class ProxyRequestsManager {
             }
 
             default:
-                throw new IllegalStateException("Action %s not supported".formatted(action.action));
+                throw new IllegalStateException("Action " + action.action + " not supported");
         }
     }
 
@@ -261,11 +276,6 @@ public class ProxyRequestsManager {
     }
 
     private static Publisher<Void> writeSimpleResponse(ProxyRequest request, FullHttpResponse response, List<CustomHeader> customHeaders) {
-//        if (headerSent) {
-//            LOGGER.log(Level.INFO, "{0}: headers for already sent to client, cannot send static response", this);
-//            return true;
-//        }
-
         // Prepare the response
         if (request.isKeepAlive()) {
             // Add 'Content-Length' header only for a keep-alive connection.
@@ -304,9 +314,10 @@ public class ProxyRequestsManager {
     private final class RequestForwarder {
 
         private final ProxyRequest request;
-        private final ContentsCache.ContentReceiver cacheReceiver;
+        private ContentsCache.ContentReceiver cacheReceiver;
         private final EndpointStats endpointStats;
         private HttpClient client;
+        private volatile boolean requestRunning;
 
         private RequestForwarder(ProxyRequest request, ContentsCache.ContentReceiver cacheReceiver) {
             this.request = request;
@@ -319,40 +330,31 @@ public class ProxyRequestsManager {
                     ? USER_REQUESTS_COUNTER.labels(request.getUserId())
                     : USER_REQUESTS_COUNTER.labels("anonymous");
 
-            Counter.Child totalRequests = TOTAL_REQUESTS_COUNTER.labels(request.getHostPort() + "");
+            Counter.Child totalRequests = TOTAL_REQUESTS_COUNTER.labels(request.getListener() + "");
 
             client = HttpClient.create(connectionProvider)
                     .host(request.getAction().host)
                     .port(request.getAction().port)
-                    .option(ChannelOption.SO_KEEPALIVE, true)
+                    .option(ChannelOption.SO_KEEPALIVE, true) // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
                     .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, parent.getCurrentConfiguration().getConnectTimeout())
-                    .doOnChannelInit((observer, channel, remoteAddress) -> {
-                        channel.pipeline().addFirst("readTimeoutHandler", new ReadTimeoutHandler(parent.getCurrentConfiguration().getIdleTimeout() / 2));
-                        channel.pipeline().addFirst("writeTimeoutHandler", new WriteTimeoutHandler(parent.getCurrentConfiguration().getIdleTimeout() / 2));
-                    })
+                    .headers(h -> h.add(request.getRequestHeaders().copy()))
+                    .followRedirect(true)
+                    .responseTimeout(Duration.ofMillis(parent.getCurrentConfiguration().getStuckRequestTimeout()))
                     .doOnRequest((req, conn) -> {
-                        requestsPerUser.inc();
                         PENDING_REQUESTS_GAUGE.inc();
+                        requestRunning = true;
+                        requestsPerUser.inc();
                         totalRequests.inc();
                         endpointStats.getTotalRequests().incrementAndGet();
                         endpointStats.getLastActivity().set(System.currentTimeMillis());
-                        parent.getRequestsLogger().logRequest(request);
-                    })
-                    .doOnRequestError((req, err) -> {
-                        LOGGER.log(Level.INFO, "errorSendingRequest to " + request.getAction().host + ":" + request.getAction().port, err);
-                        PENDING_REQUESTS_GAUGE.dec();
-                        serveServiceNotAvailable(request);
                     })
                     .doAfterResponseSuccess((resp, conn) -> {
-                        PENDING_REQUESTS_GAUGE.dec();
+                        if (requestRunning) {
+                            requestRunning = false;
+                            PENDING_REQUESTS_GAUGE.dec();
+                        }
                         endpointStats.getLastActivity().set(System.currentTimeMillis());
-                    })
-                    .doOnResponseError((req, err)
-                            -> parent.getBackendHealthManager().reportBackendUnreachable(endpointHost + ":" + endpointPort, System.currentTimeMillis(),
-                            "Response failed: " + err)
-                    )
-                    .followRedirect(true)
-                    .headers(h -> h.add(request.getRequestHeaders().copy()));
+                    });
 
             request.getRequestCookies().forEach(cookie -> client = client.cookie(cookie));
         }
@@ -362,12 +364,12 @@ public class ProxyRequestsManager {
                     .uri(request.getUri())
                     .send(request.getRequestData()) // client request body
                     .response((resp, flux) -> { // endpoint response
-                        boolean cacheable = cacheReceiver != null && parent.getCache().isCacheable(resp);
                         request.setResponseStatus(resp.status());
                         request.setResponseHeaders(resp.responseHeaders().copy()); // headers from endpoint to client
-                        if (cacheable) {
-                            cacheReceiver.receivedFromRemote(resp);
+                        if (cacheReceiver != null && parent.getCache().isCacheable(resp) && cacheReceiver.receivedFromRemote(resp)) {
                             addCachedResponseHeaders(request);
+                        } else {
+                            cacheReceiver = null;
                         }
                         addCustomResponseHeaders(request, request.getAction().customHeaders);
                         request.setResponseCookies(resp.cookies().values().stream() // cookies from endpoint to client
@@ -377,10 +379,35 @@ public class ProxyRequestsManager {
                         return request.sendResponseData(flux.retain().doOnNext(data -> { // response data
                             request.setLastActivity(System.currentTimeMillis());
                             endpointStats.getLastActivity().set(System.currentTimeMillis());
-                            if (cacheable) {
+                            if (cacheReceiver != null) {
                                 cacheReceiver.receivedFromRemote(data);
                             }
                         }).doOnComplete(() -> parent.getCache().cacheContent(cacheReceiver)));
+                    }).onErrorResume(err -> { // custom endpoint request/response error handling
+                        if (requestRunning) {
+                            requestRunning = false;
+                            PENDING_REQUESTS_GAUGE.dec();
+                        }
+
+                        String endpoint = request.getAction().host + ":" + request.getAction().port;
+                        if (err instanceof io.netty.handler.timeout.ReadTimeoutException) {
+                            STUCK_REQUESTS_COUNTER.inc();
+                            LOGGER.log(Level.SEVERE, "Read timeout error occurred for endpoint {0}; request: {1}", new Object[]{endpoint, request});
+                            if (parent.getCurrentConfiguration().isBackendsUnreachableOnStuckRequests()) {
+                                parent.getBackendHealthManager().reportBackendUnreachable(
+                                        endpoint, System.currentTimeMillis(), "Error: " + err
+                                );
+                            }
+                            return serveInternalErrorMessage(request);
+                        }
+
+                        LOGGER.log(Level.SEVERE, "Error proxying request for endpoint {0}; request: {1}", new Object[]{endpoint, request});
+                        if (err instanceof ConnectException) {
+                            parent.getBackendHealthManager().reportBackendUnreachable(
+                                    endpoint, System.currentTimeMillis(), "Error: " + err
+                            );
+                        }
+                        return serveServiceNotAvailable(request);
                     });
         }
     }
@@ -417,8 +444,8 @@ public class ProxyRequestsManager {
         if (ifModifiedSince != -1 && content.getLastModified() > 0 && ifModifiedSince >= content.getLastModified()) {
             request.setResponseStatus(HttpResponseStatus.NOT_MODIFIED);
             HttpHeaders headers = new DefaultHttpHeaders();
-            headers.set("Last-Modified", new java.util.Date(content.getLastModified()));
-            headers.set("Expires", new java.util.Date(content.getExpiresTs()));
+            headers.set(HttpHeaderNames.LAST_MODIFIED, new java.util.Date(content.getLastModified()));
+            headers.set(HttpHeaderNames.EXPIRES, new java.util.Date(content.getExpiresTs()));
             headers.add("X-Cached", "yes; ts=" + content.getCreationTs());
             request.setResponseHeaders(headers);
             return request.send();
@@ -443,45 +470,4 @@ public class ProxyRequestsManager {
             }));
         }
     }
-
-//
-//    public void failIfStuck(long now, int stuckRequestTimeout, Runnable onStuck) {
-//        long delta = now - lastActivity;
-//        if (delta >= stuckRequestTimeout) {
-//            LOGGER.log(Level.INFO, "{0} connection appears stuck {1}, on request {2} for userId: {3}", new Object[]{this, connectionToEndpoint, uri, userId});
-//            onStuck.run();
-//            serveInternalErrorMessage(true);
-//        }
-//    }
-//
-//    public void badErrorOnRemote(Throwable cause) {
-//        LOGGER.log(Level.INFO, "{0} badErrorOnRemote {1}", new Object[]{this, cause});
-//        serveInternalErrorMessage(true);
-//    }
-//
-//    private class RequestHandlerChecker implements Runnable {
-//
-//        @Override
-//        public void run() {
-//            long now = System.currentTimeMillis();
-//            List<RequestHandler> toRemove = new ArrayList<>();
-//            for (Map.Entry<Long, RequestHandler> entry : pendingRequests.entrySet()) {
-//                RequestHandler requestHandler = entry.getValue();
-//                requestHandler.failIfStuck(now, stuckRequestTimeout, () -> {
-//                    EndpointConnection connectionToEndpoint = requestHandler.getConnectionToEndpoint();
-//                    if (connectionToEndpoint != null && backendsUnreachableOnStuckRequests) {
-//                        backendHealthManager.reportBackendUnreachable(
-//                                connectionToEndpoint.getKey().getHostPort(), now,
-//                                "a request to " + requestHandler.getUri() + " for user " + requestHandler.getUserId() + " appears stuck"
-//                        );
-//                    }
-//                    STUCK_REQUESTS_COUNTER.inc();
-//                    toRemove.add(entry.getValue());
-//                });
-//            }
-//            toRemove.forEach(r -> {
-//                unregisterPendingRequest(r);
-//            });
-//        }
-//    }
 }

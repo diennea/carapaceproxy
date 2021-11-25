@@ -84,7 +84,7 @@ public class BackendsResource {
             bean.lastProbePath = backendConf.getProbePath();
             EndpointStats epstats = server.getProxyRequestsManager().getEndpointStats(EndpointKey.make(hostPort));
             if (epstats != null) {
-                bean.openConnections = epstats.getOpenConnections().longValue();
+                bean.openConnections = epstats.getOpenConnections();
                 bean.totalRequests = epstats.getTotalRequests().longValue();
                 bean.lastActivityTs = epstats.getLastActivity().longValue();
             }

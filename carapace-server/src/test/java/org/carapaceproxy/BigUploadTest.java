@@ -205,15 +205,8 @@ public class BigUploadTest {
                 assertNotNull(stats);
             }
 
-            // verify server is clean, no pending clients and backend connections
-            TestUtils.waitForCondition(() -> {
-                System.out.println("stats:" + stats);
-                return stats.getTotalConnections().intValue() > 0
-                        && stats.getActiveConnections().intValue() == 0
-                        && stats.getOpenConnections().intValue() == 0;
-            }, 100);
+            TestUtils.waitForAllConnectionsClosed(stats);
         }
-
     }
 
     @Test
@@ -247,13 +240,7 @@ public class BigUploadTest {
                 assertNotNull(stats);
             }
 
-            // verify server is clean, no pending clients and backend connections
-            TestUtils.waitForCondition(() -> {
-                return stats.getTotalConnections().intValue() > 0
-                        && stats.getActiveConnections().intValue() == 0
-                        && stats.getOpenConnections().intValue() == 0;
-            }, 100);
-
+            TestUtils.waitForAllConnectionsClosed(stats);
         }
     }
 

@@ -62,9 +62,9 @@ public class StaticContentsManager {
         ByteBuf content = resource == null ? null : contents.computeIfAbsent(resource, StaticContentsManager::loadResource);
         if (content != null) {
             content = content.retainedDuplicate();
-            int contentType = content.readableBytes();
+            int contentLength = content.readableBytes();
             res = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(code), content);
-            res.headers().set(HttpHeaderNames.CONTENT_LENGTH, contentType);
+            res.headers().set(HttpHeaderNames.CONTENT_LENGTH, contentLength);
         } else {
             res = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(404));
         }

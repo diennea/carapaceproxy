@@ -201,12 +201,7 @@ public class RawClientTest {
             assertNotNull(stats);
         }
 
-        TestUtils.waitForCondition(() -> {
-            System.out.println("stats:" + stats);
-            return stats.getTotalConnections().intValue() >= 1
-                    && stats.getActiveConnections().intValue() == 0
-                    && stats.getOpenConnections().intValue() == 0;
-        }, 100);
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -323,20 +318,15 @@ public class RawClientTest {
 
             CarapaceLogger.setLoggingDebugEnabled(true);
 
-            EndpointStats stats;
             try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
                 proxy.getCurrentConfiguration().setMaxConnectionsPerEndpoint(1);
                 proxy.getCurrentConfiguration().setClientsIdleTimeoutSeconds(300);
                 proxy.getCurrentConfiguration().setBorrowTimeout(300_000);
                 proxy.getCurrentConfiguration().setRequestsHeaderDebugEnabled(true);
-                //proxy.getConnectionsManager().applyNewConfiguration(proxy.getCurrentConfiguration());
+                proxy.getProxyRequestsManager().reloadConfiguration(proxy.getCurrentConfiguration());
                 proxy.start();
-                //stats = proxy.getConnectionsManager().getStats();
                 int port = proxy.getLocalPort();
                 assertTrue(port > 0);
-
-                RuntimeServerConfiguration currentConfiguration = proxy.getCurrentConfiguration();
-                //proxy.getConnectionsManager().applyNewConfiguration(currentConfiguration);
 
                 AtomicBoolean failed = new AtomicBoolean();
                 AtomicBoolean c2go = new AtomicBoolean();
@@ -345,11 +335,11 @@ public class RawClientTest {
                         try (RawHttpClient client1 = new RawHttpClient("localhost", port)) {
                             String body = "filler-content";
                             String request = "POST /index.html HTTP/1.1"
-                                    + "\r\nHost: localhost"
-                                    + "\r\nConnection: keep-alive"
-                                    + "\r\nContent-Type: text/plain"
+                                    + "\r\n" + HttpHeaderNames.HOST + ": localhost"
+                                    + "\r\n" + HttpHeaderNames.CONNECTION + ": " + HttpHeaderValues.KEEP_ALIVE
+                                    + "\r\n" + HttpHeaderNames.CONTENT_TYPE + ": " + HttpHeaderValues.TEXT_PLAIN
                                     + "\r\n" + HttpHeaderNames.EXPECT + ": " + HttpHeaderValues.CONTINUE
-                                    + "\r\nContent-Length: " + body.length()
+                                    + "\r\n" + HttpHeaderNames.CONTENT_LENGTH + ": " + body.length()
                                     + "\r\n\r\n";
 
                             Socket socket = client1.getSocket();
@@ -363,13 +353,19 @@ public class RawClientTest {
                             oo.write(body.getBytes(StandardCharsets.UTF_8));
                             oo.flush();
 
-                            String resp = consumeHttpResponseInput(socket.getInputStream()).getBodyString();
+                            String resp = consumeHttpResponseInput(socket.getInputStream()).getStatusLine();
+                            System.out.println("### RESP client1: " + resp);
+                            if (!resp.contains("HTTP/1.1 100 Continue")) {
+                                failed.set(true);
+                                return;
+                            }
+                            resp = consumeHttpResponseInput(socket.getInputStream()).getBodyString();
                             System.out.println("### RESP client1: " + resp);
                             if (!resp.contains("resp=client1")) {
                                 failed.set(true);
                             }
                         } catch (Exception e) {
-                            System.out.println("EXCEPTION: " + e);
+                            System.out.println("EXCEPTION client1: " + e);
                             failed.set(true);
                         }
                     }));
@@ -388,7 +384,7 @@ public class RawClientTest {
                                 }
                             }
                         } catch (Exception e) {
-                            System.out.println("EXCEPTION: " + e);
+                            System.out.println("EXCEPTION client2: " + e);
                             failed.set(true);
                         }
                     }));
@@ -414,10 +410,8 @@ public class RawClientTest {
         private final EventLoopGroup bossGroup;
         private final EventLoopGroup workerGroup;
         private final Channel channel;
-        private final AtomicBoolean responseEnabled;
 
         public DummyServer(String host, int port, AtomicBoolean responseEnabled) throws InterruptedException {
-            this.responseEnabled = responseEnabled == null ? new AtomicBoolean(true) : responseEnabled;
             if (Epoll.isAvailable()) {
                 bossGroup = new EpollEventLoopGroup();
                 workerGroup = new EpollEventLoopGroup();
@@ -470,13 +464,11 @@ public class RawClientTest {
                                                 Unpooled.copiedBuffer("resp=" + (continueRequest ? "client1" : "client2"), Charset.forName("utf-8"))
                                         );
                                         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8");
-
+                                        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
                                         if (keepAlive) {
-                                            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
                                             response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
                                         }
-
-                                        ctx.write(response);
+                                        ctx.writeAndFlush(response);
                                         if (!keepAlive) {
                                             ctx.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
                                         }

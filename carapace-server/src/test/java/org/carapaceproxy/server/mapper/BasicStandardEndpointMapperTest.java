@@ -259,6 +259,8 @@ public class BasicStandardEndpointMapperTest {
             server.configureAtBoot(config);
             server.start();
 
+            Thread.sleep(5_000);
+
             // route-custom error (Internal Errror)
             {
                 HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + server.getLocalPort() + "/custom-error.html").openConnection();
@@ -464,6 +466,8 @@ public class BasicStandardEndpointMapperTest {
             server.configureAtBoot(config);
 
             server.start();
+
+            Thread.sleep(5_000);
 
             // Test existent token
             String url = "http://localhost:" + server.getLocalPort() + "/.well-known/acme-challenge/" + tokenName;

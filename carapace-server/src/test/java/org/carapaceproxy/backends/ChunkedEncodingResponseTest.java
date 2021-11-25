@@ -85,11 +85,7 @@ public class ChunkedEncodingResponseTest {
             }
             stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
-            TestUtils.waitForCondition(() -> {
-                return stats.getTotalConnections().intValue() == 1
-                        && stats.getActiveConnections().intValue() == 0
-                        && stats.getOpenConnections().intValue() == 0;
-            }, 100);
+            TestUtils.waitForAllConnectionsClosed(stats);
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").toString();
@@ -99,11 +95,7 @@ public class ChunkedEncodingResponseTest {
                         + "0\r\n\r\n"));
             }
             assertEquals(0, server.getCache().getCacheSize());
-            TestUtils.waitForCondition(() -> {
-                return stats.getTotalConnections().intValue() == 2
-                        && stats.getActiveConnections().intValue() == 0
-                        && stats.getOpenConnections().intValue() == 0;
-            }, 100);
+            TestUtils.waitForAllConnectionsClosed(stats);
         }
     }
 
@@ -158,10 +150,6 @@ public class ChunkedEncodingResponseTest {
             assertEquals(1, server.getCache().getStats().getMisses());
         }
 
-        TestUtils.waitForCondition(() -> {
-            return stats.getTotalConnections().intValue() == 1
-                    && stats.getActiveConnections().intValue() == 0
-                    && stats.getOpenConnections().intValue() == 0;
-        }, 100);
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 }

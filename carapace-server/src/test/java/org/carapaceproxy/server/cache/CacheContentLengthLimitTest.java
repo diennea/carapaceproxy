@@ -80,6 +80,75 @@ public class CacheContentLengthLimitTest {
         testFileSizeCache(body, true);
     }
 
+    private void testFileSizeCache(String body, boolean chunked) throws Exception {
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+
+        // No size checking
+        {
+            EndpointStats stats;
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+                server.getCurrentConfiguration().setCacheMaxFileSize(0);
+                server.getCache().reloadConfiguration(server.getCurrentConfiguration());
+                server.start();
+
+                // First request
+                requestAndTestCached(body, chunked, key, server, false, 1);
+
+                // Should be cached
+                requestAndTestCached(body, chunked, key, server, true, 1);
+
+                stats = server.getProxyRequestsManager().getEndpointStats(key);
+                assertNotNull(stats);
+            }
+
+            TestUtils.waitForAllConnectionsClosed(stats);
+        }
+
+        // Max size set to current content size
+        {
+            EndpointStats stats;
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+                server.getCurrentConfiguration().setCacheMaxFileSize(body.length());
+                server.getCache().reloadConfiguration(server.getCurrentConfiguration());
+                server.start();
+
+                // First request
+                requestAndTestCached(body, chunked, key, server, false, 1);
+
+                // Should be cached
+                requestAndTestCached(body, chunked, key, server, true, 1);
+
+                stats = server.getProxyRequestsManager().getEndpointStats(key);
+                assertNotNull(stats);
+            }
+
+            TestUtils.waitForAllConnectionsClosed(stats);
+        }
+
+        // Max size set to drop current content
+        {
+            EndpointStats stats;
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+                server.getCurrentConfiguration().setCacheMaxFileSize(body.length() - 1);
+                server.getCache().reloadConfiguration(server.getCurrentConfiguration());
+                server.start();
+
+                // First request
+                requestAndTestCached(body, chunked, key, server, false, 0);
+
+                // Should not be cached
+                requestAndTestCached(body, chunked, key, server, false, 0);
+
+                stats = server.getProxyRequestsManager().getEndpointStats(key);
+                assertNotNull(stats);
+            }
+
+            TestUtils.waitForAllConnectionsClosed(stats);
+        }
+    }
+
     private void requestAndTestCached(
             String body, boolean chunked, EndpointKey key, HttpProxyServer server, boolean cached, int cacheSize) throws IOException {
 
@@ -101,87 +170,6 @@ public class CacheContentLengthLimitTest {
             EndpointStats stats = server.getProxyRequestsManager().getEndpointStats(key);
             assertNotNull(stats);
             assertThat(server.getCache().getCacheSize(), is(cacheSize));
-        }
-    }
-
-    private void testFileSizeCache(String body, boolean chunked) throws Exception {
-
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-
-        // No size checking
-        {
-            EndpointStats stats;
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
-                server.getCurrentConfiguration().setCacheMaxFileSize(0);
-                server.getCache().reloadConfiguration(server.getCurrentConfiguration());
-                server.start();
-
-                stats = server.getProxyRequestsManager().getEndpointStats(key);
-                assertNotNull(stats);
-
-                // First request
-                requestAndTestCached(body, chunked, key, server, false, 1);
-
-                // Should be cached
-                requestAndTestCached(body, chunked, key, server, true, 1);
-            }
-
-            TestUtils.waitForCondition(() -> {
-                return stats.getTotalConnections().intValue() == 1
-                        && stats.getActiveConnections().intValue() == 0
-                        && stats.getOpenConnections().intValue() == 0;
-            });
-        }
-
-        // Max size set to current content size
-        {
-            EndpointStats stats;
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
-                server.getCurrentConfiguration().setCacheMaxFileSize(body.length());
-                server.getCache().reloadConfiguration(server.getCurrentConfiguration());
-                server.start();
-
-                stats = server.getProxyRequestsManager().getEndpointStats(key);
-                assertNotNull(stats);
-
-                // First request
-                requestAndTestCached(body, chunked, key, server, false, 1);
-
-                // Should be cached
-                requestAndTestCached(body, chunked, key, server, true, 1);
-            }
-
-            TestUtils.waitForCondition(() -> {
-                return stats.getTotalConnections().intValue() == 1
-                        && stats.getActiveConnections().intValue() == 0
-                        && stats.getOpenConnections().intValue() == 0;
-            });
-        }
-
-        // Max size set to drop current content
-        {
-            EndpointStats stats;
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
-                server.getCurrentConfiguration().setCacheMaxFileSize(body.length() - 1);
-                server.getCache().reloadConfiguration(server.getCurrentConfiguration());
-                server.start();
-
-                stats = server.getProxyRequestsManager().getEndpointStats(key);
-                assertNotNull(stats);
-
-                // First request
-                requestAndTestCached(body, chunked, key, server, false, 0);
-
-                // Should not be cached
-                requestAndTestCached(body, chunked, key, server, false, 0);
-            }
-
-            TestUtils.waitForCondition(() -> {
-                return stats.getTotalConnections().intValue() == 1
-                        && stats.getActiveConnections().intValue() == 0
-                        && stats.getOpenConnections().intValue() == 0;
-            });
         }
     }
 

@@ -113,7 +113,7 @@ public class TestEndpointMapper extends EndpointMapper {
 
     @Override
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+
     }
 
 }

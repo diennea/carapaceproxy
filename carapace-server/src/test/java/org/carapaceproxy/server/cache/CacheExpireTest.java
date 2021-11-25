@@ -98,7 +98,7 @@ public class CacheExpireTest {
                     System.out.println("HEADER LINE :" + h);
                 });
                 assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("X-Cached")));
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
+                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("expires: " + formatted)));
             }
 
             stats = server.getProxyRequestsManager().getEndpointStats(key);
@@ -110,11 +110,7 @@ public class CacheExpireTest {
             assertEquals(0, server.getCache().getStats().getHeapMemoryUsed());
         }
 
-        TestUtils.waitForCondition(() -> {
-            return stats.getTotalConnections().intValue() == 1
-                    && stats.getActiveConnections().intValue() == 0
-                    && stats.getOpenConnections().intValue() == 0;
-        }, 100);
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -137,7 +133,7 @@ public class CacheExpireTest {
             int port = server.getLocalPort();
             server.getCache().getStats().resetCacheMetrics();
 
-            String expires;
+            String Expires;
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-no-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
@@ -147,8 +143,8 @@ public class CacheExpireTest {
                     System.out.println("HEADER LINE :" + h);
                 });
                 assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("X-Cached")));
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: ")));
-                expires = resp.getHeaderLines().stream().filter(h -> h.startsWith("Expires: ")).findFirst().get();
+                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("expires: ")));
+                Expires = resp.getHeaderLines().stream().filter(h -> h.startsWith("expires: ")).findFirst().get();
             }
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-no-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
@@ -159,7 +155,7 @@ public class CacheExpireTest {
                     System.out.println("HEADER LINE :" + h);
                 });
                 assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("X-Cached")));
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith(expires)));
+                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith(Expires)));
             }
 
             stats = server.getProxyRequestsManager().getEndpointStats(key);
@@ -169,11 +165,7 @@ public class CacheExpireTest {
             assertEquals(1, server.getCache().getStats().getMisses());
         }
 
-        TestUtils.waitForCondition(() -> {
-            return stats.getTotalConnections().intValue() == 1
-                    && stats.getActiveConnections().intValue() == 0
-                    && stats.getOpenConnections().intValue() == 0;
-        }, 100);
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -231,11 +223,7 @@ public class CacheExpireTest {
             assertEquals(2, server.getCache().getStats().getMisses());
         }
 
-        TestUtils.waitForCondition(() -> {
-            return stats.getTotalConnections().intValue() >= 1
-                    && stats.getActiveConnections().intValue() == 0
-                    && stats.getOpenConnections().intValue() == 0;
-        }, 100);
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -251,7 +239,7 @@ public class CacheExpireTest {
             server.getCache().getStats().resetCacheMetrics();
 
             long startts = System.currentTimeMillis();
-            java.util.Date expire = new java.util.Date(startts + 1500);
+            java.util.Date expire = new java.util.Date(startts + 5_000);
             String formatted = HttpUtils.formatDateHeader(expire);
 
             stubFor(get(urlEqualTo("/index-with-expire.html"))
@@ -281,7 +269,7 @@ public class CacheExpireTest {
             assertEquals(0, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
 
-            Thread.sleep(1500 - (System.currentTimeMillis() - startts) + 100);
+            Thread.sleep(5_000);
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 // asking for an expired content will make it expire immediately
@@ -301,11 +289,7 @@ public class CacheExpireTest {
             assertEquals(2, server.getCache().getStats().getMisses());
         }
 
-        TestUtils.waitForCondition(() -> {
-            return stats.getTotalConnections().intValue() == 1
-                    && stats.getActiveConnections().intValue() == 0
-                    && stats.getOpenConnections().intValue() == 0;
-        }, 100);
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -359,10 +343,6 @@ public class CacheExpireTest {
 
         }
 
-        TestUtils.waitForCondition(() -> {
-            return stats.getTotalConnections().intValue() == 1
-                    && stats.getActiveConnections().intValue() == 0
-                    && stats.getOpenConnections().intValue() == 0;
-        }, 100);
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 }

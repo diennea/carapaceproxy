@@ -27,20 +27,18 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Properties;
 import org.carapaceproxy.client.EndpointKey;
-import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.RawHttpClient;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import org.carapaceproxy.EndpointStats;
+import java.util.Properties;
+import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.ProxyRequestsManager;
 import org.junit.Rule;
 import org.junit.Test;
@@ -90,11 +88,8 @@ public class UnreachableBackendTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
-        EndpointStats stats;
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.start();
-            stats = server.getProxyRequestsManager().getEndpointStats(key);
-            assertNotNull(stats);
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
@@ -107,6 +102,8 @@ public class UnreachableBackendTest {
                         + "    </body>        \n"
                         + "</html>\n", resp.getBodyString());
             }
+            assertFalse(server.getBackendHealthManager().isAvailable(key.getHostPort()));
+            assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
 
@@ -123,13 +120,10 @@ public class UnreachableBackendTest {
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.newFolder());) {
             Properties properties = new Properties();
-            properties.put("connectionsmanager.stuckrequesttimeout", "100"); // ms
-            properties.put("connectionsmanager.idletimeout", "2000"); // ms
             // configure resets all listeners configurations
             server.configureAtBoot(new PropertiesConfigurationStore(properties));
             server.addListener(new NetworkListenerConfiguration("localhost", 0));
             server.setMapper(mapper);
-            assertEquals(100, server.getCurrentConfiguration().getStuckRequestTimeout());
             server.start();
             int port = server.getLocalPort();
             assertTrue(port > 0);
@@ -144,6 +138,7 @@ public class UnreachableBackendTest {
                         + "    </body>        \n"
                         + "</html>\n", resp.getBodyString());
             }
+            assertTrue(server.getBackendHealthManager().isAvailable(key.getHostPort())); // no troubles for new connections
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
@@ -173,13 +168,13 @@ public class UnreachableBackendTest {
                         + "    </body>        \n"
                         + "</html>\n", resp.getBodyString());
             }
-            assertFalse(server.getBackendHealthManager().isAvailable(key.getHostPort()));
+            assertTrue(server.getBackendHealthManager().isAvailable(key.getHostPort())); // no troubles for new connections
+            assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
 
     @Test
     public void testNonHttpResponseThenClose() throws Exception {
-
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withFault(Fault.RANDOM_DATA_THEN_CLOSE)));
@@ -190,12 +185,9 @@ public class UnreachableBackendTest {
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.newFolder());) {
             Properties properties = new Properties();
-            properties.put("connectionsmanager.stuckrequesttimeout", "100"); // ms
-            properties.put("connectionsmanager.idletimeout", "2000"); // ms
             server.configureAtBoot(new PropertiesConfigurationStore(properties));
             server.addListener(new NetworkListenerConfiguration("localhost", 0));
             server.setMapper(mapper);
-            assertEquals(100, server.getCurrentConfiguration().getStuckRequestTimeout());
             server.start();
             int port = server.getLocalPort();
 
@@ -211,6 +203,7 @@ public class UnreachableBackendTest {
                         + "</html>\n", resp.getBodyString());
             }
             assertTrue(server.getBackendHealthManager().isAvailable(key.getHostPort()));
+            assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
 }

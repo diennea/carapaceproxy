@@ -99,11 +99,7 @@ public class NotModifiedTest {
             assertEquals(1, server.getCache().getStats().getMisses());
         }
 
-        TestUtils.waitForCondition(() -> {
-            return stats.getTotalConnections().intValue() == 1
-                    && stats.getActiveConnections().intValue() == 0
-                    && stats.getOpenConnections().intValue() == 0;
-        }, 100);
+        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
 }

@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.core;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
@@ -64,7 +65,7 @@ public class ProxyRequest implements MatchingContext {
     private final long id = REQUESTS_ID_GENERATOR.incrementAndGet();
     private final HttpServerRequest request;
     private final HttpServerResponse response;
-    private final HostPort hostPort;
+    private final HostPort listener;
     private MapResult action;
     private String userId;
     private String sessionId;
@@ -77,10 +78,10 @@ public class ProxyRequest implements MatchingContext {
     private ContentsCache.ContentReceiver cacheReceiver;
     private ContentsCache.ContentSender cacheSender;
 
-    public ProxyRequest(HttpServerRequest request, HttpServerResponse response, HostPort hostPort) {
+    public ProxyRequest(HttpServerRequest request, HttpServerResponse response, HostPort listener) {
         this.request = request;
         this.response = response;
-        this.hostPort = hostPort;
+        this.listener = listener;
         request.withConnection(conn -> {
             SslHandler handler = conn.channel().pipeline().get(SslHandler.class);
             if (handler != null) {
@@ -106,10 +107,10 @@ public class ProxyRequest implements MatchingContext {
                 case PROPERTY_LISTENER_IPADDRESS:
                     return getLocalAddress().getAddress().getHostAddress();
                 case PROPERTY_LISTENER_HOST_PORT: {
-                    return hostPort.getHost() + ":" + hostPort.getPort();
+                    return listener.getHost() + ":" + listener.getPort();
                 }
                 default: {
-                    throw new IllegalArgumentException("Property name %s does not exists.".formatted(name));
+                    throw new IllegalArgumentException("Property name " + name + " does not exists.");
                 }
             }
         }
@@ -140,7 +141,7 @@ public class ProxyRequest implements MatchingContext {
         return queryString;
     }
 
-    private static UrlEncodedQueryString parseQueryString(String uri) {
+    public static UrlEncodedQueryString parseQueryString(String uri) {
         int pos = uri.indexOf('?');
         return pos < 0 || pos == uri.length() - 1
                 ? UrlEncodedQueryString.create()
@@ -152,7 +153,7 @@ public class ProxyRequest implements MatchingContext {
     }
 
     public HttpHeaders getResponseHeaders() {
-        return request.requestHeaders();
+        return response.responseHeaders();
     }
 
     public void setResponseHeaders(HttpHeaders headers) {

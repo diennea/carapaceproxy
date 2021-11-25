@@ -24,6 +24,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
+import static org.hamcrest.CoreMatchers.hasItems;
+import static org.hamcrest.MatcherAssert.assertThat;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -84,6 +86,7 @@ public class RestartEndpointTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 System.out.println("statusline:" + resp.getStatusLine());
                 assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
+                assertThat(resp.getHeaderLines(), hasItems("cache-control: no-cache\r\n", "connection: keep-alive\r\n"));
             }
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 wireMockRule.start();
@@ -123,6 +126,7 @@ public class RestartEndpointTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 System.out.println("statusline:" + resp.getStatusLine());
                 assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
+                assertThat(resp.getHeaderLines(), hasItems("cache-control: no-cache\r\n", "connection: keep-alive\r\n"));
             }
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 wireMockRule.start();

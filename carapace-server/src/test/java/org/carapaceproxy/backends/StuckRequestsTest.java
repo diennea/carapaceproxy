@@ -27,7 +27,6 @@ import static org.carapaceproxy.core.ProxyRequest.PROPERTY_URI;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
-import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.util.Properties;
 import org.carapaceproxy.client.EndpointKey;
@@ -65,7 +64,12 @@ public class StuckRequestsTest {
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
-                        .withFault(Fault.EMPTY_RESPONSE)));
+                        .withStatus(200)
+                        .withFixedDelay(5_000)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withBody("it <b>works</b> !!"))
+        );
 
         stubFor(get(urlEqualTo("/good-index.html"))
                 .willReturn(aResponse()
@@ -110,6 +114,7 @@ public class StuckRequestsTest {
             }
 
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
+            assertThat((int) ProxyRequestsManager.STUCK_REQUESTS_COUNTER.get() > 0, is(true));
 
             assertEquals(backendsUnreachableOnStuckRequests, !server.getBackendHealthManager().isAvailable(key.getHostPort()));
 
