@@ -19,7 +19,6 @@
  */
 package org.carapaceproxy.api;
 
-import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
 import java.util.Base64;

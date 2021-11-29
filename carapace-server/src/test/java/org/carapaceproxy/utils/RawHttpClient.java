@@ -52,7 +52,6 @@ public final class RawHttpClient implements AutoCloseable {
 
     private final Socket socket;
     private final String host;
-    private final boolean ssl;
 
     public RawHttpClient(String host, int port) throws IOException {
         this(host, port, false);
@@ -68,7 +67,6 @@ public final class RawHttpClient implements AutoCloseable {
 
     public RawHttpClient(String host, int port, boolean ssl, String sniHostname, String[] sslProtocols) throws IOException {
         this.host = host;
-        this.ssl = ssl;
         if (ssl) {
             SSLSocketFactory factory = HttpUtils.getSocket_factory();
             socket = factory.createSocket();

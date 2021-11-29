@@ -20,7 +20,6 @@
 package org.carapaceproxy.core;
 
 import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreData;
-import com.google.common.annotations.VisibleForTesting;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelOption;
@@ -393,7 +392,6 @@ public class Listeners {
         }
     }
 
-    @VisibleForTesting
     public SSLCertificateConfiguration chooseCertificate(String sniHostname, String defaultCertificate) {
         if (sniHostname == null) {
             sniHostname = "";

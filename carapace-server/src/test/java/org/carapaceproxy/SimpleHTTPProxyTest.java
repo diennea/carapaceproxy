@@ -32,8 +32,6 @@ import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
-import org.carapaceproxy.server.config.SSLCertificateConfiguration;
-import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 import static org.junit.Assert.assertEquals;
 import org.carapaceproxy.utils.HttpUtils;
 import org.carapaceproxy.utils.TestEndpointMapper;
@@ -73,12 +71,6 @@ public class SimpleHTTPProxyTest {
             server.start();
             int port = server.getLocalPort();
 
-            // debug
-            {
-                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html?debug").toURI(), "utf-8");
-                System.out.println("s:" + s);
-            }
-
             // not found
             try {
                 String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html?not-found").toURI(), "utf-8");
@@ -107,7 +99,6 @@ public class SimpleHTTPProxyTest {
         HttpUtils.overideJvmWideHttpsVerifier();
 
         String certificate = TestUtils.deployResource("ia.p12", tmpDir.getRoot());
-        String cacertificate = TestUtils.deployResource("ca.p12", tmpDir.getRoot());
 
         stubFor(get(urlEqualTo("/index.html?redir"))
                 .willReturn(aResponse()
@@ -119,19 +110,10 @@ public class SimpleHTTPProxyTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         EndpointStats stats;
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
-
-            server.addCertificate(new SSLCertificateConfiguration("localhost", certificate, "changeit", STATIC));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0, true, false, null, "localhost", cacertificate, "changeit"));
-
+        NetworkListenerConfiguration sslListener = new NetworkListenerConfiguration("localhost", 0, true, false, null, "localhost", certificate, "changeit");
+        try (HttpProxyServer server = HttpProxyServer.buildForTests(sslListener, mapper, tmpDir.getRoot())) {
             server.start();
             int port = server.getLocalPort();
-
-            // debug
-            {
-                String s = IOUtils.toString(new URL("https://localhost:" + port + "/index.html?debug").toURI(), "utf-8");
-                System.out.println("s:" + s);
-            }
 
             // not found
             try {

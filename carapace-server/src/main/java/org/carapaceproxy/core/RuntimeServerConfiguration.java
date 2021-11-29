@@ -252,8 +252,11 @@ public class RuntimeServerConfiguration {
 
     public void addListener(NetworkListenerConfiguration listener) throws ConfigurationNotValidException {
         if (listener.isSsl() && !certificates.containsKey(listener.getDefaultCertificate())) {
-            throw new ConfigurationNotValidException("listener " + listener.getHost() + ":" + listener.getPort() + ", ssl=" + listener.isSsl() + ", default certificate " + listener.
-                    getDefaultCertificate() + " not configured");
+            throw new ConfigurationNotValidException(
+                    "Listener " + listener.getHost() + ":" + listener.getPort() + ", "
+                    + "ssl=" + listener.isSsl() + ", "
+                    + "default certificate " + listener.getDefaultCertificate() + " not configured."
+            );
         }
         if (listener.isSsl()) {
             try {

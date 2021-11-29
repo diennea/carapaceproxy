@@ -241,6 +241,7 @@ public class CacheTest {
             RuntimeServerConfiguration currentConfiguration = server.getCurrentConfiguration();
             currentConfiguration.setCacheDisabledForSecureRequestsWithoutPublic(cacheDisabledForSecureRequestsWithoutPublic);
             server.getCache().reloadConfiguration(currentConfiguration);
+            server.getProxyRequestsManager().reloadConfiguration(currentConfiguration);
 
             server.start();
             int port = server.getLocalPort();

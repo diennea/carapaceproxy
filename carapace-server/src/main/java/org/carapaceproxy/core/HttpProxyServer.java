@@ -50,6 +50,7 @@ import org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler;
 import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_HOST;
 import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_PORT;
 import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_HTTPS_PORT;
+import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
@@ -161,6 +162,14 @@ public class HttpProxyServer implements AutoCloseable {
     public static HttpProxyServer buildForTests(String host, int port, EndpointMapper mapper, File baseDir) throws ConfigurationNotValidException, Exception {
         HttpProxyServer res = new HttpProxyServer(mapper, baseDir.getAbsoluteFile());
         res.currentConfiguration.addListener(new NetworkListenerConfiguration(host, port));
+        res.proxyRequestsManager.reloadConfiguration(res.currentConfiguration);
+        return res;
+    }
+
+    public static HttpProxyServer buildForTests(NetworkListenerConfiguration listener, EndpointMapper mapper, File baseDir) throws ConfigurationNotValidException, Exception {
+        HttpProxyServer res = new HttpProxyServer(mapper, baseDir.getAbsoluteFile());
+        res.addCertificate(new SSLCertificateConfiguration(listener.getDefaultCertificate(), listener.getSslTrustoreFile(), listener.getSslTrustorePassword(), STATIC));
+        res.currentConfiguration.addListener(listener);
         res.proxyRequestsManager.reloadConfiguration(res.currentConfiguration);
         return res;
     }
