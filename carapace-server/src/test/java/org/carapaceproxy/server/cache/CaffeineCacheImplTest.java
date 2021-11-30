@@ -34,9 +34,10 @@ import org.carapaceproxy.utils.TestUtils;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
 import org.junit.After;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
+import io.netty.buffer.Unpooled;
 import org.junit.Test;
 
 /**
@@ -150,8 +151,8 @@ public class CaffeineCacheImplTest {
     private static CacheEntry genCacheEntry(String resource, int payloadLength, long expireTs) {
         ContentKey key = new ContentKey("", "", resource);
         CachedContent payload = new CachedContent();
-        payload.chunks.add(null);
-        payload.chunks.add(null);
+        payload.chunks.add(Unpooled.EMPTY_BUFFER);
+        payload.chunks.add(Unpooled.EMPTY_BUFFER);
         payload.directSize = payloadLength / 2;
         payload.heapSize = payloadLength - payload.directSize;
         if (expireTs > 0) {

@@ -27,14 +27,11 @@ import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.util.Collections;
-import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import org.junit.Rule;
 import org.junit.Test;
@@ -65,7 +62,6 @@ public class XForwardedForFilterTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.addRequestFilter(new RequestFilterConfiguration(XForwardedForRequestFilter.TYPE, Collections.emptyMap()));
             server.start();
@@ -82,12 +78,7 @@ public class XForwardedForFilterTest {
                 System.out.println("s:" + s);
                 assertTrue(s.endsWith("it <b>works</b> !!"));
             }
-
-            stats = server.getProxyRequestsManager().getEndpointStats(key);
-            assertNotNull(stats);
         }
-
-        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -112,7 +103,6 @@ public class XForwardedForFilterTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -127,12 +117,7 @@ public class XForwardedForFilterTest {
                 System.out.println("s:" + s);
                 assertTrue(s.contains("No X-Forwarded-For"));
             }
-
-            stats = server.getProxyRequestsManager().getEndpointStats(key);
-            assertNotNull(stats);
         }
-
-        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
 }

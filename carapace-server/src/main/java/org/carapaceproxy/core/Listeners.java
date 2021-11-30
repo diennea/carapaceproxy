@@ -251,7 +251,7 @@ public class Listeners {
                     if (channel != null) {
                         channel.incRequests();
                     }
-                    ProxyRequest proxyRequest = new ProxyRequest(request, response, hostPort);                    
+                    ProxyRequest proxyRequest = new ProxyRequest(request, response, hostPort);
                     return parent.getProxyRequestsManager().processRequest(proxyRequest);
                 });
 

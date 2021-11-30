@@ -68,7 +68,7 @@ public final class RawHttpClient implements AutoCloseable {
     public RawHttpClient(String host, int port, boolean ssl, String sniHostname, String[] sslProtocols) throws IOException {
         this.host = host;
         if (ssl) {
-            SSLSocketFactory factory = HttpUtils.getSocket_factory();
+            SSLSocketFactory factory = HttpTestUtils.getSocket_factory();
             socket = factory.createSocket();
             SSLSocket sslSocket = (SSLSocket) socket;
             if (sslProtocols != null) {

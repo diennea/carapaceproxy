@@ -34,9 +34,7 @@ import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import org.junit.Rule;
@@ -69,7 +67,6 @@ public class ConcurrentClientsTest {
 
         int size = 100;
         int concurrentClients = 4;
-        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -99,12 +96,7 @@ public class ConcurrentClientsTest {
             if (oneError.get() != null) {
                 fail("error! " + oneError.get());
             }
-
-            stats = server.getProxyRequestsManager().getEndpointStats(key);
-            assertNotNull(stats);
         }
-
-        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
 }

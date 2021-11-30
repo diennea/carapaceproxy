@@ -1,21 +1,21 @@
 /*
- * Licensed to Diennea S.r.l. under one
- * or more contributor license agreements. See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership. Diennea S.r.l. licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- *
+ Licensed to Diennea S.r.l. under one
+ or more contributor license agreements. See the NOTICE file
+ distributed with this work for additional information
+ regarding copyright ownership. Diennea S.r.l. licenses this file
+ to you under the Apache License, Version 2.0 (the
+ "License"); you may not use this file except in compliance
+ with the License.  You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing,
+ software distributed under the License is distributed on an
+ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ KIND, either express or implied.  See the License for the
+ specific language governing permissions and limitations
+ under the License.
+
  */
 package org.carapaceproxy.server.certificates;
 
@@ -37,7 +37,6 @@ import org.carapaceproxy.utils.RawHttpClient.HttpResponse;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -66,7 +65,7 @@ import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.certificates.ocsp.OcspStaplingManager;
 import org.carapaceproxy.utils.CertificatesUtils;
-import org.carapaceproxy.utils.HttpUtils;
+import org.carapaceproxy.utils.HttpTestUtils;
 import org.carapaceproxy.utils.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
@@ -76,6 +75,7 @@ import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.util.KeyPairUtils;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
 import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
+import static org.junit.Assert.assertTrue;
 import java.util.Base64;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.powermock.reflect.Whitebox;
@@ -94,12 +94,13 @@ public class CertificatesTest extends UseAdminServer {
     private Properties config;
 
     private void configureAndStartServer() throws Exception {
-        HttpUtils.overideJvmWideHttpsVerifier();
+        HttpTestUtils.overideJvmWideHttpsVerifier();
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                         .withBody("it <b>works</b> !!")));
 
         config = new Properties(HTTP_ADMIN_SERVER_CONFIG);
@@ -111,10 +112,10 @@ public class CertificatesTest extends UseAdminServer {
         startServer(config);
 
         // Default certificate
-        String defaultCertificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+        String defaultCertificate = TestUtils.deployResource("ia.p12", tmpDir.getRoot());
         config.put("certificate.1.hostname", "*");
         config.put("certificate.1.file", defaultCertificate);
-        config.put("certificate.1.password", "testproxy");
+        config.put("certificate.1.password", "changeit");
 
         // SSL Listener
         config.put("listener.1.host", "localhost");
@@ -155,14 +156,13 @@ public class CertificatesTest extends UseAdminServer {
      */
     @Test
     public void test() throws Exception {
-
         configureAndStartServer();
         int port = server.getLocalPort();
 
         // Request #0: expected default certificate
         Certificate[] chain0;
         try (RawHttpClient client = new RawHttpClient("localhost", port, true, "localhost")) {
-            RawHttpClient.HttpResponse resp = client.get("https://localhost:" + port + "/index.html", credentials);
+            RawHttpClient.HttpResponse resp = client.get("/index.html", credentials);
             assertEquals("it <b>works</b> !!", resp.getBodyString());
             chain0 = client.getServerCertificate();
             assertNotNull(chain0);
@@ -181,7 +181,7 @@ public class CertificatesTest extends UseAdminServer {
         // Request #1: still expected default certificate
         Certificate[] chain1;
         try (RawHttpClient client = new RawHttpClient("localhost", port, true, "localhost")) {
-            RawHttpClient.HttpResponse resp = client.get("https://localhost:" + port + "/index.html", credentials);
+            RawHttpClient.HttpResponse resp = client.get("/index.html", credentials);
             assertEquals("it <b>works</b> !!", resp.getBodyString());
             chain1 = client.getServerCertificate();
             assertNotNull(chain1);
@@ -205,7 +205,7 @@ public class CertificatesTest extends UseAdminServer {
         // Request #2: expected uploaded certificate
         Certificate[] chain2;
         try (RawHttpClient client = new RawHttpClient("localhost", port, true, "localhost")) {
-            RawHttpClient.HttpResponse resp = client.get("https://localhost:" + port + "/index.html", credentials);
+            RawHttpClient.HttpResponse resp = client.get("/index.html", credentials);
             assertEquals("it <b>works</b> !!", resp.getBodyString());
             chain2 = client.getServerCertificate();
             assertNotNull(chain2);
@@ -230,7 +230,7 @@ public class CertificatesTest extends UseAdminServer {
         // Request #3: expected last uploaded certificate
         Certificate[] chain3;
         try (RawHttpClient client = new RawHttpClient("localhost", port, true, "localhost")) {
-            RawHttpClient.HttpResponse resp = client.get("https://localhost:" + port + "/index.html", credentials);
+            RawHttpClient.HttpResponse resp = client.get("/index.html", credentials);
             assertEquals("it <b>works</b> !!", resp.getBodyString());
             chain3 = client.getServerCertificate();
             assertNotNull(chain3);
@@ -280,7 +280,7 @@ public class CertificatesTest extends UseAdminServer {
 
             // check uploaded certificate
             try (RawHttpClient c = new RawHttpClient("localhost", port, true, "localhost")) {
-                RawHttpClient.HttpResponse r = c.get("https://localhost:" + port + "/index.html", credentials);
+                RawHttpClient.HttpResponse r = c.get("/index.html", credentials);
                 assertEquals("it <b>works</b> !!", r.getBodyString());
                 Certificate[] obtainedChain = c.getServerCertificate();
                 assertNotNull(obtainedChain);
@@ -309,7 +309,7 @@ public class CertificatesTest extends UseAdminServer {
 
             // check uploaded certificate
             try (RawHttpClient c = new RawHttpClient("localhost", port, true, "localhost")) {
-                RawHttpClient.HttpResponse r = c.get("https://localhost:" + port + "/index.html", credentials);
+                RawHttpClient.HttpResponse r = c.get("/index.html", credentials);
                 assertEquals("it <b>works</b> !!", r.getBodyString());
                 Certificate[] obtainedChain = c.getServerCertificate();
                 assertNotNull(obtainedChain);
@@ -425,7 +425,7 @@ public class CertificatesTest extends UseAdminServer {
         }
         // check ocsp response
         try (RawHttpClient c = new RawHttpClient("localhost", port, true, "localhost")) {
-            RawHttpClient.HttpResponse r = c.get("https://localhost:" + port + "/index.html", credentials);
+            RawHttpClient.HttpResponse r = c.get("/index.html", credentials);
             assertEquals("it <b>works</b> !!", r.getBodyString());
             Certificate[] obtainedChain = c.getServerCertificate();
             assertNotNull(obtainedChain);
@@ -481,7 +481,7 @@ public class CertificatesTest extends UseAdminServer {
             assertFalse(data.isManual());
             // check uploaded certificate
             try (RawHttpClient c = new RawHttpClient("localhost", port, true, "localhost")) {
-                RawHttpClient.HttpResponse r = c.get("https://localhost:" + port + "/index.html", credentials);
+                RawHttpClient.HttpResponse r = c.get("/index.html", credentials);
                 assertEquals("it <b>works</b> !!", r.getBodyString());
                 Certificate[] obtainedChain = c.getServerCertificate();
                 assertNotNull(obtainedChain);
@@ -522,7 +522,7 @@ public class CertificatesTest extends UseAdminServer {
 
         // Check renewed certificate
         try (RawHttpClient cl = new RawHttpClient("localhost", port, true, "localhost")) {
-            RawHttpClient.HttpResponse r = cl.get("https://localhost:" + port + "/index.html", credentials);
+            RawHttpClient.HttpResponse r = cl.get("/index.html", credentials);
             assertEquals("it <b>works</b> !!", r.getBodyString());
             Certificate[] obtainedChain = cl.getServerCertificate();
             assertNotNull(obtainedChain);

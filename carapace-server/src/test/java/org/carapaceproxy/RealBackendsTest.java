@@ -101,7 +101,7 @@ public class RealBackendsTest {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             RuntimeServerConfiguration config = new RuntimeServerConfiguration();
             config.setMaxConnectionsPerEndpoint(1);
-            server.getProxyRequestsManager().reloadConfiguration(config);
+            server.getProxyRequestsManager().reloadConfiguration(config, mapper.getBackends().values());
             server.start();
             if (isLocal) {
                 port = server.getLocalPort();

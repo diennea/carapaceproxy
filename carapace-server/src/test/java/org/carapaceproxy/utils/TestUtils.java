@@ -34,7 +34,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
-import org.carapaceproxy.EndpointStats;
 import sun.misc.Unsafe;
 
 /**
@@ -45,10 +44,6 @@ import sun.misc.Unsafe;
 public class TestUtils {
 
     private static final int WAIT_FOR_CONDITION_DEFAULT_WAIT_SECONDS = 20;
-
-    public static void waitForAllConnectionsClosed(EndpointStats stats) throws Exception {
-        waitForCondition(() -> stats.getOpenConnections() == 0, 100);
-    }
 
     public static void waitForCondition(Callable<Boolean> condition, int seconds) throws Exception {
         waitForCondition(condition, null, seconds);

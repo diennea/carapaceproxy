@@ -50,7 +50,6 @@ import org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler;
 import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_HOST;
 import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_PORT;
 import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_HTTPS_PORT;
-import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
@@ -81,9 +80,11 @@ import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.webapp.WebAppContext;
 import org.glassfish.jersey.servlet.ServletContainer;
 import static org.glassfish.jersey.servlet.ServletProperties.JAXRS_APPLICATION_CLASS;
+import java.util.Collections;
 import java.util.Objects;
 import org.apache.bookkeeper.stats.prometheus.PrometheusMetricsProvider;
 import org.carapaceproxy.server.certificates.ocsp.OcspStaplingManager;
+import org.carapaceproxy.server.config.BackendConfiguration;
 
 public class HttpProxyServer implements AutoCloseable {
 
@@ -156,21 +157,15 @@ public class HttpProxyServer implements AutoCloseable {
         this.proxyRequestsManager = new ProxyRequestsManager(this);
         if (mapper != null) {
             mapper.setParent(this);
+            this.proxyRequestsManager.reloadConfiguration(currentConfiguration, mapper.getBackends().values());
         }
     }
 
     public static HttpProxyServer buildForTests(String host, int port, EndpointMapper mapper, File baseDir) throws ConfigurationNotValidException, Exception {
         HttpProxyServer res = new HttpProxyServer(mapper, baseDir.getAbsoluteFile());
         res.currentConfiguration.addListener(new NetworkListenerConfiguration(host, port));
-        res.proxyRequestsManager.reloadConfiguration(res.currentConfiguration);
-        return res;
-    }
+        res.proxyRequestsManager.reloadConfiguration(res.currentConfiguration, mapper.getBackends().values());
 
-    public static HttpProxyServer buildForTests(NetworkListenerConfiguration listener, EndpointMapper mapper, File baseDir) throws ConfigurationNotValidException, Exception {
-        HttpProxyServer res = new HttpProxyServer(mapper, baseDir.getAbsoluteFile());
-        res.addCertificate(new SSLCertificateConfiguration(listener.getDefaultCertificate(), listener.getSslTrustoreFile(), listener.getSslTrustorePassword(), STATIC));
-        res.currentConfiguration.addListener(listener);
-        res.proxyRequestsManager.reloadConfiguration(res.currentConfiguration);
         return res;
     }
 
@@ -651,9 +646,16 @@ public class HttpProxyServer implements AutoCloseable {
             this.listeners.reloadConfiguration(newConfiguration);
             this.cache.reloadConfiguration(newConfiguration);
             this.requestsLogger.reloadConfiguration(newConfiguration);
-            this.mapper = newMapper;
             this.realm = newRealm;
-            this.proxyRequestsManager.reloadConfiguration(newConfiguration);
+            Map<String, BackendConfiguration> currentBackends = mapper != null ? mapper.getBackends() : Collections.emptyMap();
+            Map<String, BackendConfiguration> newBackends = newMapper.getBackends();
+            this.mapper = newMapper;
+
+            if (newConfiguration.getBorrowTimeout() != currentConfiguration.getBorrowTimeout()
+                    || newConfiguration.getMaxConnectionsPerEndpoint() != currentConfiguration.getMaxConnectionsPerEndpoint()
+                    || !newBackends.equals(currentBackends) || atBoot) {
+                this.proxyRequestsManager.reloadConfiguration(newConfiguration, newBackends.values());
+            }
 
             if (!atBoot) {
                 dynamicConfigurationStore.commitConfiguration(newConfigurationStore);

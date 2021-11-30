@@ -21,7 +21,6 @@ package org.carapaceproxy;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
 
 import org.carapaceproxy.core.HttpProxyServer;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
@@ -39,7 +38,6 @@ import org.carapaceproxy.utils.RawHttpClient;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -183,7 +181,6 @@ public class RawClientTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -196,12 +193,7 @@ public class RawClientTest {
                 }
 
             }
-
-            stats = server.getProxyRequestsManager().getEndpointStats(key);
-            assertNotNull(stats);
         }
-
-        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -323,7 +315,7 @@ public class RawClientTest {
                 proxy.getCurrentConfiguration().setClientsIdleTimeoutSeconds(300);
                 proxy.getCurrentConfiguration().setBorrowTimeout(300_000);
                 proxy.getCurrentConfiguration().setRequestsHeaderDebugEnabled(true);
-                proxy.getProxyRequestsManager().reloadConfiguration(proxy.getCurrentConfiguration());
+                proxy.getProxyRequestsManager().reloadConfiguration(proxy.getCurrentConfiguration(), mapper.getBackends().values());
                 proxy.start();
                 int port = proxy.getLocalPort();
                 assertTrue(port > 0);

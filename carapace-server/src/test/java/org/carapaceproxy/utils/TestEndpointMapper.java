@@ -107,6 +107,7 @@ public class TestEndpointMapper extends EndpointMapper {
         return directors;
     }
 
+    @Override
     public List<CustomHeader> getHeaders() {
         return headers;
     }

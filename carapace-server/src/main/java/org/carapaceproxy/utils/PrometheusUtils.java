@@ -21,7 +21,6 @@ package org.carapaceproxy.utils;
 
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
-import io.prometheus.client.SimpleCollector;
 import io.prometheus.client.Summary;
 
 /**

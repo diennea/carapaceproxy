@@ -37,11 +37,8 @@ import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -178,7 +175,6 @@ public class BigUploadTest {
 
             int size = 20_000_000;
 
-            EndpointStats stats;
             try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.start();
                 int port = server.getLocalPort();
@@ -192,20 +188,15 @@ public class BigUploadTest {
                         o.write(contents);
                     }
                 }
-                try (InputStream in = con.getInputStream()) {
-                    IOUtils.toString(in, StandardCharsets.US_ASCII);
-                    fail();
-                } catch (IOException err) {
-                    // this message is JDK specific
-                    assertEquals("Error writing to server", err.getMessage());
-                }
+                assertThrows(IOException.class, () -> {
+                    try (InputStream in = con.getInputStream()) {
+                        IOUtils.toString(in, StandardCharsets.US_ASCII);
+                    } catch (IOException ex) {
+                        throw ex;
+                    }
+                });
                 con.disconnect();
-
-                stats = server.getProxyRequestsManager().getEndpointStats(key);
-                assertNotNull(stats);
             }
-
-            TestUtils.waitForAllConnectionsClosed(stats);
         }
     }
 
@@ -222,7 +213,6 @@ public class BigUploadTest {
             TestEndpointMapper mapper = new TestEndpointMapper("localhost", mockServer.getPort());
             EndpointKey key = new EndpointKey("localhost", mockServer.getPort());
 
-            EndpointStats stats;
             try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.start();
                 int port = server.getLocalPort();
@@ -235,12 +225,7 @@ public class BigUploadTest {
                     assertTrue(res.contains("it works!"));
                 }
                 con.disconnect();
-
-                stats = server.getProxyRequestsManager().getEndpointStats(key);
-                assertNotNull(stats);
             }
-
-            TestUtils.waitForAllConnectionsClosed(stats);
         }
     }
 

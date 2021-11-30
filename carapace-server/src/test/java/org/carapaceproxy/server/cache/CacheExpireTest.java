@@ -19,11 +19,9 @@
  */
 package org.carapaceproxy.server.cache;
 
-import org.carapaceproxy.utils.HttpUtils;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import org.carapaceproxy.*;
 import org.carapaceproxy.core.HttpProxyServer;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
@@ -33,8 +31,8 @@ import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import org.carapaceproxy.utils.HttpUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -57,7 +55,7 @@ public class CacheExpireTest {
     public void testHandleExpiresFromServer() throws Exception {
 
         java.util.Date expire = new java.util.Date(System.currentTimeMillis() + 60000 * 2);
-        String formatted = HttpUtils.formatDateHeader(expire);
+        String formatted = HttpUtils.formatDateHeader(expire); // ex Wed, 01 Dec 2021 08:11:39 GMT
 
         stubFor(get(urlEqualTo("/index-with-expire.html"))
                 .willReturn(aResponse()
@@ -71,7 +69,6 @@ public class CacheExpireTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -101,16 +98,12 @@ public class CacheExpireTest {
                 assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("expires: " + formatted)));
             }
 
-            stats = server.getProxyRequestsManager().getEndpointStats(key);
-            assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(1, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
             assertEquals(18, server.getCache().getStats().getDirectMemoryUsed());
             assertEquals(0, server.getCache().getStats().getHeapMemoryUsed());
         }
-
-        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -127,7 +120,6 @@ public class CacheExpireTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -158,14 +150,10 @@ public class CacheExpireTest {
                 assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith(Expires)));
             }
 
-            stats = server.getProxyRequestsManager().getEndpointStats(key);
-            assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(1, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
         }
-
-        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -186,7 +174,6 @@ public class CacheExpireTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -216,14 +203,11 @@ public class CacheExpireTest {
                 assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
             }
 
-            stats = server.getProxyRequestsManager().getEndpointStats(key);
-            assertNotNull(stats);
             assertEquals(0, server.getCache().getCacheSize());
             assertEquals(0, server.getCache().getStats().getHits());
             assertEquals(2, server.getCache().getStats().getMisses());
         }
 
-        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -232,7 +216,6 @@ public class CacheExpireTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -263,8 +246,6 @@ public class CacheExpireTest {
                 assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
             }
 
-            stats = server.getProxyRequestsManager().getEndpointStats(key);
-            assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(0, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
@@ -289,7 +270,6 @@ public class CacheExpireTest {
             assertEquals(2, server.getCache().getStats().getMisses());
         }
 
-        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -298,7 +278,6 @@ public class CacheExpireTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -330,19 +309,13 @@ public class CacheExpireTest {
                 assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
             }
 
-            stats = server.getProxyRequestsManager().getEndpointStats(key);
-            assertNotNull(stats);
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(0, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
-
             TestUtils.waitForCondition(() -> {
                 server.getCache().getInnerCache().evict();
                 return server.getCache().getCacheSize() == 0;
             }, 10);
-
         }
-
-        TestUtils.waitForAllConnectionsClosed(stats);
     }
 }

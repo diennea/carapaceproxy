@@ -20,17 +20,14 @@
 package org.carapaceproxy.backends;
 
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.RawHttpClient;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import org.junit.Rule;
 import org.junit.Test;
@@ -74,8 +71,7 @@ public class ChunckedEncodingRequestsTest {
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-
-        EndpointStats stats;
+        
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -86,12 +82,7 @@ public class ChunckedEncodingRequestsTest {
                 System.out.println("s:" + s);
                 assertTrue(s.endsWith("it <b>works</b> !!"));
             }
-
-            stats = server.getProxyRequestsManager().getEndpointStats(key);
-            assertNotNull(stats);
         }
-
-        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -111,7 +102,6 @@ public class ChunckedEncodingRequestsTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        EndpointStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -133,12 +123,7 @@ public class ChunckedEncodingRequestsTest {
                 System.out.println("s:" + s);
                 assertTrue(s.endsWith("it <b>works</b> !!"));
             }
-
-            stats = server.getProxyRequestsManager().getEndpointStats(key);
-            assertNotNull(stats);
         }
-
-        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
 }

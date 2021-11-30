@@ -34,9 +34,6 @@ import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import static java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -55,7 +52,7 @@ import org.apache.commons.codec.binary.Base64;
  *
  * @author enrico.olivelli
  */
-public class HttpUtils {
+public class HttpTestUtils {
 
     private static SSLSocketFactory socket_factory = null;
 
@@ -197,7 +194,7 @@ public class HttpUtils {
         }
 
         if (disable_https_validation || verify_ssl_hostnames) {
-            HttpUtils.tweakConnection(con, disable_https_validation, verify_ssl_hostnames);
+            HttpTestUtils.tweakConnection(con, disable_https_validation, verify_ssl_hostnames);
         }
 
         con.setUseCaches(false);
@@ -356,7 +353,7 @@ public class HttpUtils {
             verify_ssl_hostnames = Boolean.parseBoolean(options.get("verify_ssl_hostnames") + "");
         }
         if (disable_https_validation) {
-            HttpUtils.tweakConnection(con, disable_https_validation, verify_ssl_hostnames);
+            HttpTestUtils.tweakConnection(con, disable_https_validation, verify_ssl_hostnames);
         }
         con.setReadTimeout(read_timeout);
         con.setConnectTimeout(connect_timeout);
@@ -500,11 +497,6 @@ public class HttpUtils {
     public static void overideJvmWideHttpsVerifier() {
         HttpsURLConnection.setDefaultHostnameVerifier(hostname_verifier);
         HttpsURLConnection.setDefaultSSLSocketFactory(socket_factory);
-    }
-
-    public static final String formatDateHeader(java.util.Date date) {
-        return RFC_1123_DATE_TIME.format(ZonedDateTime.ofInstant(date.toInstant(), GMT));
-    }
-    private static final ZoneId GMT = ZoneId.of("GMT");
+    }    
 
 }

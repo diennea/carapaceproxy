@@ -31,13 +31,11 @@ import static org.carapaceproxy.server.config.SSLCertificateConfiguration.Certif
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.net.InetAddress;
 import java.security.cert.X509Certificate;
-import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import javax.net.ssl.SSLSession;
@@ -70,10 +68,12 @@ public class SSLSNITest {
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-
-        EndpointStats stats;
-        NetworkListenerConfiguration sslListener = new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, certificate, "testproxy", "TLSv1.3");
-        try (HttpProxyServer server = HttpProxyServer.buildForTests(sslListener, mapper, tmpDir.getRoot())) {
+        
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
+            server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
+            server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost /*
+                     * default
+                     */, null, null));
             server.start();
             int port = server.getLocalPort();
 
@@ -83,11 +83,7 @@ public class SSLSNITest {
                 X509Certificate cert = (X509Certificate) client.getSSLSocket().getSession().getPeerCertificates()[0];
                 System.out.println("acert2: " + cert.getSerialNumber());
             }
-            stats = server.getProxyRequestsManager().getEndpointStats(key);
-            assertNotNull(stats);
         }
-
-        TestUtils.waitForAllConnectionsClosed(stats);
     }
 
     @Test
@@ -152,8 +148,9 @@ public class SSLSNITest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
 
         // TLS 1.3 support checking
-        NetworkListenerConfiguration sslListener = new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, certificate, "testproxy", "TLSv1.3");
-        try (HttpProxyServer server = HttpProxyServer.buildForTests(sslListener, mapper, tmpDir.getRoot())) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
+            server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
+            server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, null, null, "TLSv1.3"));
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
@@ -166,8 +163,9 @@ public class SSLSNITest {
 
         // default ssl protocol version support checking
         for (String proto : DEFAULT_SSL_PROTOCOLS) {
-            NetworkListenerConfiguration listener = new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, certificate, "testproxy", proto);
-            try (HttpProxyServer server = HttpProxyServer.buildForTests(listener, mapper, tmpDir.getRoot())) {
+            try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
+                server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
+                server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, null, null, proto));
                 server.start();
                 int port = server.getLocalPort();
                 try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
@@ -178,8 +176,9 @@ public class SSLSNITest {
                 }
             }
         }
-        sslListener = new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, certificate, "testproxy");
-        try (HttpProxyServer server = HttpProxyServer.buildForTests(sslListener, mapper, tmpDir.getRoot())) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
+            server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
+            server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, null, null));
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
@@ -192,8 +191,9 @@ public class SSLSNITest {
 
         // wrong ssl protocol version checking
         TestUtils.assertThrows(ConfigurationNotValidException.class, () -> {
-            NetworkListenerConfiguration listener = new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, certificate, "testproxy", "TLSvWRONG");
-            try (HttpProxyServer server = HttpProxyServer.buildForTests(listener, mapper, tmpDir.getRoot())) {
+            try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
+                server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
+                server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, null, null, "TLSvWRONG"));
             }
         });
     }

@@ -30,7 +30,6 @@ import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNotNull;
@@ -87,7 +86,6 @@ public class CacheContentLengthLimitTest {
 
         // No size checking
         {
-            EndpointStats stats;
             try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(0);
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
@@ -98,17 +96,11 @@ public class CacheContentLengthLimitTest {
 
                 // Should be cached
                 requestAndTestCached(body, chunked, key, server, true, 1);
-
-                stats = server.getProxyRequestsManager().getEndpointStats(key);
-                assertNotNull(stats);
             }
-
-            TestUtils.waitForAllConnectionsClosed(stats);
         }
 
         // Max size set to current content size
         {
-            EndpointStats stats;
             try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(body.length());
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
@@ -119,17 +111,11 @@ public class CacheContentLengthLimitTest {
 
                 // Should be cached
                 requestAndTestCached(body, chunked, key, server, true, 1);
-
-                stats = server.getProxyRequestsManager().getEndpointStats(key);
-                assertNotNull(stats);
             }
-
-            TestUtils.waitForAllConnectionsClosed(stats);
         }
 
         // Max size set to drop current content
         {
-            EndpointStats stats;
             try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(body.length() - 1);
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
@@ -140,12 +126,7 @@ public class CacheContentLengthLimitTest {
 
                 // Should not be cached
                 requestAndTestCached(body, chunked, key, server, false, 0);
-
-                stats = server.getProxyRequestsManager().getEndpointStats(key);
-                assertNotNull(stats);
             }
-
-            TestUtils.waitForAllConnectionsClosed(stats);
         }
     }
 
