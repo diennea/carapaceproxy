@@ -17,9 +17,7 @@
  under the License.
 
  */
-package org.carapaceproxy.server;
-
-import io.netty.handler.codec.http.HttpRequest;
+package org.carapaceproxy.core;
 
 /**
  * Modify a request, for instance a filter can add/drop headers.
@@ -29,7 +27,7 @@ public interface RequestFilter {
     /**
      * Apply modifications to the given request.
      *
-     * @param request     
+     * @param request
      */
-    void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler);
+    void apply(ProxyRequest request);
 }

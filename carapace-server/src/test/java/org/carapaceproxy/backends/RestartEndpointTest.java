@@ -1,5 +1,3 @@
-package org.carapaceproxy.backends;
-
 /*
  Licensed to Diennea S.r.l. under one
  or more contributor license agreements. See the NOTICE file
@@ -19,11 +17,15 @@ package org.carapaceproxy.backends;
  under the License.
 
  */
+package org.carapaceproxy.backends;
+
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
+import static org.hamcrest.CoreMatchers.hasItems;
+import static org.hamcrest.MatcherAssert.assertThat;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -31,12 +33,9 @@ import java.net.ServerSocket;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import org.apache.commons.io.IOUtils;
-import org.carapaceproxy.client.ConnectionsManagerStats;
-import org.carapaceproxy.client.EndpointKey;
-import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertEquals;
 import org.carapaceproxy.utils.CarapaceLogger;
 import org.junit.Rule;
@@ -76,9 +75,6 @@ public class RestartEndpointTest {
                 ));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-
-        ConnectionsManagerStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -90,6 +86,7 @@ public class RestartEndpointTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 System.out.println("statusline:" + resp.getStatusLine());
                 assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
+                assertThat(resp.getHeaderLines(), hasItems("cache-control: no-cache\r\n", "connection: keep-alive\r\n"));
             }
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 wireMockRule.start();
@@ -99,12 +96,7 @@ public class RestartEndpointTest {
 
                 assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
             }
-
-            stats = server.getConnectionsManager().getStats();
         }
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 
     @Test
@@ -118,9 +110,6 @@ public class RestartEndpointTest {
                 ));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-
-        ConnectionsManagerStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -137,6 +126,7 @@ public class RestartEndpointTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 System.out.println("statusline:" + resp.getStatusLine());
                 assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
+                assertThat(resp.getHeaderLines(), hasItems("cache-control: no-cache\r\n", "connection: keep-alive\r\n"));
             }
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 wireMockRule.start();
@@ -146,12 +136,7 @@ public class RestartEndpointTest {
 
                 assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
             }
-
-            stats = server.getConnectionsManager().getStats();
         }
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 
     @Test
@@ -165,11 +150,7 @@ public class RestartEndpointTest {
                 ));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-
         CarapaceLogger.setLoggingDebugEnabled(true);
-
-        ConnectionsManagerStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -185,12 +166,7 @@ public class RestartEndpointTest {
                 IOUtils.toByteArray(new URL("http://localhost:" + wireMockRule.port() + "/index.html"));
                 assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
             }
-
-            stats = server.getConnectionsManager().getStats();
         }
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 
 }

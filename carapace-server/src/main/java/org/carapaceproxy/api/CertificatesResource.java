@@ -19,7 +19,6 @@
  */
 package org.carapaceproxy.api;
 
-import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
 import java.util.Base64;
@@ -35,8 +34,8 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import org.carapaceproxy.configstore.CertificateData;
-import org.carapaceproxy.server.HttpProxyServer;
-import org.carapaceproxy.server.RuntimeServerConfiguration;
+import org.carapaceproxy.core.HttpProxyServer;
+import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;

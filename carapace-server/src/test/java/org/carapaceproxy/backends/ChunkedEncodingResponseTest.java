@@ -20,18 +20,14 @@
 package org.carapaceproxy.backends;
 
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import org.carapaceproxy.EndpointStats;
-import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
-import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import org.carapaceproxy.utils.CarapaceLogger;
 import org.junit.Rule;
@@ -61,8 +57,7 @@ public class ChunkedEncodingResponseTest {
         );
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-
-        ConnectionsManagerStats stats;
+        
         CarapaceLogger.setLoggingDebugEnabled(true);
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
@@ -84,13 +79,6 @@ public class ChunkedEncodingResponseTest {
                         + "0\r\n\r\n"));
                 assertTrue(resp.getBodyString().equals("it <b>works</b> !!"));
             }
-            stats = server.getConnectionsManager().getStats();
-            TestUtils.waitForCondition(() -> {
-                EndpointStats epstats = stats.getEndpointStats(key);
-                return epstats.getTotalConnections().intValue() == 1
-                        && epstats.getActiveConnections().intValue() == 0
-                        && epstats.getOpenConnections().intValue() == 0;
-            }, 100);
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").toString();
@@ -99,18 +87,8 @@ public class ChunkedEncodingResponseTest {
                         + "it <b>works</b> !!\r\n"
                         + "0\r\n\r\n"));
             }
-            assertNotNull(stats.getEndpoints().get(key));
             assertEquals(0, server.getCache().getCacheSize());
-            TestUtils.waitForCondition(() -> {
-                EndpointStats epstats = stats.getEndpointStats(key);
-                return epstats.getTotalConnections().intValue() == 2
-                        && epstats.getActiveConnections().intValue() == 0
-                        && epstats.getOpenConnections().intValue() == 0;
-            }, 100);
         }
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 
     @Test
@@ -124,8 +102,7 @@ public class ChunkedEncodingResponseTest {
         );
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-
-        ConnectionsManagerStats stats;
+        
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -157,21 +134,9 @@ public class ChunkedEncodingResponseTest {
                         + "it <b>works</b> !!\r\n"
                         + "0\r\n\r\n"));
             }
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(2, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
         }
-
-        TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() == 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
-        }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 }

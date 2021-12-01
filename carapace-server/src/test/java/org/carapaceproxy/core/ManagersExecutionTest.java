@@ -17,13 +17,13 @@
  under the License.
 
  */
-package org.carapaceproxy.server;
+package org.carapaceproxy.core;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import org.carapaceproxy.EndpointMapper;
+import org.carapaceproxy.server.mapper.EndpointMapper;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.certificates.DynamicCertificatesManager;

@@ -25,13 +25,12 @@ import javax.servlet.ServletContext;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import lombok.Data;
 import org.carapaceproxy.EndpointStats;
-import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
-import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.backends.BackendHealthCheck;
 import org.carapaceproxy.server.backends.BackendHealthStatus;
-import org.carapaceproxy.server.config.BackendConfiguration;
 
 /**
  * Access to backends status
@@ -45,6 +44,7 @@ public class BackendsResource {
     @javax.ws.rs.core.Context
     ServletContext context;
 
+    @Data
     public static final class BackendBean {
 
         private final String id;
@@ -54,7 +54,7 @@ public class BackendsResource {
         private long totalRequests;
         private long lastActivityTs;
 
-        private boolean isAvailable;
+        private boolean available;
         private boolean reportedAsUnreachable;
         private long reportedAsUnreachableTs;
         private String lastProbePath;
@@ -69,85 +69,28 @@ public class BackendsResource {
             this.port = port;
         }
 
-        public String getId() {
-            return id;
-        }
-
-        public long getOpenConnections() {
-            return openConnections;
-        }
-
-        public long getTotalRequests() {
-            return totalRequests;
-        }
-
-        public long getLastActivityTs() {
-            return lastActivityTs;
-        }
-
-        public String getHost() {
-            return host;
-        }
-
-        public int getPort() {
-            return port;
-        }
-
-        public boolean isIsAvailable() {
-            return isAvailable;
-        }
-
-        public boolean isReportedAsUnreachable() {
-            return reportedAsUnreachable;
-        }
-
-        public long getReportedAsUnreachableTs() {
-            return reportedAsUnreachableTs;
-        }
-
-        public String getLastProbePath() {
-            return lastProbePath;
-        }
-
-        public long getLastProbeTs() {
-            return lastProbeTs;
-        }
-
-        public boolean isLastProbeSuccess() {
-            return lastProbeSuccess;
-        }
-
-        public String getHttpResponse() {
-            return httpResponse;
-        }
-
-        public String getHttpBody() {
-            return httpBody;
-        }
-
     }
 
     @GET
     public Map<String, BackendBean> getAll() {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-        ConnectionsManagerStats stats = server.getConnectionsManager().getStats();
         Map<String, BackendHealthStatus> backendsSnapshot = server.getBackendHealthManager().getBackendsSnapshot();
         Map<String, BackendBean> res = new HashMap<>();
 
-        for (BackendConfiguration backendConf : server.getMapper().getBackends().values()) {
+        server.getMapper().getBackends().values().forEach(backendConf -> {
             String id = backendConf.getId();
             String hostPort = backendConf.getHostPort();
             BackendBean bean = new BackendBean(id, backendConf.getHost(), backendConf.getPort());
             bean.lastProbePath = backendConf.getProbePath();
-            EndpointStats epstats = stats.getEndpointStats(EndpointKey.make(hostPort));
+            EndpointStats epstats = server.getProxyRequestsManager().getEndpointStats(EndpointKey.make(hostPort));
             if (epstats != null) {
-                bean.openConnections = epstats.getOpenConnections().longValue();
+                bean.openConnections = epstats.getOpenConnections();
                 bean.totalRequests = epstats.getTotalRequests().longValue();
                 bean.lastActivityTs = epstats.getLastActivity().longValue();
             }
             BackendHealthStatus bhs = backendsSnapshot.get(hostPort);
             if (bhs != null) {
-                bean.isAvailable = bhs.isAvailable();
+                bean.available = bhs.isAvailable();
                 bean.reportedAsUnreachable = bhs.isReportedAsUnreachable();
                 bean.reportedAsUnreachableTs = bhs.getReportedAsUnreachableTs();
                 BackendHealthCheck lastProbe = bhs.getLastProbe();
@@ -159,7 +102,7 @@ public class BackendsResource {
                 }
             }
             res.put(id, bean);
-        }
+        });
 
         return res;
     }

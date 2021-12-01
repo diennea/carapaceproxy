@@ -19,11 +19,9 @@
  */
 package org.carapaceproxy.server.filters;
 
-import io.netty.handler.codec.http.HttpRequest;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.carapaceproxy.server.ClientConnectionHandler;
-import org.carapaceproxy.server.RequestHandler;
+import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 
 /**
@@ -53,11 +51,11 @@ public class RegexpMapSessionIdFilter extends BasicRequestFilter {
     }
 
     @Override
-    public void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler) {
-        if (!checkRequestMatching(requestHandler)) {
+    public void apply(ProxyRequest request) {
+        if (!checkRequestMatching(request)) {
             return;
         }
-        UrlEncodedQueryString queryString = requestHandler.getQueryString();
+        UrlEncodedQueryString queryString = request.getQueryString();
         String value = queryString.get(parameterName);
         if (value == null) {
             return;
@@ -70,6 +68,6 @@ public class RegexpMapSessionIdFilter extends BasicRequestFilter {
             return;
         }
         String group = _matcher.group(1);
-        requestHandler.setSessionId(group);
+        request.setSessionId(group);
     }
 }

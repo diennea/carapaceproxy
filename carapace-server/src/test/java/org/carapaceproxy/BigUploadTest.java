@@ -1,5 +1,3 @@
-package org.carapaceproxy;
-
 /*
  Licensed to Diennea S.r.l. under one
  or more contributor license agreements. See the NOTICE file
@@ -19,6 +17,8 @@ package org.carapaceproxy;
  under the License.
 
  */
+package org.carapaceproxy;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -34,22 +34,17 @@ import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.commons.io.IOUtils;
-import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
-import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 /**
- * The clients sends a big upload, and the server is very slow at draining the
- * contents
+ * The clients sends a big upload, and the server is very slow at draining the contents
  *
  * @author enrico.olivelli
  */
@@ -170,8 +165,8 @@ public class BigUploadTest {
     @Test
     public void testConnectionResetByPeerDuringWriteToEndpoint() throws Exception {
 
-        try (SimpleBlockingTcpServer mockServer
-                = new SimpleBlockingTcpServer(ConnectionResetByPeerHandler::new)) {
+        try (SimpleBlockingTcpServer mockServer =
+                new SimpleBlockingTcpServer(ConnectionResetByPeerHandler::new)) {
 
             mockServer.start();
 
@@ -180,7 +175,6 @@ public class BigUploadTest {
 
             int size = 20_000_000;
 
-            ConnectionsManagerStats stats;
             try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.start();
                 int port = server.getLocalPort();
@@ -194,40 +188,23 @@ public class BigUploadTest {
                         o.write(contents);
                     }
                 }
-                try (InputStream in = con.getInputStream()) {
-                    IOUtils.toString(in, StandardCharsets.US_ASCII);
-                    fail();
-                } catch (IOException err) {
-                    // this message is JDK specific
-                    assertEquals("Error writing to server", err.getMessage());
-                }
+                assertThrows(IOException.class, () -> {
+                    try (InputStream in = con.getInputStream()) {
+                        IOUtils.toString(in, StandardCharsets.US_ASCII);
+                    } catch (IOException ex) {
+                        throw ex;
+                    }
+                });
                 con.disconnect();
-
-                stats = server.getConnectionsManager().getStats();
-                assertNotNull(stats.getEndpoints().get(key));
             }
-
-            // verify server is clean, no pending clients and backend connections
-            TestUtils.waitForCondition(
-                    () -> {
-                        EndpointStats epstats = stats.getEndpointStats(key);
-                        System.out.println("stats:" + epstats);
-                        return epstats.getTotalConnections().intValue() > 0
-                        && epstats.getActiveConnections().intValue() == 0
-                        && epstats.getOpenConnections().intValue() == 0;
-                    },
-                    100);
-
-            TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
         }
-
     }
 
     @Test
     public void testBlockingServerWorks() throws Exception {
 
-        try (SimpleBlockingTcpServer mockServer
-                = new SimpleBlockingTcpServer(() -> {
+        try (SimpleBlockingTcpServer mockServer =
+                new SimpleBlockingTcpServer(() -> {
                     return new StaticResponseHandler("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nit works!\r\n".getBytes(StandardCharsets.US_ASCII));
                 })) {
 
@@ -236,7 +213,6 @@ public class BigUploadTest {
             TestEndpointMapper mapper = new TestEndpointMapper("localhost", mockServer.getPort());
             EndpointKey key = new EndpointKey("localhost", mockServer.getPort());
 
-            ConnectionsManagerStats stats;
             try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.start();
                 int port = server.getLocalPort();
@@ -249,24 +225,8 @@ public class BigUploadTest {
                     assertTrue(res.contains("it works!"));
                 }
                 con.disconnect();
-
-                stats = server.getConnectionsManager().getStats();
-                assertNotNull(stats.getEndpoints().get(key));
             }
-
-            // verify server is clean, no pending clients and backend connections
-            TestUtils.waitForCondition(
-                    () -> {
-                        EndpointStats epstats = stats.getEndpointStats(key);
-                        return epstats.getTotalConnections().intValue() > 0
-                        && epstats.getActiveConnections().intValue() == 0
-                        && epstats.getOpenConnections().intValue() == 0;
-                    },
-                    100);
-
-            TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
         }
-
     }
 
 }

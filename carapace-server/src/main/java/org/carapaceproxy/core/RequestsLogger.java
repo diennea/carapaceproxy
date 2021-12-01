@@ -17,7 +17,7 @@
  under the License.
 
  */
-package org.carapaceproxy.server;
+package org.carapaceproxy.core;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.netty.handler.codec.http.HttpHeaderNames;
@@ -136,65 +136,65 @@ public class RequestsLogger implements Runnable, Closeable {
             os = null;
         }
     }
-    
+
     @VisibleForTesting
     void rotateAccessLogFile() throws IOException {
-        String accesslogPath =  this.currentConfiguration.getAccessLogPath();
+        String accesslogPath = this.currentConfiguration.getAccessLogPath();
         long maxSize = this.currentConfiguration.getAccessLogMaxSize();
         DateFormat date = new SimpleDateFormat("yyyy-MM-dd-ss");
-        String newAccessLogName = accesslogPath + "-" +date.format(new Date());
-        
+        String newAccessLogName = accesslogPath + "-" + date.format(new Date());
+
         Path currentAccessLogPath = Paths.get(accesslogPath);
         Path newAccessLogPath = Paths.get(newAccessLogName);
         FileChannel logFileChannel = FileChannel.open(currentAccessLogPath);
 
         try {
             long currentSize = logFileChannel.size();
-            if(currentSize >= maxSize && maxSize > 0){
-                LOG.log(Level.INFO,"Maximum access log size reached. file: {0} , Size: {1} , maxSize: {2}" , new Object[]{accesslogPath,currentSize,maxSize});
+            if (currentSize >= maxSize && maxSize > 0) {
+                LOG.log(Level.INFO, "Maximum access log size reached. file: {0} , Size: {1} , maxSize: {2}", new Object[]{accesslogPath, currentSize, maxSize});
                 Files.move(currentAccessLogPath, newAccessLogPath, StandardCopyOption.ATOMIC_MOVE);
                 closeAccessLogFile();
                 // File opening will be retried at next cycle start
 
                 //Zip old file
-                gzipFile(newAccessLogName, newAccessLogName+".gzip", true);
+                gzipFile(newAccessLogName, newAccessLogName + ".gzip", true);
             }
         } catch (IOException e) {
-            LOG.log(Level.SEVERE , "Error: Unable to rename file {0} in {1}: " + e , new Object[]{accesslogPath, newAccessLogName});
+            LOG.log(Level.SEVERE, "Error: Unable to rename file {0} in {1}: " + e, new Object[]{accesslogPath, newAccessLogName});
         }
     }
-    
+
     private void gzipFile(String source_filepath, String destination_zip_filepath, boolean deleteSource) {
         byte[] buffer = new byte[1024];
         File source = new File(source_filepath);
         File dest = new File(destination_zip_filepath);
-        
+
         try {
             FileOutputStream fileOutputStream = new FileOutputStream(dest);
             try (GZIPOutputStream gzipOutputStream = new GZIPOutputStream(fileOutputStream)) {
                 try (FileInputStream fileInput = new FileInputStream(source)) {
                     int bytes_read;
-                    
+
                     while ((bytes_read = fileInput.read(buffer)) > 0) {
-                        gzipOutputStream.write(buffer,0, bytes_read);
+                        gzipOutputStream.write(buffer, 0, bytes_read);
                     }
                 }
                 gzipOutputStream.finish();
                 gzipOutputStream.close();
-                
+
                 //delete uncompressed file
-                if(deleteSource && dest.exists()){
+                if (deleteSource && dest.exists()) {
                     source.delete();
                 }
             }
-            if(verbose){
-               LOG.log(Level.INFO, "{0} was compressed successfully", source_filepath);
+            if (verbose) {
+                LOG.log(Level.INFO, "{0} was compressed successfully", source_filepath);
             }
         } catch (IOException ex) {
             LOG.log(Level.SEVERE, "{0} Compression failed:  {1}", new Object[]{source_filepath, ex});
         }
     }
-    
+
     public void reloadConfiguration(RuntimeServerConfiguration newConfiguration) {
         this.newConfiguration = newConfiguration;
     }
@@ -219,9 +219,8 @@ public class RequestsLogger implements Runnable, Closeable {
         newConfiguration = null;
     }
 
-    public void logRequest(RequestHandler request) {
-        Entry entry = new Entry(
-            request, currentConfiguration.getAccessLogFormat(), currentConfiguration.getAccessLogTimestampFormat());
+    public void logRequest(ProxyRequest request) {
+        Entry entry = new Entry(request, currentConfiguration.getAccessLogFormat(), currentConfiguration.getAccessLogTimestampFormat());
 
         if (closeRequested) {
             LOG.log(Level.SEVERE, "Request {0} not logged to access log because RequestsLogger is closed", entry.render());
@@ -292,9 +291,9 @@ public class RequestsLogger implements Runnable, Closeable {
                     continue;
                 }
 
-                long waitTime = !closeRequested ?
-                    currentConfiguration.getAccessLogFlushInterval() - (System.currentTimeMillis() - lastFlush) :
-                    0L;
+                long waitTime = !closeRequested
+                        ? currentConfiguration.getAccessLogFlushInterval() - (System.currentTimeMillis() - lastFlush)
+                        : 0L;
                 waitTime = Math.max(waitTime, 0L);
 
                 if (currentEntry == null) {
@@ -317,7 +316,7 @@ public class RequestsLogger implements Runnable, Closeable {
                 if (System.currentTimeMillis() - lastFlush >= currentConfiguration.getAccessLogFlushInterval()) {
                     flushAccessLogFile();
                 }
-                //Check if is time to rotate 
+                //Check if is time to rotate
                 rotateAccessLogFile();
 
             } catch (InterruptedException ex) {
@@ -354,31 +353,22 @@ public class RequestsLogger implements Runnable, Closeable {
         }
     }
 
-    /* ---------------------------------------------------------------------------------------------------- */
-
     /*
-        Entry handled fields:
-            <client_ip>: client ip address
-            <server_ip>: local httpproxy listener
-            <method>: http method
-            <host>: host header of the http request
-            <uri>: uri requested in the http request
-            <timestamp>: when httpproxy started to serving the request
-            <backend_time>: milliseconds from request start to the first byte received from the backend
-            <total_time>: milliseconds from request start to the last byte sended to client (tcp delays are not counted)
-            <action_id>: action id (PROXY, CACHE, ...)
-            <route_id>: id of the route used for selecting action and backend
-            <backend_id>: id (host+port) of the backend to which the request was forwarded
-            <user_id>: user id inferred by filters
-            <session_id>: session id inferred by filters
-            <tls_protocol>: tls protocol used
-            <tls_cipher_suite>: cipher suite used
-    */
+     * ----------------------------------------------------------------------------------------------------
+     */
+
+ /*
+     * Entry handled fields: <client_ip>: client ip address <server_ip>: local httpproxy listener <method>: http method <host>: host header of the http request <uri>: uri requested in the http request
+     * <timestamp>: when httpproxy started to serving the request <backend_time>: milliseconds from request start to the first byte received from the backend <total_time>: milliseconds from request
+     * start to the last byte sended to client (tcp delays are not counted) <action_id>: action id (PROXY, CACHE, ...) <route_id>: id of the route used for selecting action and backend <backend_id>:
+     * id (host+port) of the backend to which the request was forwarded <user_id>: user id inferred by filters <session_id>: session id inferred by filters <tls_protocol>: tls protocol used
+     * <tls_cipher_suite>: cipher suite used
+     */
     static final class Entry {
 
         private final ST format;
 
-        public Entry(RequestHandler request, String format, String timestampFormat) {
+        public Entry(ProxyRequest request, String format, String timestampFormat) {
             SimpleDateFormat tsFormatter = new SimpleDateFormat(timestampFormat);
 
             this.format = new ST(format);
@@ -386,12 +376,12 @@ public class RequestsLogger implements Runnable, Closeable {
             this.format.add("client_ip", request.getRemoteAddress().getAddress().getHostAddress());
             this.format.add("server_ip", request.getLocalAddress().getAddress().getHostAddress());
             this.format.add("method", request.getRequest().method().name());
-            this.format.add("host", request.getRequest().headers().getAsString(HttpHeaderNames.HOST));
+            this.format.add("host", request.getRequest().requestHeaders().getAsString(HttpHeaderNames.HOST));
             this.format.add("uri", request.getUri());
             this.format.add("timestamp", tsFormatter.format(new Timestamp(request.getStartTs())));
             this.format.add("total_time", request.getLastActivity() - request.getStartTs());
             this.format.add("action_id", request.getAction().action);
-            this.format.add("route_id", request.getAction().routeid);
+            this.format.add("route_id", request.getAction().routeId);
             this.format.add("user_id", request.getUserId());
             this.format.add("session_id", request.getSessionId());
             if (!request.isServedFromCache()) {
@@ -404,20 +394,11 @@ public class RequestsLogger implements Runnable, Closeable {
             formatSSLProperties(request);
         }
 
-        private void formatSSLProperties(RequestHandler request) {
-            String sslProtocol = "n/a";
-            String cipherSuite = "n/a";
-            ClientConnectionHandler handler = request.getClientConnectionHandler();
-            if (handler != null && handler.isSecure()) {
-                if (handler.getSslProtocol() != null) {
-                    sslProtocol = handler.getSslProtocol();
-                }
-                if (handler.getCipherSuite() != null) {
-                    cipherSuite = handler.getCipherSuite();
-                }
-            }
-            this.format.add("tls_protocol", sslProtocol);
-            this.format.add("tls_cipher_suite", cipherSuite);
+        private void formatSSLProperties(ProxyRequest request) {
+            String sslProtocol = request.getSslProtocol();
+            String cipherSuite = request.getCipherSuite();
+            this.format.add("tls_protocol", sslProtocol != null ? sslProtocol : "n/a");
+            this.format.add("tls_cipher_suite", cipherSuite != null ? cipherSuite : "n/a");
         }
 
         @VisibleForTesting

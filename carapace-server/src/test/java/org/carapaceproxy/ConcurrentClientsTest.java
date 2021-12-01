@@ -1,5 +1,3 @@
-package org.carapaceproxy;
-
 /*
  Licensed to Diennea S.r.l. under one
  or more contributor license agreements. See the NOTICE file
@@ -19,6 +17,8 @@ package org.carapaceproxy;
  under the License.
 
  */
+package org.carapaceproxy;
+
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
@@ -30,15 +30,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.logging.Logger;
 import org.apache.commons.io.IOUtils;
-import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
-import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import org.junit.Rule;
@@ -71,7 +67,6 @@ public class ConcurrentClientsTest {
 
         int size = 100;
         int concurrentClients = 4;
-        ConnectionsManagerStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -85,7 +80,6 @@ public class ConcurrentClientsTest {
                     public void run() {
                         try {
                             String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8");
-//                            System.out.println("s:" + s);
                             assertEquals("it <b>works</b> !!", s);
                         } catch (Throwable t) {
                             t.printStackTrace();
@@ -102,22 +96,7 @@ public class ConcurrentClientsTest {
             if (oneError.get() != null) {
                 fail("error! " + oneError.get());
             }
-
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
         }
-
-        TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            LOG.info("stats: " + epstats.getKey() + " " + (System.currentTimeMillis() - epstats.getLastActivity().longValue()) + " ms");
-            return epstats.getTotalConnections().intValue() > 0
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
-        }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
-    private static final Logger LOG = Logger.getLogger(ConcurrentClientsTest.class.getName());
 
 }

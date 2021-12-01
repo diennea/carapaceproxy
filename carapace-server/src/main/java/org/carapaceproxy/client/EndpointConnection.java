@@ -22,7 +22,7 @@ package org.carapaceproxy.client;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
-import org.carapaceproxy.server.RequestHandler;
+import org.carapaceproxy.core.ProxyRequestsManager;
 
 /**
  * A Connection to a specific endpoint. Connections are pooled and so they have
@@ -37,21 +37,21 @@ public interface EndpointConnection {
     /**
      * Start a request and bind the connection to the RequestHandler.
      */
-    public void sendRequest(HttpRequest request, RequestHandler handler);
+    public void sendRequest(HttpRequest request, ProxyRequestsManager handler);
 
     /**
      * Send other chunks (chunked payload from the client).
      * @param httpContent
      * @param handler
      */
-    public void sendChunk(HttpContent httpContent, RequestHandler handler);
+    public void sendChunk(HttpContent httpContent, ProxyRequestsManager handler);
 
     /**
      * Client finished its request.
      * @param msg
      * @param handler
      */
-    public void sendLastHttpContent(LastHttpContent msg, RequestHandler handler);
+    public void sendLastHttpContent(LastHttpContent msg, ProxyRequestsManager handler);
 
     /**
      * Connection is no more useful for the RequestHandler.
@@ -59,6 +59,6 @@ public interface EndpointConnection {
      * @param handler
      * @param onReleasePerformed
      */
-    public void release(boolean forceClose, RequestHandler handler, Runnable onReleasePerformed);
+    public void release(boolean forceClose, ProxyRequestsManager handler, Runnable onReleasePerformed);
 
 }

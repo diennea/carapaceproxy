@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.carapaceproxy.server.cache.ContentsCache.ContentKey;
-import org.carapaceproxy.server.cache.ContentsCache.ContentPayload;
+import org.carapaceproxy.server.cache.ContentsCache.CachedContent;
 
 /**
  *
@@ -43,7 +43,7 @@ class CaffeineCacheImpl implements CacheImpl {
 
     private static final int INITIAL_CACHE_SIZE_CAPACITY = 2000;
     
-    private final Cache<ContentKey, ContentPayload> cache;
+    private final Cache<ContentKey, CachedContent> cache;
     private final CacheStats stats;
     private Logger logger;
     
@@ -57,31 +57,30 @@ class CaffeineCacheImpl implements CacheImpl {
         this.stats = stats;
         this.logger = logger;
         
-        this.cache = Caffeine.<ContentKey, ContentPayload>newBuilder()
+        this.cache = Caffeine.<ContentKey, CachedContent>newBuilder()
             .initialCapacity((int) INITIAL_CACHE_SIZE_CAPACITY)
             .maximumWeight(cacheMaxSize > 0 ? cacheMaxSize : Long.MAX_VALUE)
-            .expireAfter(new Expiry<ContentKey, ContentPayload>() {
+            .expireAfter(new Expiry<ContentKey, CachedContent>() {
                 @Override
-                public long expireAfterCreate(ContentKey key, ContentPayload payload, long currentTime) {
+                public long expireAfterCreate(ContentKey key, CachedContent payload, long currentTime) {
                     // WARNING: provided current time is completely misleading, as stated in the doc. 
                     // System.currentTimeMillis() should be used instead.
                     return (payload.expiresTs - System.currentTimeMillis()) * 1_000_000; // In nanos
                 }
                 @Override
-                public long expireAfterUpdate(ContentKey key, ContentPayload payload, long currentTime, long currentDuration) {
+                public long expireAfterUpdate(ContentKey key, CachedContent payload, long currentTime, long currentDuration) {
                     return currentDuration;
                 }
                 @Override
-                public long expireAfterRead(ContentKey key, ContentPayload payload, long currentTime, long currentDuration) {
+                public long expireAfterRead(ContentKey key, CachedContent payload, long currentTime, long currentDuration) {
                     return currentDuration;
                 }
             })
-            .weigher(
-                (ContentKey key, ContentPayload payload) -> {
+            .weigher((ContentKey key, CachedContent payload) -> {
                     return (int) (key.getMemUsage() + payload.getMemUsage());
                 }
             )
-            .removalListener((ContentKey key, ContentPayload payload, RemovalCause cause) -> {
+            .removalListener((ContentKey key, CachedContent payload, RemovalCause cause) -> {
                 switch (cause) {
                     case COLLECTED:
                         throw new IllegalStateException("cant be collected");
@@ -134,7 +133,7 @@ class CaffeineCacheImpl implements CacheImpl {
     }
 
     @Override
-    public void put(ContentKey key, ContentPayload payload) {
+    public void put(ContentKey key, CachedContent payload) {
         cache.put(key, payload);
         
         stats.cached(payload.heapSize, payload.directSize, key.getMemUsage() + payload.getMemUsage());
@@ -145,8 +144,8 @@ class CaffeineCacheImpl implements CacheImpl {
     }
 
     @Override
-    public ContentPayload get(ContentKey key) {
-        ContentPayload cached = cache.getIfPresent(key);
+    public CachedContent get(ContentKey key) {
+        CachedContent cached = cache.getIfPresent(key);
         if (cached != null && cached.expiresTs < System.currentTimeMillis()) {
             logger.log(Level.FINE, "expiring content {0}, expired at {1}", new Object[]{key.uri, new java.util.Date(cached.expiresTs)});
             cache.invalidate(key);
@@ -159,7 +158,7 @@ class CaffeineCacheImpl implements CacheImpl {
         return cached;
     }
 
-    private void release(ContentKey key, ContentPayload payload) {
+    private void release(ContentKey key, CachedContent payload) {
         stats.released(payload.heapSize, payload.directSize, key.getMemUsage() + payload.getMemUsage());
         entries.addAndGet(-1);
         memSize.addAndGet(-(key.getMemUsage() + payload.getMemUsage()));

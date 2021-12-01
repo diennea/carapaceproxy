@@ -19,10 +19,8 @@
  */
 package org.carapaceproxy.server.filters;
 
-import io.netty.handler.codec.http.HttpRequest;
 import java.net.InetSocketAddress;
-import org.carapaceproxy.server.ClientConnectionHandler;
-import org.carapaceproxy.server.RequestHandler;
+import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 
 /**
@@ -37,15 +35,13 @@ public class XForwardedForRequestFilter extends BasicRequestFilter {
     }
 
     @Override
-    public void apply(HttpRequest request, ClientConnectionHandler client, RequestHandler requestHandler) {
-        if (!checkRequestMatching(requestHandler)) {
+    public void apply(ProxyRequest request) {
+        if (!checkRequestMatching(request)) {
             return;
         }
-        request.headers().remove("X-Forwarded-For");
-        if (client.getClientAddress() instanceof InetSocketAddress) {
-            InetSocketAddress address = (InetSocketAddress) client.getClientAddress();
-            request.headers().add("X-Forwarded-For", address.getAddress().getHostAddress());
-        }
+        request.getRequestHeaders().remove("X-Forwarded-For");
+        InetSocketAddress address = request.getRemoteAddress();
+        request.getRequestHeaders().add("X-Forwarded-For", address.getAddress().getHostAddress());
     }
 
 }

@@ -23,20 +23,18 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.carapaceproxy.core.ProxyRequest.PROPERTY_URI;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.net.URL;
 import java.util.Properties;
 import org.apache.commons.io.IOUtils;
-import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
-import org.carapaceproxy.server.HttpProxyServer;
-import static org.carapaceproxy.server.RequestHandler.PROPERTY_URI;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
-import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertEquals;
 import org.junit.Rule;
 import org.junit.Test;
@@ -86,18 +84,14 @@ public class ForceBackendTest {
 
         mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index.html.*")));
 
-        ConnectionsManagerStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
-            stats = server.getConnectionsManager().getStats();
-
             {
                 // proxy on director 2
                 String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html?thedirector=director-2").toURI(), "utf-8");
                 assertEquals("it <b>works</b> !!", s);
             }
-
             {
                 // proxy on backend 2
                 String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html?thebackend=backend-b").toURI(), "utf-8");
@@ -105,7 +99,5 @@ public class ForceBackendTest {
             }
 
         }
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 }

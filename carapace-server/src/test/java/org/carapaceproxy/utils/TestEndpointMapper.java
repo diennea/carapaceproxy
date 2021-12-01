@@ -1,5 +1,3 @@
-package org.carapaceproxy.utils;
-
 /*
  Licensed to Diennea S.r.l. under one
  or more contributor license agreements. See the NOTICE file
@@ -19,17 +17,19 @@ package org.carapaceproxy.utils;
  under the License.
 
  */
-import io.netty.handler.codec.http.HttpRequest;
+package org.carapaceproxy.utils;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import org.carapaceproxy.EndpointMapper;
-import org.carapaceproxy.MapResult;
-import org.carapaceproxy.server.RequestHandler;
-import org.carapaceproxy.server.backends.BackendHealthManager;
+import org.carapaceproxy.configstore.ConfigurationStore;
+import org.carapaceproxy.core.ProxyRequest;
+import org.carapaceproxy.server.mapper.EndpointMapper;
+import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.mapper.CustomHeader;
@@ -61,16 +61,29 @@ public class TestEndpointMapper extends EndpointMapper {
     }
 
     @Override
-    public MapResult map(HttpRequest request, String userId, String sessionId, BackendHealthManager backendHealthManager, RequestHandler requestHandler) {
-        String uri = request.uri();
+    public MapResult map(ProxyRequest request) {
+        String uri = request.getUri();
         if (uri.contains("not-found")) {
-            return MapResult.NOT_FOUND(MapResult.NO_ROUTE);
+            return MapResult.notFound(MapResult.NO_ROUTE);
         } else if (uri.contains("debug")) {
-            return new MapResult(null, 0, MapResult.Action.SYSTEM, MapResult.NO_ROUTE);
+            return MapResult.builder()
+                    .action(MapResult.Action.SYSTEM)
+                    .routeId(MapResult.NO_ROUTE)
+                    .build();
         } else if (cacheAll) {
-            return new MapResult(host, port, MapResult.Action.CACHE, MapResult.NO_ROUTE);
+            return MapResult.builder()
+                    .host(host)
+                    .port(port)
+                    .action(MapResult.Action.CACHE)
+                    .routeId(MapResult.NO_ROUTE)
+                    .build();
         } else {
-            return new MapResult(host, port, MapResult.Action.PROXY, MapResult.NO_ROUTE);
+            return MapResult.builder()
+                    .host(host)
+                    .port(port)
+                    .action(MapResult.Action.PROXY)
+                    .routeId(MapResult.NO_ROUTE)
+                    .build();
         }
     }
 
@@ -94,9 +107,14 @@ public class TestEndpointMapper extends EndpointMapper {
         return directors;
     }
 
+    @Override
     public List<CustomHeader> getHeaders() {
         return headers;
     }
 
+    @Override
+    public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
+
+    }
 
 }

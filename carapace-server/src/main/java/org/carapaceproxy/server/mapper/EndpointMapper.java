@@ -17,23 +17,20 @@
  under the License.
 
  */
-package org.carapaceproxy;
+package org.carapaceproxy.server.mapper;
 
-import io.netty.handler.codec.http.HttpRequest;
 import java.util.List;
 import java.util.Map;
-import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.configstore.ConfigurationStore;
-import org.carapaceproxy.server.RequestHandler;
-import org.carapaceproxy.server.StaticContentsManager;
-import org.carapaceproxy.server.backends.BackendHealthManager;
-import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
+import org.carapaceproxy.core.HttpProxyServer;
+import org.carapaceproxy.core.ProxyRequest;
+import org.carapaceproxy.core.StaticContentsManager;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
-import org.carapaceproxy.server.mapper.CustomHeader;
 
 /**
  * Maps requests to a remote HTTP server
@@ -41,6 +38,12 @@ import org.carapaceproxy.server.mapper.CustomHeader;
  * @author enrico.olivelli
  */
 public abstract class EndpointMapper {
+
+    HttpProxyServer parent;
+
+    public void setParent(HttpProxyServer parent) {
+        this.parent = parent;
+    }
 
     public abstract Map<String, BackendConfiguration> getBackends();
 
@@ -52,7 +55,7 @@ public abstract class EndpointMapper {
 
     public abstract List<CustomHeader> getHeaders();
 
-    public abstract MapResult map(HttpRequest request, String userId, String sessionId, BackendHealthManager backendHealthManager, RequestHandler requestHandler);
+    public abstract MapResult map(ProxyRequest request);
 
     public SimpleHTTPResponse mapPageNotFound(String routeid) {
         return SimpleHTTPResponse.NOT_FOUND(StaticContentsManager.DEFAULT_NOT_FOUND);
@@ -62,13 +65,6 @@ public abstract class EndpointMapper {
         return SimpleHTTPResponse.INTERNAL_ERROR(StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR);
     }
 
-    public void endpointFailed(EndpointKey key, Throwable error) {
-    }
-
-    public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
-    }
-
-    public void setDynamicCertificateManager(DynamicCertificatesManager manager) {
-    }
+    public abstract void configure(ConfigurationStore properties) throws ConfigurationNotValidException;
 
 }

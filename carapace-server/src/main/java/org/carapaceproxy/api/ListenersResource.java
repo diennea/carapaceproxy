@@ -19,17 +19,15 @@
  */
 package org.carapaceproxy.api;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 import javax.servlet.ServletContext;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import lombok.Data;
 import org.carapaceproxy.client.EndpointKey;
-import org.carapaceproxy.server.ClientConnectionHandler;
-import org.carapaceproxy.server.HttpProxyServer;
-import org.carapaceproxy.server.Listeners;
-import org.carapaceproxy.server.RuntimeServerConfiguration;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 
 /**
@@ -44,6 +42,7 @@ public class ListenersResource {
     @javax.ws.rs.core.Context
     ServletContext context;
 
+    @Data
     public static final class ListenerBean {
 
         private final String host;
@@ -55,80 +54,27 @@ public class ListenersResource {
         private final String defaultCertificate;
         private final int totalRequests;
 
-        public ListenerBean(String host, int port, boolean ssl, boolean ocps, String sslCiphers, String[] sslProtocols, String defaultCertificate, int totalRequests) {
-            this.host = host;
-            this.port = port;
-            this.ssl = ssl;
-            this.ocsp = ocps;
-            this.sslCiphers = sslCiphers;
-            this.sslProtocols = sslProtocols;
-            this.defaultCertificate = defaultCertificate;
-            this.totalRequests = totalRequests;
-        }
-
-        public String getHost() {
-            return host;
-        }
-
-        public int getPort() {
-            return port;
-        }
-
-        public boolean isSsl() {
-            return ssl;
-        }
-
-        public boolean isOcsp() {
-            return ocsp;
-        }
-
-        public String getSslCiphers() {
-            return sslCiphers;
-        }
-
-        public String[] getSslProtocols() {
-            return sslProtocols;
-        }
-
-        public String getDefaultCertificate() {
-            return defaultCertificate;
-        }
-
-        public int getTotalRequests() {
-            return totalRequests;
-        }
-
     }
 
     @GET
     public Map<String, ListenerBean> getAllListeners() {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-        RuntimeServerConfiguration conf = server.getCurrentConfiguration();
 
-        Listeners listeners = server.getListeners();
-        Map<String, ListenerBean> res = new HashMap<>();
-        for (NetworkListenerConfiguration listener : conf.getListeners()) {
-            int port = listener.getPort() + server.getListenersOffsetPort();
-            ClientConnectionHandler handler = listeners.getListenerHandler(listener.getKey());
-            int totalRequests = handler == null
-                    ? 0
-                    : handler.getTotalRequestsCount();
-
-            ListenerBean lisBean = new ListenerBean(
-                    listener.getHost(),
+        return server.getListeners().getListeningChannels().entrySet().stream().map(listener -> {
+            NetworkListenerConfiguration config = listener.getValue().getConfig();
+            int port = listener.getKey().getPort();
+            ListenerBean bean = new ListenerBean(
+                    config.getHost(),
                     port,
-                    listener.isSsl(),
-                    listener.isOcsp(),
-                    listener.getSslCiphers(),
-                    listener.getSslProtocols(),
-                    listener.getDefaultCertificate(),
-                    totalRequests
+                    config.isSsl(),
+                    config.isOcsp(),
+                    config.getSslCiphers(),
+                    config.getSslProtocols(),
+                    config.getDefaultCertificate(),
+                    (int) listener.getValue().getTotalRequests().get()
             );
-            EndpointKey key = EndpointKey.make(listener.getHost(), listener.getPort());
-            res.put(key.getHostPort(), lisBean);
-        }
-
-        return res;
+            return Map.entry(EndpointKey.make(config.getHost(), port).getHostPort(), bean);
+        }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
 }

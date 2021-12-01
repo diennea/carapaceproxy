@@ -22,11 +22,15 @@ package org.carapaceproxy.server.config;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import lombok.AccessLevel;
+import lombok.Data;
+import lombok.Setter;
 import org.carapaceproxy.server.mapper.CustomHeader;
 
 /**
  * Action
  */
+@Data
 public class ActionConfiguration {
 
     public static final String TYPE_PROXY = "proxy";
@@ -39,7 +43,8 @@ public class ActionConfiguration {
     private final String type;
     private final String director;
     private final String file;
-    private final int errorcode;
+    private final int errorCode;
+    @Setter(value = AccessLevel.NONE)
     private List<CustomHeader> customHeaders = Collections.emptyList(); // it's a list to keep ordering
     private String redirectLocation;
     private String redirectProto;
@@ -47,92 +52,17 @@ public class ActionConfiguration {
     private int redirectPort;
     private String redirectPath;
 
-
     public ActionConfiguration(String id, String type, String director, String file, int errorcode) {
         this.id = id;
         this.type = type;
         this.director = director;
         this.file = file;
-        this.errorcode = errorcode;
-    }
-
-    public String getDirector() {
-        return director;
-    }
-
-    public int getErrorcode() {
-        return errorcode;
-    }
-
-    public String getFile() {
-        return file;
-    }
-
-    public String getId() {
-        return id;
-    }
-
-    public String getType() {
-        return type;
+        this.errorCode = errorcode;
     }
 
     public ActionConfiguration setCustomHeaders(List<CustomHeader> customHeaders) {
         this.customHeaders = Collections.unmodifiableList(customHeaders == null ? new ArrayList() : customHeaders);
         return this;
-    }
-
-    public List<CustomHeader> getCustomHeaders() {
-        return customHeaders;
-    }
-
-    public ActionConfiguration setRedirectLocation(String redirectLocation) {
-        this.redirectLocation = redirectLocation;
-        return this;
-    }
-
-    public String getRedirectLocation() {
-        return redirectLocation;
-    }
-
-    public ActionConfiguration setRedirectProto(String redirectProto) {
-        this.redirectProto = redirectProto;
-        return this;
-    }
-
-    public String getRedirectProto() {
-        return redirectProto;
-    }
-
-    public ActionConfiguration setRedirectHost(String redirectHost) {
-        this.redirectHost = redirectHost;
-        return this;
-    }
-
-    public String getRedirectHost() {
-        return redirectHost;
-    }
-
-    public ActionConfiguration setRedirectPort(int redirectPort) {
-        this.redirectPort = redirectPort;
-        return this;
-    }
-
-    public int getRedirectPort() {
-        return redirectPort;
-    }
-
-    public ActionConfiguration setRedirectPath(String redirectPath) {
-        this.redirectPath = redirectPath;
-        return this;
-    }
-
-    public String getRedirectPath() {
-        return redirectPath;
-    }
-
-    @Override
-    public String toString() {
-        return "ActionConfiguration{" + "id=" + id + ", type=" + type + ", director=" + director + ", file=" + file + ", errorcode=" + errorcode + ", customHeaders=" + customHeaders + ", redirectLocation=" + redirectLocation + ", redirectProto=" + redirectProto + ", redirectHost=" + redirectHost + ", redirectPort=" + redirectPort + ", redirectPath=" + redirectPath + '}';
     }
 
 }

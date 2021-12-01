@@ -23,24 +23,22 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.net.URL;
 import java.util.Collections;
 import org.apache.commons.io.IOUtils;
-import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
-import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
-import org.carapaceproxy.server.config.SSLCertificateConfiguration;
-import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 import static org.junit.Assert.assertEquals;
-import org.carapaceproxy.utils.HttpUtils;
+import org.carapaceproxy.utils.HttpTestUtils;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
+import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -69,16 +67,9 @@ public class SimpleHTTPProxyTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        ConnectionsManagerStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
-
-            // debug
-            {
-                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html?debug").toURI(), "utf-8");
-                System.out.println("s:" + s);
-            }
 
             // not found
             try {
@@ -94,29 +85,16 @@ public class SimpleHTTPProxyTest {
                 System.out.println("s:" + s);
                 assertEquals("it <b>works</b> !!", s);
             }
-
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
         }
-
-        TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() == 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
-        }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 
     @Test
     public void testSsl() throws Exception {
 
-        HttpUtils.overideJvmWideHttpsVerifier();
+        HttpTestUtils.overideJvmWideHttpsVerifier();
 
         String certificate = TestUtils.deployResource("ia.p12", tmpDir.getRoot());
-        String cacertificate = TestUtils.deployResource("ca.p12", tmpDir.getRoot());
+        String caCertificate = TestUtils.deployResource("ca.p12", tmpDir.getRoot());
 
         stubFor(get(urlEqualTo("/index.html?redir"))
                 .willReturn(aResponse()
@@ -127,20 +105,11 @@ public class SimpleHTTPProxyTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        ConnectionsManagerStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
-
             server.addCertificate(new SSLCertificateConfiguration("localhost", certificate, "changeit", STATIC));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0, true, false, null, "localhost", cacertificate, "changeit"));
-
+            server.addListener(new NetworkListenerConfiguration("localhost", 0, true, false, null, "localhost", caCertificate, "changeit"));
             server.start();
             int port = server.getLocalPort();
-
-            // debug
-            {
-                String s = IOUtils.toString(new URL("https://localhost:" + port + "/index.html?debug").toURI(), "utf-8");
-                System.out.println("s:" + s);
-            }
 
             // not found
             try {
@@ -156,20 +125,7 @@ public class SimpleHTTPProxyTest {
                 System.out.println("s:" + s);
                 assertEquals("it <b>works</b> !!", s);
             }
-
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
         }
-
-        TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() == 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
-        }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 
     @Test
@@ -180,29 +136,13 @@ public class SimpleHTTPProxyTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", badPort);
         EndpointKey key = new EndpointKey("localhost", badPort);
 
-        ConnectionsManagerStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
 
-            HttpUtils.ResourceInfos result = HttpUtils.downloadFromUrl(new URL("http://localhost:" + port + "/index.html"),
+            HttpTestUtils.ResourceInfos result = HttpTestUtils.downloadFromUrl(new URL("http://localhost:" + port + "/index.html"),
                     new ByteArrayOutputStream(), Collections.singletonMap("return_errors", "true"));
             assertEquals(500, result.responseCode);
-//            String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8");
-//            System.out.println("s:" + s);
-
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
         }
-
-        TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() == 0
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
-        }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 }

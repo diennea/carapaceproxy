@@ -20,15 +20,15 @@ package org.carapaceproxy;
 
  */
 import java.io.File;
-import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.core.HttpProxyServer;
 import java.util.Properties;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;
 import org.carapaceproxy.server.filters.XForwardedForRequestFilter;
 import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import org.junit.Ignore;
 import org.junit.Rule;

@@ -1,3 +1,5 @@
+package org.carapaceproxy.utils;
+
 /*
  Licensed to Diennea S.r.l. under one
  or more contributor license agreements. See the NOTICE file
@@ -17,28 +19,21 @@
  under the License.
 
  */
-package org.carapaceproxy.server.filters;
-
-import org.carapaceproxy.core.ProxyRequest;
-import org.carapaceproxy.core.RequestFilter;
-import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import static java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME;
 
 /**
- *
- * Root class for all RequestFilters
+ * HTTP utilities
  *
  * @author paolo.venturi
  */
-public abstract class BasicRequestFilter implements RequestFilter {
+public class HttpUtils {
 
-    private final RequestMatcher matcher;
+    private static final ZoneId GMT = ZoneId.of("GMT");
 
-    public BasicRequestFilter(RequestMatcher matcher) {
-        this.matcher = matcher;
-    }
-
-    boolean checkRequestMatching(ProxyRequest request) {
-        return matcher.matches(request);
+    public static final String formatDateHeader(java.util.Date date) {
+        return RFC_1123_DATE_TIME.format(ZonedDateTime.ofInstant(date.toInstant(), GMT));
     }
 
 }

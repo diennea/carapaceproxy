@@ -17,7 +17,7 @@
  under the License.
 
  */
-package org.carapaceproxy.server;
+package org.carapaceproxy.core;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -30,6 +30,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
@@ -49,6 +50,10 @@ public class StaticContentsManager {
 
     private final ConcurrentHashMap<String, ByteBuf> contents = new ConcurrentHashMap<>();
 
+    public DefaultFullHttpResponse buildServiceNotAvailableResponse() {
+        return buildResponse(500, DEFAULT_INTERNAL_SERVER_ERROR);
+    }
+
     public DefaultFullHttpResponse buildResponse(int code, String resource) {
         if (code <= 0) {
             code = 500;
@@ -57,9 +62,9 @@ public class StaticContentsManager {
         ByteBuf content = resource == null ? null : contents.computeIfAbsent(resource, StaticContentsManager::loadResource);
         if (content != null) {
             content = content.retainedDuplicate();
-            int contentType = content.readableBytes();
+            int contentLength = content.readableBytes();
             res = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(code), content);
-            res.headers().set(HttpHeaderNames.CONTENT_LENGTH, contentType);
+            res.headers().set(HttpHeaderNames.CONTENT_LENGTH, contentLength);
         } else {
             res = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(404));
         }
@@ -91,7 +96,7 @@ public class StaticContentsManager {
                 throw new IOException("cannot load resource " + resource + ", path must start with " + FILE_RESOURCE + " or " + CLASSPATH_RESOURCE);
             }
         } catch (IOException | NullPointerException err) {
-            LOG.severe("Cannot load resource " + resource + ": " + err);
+            LOG.log(Level.SEVERE, "Cannot load resource {0}: {1}", new Object[]{resource, err});
             return null;
         }
     }

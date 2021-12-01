@@ -1,5 +1,3 @@
-package org.carapaceproxy.listeners;
-
 /*
  Licensed to Diennea S.r.l. under one
  or more contributor license agreements. See the NOTICE file
@@ -19,10 +17,12 @@ package org.carapaceproxy.listeners;
  under the License.
 
  */
+package org.carapaceproxy.listeners;
+
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.core.HttpProxyServer;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
@@ -31,8 +31,6 @@ import static org.carapaceproxy.server.config.SSLCertificateConfiguration.Certif
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.net.InetAddress;
 import java.security.cert.X509Certificate;
-import org.carapaceproxy.EndpointStats;
-import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
@@ -70,16 +68,13 @@ public class SSLSNITest {
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-
-        ConnectionsManagerStats stats;
+        
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
-
             server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
-
-            server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost /* default */, null, null));
-
+            server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost /*
+                     * default
+                     */, null, null));
             server.start();
-            stats = server.getConnectionsManager().getStats();
             int port = server.getLocalPort();
 
             try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
@@ -88,22 +83,11 @@ public class SSLSNITest {
                 X509Certificate cert = (X509Certificate) client.getSSLSocket().getSession().getPeerCertificates()[0];
                 System.out.println("acert2: " + cert.getSerialNumber());
             }
-
         }
-
-        TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() == 1
-                    && epstats.getActiveConnections().intValue() == 0
-                    && epstats.getOpenConnections().intValue() == 0;
-        }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 
     @Test
-    public void testchooseCertificate() throws Exception {
+    public void testChooseCertificate() throws Exception {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
@@ -178,7 +162,7 @@ public class SSLSNITest {
         }
 
         // default ssl protocol version support checking
-        for (String proto: DEFAULT_SSL_PROTOCOLS) {
+        for (String proto : DEFAULT_SSL_PROTOCOLS) {
             try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
                 server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
                 server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, false, null, nonLocalhost, null, null, proto));

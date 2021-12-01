@@ -20,18 +20,14 @@
 package org.carapaceproxy.backends;
 
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import org.carapaceproxy.EndpointStats;
-import org.carapaceproxy.client.ConnectionsManagerStats;
 import org.carapaceproxy.client.EndpointKey;
-import org.carapaceproxy.server.HttpProxyServer;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.RawHttpClient;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import org.junit.Rule;
 import org.junit.Test;
@@ -43,16 +39,16 @@ import org.junit.rules.TemporaryFolder;
  */
 public class ChunckedEncodingRequestsTest {
 
-    private static final String TEST_DATA
-        = "4\r\nWiki\r\n"
-        + "5\r\npedia\r\n"
-        + "E\r\n in\r\n\r\nchunks.\r\n"
-        + "0\r\n" // last content
-        + "\r\n";
+    private static final String TEST_DATA =
+            "4\r\nWiki\r\n"
+            + "5\r\npedia\r\n"
+            + "E\r\n in\r\n\r\nchunks.\r\n"
+            + "0\r\n" // last content
+            + "\r\n";
 
-    private static final String TEST_DATA_ABORTED
-        = "4\r\nWiki\r\n"
-        + "5\r\npe";
+    private static final String TEST_DATA_ABORTED =
+            "4\r\nWiki\r\n"
+            + "5\r\npe";
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
 
@@ -63,100 +59,71 @@ public class ChunckedEncodingRequestsTest {
     public void testSimple() throws Exception {
 
         wireMockRule.stubFor(
-            post(urlEqualTo("/index.html")).
-                withRequestBody(equalTo("Wikipedia in\r\n"
-                    + "\r\n"
-                    + "chunks."))
-                .willReturn(aResponse()
-                    .withStatus(200)
-                    .withHeader("Content-Type", "text/html")
-                    .withBody("it <b>works</b> !!"))
+                post(urlEqualTo("/index.html")).
+                        withRequestBody(equalTo("Wikipedia in\r\n"
+                                + "\r\n"
+                                + "chunks."))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withBody("it <b>works</b> !!"))
         );
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-
-        ConnectionsManagerStats stats;
+        
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client
-                    .executeRequest("POST /index.html HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n" + TEST_DATA).toString();
+                        .executeRequest("POST /index.html HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n" + TEST_DATA).toString();
                 System.out.println("s:" + s);
                 assertTrue(s.endsWith("it <b>works</b> !!"));
             }
-
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
         }
-
-        TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            return epstats.getTotalConnections().intValue() == 1
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
-        }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 
     @Test
     public void testClientAbortsUpload() throws Exception {
 
         wireMockRule.stubFor(
-            post(urlEqualTo("/index.html")).
-                withRequestBody(equalTo("Wikipedia in\r\n"
-                    + "\r\n"
-                    + "chunks."))
-                .willReturn(aResponse()
-                    .withStatus(200)
-                    .withHeader("Content-Type", "text/html")
-                    .withBody("it <b>works</b> !!"))
+                post(urlEqualTo("/index.html")).
+                        withRequestBody(equalTo("Wikipedia in\r\n"
+                                + "\r\n"
+                                + "chunks."))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withBody("it <b>works</b> !!"))
         );
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        ConnectionsManagerStats stats;
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client
-                    .executeRequest("POST /index.html HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n" + TEST_DATA).toString();
+                        .executeRequest("POST /index.html HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n" + TEST_DATA).toString();
                 System.out.println("s:" + s);
                 assertTrue(s.endsWith("it <b>works</b> !!"));
 
                 client
-                    .sendRequest("POST /index.html HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n" + TEST_DATA_ABORTED);
+                        .sendRequest("POST /index.html HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n" + TEST_DATA_ABORTED);
             }
 
             // proxy server is not broker after aborted client
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client
-                    .executeRequest("POST /index.html HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n" + TEST_DATA).toString();
+                        .executeRequest("POST /index.html HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n" + TEST_DATA).toString();
                 System.out.println("s:" + s);
                 assertTrue(s.endsWith("it <b>works</b> !!"));
             }
-
-            stats = server.getConnectionsManager().getStats();
-            assertNotNull(stats.getEndpoints().get(key));
         }
-
-        TestUtils.waitForCondition(() -> {
-            EndpointStats epstats = stats.getEndpointStats(key);
-            System.out.println("stats:"+epstats);
-            return epstats.getTotalConnections().intValue() == 2
-                && epstats.getActiveConnections().intValue() == 0
-                && epstats.getOpenConnections().intValue() == 0;
-        }, 100);
-
-        TestUtils.waitForCondition(TestUtils.ALL_CONNECTIONS_CLOSED(stats), 100);
-
     }
 
 }

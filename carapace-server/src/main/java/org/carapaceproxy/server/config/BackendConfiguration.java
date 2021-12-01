@@ -19,6 +19,8 @@
  */
 package org.carapaceproxy.server.config;
 
+import java.util.Objects;
+
 /**
  * Configuration of a single backend server
  */
@@ -54,6 +56,43 @@ public class BackendConfiguration {
 
     public String getHostPort() {
         return host + ":" + port;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 7;
+        hash = 53 * hash + Objects.hashCode(this.id);
+        hash = 53 * hash + Objects.hashCode(this.host);
+        hash = 53 * hash + this.port;
+        hash = 53 * hash + Objects.hashCode(this.probePath);
+        return hash;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        final BackendConfiguration other = (BackendConfiguration) obj;
+        if (this.port != other.port) {
+            return false;
+        }
+        if (!Objects.equals(this.id, other.id)) {
+            return false;
+        }
+        if (!Objects.equals(this.host, other.host)) {
+            return false;
+        }
+        if (!Objects.equals(this.probePath, other.probePath)) {
+            return false;
+        }
+        return true;
     }
 
     @Override

@@ -1,23 +1,23 @@
 /*
- * Licensed to Diennea S.r.l. under one
- * or more contributor license agreements. See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership. Diennea S.r.l. licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- *
+ Licensed to Diennea S.r.l. under one
+ or more contributor license agreements. See the NOTICE file
+ distributed with this work for additional information
+ regarding copyright ownership. Diennea S.r.l. licenses this file
+ to you under the Apache License, Version 2.0 (the
+ "License"); you may not use this file except in compliance
+ with the License.  You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing,
+ software distributed under the License is distributed on an
+ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ KIND, either express or implied.  See the License for the
+ specific language governing permissions and limitations
+ under the License.
+
  */
-package org.carapaceproxy.server;
+package org.carapaceproxy.core;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.prometheus.client.exporter.MetricsServlet;
@@ -40,12 +40,10 @@ import javax.naming.ConfigurationException;
 import javax.servlet.DispatcherType;
 import org.apache.bookkeeper.stats.*;
 import org.apache.commons.configuration.PropertiesConfiguration;
-import org.carapaceproxy.EndpointMapper;
+import org.carapaceproxy.server.mapper.EndpointMapper;
 import org.carapaceproxy.api.ApplicationConfig;
 import org.carapaceproxy.api.AuthAPIRequestsFilter;
 import org.carapaceproxy.api.ForceHeadersAPIRequestsFilter;
-import org.carapaceproxy.client.ConnectionsManager;
-import org.carapaceproxy.client.impl.ConnectionsManagerImpl;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
 import org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler;
@@ -82,8 +80,11 @@ import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.webapp.WebAppContext;
 import org.glassfish.jersey.servlet.ServletContainer;
 import static org.glassfish.jersey.servlet.ServletProperties.JAXRS_APPLICATION_CLASS;
+import java.util.Collections;
+import java.util.Objects;
 import org.apache.bookkeeper.stats.prometheus.PrometheusMetricsProvider;
 import org.carapaceproxy.server.certificates.ocsp.OcspStaplingManager;
+import org.carapaceproxy.server.config.BackendConfiguration;
 
 public class HttpProxyServer implements AutoCloseable {
 
@@ -95,11 +96,10 @@ public class HttpProxyServer implements AutoCloseable {
     private final File basePath;
     private final StaticContentsManager staticContentsManager = new StaticContentsManager();
     private BackendHealthManager backendHealthManager;
-    private final ConnectionsManager connectionsManager;
     private final PrometheusMetricsProvider statsProvider;
     private final PropertiesConfiguration statsProviderConfig = new PropertiesConfiguration();
     private final RequestsLogger requestsLogger;
-    private final FullHttpMessageLogger fullHttpMessageLogger;
+    private final ProxyRequestsManager proxyRequestsManager;
 
     private String peerId = "localhost";
     private String zkAddress;
@@ -152,18 +152,20 @@ public class HttpProxyServer implements AutoCloseable {
         this.listeners = new Listeners(this);
         this.cache = new ContentsCache(currentConfiguration);
         this.requestsLogger = new RequestsLogger(currentConfiguration);
-        this.fullHttpMessageLogger = new FullHttpMessageLogger(currentConfiguration);
-        this.connectionsManager = new ConnectionsManagerImpl(currentConfiguration, backendHealthManager, fullHttpMessageLogger);
         this.dynamicCertificatesManager = new DynamicCertificatesManager(this);
-        if (mapper != null) {
-            mapper.setDynamicCertificateManager(dynamicCertificatesManager);
-        }
         this.ocspStaplingManager = new OcspStaplingManager();
+        this.proxyRequestsManager = new ProxyRequestsManager(this);
+        if (mapper != null) {
+            mapper.setParent(this);
+            this.proxyRequestsManager.reloadConfiguration(currentConfiguration, mapper.getBackends().values());
+        }
     }
 
     public static HttpProxyServer buildForTests(String host, int port, EndpointMapper mapper, File baseDir) throws ConfigurationNotValidException, Exception {
         HttpProxyServer res = new HttpProxyServer(mapper, baseDir.getAbsoluteFile());
         res.currentConfiguration.addListener(new NetworkListenerConfiguration(host, port));
+        res.proxyRequestsManager.reloadConfiguration(res.currentConfiguration, mapper.getBackends().values());
+
         return res;
     }
 
@@ -288,10 +290,8 @@ public class HttpProxyServer implements AutoCloseable {
         try {
             started = true;
             groupMembershipHandler.start();
-            connectionsManager.start();
             cache.start();
             requestsLogger.start();
-            fullHttpMessageLogger.start();
             listeners.start();
             backendHealthManager.start();
             dynamicCertificatesManager.attachGroupMembershipHandler(groupMembershipHandler);
@@ -345,14 +345,10 @@ public class HttpProxyServer implements AutoCloseable {
 
         listeners.stop();
 
-        if (connectionsManager != null) {
-            connectionsManager.close();
-        }
+        proxyRequestsManager.close();
+
         if (requestsLogger != null) {
             requestsLogger.stop();
-        }
-        if (fullHttpMessageLogger != null) {
-            fullHttpMessageLogger.stop();
         }
         if (cache != null) {
             cache.close();
@@ -365,8 +361,8 @@ public class HttpProxyServer implements AutoCloseable {
         }
     }
 
-    public ConnectionsManager getConnectionsManager() {
-        return connectionsManager;
+    public ProxyRequestsManager getProxyRequestsManager() {
+        return proxyRequestsManager;
     }
 
     public ContentsCache getCache() {
@@ -379,10 +375,6 @@ public class HttpProxyServer implements AutoCloseable {
 
     public RequestsLogger getRequestsLogger() {
         return requestsLogger;
-    }
-
-    public FullHttpMessageLogger getFullHttpMessageLogger() {
-        return fullHttpMessageLogger;
     }
 
     private static EndpointMapper buildMapper(String className, ConfigurationStore properties) throws ConfigurationNotValidException {
@@ -644,7 +636,7 @@ public class HttpProxyServer implements AutoCloseable {
         try {
             RuntimeServerConfiguration newConfiguration = buildValidConfiguration(storeWithConfig);
             EndpointMapper newMapper = buildMapper(newConfiguration.getMapperClassname(), storeWithConfig);
-            newMapper.setDynamicCertificateManager(this.dynamicCertificatesManager);
+            newMapper.setParent(this);
             UserRealm newRealm = buildRealm(userRealmClassname, storeWithConfig);
 
             this.filters = buildFilters(newConfiguration);
@@ -654,17 +646,22 @@ public class HttpProxyServer implements AutoCloseable {
             this.listeners.reloadConfiguration(newConfiguration);
             this.cache.reloadConfiguration(newConfiguration);
             this.requestsLogger.reloadConfiguration(newConfiguration);
-            this.fullHttpMessageLogger.reloadConfiguration(newConfiguration);
-            this.connectionsManager.applyNewConfiguration(newConfiguration);
-
-            this.currentConfiguration = newConfiguration;
-            this.mapper = newMapper;
             this.realm = newRealm;
+            Map<String, BackendConfiguration> currentBackends = mapper != null ? mapper.getBackends() : Collections.emptyMap();
+            Map<String, BackendConfiguration> newBackends = newMapper.getBackends();
+            this.mapper = newMapper;
+
+            if (newConfiguration.getBorrowTimeout() != currentConfiguration.getBorrowTimeout()
+                    || newConfiguration.getMaxConnectionsPerEndpoint() != currentConfiguration.getMaxConnectionsPerEndpoint()
+                    || !newBackends.equals(currentBackends) || atBoot) {
+                this.proxyRequestsManager.reloadConfiguration(newConfiguration, newBackends.values());
+            }
 
             if (!atBoot) {
                 dynamicConfigurationStore.commitConfiguration(newConfigurationStore);
             }
 
+            this.currentConfiguration = newConfiguration;
         } catch (ConfigurationNotValidException err) {
             // impossible to have a non valid configuration here
             throw new IllegalStateException(err);
@@ -675,10 +672,9 @@ public class HttpProxyServer implements AutoCloseable {
 
     @VisibleForTesting
     public void setMapper(EndpointMapper mapper) {
+        Objects.requireNonNull(mapper);
+        mapper.setParent(this);
         this.mapper = mapper;
-        if (mapper != null) {
-            mapper.setDynamicCertificateManager(dynamicCertificatesManager);
-        }
     }
 
     @VisibleForTesting
@@ -698,9 +694,6 @@ public class HttpProxyServer implements AutoCloseable {
     @VisibleForTesting
     public void setDynamicCertificatesManager(DynamicCertificatesManager dynamicCertificatesManager) {
         this.dynamicCertificatesManager = dynamicCertificatesManager;
-        if (mapper != null) {
-            mapper.setDynamicCertificateManager(dynamicCertificatesManager);
-        }
     }
 
     @VisibleForTesting

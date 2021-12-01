@@ -19,8 +19,8 @@
  */
 package org.carapaceproxy.server.config;
 
+import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
-import org.carapaceproxy.server.RequestHandler;
 
 /**
  * Route
@@ -64,11 +64,11 @@ public class RouteConfiguration {
         return matcher;
     }
 
-    public boolean matches(RequestHandler handler) {
+    public boolean matches(ProxyRequest request) {
         if (!enabled) {
             return false;
         }
-        return matcher.matches(handler);
+        return matcher.matches(request);
     }
 
 }

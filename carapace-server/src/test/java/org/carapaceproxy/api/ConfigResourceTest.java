@@ -20,12 +20,11 @@
 package org.carapaceproxy.api;
 
 import java.util.Properties;
-import org.carapaceproxy.client.impl.ConnectionsManagerImpl;
 import org.carapaceproxy.utils.RawHttpClient;
 import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
@@ -60,19 +59,19 @@ public class ConfigResourceTest extends UseAdminServer {
 
             // 1) Applying
             String body = "dynamiccertificatesmanager.period=45\n"
-                + "listener.2.defaultcertificate=*\n"
-                + "listener.2.enabled=true\n"
-                + "listener.2.host=0.0.0.0\n"
-                + "listener.2.ocsp=true\n"
-                + "listener.2.port=4089\n"
-                + "listener.2.ssl=false";
+                    + "listener.2.defaultcertificate=*\n"
+                    + "listener.2.enabled=true\n"
+                    + "listener.2.host=0.0.0.0\n"
+                    + "listener.2.ocsp=true\n"
+                    + "listener.2.port=4089\n"
+                    + "listener.2.ssl=false";
             resp = client.executeRequest("POST /api/config/apply HTTP/1.1\r\n"
-                + "Host: localhost\r\n"
-                + "Content-Type: text/plain\r\n"
-                + "Content-Length: " + body.length() + "\r\n"
-                + "Authorization: Basic " + credentials.toBase64() + "\r\n"
-                + "\r\n"
-                + body);
+                    + "Host: localhost\r\n"
+                    + "Content-Type: text/plain\r\n"
+                    + "Content-Length: " + body.length() + "\r\n"
+                    + "Authorization: Basic " + credentials.toBase64() + "\r\n"
+                    + "\r\n"
+                    + body);
             String s = resp.getBodyString();
             System.out.println("s:" + s);
             assertTrue(s.equals("{\"ok\":true,\"error\":\"\"}"));
@@ -86,18 +85,18 @@ public class ConfigResourceTest extends UseAdminServer {
             // 3) Update config file + re-Applying
             dumpedToReApply = dumpedToReApply.replace("dynamiccertificatesmanager.period=45", "dynamiccertificatesmanager.period=30");
             dumpedToReApply += "listener.3.enabled=true\n"
-                + "listener.3.host=127.0.0.1\n"
-                + "listener.3.ocsp=true\n"
-                + "listener.3.port=4090\n"
-                + "listener.3.ssl=false";
+                    + "listener.3.host=127.0.0.1\n"
+                    + "listener.3.ocsp=true\n"
+                    + "listener.3.port=4090\n"
+                    + "listener.3.ssl=false";
 
             resp = client.executeRequest("POST /api/config/apply HTTP/1.1\r\n"
-                + "Host: localhost\r\n"
-                + "Content-Type: text/plain\r\n"
-                + "Content-Length: " + dumpedToReApply.length() + "\r\n"
-                + "Authorization: Basic " + credentials.toBase64() + "\r\n"
-                + "\r\n"
-                + dumpedToReApply);
+                    + "Host: localhost\r\n"
+                    + "Content-Type: text/plain\r\n"
+                    + "Content-Length: " + dumpedToReApply.length() + "\r\n"
+                    + "Authorization: Basic " + credentials.toBase64() + "\r\n"
+                    + "\r\n"
+                    + dumpedToReApply);
             s = resp.getBodyString();
             System.out.println("s:" + s);
             assertTrue(s.equals("{\"ok\":true,\"error\":\"\"}"));
@@ -121,14 +120,14 @@ public class ConfigResourceTest extends UseAdminServer {
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             String body = "connectionsmanager.connecttimeout=8000\n"
-                + "healthmanager.period=25";
+                    + "healthmanager.period=25";
             RawHttpClient.HttpResponse resp = client.executeRequest("POST /api/config/apply HTTP/1.1\r\n"
-                + "Host: localhost\r\n"
-                + "Content-Type: text/plain\r\n"
-                + "Content-Length: " + body.length() + "\r\n"
-                + "Authorization: Basic " + credentials.toBase64() + "\r\n"
-                + "\r\n"
-                + body);
+                    + "Host: localhost\r\n"
+                    + "Content-Type: text/plain\r\n"
+                    + "Content-Length: " + body.length() + "\r\n"
+                    + "Authorization: Basic " + credentials.toBase64() + "\r\n"
+                    + "\r\n"
+                    + body);
             String s = resp.getBodyString();
             System.out.println("s:" + s);
             assertTrue(s.equals("{\"ok\":true,\"error\":\"\"}"));
@@ -139,33 +138,31 @@ public class ConfigResourceTest extends UseAdminServer {
         stopServer();
         buildNewServer();
         startServer(configuration);
-        ConnectionsManagerImpl impl = (ConnectionsManagerImpl) server.getConnectionsManager();
-        assertEquals(8000, impl.getConnectTimeout());
+        assertEquals(8000, server.getCurrentConfiguration().getConnectTimeout());
         assertEquals(25, server.getBackendHealthManager().getPeriod());
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             String body = "connectionsmanager.connecttimeout=9000\n"
-                + "healthmanager.period=30";
+                    + "healthmanager.period=30";
             RawHttpClient.HttpResponse resp = client.executeRequest("POST /api/config/apply HTTP/1.1\r\n"
-                + "Host: localhost\r\n"
-                + "Content-Type: text/plain\r\n"
-                + "Content-Length: " + body.length() + "\r\n"
-                + "Authorization: Basic " + credentials.toBase64() + "\r\n"
-                + "\r\n"
-                + body);
+                    + "Host: localhost\r\n"
+                    + "Content-Type: text/plain\r\n"
+                    + "Content-Length: " + body.length() + "\r\n"
+                    + "Authorization: Basic " + credentials.toBase64() + "\r\n"
+                    + "\r\n"
+                    + body);
             String s = resp.getBodyString();
             System.out.println("s:" + s);
             assertTrue(s.equals("{\"ok\":true,\"error\":\"\"}"));
 
         }
-        assertEquals(9000, impl.getConnectTimeout());
+        assertEquals(9000, server.getCurrentConfiguration().getConnectTimeout());
         assertEquals(30, server.getBackendHealthManager().getPeriod());
         // restart, same "static" confguration
         stopServer();
         buildNewServer();
         startServer(configuration);
-        impl = (ConnectionsManagerImpl) server.getConnectionsManager();
-        assertEquals(9000, impl.getConnectTimeout());
+        assertEquals(9000, server.getCurrentConfiguration().getConnectTimeout());
         assertEquals(30, server.getBackendHealthManager().getPeriod());
     }
 
