@@ -213,7 +213,7 @@ public class Listeners {
                 .port(hostPort.getPort())
                 //.protocol(HttpProtocol.H2) // HTTP/2.0 setup
                 //.wiretap("logger", LogLevel.DEBUG, AdvancedByteBufFormat.TEXTUAL) // logging
-                .accessLog(true)
+                //.accessLog(true)
                 .option(ChannelOption.SO_BACKLOG, 128)
                 .childOption(ChannelOption.SO_KEEPALIVE, true)
                 .doOnChannelInit((observer, channel, remoteAddress) -> {

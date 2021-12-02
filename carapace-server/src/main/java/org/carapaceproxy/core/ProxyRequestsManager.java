@@ -21,6 +21,7 @@ package org.carapaceproxy.core;
 
 import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTP;
 import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTPS;
+import com.google.common.annotations.VisibleForTesting;
 import io.netty.channel.ChannelOption;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
@@ -36,11 +37,16 @@ import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.SimpleHTTPResponse;
@@ -48,6 +54,7 @@ import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.config.BackendConfiguration;
+import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.server.mapper.CustomHeader;
 import org.carapaceproxy.utils.HttpUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
@@ -85,7 +92,7 @@ public class ProxyRequestsManager {
     private static final Logger LOGGER = Logger.getLogger(ProxyRequestsManager.class.getName());
 
     private final HttpProxyServer parent;
-    private ConnectionProvider connectionProvider;
+    private final ConnectionsManager connectionsManager = new ConnectionsManager();
     private final ConcurrentHashMap<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
 
     public ProxyRequestsManager(HttpProxyServer parent) {
@@ -97,32 +104,11 @@ public class ProxyRequestsManager {
     }
 
     public void reloadConfiguration(RuntimeServerConfiguration newConfiguration, Collection<BackendConfiguration> newEndpoints) {
-        close();
-        ConnectionProvider.Builder builder = ConnectionProvider.builder("custom")
-                .pendingAcquireTimeout(Duration.ofSeconds(newConfiguration.getBorrowTimeout()))
-                .metrics(true, () -> (String poolName, String id, SocketAddress remoteAddress, ConnectionPoolMetrics metrics) -> {
-            String[] hostPort = remoteAddress.toString().split(":");
-            EndpointStats stats = endpointsStats.computeIfAbsent(EndpointKey.make(hostPort[0], Integer.parseInt(hostPort[1])), EndpointStats::new);
-            stats.setConnectionPoolMetrics(metrics);
-        });
-
-        // max connections per endpoint limit setup
-        newEndpoints.forEach(be -> {
-            builder.forRemoteHost(new InetSocketAddress(
-                    be.getHost(),
-                    be.getPort()),
-                    spec -> spec.maxConnections(newConfiguration.getMaxConnectionsPerEndpoint())
-            );
-        });
-
-        connectionProvider = builder.build();
+        connectionsManager.reloadConfiguration(newConfiguration, newEndpoints);
     }
 
     public void close() {
-        if (connectionProvider != null) {
-            connectionProvider.disposeLater().block();
-            connectionProvider = null;
-        }
+        connectionsManager.close();
     }
 
     public Publisher<Void> processRequest(ProxyRequest request) {
@@ -330,14 +316,18 @@ public class ProxyRequestsManager {
 
             Counter.Child totalRequests = TOTAL_REQUESTS_COUNTER.labels(request.getListener() + "");
 
+            Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> connectionToEndpoint = connectionsManager.apply(request);
+            ConnectionPoolConfiguration connectionConfig = connectionToEndpoint.getKey();
+            ConnectionProvider connectionProvider = connectionToEndpoint.getValue();
+
             client = HttpClient.create(connectionProvider)
                     .host(endpointHost)
                     .port(endpointPort)
                     .option(ChannelOption.SO_KEEPALIVE, true) // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
-                    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, parent.getCurrentConfiguration().getConnectTimeout())
+                    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
                     .headers(h -> h.add(request.getRequestHeaders().copy()))
                     .followRedirect(true)
-                    .responseTimeout(Duration.ofMillis(parent.getCurrentConfiguration().getStuckRequestTimeout()))
+                    .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
                     .doOnRequest((req, conn) -> {
                         PENDING_REQUESTS_GAUGE.inc();
                         requestRunning = true;
@@ -399,7 +389,7 @@ public class ProxyRequestsManager {
                     return serveInternalErrorMessage(request);
                 }
 
-                LOGGER.log(Level.SEVERE, "Error proxying request for endpoint {0}; request: {1}", new Object[]{endpoint, request});
+                LOGGER.log(Level.SEVERE, "Error proxying request for endpoint {0}; request: {1};\nError: {2}", new Object[]{endpoint, request, err});
                 if (err instanceof ConnectException) {
                     parent.getBackendHealthManager().reportBackendUnreachable(
                             endpoint, System.currentTimeMillis(), "Error: " + err
@@ -433,7 +423,7 @@ public class ProxyRequestsManager {
         }
     }
 
-    public Publisher<Void> serveFromCache(ProxyRequest request, ContentsCache.ContentSender cacheSender) {
+    private Publisher<Void> serveFromCache(ProxyRequest request, ContentsCache.ContentSender cacheSender) {
         ContentsCache.CachedContent content = cacheSender.getCached();
         HttpClientResponse response = content.getResponse();
 
@@ -467,5 +457,95 @@ public class ProxyRequestsManager {
                 request.setLastActivity(System.currentTimeMillis());
             }));
         }
+    }
+
+    public class ConnectionsManager implements AutoCloseable, Function<ProxyRequest, Map.Entry<ConnectionPoolConfiguration, ConnectionProvider>> {
+
+        private final Map<ConnectionPoolConfiguration, ConnectionProvider> connectionPools = new ConcurrentHashMap<>();
+        private volatile Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> defaultConnectionPool;
+
+        public void reloadConfiguration(RuntimeServerConfiguration newConfiguration, Collection<BackendConfiguration> newEndpoints) {
+            close();
+
+            // custom pools
+            ArrayList<ConnectionPoolConfiguration> _connectionPools = new ArrayList<>(newConfiguration.getConnectionPools());
+
+            // default pool
+            _connectionPools.add(new ConnectionPoolConfiguration(
+                    "*", "*",
+                    newConfiguration.getMaxConnectionsPerEndpoint(),
+                    newConfiguration.getBorrowTimeout(),
+                    newConfiguration.getConnectTimeout(),
+                    newConfiguration.getStuckRequestTimeout(),
+                    newConfiguration.getIdleTimeout(),
+                    true
+            ));
+
+            _connectionPools.forEach(connectionPool -> {
+                if (!connectionPool.isEnabled()) {
+                    return;
+                }
+
+                ConnectionProvider.Builder builder = ConnectionProvider.builder(connectionPool.getId())
+                        .pendingAcquireTimeout(Duration.ofMillis(connectionPool.getBorrowTimeout()))
+                        .maxIdleTime(Duration.ofMillis(connectionPool.getIdleTimeout()))
+                        .metrics(true, () -> (String poolName, String id, SocketAddress remoteAddress, ConnectionPoolMetrics metrics) -> {
+                    String[] hostPort = remoteAddress.toString().split(":");
+                    EndpointStats stats = endpointsStats.computeIfAbsent(EndpointKey.make(hostPort[0], Integer.parseInt(hostPort[1])), EndpointStats::new);
+                    stats.addConnectionPoolMetrics(poolName, metrics);
+                });
+
+                // max connections per endpoint limit setup
+                newEndpoints.forEach(be -> {
+                    builder.forRemoteHost(new InetSocketAddress(
+                            be.getHost(), be.getPort()),
+                            spec -> spec.maxConnections(connectionPool.getMaxConnectionsPerEndpoint())
+                    );
+                });
+
+                if (connectionPool.getId().equals("*")) {
+                    defaultConnectionPool = Map.entry(connectionPool, builder.build());
+                } else {
+                    connectionPools.put(connectionPool, builder.build());
+                }
+            });
+        }
+
+        @Override
+        public void close() {
+            connectionPools.values().forEach(connectionProvider -> {
+                connectionProvider.disposeLater().block();
+            });
+            connectionPools.clear();
+
+            if (defaultConnectionPool != null) {
+                defaultConnectionPool.getValue()
+                        .disposeLater()
+                        .block();
+                defaultConnectionPool = null;
+            }
+        }
+
+        @Override
+        public Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> apply(ProxyRequest t) {
+            String hostName = t.getRemoteAddress().getHostName();
+            return connectionPools.entrySet().stream()
+                    .filter(e -> Pattern.matches(e.getKey().getDomain(), hostName))
+                    .findFirst()
+                    .orElse(defaultConnectionPool);
+        }
+    }
+
+    @VisibleForTesting
+    public ConnectionsManager getConnectionsManager() {
+        return connectionsManager;
+    }
+
+    @VisibleForTesting
+    public Map<ConnectionPoolConfiguration, ConnectionProvider> getConnectionPools() {
+        HashMap<ConnectionPoolConfiguration, ConnectionProvider> pools = new HashMap<>(connectionsManager.connectionPools);
+        pools.put(connectionsManager.defaultConnectionPool.getKey(), connectionsManager.defaultConnectionPool.getValue());
+
+        return pools;
     }
 }

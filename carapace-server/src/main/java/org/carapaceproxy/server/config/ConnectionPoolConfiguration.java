@@ -22,18 +22,18 @@ package org.carapaceproxy.server.config;
 import lombok.Data;
 
 /**
- * Configuration of a single backend server
+ * Configuration of a single connection pool
  */
 @Data
-public class BackendConfiguration {
+public class ConnectionPoolConfiguration {
 
     private final String id;
-    private final String host;
-    private final int port;
-    private final String probePath;
-
-    public String getHostPort() {
-        return host + ":" + port;
-    }
+    private final String domain;
+    private final int maxConnectionsPerEndpoint;
+    private final int borrowTimeout;
+    private final int connectTimeout;
+    private final int stuckRequestTimeout;
+    private final int idleTimeout;
+    private final boolean enabled;
 
 }

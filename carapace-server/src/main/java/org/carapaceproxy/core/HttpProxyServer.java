@@ -651,9 +651,7 @@ public class HttpProxyServer implements AutoCloseable {
             Map<String, BackendConfiguration> newBackends = newMapper.getBackends();
             this.mapper = newMapper;
 
-            if (newConfiguration.getBorrowTimeout() != currentConfiguration.getBorrowTimeout()
-                    || newConfiguration.getMaxConnectionsPerEndpoint() != currentConfiguration.getMaxConnectionsPerEndpoint()
-                    || !newBackends.equals(currentBackends) || atBoot) {
+            if (atBoot || !newBackends.equals(currentBackends) || isConnectionsConfigurationChanged(newConfiguration)) {
                 this.proxyRequestsManager.reloadConfiguration(newConfiguration, newBackends.values());
             }
 
@@ -668,6 +666,15 @@ public class HttpProxyServer implements AutoCloseable {
         } finally {
             configurationLock.unlock();
         }
+    }
+
+    private boolean isConnectionsConfigurationChanged(RuntimeServerConfiguration newConfiguration) {
+        return newConfiguration.getMaxConnectionsPerEndpoint() != currentConfiguration.getMaxConnectionsPerEndpoint()
+                || newConfiguration.getBorrowTimeout() != currentConfiguration.getBorrowTimeout()
+                || newConfiguration.getConnectTimeout() != currentConfiguration.getConnectTimeout()
+                || newConfiguration.getStuckRequestTimeout() != currentConfiguration.getStuckRequestTimeout()
+                || newConfiguration.getIdleTimeout() != currentConfiguration.getIdleTimeout()
+                || !newConfiguration.getConnectionPools().equals(currentConfiguration.getConnectionPools());
     }
 
     @VisibleForTesting
