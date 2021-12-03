@@ -43,6 +43,7 @@ import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.D
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import java.util.Set;
 import lombok.Data;
+import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;
 
 /**
@@ -58,6 +59,8 @@ public class RuntimeServerConfiguration {
     private final List<NetworkListenerConfiguration> listeners = new ArrayList<>();
     private final Map<String, SSLCertificateConfiguration> certificates = new HashMap<>();
     private final List<RequestFilterConfiguration> requestFilters = new ArrayList<>();
+    private final List<ConnectionPoolConfiguration> connectionPools = new ArrayList<>();
+
     private int maxConnectionsPerEndpoint = 10;
     private int idleTimeout = 60000;
     private int stuckRequestTimeout = 120000;
@@ -101,12 +104,12 @@ public class RuntimeServerConfiguration {
         this.backendsUnreachableOnStuckRequests = properties.getBoolean("connectionsmanager.backendsunreachableonstuckrequests", backendsUnreachableOnStuckRequests);
         this.connectTimeout = properties.getInt("connectionsmanager.connecttimeout", connectTimeout);
         this.borrowTimeout = properties.getInt("connectionsmanager.borrowtimeout", borrowTimeout);
-        LOG.info("connectionsmanager.maxconnectionsperendpoint=" + maxConnectionsPerEndpoint);
-        LOG.info("connectionsmanager.idletimeout=" + idleTimeout);
-        LOG.info("connectionsmanager.stuckrequesttimeout=" + stuckRequestTimeout);
-        LOG.info("connectionsmanager.backendsunreachableonstuckrequests=" + backendsUnreachableOnStuckRequests);
-        LOG.info("connectionsmanager.connecttimeout=" + connectTimeout);
-        LOG.info("connectionsmanager.borrowtimeout=" + borrowTimeout);
+        LOG.log(Level.INFO, "connectionsmanager.maxconnectionsperendpoint={0}", maxConnectionsPerEndpoint);
+        LOG.log(Level.INFO, "connectionsmanager.idletimeout={0}", idleTimeout);
+        LOG.log(Level.INFO, "connectionsmanager.stuckrequesttimeout={0}", stuckRequestTimeout);
+        LOG.log(Level.INFO, "connectionsmanager.backendsunreachableonstuckrequests={0}", backendsUnreachableOnStuckRequests);
+        LOG.log(Level.INFO, "connectionsmanager.connecttimeout={0}", connectTimeout);
+        LOG.log(Level.INFO, "connectionsmanager.borrowtimeout={0}", borrowTimeout);
 
         this.mapperClassname = properties.getClassname("mapper.class", StandardEndpointMapper.class.getName());
         LOG.log(Level.INFO, "mapper.class={0}", this.mapperClassname);
@@ -114,9 +117,9 @@ public class RuntimeServerConfiguration {
         this.cacheMaxSize = properties.getLong("cache.maxsize", cacheMaxSize);
         this.cacheMaxFileSize = properties.getLong("cache.maxfilesize", cacheMaxFileSize);
         this.cacheDisabledForSecureRequestsWithoutPublic = properties.getBoolean("cache.requests.secure.disablewithoutpublic", cacheDisabledForSecureRequestsWithoutPublic);
-        LOG.info("cache.maxsize=" + cacheMaxSize);
-        LOG.info("cache.maxfilesize=" + cacheMaxFileSize);
-        LOG.info("cache.requests.secure.disablewithoutpublic=" + cacheDisabledForSecureRequestsWithoutPublic);
+        LOG.log(Level.INFO, "cache.maxsize={0}", cacheMaxSize);
+        LOG.log(Level.INFO, "cache.maxfilesize={0}", cacheMaxFileSize);
+        LOG.log(Level.INFO, "cache.requests.secure.disablewithoutpublic={0}", cacheDisabledForSecureRequestsWithoutPublic);
 
         this.accessLogPath = properties.getString("accesslog.path", accessLogPath);
         this.accessLogTimestampFormat = properties.getString("accesslog.format.timestamp", accessLogTimestampFormat);
@@ -135,48 +138,49 @@ public class RuntimeServerConfiguration {
         LOG.log(Level.INFO, "accesslog.path={0}", accessLogPath);
         LOG.log(Level.INFO, "accesslog.format.timestamp={0} (example: {1})", new Object[]{accessLogTimestampFormat, tsFormatExample});
         LOG.log(Level.INFO, "accesslog.format={0}", accessLogFormat);
-        LOG.info("accesslog.queue.maxcapacity=" + accessLogMaxQueueCapacity);
-        LOG.info("accesslog.flush.interval=" + accessLogFlushInterval);
-        LOG.info("accesslog.failure.wait=" + accessLogWaitBetweenFailures);
-        LOG.info("accesslog.maxsize=" + accessLogMaxSize);
+        LOG.log(Level.INFO, "accesslog.queue.maxcapacity={0}", accessLogMaxQueueCapacity);
+        LOG.log(Level.INFO, "accesslog.flush.interval={0}", accessLogFlushInterval);
+        LOG.log(Level.INFO, "accesslog.failure.wait={0}", accessLogWaitBetweenFailures);
+        LOG.log(Level.INFO, "accesslog.maxsize={0}", accessLogMaxSize);
 
         accessLogAdvancedEnabled = properties.getBoolean("accesslog.advanced.enabled", accessLogAdvancedEnabled);
         accessLogAdvancedBodySize = properties.getInt("accesslog.advanced.body.size", accessLogAdvancedBodySize);
-        LOG.info("accesslog.advanced.enabled=" + accessLogAdvancedEnabled);
-        LOG.info("accesslog.advanced.body.size=" + accessLogAdvancedBodySize);
+        LOG.log(Level.INFO, "accesslog.advanced.enabled={0}", accessLogAdvancedEnabled);
+        LOG.log(Level.INFO, "accesslog.advanced.body.size={0}", accessLogAdvancedBodySize);
 
-        tryConfigureCertificates(properties);
-        tryConfigureListeners(properties);
-        tryConfigureFilters(properties);
+        configureCertificates(properties);
+        configureListeners(properties);
+        configureFilters(properties);
+        configureConnectionPools(properties);
 
         healthProbePeriod = properties.getInt("healthmanager.period", 0);
-        LOG.info("healthmanager.period=" + healthProbePeriod);
+        LOG.log(Level.INFO, "healthmanager.period={0}", healthProbePeriod);
         if (healthProbePeriod <= 0) {
             LOG.warning("BACKEND-HEALTH-MANAGER DISABLED");
         }
 
         dynamicCertificatesManagerPeriod = properties.getInt("dynamiccertificatesmanager.period", 0);
-        LOG.info("dynamiccertificatesmanager.period=" + dynamicCertificatesManagerPeriod);
+        LOG.log(Level.INFO, "dynamiccertificatesmanager.period={0}", dynamicCertificatesManagerPeriod);
         keyPairsSize = properties.getInt("dynamiccertificatesmanager.keypairssize", DEFAULT_KEYPAIRS_SIZE);
-        LOG.info("dynamiccertificatesmanager.keypairssize=" + keyPairsSize);
+        LOG.log(Level.INFO, "dynamiccertificatesmanager.keypairssize={0}", keyPairsSize);
 
         domainsCheckerIPAddresses = Set.of(properties.getArray("dynamiccertificatesmanager.domainschecker.ipaddresses", new String[]{}));
-        LOG.info("dynamiccertificatesmanager.domainschecker.ipaddresses=" + domainsCheckerIPAddresses);
+        LOG.log(Level.INFO, "dynamiccertificatesmanager.domainschecker.ipaddresses={0}", domainsCheckerIPAddresses);
 
         ocspStaplingManagerPeriod = properties.getInt("ocspstaplingmanager.period", 0);
-        LOG.info("ocspstaplingmanager.period=" + ocspStaplingManagerPeriod);
+        LOG.log(Level.INFO, "ocspstaplingmanager.period={0}", ocspStaplingManagerPeriod);
 
         boolean loggingDebugEnabled = properties.getBoolean("logging.debug.enabled", false);
         CarapaceLogger.setLoggingDebugEnabled(loggingDebugEnabled);
-        LOG.info("logging.debug.enabled=" + loggingDebugEnabled);
+        LOG.log(Level.INFO, "logging.debug.enabled={0}", loggingDebugEnabled);
         requestsHeaderDebugEnabled = properties.getBoolean("requests.header.debug.enabled", requestsHeaderDebugEnabled);
-        LOG.info("requests.header.debug.enabled=" + requestsHeaderDebugEnabled);
+        LOG.log(Level.INFO, "requests.header.debug.enabled={0}", requestsHeaderDebugEnabled);
 
         clientsIdleTimeoutSeconds = properties.getInt("clients.idle.timeout", clientsIdleTimeoutSeconds);
-        LOG.info("clients.idle.timeout=" + clientsIdleTimeoutSeconds);
+        LOG.log(Level.INFO, "clients.idle.timeout={0}", clientsIdleTimeoutSeconds);
     }
 
-    private void tryConfigureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
+    private void configureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
         int max = properties.findMaxIndexForPrefix("certificate");
         for (int i = 0; i <= max; i++) {
             String prefix = "certificate." + i + ".";
@@ -206,7 +210,7 @@ public class RuntimeServerConfiguration {
         }
     }
 
-    private void tryConfigureListeners(ConfigurationStore properties) throws ConfigurationNotValidException {
+    private void configureListeners(ConfigurationStore properties) throws ConfigurationNotValidException {
         int max = properties.findMaxIndexForPrefix("listener");
         for (int i = 0; i <= max; i++) {
             String prefix = "listener." + i + ".";
@@ -230,7 +234,7 @@ public class RuntimeServerConfiguration {
         }
     }
 
-    private void tryConfigureFilters(ConfigurationStore properties) throws ConfigurationNotValidException {
+    private void configureFilters(ConfigurationStore properties) throws ConfigurationNotValidException {
         int max = properties.findMaxIndexForPrefix("filter");
         for (int i = 0; i <= max; i++) {
             String prefix = "filter." + i + ".";
@@ -247,6 +251,41 @@ public class RuntimeServerConfiguration {
                 buildRequestFilter(config);
                 this.addRequestFilter(config);
             }
+        }
+    }
+
+    private void configureConnectionPools(ConfigurationStore properties) throws ConfigurationNotValidException {
+        int max = properties.findMaxIndexForPrefix("connectionpool");
+        for (int i = 0; i <= max; i++) {
+            final String prefix = "connectionpool." + i + ".";
+            String id = properties.getString(prefix + "id", "");
+            if (id.isEmpty()) {
+                continue;
+            }
+            String domain = properties.getString(prefix + "domain", "");
+            if (domain.isEmpty()) {
+                throw new ConfigurationNotValidException(
+                        "Invalid connection pool configuration: domain cannot be empty"
+                );
+            }
+            int maxconnectionsperendpoint = properties.getInt(prefix + "maxconnectionsperendpoint", maxConnectionsPerEndpoint);
+            int borrowtimeout = properties.getInt(prefix + "borrowtimeout", borrowTimeout);
+            int connecttimeout = properties.getInt(prefix + "connecttimeout", connectTimeout);
+            int stuckrequesttimeout = properties.getInt(prefix + "stuckrequesttimeout", stuckRequestTimeout);
+            int idletimeout = properties.getInt(prefix + "idletimeout", idleTimeout);
+            boolean enabled = properties.getBoolean(prefix + "enabled", false);
+
+            ConnectionPoolConfiguration connectionPool = new ConnectionPoolConfiguration(
+                    id, domain,
+                    maxconnectionsperendpoint,
+                    borrowtimeout,
+                    connecttimeout,
+                    stuckrequesttimeout,
+                    idletimeout,
+                    enabled
+            );
+            connectionPools.add(connectionPool);
+            LOG.log(Level.INFO, "Configured connectionpool." + i + ": {0}", connectionPool);
         }
     }
 
