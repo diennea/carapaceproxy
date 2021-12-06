@@ -19,14 +19,11 @@
  */
 package org.carapaceproxy;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.Getter;
 import lombok.ToString;
 import org.carapaceproxy.client.EndpointKey;
-import reactor.netty.resources.ConnectionPoolMetrics;
 
 /**
  * Stats about an endpoint
@@ -37,7 +34,6 @@ import reactor.netty.resources.ConnectionPoolMetrics;
 public class EndpointStats {
 
     private final EndpointKey key;
-    private final Map<String, ConnectionPoolMetrics> connectionPoolsMetrics = new ConcurrentHashMap<>();
     @Getter
     private final AtomicInteger totalRequests = new AtomicInteger();
     @Getter
@@ -45,21 +41,6 @@ public class EndpointStats {
 
     public EndpointStats(EndpointKey key) {
         this.key = key;
-    }
-
-    public void addConnectionPoolMetrics(String poolName, ConnectionPoolMetrics metrics) {
-        connectionPoolsMetrics.put(poolName, metrics);
-    }
-
-    public int getTotalOpenConnections() {
-        return connectionPoolsMetrics.values().stream()
-                .mapToInt(ConnectionPoolMetrics::allocatedSize)
-                .sum();
-    }
-
-    public int getOpenConnectionsForPool(String poolName) {
-        ConnectionPoolMetrics metrics = connectionPoolsMetrics.get(poolName);
-        return metrics != null ? metrics.allocatedSize() : 0;
     }
 
 }

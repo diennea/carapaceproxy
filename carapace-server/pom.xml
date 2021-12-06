@@ -146,6 +146,11 @@
             </exclusions>
         </dependency>
         <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <version>${libs.micrometer}</version>
+        </dependency>
+        <dependency>
             <groupId>org.herddb</groupId>
             <artifactId>herddb-jdbc</artifactId>
             <version>${libs.herddb}</version>

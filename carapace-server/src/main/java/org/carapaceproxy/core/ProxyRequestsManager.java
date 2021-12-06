@@ -35,7 +35,6 @@ import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
-import java.net.SocketAddress;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -63,7 +62,6 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.http.client.HttpClientResponse;
-import reactor.netty.resources.ConnectionPoolMetrics;
 import reactor.netty.resources.ConnectionProvider;
 
 /**
@@ -489,11 +487,7 @@ public class ProxyRequestsManager {
                 ConnectionProvider.Builder builder = ConnectionProvider.builder(connectionPool.getId())
                         .pendingAcquireTimeout(Duration.ofMillis(connectionPool.getBorrowTimeout()))
                         .maxIdleTime(Duration.ofMillis(connectionPool.getIdleTimeout()))
-                        .metrics(true, () -> (String poolName, String id, SocketAddress remoteAddress, ConnectionPoolMetrics metrics) -> {
-                    String[] hostPort = remoteAddress.toString().split(":");
-                    EndpointStats stats = endpointsStats.computeIfAbsent(EndpointKey.make(hostPort[0], Integer.parseInt(hostPort[1])), EndpointStats::new);
-                    stats.addConnectionPoolMetrics(poolName, metrics);
-                });
+                        .metrics(true);
 
                 // max connections per endpoint limit setup
                 newEndpoints.forEach(be -> {
