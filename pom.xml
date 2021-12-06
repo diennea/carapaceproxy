@@ -114,6 +114,7 @@
         <libs.herddb>0.23.0</libs.herddb>
         <libs.prometheus>0.12.0</libs.prometheus>
         <libs.prometheus.metrics>4.14.3</libs.prometheus.metrics>
+        <libs.micrometer>1.8.0</libs.micrometer>
 
         <libs.commons.lang3>3.12.0</libs.commons.lang3>
         <libs.commons-pool2>2.11.1</libs.commons-pool2>

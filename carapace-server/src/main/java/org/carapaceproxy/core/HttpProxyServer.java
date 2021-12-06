@@ -80,9 +80,31 @@ import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.webapp.WebAppContext;
 import org.glassfish.jersey.servlet.ServletContainer;
 import static org.glassfish.jersey.servlet.ServletProperties.JAXRS_APPLICATION_CLASS;
+import static reactor.netty.Metrics.ACTIVE_CONNECTIONS;
+import static reactor.netty.Metrics.CONNECTION_PROVIDER_PREFIX;
+import static reactor.netty.Metrics.IDLE_CONNECTIONS;
+import static reactor.netty.Metrics.NAME;
+import static reactor.netty.Metrics.PENDING_CONNECTIONS;
+import static reactor.netty.Metrics.REMOTE_ADDRESS;
+import static reactor.netty.Metrics.TOTAL_CONNECTIONS;
+import io.micrometer.core.instrument.Measurement;
+import io.micrometer.core.instrument.Meter;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.prometheus.PrometheusConfig;
+import io.micrometer.prometheus.PrometheusMeterRegistry;
+import io.micrometer.prometheus.PrometheusRenameFilter;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.util.Collections;
 import java.util.Objects;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.bookkeeper.stats.prometheus.PrometheusMetricsProvider;
+import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.certificates.ocsp.OcspStaplingManager;
 import org.carapaceproxy.server.config.BackendConfiguration;
 
@@ -90,15 +112,30 @@ public class HttpProxyServer implements AutoCloseable {
 
     private static final Logger LOG = Logger.getLogger(HttpProxyServer.class.getName());
 
+    @Getter
     private final Listeners listeners;
+
+    @Getter
     private final ContentsCache cache;
     private final StatsLogger mainLogger;
+
+    @Getter
     private final File basePath;
+
+    @Getter
     private final StaticContentsManager staticContentsManager = new StaticContentsManager();
+
+    @Getter
+    @Setter
     private BackendHealthManager backendHealthManager;
     private final PrometheusMetricsProvider statsProvider;
     private final PropertiesConfiguration statsProviderConfig = new PropertiesConfiguration();
+    private final PrometheusMeterRegistry prometheusRegistry;
+
+    @Getter
     private final RequestsLogger requestsLogger;
+
+    @Getter
     private final ProxyRequestsManager proxyRequestsManager;
 
     private String peerId = "localhost";
@@ -107,13 +144,32 @@ public class HttpProxyServer implements AutoCloseable {
     private boolean zkSecure;
     private int zkTimeout;
     private boolean cluster;
+
+    @Getter
     private GroupMembershipHandler groupMembershipHandler = new NullGroupMembershipHandler();
+
+    @Getter
+    @Setter
     private DynamicCertificatesManager dynamicCertificatesManager;
+
+    @Getter
+    @Setter
     private OcspStaplingManager ocspStaplingManager;
+
+    @Getter
     private RuntimeServerConfiguration currentConfiguration;
+
+    @Getter
     private ConfigurationStore dynamicConfigurationStore;
+
+    @Getter
     private EndpointMapper mapper;
+
+    @Getter
+    @Setter
     private UserRealm realm;
+
+    @Getter
     private List<RequestFilter> filters;
     private volatile boolean started;
 
@@ -133,19 +189,33 @@ public class HttpProxyServer implements AutoCloseable {
     private int adminServerHttpsPort = -1;
     private String adminServerCertFile;
     private String adminServerCertFilePwd = "";
+
+    @Getter
     private String metricsUrl;
     private String userRealmClassname;
+
     /**
      * This is only for testing cluster mode with a single machine
      */
+    @Getter
     private int listenersOffsetPort = 0;
+
+    public static HttpProxyServer buildForTests(String host, int port, EndpointMapper mapper, File baseDir) throws ConfigurationNotValidException, Exception {
+        HttpProxyServer res = new HttpProxyServer(mapper, baseDir.getAbsoluteFile());
+        res.currentConfiguration.addListener(new NetworkListenerConfiguration(host, port));
+        res.proxyRequestsManager.reloadConfiguration(res.currentConfiguration, mapper.getBackends().values());
+
+        return res;
+    }
 
     public HttpProxyServer(EndpointMapper mapper, File basePath) throws Exception {
         this.mapper = mapper;
         this.basePath = basePath;
         this.statsProvider = new PrometheusMetricsProvider();
         this.mainLogger = statsProvider.getStatsLogger("");
-
+        prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+        prometheusRegistry.config().meterFilter(new PrometheusRenameFilter());
+        Metrics.globalRegistry.add(prometheusRegistry);
         this.filters = new ArrayList<>();
         this.currentConfiguration = new RuntimeServerConfiguration();
         this.backendHealthManager = new BackendHealthManager(currentConfiguration, mapper);
@@ -161,12 +231,15 @@ public class HttpProxyServer implements AutoCloseable {
         }
     }
 
-    public static HttpProxyServer buildForTests(String host, int port, EndpointMapper mapper, File baseDir) throws ConfigurationNotValidException, Exception {
-        HttpProxyServer res = new HttpProxyServer(mapper, baseDir.getAbsoluteFile());
-        res.currentConfiguration.addListener(new NetworkListenerConfiguration(host, port));
-        res.proxyRequestsManager.reloadConfiguration(res.currentConfiguration, mapper.getBackends().values());
+    public int getLocalPort() {
+        return listeners.getLocalPort();
+    }
 
-        return res;
+    @VisibleForTesting
+    public void setMapper(EndpointMapper mapper) {
+        Objects.requireNonNull(mapper);
+        mapper.setParent(this);
+        this.mapper = mapper;
     }
 
     public void startAdminInterface() throws Exception {
@@ -229,10 +302,11 @@ public class HttpProxyServer implements AutoCloseable {
             WebAppContext webApp = new WebAppContext(webUi.getAbsolutePath(), "/ui");
             contexts.addHandler(webApp);
         } else {
-            LOG.severe("Cannot find " + webUi.getAbsolutePath() + " directory. Web UI will not be deployed");
+            LOG.log(Level.SEVERE, "Cannot find {0} directory. Web UI will not be deployed", webUi.getAbsolutePath());
         }
 
         ServletContextHandler context = new ServletContextHandler(ServletContextHandler.GZIP);
+        context.setAttribute("server", this);
         context.setContextPath("/");
         context.addFilter(AuthAPIRequestsFilter.class, "/api/*", EnumSet.of(DispatcherType.REQUEST));
         context.addFilter(ForceHeadersAPIRequestsFilter.class, "/api/*", EnumSet.of(DispatcherType.REQUEST));
@@ -241,7 +315,16 @@ public class HttpProxyServer implements AutoCloseable {
         jerseyServlet.setInitParameter(JAXRS_APPLICATION_CLASS, ApplicationConfig.class.getCanonicalName());
         context.addServlet(jerseyServlet, "/api/*");
         context.addServlet(new ServletHolder(new MetricsServlet()), "/metrics");
-        context.setAttribute("server", this);
+        context.addServlet(new ServletHolder(new HttpServlet() {
+            protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+                byte[] metricsData = prometheusRegistry.scrape().getBytes();
+                resp.setStatus(200);
+                resp.setContentLength(metricsData.length);
+                try (OutputStream os = resp.getOutputStream()) {
+                    os.write(metricsData);
+                }
+            }
+        }), "/micrometrics");
 
         NCSARequestLog requestLog = new NCSARequestLog();
         requestLog.setFilename(adminAccessLogPath);
@@ -269,12 +352,12 @@ public class HttpProxyServer implements AutoCloseable {
         }
 
         if (adminServerHttpPort > 0) {
-            LOG.info("Base HTTP Admin UI url: http://" + adminAdvertisedServerHost + ":" + adminServerHttpPort + "/ui");
-            LOG.info("Base HTTP Admin API url: http://" + adminAdvertisedServerHost + ":" + adminServerHttpPort + "/api");
+            LOG.log(Level.INFO, "Base HTTP Admin UI url: http://{0}:{1}/ui", new Object[]{adminAdvertisedServerHost, adminServerHttpPort});
+            LOG.log(Level.INFO, "Base HTTP Admin API url: http://{0}:{1}/api", new Object[]{adminAdvertisedServerHost, adminServerHttpPort});
         }
         if (adminServerHttpsPort > 0) {
-            LOG.info("Base HTTPS Admin UI url: https://" + adminAdvertisedServerHost + ":" + adminServerHttpsPort + "/ui");
-            LOG.info("Base HTTPS Admin API url: https://" + adminAdvertisedServerHost + ":" + adminServerHttpsPort + "/api");
+            LOG.log(Level.INFO, "Base HTTPS Admin UI url: https://{0}:{1}/ui", new Object[]{adminAdvertisedServerHost, adminServerHttpsPort});
+            LOG.log(Level.INFO, "Base HTTPS Admin API url: https://{0}:{1}/api", new Object[]{adminAdvertisedServerHost, adminServerHttpsPort});
         }
 
         if (adminServerHttpPort > 0) {
@@ -282,7 +365,7 @@ public class HttpProxyServer implements AutoCloseable {
         } else {
             metricsUrl = "https://" + adminAdvertisedServerHost + ":" + adminServerHttpsPort + "/metrics";
         }
-        LOG.info("Prometheus Metrics url: " + metricsUrl);
+        LOG.log(Level.INFO, "Prometheus Metrics url: {0}", metricsUrl);
 
     }
 
@@ -311,18 +394,6 @@ public class HttpProxyServer implements AutoCloseable {
         } catch (IllegalArgumentException exc) {
             //default metrics already initialized...ok
         }
-    }
-
-    public String getMetricsUrl() {
-        return metricsUrl;
-    }
-
-    public int getLocalPort() {
-        return listeners.getLocalPort();
-    }
-
-    public int getListenersOffsetPort() {
-        return listenersOffsetPort;
     }
 
     @Override
@@ -359,22 +430,6 @@ public class HttpProxyServer implements AutoCloseable {
             // this will also shutdown embedded database
             dynamicConfigurationStore.close();
         }
-    }
-
-    public ProxyRequestsManager getProxyRequestsManager() {
-        return proxyRequestsManager;
-    }
-
-    public ContentsCache getCache() {
-        return cache;
-    }
-
-    public BackendHealthManager getBackendHealthManager() {
-        return backendHealthManager;
-    }
-
-    public RequestsLogger getRequestsLogger() {
-        return requestsLogger;
     }
 
     private static EndpointMapper buildMapper(String className, ConfigurationStore properties) throws ConfigurationNotValidException {
@@ -467,14 +522,14 @@ public class HttpProxyServer implements AutoCloseable {
 
         userRealmClassname = properties.getClassname("userrealm.class", SimpleUserRealm.class.getName());
 
-        LOG.info("http.admin.enabled=" + adminServerEnabled);
-        LOG.info("http.admin.port=" + adminServerHttpPort);
-        LOG.info("http.admin.host=" + adminServerHost);
-        LOG.info("https.admin.port=" + adminServerHttpsPort);
-        LOG.info("https.admin.sslcertfile=" + adminServerCertFile);
-        LOG.info("admin.advertised.host=" + adminAdvertisedServerHost);
-        LOG.info("listener.offset.port=" + listenersOffsetPort);
-        LOG.info("userrealm.class=" + userRealmClassname);
+        LOG.log(Level.INFO, "http.admin.enabled={0}", adminServerEnabled);
+        LOG.log(Level.INFO, "http.admin.port={0}", adminServerHttpPort);
+        LOG.log(Level.INFO, "http.admin.host={0}", adminServerHost);
+        LOG.log(Level.INFO, "https.admin.port={0}", adminServerHttpsPort);
+        LOG.log(Level.INFO, "https.admin.sslcertfile={0}", adminServerCertFile);
+        LOG.log(Level.INFO, "admin.advertised.host={0}", adminAdvertisedServerHost);
+        LOG.log(Level.INFO, "listener.offset.port={0}", listenersOffsetPort);
+        LOG.log(Level.INFO, "userrealm.class={0}", userRealmClassname);
 
         String awsAccessKey = properties.getString("aws.accesskey", null);
         LOG.log(Level.INFO, "aws.accesskey={0}", awsAccessKey);
@@ -525,34 +580,6 @@ public class HttpProxyServer implements AutoCloseable {
         } catch (InterruptedException ex) {
             throw new IllegalStateException(ex);
         }
-    }
-
-    public EndpointMapper getMapper() {
-        return mapper;
-    }
-
-    public UserRealm getRealm() {
-        return realm;
-    }
-
-    public File getBasePath() {
-        return basePath;
-    }
-
-    public StaticContentsManager getStaticContentsManager() {
-        return staticContentsManager;
-    }
-
-    public RuntimeServerConfiguration getCurrentConfiguration() {
-        return currentConfiguration;
-    }
-
-    public List<RequestFilter> getFilters() {
-        return filters;
-    }
-
-    public Listeners getListeners() {
-        return listeners;
     }
 
     public RuntimeServerConfiguration buildValidConfiguration(ConfigurationStore simpleStore) throws ConfigurationNotValidException {
@@ -677,50 +704,6 @@ public class HttpProxyServer implements AutoCloseable {
                 || !newConfiguration.getConnectionPools().equals(currentConfiguration.getConnectionPools());
     }
 
-    @VisibleForTesting
-    public void setMapper(EndpointMapper mapper) {
-        Objects.requireNonNull(mapper);
-        mapper.setParent(this);
-        this.mapper = mapper;
-    }
-
-    @VisibleForTesting
-    public void setRealm(UserRealm realm) {
-        this.realm = realm;
-    }
-
-    @VisibleForTesting
-    public void setBackendHealthManager(BackendHealthManager backendHealthManager) {
-        this.backendHealthManager = backendHealthManager;
-    }
-
-    public DynamicCertificatesManager getDynamicCertificatesManager() {
-        return this.dynamicCertificatesManager;
-    }
-
-    @VisibleForTesting
-    public void setDynamicCertificatesManager(DynamicCertificatesManager dynamicCertificatesManager) {
-        this.dynamicCertificatesManager = dynamicCertificatesManager;
-    }
-
-    @VisibleForTesting
-    public ConfigurationStore getDynamicConfigurationStore() {
-        return dynamicConfigurationStore;
-    }
-
-    public GroupMembershipHandler getGroupMembershipHandler() {
-        return this.groupMembershipHandler;
-    }
-
-    public OcspStaplingManager getOcspStaplingManager() {
-        return ocspStaplingManager;
-    }
-
-    @VisibleForTesting
-    public void setOcspStaplingManager(OcspStaplingManager ocspStaplingManager) {
-        this.ocspStaplingManager = ocspStaplingManager;
-    }
-
     private void readClusterConfiguration(ConfigurationStore staticConfiguration) throws ConfigurationNotValidException {
         String mode = staticConfiguration.getString("mode", "standalone");
         switch (mode) {
@@ -733,7 +716,7 @@ public class HttpProxyServer implements AutoCloseable {
                 zkProperties = new Properties(staticConfiguration.asProperties("zookeeper."));
                 LOG.log(Level.INFO, "mode=cluster, zkAddress=''{0}'',zkTimeout={1}, peer.id=''{2}'', zkSecure: {3}", new Object[]{zkAddress, zkTimeout, peerId, zkSecure});
                 zkProperties.forEach((k, v) -> {
-                    LOG.log(Level.INFO, "additional zkclient property: " + k + "=" + v);
+                    LOG.log(Level.INFO, "additional zkclient property: {0}={1}", new Object[]{k, v});
                 });
                 break;
             case "standalone":
@@ -789,6 +772,50 @@ public class HttpProxyServer implements AutoCloseable {
             }
         }
 
+    }
+
+    @Data
+    public static class ConnectionPoolStats {
+
+        private int totalConnections; // The number of all connections, active or idle
+        private int activeConnections; // The number of the connections that have been successfully acquired and are in active use
+        private int idleConnections; // The number of the idle connections
+        private int pendingConnections; // The number of requests that are waiting for a connection
+
+    }
+
+    public Map<EndpointKey, Map<String, ConnectionPoolStats>> getConnectionPoolsStats() {
+        Map<EndpointKey, Map<String, ConnectionPoolStats>> res = new HashMap<>();
+        prometheusRegistry.forEachMeter(meter -> {
+            Meter.Id metric = meter.getId();
+            if (!metric.getName().startsWith(CONNECTION_PROVIDER_PREFIX)) {
+                return;
+            }
+            EndpointKey key = EndpointKey.make(metric.getTag(REMOTE_ADDRESS));
+            Map<String, ConnectionPoolStats> pools = res.computeIfAbsent(key, k -> new HashMap<String, ConnectionPoolStats>());
+            String poolName = metric.getTag(NAME);
+            ConnectionPoolStats stats = pools.computeIfAbsent(poolName, k -> new ConnectionPoolStats());
+            double value = 0;
+            for (Measurement m : meter.measure()) {
+                value += m.getValue();
+            }
+            switch (metric.getName()) {
+                case CONNECTION_PROVIDER_PREFIX + TOTAL_CONNECTIONS:
+                    stats.totalConnections += (int) value;
+                    break;
+                case CONNECTION_PROVIDER_PREFIX + ACTIVE_CONNECTIONS:
+                    stats.activeConnections += (int) value;
+                    break;
+                case CONNECTION_PROVIDER_PREFIX + IDLE_CONNECTIONS:
+                    stats.idleConnections += (int) value;
+                    break;
+                case CONNECTION_PROVIDER_PREFIX + PENDING_CONNECTIONS:
+                    stats.pendingConnections += (int) value;
+                    break;
+            }
+        });
+
+        return res;
     }
 
 }

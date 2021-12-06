@@ -29,6 +29,7 @@ import lombok.Data;
 import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
+import org.carapaceproxy.core.HttpProxyServer.ConnectionPoolStats;
 import org.carapaceproxy.server.backends.BackendHealthCheck;
 import org.carapaceproxy.server.backends.BackendHealthStatus;
 
@@ -82,9 +83,15 @@ public class BackendsResource {
             String hostPort = backendConf.getHostPort();
             BackendBean bean = new BackendBean(id, backendConf.getHost(), backendConf.getPort());
             bean.lastProbePath = backendConf.getProbePath();
-            EndpointStats epstats = server.getProxyRequestsManager().getEndpointStats(EndpointKey.make(hostPort));
+            EndpointKey key = EndpointKey.make(hostPort);
+            Map<String, ConnectionPoolStats> poolsStats = server.getConnectionPoolsStats().get(key);
+            if (poolsStats != null) {
+                bean.openConnections = poolsStats.values().stream()
+                        .mapToInt(ConnectionPoolStats::getTotalConnections)
+                        .sum();
+            }
+            EndpointStats epstats = server.getProxyRequestsManager().getEndpointStats(key);
             if (epstats != null) {
-                bean.openConnections = epstats.getTotalOpenConnections();
                 bean.totalRequests = epstats.getTotalRequests().longValue();
                 bean.lastActivityTs = epstats.getLastActivity().longValue();
             }

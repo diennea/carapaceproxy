@@ -19,18 +19,18 @@
  */
 package org.carapaceproxy.client;
 
-import java.util.Objects;
+import lombok.Data;
 
 /**
  * Identifier of an endpoint
  *
  * @author enrico.olivelli
  */
+@Data
 public final class EndpointKey {
 
     private final String host;
     private final int port;
-    private final String hostPort;
 
     public static EndpointKey make(String host, int port) {
         return new EndpointKey(host, port);
@@ -50,53 +50,10 @@ public final class EndpointKey {
     public EndpointKey(String host, int port) {
         this.host = host;
         this.port = port;
-        this.hostPort = host + ":" + port;
-    }
-
-    public String getHost() {
-        return host;
-    }
-
-    public int getPort() {
-        return port;
-    }
-
-    @Override
-    public int hashCode() {
-        int hash = 3;
-        hash = 23 * hash + Objects.hashCode(this.host);
-        hash = 23 * hash + this.port;
-        return hash;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null) {
-            return false;
-        }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        final EndpointKey other = (EndpointKey) obj;
-        if (this.port != other.port) {
-            return false;
-        }
-        if (!Objects.equals(this.host, other.host)) {
-            return false;
-        }
-        return true;
     }
 
     public String getHostPort() {
-        return hostPort;
-    }
-
-    @Override
-    public String toString() {
-        return "EndpointKey{" + "host=" + host + ", port=" + port + '}';
+        return host + ":" + port;
     }
 
 }
