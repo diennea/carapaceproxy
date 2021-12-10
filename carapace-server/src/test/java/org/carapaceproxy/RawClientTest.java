@@ -85,7 +85,6 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.RawHttpServer;
 import org.junit.After;
@@ -314,7 +313,6 @@ public class RawClientTest {
                 proxy.getCurrentConfiguration().setMaxConnectionsPerEndpoint(1);
                 proxy.getCurrentConfiguration().setClientsIdleTimeoutSeconds(300);
                 proxy.getCurrentConfiguration().setBorrowTimeout(300_000);
-                proxy.getCurrentConfiguration().setRequestsHeaderDebugEnabled(true);
                 proxy.getProxyRequestsManager().reloadConfiguration(proxy.getCurrentConfiguration(), mapper.getBackends().values());
                 proxy.start();
                 int port = proxy.getLocalPort();
@@ -523,19 +521,12 @@ public class RawClientTest {
 
         CarapaceLogger.setLoggingDebugEnabled(true);
 
-        EndpointStats stats;
         try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             proxy.getCurrentConfiguration().setMaxConnectionsPerEndpoint(1);
-            proxy.getCurrentConfiguration().setRequestsHeaderDebugEnabled(true);
             proxy.getCurrentConfiguration().setClientsIdleTimeoutSeconds(10);
-            //proxy.getConnectionsManager().applyNewConfiguration(proxy.getCurrentConfiguration());
             proxy.start();
-            //stats = proxy.getConnectionsManager().getStats();
             int port = proxy.getLocalPort();
             assertTrue(port > 0);
-
-            RuntimeServerConfiguration currentConfiguration = proxy.getCurrentConfiguration();
-            //proxy.getConnectionsManager().applyNewConfiguration(currentConfiguration);
 
             AtomicBoolean failed = new AtomicBoolean();
             AtomicBoolean c2go = new AtomicBoolean();

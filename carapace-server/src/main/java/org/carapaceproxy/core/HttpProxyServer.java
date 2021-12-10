@@ -679,7 +679,9 @@ public class HttpProxyServer implements AutoCloseable {
             this.mapper = newMapper;
 
             if (atBoot || !newBackends.equals(currentBackends) || isConnectionsConfigurationChanged(newConfiguration)) {
-                this.proxyRequestsManager.reloadConfiguration(newConfiguration, newBackends.values());
+                prometheusRegistry.clear();
+                Metrics.globalRegistry.clear();
+                proxyRequestsManager.reloadConfiguration(newConfiguration, newBackends.values());
             }
 
             if (!atBoot) {

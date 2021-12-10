@@ -80,7 +80,7 @@ public class ChunckedEncodingRequestsTest {
                 String s = client
                         .executeRequest("POST /index.html HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n" + TEST_DATA).toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
             }
         }
     }
@@ -110,7 +110,7 @@ public class ChunckedEncodingRequestsTest {
                 String s = client
                         .executeRequest("POST /index.html HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n" + TEST_DATA).toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
 
                 client
                         .sendRequest("POST /index.html HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n" + TEST_DATA_ABORTED);
@@ -121,7 +121,7 @@ public class ChunckedEncodingRequestsTest {
                 String s = client
                         .executeRequest("POST /index.html HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n" + TEST_DATA).toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
             }
         }
     }

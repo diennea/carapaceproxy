@@ -67,14 +67,14 @@ public class ChunkedEncodingResponseTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("12\r\n"
+                assertTrue(s.contains("12\r\n"
                         + "it <b>works</b> !!\r\n"
                         + "0\r\n\r\n"));
                 assertTrue(resp.getBodyString().equals("it <b>works</b> !!"));
 
                 resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 System.out.println("s:" + resp);
-                assertTrue(resp.toString().endsWith("12\r\n"
+                assertTrue(resp.toString().contains("12\r\n"
                         + "it <b>works</b> !!\r\n"
                         + "0\r\n\r\n"));
                 assertTrue(resp.getBodyString().equals("it <b>works</b> !!"));
@@ -83,7 +83,7 @@ public class ChunkedEncodingResponseTest {
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("12\r\n"
+                assertTrue(s.contains("12\r\n"
                         + "it <b>works</b> !!\r\n"
                         + "0\r\n\r\n"));
             }
@@ -112,7 +112,7 @@ public class ChunkedEncodingResponseTest {
                         .executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("12\r\n"
+                assertTrue(s.contains("12\r\n"
                         + "it <b>works</b> !!\r\n"
                         + "0\r\n\r\n"));
                 assertTrue(resp.getBodyString().equals("it <b>works</b> !!"));
@@ -120,7 +120,7 @@ public class ChunkedEncodingResponseTest {
                 resp = client
                         .executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 System.out.println("s:" + resp);
-                assertTrue(resp.toString().endsWith("12\r\n"
+                assertTrue(resp.toString().contains("12\r\n"
                         + "it <b>works</b> !!\r\n"
                         + "0\r\n\r\n"));
                 assertTrue(resp.getBodyString().equals("it <b>works</b> !!"));
@@ -130,7 +130,7 @@ public class ChunkedEncodingResponseTest {
                 String s = client
                         .executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("12\r\n"
+                assertTrue(s.contains("12\r\n"
                         + "it <b>works</b> !!\r\n"
                         + "0\r\n\r\n"));
             }

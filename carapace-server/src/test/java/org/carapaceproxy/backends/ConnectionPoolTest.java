@@ -113,6 +113,7 @@ public class ConnectionPoolTest extends UseAdminServer {
         config.put("connectionsmanager.connecttimeout", "10000");
         config.put("connectionsmanager.stuckrequesttimeout", "15000");
         config.put("connectionsmanager.idletimeout", "20000");
+        config.put("connectionsmanager.disposetimeout", "50000");
 
         // Custom connection pool (with defaults)
         config.put("connectionpool.1.id", "localhost");
@@ -132,6 +133,7 @@ public class ConnectionPoolTest extends UseAdminServer {
         config.put("connectionpool.3.connecttimeout", "22000");
         config.put("connectionpool.3.stuckrequesttimeout", "23000");
         config.put("connectionpool.3.idletimeout", "24000");
+        config.put("connectionpool.3.disposetimeout", "25000");
         config.put("connectionpool.3.enabled", "true");
         changeDynamicConfiguration(config);
     }
@@ -148,7 +150,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         // default pool
         ConnectionPoolConfiguration defaultPool = new ConnectionPoolConfiguration(
-                "*", "*", 10, 5_000, 10_000, 15_000, 20_000, true
+                "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 50_000, true
         );
         {
             ConnectionProvider provider = connectionPools.get(defaultPool);
@@ -160,7 +162,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         // pool with defaults
         ConnectionPoolConfiguration poolWithDefaults = new ConnectionPoolConfiguration(
-                "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, true
+                "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, 50_000, true
         );
         {
             ConnectionProvider provider = connectionPools.get(poolWithDefaults);
@@ -172,7 +174,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         // custom pool
         ConnectionPoolConfiguration customPool = new ConnectionPoolConfiguration(
-                "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, true
+                "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, 25_000, true
         );
         {
             ConnectionProvider provider = connectionPools.get(customPool);

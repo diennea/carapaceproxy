@@ -73,12 +73,13 @@ public class CacheExpireTest {
             server.start();
             int port = server.getLocalPort();
             server.getCache().getStats().resetCacheMetrics();
+            server.getCurrentConfiguration().setRequestCompressionEnabled(false);
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
                 resp.getHeaderLines().forEach(h -> {
                     System.out.println("HEADER LINE :" + h);
                 });
@@ -90,7 +91,7 @@ public class CacheExpireTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
                 resp.getHeaderLines().forEach(h -> {
                     System.out.println("HEADER LINE :" + h);
                 });
@@ -130,7 +131,7 @@ public class CacheExpireTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-no-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
                 resp.getHeaderLines().forEach(h -> {
                     System.out.println("HEADER LINE :" + h);
                 });
@@ -142,7 +143,7 @@ public class CacheExpireTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-no-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
                 resp.getHeaderLines().forEach(h -> {
                     System.out.println("HEADER LINE :" + h);
                 });
@@ -183,7 +184,7 @@ public class CacheExpireTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
                 resp.getHeaderLines().forEach(h -> {
                     System.out.println("HEADER LINE :" + h);
                 });
@@ -195,7 +196,7 @@ public class CacheExpireTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
                 resp.getHeaderLines().forEach(h -> {
                     System.out.println("HEADER LINE :" + h);
                 });
@@ -238,7 +239,7 @@ public class CacheExpireTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
                 resp.getHeaderLines().forEach(h -> {
                     System.out.println("HEADER LINE :" + h);
                 });
@@ -257,7 +258,7 @@ public class CacheExpireTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
                 resp.getHeaderLines().forEach(h -> {
                     System.out.println("HEADER LINE :" + h);
                 });
@@ -301,7 +302,7 @@ public class CacheExpireTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
                 resp.getHeaderLines().forEach(h -> {
                     System.out.println("HEADER LINE :" + h);
                 });

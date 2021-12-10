@@ -70,13 +70,13 @@ public class XForwardedForFilterTest {
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nX-Forwarded-For: 1.2.3.4\r\nConnection: close\r\n\r\n").toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
             }
         }
     }
@@ -110,7 +110,7 @@ public class XForwardedForFilterTest {
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nX-Forwarded-For: 1.2.3.4\r\nConnection: close\r\n\r\n").toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
             }
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").toString();

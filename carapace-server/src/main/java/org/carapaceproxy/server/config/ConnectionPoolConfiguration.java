@@ -34,6 +34,7 @@ public class ConnectionPoolConfiguration {
     private final int connectTimeout;
     private final int stuckRequestTimeout;
     private final int idleTimeout;
+    private final int disposeTimeout;
     private final boolean enabled;
 
 }

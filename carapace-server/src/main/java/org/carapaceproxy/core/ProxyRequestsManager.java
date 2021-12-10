@@ -55,6 +55,7 @@ import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.server.mapper.CustomHeader;
+import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.HttpUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
 import org.reactivestreams.Publisher;
@@ -321,11 +322,12 @@ public class ProxyRequestsManager {
             client = HttpClient.create(connectionProvider)
                     .host(endpointHost)
                     .port(endpointPort)
+                    .followRedirect(false) // clients has to request the redirect, not the proxy
+                    .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
+                    .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
                     .option(ChannelOption.SO_KEEPALIVE, true) // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
                     .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
                     .headers(h -> h.add(request.getRequestHeaders().copy()))
-                    .followRedirect(true)
-                    .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
                     .doOnRequest((req, conn) -> {
                         PENDING_REQUESTS_GAUGE.inc();
                         requestRunning = true;
@@ -476,6 +478,7 @@ public class ProxyRequestsManager {
                     newConfiguration.getConnectTimeout(),
                     newConfiguration.getStuckRequestTimeout(),
                     newConfiguration.getIdleTimeout(),
+                    newConfiguration.getDisposeTimeout(),
                     true
             ));
 
@@ -487,6 +490,8 @@ public class ProxyRequestsManager {
                 ConnectionProvider.Builder builder = ConnectionProvider.builder(connectionPool.getId())
                         .pendingAcquireTimeout(Duration.ofMillis(connectionPool.getBorrowTimeout()))
                         .maxIdleTime(Duration.ofMillis(connectionPool.getIdleTimeout()))
+                        .disposeTimeout(Duration.ofMillis(connectionPool.getDisposeTimeout()))
+                        .lifo()
                         .metrics(true);
 
                 // max connections per endpoint limit setup
@@ -508,25 +513,26 @@ public class ProxyRequestsManager {
         @Override
         public void close() {
             connectionPools.values().forEach(connectionProvider -> {
-                connectionProvider.disposeLater().block();
+                connectionProvider.dispose(); // graceful shutdown according to disposeTimeout
             });
             connectionPools.clear();
 
             if (defaultConnectionPool != null) {
-                defaultConnectionPool.getValue()
-                        .disposeLater()
-                        .block();
-                defaultConnectionPool = null;
+                defaultConnectionPool.getValue().dispose(); // graceful shutdown according to disposeTimeout
             }
         }
 
         @Override
         public Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> apply(ProxyRequest t) {
             String hostName = t.getRemoteAddress().getHostName();
-            return connectionPools.entrySet().stream()
+            Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> selectedPool = connectionPools.entrySet().stream()
                     .filter(e -> Pattern.matches(e.getKey().getDomain(), hostName))
                     .findFirst()
                     .orElse(defaultConnectionPool);
+
+            CarapaceLogger.debug("Using connection {0} for domain {1}", selectedPool.getKey().getId(), hostName);
+
+            return selectedPool;
         }
     }
 
