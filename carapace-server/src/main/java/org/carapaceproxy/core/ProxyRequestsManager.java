@@ -471,16 +471,7 @@ public class ProxyRequestsManager {
             ArrayList<ConnectionPoolConfiguration> _connectionPools = new ArrayList<>(newConfiguration.getConnectionPools());
 
             // default pool
-            _connectionPools.add(new ConnectionPoolConfiguration(
-                    "*", "*",
-                    newConfiguration.getMaxConnectionsPerEndpoint(),
-                    newConfiguration.getBorrowTimeout(),
-                    newConfiguration.getConnectTimeout(),
-                    newConfiguration.getStuckRequestTimeout(),
-                    newConfiguration.getIdleTimeout(),
-                    newConfiguration.getDisposeTimeout(),
-                    true
-            ));
+            _connectionPools.add(newConfiguration.getDefaultConnectionPool());
 
             _connectionPools.forEach(connectionPool -> {
                 if (!connectionPool.isEnabled()) {

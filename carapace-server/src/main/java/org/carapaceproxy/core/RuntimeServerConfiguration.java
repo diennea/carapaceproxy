@@ -60,6 +60,7 @@ public class RuntimeServerConfiguration {
     private final Map<String, SSLCertificateConfiguration> certificates = new HashMap<>();
     private final List<RequestFilterConfiguration> requestFilters = new ArrayList<>();
     private final List<ConnectionPoolConfiguration> connectionPools = new ArrayList<>();
+    private ConnectionPoolConfiguration defaultConnectionPool;
 
     private int maxConnectionsPerEndpoint = 10;
     private int idleTimeout = 60_000;
@@ -94,6 +95,19 @@ public class RuntimeServerConfiguration {
     private int clientsIdleTimeoutSeconds = 120;
     private int responseCompressionThreshold; // bytes; default (0) enabled for all requests
     private boolean requestCompressionEnabled = true;
+
+    public RuntimeServerConfiguration() {
+        defaultConnectionPool = new ConnectionPoolConfiguration(
+                "*", "*",
+                maxConnectionsPerEndpoint,
+                borrowTimeout,
+                connectTimeout,
+                stuckRequestTimeout,
+                idleTimeout,
+                disposeTimeout,
+                true
+        );
+    }
 
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
         LOG.log(Level.INFO, "configuring from {0}", properties);
@@ -296,6 +310,19 @@ public class RuntimeServerConfiguration {
             connectionPools.add(connectionPool);
             LOG.log(Level.INFO, "Configured connectionpool." + i + ": {0}", connectionPool);
         }
+
+        // dafault connection pool
+        defaultConnectionPool = new ConnectionPoolConfiguration(
+                "*", "*",
+                getMaxConnectionsPerEndpoint(),
+                getBorrowTimeout(),
+                getConnectTimeout(),
+                getStuckRequestTimeout(),
+                getIdleTimeout(),
+                getDisposeTimeout(),
+                true
+        );
+        LOG.log(Level.INFO, "Configured default connectionpool: {0}", defaultConnectionPool);
     }
 
     public void addListener(NetworkListenerConfiguration listener) throws ConfigurationNotValidException {

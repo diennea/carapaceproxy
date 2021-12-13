@@ -30,12 +30,16 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.HashMap;
 import java.util.Properties;
 import org.carapaceproxy.utils.RawHttpClient;
 import java.util.Map;
+import org.carapaceproxy.api.ConnectionPoolsResource;
 import org.carapaceproxy.api.UseAdminServer;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.core.ProxyRequestsManager;
@@ -48,6 +52,8 @@ import reactor.netty.http.server.HttpServerRequest;
 import reactor.netty.resources.ConnectionProvider;
 
 public class ConnectionPoolTest extends UseAdminServer {
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
@@ -236,5 +242,45 @@ public class ConnectionPoolTest extends UseAdminServer {
             assertThat(maxConnectionsPerHost.size(), is(2));
             maxConnectionsPerHost.values().stream().allMatch(e -> e == 20);
         }
+    }
+
+    @Test
+    public void testAPIResource() throws Exception {
+        configureAndStartServer();
+        int port = server.getLocalPort();
+
+        try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+            String s1 = client.get("/index.html").getBodyString();
+            assertEquals("it <b>works</b> !!", s1);
+        }
+
+        try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+            RawHttpClient.HttpResponse response = client.get("/api/connectionpools", credentials);
+            TypeReference<HashMap<String, ConnectionPoolsResource.ConnectionPoolBean>> typeRef = new TypeReference<HashMap<String, ConnectionPoolsResource.ConnectionPoolBean>>() {
+            };
+            Map<String, ConnectionPoolsResource.ConnectionPoolBean> pools = MAPPER.readValue(response.getBodyString(), typeRef);
+            assertThat(pools.size(), is(4));
+
+            // default pool
+            assertThat(pools.get("*"), is(new ConnectionPoolsResource.ConnectionPoolBean(
+                    "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 50_000, true, 0
+            )));
+
+            // pool with defaults
+            assertThat(pools.get("localhost"), is(new ConnectionPoolsResource.ConnectionPoolBean(
+                    "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, 50_000, true, 1
+            )));
+
+            // disabled custom pool
+            assertThat(pools.get("localhost2"), is(new ConnectionPoolsResource.ConnectionPoolBean(
+                    "localhost2", "localhost2", 10, 5_000, 10_000, 15_000, 20_000, 50_000, false, 0
+            )));
+
+            // custom pool
+            assertThat(pools.get("localhosts"), is(new ConnectionPoolsResource.ConnectionPoolBean(
+                    "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, 25_000, true, 0
+            )));
+        }
+
     }
 }

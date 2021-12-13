@@ -7,32 +7,37 @@
                     {
                         label: 'Backends',
                         icoName: 'server',
-                        href: '/',
+                        href: '/'
+                    },
+                    {
+                        label: 'Connection Pools',
+                        icoName: 'database',
+                        href: '/connectionpools'
                     },
                     {
                         label: 'Directors',
                         icoName: 'crosshairs',
-                        href: '/directors',
+                        href: '/directors'
                     },
                     {
                         label: 'Actions',
                         icoName: 'bolt',
-                        href: '/actions',
+                        href: '/actions'
                     },
                     {
                         label: 'Routes',
                         icoName: 'map-signs',
-                        href: '/routes',
+                        href: '/routes'
                     },
                     {
                         label: 'Listeners',
                         icoName: 'door-open',
-                        href: '/listeners',
+                        href: '/listeners'
                     },
                     {
                         label: 'Headers',
                         icoName: 'heading',
-                        href: '/headers',
+                        href: '/headers'
                     },
                     {
                         label: 'Filters',
@@ -42,32 +47,32 @@
                     {
                         label: 'Certificates',
                         icoName: 'file-signature',
-                        href: '/certificates',
+                        href: '/certificates'
                     },
-                        {
+                    {
                         label: 'Cache',
                         icoName: 'archive',
-                        href: '/cache',
+                        href: '/cache'
                     },
                     {
                         label: 'Users',
                         icoName: 'users',
-                        href: '/users',
+                        href: '/users'
                     },
                     {
                         label: 'Metrics',
                         icoName: 'chart-bar',
-                        href: '/metrics',
+                        href: '/metrics'
                     },
                     {
                         label: 'Peers',
                         icoName: 'network-wired',
-                        href: '/peers',
+                        href: '/peers'
                     },
                     {
                         label: 'Configuration',
                         icoName: 'sliders-h',
-                        href: '/configuration',
+                        href: '/configuration'
                     }
                 ]"
             />
