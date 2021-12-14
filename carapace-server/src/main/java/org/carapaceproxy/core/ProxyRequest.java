@@ -19,7 +19,6 @@
  */
 package org.carapaceproxy.core;
 
-import com.google.common.annotations.VisibleForTesting;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
@@ -131,6 +130,10 @@ public class ProxyRequest implements MatchingContext {
 
     public String getUri() {
         return request.uri();
+    }
+
+    public String getRequestHostname() {
+        return request.requestHeaders().get(HttpHeaderNames.HOST);
     }
 
     public UrlEncodedQueryString getQueryString() {

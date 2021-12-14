@@ -85,6 +85,7 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.RawHttpServer;
 import org.junit.After;
@@ -310,9 +311,9 @@ public class RawClientTest {
             CarapaceLogger.setLoggingDebugEnabled(true);
 
             try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
-                proxy.getCurrentConfiguration().setMaxConnectionsPerEndpoint(1);
+                ConnectionPoolConfiguration defaultConnectionPool = proxy.getCurrentConfiguration().getDefaultConnectionPool();
+                defaultConnectionPool.setMaxConnectionsPerEndpoint(1);
                 proxy.getCurrentConfiguration().setClientsIdleTimeoutSeconds(300);
-                proxy.getCurrentConfiguration().setBorrowTimeout(300_000);
                 proxy.getProxyRequestsManager().reloadConfiguration(proxy.getCurrentConfiguration(), mapper.getBackends().values());
                 proxy.start();
                 int port = proxy.getLocalPort();
@@ -384,7 +385,7 @@ public class RawClientTest {
                             future.get();
                         } catch (InterruptedException | ExecutionException e) {
                             System.out.println("ERR" + e);
-                            System.out.println(e);
+                            failed.set(true);
                         }
                     }
                     ex.shutdown();
@@ -522,8 +523,10 @@ public class RawClientTest {
         CarapaceLogger.setLoggingDebugEnabled(true);
 
         try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
-            proxy.getCurrentConfiguration().setMaxConnectionsPerEndpoint(1);
+            ConnectionPoolConfiguration defaultConnectionPool = proxy.getCurrentConfiguration().getDefaultConnectionPool();
+            defaultConnectionPool.setMaxConnectionsPerEndpoint(1);
             proxy.getCurrentConfiguration().setClientsIdleTimeoutSeconds(10);
+            proxy.getProxyRequestsManager().reloadConfiguration(proxy.getCurrentConfiguration(), mapper.getBackends().values());
             proxy.start();
             int port = proxy.getLocalPort();
             assertTrue(port > 0);
@@ -532,7 +535,7 @@ public class RawClientTest {
             AtomicBoolean c2go = new AtomicBoolean();
             try {
                 futures.add(ex.submit(() -> {
-                    try (RawHttpClient client1 = new RawHttpClient("localhost", port)) {
+                    try (RawHttpClient client1 = new RawHttpClient("localhost", port, 300_000)) {
                         String body = "filler-content";
                         String request = "POST /index.html HTTP/1.1"
                                 + "\r\nHost: localhost"
@@ -558,6 +561,7 @@ public class RawClientTest {
                         }
                     } catch (Throwable e) {
                         System.out.println("EXCEPTION: " + e);
+                        failed.set(true);
                     }
                 }));
                 futures.add(ex.submit(() -> {
@@ -565,7 +569,7 @@ public class RawClientTest {
                         while (!c2go.get()) {
                             Thread.sleep(1_000);
                         }
-                        try (RawHttpClient client2 = new RawHttpClient("localhost", port)) {
+                        try (RawHttpClient client2 = new RawHttpClient("localhost", port, 300_000)) {
                             RawHttpClient.HttpResponse res = client2.get("/index.html");
                             String resp = res.getBodyString();
                             System.out.println("### RESP client2: " + resp);
@@ -584,6 +588,7 @@ public class RawClientTest {
                         future.get();
                     } catch (InterruptedException | ExecutionException e) {
                         System.out.println("ERR" + e);
+                        failed.set(true);
                     }
                 }
                 ex.shutdown();
@@ -593,4 +598,99 @@ public class RawClientTest {
         }
     }
 
+    @Test
+    public void testMaxConnectionsAndBorrowTimeout() throws Exception {
+        CarapaceLogger.setLoggingDebugEnabled(true);
+        ExecutorService ex = Executors.newFixedThreadPool(2);
+        List<Future> futures = new ArrayList<>();
+        AtomicBoolean responseEnabled = new AtomicBoolean();
+
+        try (DummyServer server = new DummyServer("localhost", 8086, responseEnabled)) {
+            TestEndpointMapper mapper = new TestEndpointMapper("localhost", 8086, false);
+            try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+                ConnectionPoolConfiguration defaultConnectionPool = proxy.getCurrentConfiguration().getDefaultConnectionPool();
+                defaultConnectionPool.setMaxConnectionsPerEndpoint(1);
+                defaultConnectionPool.setBorrowTimeout(1);
+                proxy.getProxyRequestsManager().reloadConfiguration(proxy.getCurrentConfiguration(), mapper.getBackends().values());
+                proxy.start();
+                int port = proxy.getLocalPort();
+                assertTrue(port > 0);
+
+                AtomicBoolean failed = new AtomicBoolean();
+                AtomicBoolean c2go = new AtomicBoolean();
+                try {
+                    futures.add(ex.submit(() -> {
+                        try (RawHttpClient client1 = new RawHttpClient("localhost", port, 300_000)) {
+                            String body = "filler-content";
+                            String request = "POST /index.html HTTP/1.1"
+                                    + "\r\n" + HttpHeaderNames.HOST + ": localhost"
+                                    + "\r\n" + HttpHeaderNames.CONNECTION + ": " + HttpHeaderValues.KEEP_ALIVE
+                                    + "\r\n" + HttpHeaderNames.CONTENT_TYPE + ": " + HttpHeaderValues.TEXT_PLAIN
+                                    + "\r\n" + HttpHeaderNames.EXPECT + ": " + HttpHeaderValues.CONTINUE
+                                    + "\r\n" + HttpHeaderNames.CONTENT_LENGTH + ": " + body.length()
+                                    + "\r\n\r\n";
+
+                            Socket socket = client1.getSocket();
+                            OutputStream oo = socket.getOutputStream();
+
+                            oo.write(request.getBytes(StandardCharsets.UTF_8));
+                            oo.flush();
+                            Thread.sleep(5_000);
+                            c2go.set(true);
+                            Thread.sleep(15_000); // throws client2 borrow timeout (no connections available)
+
+                            oo.write(body.getBytes(StandardCharsets.UTF_8));
+                            oo.flush();
+
+                            String resp = consumeHttpResponseInput(socket.getInputStream()).getStatusLine();
+                            System.out.println("### RESP client1: " + resp);
+                            if (!resp.contains("HTTP/1.1 100 Continue")) {
+                                failed.set(true);
+                                return;
+                            }
+                            resp = consumeHttpResponseInput(socket.getInputStream()).getBodyString();
+                            System.out.println("### RESP client1: " + resp);
+                            if (!resp.contains("resp=client1")) {
+                                failed.set(true);
+                            }
+                        } catch (Exception e) {
+                            System.out.println("EXCEPTION client1: " + e);
+                            failed.set(true);
+                        }
+                    }));
+                    futures.add(ex.submit(() -> {
+                        try {
+                            while (!c2go.get()) {
+                                Thread.sleep(1_000);
+                            }
+                            try (RawHttpClient client2 = new RawHttpClient("localhost", port, 300_000)) {
+                                String resp = client2.get("/index.html").getBodyString();
+                                System.out.println("### RESP client2: " + resp);
+                                if (!resp.contains("An internal error occurred")) { // borrow timeout
+                                    failed.set(true);
+                                    return;
+                                }
+                                responseEnabled.set(true);
+                            }
+                        } catch (Exception e) {
+                            System.out.println("EXCEPTION client2: " + e);
+                            failed.set(true);
+                        }
+                    }));
+                } finally {
+                    for (Future future : futures) {
+                        try {
+                            future.get();
+                        } catch (InterruptedException | ExecutionException e) {
+                            System.out.println("ERR" + e);
+                            failed.set(true);
+                        }
+                    }
+                    ex.shutdown();
+                    ex.awaitTermination(1, TimeUnit.MINUTES);
+                }
+                assertThat(failed.get(), is(false));
+            }
+        }
+    }
 }

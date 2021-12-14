@@ -318,6 +318,13 @@ public class ProxyRequestsManager {
             Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> connectionToEndpoint = connectionsManager.apply(request);
             ConnectionPoolConfiguration connectionConfig = connectionToEndpoint.getKey();
             ConnectionProvider connectionProvider = connectionToEndpoint.getValue();
+            if (CarapaceLogger.isLoggingDebugEnabled()) {
+                Map<String, HttpProxyServer.ConnectionPoolStats> stats = parent.getConnectionPoolsStats().get(EndpointKey.make(endpointHost, endpointPort));
+                if (stats != null) {
+                    CarapaceLogger.debug("Connection {0} stats: {1}", connectionConfig.getId(), stats.get(connectionConfig.getId()));
+                }
+                CarapaceLogger.debug("Max connections for {0}: {1}", connectionConfig.getId(), connectionProvider.maxConnectionsPerHost());
+            }
 
             client = HttpClient.create(connectionProvider)
                     .host(endpointHost)
@@ -479,18 +486,21 @@ public class ProxyRequestsManager {
                 }
 
                 ConnectionProvider.Builder builder = ConnectionProvider.builder(connectionPool.getId())
-                        .pendingAcquireTimeout(Duration.ofMillis(connectionPool.getBorrowTimeout()))
-                        .maxIdleTime(Duration.ofMillis(connectionPool.getIdleTimeout()))
-                        .disposeTimeout(Duration.ofMillis(connectionPool.getDisposeTimeout()))
-                        .lifo()
-                        .metrics(true);
+                        .disposeTimeout(Duration.ofMillis(connectionPool.getDisposeTimeout()));
 
                 // max connections per endpoint limit setup
                 newEndpoints.forEach(be -> {
-                    builder.forRemoteHost(new InetSocketAddress(
-                            be.getHost(), be.getPort()),
-                            spec -> spec.maxConnections(connectionPool.getMaxConnectionsPerEndpoint())
+                    CarapaceLogger.debug("Setup max connections per endpoint {0}:{1} = {2} for connectionpool {3}",
+                            be.getHost(), be.getPort() + "", connectionPool.getMaxConnectionsPerEndpoint(), connectionPool.getId()
                     );
+                    builder.forRemoteHost(InetSocketAddress.createUnresolved(be.getHost(), be.getPort()), spec -> {
+                        spec.maxConnections(connectionPool.getMaxConnectionsPerEndpoint());
+                        spec.pendingAcquireTimeout(Duration.ofMillis(connectionPool.getBorrowTimeout()));
+                        spec.maxIdleTime(Duration.ofMillis(connectionPool.getIdleTimeout()));
+                        spec.evictInBackground(Duration.ofMillis(connectionPool.getIdleTimeout() * 2));
+                        spec.lifo();
+                        spec.metrics(true);
+                    });
                 });
 
                 if (connectionPool.getId().equals("*")) {
@@ -514,8 +524,8 @@ public class ProxyRequestsManager {
         }
 
         @Override
-        public Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> apply(ProxyRequest t) {
-            String hostName = t.getRemoteAddress().getHostName();
+        public Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> apply(ProxyRequest request) {
+            String hostName = request.getRequestHostname();
             Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> selectedPool = connectionPools.entrySet().stream()
                     .filter(e -> Pattern.matches(e.getKey().getDomain(), hostName))
                     .findFirst()

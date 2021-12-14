@@ -48,24 +48,28 @@ import javax.net.ssl.SSLSocketFactory;
 public final class RawHttpClient implements AutoCloseable {
 
     private static final boolean DEBUG = false;
-    private static final int SOCKET_SO_TIMEOUT = 10_000; // millis
+    private static final int DEFAULT_SOCKET_SO_TIMEOUT = 10_000; // millis
 
     private final Socket socket;
     private final String host;
 
+    public RawHttpClient(String host, int port, int socketTimeout) throws IOException {
+        this(host, port, false, null, null, socketTimeout);
+    }
+
     public RawHttpClient(String host, int port) throws IOException {
-        this(host, port, false);
+        this(host, port, false, null, null, DEFAULT_SOCKET_SO_TIMEOUT);
     }
 
     public RawHttpClient(String host, int port, boolean ssl) throws IOException {
-        this(host, port, ssl, null, null);
+        this(host, port, ssl, null, null, DEFAULT_SOCKET_SO_TIMEOUT);
     }
 
     public RawHttpClient(String host, int port, boolean ssl, String sniHostname) throws IOException {
-        this(host, port, ssl, sniHostname, null);
+        this(host, port, ssl, sniHostname, null, DEFAULT_SOCKET_SO_TIMEOUT);
     }
 
-    public RawHttpClient(String host, int port, boolean ssl, String sniHostname, String[] sslProtocols) throws IOException {
+    public RawHttpClient(String host, int port, boolean ssl, String sniHostname, String[] sslProtocols, int socketTimeout) throws IOException {
         this.host = host;
         if (ssl) {
             SSLSocketFactory factory = HttpTestUtils.getSocket_factory();
@@ -85,11 +89,11 @@ public final class RawHttpClient implements AutoCloseable {
         } else {
             socket = new Socket(host, port);
         }
-        socket.setSoTimeout(SOCKET_SO_TIMEOUT);
+        socket.setSoTimeout(socketTimeout);
     }
 
     public static RawHttpClient withEnabledSSLProtocols(String host, int port, String... protocols) throws IOException {
-        return new RawHttpClient(host, port, true, null, protocols);
+        return new RawHttpClient(host, port, true, null, protocols, DEFAULT_SOCKET_SO_TIMEOUT);
     }
 
     public Certificate[] getServerCertificate() throws SSLPeerUnverifiedException {
