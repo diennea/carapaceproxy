@@ -41,6 +41,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.github.tomakehurst.wiremock.matching.UrlPattern;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
@@ -690,6 +691,27 @@ public class RawClientTest {
                     ex.awaitTermination(1, TimeUnit.MINUTES);
                 }
                 assertThat(failed.get(), is(false));
+            }
+        }
+    }
+
+    @Test
+    public void testInvalidUriChars() throws Exception {
+        stubFor(get(UrlPattern.ANY)
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withBody("it <b>works</b> !!")));
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            server.start();
+            int port = server.getLocalPort();
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                String s = client.executeRequest("GET /index[1].html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").getBodyString();
+                System.out.println("s:" + s);
+                assertEquals("it <b>works</b> !!", s);
             }
         }
     }

@@ -18,7 +18,6 @@
         },
         created() {
             doGet("/api/connectionpools", data => {
-                console.log(data)
                 this.connectionPools = Object.values(data || {});
             });
         },
