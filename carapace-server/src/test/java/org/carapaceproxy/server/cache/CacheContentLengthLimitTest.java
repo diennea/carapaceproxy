@@ -88,6 +88,7 @@ public class CacheContentLengthLimitTest {
         {
             try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(0);
+                server.getCurrentConfiguration().setRequestCompressionEnabled(false);
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
                 server.start();
 
@@ -103,6 +104,7 @@ public class CacheContentLengthLimitTest {
         {
             try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(body.length());
+                server.getCurrentConfiguration().setRequestCompressionEnabled(false);
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
                 server.start();
 
@@ -118,6 +120,7 @@ public class CacheContentLengthLimitTest {
         {
             try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(body.length() - 1);
+                server.getCurrentConfiguration().setRequestCompressionEnabled(false);
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
                 server.start();
 
@@ -139,9 +142,9 @@ public class CacheContentLengthLimitTest {
             String s = resp.toString();
             System.out.println("s:" + s);
             if (!chunked) {
-                assertTrue(s.endsWith(body));
+                assertTrue(s.contains(body));
             } else {
-                assertTrue(s.endsWith(
+                assertTrue(s.contains(
                         Integer.toString(body.length(), 16) + "\r\n"
                         + body + "\r\n"
                         + "0\r\n\r\n"));

@@ -20,7 +20,6 @@
 package org.carapaceproxy.utils;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import org.carapaceproxy.configstore.ConfigurationStore;
@@ -50,7 +49,7 @@ public class TestEndpointMapper extends EndpointMapper {
     }
 
     public TestEndpointMapper(String host, int port, boolean cacheAll) {
-        this(host, port, cacheAll, Collections.EMPTY_MAP);
+        this(host, port, cacheAll, Map.of(host, new BackendConfiguration(host, host, port, "/index.html")));
     }
 
     public TestEndpointMapper(String host, int port, boolean cacheAll, Map<String, BackendConfiguration> backends) {

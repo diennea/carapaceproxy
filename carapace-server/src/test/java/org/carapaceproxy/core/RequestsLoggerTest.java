@@ -525,7 +525,7 @@ public class RequestsLoggerTest {
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
                 assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
             }
 
@@ -533,14 +533,14 @@ public class RequestsLoggerTest {
                 {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                     String s = resp.toString();
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
 
                 {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                     String s = resp.toString();
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
             }
@@ -574,31 +574,31 @@ public class RequestsLoggerTest {
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                     String s = resp.toString();
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                 }
 
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     {
                         RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                         String s = resp.toString();
-                        assertTrue(s.endsWith("it <b>works</b> !!"));
+                        assertTrue(s.contains("it <b>works</b> !!"));
                     }
 
                     {
                         RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                         String s = resp.toString();
-                        assertTrue(s.endsWith("it <b>works</b> !!"));
+                        assertTrue(s.contains("it <b>works</b> !!"));
                     }
                 }
             }
             Thread.sleep(3000);
             //check if gzip file exist
-            File[] f = new File(tmpDir.getRoot().getAbsolutePath()).listFiles((dir, name) -> name.startsWith("access") && name.endsWith(".gzip"));
+            File[] f = new File(tmpDir.getRoot().getAbsolutePath()).listFiles((dir, name) -> name.startsWith("access") && name.contains(".gzip"));
             assertTrue(f.length == 1);
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
             }
             assertTrue(logFileChannel.size() > 0);
         }

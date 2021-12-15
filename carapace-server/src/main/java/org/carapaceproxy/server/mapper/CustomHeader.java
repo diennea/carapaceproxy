@@ -19,12 +19,15 @@
  */
 package org.carapaceproxy.server.mapper;
 
+import lombok.Data;
+
 /**
  *
  * Custom Header to add/set/remove in HttpResponses
  *
  * @author paolo.venturi
  */
+@Data
 public final class CustomHeader {
 
     public static enum HeaderMode {
@@ -43,26 +46,4 @@ public final class CustomHeader {
     private final String value;
     private final HeaderMode mode;
 
-    public CustomHeader(String id, String name, String value, HeaderMode mode) {
-        this.id = id;
-        this.name = name;
-        this.value = value;
-        this.mode = mode;
-    }
-
-    public String getId() {
-        return id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getValue() {
-        return value;
-    }
-
-    public HeaderMode getMode() {
-        return mode;
-    }
 }

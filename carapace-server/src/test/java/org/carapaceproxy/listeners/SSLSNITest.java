@@ -79,7 +79,7 @@ public class SSLSNITest {
 
             try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-                assertTrue(resp.toString().endsWith("it <b>works</b> !!"));
+                assertTrue(resp.toString().contains("it <b>works</b> !!"));
                 X509Certificate cert = (X509Certificate) client.getSSLSocket().getSession().getPeerCertificates()[0];
                 System.out.println("acert2: " + cert.getSerialNumber());
             }
@@ -155,7 +155,7 @@ public class SSLSNITest {
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-                assertTrue(resp.toString().endsWith("it <b>works</b> !!"));
+                assertTrue(resp.toString().contains("it <b>works</b> !!"));
                 SSLSession session = client.getSSLSocket().getSession();
                 assertTrue("TLSv1.3".equals(session.getProtocol()));
             }
@@ -170,7 +170,7 @@ public class SSLSNITest {
                 int port = server.getLocalPort();
                 try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-                    assertTrue(resp.toString().endsWith("it <b>works</b> !!"));
+                    assertTrue(resp.toString().contains("it <b>works</b> !!"));
                     SSLSession session = client.getSSLSocket().getSession();
                     assertEquals(proto, session.getProtocol());
                 }
@@ -183,7 +183,7 @@ public class SSLSNITest {
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-                assertTrue(resp.toString().endsWith("it <b>works</b> !!"));
+                assertTrue(resp.toString().contains("it <b>works</b> !!"));
                 SSLSession session = client.getSSLSocket().getSession();
                 assertTrue(DEFAULT_SSL_PROTOCOLS.contains(session.getProtocol()));
             }

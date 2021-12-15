@@ -60,13 +60,15 @@ public class RuntimeServerConfiguration {
     private final Map<String, SSLCertificateConfiguration> certificates = new HashMap<>();
     private final List<RequestFilterConfiguration> requestFilters = new ArrayList<>();
     private final List<ConnectionPoolConfiguration> connectionPools = new ArrayList<>();
+    private ConnectionPoolConfiguration defaultConnectionPool;
 
     private int maxConnectionsPerEndpoint = 10;
-    private int idleTimeout = 60000;
-    private int stuckRequestTimeout = 120000;
+    private int idleTimeout = 60_000;
+    private int stuckRequestTimeout = 120_000;
     private boolean backendsUnreachableOnStuckRequests = false;
-    private int connectTimeout = 10000;
-    private int borrowTimeout = 60000;
+    private int connectTimeout = 10_000;
+    private int borrowTimeout = 60_000;
+    private int disposeTimeout = 300_000; // 5 min;
     private long cacheMaxSize = 0;
     private long cacheMaxFileSize = 0;
     private boolean cacheDisabledForSecureRequestsWithoutPublic = false;
@@ -90,8 +92,22 @@ public class RuntimeServerConfiguration {
     private Set<String> domainsCheckerIPAddresses;
     private List<String> supportedSSLProtocols = null;
     private int ocspStaplingManagerPeriod = 0;
-    private boolean requestsHeaderDebugEnabled = false;
     private int clientsIdleTimeoutSeconds = 120;
+    private int responseCompressionThreshold; // bytes; default (0) enabled for all requests
+    private boolean requestCompressionEnabled = true;
+
+    public RuntimeServerConfiguration() {
+        defaultConnectionPool = new ConnectionPoolConfiguration(
+                "*", "*",
+                maxConnectionsPerEndpoint,
+                borrowTimeout,
+                connectTimeout,
+                stuckRequestTimeout,
+                idleTimeout,
+                disposeTimeout,
+                true
+        );
+    }
 
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
         LOG.log(Level.INFO, "configuring from {0}", properties);
@@ -104,12 +120,14 @@ public class RuntimeServerConfiguration {
         this.backendsUnreachableOnStuckRequests = properties.getBoolean("connectionsmanager.backendsunreachableonstuckrequests", backendsUnreachableOnStuckRequests);
         this.connectTimeout = properties.getInt("connectionsmanager.connecttimeout", connectTimeout);
         this.borrowTimeout = properties.getInt("connectionsmanager.borrowtimeout", borrowTimeout);
+        this.disposeTimeout = properties.getInt("connectionsmanager.disposetimeout", disposeTimeout);
         LOG.log(Level.INFO, "connectionsmanager.maxconnectionsperendpoint={0}", maxConnectionsPerEndpoint);
         LOG.log(Level.INFO, "connectionsmanager.idletimeout={0}", idleTimeout);
         LOG.log(Level.INFO, "connectionsmanager.stuckrequesttimeout={0}", stuckRequestTimeout);
         LOG.log(Level.INFO, "connectionsmanager.backendsunreachableonstuckrequests={0}", backendsUnreachableOnStuckRequests);
         LOG.log(Level.INFO, "connectionsmanager.connecttimeout={0}", connectTimeout);
         LOG.log(Level.INFO, "connectionsmanager.borrowtimeout={0}", borrowTimeout);
+        LOG.log(Level.INFO, "connectionsmanager.disposetimeout={0}", disposeTimeout);
 
         this.mapperClassname = properties.getClassname("mapper.class", StandardEndpointMapper.class.getName());
         LOG.log(Level.INFO, "mapper.class={0}", this.mapperClassname);
@@ -173,11 +191,14 @@ public class RuntimeServerConfiguration {
         boolean loggingDebugEnabled = properties.getBoolean("logging.debug.enabled", false);
         CarapaceLogger.setLoggingDebugEnabled(loggingDebugEnabled);
         LOG.log(Level.INFO, "logging.debug.enabled={0}", loggingDebugEnabled);
-        requestsHeaderDebugEnabled = properties.getBoolean("requests.header.debug.enabled", requestsHeaderDebugEnabled);
-        LOG.log(Level.INFO, "requests.header.debug.enabled={0}", requestsHeaderDebugEnabled);
 
         clientsIdleTimeoutSeconds = properties.getInt("clients.idle.timeout", clientsIdleTimeoutSeconds);
         LOG.log(Level.INFO, "clients.idle.timeout={0}", clientsIdleTimeoutSeconds);
+
+        responseCompressionThreshold = properties.getInt("response.compression.threshold", responseCompressionThreshold);
+        LOG.log(Level.INFO, "response.compression.threshold={0}", responseCompressionThreshold);
+        requestCompressionEnabled = properties.getBoolean("request.compression.enabled", requestCompressionEnabled);
+        LOG.log(Level.INFO, "request.compression.enabled={0}", requestCompressionEnabled);
     }
 
     private void configureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
@@ -273,6 +294,7 @@ public class RuntimeServerConfiguration {
             int connecttimeout = properties.getInt(prefix + "connecttimeout", connectTimeout);
             int stuckrequesttimeout = properties.getInt(prefix + "stuckrequesttimeout", stuckRequestTimeout);
             int idletimeout = properties.getInt(prefix + "idletimeout", idleTimeout);
+            int disposetimeout = properties.getInt(prefix + "disposetimeout", disposeTimeout);
             boolean enabled = properties.getBoolean(prefix + "enabled", false);
 
             ConnectionPoolConfiguration connectionPool = new ConnectionPoolConfiguration(
@@ -282,11 +304,25 @@ public class RuntimeServerConfiguration {
                     connecttimeout,
                     stuckrequesttimeout,
                     idletimeout,
+                    disposetimeout,
                     enabled
             );
             connectionPools.add(connectionPool);
             LOG.log(Level.INFO, "Configured connectionpool." + i + ": {0}", connectionPool);
         }
+
+        // dafault connection pool
+        defaultConnectionPool = new ConnectionPoolConfiguration(
+                "*", "*",
+                getMaxConnectionsPerEndpoint(),
+                getBorrowTimeout(),
+                getConnectTimeout(),
+                getStuckRequestTimeout(),
+                getIdleTimeout(),
+                getDisposeTimeout(),
+                true
+        );
+        LOG.log(Level.INFO, "Configured default connectionpool: {0}", defaultConnectionPool);
     }
 
     public void addListener(NetworkListenerConfiguration listener) throws ConfigurationNotValidException {

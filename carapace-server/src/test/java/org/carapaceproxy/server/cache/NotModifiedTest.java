@@ -67,7 +67,7 @@ public class NotModifiedTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
                 resp.getHeaderLines().forEach(h -> {
                     System.out.println("HEADER LINE :" + h);
                 });

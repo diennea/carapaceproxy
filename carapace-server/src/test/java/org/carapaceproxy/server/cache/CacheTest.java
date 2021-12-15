@@ -85,7 +85,7 @@ public class CacheTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
                 resp.getHeaderLines().forEach(h -> {
                     System.out.println("HEADER LINE :" + h);
                 });
@@ -97,7 +97,7 @@ public class CacheTest {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
 
@@ -105,7 +105,7 @@ public class CacheTest {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
             }
@@ -152,7 +152,7 @@ public class CacheTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
                 resp.getHeaderLines().forEach(h -> {
                     System.out.println("HEADER LINE :" + h);
                 });
@@ -165,7 +165,7 @@ public class CacheTest {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: no-cache\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
 
@@ -173,7 +173,7 @@ public class CacheTest {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
             }
@@ -243,7 +243,7 @@ public class CacheTest {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     resp.getHeaderLines().forEach(h -> {
                         System.out.println("HEADER LINE :" + h);
                     });
@@ -253,7 +253,7 @@ public class CacheTest {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     resp.getHeaderLines().forEach(h -> {
                         System.out.println("HEADER LINE :" + h);
                     });
@@ -274,14 +274,14 @@ public class CacheTest {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: public\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
                 {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: public\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached"))); // cached due to cache-control: public header presence in second request
                 }
             }
@@ -297,14 +297,14 @@ public class CacheTest {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: puBlIc, max-age=3600\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
                 {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: puBlIc, max-age = 3600\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
             }
@@ -320,14 +320,14 @@ public class CacheTest {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: public, max-age = 0\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
                 {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: public, max-age = 0\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
             }
@@ -358,7 +358,7 @@ public class CacheTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("12\r\n"
+                assertTrue(s.contains("12\r\n"
                         + "it <b>works</b> !!\r\n"
                         + "0\r\n\r\n"));
                 resp.getHeaderLines().forEach(h -> {
@@ -372,7 +372,7 @@ public class CacheTest {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("12\r\n"
+                    assertTrue(s.contains("12\r\n"
                             + "it <b>works</b> !!\r\n"
                             + "0\r\n\r\n"));
                     assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
@@ -382,7 +382,7 @@ public class CacheTest {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("12\r\n"
+                    assertTrue(s.contains("12\r\n"
                             + "it <b>works</b> !!\r\n"
                             + "0\r\n\r\n"));
                     assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
@@ -416,7 +416,7 @@ public class CacheTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("12\r\n"
+                assertTrue(s.contains("12\r\n"
                         + "it <b>works</b> !!\r\n"
                         + "0\r\n\r\n"));
                 resp.getHeaderLines().forEach(h -> {
@@ -430,7 +430,7 @@ public class CacheTest {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("12\r\n"
+                    assertTrue(s.contains("12\r\n"
                             + "it <b>works</b> !!\r\n"
                             + "0\r\n\r\n"));
                     assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
@@ -440,7 +440,7 @@ public class CacheTest {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("12\r\n"
+                    assertTrue(s.contains("12\r\n"
                             + "it <b>works</b> !!\r\n"
                             + "0\r\n\r\n"));
                     assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
@@ -473,13 +473,13 @@ public class CacheTest {
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client.get("/index.html?_nocache").toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client.get("/index.html?_nocache").toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
             }
 
             assertEquals(0, server.getCache().getCacheSize());
@@ -508,13 +508,13 @@ public class CacheTest {
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client.get("/index.png?_nocache").toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client.get("/index.png?_nocache").toString();
                 System.out.println("s:" + s);
-                assertTrue(s.endsWith("it <b>works</b> !!"));
+                assertTrue(s.contains("it <b>works</b> !!"));
             }
 
             assertEquals(1, server.getCache().getCacheSize());
@@ -543,13 +543,13 @@ public class CacheTest {
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     String s = client.get("/index.png?_nocache").toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                 }
 
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     String s = client.get("/index.png?_nocache").toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                 }
                 assertEquals(0, server.getCache().getCacheSize());
                 assertEquals(0, server.getCache().getStats().getHits());
@@ -570,13 +570,13 @@ public class CacheTest {
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     String s = client.get("/index.png?_nocache").toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                 }
 
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     String s = client.get("/index.png?_nocache").toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                 }
                 assertEquals(0, server.getCache().getCacheSize());
                 assertEquals(0, server.getCache().getStats().getHits());
@@ -597,13 +597,13 @@ public class CacheTest {
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     String s = client.get("/index.png?_nocache").toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                 }
 
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     String s = client.get("/index.png?_nocache").toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                 }
                 assertEquals(0, server.getCache().getCacheSize());
                 assertEquals(0, server.getCache().getStats().getHits());
@@ -624,13 +624,13 @@ public class CacheTest {
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     String s = client.get("/index.png?_nocache").toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                 }
 
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     String s = client.get("/index.png?_nocache").toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                 }
                 assertEquals(0, server.getCache().getCacheSize());
                 assertEquals(0, server.getCache().getStats().getHits());
@@ -651,13 +651,13 @@ public class CacheTest {
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     String s = client.get("/index.png?_nocache").toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                 }
 
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     String s = client.get("/index.png?_nocache").toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                 }
                 assertEquals(0, server.getCache().getCacheSize());
                 assertEquals(0, server.getCache().getStats().getHits());
@@ -677,13 +677,13 @@ public class CacheTest {
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     String s = client.get("/index.png?_nocache").toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                 }
 
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     String s = client.get("/index.png?_nocache").toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                 }
                 assertEquals(1, server.getCache().getCacheSize());
                 assertEquals(1, server.getCache().getStats().getHits());
@@ -712,14 +712,14 @@ public class CacheTest {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: " + noCacheValue + "\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: " + noCacheValue + "\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
 
@@ -744,14 +744,14 @@ public class CacheTest {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: no-cache, no-store\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: no-cache, no-store\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
 
@@ -774,14 +774,14 @@ public class CacheTest {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: max-age  = 0\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: max-age  = 0\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
 
@@ -804,14 +804,14 @@ public class CacheTest {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: No-CacHe\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: No-CacHe\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
                 assertEquals(0, server.getCache().getCacheSize());
@@ -833,14 +833,14 @@ public class CacheTest {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nPragma: No-CacHe\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nPragma: No-CacHe\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                     assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                 }
                 assertEquals(0, server.getCache().getCacheSize());
@@ -861,13 +861,13 @@ public class CacheTest {
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     String s = client.get("/index.html").toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                 }
 
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     String s = client.get("/index.html").toString();
                     System.out.println("s:" + s);
-                    assertTrue(s.endsWith("it <b>works</b> !!"));
+                    assertTrue(s.contains("it <b>works</b> !!"));
                 }
                 assertEquals(1, server.getCache().getCacheSize());
                 assertEquals(1, server.getCache().getStats().getHits());

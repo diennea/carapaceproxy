@@ -56,6 +56,9 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.PrometheusUtils;
 import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
 import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.ssl.OpenSslCachingX509KeyManagerFactory;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.concurrent.Future;
@@ -65,6 +68,7 @@ import java.util.HashMap;
 import java.util.Map.Entry;
 import lombok.Data;
 import reactor.netty.DisposableServer;
+import reactor.netty.NettyPipeline;
 import reactor.netty.http.server.HttpServer;
 
 /**
@@ -212,8 +216,6 @@ public class Listeners {
                 .host(hostPort.getHost())
                 .port(hostPort.getPort())
                 //.protocol(HttpProtocol.H2) // HTTP/2.0 setup
-                //.wiretap("logger", LogLevel.DEBUG, AdvancedByteBufFormat.TEXTUAL) // logging
-                //.accessLog(true)
                 .option(ChannelOption.SO_BACKLOG, 128)
                 .childOption(ChannelOption.SO_KEEPALIVE, true)
                 .doOnChannelInit((observer, channel, remoteAddress) -> {
@@ -241,6 +243,19 @@ public class Listeners {
                         };
                         channel.pipeline().addFirst(sni);
                     }
+                    channel.pipeline().addAfter(NettyPipeline.HttpCodec, "uriEncoder", new ChannelInboundHandlerAdapter() {
+                        @Override
+                        public void channelRead(ChannelHandlerContext ctx, Object msg) {
+                            if (msg instanceof HttpRequest) {
+                                HttpRequest request = (HttpRequest) msg;
+                                request.setUri(request.uri()
+                                        .replaceAll("\\[", "%5B")
+                                        .replaceAll("\\]", "%5D")
+                                );
+                            }
+                            ctx.fireChannelRead(msg);
+                        }
+                    });
                 })
                 .doOnConnection(conn -> {
                     CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
@@ -254,6 +269,11 @@ public class Listeners {
                     ProxyRequest proxyRequest = new ProxyRequest(request, response, hostPort);
                     return parent.getProxyRequestsManager().processRequest(proxyRequest);
                 });
+
+        // response compression
+        if (currentConfiguration.getResponseCompressionThreshold() >= 0) {
+            httpServer = httpServer.compress(currentConfiguration.getResponseCompressionThreshold());
+        }
 
         // Initialization of event loop groups, native transport libraries and the native libraries for the security
         httpServer.warmup().block();

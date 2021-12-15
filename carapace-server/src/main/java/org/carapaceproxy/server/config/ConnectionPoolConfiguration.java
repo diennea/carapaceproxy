@@ -19,21 +19,24 @@
  */
 package org.carapaceproxy.server.config;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
 
 /**
  * Configuration of a single connection pool
  */
 @Data
+@AllArgsConstructor
 public class ConnectionPoolConfiguration {
 
-    private final String id;
-    private final String domain;
-    private final int maxConnectionsPerEndpoint;
-    private final int borrowTimeout;
-    private final int connectTimeout;
-    private final int stuckRequestTimeout;
-    private final int idleTimeout;
-    private final boolean enabled;
+    private String id;
+    private String domain;
+    private int maxConnectionsPerEndpoint;
+    private int borrowTimeout;
+    private int connectTimeout;
+    private int stuckRequestTimeout;
+    private int idleTimeout;
+    private int disposeTimeout;
+    private boolean enabled;
 
 }

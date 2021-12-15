@@ -30,13 +30,19 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import java.net.InetSocketAddress;
+import io.netty.handler.codec.http.HttpHeaderNames;
 import java.net.SocketAddress;
+import java.util.HashMap;
 import java.util.Properties;
 import org.carapaceproxy.utils.RawHttpClient;
 import java.util.Map;
+import org.carapaceproxy.api.ConnectionPoolsResource;
 import org.carapaceproxy.api.UseAdminServer;
+import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.core.ProxyRequestsManager;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
@@ -48,6 +54,8 @@ import reactor.netty.http.server.HttpServerRequest;
 import reactor.netty.resources.ConnectionProvider;
 
 public class ConnectionPoolTest extends UseAdminServer {
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
@@ -113,6 +121,7 @@ public class ConnectionPoolTest extends UseAdminServer {
         config.put("connectionsmanager.connecttimeout", "10000");
         config.put("connectionsmanager.stuckrequesttimeout", "15000");
         config.put("connectionsmanager.idletimeout", "20000");
+        config.put("connectionsmanager.disposetimeout", "50000");
 
         // Custom connection pool (with defaults)
         config.put("connectionpool.1.id", "localhost");
@@ -132,7 +141,9 @@ public class ConnectionPoolTest extends UseAdminServer {
         config.put("connectionpool.3.connecttimeout", "22000");
         config.put("connectionpool.3.stuckrequesttimeout", "23000");
         config.put("connectionpool.3.idletimeout", "24000");
+        config.put("connectionpool.3.disposetimeout", "25000");
         config.put("connectionpool.3.enabled", "true");
+
         changeDynamicConfiguration(config);
     }
 
@@ -148,7 +159,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         // default pool
         ConnectionPoolConfiguration defaultPool = new ConnectionPoolConfiguration(
-                "*", "*", 10, 5_000, 10_000, 15_000, 20_000, true
+                "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 50_000, true
         );
         {
             ConnectionProvider provider = connectionPools.get(defaultPool);
@@ -160,7 +171,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         // pool with defaults
         ConnectionPoolConfiguration poolWithDefaults = new ConnectionPoolConfiguration(
-                "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, true
+                "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, 50_000, true
         );
         {
             ConnectionProvider provider = connectionPools.get(poolWithDefaults);
@@ -172,7 +183,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         // custom pool
         ConnectionPoolConfiguration customPool = new ConnectionPoolConfiguration(
-                "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, true
+                "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, 25_000, true
         );
         {
             ConnectionProvider provider = connectionPools.get(customPool);
@@ -180,11 +191,6 @@ public class ConnectionPoolTest extends UseAdminServer {
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost.size(), is(2));
             maxConnectionsPerHost.values().stream().allMatch(e -> e == 20);
-        }
-
-        try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-            String s1 = client.get("/index.html").getBodyString();
-            assertEquals("it <b>works</b> !!", s1);
         }
 
         // connection pool selection
@@ -195,7 +201,7 @@ public class ConnectionPoolTest extends UseAdminServer {
             HttpServerRequest request = mock(HttpServerRequest.class);
             ProxyRequest proxyRequest = mock(ProxyRequest.class);
             when(proxyRequest.getRequest()).thenReturn(request);
-            when(proxyRequest.getRemoteAddress()).thenReturn(new InetSocketAddress("localhost*", 8086));
+            when(proxyRequest.getRequestHostname()).thenReturn("localhost*");
 
             Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> res = connectionsManager.apply(proxyRequest);
             assertThat(res.getKey(), is(defaultPool));
@@ -203,6 +209,15 @@ public class ConnectionPoolTest extends UseAdminServer {
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost.size(), is(2));
             maxConnectionsPerHost.values().stream().allMatch(e -> e == 10);
+
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\n" + HttpHeaderNames.HOST + ": localhost*" + "\r\n\r\n");
+                assertEquals("it <b>works</b> !!", resp.getBodyString());
+            }
+            Map<String, HttpProxyServer.ConnectionPoolStats> stats = server.getConnectionPoolsStats().get(EndpointKey.make("localhost", wireMockRule.port()));
+            assertThat(stats.get("*").getTotalConnections(), is(1));
+            assertThat(stats.get("localhost"), is(nullValue()));
+            assertThat(stats.get("localhosts"), is(nullValue()));
         }
 
         // provider with defaults
@@ -210,7 +225,7 @@ public class ConnectionPoolTest extends UseAdminServer {
             HttpServerRequest request = mock(HttpServerRequest.class);
             ProxyRequest proxyRequest = mock(ProxyRequest.class);
             when(proxyRequest.getRequest()).thenReturn(request);
-            when(proxyRequest.getRemoteAddress()).thenReturn(new InetSocketAddress("localhost", 8086));
+            when(proxyRequest.getRequestHostname()).thenReturn("localhost");
 
             Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> res = connectionsManager.apply(proxyRequest);
             assertThat(res.getKey(), is(poolWithDefaults));
@@ -218,6 +233,15 @@ public class ConnectionPoolTest extends UseAdminServer {
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost.size(), is(2));
             maxConnectionsPerHost.values().stream().allMatch(e -> e == 10);
+
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\n" + HttpHeaderNames.HOST + ": localhost" + "\r\n\r\n");
+                assertEquals("it <b>works</b> !!", resp.getBodyString());
+            }
+            Map<String, HttpProxyServer.ConnectionPoolStats> stats = server.getConnectionPoolsStats().get(EndpointKey.make("localhost", wireMockRule.port()));
+            assertThat(stats.get("*").getTotalConnections(), is(1));
+            assertThat(stats.get("localhost").getTotalConnections(), is(1));
+            assertThat(stats.get("localhosts"), is(nullValue()));
         }
 
         // custom provider
@@ -225,7 +249,7 @@ public class ConnectionPoolTest extends UseAdminServer {
             HttpServerRequest request = mock(HttpServerRequest.class);
             ProxyRequest proxyRequest = mock(ProxyRequest.class);
             when(proxyRequest.getRequest()).thenReturn(request);
-            when(proxyRequest.getRemoteAddress()).thenReturn(new InetSocketAddress("localhost3", 8086));
+            when(proxyRequest.getRequestHostname()).thenReturn("localhost3");
 
             Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> res = connectionsManager.apply(proxyRequest);
             assertThat(res.getKey(), is(customPool));
@@ -233,6 +257,54 @@ public class ConnectionPoolTest extends UseAdminServer {
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost.size(), is(2));
             maxConnectionsPerHost.values().stream().allMatch(e -> e == 20);
+
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\n" + HttpHeaderNames.HOST + ": localhost3" + "\r\n\r\n");
+                assertEquals("it <b>works</b> !!", resp.getBodyString());
+            }
+            Map<String, HttpProxyServer.ConnectionPoolStats> stats = server.getConnectionPoolsStats().get(EndpointKey.make("localhost", wireMockRule.port()));
+            assertThat(stats.get("*").getTotalConnections(), is(1));
+            assertThat(stats.get("localhost").getTotalConnections(), is(1));
+            assertThat(stats.get("localhosts").getTotalConnections(), is(1));
+        }
+    }
+
+    @Test
+    public void testAPIResource() throws Exception {
+        configureAndStartServer();
+        int port = server.getLocalPort();
+
+        try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+            String s1 = client.get("/index.html").getBodyString();
+            assertEquals("it <b>works</b> !!", s1);
+        }
+
+        try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+            RawHttpClient.HttpResponse response = client.get("/api/connectionpools", credentials);
+            TypeReference<HashMap<String, ConnectionPoolsResource.ConnectionPoolBean>> typeRef = new TypeReference<HashMap<String, ConnectionPoolsResource.ConnectionPoolBean>>() {
+            };
+            Map<String, ConnectionPoolsResource.ConnectionPoolBean> pools = MAPPER.readValue(response.getBodyString(), typeRef);
+            assertThat(pools.size(), is(4));
+
+            // default pool
+            assertThat(pools.get("*"), is(new ConnectionPoolsResource.ConnectionPoolBean(
+                    "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 50_000, true, 0
+            )));
+
+            // pool with defaults
+            assertThat(pools.get("localhost"), is(new ConnectionPoolsResource.ConnectionPoolBean(
+                    "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, 50_000, true, 1
+            )));
+
+            // disabled custom pool
+            assertThat(pools.get("localhost2"), is(new ConnectionPoolsResource.ConnectionPoolBean(
+                    "localhost2", "localhost2", 10, 5_000, 10_000, 15_000, 20_000, 50_000, false, 0
+            )));
+
+            // custom pool
+            assertThat(pools.get("localhosts"), is(new ConnectionPoolsResource.ConnectionPoolBean(
+                    "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, 25_000, true, 0
+            )));
         }
     }
 }
