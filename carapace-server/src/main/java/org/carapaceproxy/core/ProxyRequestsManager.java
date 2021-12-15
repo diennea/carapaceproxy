@@ -122,47 +122,51 @@ public class ProxyRequestsManager {
             action = MapResult.internalError(MapResult.NO_ROUTE);
         }
         request.setAction(action);
-        parent.getRequestsLogger().logRequest(request);
 
         if (LOGGER.isLoggable(Level.FINER)) {
             LOGGER.log(Level.FINER, "{0} Mapped {1} to {2}, userid {3}", new Object[]{this, request.getUri(), action, request.getUserId()});
         }
 
-        switch (action.action) {
-            case NOTFOUND:
-                return serveNotFoundMessage(request);
+        try {
+            switch (action.action) {
+                case NOTFOUND:
+                    return serveNotFoundMessage(request);
 
-            case INTERNAL_ERROR:
-                return serveInternalErrorMessage(request);
+                case INTERNAL_ERROR:
+                    return serveInternalErrorMessage(request);
 
-            case STATIC:
-            case ACME_CHALLENGE:
-                return serveStaticMessage(request);
+                case STATIC:
+                case ACME_CHALLENGE:
+                    return serveStaticMessage(request);
 
-            case REDIRECT:
-                return serveRedirect(request);
+                case REDIRECT:
+                    return serveRedirect(request);
 
-            case PROXY: {
-                RequestForwarder forwarder = new RequestForwarder(request, null);
-                return forwarder.forward();
-            }
-
-            case CACHE: {
-                ContentsCache.ContentSender cacheSender = parent.getCache().getCacheSender(request);
-                if (cacheSender != null) {
-                    return serveFromCache(request, cacheSender); // cached content
+                case PROXY: {
+                    RequestForwarder forwarder = new RequestForwarder(request, null);
+                    return forwarder.forward();
                 }
-                ContentsCache.ContentReceiver cacheReceiver = parent.getCache().createCacheReceiver(request);
-                if (cacheReceiver != null) { // cacheable
-                    // https://tools.ietf.org/html/rfc7234#section-4.3.4
-                    cleanRequestFromCacheValidators(request);
-                }
-                RequestForwarder forwarder = new RequestForwarder(request, cacheReceiver);
-                return forwarder.forward();
-            }
 
-            default:
-                throw new IllegalStateException("Action " + action.action + " not supported");
+                case CACHE: {
+                    ContentsCache.ContentSender cacheSender = parent.getCache().getCacheSender(request);
+                    if (cacheSender != null) {
+                        request.setServedFromCache(true);
+                        return serveFromCache(request, cacheSender); // cached content
+                    }
+                    ContentsCache.ContentReceiver cacheReceiver = parent.getCache().createCacheReceiver(request);
+                    if (cacheReceiver != null) { // cacheable
+                        // https://tools.ietf.org/html/rfc7234#section-4.3.4
+                        cleanRequestFromCacheValidators(request);
+                    }
+                    RequestForwarder forwarder = new RequestForwarder(request, cacheReceiver);
+                    return forwarder.forward();
+                }
+
+                default:
+                    throw new IllegalStateException("Action " + action.action + " not supported");
+            }
+        } finally {
+            parent.getRequestsLogger().logRequest(request);
         }
     }
 

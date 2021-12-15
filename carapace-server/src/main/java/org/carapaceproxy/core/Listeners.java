@@ -67,6 +67,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map.Entry;
 import lombok.Data;
+import org.carapaceproxy.utils.CarapaceLogger;
 import reactor.netty.DisposableServer;
 import reactor.netty.NettyPipeline;
 import reactor.netty.http.server.HttpServer;
@@ -163,11 +164,11 @@ public class Listeners {
             if (newConfigurationForListener == null) {
                 LOG.log(Level.INFO, "listener: {0} is to be shut down", key);
                 listenersToStop.add(key);
-            } else if (!newConfigurationForListener.equals(actualListenerConfig)) {
+            } else if (!newConfigurationForListener.equals(actualListenerConfig)
+                    || newConfiguration.getResponseCompressionThreshold() != currentConfiguration.getResponseCompressionThreshold()) {
                 LOG.log(Level.INFO, "listener: {0} is to be restarted", key);
                 listenersToRestart.add(key);
             }
-
             channel.getValue().clear();
         }
         for (NetworkListenerConfiguration config : newConfiguration.getListeners()) {
@@ -178,6 +179,9 @@ public class Listeners {
             }
         }
 
+        // apply new configuration, this has to be done before rebooting listeners
+        currentConfiguration = newConfiguration;
+
         try {
             for (HostPort hostport : listenersToStop) {
                 LOG.log(Level.INFO, "Stopping {0}", hostport);
@@ -187,29 +191,25 @@ public class Listeners {
             for (HostPort hostport : listenersToRestart) {
                 LOG.log(Level.INFO, "Restart {0}", hostport);
                 stopListener(hostport);
-                NetworkListenerConfiguration newConfigurationForListener = newConfiguration.getListener(hostport);
+                NetworkListenerConfiguration newConfigurationForListener = currentConfiguration.getListener(hostport);
                 bootListener(newConfigurationForListener);
             }
 
             for (HostPort hostport : listenersToStart) {
                 LOG.log(Level.INFO, "Starting {0}", hostport);
-                NetworkListenerConfiguration newConfigurationForListener = newConfiguration.getListener(hostport);
+                NetworkListenerConfiguration newConfigurationForListener = currentConfiguration.getListener(hostport);
                 bootListener(newConfigurationForListener);
             }
-
-            // apply new configuration, this will affect SSL certificates
-            this.currentConfiguration = newConfiguration;
         } catch (InterruptedException stopMe) {
             Thread.currentThread().interrupt();
             throw stopMe;
         }
-
     }
 
     private void bootListener(NetworkListenerConfiguration config) throws InterruptedException {
         HostPort hostPort = new HostPort(config.getHost(), config.getPort() + parent.getListenersOffsetPort());
         ListeningChannel listeningChannel = new ListeningChannel(hostPort, config);
-        LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{hostPort.getHost(), hostPort.getPort(), config.isSsl()});
+        LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{hostPort.getHost(), hostPort.getPort() + "", config.isSsl()});
 
         // Listener setup
         HttpServer httpServer = HttpServer.create()
@@ -272,7 +272,12 @@ public class Listeners {
 
         // response compression
         if (currentConfiguration.getResponseCompressionThreshold() >= 0) {
+            CarapaceLogger.debug("Response compression enabled with min size = {0} bytes for listener {1}",
+                    currentConfiguration.getResponseCompressionThreshold(), hostPort
+            );
             httpServer = httpServer.compress(currentConfiguration.getResponseCompressionThreshold());
+        } else {
+            CarapaceLogger.debug("Response compression disabled for listener {0}", hostPort);
         }
 
         // Initialization of event loop groups, native transport libraries and the native libraries for the security

@@ -32,7 +32,8 @@ import java.util.Collection;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import lombok.Data;
-import org.carapaceproxy.server.cache.ContentsCache;
+import lombok.Getter;
+import lombok.Setter;
 import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
@@ -74,8 +75,9 @@ public class ProxyRequest implements MatchingContext {
     private UrlEncodedQueryString queryString;
     private String sslProtocol;
     private String cipherSuite;
-    private ContentsCache.ContentReceiver cacheReceiver;
-    private ContentsCache.ContentSender cacheSender;
+    @Getter
+    @Setter
+    private boolean servedFromCache;
 
     public ProxyRequest(HttpServerRequest request, HttpServerResponse response, HostPort listener) {
         this.request = request;
@@ -199,7 +201,4 @@ public class ProxyRequest implements MatchingContext {
         return request.isKeepAlive();
     }
 
-    boolean isServedFromCache() {
-        return cacheSender != null;
-    }
 }

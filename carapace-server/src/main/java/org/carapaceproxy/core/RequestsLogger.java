@@ -384,12 +384,12 @@ public class RequestsLogger implements Runnable, Closeable {
             this.format.add("route_id", request.getAction().routeId);
             this.format.add("user_id", request.getUserId());
             this.format.add("session_id", request.getSessionId());
-            if (!request.isServedFromCache()) {
-                this.format.add("backend_id", String.format("%s:%s", request.getAction().host, request.getAction().port));
-                this.format.add("backend_time", request.getBackendStartTs() - request.getStartTs());
-            } else {
+            if (request.isServedFromCache()) {
                 this.format.add("backend_id", "CACHED");
                 this.format.add("backend_time", "0");
+            } else {
+                this.format.add("backend_id", String.format("%s:%s", request.getAction().host, request.getAction().port));
+                this.format.add("backend_time", request.getBackendStartTs() - request.getStartTs());
             }
             formatSSLProperties(request);
         }
