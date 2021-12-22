@@ -34,9 +34,9 @@ import java.util.stream.Collectors;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
-import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
+import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchingContext;
 import org.reactivestreams.Publisher;
 import reactor.netty.ByteBufFlux;
@@ -72,6 +72,7 @@ public class ProxyRequest implements MatchingContext {
     private long startTs;
     private long backendStartTs = 0;
     private volatile long lastActivity;
+    private String uri;
     private UrlEncodedQueryString queryString;
     private String sslProtocol;
     private String cipherSuite;
@@ -131,7 +132,23 @@ public class ProxyRequest implements MatchingContext {
     }
 
     public String getUri() {
-        return request.uri();
+        if (uri != null) {
+            return uri;
+        }
+
+        uri = request.uri();
+        int pos = uri.indexOf("://");
+        if (pos >= 0) {
+            uri = uri.substring(pos + 3);
+        }
+        pos = uri.indexOf("/");
+        if (pos >= 0) {
+            uri = uri.substring(pos);
+        } else {
+            uri = "/";
+        }
+
+        return uri;
     }
 
     public String getRequestHostname() {
