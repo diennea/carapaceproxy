@@ -20,27 +20,19 @@
 package org.carapaceproxy;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import org.carapaceproxy.utils.TestEndpointMapper;
-
-import org.carapaceproxy.core.HttpProxyServer;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
-
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 import static org.carapaceproxy.utils.RawHttpClient.consumeHttpResponseInput;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import java.io.IOException;
-import org.carapaceproxy.client.EndpointKey;
-import org.carapaceproxy.utils.RawHttpClient;
-
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-
+import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import com.github.tomakehurst.wiremock.matching.UrlPattern;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.Unpooled;
@@ -67,6 +59,7 @@ import io.netty.handler.codec.http.HttpResponseEncoder;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.LastHttpContent;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.Socket;
@@ -86,9 +79,13 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;
+import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.RawHttpServer;
+import org.carapaceproxy.utils.TestEndpointMapper;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -711,6 +708,48 @@ public class RawClientTest {
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client.executeRequest("GET /index[1].html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").getBodyString();
                 System.out.println("s:" + s);
+                assertEquals("it <b>works</b> !!", s);
+            }
+        }
+    }
+
+    @Test
+    public void testClosedProxy() throws Exception {
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            server.start();
+            int port = server.getLocalPort();
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                stubFor(get(UrlPattern.ANY)
+                        .withQueryParam("myparam", equalTo("myvalye"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                                .withBody("it <b>works</b> !!")));
+
+                // Proxy request has to use "localhost:port" as endpoint instead of the one in the url (ex yahoo.com)
+                // in order to avoid open proxy vulnerability
+                String s = client.executeRequest("GET http://yahoo.com/?myparam=myvalye HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                assertEquals("it <b>works</b> !!", s);
+
+                stubFor(get(UrlPattern.ANY)
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                                .withBody("it <b>works</b> !!")));
+
+                s = client.executeRequest("GET http://yahoo.com/fakepage.html HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                assertEquals("it <b>works</b> !!", s);
+
+                s = client.executeRequest("GET http://yahoo.com/ HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                assertEquals("it <b>works</b> !!", s);
+
+                s = client.executeRequest("GET http://yahoo.com HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                assertEquals("it <b>works</b> !!", s);
+
+                s = client.executeRequest("GET :// HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
             }
         }
