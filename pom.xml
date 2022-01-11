@@ -111,16 +111,17 @@
 
         <libs.zookkeeper>3.7.0</libs.zookkeeper>
         <libs.curator>5.2.0</libs.curator>
-        <libs.herddb>0.23.0</libs.herddb>
+        <libs.herddb>0.24.0</libs.herddb>
         <libs.prometheus>0.12.0</libs.prometheus>
         <libs.prometheus.metrics>4.14.3</libs.prometheus.metrics>
-        <libs.micrometer>1.8.0</libs.micrometer>
+        <libs.micrometer>1.8.1</libs.micrometer>
 
         <libs.commons.lang3>3.12.0</libs.commons.lang3>
         <libs.commons-pool2>2.11.1</libs.commons-pool2>
-        <libs.commons-io>2.7</libs.commons-io>
-        <libs.jetty>9.4.8.v20171121</libs.jetty>
-        <libs.jersey>2.27</libs.jersey>
+        <libs.commons-io>2.11.0</libs.commons-io>
+        <libs.jetty>9.4.44.v20210927</libs.jetty>
+        <libs.jersey>2.35</libs.jersey>
+        <libs.jackson>2.12.3</libs.jackson>
         <libs.jaxws.jaxb-api>2.3.0</libs.jaxws.jaxb-api>
         <libs.jaxws.jaxb-impl>2.3.0</libs.jaxws.jaxb-impl>
         <libs.javaxactivation-api>1.2.0</libs.javaxactivation-api>
@@ -130,7 +131,7 @@
         <libs.spotbugsannotations>4.5.0</libs.spotbugsannotations>
 
         <!-- test dependecies -->
-        <libs.junit>4.13.1</libs.junit>
+        <libs.junit>4.13.2</libs.junit>
         <libs.junitparams>1.1.1</libs.junitparams>
         <libs.wiremock>2.21.0</libs.wiremock>
         <libs.powermock>2.0.4</libs.powermock>
