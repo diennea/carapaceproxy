@@ -132,15 +132,15 @@
         <libs.spotbugsannotations>4.5.3</libs.spotbugsannotations>
 
         <!-- test dependecies -->
-        <libs.junit>4.13.1</libs.junit>
+        <libs.junit>4.13.2</libs.junit>
         <libs.junitparams>1.1.1</libs.junitparams>
-        <libs.wiremock>2.21.0</libs.wiremock>
-        <libs.powermock>2.0.4</libs.powermock>
-        <libs.mockito>3.0.0</libs.mockito>
+        <libs.wiremock>2.32.0</libs.wiremock>
+        <libs.powermock>2.0.9</libs.powermock>
+        <libs.mockito>3.12.4</libs.mockito>
         <libs.hamcrest>2.2</libs.hamcrest>
 
-        <plugins.spotbugsmaven>4.5.0.0</plugins.spotbugsmaven>
-        <libs.asm>6.2</libs.asm>
+        <plugins.spotbugsmaven>4.5.3.0</plugins.spotbugsmaven>
+        <libs.asm>9.2</libs.asm>
     </properties>
     <repositories>
         <repository>
