@@ -101,33 +101,35 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <javacc-maven-plugin.version>2.4</javacc-maven-plugin.version>
 
-        <libs.projectreactor>2020.0.13</libs.projectreactor>
-        <libs.netty.ssl>2.0.46.Final</libs.netty.ssl>
+        <libs.projectreactor>2020.0.15</libs.projectreactor>
+        <libs.netty.ssl>2.0.47.Final</libs.netty.ssl>
         <libs.acme4j>2.12</libs.acme4j>
-        <libs.bouncycastle>1.69</libs.bouncycastle>
-        <libs.awssdk>2.17.91</libs.awssdk>
-        <libs.caffeine>3.0.4</libs.caffeine>
+        <libs.bouncycastle>1.70</libs.bouncycastle>
+        <libs.awssdk>2.17.113</libs.awssdk>
+        <libs.caffeine>3.0.5</libs.caffeine>
         <libs.antlr>4.3.1</libs.antlr>
 
         <libs.zookkeeper>3.7.0</libs.zookkeeper>
         <libs.curator>5.2.0</libs.curator>
-        <libs.herddb>0.23.0</libs.herddb>
-        <libs.prometheus>0.12.0</libs.prometheus>
-        <libs.prometheus.metrics>4.14.3</libs.prometheus.metrics>
-        <libs.micrometer>1.8.0</libs.micrometer>
+        <libs.prometheus>0.14.1</libs.prometheus>
+        <libs.prometheus.metrics>4.14.4</libs.prometheus.metrics>
+        <libs.micrometer>1.8.2</libs.micrometer>
+        <libs.herddb>0.24.0</libs.herddb>
 
         <libs.commons.lang3>3.12.0</libs.commons.lang3>
         <libs.commons-pool2>2.11.1</libs.commons-pool2>
-        <libs.commons-io>2.7</libs.commons-io>
-        <libs.jetty>9.4.8.v20171121</libs.jetty>
-        <libs.jersey>2.27</libs.jersey>
-        <libs.jaxws.jaxb-api>2.3.0</libs.jaxws.jaxb-api>
-        <libs.jaxws.jaxb-impl>2.3.0</libs.jaxws.jaxb-impl>
+        <libs.commons-io>2.11.0</libs.commons-io>
+
+        <libs.jetty>9.4.44.v20210927</libs.jetty>
+        <libs.jersey>2.35</libs.jersey>
+        <libs.jackson>2.13.1</libs.jackson>
+        <libs.jaxws.jaxb-api>2.3.1</libs.jaxws.jaxb-api>
+        <libs.jaxws.jaxb-impl>3.0.2</libs.jaxws.jaxb-impl>
         <libs.javaxactivation-api>1.2.0</libs.javaxactivation-api>
-        <libs.slf4j>1.7.32</libs.slf4j>
+        <libs.slf4j>1.7.33</libs.slf4j>
         <libs.guava>31.0.1-jre</libs.guava>
         <libs.lombok>1.18.22</libs.lombok>
-        <libs.spotbugsannotations>4.5.0</libs.spotbugsannotations>
+        <libs.spotbugsannotations>4.5.3</libs.spotbugsannotations>
 
         <!-- test dependecies -->
         <libs.junit>4.13.1</libs.junit>
