@@ -223,6 +223,7 @@ public class ContentsCache {
             Map<String, Object> entry = new HashMap<>();
             entry.put("method", key.method);
             entry.put("host", key.host);
+            entry.put("scheme", key.scheme);
             entry.put("uri", key.uri);
             entry.put("cacheKey", key.composeKey());
             entry.put("heapSize", payload.heapSize);

@@ -139,7 +139,7 @@ class CaffeineCacheImpl implements CacheImpl {
         stats.cached(payload.heapSize, payload.directSize, key.getMemUsage() + payload.getMemUsage());
         entries.addAndGet(1);
         memSize.addAndGet(key.getMemUsage() + payload.getMemUsage());
-        
+
         logger.log(Level.FINE, "adding content {0}", key.uri);
     }
 

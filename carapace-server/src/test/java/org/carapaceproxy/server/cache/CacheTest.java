@@ -266,7 +266,6 @@ public class CacheTest {
             assertEquals(expected, server.getCache().getCacheSize());
             assertEquals(expected, server.getCache().getStats().getHits());
             assertEquals(expected, server.getCache().getStats().getMisses());
-            assertThat(server.getCache().inspectCache().get(0).get("scheme"), is("http"));
             server.getCache().getStats().resetCacheMetrics();
             server.getCache().clear();
 
@@ -290,7 +289,7 @@ public class CacheTest {
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(1, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
-            assertThat(server.getCache().inspectCache().get(0).get("scheme"), is("http"));
+            assertThat(server.getCache().inspectCache().get(0).get("scheme"), is("https"));
             server.getCache().getStats().resetCacheMetrics();
             server.getCache().clear();
 
@@ -314,7 +313,7 @@ public class CacheTest {
             assertEquals(1, server.getCache().getCacheSize());
             assertEquals(1, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
-            assertThat(server.getCache().inspectCache().get(0).get("scheme"), is("http"));
+            assertThat(server.getCache().inspectCache().get(0).get("scheme"), is("https"));
             server.getCache().getStats().resetCacheMetrics();
             server.getCache().clear();
 
