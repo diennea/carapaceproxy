@@ -20,6 +20,7 @@
 package org.carapaceproxy.server.cache;
 
 import com.github.benmanes.caffeine.cache.RemovalCause;
+
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,20 +29,24 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
 import org.carapaceproxy.server.cache.ContentsCache.ContentKey;
 import org.carapaceproxy.server.cache.ContentsCache.CachedContent;
 import org.carapaceproxy.utils.TestUtils;
+
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+
 import org.junit.After;
+
 import static org.junit.Assert.assertTrue;
+
 import io.netty.buffer.Unpooled;
 import org.junit.Test;
 
 /**
- *
  * @author francesco.caliumi
  */
 public class CaffeineCacheImplTest {
@@ -149,7 +154,7 @@ public class CaffeineCacheImplTest {
     }
 
     private static CacheEntry genCacheEntry(String resource, int payloadLength, long expireTs) {
-        ContentKey key = new ContentKey("", "", resource);
+        ContentKey key = new ContentKey("", "", "", resource);
         CachedContent payload = new CachedContent();
         payload.chunks.add(Unpooled.EMPTY_BUFFER);
         payload.chunks.add(Unpooled.EMPTY_BUFFER);

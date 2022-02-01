@@ -42,28 +42,28 @@ import org.carapaceproxy.server.cache.ContentsCache.CachedContent;
 class CaffeineCacheImpl implements CacheImpl {
 
     private static final int INITIAL_CACHE_SIZE_CAPACITY = 2000;
-    
+
     private final Cache<ContentKey, CachedContent> cache;
     private final CacheStats stats;
     private Logger logger;
-    
+
     private AtomicLong entries = new AtomicLong(0);
     private AtomicLong memSize = new AtomicLong(0);
-    
     private boolean verbose = false;
+
     private volatile RemovalListener removalListener;
 
     public CaffeineCacheImpl(CacheStats stats, long cacheMaxSize, Logger logger) {
         this.stats = stats;
         this.logger = logger;
-        
+
         this.cache = Caffeine.<ContentKey, CachedContent>newBuilder()
             .initialCapacity((int) INITIAL_CACHE_SIZE_CAPACITY)
             .maximumWeight(cacheMaxSize > 0 ? cacheMaxSize : Long.MAX_VALUE)
             .expireAfter(new Expiry<ContentKey, CachedContent>() {
                 @Override
                 public long expireAfterCreate(ContentKey key, CachedContent payload, long currentTime) {
-                    // WARNING: provided current time is completely misleading, as stated in the doc. 
+                    // WARNING: provided current time is completely misleading, as stated in the doc.
                     // System.currentTimeMillis() should be used instead.
                     return (payload.expiresTs - System.currentTimeMillis()) * 1_000_000; // In nanos
                 }
@@ -116,7 +116,7 @@ class CaffeineCacheImpl implements CacheImpl {
     void setRemovalListener(RemovalListener listener) {
         this.removalListener = listener;
     }
-    
+
     @Override
     public void setVerbose(boolean verbose) {
         this.verbose = verbose;
@@ -135,11 +135,11 @@ class CaffeineCacheImpl implements CacheImpl {
     @Override
     public void put(ContentKey key, CachedContent payload) {
         cache.put(key, payload);
-        
+
         stats.cached(payload.heapSize, payload.directSize, key.getMemUsage() + payload.getMemUsage());
         entries.addAndGet(1);
         memSize.addAndGet(key.getMemUsage() + payload.getMemUsage());
-        
+
         logger.log(Level.FINE, "adding content {0}", key.uri);
     }
 
@@ -164,7 +164,7 @@ class CaffeineCacheImpl implements CacheImpl {
         memSize.addAndGet(-(key.getMemUsage() + payload.getMemUsage()));
         payload.clear();
     }
-    
+
     @Override
     public void remove(ContentKey key) {
         cache.invalidate(key);
@@ -174,7 +174,7 @@ class CaffeineCacheImpl implements CacheImpl {
     public void evict() {
         cache.cleanUp();
     }
-        
+
     @Override
     public int clear() {
         int currentSize = getSize();

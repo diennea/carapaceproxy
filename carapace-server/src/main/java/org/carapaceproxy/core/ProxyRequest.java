@@ -31,6 +31,7 @@ import java.net.InetSocketAddress;
 import java.util.Collection;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
@@ -58,6 +59,7 @@ public class ProxyRequest implements MatchingContext {
     public static final String PROPERTY_HEADERS = "request.headers.";
     public static final String PROPERTY_LISTENER_HOST_PORT = "listener.hostport";
     public static final String PROPERTY_LISTENER_IPADDRESS = "listener.ipaddress";
+
 
     private static final int HEADERS_SUBSTRING_INDEX = PROPERTY_HEADERS.length();
     private static final AtomicLong REQUESTS_ID_GENERATOR = new AtomicLong();
@@ -149,6 +151,10 @@ public class ProxyRequest implements MatchingContext {
         }
 
         return uri;
+    }
+
+    public String getScheme() {
+        return request.scheme();
     }
 
     public String getRequestHostname() {
