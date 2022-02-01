@@ -276,7 +276,7 @@ public class HttpProxyServer implements AutoCloseable {
                 ks.load(in, adminServerCertFilePwd.trim().toCharArray());
             }
 
-            SslContextFactory sslContextFactory = new SslContextFactory();
+            SslContextFactory.Server sslContextFactory = new SslContextFactory.Server();
             sslContextFactory.setKeyStore(ks);
             sslContextFactory.setKeyStorePassword(adminServerCertFilePwd);
             sslContextFactory.setKeyManagerPassword(adminServerCertFilePwd);
