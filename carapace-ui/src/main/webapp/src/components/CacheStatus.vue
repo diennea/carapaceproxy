@@ -102,7 +102,7 @@ export default {
             });
             doGet("/api/cache/inspect", data => {
                 data.forEach(it => {
-                    it.key = it.host + it.uri;
+                    it.key = it.scheme + '://' + it.host + it.uri;
                     it.creationTs = formatTimestamp(it.creationTs);
                     it.expireTs = formatTimestamp(it.expireTs);
                     this.cacheitems.push(it);

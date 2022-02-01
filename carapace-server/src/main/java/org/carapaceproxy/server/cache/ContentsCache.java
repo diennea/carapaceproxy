@@ -24,8 +24,8 @@ import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpHeaders;
-import static io.netty.handler.codec.http.HttpStatusClass.REDIRECTION;
 import io.prometheus.client.Counter;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -38,6 +38,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
+
 import lombok.Data;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
@@ -222,6 +223,7 @@ public class ContentsCache {
             Map<String, Object> entry = new HashMap<>();
             entry.put("method", key.method);
             entry.put("host", key.host);
+            entry.put("scheme", key.scheme);
             entry.put("uri", key.uri);
             entry.put("cacheKey", key.composeKey());
             entry.put("heapSize", payload.heapSize);
@@ -359,17 +361,20 @@ public class ContentsCache {
         final String method;
         final String host;
         final String uri;
+        final String scheme;
 
-        ContentKey(String method, String host, String uri) {
+        ContentKey(String method, String scheme, String host, String uri) {
             this.method = method;
             this.host = host;
             this.uri = uri;
+            this.scheme = scheme;
         }
 
         public ContentKey(ProxyRequest request) {
             this.method = request.getMethod().name();
             this.host = request.getRequestHeaders().getAsString(HttpHeaderNames.HOST);
             this.uri = request.getUri();
+            this.scheme = request.getScheme();
         }
 
         public long getMemUsage() {
