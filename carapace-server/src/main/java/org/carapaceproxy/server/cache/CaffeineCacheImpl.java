@@ -49,8 +49,8 @@ class CaffeineCacheImpl implements CacheImpl {
 
     private AtomicLong entries = new AtomicLong(0);
     private AtomicLong memSize = new AtomicLong(0);
-
     private boolean verbose = false;
+
     private volatile RemovalListener removalListener;
 
     public CaffeineCacheImpl(CacheStats stats, long cacheMaxSize, Logger logger) {

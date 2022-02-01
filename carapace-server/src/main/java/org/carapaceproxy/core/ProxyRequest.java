@@ -27,7 +27,6 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpScheme;
 import io.netty.handler.codec.http.cookie.Cookie;
 import io.netty.handler.ssl.SslHandler;
-
 import java.net.InetSocketAddress;
 import java.util.Collection;
 import java.util.concurrent.atomic.AtomicLong;
@@ -56,7 +55,6 @@ public class ProxyRequest implements MatchingContext {
     // All properties name have been converted to lowercase during parsing
     public static final String PROPERTY_URI = "request.uri";
     public static final String PROPERTY_METHOD = "request.method";
-    public static final String PROPERTY_SCHEME = "request.scheme";
     public static final String PROPERTY_CONTENT_TYPE = "request.content-type";
     public static final String PROPERTY_HEADERS = "request.headers.";
     public static final String PROPERTY_LISTENER_HOST_PORT = "listener.hostport";
@@ -108,8 +106,6 @@ public class ProxyRequest implements MatchingContext {
                     return request.uri();
                 case PROPERTY_METHOD:
                     return request.method().name();
-                case PROPERTY_SCHEME:
-                    return request.scheme();
                 case PROPERTY_CONTENT_TYPE:
                     return request.requestHeaders().get(HttpHeaderNames.CONTENT_TYPE, "");
                 case PROPERTY_LISTENER_IPADDRESS:
