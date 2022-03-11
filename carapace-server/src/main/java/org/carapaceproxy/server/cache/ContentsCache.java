@@ -300,7 +300,7 @@ public class ContentsCache {
         int hits;
 
         private void addChunk(ByteBuf chunk) {
-            chunks.add(chunk.copy().retain());
+            chunks.add(chunk.retainedDuplicate());
             if (chunk.isDirect()) {
                 directSize += chunk.capacity();
             } else {
