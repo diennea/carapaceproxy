@@ -66,6 +66,7 @@ import io.prometheus.client.Counter;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map.Entry;
+import java.util.function.Function;
 import lombok.Data;
 import org.carapaceproxy.utils.CarapaceLogger;
 import reactor.netty.DisposableServer;
@@ -216,6 +217,7 @@ public class Listeners {
                 .host(hostPort.getHost())
                 .port(hostPort.getPort())
                 //.protocol(HttpProtocol.H2) // HTTP/2.0 setup
+                .metrics(true, Function.identity())
                 .option(ChannelOption.SO_BACKLOG, 128)
                 .childOption(ChannelOption.SO_KEEPALIVE, true)
                 .doOnChannelInit((observer, channel, remoteAddress) -> {

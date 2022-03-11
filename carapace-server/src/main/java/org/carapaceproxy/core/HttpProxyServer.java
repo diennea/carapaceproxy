@@ -90,9 +90,9 @@ import static reactor.netty.Metrics.TOTAL_CONNECTIONS;
 import io.micrometer.core.instrument.Measurement;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.config.MeterFilter;
 import io.micrometer.prometheus.PrometheusConfig;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
-import io.micrometer.prometheus.PrometheusRenameFilter;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Collections;
@@ -213,9 +213,6 @@ public class HttpProxyServer implements AutoCloseable {
         this.basePath = basePath;
         this.statsProvider = new PrometheusMetricsProvider();
         this.mainLogger = statsProvider.getStatsLogger("");
-        prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
-        prometheusRegistry.config().meterFilter(new PrometheusRenameFilter());
-        Metrics.globalRegistry.add(prometheusRegistry);
         this.filters = new ArrayList<>();
         this.currentConfiguration = new RuntimeServerConfiguration();
         this.backendHealthManager = new BackendHealthManager(currentConfiguration, mapper);
@@ -229,6 +226,13 @@ public class HttpProxyServer implements AutoCloseable {
             mapper.setParent(this);
             this.proxyRequestsManager.reloadConfiguration(currentConfiguration, mapper.getBackends().values());
         }
+
+        // metrics
+        prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+        Metrics.globalRegistry.add(prometheusRegistry);
+        Metrics.globalRegistry.config()
+                .meterFilter(MeterFilter.denyNameStartsWith(("reactor.netty.http.server.data"))) // spam
+                .meterFilter(MeterFilter.denyNameStartsWith(("reactor.netty.http.server.response"))); // spam
     }
 
     public int getLocalPort() {
