@@ -263,6 +263,9 @@ public class ProxyRequestsManager {
     }
 
     private static Publisher<Void> writeSimpleResponse(ProxyRequest request, FullHttpResponse response, List<CustomHeader> customHeaders) {
+        if (request.getResponse().hasSentHeaders()) {
+            return Mono.empty();
+        }
         // Prepare the response
         if (request.isKeepAlive()) {
             // Add 'Content-Length' header only for a keep-alive connection.
@@ -382,32 +385,33 @@ public class ProxyRequestsManager {
                                 cacheReceiver.receivedFromRemote(data);
                             }
                         }).doOnComplete(() -> parent.getCache().cacheContent(cacheReceiver)));
-                    }).onErrorResume(err -> { // custom endpoint request/response error handling
-                if (requestRunning) {
-                    requestRunning = false;
-                    PENDING_REQUESTS_GAUGE.dec();
-                }
+                    })
+                    .onErrorResume(err -> { // custom endpoint request/response error handling
+                        if (requestRunning) {
+                            requestRunning = false;
+                            PENDING_REQUESTS_GAUGE.dec();
+                        }
 
-                String endpoint = request.getAction().host + ":" + request.getAction().port;
-                if (err instanceof io.netty.handler.timeout.ReadTimeoutException) {
-                    STUCK_REQUESTS_COUNTER.inc();
-                    LOGGER.log(Level.SEVERE, "Read timeout error occurred for endpoint {0}; request: {1}", new Object[]{endpoint, request});
-                    if (parent.getCurrentConfiguration().isBackendsUnreachableOnStuckRequests()) {
-                        parent.getBackendHealthManager().reportBackendUnreachable(
-                                endpoint, System.currentTimeMillis(), "Error: " + err
-                        );
-                    }
-                    return serveInternalErrorMessage(request);
-                }
+                        String endpoint = request.getAction().host + ":" + request.getAction().port;
+                        if (err instanceof io.netty.handler.timeout.ReadTimeoutException) {
+                            STUCK_REQUESTS_COUNTER.inc();
+                            LOGGER.log(Level.SEVERE, "Read timeout error occurred for endpoint {0}; request: {1}", new Object[]{endpoint, request});
+                            if (parent.getCurrentConfiguration().isBackendsUnreachableOnStuckRequests()) {
+                                parent.getBackendHealthManager().reportBackendUnreachable(
+                                        endpoint, System.currentTimeMillis(), "Error: " + err
+                                );
+                            }
+                            return serveInternalErrorMessage(request);
+                        }
 
-                LOGGER.log(Level.SEVERE, "Error proxying request for endpoint {0}; request: {1};\nError: {2}", new Object[]{endpoint, request, err});
-                if (err instanceof ConnectException) {
-                    parent.getBackendHealthManager().reportBackendUnreachable(
-                            endpoint, System.currentTimeMillis(), "Error: " + err
-                    );
-                }
-                return serveServiceNotAvailable(request);
-            });
+                        LOGGER.log(Level.SEVERE, "Error proxying request for endpoint {0}; request: {1};\nError: {2}", new Object[]{endpoint, request, err});
+                        if (err instanceof ConnectException) {
+                            parent.getBackendHealthManager().reportBackendUnreachable(
+                                    endpoint, System.currentTimeMillis(), "Error: " + err
+                            );
+                        }
+                        return serveServiceNotAvailable(request);
+                    });
         }
     }
 
