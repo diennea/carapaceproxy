@@ -379,7 +379,8 @@ public class ContentsCache {
 
         public long getMemUsage() {
             // Just an estimate
-            return sizeof(method)
+            return  sizeof(scheme)
+                    + sizeof(method)
                     + sizeof(host)
                     + sizeof(uri);
         }
@@ -395,19 +396,24 @@ public class ContentsCache {
         public String getUri() {
             return uri;
         }
+        
+        public String getScheme() {
+            return scheme;
+        }
 
         public String composeKey() {
-            return method + " | " + host + " | " + uri;
+            return scheme + " | " + method + " | " + host + " | " + uri;
         }
 
         @Override
         public String toString() {
-            return "ContentKey{" + "method=" + method + ", host=" + host + ", uri=" + uri + '}';
+            return "ContentKey{" + "scheme=" + scheme + ", method=" + method + ", host=" + host + ", uri=" + uri + '}';
         }
 
         @Override
         public int hashCode() {
             int hash = 3;
+            hash = 83 * hash + Objects.hashCode(this.scheme);
             hash = 83 * hash + Objects.hashCode(this.method);
             hash = 83 * hash + Objects.hashCode(this.host);
             hash = 83 * hash + Objects.hashCode(this.uri);
@@ -435,6 +441,10 @@ public class ContentsCache {
             if (!Objects.equals(this.uri, other.uri)) {
                 return false;
             }
+            if (!Objects.equals(this.scheme, other.scheme)) {
+                return false;
+            }
+            
             return true;
         }
     }
