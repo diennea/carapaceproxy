@@ -44,6 +44,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import io.netty.handler.codec.http.HttpHeaderNames;
+import java.net.ServerSocket;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
@@ -121,7 +122,7 @@ public class CacheTest {
             assertThat(inspect.get(0).get("scheme"), is("http"));
             assertThat(inspect.get(0).get("host"), is("localhost"));
             assertThat(inspect.get(0).get("uri"), is("/index.html"));
-            assertThat(inspect.get(0).get("cacheKey"), is("GET | localhost | /index.html"));
+            assertThat(inspect.get(0).get("cacheKey"), is("http | GET | localhost | /index.html"));
             assertThat(inspect.get(0).get("heapSize"), is(not(0)));
             assertThat(inspect.get(0).get("directSize"), is(not(0)));
             assertThat(inspect.get(0).get("totalSize"), is(not(0)));
@@ -337,6 +338,121 @@ public class CacheTest {
             assertEquals(0, server.getCache().getCacheSize());
             assertEquals(0, server.getCache().getStats().getHits());
             assertEquals(0, server.getCache().getStats().getMisses());
+        }
+    }
+
+    @Test
+    public void testServeFromCacheWithRequestProtocol() throws Exception {
+        String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+
+        stubFor(get(urlEqualTo("/index.html"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withBody("it <b>works</b> !!")));
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+        int httpPort = 1234;
+        int httpsPort = 1235;
+        
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
+            server.addCertificate(new SSLCertificateConfiguration("localhost", "localhost.p12", "testproxy", STATIC));
+            server.addListener(new NetworkListenerConfiguration("localhost", httpsPort, true, false, null, "localhost", null, null));
+            server.addListener(new NetworkListenerConfiguration("localhost", httpPort));
+            server.start();
+            server.getCache().getStats().resetCacheMetrics();
+            
+            try (RawHttpClient client = new RawHttpClient("localhost", httpPort)) {
+                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                String s = resp.toString();
+                System.out.println("s:" + s);
+                assertTrue(s.contains("it <b>works</b> !!"));
+                resp.getHeaderLines().forEach(h -> {
+                    System.out.println("HEADER LINE :" + h);
+                });
+                assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+            }
+
+            try (RawHttpClient client = new RawHttpClient("localhost", httpPort)) {
+                {
+                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                    String s = resp.toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.contains("it <b>works</b> !!"));
+                    assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                }
+            }
+
+            try (RawHttpClient client = new RawHttpClient("localhost", httpsPort, true)) {
+                {
+                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                    String s = resp.toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.contains("it <b>works</b> !!"));
+                    resp.getHeaderLines().forEach(h -> {
+                        System.out.println("HEADER LINE :" + h);
+                    });
+                    assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                }
+                {
+                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                    String s = resp.toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.contains("it <b>works</b> !!"));
+                    resp.getHeaderLines().forEach(h -> {
+                        System.out.println("HEADER LINE :" + h);
+                    });
+                    assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                }
+            }
+            
+            server.getCache().clear();
+            
+            try (RawHttpClient client = new RawHttpClient("localhost", httpsPort, true)) {
+                {
+                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                    String s = resp.toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.contains("it <b>works</b> !!"));
+                    resp.getHeaderLines().forEach(h -> {
+                        System.out.println("HEADER LINE :" + h);
+                    });
+                    assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                }
+                {
+                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                    String s = resp.toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.contains("it <b>works</b> !!"));
+                    resp.getHeaderLines().forEach(h -> {
+                        System.out.println("HEADER LINE :" + h);
+                    });
+                    assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                }
+            }
+            
+            try (RawHttpClient client = new RawHttpClient("localhost", httpPort)) {
+                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                String s = resp.toString();
+                System.out.println("s:" + s);
+                assertTrue(s.contains("it <b>works</b> !!"));
+                resp.getHeaderLines().forEach(h -> {
+                    System.out.println("HEADER LINE :" + h);
+                });
+                assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+            }
+
+            try (RawHttpClient client = new RawHttpClient("localhost", httpPort)) {
+                {
+                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                    String s = resp.toString();
+                    System.out.println("s:" + s);
+                    assertTrue(s.contains("it <b>works</b> !!"));
+                    assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                }
+            }
         }
     }
 
