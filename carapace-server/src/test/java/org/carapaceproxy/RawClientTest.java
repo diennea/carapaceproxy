@@ -26,6 +26,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
+import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 import static org.carapaceproxy.utils.RawHttpClient.consumeHttpResponseInput;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -67,6 +68,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -79,24 +81,31 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import junitparams.JUnitParamsRunner;
+import junitparams.Parameters;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
+import org.carapaceproxy.server.config.NetworkListenerConfiguration;
+import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.RawHttpServer;
 import org.carapaceproxy.utils.TestEndpointMapper;
+import org.carapaceproxy.utils.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.rules.TestName;
+import org.junit.runner.RunWith;
 
 /**
  *
  * @author enrico.olivelli
  */
+@RunWith(JUnitParamsRunner.class)
 public class RawClientTest {
 
     private static final Logger LOG = Logger.getLogger(RawClientTest.class.getName());
@@ -714,42 +723,72 @@ public class RawClientTest {
     }
 
     @Test
-    public void testClosedProxy() throws Exception {
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+    @Parameters({"http", "https"})
+    public void testClosedProxy(String scheme) throws Exception {
+        String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+
+        // Proxy requests have to use "localhost:port" as endpoint instead of the one in the url (ex yahoo.com)
+        // in order to avoid open proxy vulnerability
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
+            server.addCertificate(new SSLCertificateConfiguration("localhost", "localhost.p12", "testproxy", STATIC));
+            server.addListener(new NetworkListenerConfiguration("localhost", 0, scheme.equals("https"), false, null, "localhost", null, null));
+
             server.start();
             int port = server.getLocalPort();
-            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                stubFor(get(UrlPattern.ANY)
-                        .withQueryParam("myparam", equalTo("myvalye"))
+            try (RawHttpClient client = new RawHttpClient("localhost", port, scheme.equals("https"))) {
+
+                stubFor(get("/index.html?p1=v1&p2=https://localhost/index.html?p=1")
+                        .withQueryParams(Map.of("p1", equalTo("v1"), "p2", equalTo("https://localhost/index.html?p=1")))
                         .willReturn(aResponse()
                                 .withStatus(200)
                                 .withHeader("Content-Type", "text/html")
                                 .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                                 .withBody("it <b>works</b> !!")));
-
-                // Proxy request has to use "localhost:port" as endpoint instead of the one in the url (ex yahoo.com)
-                // in order to avoid open proxy vulnerability
-                String s = client.executeRequest("GET http://yahoo.com/?myparam=myvalye HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                String s = client.executeRequest("GET " + scheme + "://yahoo.com/index.html?p1=v1&p2=https://localhost/index.html?p=1 HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                assertEquals("it <b>works</b> !!", s);
+                s = client.get("/index.html?p1=v1&p2=https://localhost/index.html?p=1").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
 
-                stubFor(get(UrlPattern.ANY)
+                stubFor(get("/index.html")
                         .willReturn(aResponse()
                                 .withStatus(200)
                                 .withHeader("Content-Type", "text/html")
                                 .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                                 .withBody("it <b>works</b> !!")));
-
-                s = client.executeRequest("GET http://yahoo.com/fakepage.html HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                s = client.executeRequest("GET " + scheme + "://yahoo.com/index.html HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                assertEquals("it <b>works</b> !!", s);
+                s = client.get("/index.html").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
 
-                s = client.executeRequest("GET http://yahoo.com/ HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                stubFor(get("/?p1=v1&p2=https://localhost/index.html?p=1")
+                        .withQueryParams(Map.of("p1", equalTo("v1"), "p2", equalTo("https://localhost/index.html?p=1")))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                                .withBody("it <b>works</b> !!")));
+                s = client.executeRequest("GET " + scheme + "://yahoo.com/?p1=v1&p2=https://localhost/index.html?p=1 HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                assertEquals("it <b>works</b> !!", s);
+                s = client.get("/?p1=v1&p2=https://localhost/index.html?p=1").getBodyString();
+                assertEquals("it <b>works</b> !!", s);
+                s = client.executeRequest("GET " + scheme + "://yahoo.com?p1=v1&p2=https://localhost/index.html?p=1 HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                assertEquals("it <b>works</b> !!", s);
+                s = client.get("?p1=v1&p2=https://localhost/index.html?p=1").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
 
-                s = client.executeRequest("GET http://yahoo.com HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                stubFor(get("/")
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                                .withBody("it <b>works</b> !!")));
+                s = client.executeRequest("GET " + scheme + "://yahoo.com/ HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
-
-                s = client.executeRequest("GET :// HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                s = client.get("/").getBodyString();
+                assertEquals("it <b>works</b> !!", s);
+                s = client.executeRequest("GET " + scheme + "://yahoo.com HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
             }
         }
