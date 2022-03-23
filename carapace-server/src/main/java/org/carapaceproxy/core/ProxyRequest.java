@@ -60,7 +60,6 @@ public class ProxyRequest implements MatchingContext {
     public static final String PROPERTY_LISTENER_HOST_PORT = "listener.hostport";
     public static final String PROPERTY_LISTENER_IPADDRESS = "listener.ipaddress";
 
-
     private static final int HEADERS_SUBSTRING_INDEX = PROPERTY_HEADERS.length();
     private static final AtomicLong REQUESTS_ID_GENERATOR = new AtomicLong();
 
@@ -133,21 +132,36 @@ public class ProxyRequest implements MatchingContext {
         return request.remoteAddress();
     }
 
+    /**
+     *
+     * @return the uri path (starting from /) + query params
+     */
     public String getUri() {
         if (uri != null) {
             return uri;
         }
 
         uri = request.uri();
-        int pos = uri.indexOf("://");
-        if (pos >= 0) {
-            uri = uri.substring(pos + 3);
+
+        String schemePrefix = request.scheme() + "://";
+        // uri in the form of scheme://domain:port/
+        // > we need to avoid open-proxy vulnerability
+        if (uri.startsWith(schemePrefix)) {
+            uri = uri.substring(schemePrefix.length());
         }
-        pos = uri.indexOf("/");
-        if (pos >= 0) {
-            uri = uri.substring(pos);
+        String fullPath = request.fullPath();
+        if (fullPath != null && !fullPath.isBlank()) {
+            int pos = uri.indexOf(request.fullPath());
+            if (pos > 0) {
+                uri = uri.substring(pos);
+            }
         } else {
-            uri = "/";
+            int queryStringPos = uri.indexOf("?");
+            if (queryStringPos >= 0) {
+                uri = "/" + uri.substring(queryStringPos);
+            } else {
+                uri = "/";
+            }
         }
 
         return uri;
