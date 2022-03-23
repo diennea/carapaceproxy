@@ -218,7 +218,8 @@ public class HttpProxyServer implements AutoCloseable {
         Metrics.globalRegistry.add(prometheusRegistry);
         Metrics.globalRegistry.config()
                 .meterFilter(MeterFilter.denyNameStartsWith(("reactor.netty.http.server.data"))) // spam
-                .meterFilter(MeterFilter.denyNameStartsWith(("reactor.netty.http.server.response"))); // spam
+                .meterFilter(MeterFilter.denyNameStartsWith(("reactor.netty.http.server.response"))) // spam
+                .meterFilter(MeterFilter.denyNameStartsWith(("reactor.netty.http.server.errors"))); // spam
 
         this.mapper = mapper;
         this.basePath = basePath;
