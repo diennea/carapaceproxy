@@ -21,19 +21,22 @@ package org.carapaceproxy;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.findAll;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlMatching;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 import static org.carapaceproxy.utils.RawHttpClient.consumeHttpResponseInput;
-import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import com.github.tomakehurst.wiremock.http.HttpHeader;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import com.github.tomakehurst.wiremock.matching.UrlPattern;
 import io.netty.bootstrap.ServerBootstrap;
@@ -78,6 +81,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -799,14 +803,9 @@ public class RawClientTest {
     @Test
     public void testCookies() throws Exception {
         stubFor(get("/index.html")
-                .withCookie("requestCookie", equalTo("requestValue"))
-                .withCookie("requestCookie2", equalTo("requestValue2"))
                 .willReturn(aResponse()
                         .withStatus(200)
-                        .withHeader("Content-Type", "text/html")
-                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
-                        .withHeader(HttpHeaderNames.SET_COOKIE.toString(), "responseCookie=responseValue")
-                        .withHeader(HttpHeaderNames.SET_COOKIE.toString(), "responseCookie2=responseValue2")
+                        .withHeader(HttpHeaderNames.SET_COOKIE.toString(), "responseCookie=responseValue; responseCookie2=responseValue2")
                         .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
@@ -817,12 +816,26 @@ public class RawClientTest {
                 HttpResponse resp = client.executeRequest(
                         "GET /index.html HTTP/1.1"
                         + "\r\nHost: localhost"
-                        + "\r\n" + HttpHeaderNames.COOKIE + ": requestCookie=requestValue;requestCookie2=requestValue2"
+                        + "\r\n" + HttpHeaderNames.COOKIE + ": requestCookie=requestValue; requestCookie2=requestValue2"
                         + "\r\nConnection: close\r\n\r\n"
                 );
                 assertEquals("it <b>works</b> !!", resp.getBodyString());
-                assertThat(resp.getHeaderLines(), hasItems("Set-Cookie: responseCookie=responseValue\r\n", "Set-Cookie: responseCookie2=responseValue2\r\n"));
+
+                // cookies from server
+                List<String> headerSetCookie = resp.getHeaderLines().stream()
+                        .filter(h -> h.toLowerCase().contains("set-cookie"))
+                        .collect(Collectors.toList());
+                assertThat(headerSetCookie.size(), is(1));
+                assertThat(headerSetCookie.get(0), is("Set-Cookie: responseCookie=responseValue; responseCookie2=responseValue2\r\n"));
             }
         }
+
+        // cookies from client
+        HttpHeader headerCookie = findAll(getRequestedFor(urlMatching("/index.html")))
+                .get(0)
+                .getHeaders()
+                .getHeader(HttpHeaderNames.COOKIE.toString());
+        assertThat(headerCookie.values().size(), is(1));
+        assertThat(headerCookie.values().get(0), is("requestCookie=requestValue; requestCookie2=requestValue2"));
     }
 }
