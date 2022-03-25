@@ -28,6 +28,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 import static org.carapaceproxy.utils.RawHttpClient.consumeHttpResponseInput;
+import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -90,6 +91,7 @@ import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.RawHttpClient;
+import org.carapaceproxy.utils.RawHttpClient.HttpResponse;
 import org.carapaceproxy.utils.RawHttpServer;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
@@ -790,6 +792,36 @@ public class RawClientTest {
                 assertEquals("it <b>works</b> !!", s);
                 s = client.executeRequest("GET " + scheme + "://yahoo.com HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
+            }
+        }
+    }
+
+    @Test
+    public void testCookies() throws Exception {
+        stubFor(get("/index.html")
+                .withCookie("requestCookie", equalTo("requestValue"))
+                .withCookie("requestCookie2", equalTo("requestValue2"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withHeader(HttpHeaderNames.SET_COOKIE.toString(), "responseCookie=responseValue")
+                        .withHeader(HttpHeaderNames.SET_COOKIE.toString(), "responseCookie2=responseValue2")
+                        .withBody("it <b>works</b> !!")));
+
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            server.start();
+            int port = server.getLocalPort();
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                HttpResponse resp = client.executeRequest(
+                        "GET /index.html HTTP/1.1"
+                        + "\r\nHost: localhost"
+                        + "\r\n" + HttpHeaderNames.COOKIE + ": requestCookie=requestValue;requestCookie2=requestValue2"
+                        + "\r\nConnection: close\r\n\r\n"
+                );
+                assertEquals("it <b>works</b> !!", resp.getBodyString());
+                assertThat(resp.getHeaderLines(), hasItems("Set-Cookie: responseCookie=responseValue\r\n", "Set-Cookie: responseCookie2=responseValue2\r\n"));
             }
         }
     }
