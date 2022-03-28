@@ -46,7 +46,6 @@ import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.server.mapper.MapResult;
@@ -357,8 +356,6 @@ public class ProxyRequestsManager {
                         }
                         endpointStats.getLastActivity().set(System.currentTimeMillis());
                     });
-
-            request.getRequestCookies().forEach(cookie -> client = client.cookie(cookie));
         }
 
         public Publisher<Void> forward() {
@@ -374,10 +371,6 @@ public class ProxyRequestsManager {
                             cacheReceiver = null;
                         }
                         addCustomResponseHeaders(request, request.getAction().customHeaders);
-                        request.setResponseCookies(resp.cookies().values().stream() // cookies from endpoint to client
-                                .flatMap(Collection::stream)
-                                .collect(Collectors.toList())
-                        );
                         return request.sendResponseData(flux.retain().doOnNext(data -> { // response data
                             request.setLastActivity(System.currentTimeMillis());
                             endpointStats.getLastActivity().set(System.currentTimeMillis());
@@ -462,11 +455,6 @@ public class ProxyRequestsManager {
             headers.add(HttpHeaderNames.EXPIRES, HttpUtils.formatDateHeader(new java.util.Date(content.getExpiresTs())));
             request.setResponseHeaders(headers);
             addCustomResponseHeaders(request, request.getAction().customHeaders);
-            // cookies
-            request.setResponseCookies(response.cookies().values().stream() // cached cookies from endpoint to client
-                    .flatMap(Collection::stream)
-                    .collect(Collectors.toList())
-            );
             // body
             return request.sendResponseData(Flux.fromIterable(content.getChunks()).doOnNext(data -> { // response data
                 request.setLastActivity(System.currentTimeMillis());
