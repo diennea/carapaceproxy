@@ -25,13 +25,9 @@ import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpScheme;
-import io.netty.handler.codec.http.cookie.Cookie;
 import io.netty.handler.ssl.SslHandler;
 import java.net.InetSocketAddress;
-import java.util.Collection;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
-
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
@@ -200,18 +196,6 @@ public class ProxyRequest implements MatchingContext {
 
     public void setResponseHeaders(HttpHeaders headers) {
         response.headers(headers);
-    }
-
-    public Collection<Cookie> getRequestCookies() {
-        return request.allCookies().values().stream() // cookies form client to endpoint
-                .flatMap(Collection::stream)
-                .collect(Collectors.toList());
-    }
-
-    public void setResponseCookies(Collection<Cookie> cookies) {
-        cookies.forEach(cookie -> {
-            response.addCookie(cookie);
-        });
     }
 
     public HttpMethod getMethod() {
