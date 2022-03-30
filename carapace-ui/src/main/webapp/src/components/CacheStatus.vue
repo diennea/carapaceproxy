@@ -113,6 +113,7 @@ export default {
             return item.host + item.uri;
         },
         flushCache() {
+            // eslint-disable-next-line
             doGet("/api/cache/flush", data => {
                 this.cacheitems = [];
                 this.loadData();
