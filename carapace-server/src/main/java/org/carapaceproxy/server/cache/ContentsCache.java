@@ -300,7 +300,7 @@ public class ContentsCache {
         int hits;
 
         private void addChunk(ByteBuf chunk) {
-            chunks.add(chunk.retainedDuplicate());
+            chunks.add(chunk.copy()); // a copy starts always with refCount = 1
             if (chunk.isDirect()) {
                 directSize += chunk.capacity();
             } else {
@@ -315,7 +315,7 @@ public class ContentsCache {
 
         public List<ByteBuf> getChunks() {
             return chunks.stream()
-                    .map(c -> c.copy())
+                    .map(c -> c.copy()) // a copy starts always with refCount = 1
                     .collect(Collectors.toList());
         }
 
@@ -396,7 +396,7 @@ public class ContentsCache {
         public String getUri() {
             return uri;
         }
-        
+
         public String getScheme() {
             return scheme;
         }
@@ -444,7 +444,7 @@ public class ContentsCache {
             if (!Objects.equals(this.scheme, other.scheme)) {
                 return false;
             }
-            
+
             return true;
         }
     }

@@ -170,6 +170,10 @@ public class ProxyRequestsManager {
     }
 
     private Publisher<Void> serveNotFoundMessage(ProxyRequest request) {
+        if (request.getResponse().hasSentHeaders()) {
+            return Mono.empty();
+        }
+
         SimpleHTTPResponse res = parent.getMapper().mapPageNotFound(request.getAction().routeId);
         int code = 0;
         String resource = null;
@@ -191,6 +195,10 @@ public class ProxyRequestsManager {
     }
 
     private Publisher<Void> serveInternalErrorMessage(ProxyRequest request) {
+        if (request.getResponse().hasSentHeaders()) {
+            return Mono.empty();
+        }
+
         SimpleHTTPResponse res = parent.getMapper().mapInternalError(request.getAction().routeId);
         int code = 0;
         String resource = null;
@@ -212,13 +220,21 @@ public class ProxyRequestsManager {
     }
 
     private Publisher<Void> serveStaticMessage(ProxyRequest request) {
+        if (request.getResponse().hasSentHeaders()) {
+            return Mono.empty();
+        }
+
         FullHttpResponse response = parent.getStaticContentsManager()
                 .buildResponse(request.getAction().errorCode, request.getAction().resource);
 
-        return writeSimpleResponse(request, response);
+        return writeSimpleResponse(request, response, request.getAction().customHeaders);
     }
 
     private Publisher<Void> serveRedirect(ProxyRequest request) {
+        if (request.getResponse().hasSentHeaders()) {
+            return Mono.empty();
+        }
+
         MapResult action = request.getAction();
 
         DefaultFullHttpResponse response = new DefaultFullHttpResponse(
@@ -254,17 +270,10 @@ public class ProxyRequestsManager {
                 + "://" + location.replaceFirst("http.?:\\/\\/", "");
         response.headers().set(HttpHeaderNames.LOCATION, location);
 
-        return writeSimpleResponse(request, response);
-    }
-
-    private static Publisher<Void> writeSimpleResponse(ProxyRequest request, FullHttpResponse response) {
         return writeSimpleResponse(request, response, request.getAction().customHeaders);
     }
 
     private static Publisher<Void> writeSimpleResponse(ProxyRequest request, FullHttpResponse response, List<CustomHeader> customHeaders) {
-        if (request.getResponse().hasSentHeaders()) {
-            return Mono.empty();
-        }
         // Prepare the response
         if (request.isKeepAlive()) {
             // Add 'Content-Length' header only for a keep-alive connection.
@@ -409,8 +418,12 @@ public class ProxyRequestsManager {
     }
 
     private Publisher<Void> serveServiceNotAvailable(ProxyRequest request) {
+        if (request.getResponse().hasSentHeaders()) {
+            return Mono.empty();
+        }
+
         FullHttpResponse response = parent.getStaticContentsManager().buildServiceNotAvailableResponse();
-        return writeSimpleResponse(request, response);
+        return writeSimpleResponse(request, response, request.getAction().customHeaders);
     }
 
     private static void cleanRequestFromCacheValidators(ProxyRequest request) {

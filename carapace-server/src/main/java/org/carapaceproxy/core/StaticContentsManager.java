@@ -48,7 +48,14 @@ public class StaticContentsManager {
     public static final String DEFAULT_NOT_FOUND = CLASSPATH_RESOURCE + "/default-error-pages/404_notfound.html";
     public static final String DEFAULT_INTERNAL_SERVER_ERROR = CLASSPATH_RESOURCE + "/default-error-pages/500_internalservererror.html";
 
+    private static final Logger LOG = Logger.getLogger(StaticContentsManager.class.getName());
+
     private final ConcurrentHashMap<String, ByteBuf> contents = new ConcurrentHashMap<>();
+
+    public void close() {
+        contents.values().forEach(ByteBuf::release);
+        contents.clear();
+    }
 
     public DefaultFullHttpResponse buildServiceNotAvailableResponse() {
         return buildResponse(500, DEFAULT_INTERNAL_SERVER_ERROR);
@@ -61,7 +68,7 @@ public class StaticContentsManager {
         DefaultFullHttpResponse res;
         ByteBuf content = resource == null ? null : contents.computeIfAbsent(resource, StaticContentsManager::loadResource);
         if (content != null) {
-            content = content.retainedDuplicate();
+            content = content.copy(); // a copy starts always with refCount = 1
             int contentLength = content.readableBytes();
             res = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(code), content);
             res.headers().set(HttpHeaderNames.CONTENT_LENGTH, contentLength);
@@ -70,10 +77,6 @@ public class StaticContentsManager {
         }
         res.headers().set(HttpHeaderNames.CACHE_CONTROL, "no-cache");
         return res;
-    }
-
-    public void close() {
-        contents.clear();
     }
 
     private static ByteBuf loadResource(String resource) {
@@ -100,5 +103,4 @@ public class StaticContentsManager {
             return null;
         }
     }
-    private static final Logger LOG = Logger.getLogger(StaticContentsManager.class.getName());
 }
