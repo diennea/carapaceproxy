@@ -310,6 +310,10 @@ public class ContentsCache {
 
         void clear() {
             chunks.forEach(ByteBuf::release);
+            if (LOG.isLoggable(Level.FINE)) {
+                LOG.log(Level.FINE, "ConcentsCache refCnt after release");
+                chunks.forEach(buff -> LOG.log(Level.FINE, "refCnt: {0}", buff.refCnt()));
+            }
             chunks.clear();
         }
 
