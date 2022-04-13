@@ -300,7 +300,7 @@ public class ContentsCache {
         int hits;
 
         private void addChunk(ByteBuf chunk) {
-            chunks.add(chunk.copy()); // a copy starts always with refCount = 1
+            chunks.add(chunk.retainedDuplicate());
             if (chunk.isDirect()) {
                 directSize += chunk.capacity();
             } else {
@@ -319,7 +319,7 @@ public class ContentsCache {
 
         public List<ByteBuf> getChunks() {
             return chunks.stream()
-                    .map(c -> c.copy()) // a copy starts always with refCount = 1
+                    .map(c -> c.retainedDuplicate())
                     .collect(Collectors.toList());
         }
 
