@@ -101,8 +101,8 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <javacc-maven-plugin.version>2.4</javacc-maven-plugin.version>
 
-        <libs.projectreactor>2020.0.15</libs.projectreactor>
-        <libs.netty.ssl>2.0.47.Final</libs.netty.ssl>
+        <libs.projectreactor>2020.0.17</libs.projectreactor>
+        <libs.netty.ssl>2.0.51.Final</libs.netty.ssl>
         <libs.acme4j>2.12</libs.acme4j>
         <libs.bouncycastle>1.70</libs.bouncycastle>
         <libs.awssdk>2.17.113</libs.awssdk>

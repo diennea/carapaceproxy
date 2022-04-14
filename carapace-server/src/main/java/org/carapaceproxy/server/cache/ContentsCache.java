@@ -310,12 +310,16 @@ public class ContentsCache {
 
         void clear() {
             chunks.forEach(ByteBuf::release);
+            if (LOG.isLoggable(Level.FINE)) {
+                LOG.log(Level.FINE, "ConcentsCache refCnt after release");
+                chunks.forEach(buff -> LOG.log(Level.FINE, "refCnt: {0}", buff.refCnt()));
+            }
             chunks.clear();
         }
 
         public List<ByteBuf> getChunks() {
             return chunks.stream()
-                    .map(c -> c.copy())
+                    .map(c -> c.retainedDuplicate())
                     .collect(Collectors.toList());
         }
 
@@ -396,7 +400,7 @@ public class ContentsCache {
         public String getUri() {
             return uri;
         }
-        
+
         public String getScheme() {
             return scheme;
         }
@@ -444,7 +448,7 @@ public class ContentsCache {
             if (!Objects.equals(this.scheme, other.scheme)) {
                 return false;
             }
-            
+
             return true;
         }
     }
