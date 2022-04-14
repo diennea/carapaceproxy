@@ -159,7 +159,9 @@ class CaffeineCacheImpl implements CacheImpl {
     }
 
     private void release(ContentKey key, CachedContent payload) {
-        logger.log(Level.FINE, "Releasing cache content {0}", new Object[]{key.uri});
+        if (logger.isLoggable(Level.FINE)) {
+            logger.log(Level.FINE, "Releasing cache content {0}", new Object[]{key.uri});
+        }
 
         stats.released(payload.heapSize, payload.directSize, key.getMemUsage() + payload.getMemUsage());
         entries.addAndGet(-1);
