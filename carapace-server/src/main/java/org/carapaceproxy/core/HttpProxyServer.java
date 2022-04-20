@@ -94,13 +94,8 @@ import io.micrometer.core.instrument.config.MeterFilter;
 import io.micrometer.prometheus.PrometheusConfig;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
 import io.micrometer.prometheus.PrometheusRenameFilter;
-import java.io.IOException;
-import java.io.OutputStream;
 import java.util.Collections;
 import java.util.Objects;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
@@ -322,16 +317,7 @@ public class HttpProxyServer implements AutoCloseable {
         jerseyServlet.setInitParameter(JAXRS_APPLICATION_CLASS, ApplicationConfig.class.getCanonicalName());
         context.addServlet(jerseyServlet, "/api/*");
         context.addServlet(new ServletHolder(new MetricsServlet()), "/metrics");
-        context.addServlet(new ServletHolder(new HttpServlet() {
-            protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-                byte[] metricsData = prometheusRegistry.scrape().getBytes();
-                resp.setStatus(200);
-                resp.setContentLength(metricsData.length);
-                try (OutputStream os = resp.getOutputStream()) {
-                    os.write(metricsData);
-                }
-            }
-        }), "/micrometrics");
+        context.addServlet(new ServletHolder(new MetricsServlet(prometheusRegistry.getPrometheusRegistry())), "/micrometrics");
 
         NCSARequestLog requestLog = new NCSARequestLog();
         requestLog.setFilename(adminAccessLogPath);
@@ -686,8 +672,6 @@ public class HttpProxyServer implements AutoCloseable {
             this.mapper = newMapper;
 
             if (atBoot || !newBackends.equals(currentBackends) || isConnectionsConfigurationChanged(newConfiguration)) {
-                prometheusRegistry.clear();
-                Metrics.globalRegistry.clear();
                 proxyRequestsManager.reloadConfiguration(newConfiguration, newBackends.values());
             }
 
