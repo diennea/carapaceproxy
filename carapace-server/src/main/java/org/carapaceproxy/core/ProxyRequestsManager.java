@@ -509,7 +509,7 @@ public class ProxyRequestsManager {
                         spec.evictInBackground(Duration.ofMillis(connectionPool.getIdleTimeout() * 2));
                         spec.lifo();
                         spec.metrics(true);
-                    });
+                    }).metrics(true);
                 });
 
                 if (connectionPool.getId().equals("*")) {
