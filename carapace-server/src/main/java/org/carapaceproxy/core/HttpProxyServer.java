@@ -126,7 +126,7 @@ public class HttpProxyServer implements AutoCloseable {
     private BackendHealthManager backendHealthManager;
     private final PrometheusMetricsProvider statsProvider;
     private final PropertiesConfiguration statsProviderConfig = new PropertiesConfiguration();
-    private final PrometheusMeterRegistry prometheusRegistry;
+    private PrometheusMeterRegistry prometheusRegistry;
 
     @Getter
     private final RequestsLogger requestsLogger;
@@ -208,14 +208,6 @@ public class HttpProxyServer implements AutoCloseable {
         // metrics
         statsProvider = new PrometheusMetricsProvider();
         mainLogger = statsProvider.getStatsLogger("");
-        prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
-        prometheusRegistry.config().meterFilter(new PrometheusRenameFilter());
-        Metrics.globalRegistry.add(prometheusRegistry);
-        Metrics.globalRegistry.config()
-                .meterFilter(MeterFilter.denyNameStartsWith(("reactor.netty.http.server.data"))) // spam
-                .meterFilter(MeterFilter.denyNameStartsWith(("reactor.netty.http.server.response"))) // spam
-                .meterFilter(MeterFilter.denyNameStartsWith(("reactor.netty.http.server.errors"))); // spam
-
         this.mapper = mapper;
         this.basePath = basePath;
         this.filters = new ArrayList<>();
@@ -405,10 +397,8 @@ public class HttpProxyServer implements AutoCloseable {
                 adminserver = null;
             }
         }
-        statsProvider.stop();
 
         listeners.stop();
-
         proxyRequestsManager.close();
 
         if (requestsLogger != null) {
@@ -423,6 +413,10 @@ public class HttpProxyServer implements AutoCloseable {
             // this will also shutdown embedded database
             dynamicConfigurationStore.close();
         }
+
+        statsProvider.stop();
+        prometheusRegistry.close();
+        Metrics.globalRegistry.close();
     }
 
     private static EndpointMapper buildMapper(String className, ConfigurationStore properties) throws ConfigurationNotValidException {
@@ -679,6 +673,8 @@ public class HttpProxyServer implements AutoCloseable {
                 dynamicConfigurationStore.commitConfiguration(newConfigurationStore);
             }
 
+            setupMetrics();
+
             this.currentConfiguration = newConfiguration;
         } catch (ConfigurationNotValidException err) {
             // impossible to have a non valid configuration here
@@ -686,6 +682,20 @@ public class HttpProxyServer implements AutoCloseable {
         } finally {
             configurationLock.unlock();
         }
+    }
+
+    private void setupMetrics() {
+        if (prometheusRegistry != null) {
+            prometheusRegistry.close();
+        }
+        prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+        prometheusRegistry.config().meterFilter(new PrometheusRenameFilter());
+        Metrics.globalRegistry.clear();
+        Metrics.globalRegistry.add(prometheusRegistry);
+        Metrics.globalRegistry.config()
+                .meterFilter(MeterFilter.denyNameStartsWith(("reactor.netty.http.server.data"))) // spam
+                .meterFilter(MeterFilter.denyNameStartsWith(("reactor.netty.http.server.response"))) // spam
+                .meterFilter(MeterFilter.denyNameStartsWith(("reactor.netty.http.server.errors"))); // spam
     }
 
     private boolean isConnectionsConfigurationChanged(RuntimeServerConfiguration newConfiguration) {
