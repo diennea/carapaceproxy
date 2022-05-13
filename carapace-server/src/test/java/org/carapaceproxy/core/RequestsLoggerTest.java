@@ -37,6 +37,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.List;
+
+import io.netty.handler.codec.http.HttpVersion;
 import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.utils.RawHttpClient;
@@ -101,6 +103,7 @@ public class RequestsLoggerTest {
         MapResult action;
         String userid;
         String sessionid;
+        HttpVersion reqProtocolVersion;
     }
 
     private static ProxyRequest createMockRequestHandler(MockProxyRequest r) throws Exception {
@@ -125,6 +128,7 @@ public class RequestsLoggerTest {
         when(rh.getLastActivity()).thenReturn(f.parse(r.endTs).getTime());
         when(rh.getUserId()).thenReturn(r.userid);
         when(rh.getSessionId()).thenReturn(r.sessionid);
+        when(hr.version()).thenReturn(r.reqProtocolVersion);
 
         return rh;
     }
@@ -177,6 +181,7 @@ public class RequestsLoggerTest {
             r1.startTs = "2018-10-23 10:10:10.000";
             r1.backendStartTs = "2018-10-23 10:10:10.542";
             r1.endTs = "2018-10-23 10:10:11.012";
+            r1.reqProtocolVersion = HttpVersion.HTTP_1_1;
             r1.action = MapResult.builder()
                     .host("host")
                     .port(1111)
@@ -198,7 +203,7 @@ public class RequestsLoggerTest {
             assertThat(rows1.size(), is(1));
             assertThat(rows1.get(0), is(
                     "[2018-10-23 10:10:10.000] [GET thehost /index.html] [uid:uid_1, sid:sid_1, ip:123.123.123.123] "
-                    + "server=234.234.234.234, act=CACHE, route=routeid_1, backend=host:1111. time t=1012ms b=542ms"));
+                    + "server=234.234.234.234, act=CACHE, route=routeid_1, backend=host:1111. time t=1012ms b=542ms, protocol=" + HttpVersion.HTTP_1_1));
 
             // Request to log 2. Let's wait 100ms before do the request and check if flush will be done within the
             // initial FLUSH_WAIT_TIME ms timeframe
@@ -214,6 +219,7 @@ public class RequestsLoggerTest {
             r2.startTs = "2018-10-23 11:10:10.000";
             r2.backendStartTs = "2018-10-23 11:10:10.142";
             r2.endTs = "2018-10-23 11:10:10.912";
+            r2.reqProtocolVersion = HttpVersion.HTTP_1_1;
             r2.action = MapResult.builder()
                     .host("host2")
                     .port(2222)
@@ -244,7 +250,7 @@ public class RequestsLoggerTest {
             assertThat(rows3.size(), is(2));
             assertThat(rows3.get(1), is(
                     "[2018-10-23 11:10:10.000] [POST thehost2 /index2.html] [uid:uid_2, sid:sid_2, ip:111.123.123.123] "
-                    + "server=111.234.234.234, act=PROXY, route=routeid_2, backend=host2:2222. time t=912ms b=142ms"));
+                    + "server=111.234.234.234, act=PROXY, route=routeid_2, backend=host2:2222. time t=912ms b=142ms, protocol=" + HttpVersion.HTTP_1_1));
         }
 
         // Hot configuration reload
@@ -268,6 +274,7 @@ public class RequestsLoggerTest {
             r1.startTs = "2018-10-23 10:10:10.000";
             r1.backendStartTs = "2018-10-23 10:10:10.542";
             r1.endTs = "2018-10-23 10:10:11.012";
+            r1.reqProtocolVersion=HttpVersion.HTTP_1_1;
             r1.action = MapResult.builder()
                     .host("host")
                     .port(1111)
@@ -289,7 +296,7 @@ public class RequestsLoggerTest {
             assertThat(rows1.size(), is(3));
             assertThat(rows1.get(2), is(
                     "[2018-10-23 10:10:10.000] [GET thehost /index.html] [uid:uid_1, sid:sid_1, ip:123.123.123.123] "
-                    + "server=234.234.234.234, act=CACHE, route=routeid_1, backend=host:1111. time t=1012ms b=542ms"));
+                    + "server=234.234.234.234, act=CACHE, route=routeid_1, backend=host:1111. time t=1012ms b=542ms, protocol=" + HttpVersion.HTTP_1_1));
 
             // This request will be taken in with the new conf
             MockProxyRequest r2 = new MockProxyRequest();
