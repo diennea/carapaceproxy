@@ -36,6 +36,8 @@ import io.prometheus.client.Gauge;
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -374,6 +376,13 @@ public class ProxyRequestsManager {
                     .response((resp, flux) -> { // endpoint response
                         request.setResponseStatus(resp.status());
                         request.setResponseHeaders(resp.responseHeaders().copy()); // headers from endpoint to client
+                        if(CarapaceLogger.isLoggingDebugEnabled()) {
+                            CarapaceLogger.debug("Receive response from backend for "
+                                    + request.getRemoteAddress()
+                                    + " uri" + request.getUri()
+                                    + " timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
+                                    + " Backend: " + request.getAction().host);
+                        }
                         if (cacheReceiver != null && parent.getCache().isCacheable(resp) && cacheReceiver.receivedFromRemote(resp)) {
                             addCachedResponseHeaders(request);
                         } else {
@@ -386,7 +395,16 @@ public class ProxyRequestsManager {
                             if (cacheReceiver != null) {
                                 cacheReceiver.receivedFromRemote(data);
                             }
-                        }).doOnComplete(() -> parent.getCache().cacheContent(cacheReceiver)));
+                        }).doOnComplete(() -> {
+                            parent.getCache().cacheContent(cacheReceiver);
+                            if(CarapaceLogger.isLoggingDebugEnabled()) {
+                                CarapaceLogger.debug("Send all response to client "
+                                        + request.getRemoteAddress()
+                                        + " for uri " + request.getUri()
+                                        + " timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
+                                        + " Backend: " + request.getAction().host);
+                            }
+                        }));
                     })
                     .onErrorResume(err -> { // custom endpoint request/response error handling
                         if (requestRunning) {
