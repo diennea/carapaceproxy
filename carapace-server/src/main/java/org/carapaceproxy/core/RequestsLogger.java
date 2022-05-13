@@ -138,7 +138,7 @@ public class RequestsLogger implements Runnable, Closeable {
     }
 
     @VisibleForTesting
-    void rotateAccessLogFile() throws IOException {
+    void rotateAccessLogFile() {
         String accesslogPath = this.currentConfiguration.getAccessLogPath();
         long maxSize = this.currentConfiguration.getAccessLogMaxSize();
         DateFormat date = new SimpleDateFormat("yyyy-MM-dd-ss");
@@ -146,9 +146,8 @@ public class RequestsLogger implements Runnable, Closeable {
 
         Path currentAccessLogPath = Paths.get(accesslogPath);
         Path newAccessLogPath = Paths.get(newAccessLogName);
-        FileChannel logFileChannel = FileChannel.open(currentAccessLogPath);
 
-        try {
+        try (FileChannel logFileChannel = FileChannel.open(currentAccessLogPath)) {
             long currentSize = logFileChannel.size();
             if (currentSize >= maxSize && maxSize > 0) {
                 LOG.log(Level.INFO, "Maximum access log size reached. file: {0} , Size: {1} , maxSize: {2}", new Object[]{accesslogPath, currentSize, maxSize});
@@ -363,6 +362,7 @@ public class RequestsLogger implements Runnable, Closeable {
      * start to the last byte sended to client (tcp delays are not counted) <action_id>: action id (PROXY, CACHE, ...) <route_id>: id of the route used for selecting action and backend <backend_id>:
      * id (host+port) of the backend to which the request was forwarded <user_id>: user id inferred by filters <session_id>: session id inferred by filters <tls_protocol>: tls protocol used
      * <tls_cipher_suite>: cipher suite used
+     * <http_protocol_version>: http protocol used
      */
     static final class Entry {
 
@@ -384,6 +384,7 @@ public class RequestsLogger implements Runnable, Closeable {
             this.format.add("route_id", request.getAction().routeId);
             this.format.add("user_id", request.getUserId());
             this.format.add("session_id", request.getSessionId());
+            this.format.add("http_protocol_version", request.getRequest().version());
             if (request.isServedFromCache()) {
                 this.format.add("backend_id", "CACHED");
                 this.format.add("backend_time", "0");
