@@ -78,7 +78,7 @@ public class RuntimeServerConfiguration {
     private String accessLogFormat =
             "[<timestamp>] [<method> <host> <uri>] [uid:<user_id>, sid:<session_id>, ip:<client_ip>] "
             + "server=<server_ip>, act=<action_id>, route=<route_id>, backend=<backend_id>. "
-            + "time t=<total_time>ms b=<backend_time>ms";
+            + "time t=<total_time>ms b=<backend_time>ms, protocol=<http_protocol_version>";
     private int accessLogMaxQueueCapacity = 2000;
     private int accessLogFlushInterval = 5000;
     private int accessLogWaitBetweenFailures = 10000;
