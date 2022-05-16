@@ -40,6 +40,8 @@ import java.net.InetSocketAddress;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.cert.Certificate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -264,6 +266,12 @@ public class Listeners {
                     conn.channel().closeFuture().addListener(e -> CURRENT_CONNECTED_CLIENTS_GAUGE.dec());
                 })
                 .handle((request, response) -> { // Custom request-response handling
+                    if(CarapaceLogger.isLoggingDebugEnabled()) {
+                        CarapaceLogger.debug("Receive request " + request.uri()
+                        + " From " + request.remoteAddress()
+                        + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")));
+                    }
+
                     ListeningChannel channel = listeningChannels.get(hostPort);
                     if (channel != null) {
                         channel.incRequests();

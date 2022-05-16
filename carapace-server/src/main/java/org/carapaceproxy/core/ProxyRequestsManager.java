@@ -353,6 +353,13 @@ public class ProxyRequestsManager {
                     .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
                     .headers(h -> h.add(request.getRequestHeaders().copy()))
                     .doOnRequest((req, conn) -> {
+                        if(CarapaceLogger.isLoggingDebugEnabled()) {
+                            CarapaceLogger.debug("Start sending request for " + request.getRemoteAddress()
+                            + " Uri " +  request.getUri()
+                            + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
+                            + " Backend " + endpointHost + ":" + endpointPort);
+                        }
+
                         PENDING_REQUESTS_GAUGE.inc();
                         requestRunning = true;
                         requestsPerUser.inc();
