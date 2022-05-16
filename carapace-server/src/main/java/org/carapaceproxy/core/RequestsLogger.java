@@ -168,8 +168,7 @@ public class RequestsLogger implements Runnable, Closeable {
         File source = new File(source_filepath);
         File dest = new File(destination_zip_filepath);
 
-        try {
-            FileOutputStream fileOutputStream = new FileOutputStream(dest);
+        try (FileOutputStream fileOutputStream = new FileOutputStream(dest)) {
             try (GZIPOutputStream gzipOutputStream = new GZIPOutputStream(fileOutputStream)) {
                 try (FileInputStream fileInput = new FileInputStream(source)) {
                     int bytes_read;
