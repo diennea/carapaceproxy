@@ -366,6 +366,13 @@ public class ProxyRequestsManager {
                         totalRequests.inc();
                         endpointStats.getTotalRequests().incrementAndGet();
                         endpointStats.getLastActivity().set(System.currentTimeMillis());
+                    }).doAfterRequest((req, conn) -> {
+                        if(CarapaceLogger.isLoggingDebugEnabled()) {
+                            CarapaceLogger.debug("Finished sending request for " + request.getRemoteAddress()
+                                    + " Uri " +  request.getUri()
+                                    + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
+                                    + " Backend " + endpointHost + ":" + endpointPort);
+                        }
                     })
                     .doAfterResponseSuccess((resp, conn) -> {
                         if (requestRunning) {
