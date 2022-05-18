@@ -353,6 +353,7 @@ public class ProxyRequestsManager {
                     .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
                     .option(ChannelOption.SO_KEEPALIVE, true) // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
                     .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
+                    .headers(h -> h.add(request.getRequestHeaders().copy()))
                     .doOnRequest((req, conn) -> {
                         if (CarapaceLogger.isLoggingDebugEnabled()) {
                             CarapaceLogger.debug("Start sending request for " + request.getRemoteAddress()
@@ -386,10 +387,7 @@ public class ProxyRequestsManager {
         public Publisher<Void> forward() {
             return client.request(request.getMethod())
                     .uri(request.getUri())
-                    .send((req, out) -> {
-                        req.headers(request.getRequestHeaders().copy()); // client request headers
-                        return out.send(request.getRequestData()); // client request body
-                    })
+                    .send(request.getRequestData()) // client request body
                     .response((resp, flux) -> { // endpoint response
                         request.setResponseStatus(resp.status());
                         request.setResponseHeaders(resp.responseHeaders().copy()); // headers from endpoint to client

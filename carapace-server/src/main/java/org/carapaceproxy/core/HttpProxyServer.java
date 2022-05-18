@@ -751,7 +751,7 @@ public class HttpProxyServer implements AutoCloseable {
             try {
                 dynamicConfigurationStore.reload();
                 applyDynamicConfiguration(null, true);
-            } catch (InterruptedException | ConfigurationChangeInProgressException err) {
+            } catch (Throwable err) {
                 LOG.log(Level.SEVERE, "Cannot apply new configuration", err);
             }
         }
@@ -761,7 +761,7 @@ public class HttpProxyServer implements AutoCloseable {
             LOG.log(Level.INFO, "Configuration listener - reloading configuration after ZK reconnection");
             try {
                 applyDynamicConfiguration(null, true);
-            } catch (InterruptedException | ConfigurationChangeInProgressException err) {
+            } catch (Throwable err) {
                 LOG.log(Level.SEVERE, "Cannot apply new configuration", err);
             }
         }
