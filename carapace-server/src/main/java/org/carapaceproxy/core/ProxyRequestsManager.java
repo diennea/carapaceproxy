@@ -21,7 +21,9 @@ package org.carapaceproxy.core;
 
 import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTP;
 import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTPS;
+import static reactor.netty.Metrics.CONNECTION_PROVIDER_PREFIX;
 import com.google.common.annotations.VisibleForTesting;
+import io.micrometer.core.instrument.Metrics;
 import io.netty.channel.ChannelOption;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
@@ -316,7 +318,7 @@ public class ProxyRequestsManager {
         private final ProxyRequest request;
         private ContentsCache.ContentReceiver cacheReceiver;
         private final EndpointStats endpointStats;
-        private HttpClient client;
+        private final HttpClient client;
         private volatile boolean requestRunning;
 
         private RequestForwarder(ProxyRequest request, ContentsCache.ContentReceiver cacheReceiver) {
@@ -353,11 +355,11 @@ public class ProxyRequestsManager {
                     .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
                     .headers(h -> h.add(request.getRequestHeaders().copy()))
                     .doOnRequest((req, conn) -> {
-                        if(CarapaceLogger.isLoggingDebugEnabled()) {
+                        if (CarapaceLogger.isLoggingDebugEnabled()) {
                             CarapaceLogger.debug("Start sending request for " + request.getRemoteAddress()
-                            + " Uri " +  request.getUri()
-                            + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
-                            + " Backend " + endpointHost + ":" + endpointPort);
+                                    + " Uri " + request.getUri()
+                                    + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
+                                    + " Backend " + endpointHost + ":" + endpointPort);
                         }
 
                         PENDING_REQUESTS_GAUGE.inc();
@@ -367,14 +369,13 @@ public class ProxyRequestsManager {
                         endpointStats.getTotalRequests().incrementAndGet();
                         endpointStats.getLastActivity().set(System.currentTimeMillis());
                     }).doAfterRequest((req, conn) -> {
-                        if(CarapaceLogger.isLoggingDebugEnabled()) {
+                        if (CarapaceLogger.isLoggingDebugEnabled()) {
                             CarapaceLogger.debug("Finished sending request for " + request.getRemoteAddress()
-                                    + " Uri " +  request.getUri()
+                                    + " Uri " + request.getUri()
                                     + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
                                     + " Backend " + endpointHost + ":" + endpointPort);
                         }
-                    })
-                    .doAfterResponseSuccess((resp, conn) -> {
+                    }).doAfterResponseSuccess((resp, conn) -> {
                         if (requestRunning) {
                             requestRunning = false;
                             PENDING_REQUESTS_GAUGE.dec();
@@ -390,7 +391,7 @@ public class ProxyRequestsManager {
                     .response((resp, flux) -> { // endpoint response
                         request.setResponseStatus(resp.status());
                         request.setResponseHeaders(resp.responseHeaders().copy()); // headers from endpoint to client
-                        if(CarapaceLogger.isLoggingDebugEnabled()) {
+                        if (CarapaceLogger.isLoggingDebugEnabled()) {
                             CarapaceLogger.debug("Receive response from backend for "
                                     + request.getRemoteAddress()
                                     + " uri" + request.getUri()
@@ -411,7 +412,7 @@ public class ProxyRequestsManager {
                             }
                         }).doOnComplete(() -> {
                             parent.getCache().cacheContent(cacheReceiver);
-                            if(CarapaceLogger.isLoggingDebugEnabled()) {
+                            if (CarapaceLogger.isLoggingDebugEnabled()) {
                                 CarapaceLogger.debug("Send all response to client "
                                         + request.getRemoteAddress()
                                         + " for uri " + request.getUri()
@@ -539,9 +540,9 @@ public class ProxyRequestsManager {
                         spec.pendingAcquireTimeout(Duration.ofMillis(connectionPool.getBorrowTimeout()));
                         spec.maxIdleTime(Duration.ofMillis(connectionPool.getIdleTimeout()));
                         spec.evictInBackground(Duration.ofMillis(connectionPool.getIdleTimeout() * 2));
-                        spec.lifo();
                         spec.metrics(true);
-                    }).metrics(true);
+                        spec.lifo();
+                    });
                 });
 
                 if (connectionPool.getId().equals("*")) {
@@ -554,14 +555,19 @@ public class ProxyRequestsManager {
 
         @Override
         public void close() {
-            connectionPools.values().forEach(connectionProvider -> {
-                connectionProvider.dispose(); // graceful shutdown according to disposeTimeout
-            });
+            connectionPools.values().forEach(ConnectionProvider::dispose); // graceful shutdown according to disposeTimeout
             connectionPools.clear();
 
             if (defaultConnectionPool != null) {
                 defaultConnectionPool.getValue().dispose(); // graceful shutdown according to disposeTimeout
             }
+
+            // reset connections provider metrics
+            Metrics.globalRegistry.forEachMeter(m -> {
+                if (m.getId().getName().startsWith(CONNECTION_PROVIDER_PREFIX)) {
+                    Metrics.globalRegistry.remove(m);
+                }
+            });
         }
 
         @Override
