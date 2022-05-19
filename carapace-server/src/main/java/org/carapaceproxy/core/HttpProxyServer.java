@@ -631,6 +631,7 @@ public class HttpProxyServer implements AutoCloseable {
      *
      * @param newConfigurationStore
      * @throws InterruptedException
+     * @throws org.carapaceproxy.server.config.ConfigurationChangeInProgressException
      * @see #buildValidConfiguration(org.carapaceproxy.configstore.ConfigurationStore)
      */
     public void applyDynamicConfigurationFromAPI(ConfigurationStore newConfigurationStore) throws InterruptedException, ConfigurationChangeInProgressException {
@@ -671,7 +672,7 @@ public class HttpProxyServer implements AutoCloseable {
             Map<String, BackendConfiguration> newBackends = newMapper.getBackends();
             this.mapper = newMapper;
 
-            if (atBoot || !newBackends.equals(currentBackends) || isConnectionsConfigurationChanged(newConfiguration)) {
+            if (!newBackends.equals(currentBackends) || isConnectionsConfigurationChanged(newConfiguration)) {
                 proxyRequestsManager.reloadConfiguration(newConfiguration, newBackends.values());
             }
 

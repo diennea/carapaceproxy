@@ -21,7 +21,9 @@ package org.carapaceproxy.core;
 
 import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTP;
 import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTPS;
+import static reactor.netty.Metrics.CONNECTION_PROVIDER_PREFIX;
 import com.google.common.annotations.VisibleForTesting;
+import io.micrometer.core.instrument.Metrics;
 import io.netty.channel.ChannelOption;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
@@ -361,7 +363,6 @@ public class ProxyRequestsManager {
                         .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
                         .option(ChannelOption.SO_KEEPALIVE, true) // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
                         .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
-                        .headers(h -> h.add(request.getRequestHeaders().copy()))
                         .doOnRequest((req, conn) -> {
                             if (CarapaceLogger.isLoggingDebugEnabled()) {
                                 CarapaceLogger.debug("Start sending request for " + request.getRemoteAddress()
@@ -390,8 +391,10 @@ public class ProxyRequestsManager {
                             endpointStats.getLastActivity().set(System.currentTimeMillis());
                         }).request(request.getMethod())
                         .uri(request.getUri())
-                        .send(request.getRequestData()) // client request body
-                        .response((resp, flux) -> { // endpoint response
+                        .send((req, out) -> {
+                            req.headers(request.getRequestHeaders().copy()); // client request headers
+                            return out.send(request.getRequestData()); // client request body
+                        }).response((resp, flux) -> { // endpoint response
                             request.setResponseStatus(resp.status());
                             request.setResponseHeaders(resp.responseHeaders().copy()); // headers from endpoint to client
                             if (CarapaceLogger.isLoggingDebugEnabled()) {
@@ -544,9 +547,9 @@ public class ProxyRequestsManager {
                         spec.pendingAcquireTimeout(Duration.ofMillis(connectionPool.getBorrowTimeout()));
                         spec.maxIdleTime(Duration.ofMillis(connectionPool.getIdleTimeout()));
                         spec.evictInBackground(Duration.ofMillis(connectionPool.getIdleTimeout() * 2));
-                        spec.lifo();
                         spec.metrics(true);
-                    }).metrics(true);
+                        spec.lifo();
+                    });
                 });
 
                 if (connectionPool.getId().equals("*")) {
@@ -559,14 +562,19 @@ public class ProxyRequestsManager {
 
         @Override
         public void close() {
-            connectionPools.values().forEach(connectionProvider -> {
-                connectionProvider.dispose(); // graceful shutdown according to disposeTimeout
-            });
+            connectionPools.values().forEach(ConnectionProvider::dispose); // graceful shutdown according to disposeTimeout
             connectionPools.clear();
 
             if (defaultConnectionPool != null) {
                 defaultConnectionPool.getValue().dispose(); // graceful shutdown according to disposeTimeout
             }
+
+            // reset connections provider metrics
+            Metrics.globalRegistry.forEachMeter(m -> {
+                if (m.getId().getName().startsWith(CONNECTION_PROVIDER_PREFIX)) {
+                    Metrics.globalRegistry.remove(m);
+                }
+            });
         }
 
         @Override
