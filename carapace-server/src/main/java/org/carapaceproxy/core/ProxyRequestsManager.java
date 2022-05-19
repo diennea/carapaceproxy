@@ -44,6 +44,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -60,6 +62,7 @@ import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.HttpUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
 import org.reactivestreams.Publisher;
+import org.reactivestreams.Subscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.http.client.HttpClient;
@@ -92,8 +95,10 @@ public class ProxyRequestsManager {
     private static final Logger LOGGER = Logger.getLogger(ProxyRequestsManager.class.getName());
 
     private final HttpProxyServer parent;
+    private final Map<String, Publisher<Void>> forwardersPool = new ConcurrentHashMap<>(); // hostname -> forwarder
+    private final Map<String, ConcurrentLinkedQueue<ProxyRequest>> requestsQueues = new ConcurrentHashMap<>(); // hostname -> requests to forward
     private final ConnectionsManager connectionsManager = new ConnectionsManager();
-    private final ConcurrentHashMap<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
+    private final Map<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
 
     public ProxyRequestsManager(HttpProxyServer parent) {
         this.parent = parent;
@@ -144,8 +149,7 @@ public class ProxyRequestsManager {
                     return serveRedirect(request);
 
                 case PROXY: {
-                    RequestForwarder forwarder = new RequestForwarder(request, null);
-                    return forwarder.forward();
+                    return forward(request);
                 }
 
                 case CACHE: {
@@ -154,13 +158,7 @@ public class ProxyRequestsManager {
                         request.setServedFromCache(true);
                         return serveFromCache(request, cacheSender); // cached content
                     }
-                    ContentsCache.ContentReceiver cacheReceiver = parent.getCache().createCacheReceiver(request);
-                    if (cacheReceiver != null) { // cacheable
-                        // https://tools.ietf.org/html/rfc7234#section-4.3.4
-                        cleanRequestFromCacheValidators(request);
-                    }
-                    RequestForwarder forwarder = new RequestForwarder(request, cacheReceiver);
-                    return forwarder.forward();
+                    return forward(request);
                 }
 
                 default:
@@ -311,142 +309,149 @@ public class ProxyRequestsManager {
         });
     }
 
-    private final class RequestForwarder {
+    public Publisher<Void> forward(ProxyRequest proxyRequest) {
+        ConcurrentLinkedQueue<ProxyRequest> requestsQueue = requestsQueues.computeIfAbsent(proxyRequest.getRequestHostname(), h -> new ConcurrentLinkedQueue<>());
+        requestsQueue.add(proxyRequest);
 
-        private final ProxyRequest request;
-        private ContentsCache.ContentReceiver cacheReceiver;
-        private final EndpointStats endpointStats;
-        private HttpClient client;
-        private volatile boolean requestRunning;
-
-        private RequestForwarder(ProxyRequest request, ContentsCache.ContentReceiver cacheReceiver) {
-            this.request = request;
-            this.cacheReceiver = cacheReceiver;
-            final String endpointHost = request.getAction().host;
-            final int endpointPort = request.getAction().port;
-            endpointStats = endpointsStats.computeIfAbsent(EndpointKey.make(endpointHost, endpointPort), EndpointStats::new);
-
-            Counter.Child requestsPerUser = request.getUserId() != null
-                    ? USER_REQUESTS_COUNTER.labels(request.getUserId())
-                    : USER_REQUESTS_COUNTER.labels("anonymous");
-
-            Counter.Child totalRequests = TOTAL_REQUESTS_COUNTER.labels(request.getListener() + "");
-
-            Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> connectionToEndpoint = connectionsManager.apply(request);
-            ConnectionPoolConfiguration connectionConfig = connectionToEndpoint.getKey();
-            ConnectionProvider connectionProvider = connectionToEndpoint.getValue();
-            if (CarapaceLogger.isLoggingDebugEnabled()) {
-                Map<String, HttpProxyServer.ConnectionPoolStats> stats = parent.getConnectionPoolsStats().get(EndpointKey.make(endpointHost, endpointPort));
-                if (stats != null) {
-                    CarapaceLogger.debug("Connection {0} stats: {1}", connectionConfig.getId(), stats.get(connectionConfig.getId()));
+        return forwardersPool.computeIfAbsent(proxyRequest.getRequestHostname(), hostname -> {
+            return (Subscriber<? super Void> sub) -> {
+                ConcurrentLinkedQueue<ProxyRequest> queue = requestsQueues.get(hostname);
+                if (queue == null) {
+                    throw new IllegalStateException("No request pool found for hostname " + hostname);
                 }
-                CarapaceLogger.debug("Max connections for {0}: {1}", connectionConfig.getId(), connectionProvider.maxConnectionsPerHost());
-            }
+                ProxyRequest request = queue.poll();
+                if (request == null) {
+                    throw new IllegalStateException("Requests pool empty for hostname " + hostname);
+                }
 
-            client = HttpClient.create(connectionProvider)
-                    .host(endpointHost)
-                    .port(endpointPort)
-                    .followRedirect(false) // clients has to request the redirect, not the proxy
-                    .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
-                    .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
-                    .option(ChannelOption.SO_KEEPALIVE, true) // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
-                    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
-                    .headers(h -> h.add(request.getRequestHeaders().copy()))
-                    .doOnRequest((req, conn) -> {
-                        if(CarapaceLogger.isLoggingDebugEnabled()) {
-                            CarapaceLogger.debug("Start sending request for " + request.getRemoteAddress()
-                            + " Uri " +  request.getUri()
-                            + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
-                            + " Backend " + endpointHost + ":" + endpointPort);
-                        }
+                final String endpointHost = request.getAction().host;
+                final int endpointPort = request.getAction().port;
+                Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> connectionToEndpoint = connectionsManager.apply(request);
+                ConnectionPoolConfiguration connectionConfig = connectionToEndpoint.getKey();
+                ConnectionProvider connectionProvider = connectionToEndpoint.getValue();
+                if (CarapaceLogger.isLoggingDebugEnabled()) {
+                    Map<String, HttpProxyServer.ConnectionPoolStats> stats = parent.getConnectionPoolsStats().get(EndpointKey.make(endpointHost, endpointPort));
+                    if (stats != null) {
+                        CarapaceLogger.debug("Connection {0} stats: {1}", connectionConfig.getId(), stats.get(connectionConfig.getId()));
+                    }
+                    CarapaceLogger.debug("Max connections for {0}: {1}", connectionConfig.getId(), connectionProvider.maxConnectionsPerHost());
+                }
 
-                        PENDING_REQUESTS_GAUGE.inc();
-                        requestRunning = true;
-                        requestsPerUser.inc();
-                        totalRequests.inc();
-                        endpointStats.getTotalRequests().incrementAndGet();
-                        endpointStats.getLastActivity().set(System.currentTimeMillis());
-                    }).doAfterRequest((req, conn) -> {
-                        if(CarapaceLogger.isLoggingDebugEnabled()) {
-                            CarapaceLogger.debug("Finished sending request for " + request.getRemoteAddress()
-                                    + " Uri " +  request.getUri()
-                                    + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
-                                    + " Backend " + endpointHost + ":" + endpointPort);
-                        }
-                    })
-                    .doAfterResponseSuccess((resp, conn) -> {
-                        if (requestRunning) {
-                            requestRunning = false;
-                            PENDING_REQUESTS_GAUGE.dec();
-                        }
-                        endpointStats.getLastActivity().set(System.currentTimeMillis());
-                    });
-        }
+                AtomicBoolean requestRunning = new AtomicBoolean(false);
+                Counter.Child requestsPerUser = request.getUserId() != null
+                        ? USER_REQUESTS_COUNTER.labels(request.getUserId())
+                        : USER_REQUESTS_COUNTER.labels("anonymous");
+                Counter.Child totalRequests = TOTAL_REQUESTS_COUNTER.labels(request.getListener() + "");
+                EndpointStats endpointStats = endpointsStats.computeIfAbsent(EndpointKey.make(endpointHost, endpointPort), EndpointStats::new);
 
-        public Publisher<Void> forward() {
-            return client.request(request.getMethod())
-                    .uri(request.getUri())
-                    .send(request.getRequestData()) // client request body
-                    .response((resp, flux) -> { // endpoint response
-                        request.setResponseStatus(resp.status());
-                        request.setResponseHeaders(resp.responseHeaders().copy()); // headers from endpoint to client
-                        if(CarapaceLogger.isLoggingDebugEnabled()) {
-                            CarapaceLogger.debug("Receive response from backend for "
-                                    + request.getRemoteAddress()
-                                    + " uri" + request.getUri()
-                                    + " timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
-                                    + " Backend: " + request.getAction().host);
-                        }
-                        if (cacheReceiver != null && parent.getCache().isCacheable(resp) && cacheReceiver.receivedFromRemote(resp)) {
-                            addCachedResponseHeaders(request);
-                        } else {
-                            cacheReceiver = null;
-                        }
-                        addCustomResponseHeaders(request, request.getAction().customHeaders);
-                        return request.sendResponseData(flux.retain().doOnNext(data -> { // response data
-                            request.setLastActivity(System.currentTimeMillis());
-                            endpointStats.getLastActivity().set(System.currentTimeMillis());
-                            if (cacheReceiver != null) {
-                                cacheReceiver.receivedFromRemote(data);
+                AtomicBoolean cacheable = new AtomicBoolean(request.getAction().action.equals(MapResult.Action.CACHE));
+                final ContentsCache.ContentReceiver cacheReceiver = cacheable.get() ? parent.getCache().createCacheReceiver(request) : null;
+                if (cacheReceiver != null) { // cacheable
+                    // https://tools.ietf.org/html/rfc7234#section-4.3.4
+                    cleanRequestFromCacheValidators(request);
+                } else {
+                    cacheable.set(false);
+                }
+
+                HttpClient.create(connectionProvider)
+                        .host(endpointHost)
+                        .port(endpointPort)
+                        .followRedirect(false) // clients has to request the redirect, not the proxy
+                        .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
+                        .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
+                        .option(ChannelOption.SO_KEEPALIVE, true) // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
+                        .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
+                        .headers(h -> h.add(request.getRequestHeaders().copy()))
+                        .doOnRequest((req, conn) -> {
+                            if (CarapaceLogger.isLoggingDebugEnabled()) {
+                                CarapaceLogger.debug("Start sending request for " + request.getRemoteAddress()
+                                        + " Uri " + request.getUri()
+                                        + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
+                                        + " Backend " + endpointHost + ":" + endpointPort);
                             }
-                        }).doOnComplete(() -> {
-                            parent.getCache().cacheContent(cacheReceiver);
-                            if(CarapaceLogger.isLoggingDebugEnabled()) {
-                                CarapaceLogger.debug("Send all response to client "
+                            PENDING_REQUESTS_GAUGE.inc();
+                            requestRunning.set(true);
+                            requestsPerUser.inc();
+                            totalRequests.inc();
+                            endpointStats.getTotalRequests().incrementAndGet();
+                            endpointStats.getLastActivity().set(System.currentTimeMillis());
+                        }).doAfterRequest((req, conn) -> {
+                            if (CarapaceLogger.isLoggingDebugEnabled()) {
+                                CarapaceLogger.debug("Finished sending request for " + request.getRemoteAddress()
+                                        + " Uri " + request.getUri()
+                                        + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
+                                        + " Backend " + endpointHost + ":" + endpointPort);
+                            }
+                        }).doAfterResponseSuccess((resp, conn) -> {
+                            if (requestRunning.get()) {
+                                requestRunning.set(false);
+                                PENDING_REQUESTS_GAUGE.dec();
+                            }
+                            endpointStats.getLastActivity().set(System.currentTimeMillis());
+                        }).request(request.getMethod())
+                        .uri(request.getUri())
+                        .send(request.getRequestData()) // client request body
+                        .response((resp, flux) -> { // endpoint response
+                            request.setResponseStatus(resp.status());
+                            request.setResponseHeaders(resp.responseHeaders().copy()); // headers from endpoint to client
+                            if (CarapaceLogger.isLoggingDebugEnabled()) {
+                                CarapaceLogger.debug("Receive response from backend for "
                                         + request.getRemoteAddress()
-                                        + " for uri " + request.getUri()
+                                        + " uri" + request.getUri()
                                         + " timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
                                         + " Backend: " + request.getAction().host);
                             }
-                        }));
-                    })
-                    .onErrorResume(err -> { // custom endpoint request/response error handling
-                        if (requestRunning) {
-                            requestRunning = false;
-                            PENDING_REQUESTS_GAUGE.dec();
-                        }
 
-                        String endpoint = request.getAction().host + ":" + request.getAction().port;
-                        if (err instanceof io.netty.handler.timeout.ReadTimeoutException) {
-                            STUCK_REQUESTS_COUNTER.inc();
-                            LOGGER.log(Level.SEVERE, "Read timeout error occurred for endpoint {0}; request: {1}", new Object[]{endpoint, request});
-                            if (parent.getCurrentConfiguration().isBackendsUnreachableOnStuckRequests()) {
+                            if (cacheable.get() && parent.getCache().isCacheable(resp) && cacheReceiver.receivedFromRemote(resp)) {
+                                addCachedResponseHeaders(request);
+                            } else {
+                                cacheable.set(false);
+                            }
+                            addCustomResponseHeaders(request, request.getAction().customHeaders);
+                            return request.sendResponseData(flux.retain().doOnNext(data -> { // response data
+                                request.setLastActivity(System.currentTimeMillis());
+                                endpointStats.getLastActivity().set(System.currentTimeMillis());
+                                if (cacheable.get()) {
+                                    cacheReceiver.receivedFromRemote(data);
+                                }
+                            }).doOnComplete(() -> {
+                                parent.getCache().cacheContent(cacheReceiver);
+                                if (CarapaceLogger.isLoggingDebugEnabled()) {
+                                    CarapaceLogger.debug("Send all response to client "
+                                            + request.getRemoteAddress()
+                                            + " for uri " + request.getUri()
+                                            + " timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
+                                            + " Backend: " + request.getAction().host);
+                                }
+                            }));
+                        }).onErrorResume(err -> { // custom endpoint request/response error handling
+                            if (requestRunning.get()) {
+                                requestRunning.set(false);
+                                PENDING_REQUESTS_GAUGE.dec();
+                            }
+
+                            String endpoint = request.getAction().host + ":" + request.getAction().port;
+                            if (err instanceof io.netty.handler.timeout.ReadTimeoutException) {
+                                STUCK_REQUESTS_COUNTER.inc();
+                                LOGGER.log(Level.SEVERE, "Read timeout error occurred for endpoint {0}; request: {1}", new Object[]{endpoint, request});
+                                if (parent.getCurrentConfiguration().isBackendsUnreachableOnStuckRequests()) {
+                                    parent.getBackendHealthManager().reportBackendUnreachable(
+                                            endpoint, System.currentTimeMillis(), "Error: " + err
+                                    );
+                                }
+                                return serveInternalErrorMessage(request);
+                            }
+
+                            LOGGER.log(Level.SEVERE, "Error proxying request for endpoint {0}; request: {1};\nError: {2}", new Object[]{endpoint, request, err});
+                            if (err instanceof ConnectException) {
                                 parent.getBackendHealthManager().reportBackendUnreachable(
                                         endpoint, System.currentTimeMillis(), "Error: " + err
                                 );
                             }
-                            return serveInternalErrorMessage(request);
-                        }
-
-                        LOGGER.log(Level.SEVERE, "Error proxying request for endpoint {0}; request: {1};\nError: {2}", new Object[]{endpoint, request, err});
-                        if (err instanceof ConnectException) {
-                            parent.getBackendHealthManager().reportBackendUnreachable(
-                                    endpoint, System.currentTimeMillis(), "Error: " + err
-                            );
-                        }
-                        return serveServiceNotAvailable(request);
-                    });
-        }
+                            return serveServiceNotAvailable(request);
+                        }).subscribe(sub);
+            };
+        });
     }
 
     private Publisher<Void> serveServiceNotAvailable(ProxyRequest request) {
