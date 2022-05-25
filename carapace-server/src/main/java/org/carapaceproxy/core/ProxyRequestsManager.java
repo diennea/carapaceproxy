@@ -25,6 +25,8 @@ import static reactor.netty.Metrics.CONNECTION_PROVIDER_PREFIX;
 import com.google.common.annotations.VisibleForTesting;
 import io.micrometer.core.instrument.Metrics;
 import io.netty.channel.ChannelOption;
+import io.netty.channel.epoll.EpollChannelOption;
+import io.netty.channel.socket.nio.NioChannelOption;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.FullHttpResponse;
@@ -51,6 +53,7 @@ import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
+import jdk.net.ExtendedSocketOptions;
 import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.server.mapper.MapResult;
@@ -324,8 +327,14 @@ public class ProxyRequestsManager {
                     .followRedirect(false) // clients has to request the redirect, not the proxy
                     .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
                     .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
-                    .option(ChannelOption.SO_KEEPALIVE, true) // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
                     .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
+                    .option(ChannelOption.SO_KEEPALIVE, true) // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
+                    .option(NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE), connectionConfig.getKeepaliveIdle())
+                    .option(NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL), connectionConfig.getKeepaliveInterval())
+                    .option(NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), connectionConfig.getKeepaliveCount())
+                    .option(EpollChannelOption.TCP_KEEPIDLE, connectionConfig.getKeepaliveIdle())
+                    .option(EpollChannelOption.TCP_KEEPINTVL, connectionConfig.getKeepaliveInterval())
+                    .option(EpollChannelOption.TCP_KEEPCNT, connectionConfig.getKeepaliveCount())
                     .doOnRequest((req, conn) -> {
                         if (CarapaceLogger.isLoggingDebugEnabled()) {
                             CarapaceLogger.debug("Start sending request for "

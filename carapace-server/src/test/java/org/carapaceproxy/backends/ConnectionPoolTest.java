@@ -159,7 +159,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         // default pool
         ConnectionPoolConfiguration defaultPool = new ConnectionPoolConfiguration(
-                "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 50_000, true
+                "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 50_000, 500, 50 , 5, true
         );
         {
             ConnectionProvider provider = connectionPools.get(defaultPool);
@@ -171,7 +171,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         // pool with defaults
         ConnectionPoolConfiguration poolWithDefaults = new ConnectionPoolConfiguration(
-                "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, 50_000, true
+                "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, 50_000, 500, 50 , 5, true
         );
         {
             ConnectionProvider provider = connectionPools.get(poolWithDefaults);
@@ -183,7 +183,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         // custom pool
         ConnectionPoolConfiguration customPool = new ConnectionPoolConfiguration(
-                "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, 25_000, true
+                "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, 25_000, 500, 50, 5, true
         );
         {
             ConnectionProvider provider = connectionPools.get(customPool);

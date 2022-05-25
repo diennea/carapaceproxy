@@ -69,6 +69,9 @@ public class RuntimeServerConfiguration {
     private int connectTimeout = 10_000;
     private int borrowTimeout = 60_000;
     private int disposeTimeout = 300_000; // 5 min;
+    private int keepaliveIdle = 300;
+    private int keepaliveInterval = 60;
+    private int keepaliveCount = 8;
     private long cacheMaxSize = 0;
     private long cacheMaxFileSize = 0;
     private boolean cacheDisabledForSecureRequestsWithoutPublic = false;
@@ -105,6 +108,9 @@ public class RuntimeServerConfiguration {
                 stuckRequestTimeout,
                 idleTimeout,
                 disposeTimeout,
+                keepaliveIdle,
+                keepaliveInterval,
+                keepaliveCount,
                 true
         );
     }
@@ -121,13 +127,18 @@ public class RuntimeServerConfiguration {
         this.connectTimeout = properties.getInt("connectionsmanager.connecttimeout", connectTimeout);
         this.borrowTimeout = properties.getInt("connectionsmanager.borrowtimeout", borrowTimeout);
         this.disposeTimeout = properties.getInt("connectionsmanager.disposetimeout", disposeTimeout);
+        this.keepaliveIdle = properties.getInt("connectionsmanager.keepaliveidle", keepaliveIdle);
+        this.keepaliveInterval = properties.getInt("connectionsmanager.keepaliveinterval", keepaliveInterval);
+        this.keepaliveCount = properties.getInt("connectionsmanager.keepalivecount", keepaliveCount);
         LOG.log(Level.INFO, "connectionsmanager.maxconnectionsperendpoint={0}", maxConnectionsPerEndpoint);
         LOG.log(Level.INFO, "connectionsmanager.idletimeout={0}", idleTimeout);
         LOG.log(Level.INFO, "connectionsmanager.stuckrequesttimeout={0}", stuckRequestTimeout);
         LOG.log(Level.INFO, "connectionsmanager.backendsunreachableonstuckrequests={0}", backendsUnreachableOnStuckRequests);
         LOG.log(Level.INFO, "connectionsmanager.connecttimeout={0}", connectTimeout);
         LOG.log(Level.INFO, "connectionsmanager.borrowtimeout={0}", borrowTimeout);
-        LOG.log(Level.INFO, "connectionsmanager.disposetimeout={0}", disposeTimeout);
+        LOG.log(Level.INFO, "connectionsmanager.keepaliveidle={0}", keepaliveIdle);
+        LOG.log(Level.INFO, "connectionsmanager.keepaliveinterval={0}", keepaliveInterval);
+        LOG.log(Level.INFO, "connectionsmanager.keepalivecount={0}", keepaliveCount);
 
         this.mapperClassname = properties.getClassname("mapper.class", StandardEndpointMapper.class.getName());
         LOG.log(Level.INFO, "mapper.class={0}", this.mapperClassname);
@@ -295,6 +306,9 @@ public class RuntimeServerConfiguration {
             int stuckrequesttimeout = properties.getInt(prefix + "stuckrequesttimeout", stuckRequestTimeout);
             int idletimeout = properties.getInt(prefix + "idletimeout", idleTimeout);
             int disposetimeout = properties.getInt(prefix + "disposetimeout", disposeTimeout);
+            int keepaliveidle = properties.getInt(prefix + "keepaliveidle", keepaliveIdle);
+            int keepaliveinterval = properties.getInt(prefix + "keepaliveinterval", keepaliveInterval);
+            int keepalivecount = properties.getInt(prefix + "keepalivecount", keepaliveCount);
             boolean enabled = properties.getBoolean(prefix + "enabled", false);
 
             ConnectionPoolConfiguration connectionPool = new ConnectionPoolConfiguration(
@@ -305,6 +319,9 @@ public class RuntimeServerConfiguration {
                     stuckrequesttimeout,
                     idletimeout,
                     disposetimeout,
+                    keepaliveidle,
+                    keepaliveinterval,
+                    keepalivecount,
                     enabled
             );
             connectionPools.add(connectionPool);
@@ -320,6 +337,9 @@ public class RuntimeServerConfiguration {
                 getStuckRequestTimeout(),
                 getIdleTimeout(),
                 getDisposeTimeout(),
+                getKeepaliveIdle(),
+                getKeepaliveInterval(),
+                getKeepaliveCount(),
                 true
         );
         LOG.log(Level.INFO, "Configured default connectionpool: {0}", defaultConnectionPool);
