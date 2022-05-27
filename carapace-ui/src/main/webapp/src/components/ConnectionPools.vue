@@ -57,6 +57,21 @@
                         sortable: true
                     },
                     {
+                        key: "keepaliveIdle",
+                        label: "Keepalive Idle (sec)",
+                        sortable: true
+                    },
+                    {
+                        key: "keepaliveInterval",
+                        label: "Keepalive Interval (sec)",
+                        sortable: true
+                    },
+                    {
+                        key: "keepaliveCount",
+                        label: "Keepalive Count",
+                        sortable: true
+                    },
+                    {
                         key: "enabled",
                         label: "Enabled",
                         sortable: true,

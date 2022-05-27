@@ -69,8 +69,8 @@ public class RuntimeServerConfiguration {
     private int connectTimeout = 10_000;
     private int borrowTimeout = 60_000;
     private int disposeTimeout = 300_000; // 5 min;
-    private int keepaliveIdle = 300;
-    private int keepaliveInterval = 60;
+    private int keepaliveIdle = 300; // sec
+    private int keepaliveInterval = 60; // sec
     private int keepaliveCount = 8;
     private long cacheMaxSize = 0;
     private long cacheMaxFileSize = 0;
