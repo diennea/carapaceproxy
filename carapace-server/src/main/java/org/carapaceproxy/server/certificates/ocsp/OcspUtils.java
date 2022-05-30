@@ -27,23 +27,22 @@ import java.net.URI;
 import java.net.URL;
 import java.security.cert.X509Certificate;
 import java.util.concurrent.TimeUnit;
-
 import javax.net.ssl.HttpsURLConnection;
-
-import org.bouncycastle.asn1.ASN1Encodable;
-import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1Primitive;
-import org.bouncycastle.asn1.BERTags;
-import org.bouncycastle.asn1.DERTaggedObject;
-import org.bouncycastle.asn1.DLSequence;
 import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.cert.ocsp.OCSPReq;
 import org.bouncycastle.cert.ocsp.OCSPResp;
-import org.bouncycastle.x509.extension.X509ExtensionUtil;
-
 import io.netty.util.CharsetUtil;
+import java.io.ByteArrayInputStream;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.bouncycastle.asn1.ASN1InputStream;
+import org.bouncycastle.asn1.ASN1OctetString;
+import org.bouncycastle.asn1.ASN1TaggedObject;
+import org.bouncycastle.asn1.x509.AccessDescription;
+import org.bouncycastle.asn1.x509.AuthorityInformationAccess;
+import org.bouncycastle.asn1.x509.GeneralName;
+import org.bouncycastle.asn1.x509.X509ObjectIdentifiers;
 
 public final class OcspUtils {
 
@@ -52,9 +51,6 @@ public final class OcspUtils {
      *
      * http://www.alvestrand.no/objectid/1.3.6.1.5.5.7.48.1.html
      */
-    private static final ASN1ObjectIdentifier OCSP_RESPONDER_OID =
-            new ASN1ObjectIdentifier("1.3.6.1.5.5.7.48.1").intern();
-
     private static final String OCSP_REQUEST_TYPE = "application/ocsp-request";
     private static final String OCSP_RESPONSE_TYPE = "application/ocsp-response";
 
@@ -65,54 +61,45 @@ public final class OcspUtils {
 
     /**
      * Returns the OCSP responder {@link URI} or {@code null} if it doesn't have one.
+     *
+     * @param certificate
+     * @return
+     * @throws java.io.IOException
      */
-    public static URI ocspUri(X509Certificate certificate) throws IOException {
-        byte[] value = certificate.getExtensionValue(Extension.authorityInfoAccess.getId());
-        if (value == null) {
+    public static URI getOcspUri(X509Certificate certificate) throws IOException {
+        ASN1Primitive obj = getExtensionValue(certificate, Extension.authorityInfoAccess.getId());
+        if (obj == null) {
             return null;
         }
-
-        ASN1Primitive authorityInfoAccess = X509ExtensionUtil.fromExtensionValue(value);
-        if (!(authorityInfoAccess instanceof DLSequence)) {
-            return null;
-        }
-
-        DLSequence aiaSequence = (DLSequence) authorityInfoAccess;
-        DERTaggedObject taggedObject = findObject(aiaSequence, OCSP_RESPONDER_OID, DERTaggedObject.class);
-        if (taggedObject == null) {
-            return null;
-        }
-
-        if (taggedObject.getTagNo() != BERTags.OBJECT_IDENTIFIER) {
-            return null;
-        }
-
-        byte[] encoded = taggedObject.getEncoded();
-        int length = (int) encoded[1] & 0xFF;
-        String uri = new String(encoded, 2, length, CharsetUtil.UTF_8);
-        return URI.create(uri);
-    }
-
-    private static <T> T findObject(DLSequence sequence, ASN1ObjectIdentifier oid, Class<T> type) {
-        for (ASN1Encodable element : sequence) {
-            if (!(element instanceof DLSequence)) {
+        AuthorityInformationAccess authorityInformationAccess = AuthorityInformationAccess.getInstance(obj);
+        AccessDescription[] accessDescriptions = authorityInformationAccess.getAccessDescriptions();
+        for (AccessDescription accessDescription : accessDescriptions) {
+            boolean correctAccessMethod = accessDescription.getAccessMethod().equals(X509ObjectIdentifiers.ocspAccessMethod);
+            if (!correctAccessMethod) {
                 continue;
             }
-
-            DLSequence subSequence = (DLSequence) element;
-            if (subSequence.size() != 2) {
+            GeneralName name = accessDescription.getAccessLocation();
+            if (name.getTagNo() != GeneralName.uniformResourceIdentifier) {
                 continue;
             }
-
-            ASN1Encodable key = subSequence.getObjectAt(0);
-            ASN1Encodable value = subSequence.getObjectAt(1);
-
-            if (key.equals(oid) && type.isInstance(value)) {
-                return type.cast(value);
-            }
+            byte[] encoded = ((ASN1TaggedObject) name.toASN1Primitive()).getEncoded();
+            int length = (int) encoded[1] & 0xFF;
+            String uri = new String(encoded, 2, length, CharsetUtil.UTF_8);
+            return URI.create(uri);
         }
 
         return null;
+    }
+
+    private static ASN1Primitive getExtensionValue(X509Certificate certificate, String oid) throws IOException {
+        byte[] bytes = certificate.getExtensionValue(oid);
+        if (bytes == null) {
+            return null;
+        }
+        ASN1InputStream aIn = new ASN1InputStream(new ByteArrayInputStream(bytes));
+        ASN1OctetString octs = (ASN1OctetString) aIn.readObject();
+        aIn = new ASN1InputStream(new ByteArrayInputStream(octs.getOctets()));
+        return aIn.readObject();
     }
 
     public static OCSPResp request(String dn, URI uri, OCSPReq request, long timeout, TimeUnit unit) throws IOException {

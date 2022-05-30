@@ -161,7 +161,7 @@ public class OcspStaplingManager implements Runnable {
         X509Certificate issuer = (X509Certificate) chain[chain.length - 1];
         String dn = cert.getSubjectDN().getName();
 
-        URI uri = OcspUtils.ocspUri(cert);
+        URI uri = OcspUtils.getOcspUri(cert);
         LOG.log(Level.INFO, "OCSP Responder URI: {0}", uri);
 
         if (uri == null) {
@@ -204,7 +204,7 @@ public class OcspStaplingManager implements Runnable {
     }
 
     public void addCertificateForStapling(Certificate[] chain) {
-       ocspChecks.putIfAbsent(chain[0], new OcspCheck(chain, null));
+        ocspChecks.putIfAbsent(chain[0], new OcspCheck(chain, null));
     }
 
     public byte[] getOcspResponseForCertificate(Certificate cert) throws IOException {
