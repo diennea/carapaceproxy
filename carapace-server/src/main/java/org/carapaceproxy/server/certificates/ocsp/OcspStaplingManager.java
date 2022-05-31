@@ -44,6 +44,7 @@ import org.bouncycastle.cert.ocsp.OCSPException;
 import org.bouncycastle.cert.ocsp.OCSPReq;
 import org.bouncycastle.cert.ocsp.OCSPResp;
 import org.bouncycastle.cert.ocsp.SingleResp;
+import org.bouncycastle.operator.OperatorCreationException;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
 
@@ -124,7 +125,7 @@ public class OcspStaplingManager implements Runnable {
                         LOG.log(Level.SEVERE, "OCSP stapling failed for {0}", dn);
                     }
                 }
-            } catch (IOException | OCSPException | GeneralSecurityException ex) {
+            } catch (IOException | OCSPException | GeneralSecurityException | OperatorCreationException ex) {
                 LOG.log(Level.SEVERE, "Unable to perform OCSP stapling for " + dn, ex);
             }
         });
@@ -148,7 +149,7 @@ public class OcspStaplingManager implements Runnable {
         return nextUpdate.before(expiringDate);
     }
 
-    public boolean performStaplingForCertificate(Certificate[] chain) throws IOException, OCSPException, GeneralSecurityException {
+    public boolean performStaplingForCertificate(Certificate[] chain) throws IOException, OCSPException, GeneralSecurityException, OperatorCreationException {
         if (!OpenSsl.isAvailable() || !OpenSsl.isOcspSupported()) {
             return false;
         }
