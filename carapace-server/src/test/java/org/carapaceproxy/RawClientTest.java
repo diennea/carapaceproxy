@@ -739,7 +739,7 @@ public class RawClientTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", "localhost.p12", "testproxy", STATIC));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0, scheme.equals("https"), false, null, "localhost", null, null));
+            server.addListener(new NetworkListenerConfiguration("localhost", 0, scheme.equals("https"), null, "localhost", null, null));
 
             server.start();
             int port = server.getLocalPort();

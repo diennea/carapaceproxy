@@ -19,63 +19,49 @@
  */
 package org.carapaceproxy.core;
 
-import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreData;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.netty.buffer.ByteBufAllocator;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelOption;
-import io.netty.handler.ssl.OpenSsl;
-import io.netty.handler.ssl.ReferenceCountedOpenSslEngine;
-import io.netty.handler.ssl.SniHandler;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
-import io.netty.handler.ssl.SslHandler;
-import io.netty.handler.ssl.SslProvider;
+import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.ssl.*;
+import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
+import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.Promise;
+import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
+import lombok.Data;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.carapaceproxy.server.config.NetworkListenerConfiguration;
+import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
+import org.carapaceproxy.server.config.SSLCertificateConfiguration;
+import org.carapaceproxy.utils.CarapaceLogger;
+import org.carapaceproxy.utils.PrometheusUtils;
+import reactor.netty.DisposableServer;
+import reactor.netty.NettyPipeline;
+import reactor.netty.http.server.HttpServer;
+
+import javax.net.ssl.KeyManagerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.cert.Certificate;
-import java.security.cert.X509Certificate;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.TrustManagerFactory;
-import org.carapaceproxy.server.config.ConfigurationNotValidException;
-import org.carapaceproxy.server.config.NetworkListenerConfiguration;
-import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
-import org.carapaceproxy.server.config.SSLCertificateConfiguration;
-import org.carapaceproxy.utils.CertificatesUtils;
-import org.carapaceproxy.utils.PrometheusUtils;
-import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
-import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.ssl.OpenSslCachingX509KeyManagerFactory;
-import io.netty.handler.timeout.IdleStateHandler;
-import io.netty.util.concurrent.Future;
-import io.prometheus.client.Counter;
-import java.time.Duration;
-import java.util.HashMap;
-import java.util.Map.Entry;
-import java.util.function.Function;
-import lombok.Data;
-import org.carapaceproxy.utils.CarapaceLogger;
-import reactor.netty.DisposableServer;
-import reactor.netty.NettyPipeline;
-import reactor.netty.http.server.HttpServer;
+
+import static org.carapaceproxy.utils.CertificatesUtils.*;
 
 /**
  * Listeners waiting for incoming clients requests
@@ -231,7 +217,7 @@ public class Listeners {
                             @Override
                             protected SslHandler newSslHandler(SslContext context, ByteBufAllocator allocator) {
                                 SslHandler handler = super.newSslHandler(context, allocator);
-                                if (config.isOcsp() && OpenSsl.isOcspSupported()) {
+                                if (currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported()) {
                                     Certificate cert = (Certificate) context.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN)).get();
                                     if (cert != null) {
                                         try {
@@ -376,7 +362,7 @@ public class Listeners {
                 byte[] keystoreContent = parent.getDynamicCertificatesManager().getCertificateForDomain(certificate.getId());
                 KeyStore keystore;
                 if (keystoreContent != null) {
-                    LOG.log(Level.FINE, "start SSL with dynamic certificate id {0}, on listener {1}:{2} OCSP {3}", new Object[]{certificate.getId(), listener.getHost(), port, listener.isOcsp()});
+                    LOG.log(Level.FINE, "start SSL with dynamic certificate id {0}, on listener {1}:{2}", new Object[]{certificate.getId(), listener.getHost(), port});
                     keystore = loadKeyStoreData(keystoreContent, certificate.getPassword());
                 } else {
                     if (certificate.isDynamic()) { // fallback to default certificate
@@ -385,8 +371,8 @@ public class Listeners {
                             throw new ConfigurationNotValidException("Unable to boot SSL context for listener " + listener.getHost() + ": no default certificate setup.");
                         }
                     }
-                    LOG.log(Level.FINE, "start SSL with certificate id {0}, on listener {1}:{2} file={3} OCSP {4}",
-                            new Object[]{certificate.getId(), listener.getHost(), port, certificate.getFile(), listener.isOcsp()}
+                    LOG.log(Level.FINE, "start SSL with certificate id {0}, on listener {1}:{2} file={3}",
+                            new Object[]{certificate.getId(), listener.getHost(), port, certificate.getFile()}
                     );
                     keystore = loadKeyStoreFromFile(certificate.getFile(), certificate.getPassword(), basePath);
                 }
@@ -400,14 +386,14 @@ public class Listeners {
                 }
                 SslContext sslContext = SslContextBuilder
                         .forServer(keyFactory)
-                        .enableOcsp(listener.isOcsp() && OpenSsl.isOcspSupported())
+                        .enableOcsp(currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported())
                         .trustManager(parent.getTrustStoreManager().getTrustManagerFactory())
                         .sslProvider(SslProvider.OPENSSL)
                         .protocols(listener.getSslProtocols())
                         .ciphers(ciphers).build();
 
                 Certificate[] chain = readChainFromKeystore(keystore);
-                if (listener.isOcsp() && OpenSsl.isOcspSupported() && chain != null && chain.length > 0) {
+                if (currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported() && chain != null && chain.length > 0) {
                     parent.getOcspStaplingManager().addCertificateForStapling(chain);
                     Attribute<Object> attr = sslContext.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN));
                     attr.set(chain[0]);

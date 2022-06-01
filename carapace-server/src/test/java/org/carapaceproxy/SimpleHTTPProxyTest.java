@@ -107,7 +107,7 @@ public class SimpleHTTPProxyTest {
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", certificate, "changeit", STATIC));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0, true, false, null, "localhost", caCertificate, "changeit"));
+            server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost", caCertificate, "changeit"));
             server.start();
             int port = server.getLocalPort();
 

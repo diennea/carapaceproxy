@@ -97,6 +97,7 @@ public class RuntimeServerConfiguration {
     private boolean requestCompressionEnabled = true;
     private String sslTrustStoreFile;
     private String sslTrustStorePassword;
+    private boolean ocspEnabled = false;
 
     public RuntimeServerConfiguration() {
         defaultConnectionPool = new ConnectionPoolConfiguration(
@@ -207,6 +208,9 @@ public class RuntimeServerConfiguration {
 
         sslTrustStorePassword = properties.getString("truststore.ssltruststorepassword", sslTrustStoreFile);
         LOG.log(Level.INFO, "truststore.ssltruststorepassword={0}", sslTrustStorePassword);
+
+        ocspEnabled = properties.getBoolean("ocsp.enabled", ocspEnabled);
+        LOG.log(Level.INFO, "ocsp.enabled={0}", ocspEnabled);
     }
 
     private void configureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
@@ -247,13 +251,10 @@ public class RuntimeServerConfiguration {
             int port = properties.getInt(prefix + "port", 0);
             if (port > 0) {
                 boolean ssl = properties.getBoolean(prefix + "ssl", false);
-                boolean ocsp = properties.getBoolean(prefix + "ocsp", false);
-                String trustStoreFile = properties.getString(prefix + "ssltruststorefile", "");
-                String trustStorePassword = properties.getString(prefix + "ssltruststorepassword", "");
                 String sslciphers = properties.getString(prefix + "sslciphers", "");
                 String defautlSslCertificate = properties.getString(prefix + "defaultcertificate", "*");
                 NetworkListenerConfiguration config = new NetworkListenerConfiguration(
-                        host, port, ssl, ocsp, sslciphers, defautlSslCertificate, trustStoreFile, trustStorePassword
+                        host, port, ssl, sslciphers, defautlSslCertificate
                 );
                 if (ssl) {
                     config.setSslProtocols(properties.getArray(prefix + "sslprotocols", DEFAULT_SSL_PROTOCOLS.toArray(new String[0])));
