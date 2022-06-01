@@ -25,9 +25,13 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
+import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import javax.net.ssl.HttpsURLConnection;
+import javax.security.auth.x500.X500Principal;
+
 import org.bouncycastle.asn1.ASN1Primitive;
 import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.cert.ocsp.OCSPReq;
@@ -137,6 +141,18 @@ public final class OcspUtils {
             }
         } finally {
             connection.disconnect();
+        }
+    }
+
+    public static X509Certificate getIssuerCertificate(Certificate[] certificates, Map<String, X509Certificate> trustedCA) {
+        if(certificates.length > 1) {
+            return (X509Certificate) certificates[1];
+        } else if (certificates.length == 1) {
+            final X509Certificate cert = (X509Certificate) certificates[0];
+            X500Principal issuerPrincipal = cert.getIssuerX500Principal();
+            return trustedCA.get(issuerPrincipal);
+        } else {
+            return null;
         }
     }
 }

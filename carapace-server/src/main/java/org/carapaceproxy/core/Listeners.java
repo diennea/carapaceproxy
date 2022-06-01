@@ -40,6 +40,7 @@ import java.net.InetSocketAddress;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -55,6 +56,7 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
+import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
 import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
 import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
@@ -391,14 +393,6 @@ public class Listeners {
                 KeyManagerFactory keyFactory = new OpenSslCachingX509KeyManagerFactory(KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()));
                 keyFactory.init(keystore, certificate.getPassword().toCharArray());
 
-                LOG.log(Level.FINE, "loading trustore from {0}", listener.getSslTrustoreFile());
-                TrustManagerFactory trustManagerFactory = null;
-                KeyStore truststore = loadKeyStoreFromFile(listener.getSslTrustoreFile(), listener.getSslTrustorePassword(), basePath);
-                if (truststore != null) {
-                    trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-                    trustManagerFactory.init(truststore);
-                }
-
                 List<String> ciphers = null;
                 if (sslCiphers != null && !sslCiphers.isEmpty()) {
                     LOG.log(Level.FINE, "required sslCiphers {0}", sslCiphers);
@@ -407,7 +401,7 @@ public class Listeners {
                 SslContext sslContext = SslContextBuilder
                         .forServer(keyFactory)
                         .enableOcsp(listener.isOcsp() && OpenSsl.isOcspSupported())
-                        .trustManager(trustManagerFactory)
+                        .trustManager(parent.getTrustStoreManager().getTrustManagerFactory())
                         .sslProvider(SslProvider.OPENSSL)
                         .protocols(listener.getSslProtocols())
                         .ciphers(ciphers).build();

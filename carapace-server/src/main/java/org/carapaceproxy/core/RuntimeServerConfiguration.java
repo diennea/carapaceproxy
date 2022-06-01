@@ -95,6 +95,8 @@ public class RuntimeServerConfiguration {
     private int clientsIdleTimeoutSeconds = 120;
     private int responseCompressionThreshold; // bytes; default (0) enabled for all requests
     private boolean requestCompressionEnabled = true;
+    private String sslTrustStoreFile;
+    private String sslTrustStorePassword;
 
     public RuntimeServerConfiguration() {
         defaultConnectionPool = new ConnectionPoolConfiguration(
@@ -199,6 +201,12 @@ public class RuntimeServerConfiguration {
         LOG.log(Level.INFO, "response.compression.threshold={0}", responseCompressionThreshold);
         requestCompressionEnabled = properties.getBoolean("request.compression.enabled", requestCompressionEnabled);
         LOG.log(Level.INFO, "request.compression.enabled={0}", requestCompressionEnabled);
+
+        sslTrustStoreFile = properties.getString("truststore.ssltruststorefile", sslTrustStoreFile);
+        LOG.log(Level.INFO, "truststore.ssltruststorefile={0}", sslTrustStoreFile);
+
+        sslTrustStorePassword = properties.getString("truststore.ssltruststorepassword", sslTrustStoreFile);
+        LOG.log(Level.INFO, "truststore.ssltruststorepassword={0}", sslTrustStorePassword);
     }
 
     private void configureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
