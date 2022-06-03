@@ -150,7 +150,7 @@ public final class OcspUtils {
         } else if (certificates.length == 1) {
             final X509Certificate cert = (X509Certificate) certificates[0];
             X500Principal issuerPrincipal = cert.getIssuerX500Principal();
-            return trustedCA.get(issuerPrincipal);
+            return trustedCA.get(issuerPrincipal.getName());
         } else {
             return null;
         }

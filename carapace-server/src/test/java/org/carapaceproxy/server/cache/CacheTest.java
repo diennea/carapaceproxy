@@ -204,7 +204,7 @@ public class CacheTest {
         EndpointStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", "localhost.p12", "testproxy", STATIC));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost", null, null));
+            server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost"));
             server.start();
         }
     }
@@ -227,7 +227,7 @@ public class CacheTest {
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", "localhost.p12", "testproxy", STATIC));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost", null, null));
+            server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost"));
 
             RuntimeServerConfiguration currentConfiguration = server.getCurrentConfiguration();
             currentConfiguration.setCacheDisabledForSecureRequestsWithoutPublic(cacheDisabledForSecureRequestsWithoutPublic);
@@ -358,7 +358,7 @@ public class CacheTest {
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", "localhost.p12", "testproxy", STATIC));
-            server.addListener(new NetworkListenerConfiguration("localhost", httpsPort, true, null, "localhost", null, null));
+            server.addListener(new NetworkListenerConfiguration("localhost", httpsPort, true, null, "localhost"));
             server.addListener(new NetworkListenerConfiguration("localhost", httpPort));
             server.start();
             server.getCache().getStats().resetCacheMetrics();

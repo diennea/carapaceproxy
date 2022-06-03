@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.core;
 
+import java.io.Console;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;

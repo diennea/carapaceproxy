@@ -121,7 +121,6 @@ public class CertificatesTest extends UseAdminServer {
         config.put("listener.1.host", "localhost");
         config.put("listener.1.port", "8443");
         config.put("listener.1.ssl", "true");
-        config.put("listener.1.ocsp", "true");
         config.put("listener.1.enabled", "true");
         config.put("listener.1.defaultcertificate", "*");
 
@@ -141,6 +140,9 @@ public class CertificatesTest extends UseAdminServer {
         config.put("route.100.enabled", "true");
         config.put("route.100.match", "all");
         config.put("route.100.action", "proxy-all");
+
+        //Enabled ocsp stapling
+        config.put("ocsp.enabled", "true");
 
         changeDynamicConfiguration(config);
     }

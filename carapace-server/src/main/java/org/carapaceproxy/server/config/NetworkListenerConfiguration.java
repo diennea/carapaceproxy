@@ -64,7 +64,7 @@ public class NetworkListenerConfiguration {
         this.defaultCertificate = null;
     }
 
-    public NetworkListenerConfiguration(String host, int port, boolean ssl, boolean ocsp, String sslCiphers, String defaultCertificate) {
+    public NetworkListenerConfiguration(String host, int port, boolean ssl, String sslCiphers, String defaultCertificate) {
         this(
                 host, port, ssl, sslCiphers, defaultCertificate, DEFAULT_SSL_PROTOCOLS.toArray(new String[0])
         );
