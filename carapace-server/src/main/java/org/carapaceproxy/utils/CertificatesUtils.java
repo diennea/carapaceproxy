@@ -19,22 +19,19 @@
  */
 package org.carapaceproxy.utils;
 
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.security.GeneralSecurityException;
-import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
+import java.security.*;
+import java.security.cert.*;
 import java.security.cert.Certificate;
-import java.security.cert.CertificateEncodingException;
-import java.security.cert.CertificateException;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.Iterator;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Utilitis for Certificates storing as Keystores
@@ -133,6 +130,18 @@ public final class CertificatesUtils {
         }
 
         return ks;
+    }
+
+    public static Map<String, X509Certificate> loadCaCerts(TrustManagerFactory trustManagerFactory) {
+        final Map<String, X509Certificate> certificateAuthorities = new HashMap<>();
+        for(TrustManager trustManager : trustManagerFactory.getTrustManagers()) {
+            if(trustManager instanceof X509TrustManager) {
+                for (X509Certificate ca : ((X509TrustManager) trustManager).getAcceptedIssuers()) {
+                    certificateAuthorities.put(ca.getSubjectX500Principal().getName(), ca);
+                }
+            }
+        }
+        return certificateAuthorities;
     }
 
     public static KeyStore loadKeyStoreData(byte[] data, String password)
