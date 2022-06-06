@@ -21,6 +21,7 @@ package org.carapaceproxy.server.certificates.ocsp;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.netty.handler.ssl.OpenSsl;
+
 import java.io.IOException;
 import java.math.BigInteger;
 import java.net.URI;
@@ -37,6 +38,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
+
 import org.bouncycastle.asn1.ocsp.OCSPResponseStatus;
 import org.bouncycastle.cert.ocsp.BasicOCSPResp;
 import org.bouncycastle.cert.ocsp.CertificateStatus;
@@ -44,7 +46,9 @@ import org.bouncycastle.cert.ocsp.OCSPException;
 import org.bouncycastle.cert.ocsp.OCSPReq;
 import org.bouncycastle.cert.ocsp.OCSPResp;
 import org.bouncycastle.cert.ocsp.SingleResp;
+import org.bouncycastle.operator.OperatorCreationException;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
+import org.carapaceproxy.core.TrustStoreManager;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
 
 /**
@@ -64,6 +68,7 @@ public class OcspStaplingManager implements Runnable {
     private volatile int period = 0; // in seconds
 
     private final ConcurrentHashMap<Certificate, OcspCheck> ocspChecks = new ConcurrentHashMap<>();
+    private TrustStoreManager trustStoreManager;
 
     private static final class OcspCheck {
 
@@ -76,7 +81,8 @@ public class OcspStaplingManager implements Runnable {
         }
     }
 
-    public OcspStaplingManager() {
+    public OcspStaplingManager(TrustStoreManager trustStoreManager) {
+        this.trustStoreManager = trustStoreManager;
         scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat(THREAD_NAME).build());
     }
 
@@ -124,7 +130,7 @@ public class OcspStaplingManager implements Runnable {
                         LOG.log(Level.SEVERE, "OCSP stapling failed for {0}", dn);
                     }
                 }
-            } catch (IOException | OCSPException | GeneralSecurityException ex) {
+            } catch (IOException | OCSPException | GeneralSecurityException | OperatorCreationException ex) {
                 LOG.log(Level.SEVERE, "Unable to perform OCSP stapling for " + dn, ex);
             }
         });
@@ -148,7 +154,7 @@ public class OcspStaplingManager implements Runnable {
         return nextUpdate.before(expiringDate);
     }
 
-    public boolean performStaplingForCertificate(Certificate[] chain) throws IOException, OCSPException, GeneralSecurityException {
+    public boolean performStaplingForCertificate(Certificate[] chain) throws IOException, OCSPException, GeneralSecurityException, OperatorCreationException {
         if (!OpenSsl.isAvailable() || !OpenSsl.isOcspSupported()) {
             return false;
         }
@@ -158,10 +164,15 @@ public class OcspStaplingManager implements Runnable {
         }
 
         X509Certificate cert = (X509Certificate) chain[0];
-        X509Certificate issuer = (X509Certificate) chain[chain.length - 1];
+        X509Certificate issuer = OcspUtils.getIssuerCertificate(chain, trustStoreManager.getCertificateAuthorities());
+        if (issuer == null) {
+            LOG.log(Level.INFO, "Unable to obtain certicate of issuer {0} for certificate subject {1}",
+                    new Object[]{cert.getIssuerX500Principal().getName(), cert.getSubjectX500Principal().getName()});
+            return false;
+        }
         String dn = cert.getSubjectDN().getName();
 
-        URI uri = OcspUtils.ocspUri(cert);
+        URI uri = OcspUtils.getOcspUri(cert);
         LOG.log(Level.INFO, "OCSP Responder URI: {0}", uri);
 
         if (uri == null) {
@@ -204,7 +215,7 @@ public class OcspStaplingManager implements Runnable {
     }
 
     public void addCertificateForStapling(Certificate[] chain) {
-       ocspChecks.putIfAbsent(chain[0], new OcspCheck(chain, null));
+        ocspChecks.putIfAbsent(chain[0], new OcspCheck(chain, null));
     }
 
     public byte[] getOcspResponseForCertificate(Certificate cert) throws IOException {

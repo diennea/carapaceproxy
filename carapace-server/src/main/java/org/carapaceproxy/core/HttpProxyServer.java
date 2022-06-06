@@ -166,6 +166,9 @@ public class HttpProxyServer implements AutoCloseable {
     private UserRealm realm;
 
     @Getter
+    private TrustStoreManager trustStoreManager;
+
+    @Getter
     private List<RequestFilter> filters;
     private volatile boolean started;
 
@@ -225,7 +228,8 @@ public class HttpProxyServer implements AutoCloseable {
         this.cache = new ContentsCache(currentConfiguration);
         this.requestsLogger = new RequestsLogger(currentConfiguration);
         this.dynamicCertificatesManager = new DynamicCertificatesManager(this);
-        this.ocspStaplingManager = new OcspStaplingManager();
+        this.trustStoreManager = new TrustStoreManager(currentConfiguration, this);
+        this.ocspStaplingManager = new OcspStaplingManager(trustStoreManager);
         this.proxyRequestsManager = new ProxyRequestsManager(this);
         if (mapper != null) {
             mapper.setParent(this);
@@ -663,6 +667,7 @@ public class HttpProxyServer implements AutoCloseable {
             this.filters = buildFilters(newConfiguration);
             this.backendHealthManager.reloadConfiguration(newConfiguration, newMapper);
             this.dynamicCertificatesManager.reloadConfiguration(newConfiguration);
+            this.trustStoreManager.reloadConfiguration(newConfiguration);
             this.ocspStaplingManager.reloadConfiguration(newConfiguration);
             this.listeners.reloadConfiguration(newConfiguration);
             this.cache.reloadConfiguration(newConfiguration);

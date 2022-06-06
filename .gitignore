@@ -13,3 +13,4 @@ release.properties
 **/*.p12
 **/*.DS_Store
 **/.idea/
+*.iml

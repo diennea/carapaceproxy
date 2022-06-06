@@ -38,12 +38,6 @@ export default {
                     sortable: true,
                     formatter: toBooleanSymbol
                 },
-                {
-                    key: "ocsp",
-                    label: "OCSP",
-                    sortable: true,
-                    formatter: toBooleanSymbol
-                },
                 { key: "sslCiphers", label: "SSLCiphers", sortable: true },
                 {
                     key: "sslProtocols",

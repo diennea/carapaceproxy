@@ -48,7 +48,6 @@ public class ListenersResource {
         private final String host;
         private final int port;
         private final boolean ssl;
-        private final boolean ocsp;
         private final String sslCiphers;
         private final String[] sslProtocols;
         private final String defaultCertificate;
@@ -67,7 +66,6 @@ public class ListenersResource {
                     config.getHost(),
                     port,
                     config.isSsl(),
-                    config.isOcsp(),
                     config.getSslCiphers(),
                     config.getSslProtocols(),
                     config.getDefaultCertificate(),
