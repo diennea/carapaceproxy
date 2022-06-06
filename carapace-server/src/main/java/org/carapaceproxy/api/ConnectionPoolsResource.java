@@ -60,9 +60,12 @@ public class ConnectionPoolsResource {
         private int stuckRequestTimeout;
         private int idleTimeout;
         private int disposeTimeout;
+        private int keepaliveIdle;
+        private int keepaliveInterval;
+        private int keepaliveCount;
         private boolean enabled;
-        private int totalConnections;
 
+        private int totalConnections;
     }
 
     @GET
@@ -89,6 +92,9 @@ public class ConnectionPoolsResource {
                     conf.getStuckRequestTimeout(),
                     conf.getIdleTimeout(),
                     conf.getDisposeTimeout(),
+                    conf.getKeepaliveIdle(),
+                    conf.getKeepaliveInterval(),
+                    conf.getKeepaliveCount(),
                     conf.isEnabled(),
                     poolsStats.getOrDefault(conf.getId(), 0)
             );
@@ -107,6 +113,9 @@ public class ConnectionPoolsResource {
                 defaultConnectionPool.getStuckRequestTimeout(),
                 defaultConnectionPool.getIdleTimeout(),
                 defaultConnectionPool.getDisposeTimeout(),
+                defaultConnectionPool.getKeepaliveIdle(),
+                defaultConnectionPool.getKeepaliveInterval(),
+                defaultConnectionPool.getKeepaliveCount(),
                 defaultConnectionPool.isEnabled(),
                 poolsStats.getOrDefault(defaultConnectionPool.getId(), 0)
         ));

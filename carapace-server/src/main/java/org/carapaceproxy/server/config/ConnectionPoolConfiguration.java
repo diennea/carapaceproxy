@@ -37,6 +37,10 @@ public class ConnectionPoolConfiguration {
     private int stuckRequestTimeout;
     private int idleTimeout;
     private int disposeTimeout;
+    private int keepaliveIdle;
+    private int keepaliveInterval;
+    private int keepaliveCount;
+
     private boolean enabled;
 
 }
