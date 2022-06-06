@@ -207,7 +207,7 @@ public class RuntimeServerConfiguration {
         sslTrustStoreFile = properties.getString("truststore.ssltruststorefile", sslTrustStoreFile);
         LOG.log(Level.INFO, "truststore.ssltruststorefile={0}", sslTrustStoreFile);
 
-        sslTrustStorePassword = properties.getString("truststore.ssltruststorepassword", sslTrustStoreFile);
+        sslTrustStorePassword = properties.getString("truststore.ssltruststorepassword", sslTrustStorePassword);
         LOG.log(Level.INFO, "truststore.ssltruststorepassword={0}", sslTrustStorePassword);
 
         ocspEnabled = properties.getBoolean("ocsp.enabled", ocspEnabled);

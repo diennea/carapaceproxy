@@ -667,8 +667,8 @@ public class HttpProxyServer implements AutoCloseable {
             this.filters = buildFilters(newConfiguration);
             this.backendHealthManager.reloadConfiguration(newConfiguration, newMapper);
             this.dynamicCertificatesManager.reloadConfiguration(newConfiguration);
-            this.ocspStaplingManager.reloadConfiguration(newConfiguration);
             this.trustStoreManager.reloadConfiguration(newConfiguration);
+            this.ocspStaplingManager.reloadConfiguration(newConfiguration);
             this.listeners.reloadConfiguration(newConfiguration);
             this.cache.reloadConfiguration(newConfiguration);
             this.requestsLogger.reloadConfiguration(newConfiguration);
