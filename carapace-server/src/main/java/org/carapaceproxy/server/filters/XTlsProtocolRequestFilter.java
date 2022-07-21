@@ -16,8 +16,9 @@ public class XTlsProtocolRequestFilter extends BasicRequestFilter {
         if (!checkRequestMatching(request)) {
             return;
         }
-
-        request.getRequestHeaders().remove("X-Tls-Protocol");
-        request.getRequestHeaders().add("X-Tls-Protocol", request.getSslProtocol());
+        if (request.isSecure()) {
+            request.getRequestHeaders().remove("X-Tls-Protocol");
+            request.getRequestHeaders().add("X-Tls-Protocol", request.getSslProtocol());
+        }
     }
 }

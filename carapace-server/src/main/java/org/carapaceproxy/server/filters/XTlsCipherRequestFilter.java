@@ -3,7 +3,7 @@ package org.carapaceproxy.server.filters;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 
-public class XTlsCipherRequestFilter extends BasicRequestFilter{
+public class XTlsCipherRequestFilter extends BasicRequestFilter {
     public static final String TYPE = "add-x-tls-cipher";
 
     public XTlsCipherRequestFilter(RequestMatcher matcher) {
@@ -15,8 +15,9 @@ public class XTlsCipherRequestFilter extends BasicRequestFilter{
         if (!checkRequestMatching(request)) {
             return;
         }
-
-        request.getRequestHeaders().remove("X-Tls-Cipher");
-        request.getRequestHeaders().add("X-Tls-Cipher", request.getCipherSuite());
+        if (request.isSecure()) {
+            request.getRequestHeaders().remove("X-Tls-Cipher");
+            request.getRequestHeaders().add("X-Tls-Cipher", request.getCipherSuite());
+        }
     }
 }

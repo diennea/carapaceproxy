@@ -534,7 +534,6 @@ public class StartAPIServerTest extends UseAdminServer {
             assertThat(json, containsString(RegexpMapSessionIdFilter.TYPE));
             assertThat(json, containsString("param_test_user"));
             assertThat(json, containsString(XForwardedForRequestFilter.TYPE));
-            System.out.println(response.getBodyString());
             assertThat(json, containsString(XTlsProtocolRequestFilter.TYPE));
             assertThat(json, containsString(XTlsCipherRequestFilter.TYPE));
         }
