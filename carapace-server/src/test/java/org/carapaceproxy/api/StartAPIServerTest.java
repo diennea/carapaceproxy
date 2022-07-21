@@ -33,10 +33,9 @@ import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
+import org.carapaceproxy.server.filters.*;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchAllRequestMatcher;
-import org.carapaceproxy.server.filters.RegexpMapSessionIdFilter;
-import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;
-import org.carapaceproxy.server.filters.XForwardedForRequestFilter;
+
 import static org.carapaceproxy.utils.CertificatesTestUtils.uploadCertificate;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestUtils;
@@ -520,6 +519,9 @@ public class StartAPIServerTest extends UseAdminServer {
         properties.put("filter.2.regexp", "(.*)");
 
         properties.put("filter.3.type", "add-x-forwarded-for");
+
+        properties.put("filter.4.type", "add-x-tls-protocol");
+        properties.put("filter.5.type", "add-x-tls-cipher");
         startServer(properties);
 
         // full list request
@@ -532,6 +534,9 @@ public class StartAPIServerTest extends UseAdminServer {
             assertThat(json, containsString(RegexpMapSessionIdFilter.TYPE));
             assertThat(json, containsString("param_test_user"));
             assertThat(json, containsString(XForwardedForRequestFilter.TYPE));
+            System.out.println(response.getBodyString());
+            assertThat(json, containsString(XTlsProtocolRequestFilter.TYPE));
+            assertThat(json, containsString(XTlsCipherRequestFilter.TYPE));
         }
     }
 

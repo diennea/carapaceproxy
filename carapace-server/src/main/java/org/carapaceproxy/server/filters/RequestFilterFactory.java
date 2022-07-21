@@ -47,6 +47,10 @@ public class RequestFilterFactory {
         switch (type) {
             case XForwardedForRequestFilter.TYPE:
                 return new XForwardedForRequestFilter(matcher);
+            case XTlsCipherRequestFilter.TYPE:
+                return new XTlsCipherRequestFilter(matcher);
+            case XTlsProtocolRequestFilter.TYPE:
+                return new XTlsProtocolRequestFilter(matcher);
             case RegexpMapUserIdFilter.TYPE: {
                 String param = filterConfig.getOrDefault("param", "userid").trim();
                 String regexp = filterConfig.getOrDefault("regexp", "(.*)").trim();
