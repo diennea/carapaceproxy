@@ -29,9 +29,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.RequestFilter;
-import org.carapaceproxy.server.filters.RegexpMapSessionIdFilter;
-import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;
-import org.carapaceproxy.server.filters.XForwardedForRequestFilter;
+import org.carapaceproxy.server.filters.*;
 
 /**
  * Access to request filters
@@ -78,6 +76,12 @@ public class RequestFiltersResource {
             RequestFilterBean filterBean = new RequestFilterBean();
             if (f instanceof XForwardedForRequestFilter) {
                 filterBean.setType(XForwardedForRequestFilter.TYPE);
+                res.add(filterBean);
+            } else if(f instanceof XTlsCipherRequestFilter){
+                filterBean.setType(XTlsCipherRequestFilter.TYPE);
+                res.add(filterBean);
+            } else if(f instanceof XTlsProtocolRequestFilter){
+                filterBean.setType(XTlsProtocolRequestFilter.TYPE);
                 res.add(filterBean);
             } else if (f instanceof RegexpMapUserIdFilter) {
                 RegexpMapUserIdFilter filter = (RegexpMapUserIdFilter) f;

@@ -54,22 +54,22 @@ public final class RawHttpClient implements AutoCloseable {
     private final String host;
 
     public RawHttpClient(String host, int port, int socketTimeout) throws IOException {
-        this(host, port, false, null, null, socketTimeout);
+        this(host, port, false, null, null, null, socketTimeout);
     }
 
     public RawHttpClient(String host, int port) throws IOException {
-        this(host, port, false, null, null, DEFAULT_SOCKET_SO_TIMEOUT);
+        this(host, port, false, null, null, null, DEFAULT_SOCKET_SO_TIMEOUT);
     }
 
     public RawHttpClient(String host, int port, boolean ssl) throws IOException {
-        this(host, port, ssl, null, null, DEFAULT_SOCKET_SO_TIMEOUT);
+        this(host, port, ssl, null, null, null, DEFAULT_SOCKET_SO_TIMEOUT);
     }
 
     public RawHttpClient(String host, int port, boolean ssl, String sniHostname) throws IOException {
-        this(host, port, ssl, sniHostname, null, DEFAULT_SOCKET_SO_TIMEOUT);
+        this(host, port, ssl, sniHostname, null, null, DEFAULT_SOCKET_SO_TIMEOUT);
     }
 
-    public RawHttpClient(String host, int port, boolean ssl, String sniHostname, String[] sslProtocols, int socketTimeout) throws IOException {
+    public RawHttpClient(String host, int port, boolean ssl, String sniHostname, String[] sslProtocols, String[] sslCipherSuites, int socketTimeout) throws IOException {
         this.host = host;
         if (ssl) {
             SSLSocketFactory factory = HttpTestUtils.getSocket_factory();
@@ -77,6 +77,9 @@ public final class RawHttpClient implements AutoCloseable {
             SSLSocket sslSocket = (SSLSocket) socket;
             if (sslProtocols != null) {
                 sslSocket.setEnabledProtocols(sslProtocols);
+            }
+            if(sslCipherSuites != null) {
+                sslSocket.setEnabledCipherSuites(sslCipherSuites);
             }
             if (sniHostname != null) {
                 SSLParameters sslParameters = new SSLParameters();
@@ -92,8 +95,8 @@ public final class RawHttpClient implements AutoCloseable {
         socket.setSoTimeout(socketTimeout);
     }
 
-    public static RawHttpClient withEnabledSSLProtocols(String host, int port, String... protocols) throws IOException {
-        return new RawHttpClient(host, port, true, null, protocols, DEFAULT_SOCKET_SO_TIMEOUT);
+    public static RawHttpClient withEnabledSSLProtocols(String host, int port, String[] cipherSuites, String... protocols) throws IOException {
+        return new RawHttpClient(host, port, true, null, protocols, cipherSuites, DEFAULT_SOCKET_SO_TIMEOUT);
     }
 
     public Certificate[] getServerCertificate() throws SSLPeerUnverifiedException {
