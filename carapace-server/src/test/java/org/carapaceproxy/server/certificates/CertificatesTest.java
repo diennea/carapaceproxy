@@ -34,9 +34,8 @@ import org.carapaceproxy.api.UseAdminServer;
 import static org.carapaceproxy.utils.CertificatesTestUtils.uploadCertificate;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.RawHttpClient.HttpResponse;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
+
+import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -75,7 +74,7 @@ import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.util.KeyPairUtils;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
 import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
-import static org.junit.Assert.assertTrue;
+
 import java.util.Base64;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.powermock.reflect.Whitebox;
@@ -542,29 +541,33 @@ public class CertificatesTest extends UseAdminServer {
             // upload exact
             KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
             Certificate[] chain = generateSampleChain(endUserKeyPair, false);
-            byte[] chainData = createKeystore(chain, endUserKeyPair.getPrivate());
-            String chain1 = Base64.getEncoder().encodeToString(chainData);
-            uploadCertificate("localhost2", null, chainData, client, credentials);
+            byte[] chainData1 = createKeystore(chain, endUserKeyPair.getPrivate());
+            uploadCertificate("localhost2", null, chainData1, client, credentials);
             CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost2");
+            byte[] keyStoreData = Base64.getDecoder().decode(data.getChain());
+            Certificate[] saveChain = CertificatesUtils.readChainFromKeystore(keyStoreData);
             assertNotNull(data);
-            assertEquals(chain1, data.getChain());
+            assertArrayEquals(CertificatesUtils.readChainFromKeystore(chainData1), saveChain);
             assertFalse(data.isWildcard());
 
             // upload wildcard
             endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
             chain = generateSampleChain(endUserKeyPair, false);
-            chainData = createKeystore(chain, endUserKeyPair.getPrivate());
-            String chain2 = Base64.getEncoder().encodeToString(chainData);
-            uploadCertificate("*.localhost2", null, chainData, client, credentials);
+            byte[] chainData2 = createKeystore(chain, endUserKeyPair.getPrivate());
+            uploadCertificate("*.localhost2", null, chainData2, client, credentials);
             data = dynCertsMan.getCertificateDataForDomain("*.localhost2");
+            byte[] keyStoreData2 = Base64.getDecoder().decode(data.getChain());
+            Certificate[] saveChain2 = CertificatesUtils.readChainFromKeystore(keyStoreData2);
             assertNotNull(data);
-            assertEquals(chain2, data.getChain());
+            assertArrayEquals(CertificatesUtils.readChainFromKeystore(chainData2), saveChain2);
             assertTrue(data.isWildcard());
 
             // exact still different from wildcard
             data = dynCertsMan.getCertificateDataForDomain("localhost2");
+            byte[] keyStoreData3 = Base64.getDecoder().decode(data.getChain());
+            Certificate[] saveChain3 = CertificatesUtils.readChainFromKeystore(keyStoreData3);
             assertNotNull(data);
-            assertEquals(chain1, data.getChain());
+            assertArrayEquals(CertificatesUtils.readChainFromKeystore(chainData1), saveChain3);
             assertFalse(data.isWildcard());
         }
     }
