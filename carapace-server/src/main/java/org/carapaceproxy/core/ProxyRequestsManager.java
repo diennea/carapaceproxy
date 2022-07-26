@@ -25,6 +25,7 @@ import static reactor.netty.Metrics.CONNECTION_PROVIDER_PREFIX;
 import com.google.common.annotations.VisibleForTesting;
 import io.micrometer.core.instrument.Metrics;
 import io.netty.channel.ChannelOption;
+import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.socket.nio.NioChannelOption;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
@@ -329,12 +330,15 @@ public class ProxyRequestsManager {
                     .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
                     .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
                     .option(ChannelOption.SO_KEEPALIVE, true) // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
-                    .option(NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE), connectionConfig.getKeepaliveIdle())
-                    .option(NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL), connectionConfig.getKeepaliveInterval())
-                    .option(NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), connectionConfig.getKeepaliveCount())
-                    .option(EpollChannelOption.TCP_KEEPIDLE, connectionConfig.getKeepaliveIdle())
-                    .option(EpollChannelOption.TCP_KEEPINTVL, connectionConfig.getKeepaliveInterval())
-                    .option(EpollChannelOption.TCP_KEEPCNT, connectionConfig.getKeepaliveCount())
+                    .option(Epoll.isAvailable()
+                            ? EpollChannelOption.TCP_KEEPIDLE
+                            : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE), connectionConfig.getKeepaliveIdle())
+                    .option(Epoll.isAvailable()
+                            ? EpollChannelOption.TCP_KEEPINTVL
+                            : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL), connectionConfig.getKeepaliveInterval())
+                    .option(Epoll.isAvailable()
+                            ? EpollChannelOption.TCP_KEEPCNT
+                            : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), connectionConfig.getKeepaliveCount())
                     .doOnRequest((req, conn) -> {
                         if (CarapaceLogger.isLoggingDebugEnabled()) {
                             CarapaceLogger.debug("Start sending request for "
