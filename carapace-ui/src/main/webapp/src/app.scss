@@ -70,3 +70,12 @@ secondary: $primary-dark
         background-color: $info;
     }
 }
+
+.page-header {
+    display: flex;
+    align-items: center;
+
+    .title {
+        flex-grow: 1;
+    }
+}

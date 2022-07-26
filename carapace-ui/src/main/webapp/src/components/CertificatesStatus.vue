@@ -1,6 +1,25 @@
 <template>
     <div>
-        <h2>Certificates</h2>
+        <div class="page-header">
+            <h2 class="title">Certificates</h2>
+            <b-button v-b-modal.edit>Create certificate</b-button>
+            <b-modal id="edit" title="Create certificate" modal-ok="Save">
+                <b-form @submit="onSubmit" @reset="onReset">
+                    <b-form-group id="domain"
+                                  label="Domain"
+                                  label-for="domain"
+                                  description="Certificate domain">
+                        <b-form-input v-model="form.domain"
+                                      type="text"
+                                      placeholder="the domain"
+                                      required>
+                        </b-form-input>
+                    </b-form-group>
+                </b-form>
+                <b-button type="submit" variant="primary">Submit</b-button>
+                <b-button type="reset" variant="danger">Reset</b-button>
+            </b-modal>
+        </div>
         <div v-if="expiredCertificates.length > 0" class="box-warning">
             <strong>These certificates are expired:</strong>
             <ul>
@@ -27,7 +46,10 @@
         data() {
             return {
                 certificates: [],
-                loading: true
+                loading: true,
+                form: {
+                    domain: ""
+                }
             };
         },
         created() {
@@ -78,6 +100,13 @@
                     return "error"
                 }
                 return "info";
+            },
+            onSubmit() {
+                console.log("submit", this.form);
+            },
+            onReset() {
+                this.form = {};
+                console.log("reset", this.form);
             }
         }
     };
