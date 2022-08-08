@@ -253,6 +253,7 @@ public class Listeners {
                     CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
                     conn.channel().closeFuture().addListener(e -> CURRENT_CONNECTED_CLIENTS_GAUGE.dec());
                 })
+                .httpRequestDecoder(option -> option.maxHeaderSize(currentConfiguration.getMaxHeaderSize()))
                 .handle((request, response) -> { // Custom request-response handling
                     if(CarapaceLogger.isLoggingDebugEnabled()) {
                         CarapaceLogger.debug("Receive request " + request.uri()

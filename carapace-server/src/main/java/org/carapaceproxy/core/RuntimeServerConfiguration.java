@@ -19,7 +19,6 @@
  */
 package org.carapaceproxy.core;
 
-import java.io.Console;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -28,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
 import org.carapaceproxy.configstore.ConfigurationStore;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
@@ -102,6 +102,7 @@ public class RuntimeServerConfiguration {
     private String sslTrustStoreFile;
     private String sslTrustStorePassword;
     private boolean ocspEnabled = false;
+    private int maxHeaderSize = 8_192; //bytes
 
     public RuntimeServerConfiguration() {
         defaultConnectionPool = new ConnectionPoolConfiguration(
@@ -223,6 +224,9 @@ public class RuntimeServerConfiguration {
 
         ocspEnabled = properties.getBoolean("ocsp.enabled", ocspEnabled);
         LOG.log(Level.INFO, "ocsp.enabled={0}", ocspEnabled);
+
+        maxHeaderSize = properties.getInt("carapace.maxHeaderSize", maxHeaderSize);
+        LOG.log(Level.INFO, "carapace.maxHeaderSize={0}", maxHeaderSize);
     }
 
     private void configureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
