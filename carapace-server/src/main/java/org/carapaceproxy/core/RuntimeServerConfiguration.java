@@ -102,7 +102,7 @@ public class RuntimeServerConfiguration {
     private String sslTrustStoreFile;
     private String sslTrustStorePassword;
     private boolean ocspEnabled = false;
-    private int maxHeaderSize = 8_192; //bytes
+    private int maxHeaderSize = 8_192; //bytes; default 8kb
 
     public RuntimeServerConfiguration() {
         defaultConnectionPool = new ConnectionPoolConfiguration(
@@ -225,8 +225,11 @@ public class RuntimeServerConfiguration {
         ocspEnabled = properties.getBoolean("ocsp.enabled", ocspEnabled);
         LOG.log(Level.INFO, "ocsp.enabled={0}", ocspEnabled);
 
-        maxHeaderSize = properties.getInt("carapace.maxHeaderSize", maxHeaderSize);
-        LOG.log(Level.INFO, "carapace.maxHeaderSize={0}", maxHeaderSize);
+        maxHeaderSize = properties.getInt("carapace.maxheadersize", maxHeaderSize);
+        if (this.maxHeaderSize <= 0) {
+            throw new ConfigurationNotValidException("Invalid value '" + this.maxHeaderSize + "' for carapace.maxheadersize");
+        }
+        LOG.log(Level.INFO, "carapace.maxheadersize={0}", maxHeaderSize);
     }
 
     private void configureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
