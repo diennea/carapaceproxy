@@ -23,6 +23,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.security.KeyStore;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Properties;
@@ -37,6 +38,8 @@ import org.carapaceproxy.server.filters.*;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchAllRequestMatcher;
 
 import static org.carapaceproxy.utils.CertificatesTestUtils.uploadCertificate;
+
+import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestUtils;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -460,7 +463,8 @@ public class StartAPIServerTest extends UseAdminServer {
 
             // Downloading
             response = client.get("/api/certificates/" + manualDomain + "/download", credentials);
-            assertTrue(Arrays.equals(chain1, response.getBody()));
+            Certificate[] responseChain = CertificatesUtils.readChainFromKeystore(response.getBody());
+            assertTrue(Arrays.equals(CertificatesUtils.readChainFromKeystore(chain1), responseChain));
 
             // Certificate updating
             // Uploading
@@ -502,7 +506,8 @@ public class StartAPIServerTest extends UseAdminServer {
 
             // Downloading
             response = client.get("/api/certificates/" + manualDomain + "/download", credentials);
-            assertTrue(Arrays.equals(chain2, response.getBody()));
+            Certificate[] responseChain2 = CertificatesUtils.readChainFromKeystore(response.getBody());
+            assertTrue(Arrays.equals(CertificatesUtils.readChainFromKeystore(chain2), responseChain2));
         }
     }
 

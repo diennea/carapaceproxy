@@ -22,16 +22,13 @@ package org.carapaceproxy.utils;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.security.*;
-import java.security.cert.*;
 import java.security.cert.Certificate;
+import java.security.cert.CertificateEncodingException;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Utilitis for Certificates storing as Keystores
@@ -47,9 +44,8 @@ public final class CertificatesUtils {
     private static final long DAY_TO_MILLIS = 24 * 60 * 60 * 1_000;
 
     /**
-     *
      * @param chain to store into a keystore
-     * @param key private key for the chain
+     * @param key   private key for the chain
      * @return keystore data
      * @throws GeneralSecurityException
      */
@@ -76,7 +72,8 @@ public final class CertificatesUtils {
         try (ByteArrayInputStream is = new ByteArrayInputStream(data)) {
             KeyStore keyStore = KeyStore.getInstance(KEYSTORE_FORMAT);
             keyStore.load(is, KEYSTORE_PW);
-            return keyStore.getCertificateChain(KEYSTORE_CERT_ALIAS);
+            String alias = keyStore.aliases().nextElement();
+            return keyStore.getCertificateChain(alias);
         } catch (IOException ex) {
             throw new GeneralSecurityException(ex);
         }
@@ -102,7 +99,6 @@ public final class CertificatesUtils {
     }
 
     /**
-     *
      * @param data keystore data.
      * @return whether a valid keystore can be retrived from data.
      */
@@ -134,8 +130,8 @@ public final class CertificatesUtils {
 
     public static Map<String, X509Certificate> loadCaCerts(TrustManagerFactory trustManagerFactory) {
         final Map<String, X509Certificate> certificateAuthorities = new HashMap<>();
-        for(TrustManager trustManager : trustManagerFactory.getTrustManagers()) {
-            if(trustManager instanceof X509TrustManager) {
+        for (TrustManager trustManager : trustManagerFactory.getTrustManagers()) {
+            if (trustManager instanceof X509TrustManager) {
                 for (X509Certificate ca : ((X509TrustManager) trustManager).getAcceptedIssuers()) {
                     certificateAuthorities.put(ca.getSubjectX500Principal().getName(), ca);
                 }
@@ -153,12 +149,28 @@ public final class CertificatesUtils {
         return ks;
     }
 
+
     public static boolean isCertificateExpired(Date expiringDate, int daysBeforeRenewal) throws GeneralSecurityException {
         if (expiringDate == null) {
             return false;
         }
 
         return System.currentTimeMillis() + (daysBeforeRenewal * DAY_TO_MILLIS) >= expiringDate.getTime();
+    }
+
+    /**
+     * Extract certificate private key
+     * @param data Certificate data.
+     * @param password Private key password.
+     * @return PrivateKey.
+     * @throws Exception
+     */
+    public static PrivateKey loadPrivateKey(byte[] data, String password) throws Exception {
+        KeyStore ks = KeyStore.getInstance(KEYSTORE_FORMAT);
+        ks.load(new ByteArrayInputStream(data), password.trim().toCharArray());
+        String alias = ks.aliases().nextElement();
+        PrivateKey key = (PrivateKey) ks.getKey(alias, password.trim().toCharArray());
+        return key;
     }
 
     /**

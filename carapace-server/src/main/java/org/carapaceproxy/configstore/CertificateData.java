@@ -217,7 +217,9 @@ public class CertificateData {
 
     @Override
     public String toString() {
-        return "CertificateData{" + "domain=" + domain + ", state=" + state + ", manual=" + manual + '}';
+        return "CertificateData{" + "domain=" + domain + ","
+                +" state=" + state + ", manual=" + manual
+                + ",expiringDate=" + expiringDate + ",serialNumber " + serialNumber + '}';
     }
 
 }
