@@ -95,8 +95,11 @@ public class ProxyRequestsManager {
     private final Map<String, HttpClient> forwardersPool = new ConcurrentHashMap<>(); // endpoint_connectionpool -> forwarder to use
     private final ConnectionsManager connectionsManager = new ConnectionsManager();
 
+    private RuntimeServerConfiguration currentConfiguration;
+
     public ProxyRequestsManager(HttpProxyServer parent) {
         this.parent = parent;
+        this.currentConfiguration = parent.getCurrentConfiguration();
     }
 
     public EndpointStats getEndpointStats(EndpointKey key) {
@@ -339,6 +342,7 @@ public class ProxyRequestsManager {
                     .option(Epoll.isAvailable()
                             ? EpollChannelOption.TCP_KEEPCNT
                             : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), connectionConfig.getKeepaliveCount())
+                    .httpResponseDecoder(option -> option.maxHeaderSize(currentConfiguration.getMaxHeaderSize()))
                     .doOnRequest((req, conn) -> {
                         if (CarapaceLogger.isLoggingDebugEnabled()) {
                             CarapaceLogger.debug("Start sending request for "
