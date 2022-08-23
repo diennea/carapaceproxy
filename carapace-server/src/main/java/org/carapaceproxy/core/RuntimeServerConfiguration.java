@@ -103,6 +103,7 @@ public class RuntimeServerConfiguration {
     private String sslTrustStorePassword;
     private boolean ocspEnabled = false;
     private int maxHeaderSize = 8_192; //bytes; default 8kb
+    private boolean maintenanceModeEnabled = false;
 
     public RuntimeServerConfiguration() {
         defaultConnectionPool = new ConnectionPoolConfiguration(
@@ -230,6 +231,9 @@ public class RuntimeServerConfiguration {
             throw new ConfigurationNotValidException("Invalid value '" + this.maxHeaderSize + "' for carapace.maxheadersize");
         }
         LOG.log(Level.INFO, "carapace.maxheadersize={0}", maxHeaderSize);
+
+        maintenanceModeEnabled = properties.getBoolean("carapace.maintenancemode.enabled", maintenanceModeEnabled);
+        LOG.log(Level.INFO, "carapace.maintenancemode.enabled={0}", maintenanceModeEnabled);
     }
 
     private void configureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {

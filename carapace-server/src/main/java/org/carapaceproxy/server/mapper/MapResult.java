@@ -45,6 +45,10 @@ public class MapResult {
          */
         INTERNAL_ERROR,
         /**
+         * Maintenance mode
+         */
+        MAINTENANCE_MODE,
+        /**
          * Custom static message
          */
         STATIC,
@@ -87,6 +91,13 @@ public class MapResult {
     public static MapResult internalError(String routeId) {
         return MapResult.builder()
                 .action(Action.INTERNAL_ERROR)
+                .routeId(routeId)
+                .build();
+    }
+
+    public static MapResult maintenanceMode(String routeId) {
+        return MapResult.builder()
+                .action(Action.MAINTENANCE_MODE)
                 .routeId(routeId)
                 .build();
     }

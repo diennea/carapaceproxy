@@ -47,6 +47,7 @@ public class StaticContentsManager {
 
     public static final String DEFAULT_NOT_FOUND = CLASSPATH_RESOURCE + "/default-error-pages/404_notfound.html";
     public static final String DEFAULT_INTERNAL_SERVER_ERROR = CLASSPATH_RESOURCE + "/default-error-pages/500_internalservererror.html";
+    public static final String DEFAULT_MAINTENANCE_MODE_PAGE =  CLASSPATH_RESOURCE + "/default-error-pages/500_maintenance.html";
 
     private static final Logger LOG = Logger.getLogger(StaticContentsManager.class.getName());
 

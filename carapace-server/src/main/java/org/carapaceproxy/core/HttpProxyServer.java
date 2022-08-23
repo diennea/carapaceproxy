@@ -713,7 +713,8 @@ public class HttpProxyServer implements AutoCloseable {
             Map<String, BackendConfiguration> newBackends = newMapper.getBackends();
             this.mapper = newMapper;
 
-            if (!newBackends.equals(currentBackends) || isConnectionsConfigurationChanged(newConfiguration)) {
+            if (!newBackends.equals(currentBackends) || isConnectionsConfigurationChanged(newConfiguration)
+                || currentConfiguration.isMaintenanceModeEnabled() != newConfiguration.isMaintenanceModeEnabled()) {
                 proxyRequestsManager.reloadConfiguration(newConfiguration, newBackends.values());
             }
 

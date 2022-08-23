@@ -68,6 +68,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     private String defaultInternalErrorAction = "internal-error";
     private String forceDirectorParameter = "x-director";
     private String forceBackendParameter = "x-backend";
+    private String defaultMaintenanceAction = "maintenance";
 
     private static final Logger LOG = Logger.getLogger(StandardEndpointMapper.class.getName());
     private static final String ACME_CHALLENGE_URI_PATTERN = "/\\.well-known/acme-challenge/";
@@ -244,6 +245,28 @@ public class StandardEndpointMapper extends EndpointMapper {
     }
 
     @Override
+    public SimpleHTTPResponse mapMaintenanceMode(String routeid) {
+        ActionConfiguration maintenanceAction = null;
+        // custom for route
+        Optional<RouteConfiguration> config = routes.stream().filter(r -> r.getId().equalsIgnoreCase(routeid)).findFirst();
+        if (config.isPresent()) {
+            String action = config.get().getMaintenanceModeAction();
+            if (action != null) {
+                maintenanceAction = actions.get(action);
+            }
+        }
+        // custom global
+        if (maintenanceAction == null && defaultMaintenanceAction != null) {
+            maintenanceAction = actions.get(defaultMaintenanceAction);
+        }
+        if (maintenanceAction != null) {
+            return new SimpleHTTPResponse(maintenanceAction.getErrorCode(), maintenanceAction.getFile(), maintenanceAction.getCustomHeaders());
+        }
+        // fallback
+        return super.mapMaintenanceMode(routeid);
+    }
+
+    @Override
     public SimpleHTTPResponse mapPageNotFound(String routeid) {
         // custom global
         if (defaultNotFoundAction != null) {
@@ -278,6 +301,8 @@ public class StandardEndpointMapper extends EndpointMapper {
         LOG.log(Level.INFO, "configured default.action.notfound={0}", defaultNotFoundAction);
         this.defaultInternalErrorAction = properties.getString("default.action.internalerror", "internal-error");
         LOG.log(Level.INFO, "configured default.action.internalerror={0}", defaultInternalErrorAction);
+        this.defaultMaintenanceAction = properties.getString("default.action.maintenance", "maintenance");
+        LOG.log(Level.INFO, "configured default.action.maintenance={0}", defaultMaintenanceAction);
         this.forceDirectorParameter = properties.getString("mapper.forcedirector.parameter", forceDirectorParameter);
         LOG.log(Level.INFO, "configured mapper.forcedirector.parameter={0}", forceDirectorParameter);
         this.forceBackendParameter = properties.getString("mapper.forcebackend.parameter", forceBackendParameter);
@@ -430,6 +455,14 @@ public class StandardEndpointMapper extends EndpointMapper {
                     }
                 }
                 config.setErrorAction(errorAction);
+                String maintenanceAction = properties.getString(prefix + "maintenanceaction", "");
+                if(!maintenanceAction.isEmpty()) {
+                    ActionConfiguration defined = actions.get(maintenanceAction);
+                    if(defined == null || !ActionConfiguration.TYPE_STATIC.equals(defined.getType())) {
+                        throw new ConfigurationNotValidException("Maintenance action for route " + id + " has to be defined and has to be type STATIC");
+                    }
+                }
+                config.setMaintenanceModeAction(maintenanceAction);
                 addRoute(config);
             } catch (ParseException | ConfigurationNotValidException ex) {
                 throw new ConfigurationNotValidException(
