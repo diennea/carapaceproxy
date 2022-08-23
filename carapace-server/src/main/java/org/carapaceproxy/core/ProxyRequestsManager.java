@@ -110,6 +110,10 @@ public class ProxyRequestsManager {
         connectionsManager.reloadConfiguration(newConfiguration, newEndpoints);
     }
 
+    public void reloadConfiguration(RuntimeServerConfiguration newConfiguration) {
+        this.currentConfiguration = newConfiguration;
+    }
+
     public void close() {
         connectionsManager.close();
     }

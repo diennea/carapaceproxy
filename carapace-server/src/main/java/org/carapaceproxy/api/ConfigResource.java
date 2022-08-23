@@ -23,20 +23,16 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringReader;
 import java.io.StringWriter;
-import java.util.Properties;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.servlet.ServletContext;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
+import javax.ws.rs.*;
+
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
+import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 
@@ -127,6 +123,24 @@ public class ConfigResource {
         }
     }
 
+    @Path("/maintenance")
+    @Consumes(value = "text/plain")
+    @POST
+    public ConfigurationChangeResult setupMaintenanceMode(@QueryParam("enable") boolean value) {
+        HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
+        RuntimeServerConfiguration newCurrentConfiguration = server.getCurrentConfiguration();
+        newCurrentConfiguration.setMaintenanceModeEnabled(value);
+        server.getProxyRequestsManager().reloadConfiguration(newCurrentConfiguration);
+        return ConfigurationChangeResult.response(newCurrentConfiguration.isMaintenanceModeEnabled(), "");
+    }
+
+    @Path("/maintenance")
+    @GET
+    public ConfigurationChangeResult getMaintenanceStatus() {
+        HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
+        return ConfigurationChangeResult.response(server.getCurrentConfiguration().isMaintenanceModeEnabled(), "");
+    }
+
     private void dumpAndValidateInputConfiguration(PropertiesConfigurationStore simpleStore) throws ConfigurationNotValidException {
         int[] count = new int[]{0};
         simpleStore.forEach((k, v) -> {
@@ -178,6 +192,10 @@ public class ConfigResource {
             StringWriter w = new StringWriter();
             error.printStackTrace(new PrintWriter(w));
             return new ConfigurationChangeResult(false, w.toString());
+        }
+
+        public static ConfigurationChangeResult response(boolean status, String error) {
+            return new ConfigurationChangeResult(status, error);
         }
 
         private ConfigurationChangeResult(boolean ok, String error) {
