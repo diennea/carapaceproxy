@@ -106,7 +106,6 @@ public class ProxyRequestsManager {
     }
 
     public void reloadConfiguration(RuntimeServerConfiguration newConfiguration, Collection<BackendConfiguration> newEndpoints) {
-        this.currentConfiguration = newConfiguration;
         connectionsManager.reloadConfiguration(newConfiguration, newEndpoints);
     }
 
@@ -128,11 +127,6 @@ public class ProxyRequestsManager {
         if (action == null) {
             LOGGER.log(Level.INFO, "Mapper returned NULL action for {0}", this);
             action = MapResult.internalError(MapResult.NO_ROUTE);
-        }
-
-        if(currentConfiguration.isMaintenanceModeEnabled()) {
-            String routeId = action.routeId;
-            action = MapResult.maintenanceMode(routeId);
         }
 
         request.setAction(action);

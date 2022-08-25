@@ -126,12 +126,10 @@ public class ConfigResource {
     @Path("/maintenance")
     @Consumes(value = "text/plain")
     @POST
-    public ConfigurationChangeResult setupMaintenanceMode(@QueryParam("enable") boolean value) {
+    public ConfigurationChangeResult setupMaintenanceMode(@QueryParam("enable") boolean value) throws ConfigurationNotValidException, ConfigurationChangeInProgressException, InterruptedException {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-        RuntimeServerConfiguration newCurrentConfiguration = server.getCurrentConfiguration();
-        newCurrentConfiguration.setMaintenanceModeEnabled(value);
-        server.getProxyRequestsManager().reloadConfiguration(newCurrentConfiguration);
-        return ConfigurationChangeResult.response(newCurrentConfiguration.isMaintenanceModeEnabled(), "");
+        server.UpdateMaintenanceMode(value);
+        return ConfigurationChangeResult.response(server.getCurrentConfiguration().isMaintenanceModeEnabled(), "");
     }
 
     @Path("/maintenance")

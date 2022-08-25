@@ -145,6 +145,7 @@ export default {
        },
        reset() {
            this.getMaintenanceStatus();
+           this.fetch();
        },
     }
 };

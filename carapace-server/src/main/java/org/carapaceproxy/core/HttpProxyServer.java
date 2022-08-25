@@ -647,6 +647,12 @@ public class HttpProxyServer implements AutoCloseable {
         applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(props));
     }
 
+    public void UpdateMaintenanceMode(boolean value) throws ConfigurationChangeInProgressException, InterruptedException {
+        Properties props = dynamicConfigurationStore.asProperties(null);
+        props.setProperty("carapace.maintenancemode.enabled", String.valueOf(value));
+        applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(props));
+    }
+
     private void performUpdate(Properties props, String key, CertificateData cert) {
         props.setProperty(key.replace("hostname", "mode"), cert.isManual() ? "manual" : "acme");
         if (cert.isManual()) {
@@ -713,9 +719,12 @@ public class HttpProxyServer implements AutoCloseable {
             Map<String, BackendConfiguration> newBackends = newMapper.getBackends();
             this.mapper = newMapper;
 
-            if (!newBackends.equals(currentBackends) || isConnectionsConfigurationChanged(newConfiguration)
-                || currentConfiguration.isMaintenanceModeEnabled() != newConfiguration.isMaintenanceModeEnabled()) {
+            if (!newBackends.equals(currentBackends) || isConnectionsConfigurationChanged(newConfiguration)) {
                 proxyRequestsManager.reloadConfiguration(newConfiguration, newBackends.values());
+            }
+
+            if(currentConfiguration.isMaintenanceModeEnabled() != newConfiguration.isMaintenanceModeEnabled()) {
+                proxyRequestsManager.reloadConfiguration(newConfiguration);
             }
 
             if (!atBoot) {

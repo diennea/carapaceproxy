@@ -116,6 +116,14 @@ public class StandardEndpointMapper extends EndpointMapper {
             if (!route.isEnabled()) {
                 continue;
             }
+
+            if(parent.getCurrentConfiguration().isMaintenanceModeEnabled()) {
+                if(LOG.isLoggable(Level.FINER)) {
+                    LOG.log(Level.FINER, "Maintenance mode is enable: request uri: {0}",request.getUri());
+                }
+                return MapResult.maintenanceMode(route.getId());
+            }
+
             boolean matchResult = route.matches(request);
             if (LOG.isLoggable(Level.FINER)) {
                 LOG.log(Level.FINER, "route {0}, map {1} -> {2}", new Object[]{route.getId(), request.getUri(), matchResult});
