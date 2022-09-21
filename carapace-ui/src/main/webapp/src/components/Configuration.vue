@@ -38,6 +38,8 @@
             <b-modal 
             id="maintenance" 
             title="Maintenance"
+            cancel-title="Close"
+            no-close-on-backdrop
             @ok="setupMaintenanceMode"
             @hidden="reset"
             >
@@ -122,21 +124,25 @@ export default {
                 }
             );
         },
-       setupMaintenanceMode() {
+       setupMaintenanceMode(bvModalEvent) {
+           bvModalEvent.preventDefault()
            doPost("/api/config/maintenance?enable=" + this.checked,
                this.checked,
                data => {
                    this.checked = data.ok;
                    this.opSuccess = true;
                    this.opMessage = data.ok
-                        ? "Maintenance mode has been enabled."
-                        : "Maintenance mode has been disabled";
+                        ? "Maintenance mode has been enabled.\n Refresh page to see the change."
+                        : "Maintenance mode has been disabled.\n Refresh page to see the change.";
                },
                error => {
                    this.opSuccess = false;
                    this.opMessage = "Something went wrong (" + error + ")";
                }
            );
+           this.$nextTick(() => {
+             this.$bvModal.hide('maintenance')
+           })
        },
        getMaintenanceStatus() {
             doGet("/api/config/maintenance", data => {
@@ -145,7 +151,6 @@ export default {
        },
        reset() {
            this.getMaintenanceStatus();
-           this.fetch();
        },
     }
 };

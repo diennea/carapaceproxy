@@ -1,9 +1,10 @@
 <template>
-    <nav class="navbar">
+    <nav :class="classes">
         <a class="navbar-brand" href="#">
             <img id="logo" :src="logo" height="45px" width="45px" />
             <span id="label">{{label}}</span>
         </a>
+        <b v-if="maintenanceStatus">MAINTENANCE MODE IS ENABLE</b>
         <router-link to="/peers">
             <b>Node:</b> {{nodeId}}
         </router-link>
@@ -11,6 +12,8 @@
 </template>
 
 <script>
+import { doGet } from "./../mockserver";
+
 export default {
     name: "Navbar",
     props: {
@@ -19,9 +22,24 @@ export default {
         nodeId: String
     },
     data() {
-        return {};
+        return {
+            maintenanceStatus: false
+        };
     },
-    methods: {}
+    created() {
+        doGet("/api/config/maintenance", data => {
+            this.maintenanceStatus = data.ok;
+        });
+    },
+    methods: {},
+    computed: {
+        classes () {
+            if (this.maintenanceStatus) {
+                return 'navbar maintenance';
+            }
+            return 'navbar';
+        }
+    }
 };
 </script>
 
@@ -38,6 +56,14 @@ export default {
 
     * {
         color: $navbar-elements;
+    }
+
+    &.maintenance {
+       background-color: $navbar-maintenance;
+
+           * {
+               color: $primary-dark;
+           }
     }
 
     a,

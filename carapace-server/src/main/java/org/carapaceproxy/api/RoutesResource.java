@@ -46,13 +46,15 @@ public class RoutesResource {
         private final String errorAction;
         private final boolean enabled;
         private final String matcher;
+        private final String maintenanceAction;
 
-        public RouteBean(String id, String action, String errorAction, boolean enabled, String matcher) {
+        public RouteBean(String id, String action, String errorAction, boolean enabled, String matcher, String maintenanceAction) {
             this.id = id;
             this.action = action;
             this.errorAction = errorAction;
             this.enabled = enabled;
             this.matcher = matcher;
+            this.maintenanceAction = maintenanceAction;
         }
 
         public String getId() {
@@ -74,6 +76,8 @@ public class RoutesResource {
         public String getMatcher() {
             return matcher;
         }
+
+        public String getMaintenanceAction() { return maintenanceAction; }
     }
 
     @GET
@@ -88,7 +92,8 @@ public class RoutesResource {
                             route.getAction(),
                             route.getErrorAction(),
                             route.isEnabled(),
-                            route.getMatcher().getDescription()));
+                            route.getMatcher().getDescription(),
+                            route.getMaintenanceModeAction()));
                 });
 
         return routes;

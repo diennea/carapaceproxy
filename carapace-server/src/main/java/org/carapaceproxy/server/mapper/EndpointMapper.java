@@ -66,7 +66,7 @@ public abstract class EndpointMapper {
     }
 
     public SimpleHTTPResponse mapMaintenanceMode(String routeId) {
-        return SimpleHTTPResponse.MAINTENANCE_MODE(StaticContentsManager.DEFAULT_MAINTENANCE_MODE_PAGE);
+        return SimpleHTTPResponse.MAINTENANCE_MODE(StaticContentsManager.DEFAULT_MAINTENANCE_MODE_ERROR);
     }
 
     public abstract void configure(ConfigurationStore properties) throws ConfigurationNotValidException;

@@ -109,10 +109,6 @@ public class ProxyRequestsManager {
         connectionsManager.reloadConfiguration(newConfiguration, newEndpoints);
     }
 
-    public void reloadConfiguration(RuntimeServerConfiguration newConfiguration) {
-        this.currentConfiguration = newConfiguration;
-    }
-
     public void close() {
         connectionsManager.close();
     }
@@ -238,7 +234,7 @@ public class ProxyRequestsManager {
             customHeaders = res.getCustomHeaders();
         }
         if (resource == null) {
-            resource = StaticContentsManager.DEFAULT_MAINTENANCE_MODE_PAGE;
+            resource = StaticContentsManager.DEFAULT_MAINTENANCE_MODE_ERROR;
         }
         if (code <= 0) {
             code = 500;

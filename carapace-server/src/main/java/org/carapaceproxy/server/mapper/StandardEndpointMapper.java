@@ -31,14 +31,13 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.carapaceproxy.server.mapper.MapResult.Action;
 import org.carapaceproxy.configstore.ConfigurationStore;
-import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
-import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_NOT_FOUND;
-import static org.carapaceproxy.core.StaticContentsManager.IN_MEMORY_RESOURCE;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.BackendSelector;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.DirectorConfiguration;
+
+import static org.carapaceproxy.core.StaticContentsManager.*;
 import static org.carapaceproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
 import java.util.Optional;
 import org.carapaceproxy.SimpleHTTPResponse;
@@ -117,18 +116,18 @@ public class StandardEndpointMapper extends EndpointMapper {
                 continue;
             }
 
-            if(parent.getCurrentConfiguration().isMaintenanceModeEnabled()) {
-                if(LOG.isLoggable(Level.FINER)) {
-                    LOG.log(Level.FINER, "Maintenance mode is enable: request uri: {0}",request.getUri());
-                }
-                return MapResult.maintenanceMode(route.getId());
-            }
-
             boolean matchResult = route.matches(request);
             if (LOG.isLoggable(Level.FINER)) {
                 LOG.log(Level.FINER, "route {0}, map {1} -> {2}", new Object[]{route.getId(), request.getUri(), matchResult});
             }
             if (matchResult) {
+                if(parent.getCurrentConfiguration().isMaintenanceModeEnabled()) {
+                    if(LOG.isLoggable(Level.FINER)) {
+                        LOG.log(Level.FINER, "Maintenance mode is enable: request uri: {0}",request.getUri());
+                    }
+                    return MapResult.maintenanceMode(route.getId());
+                }
+
                 ActionConfiguration action = actions.get(route.getAction());
                 if (action == null) {
                     LOG.log(Level.INFO, "no action ''{0}'' -> not-found for {1}, valid {2}", new Object[]{route.getAction(), request.getUri(), actions.keySet()});
@@ -294,6 +293,7 @@ public class StandardEndpointMapper extends EndpointMapper {
         addAction(new ActionConfiguration("cache-if-possible", ActionConfiguration.TYPE_CACHE, DirectorConfiguration.DEFAULT, null, -1));
         addAction(new ActionConfiguration("not-found", ActionConfiguration.TYPE_STATIC, null, DEFAULT_NOT_FOUND, 404));
         addAction(new ActionConfiguration("internal-error", ActionConfiguration.TYPE_STATIC, null, DEFAULT_INTERNAL_SERVER_ERROR, 500));
+        addAction(new ActionConfiguration("maintenance", ActionConfiguration.TYPE_STATIC, null, DEFAULT_MAINTENANCE_MODE_ERROR, 500));
 
         // Route+Action configuration for Let's Encrypt ACME challenging
         addAction(new ActionConfiguration(
@@ -463,6 +463,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                     }
                 }
                 config.setErrorAction(errorAction);
+                //Maintenance action
                 String maintenanceAction = properties.getString(prefix + "maintenanceaction", "");
                 if(!maintenanceAction.isEmpty()) {
                     ActionConfiguration defined = actions.get(maintenanceAction);
