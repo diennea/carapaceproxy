@@ -60,6 +60,10 @@ public class SimpleHTTPResponse {
         return new SimpleHTTPResponse(500, res, null);
     }
 
+    public static final SimpleHTTPResponse MAINTENANCE_MODE(String res) {
+        return new SimpleHTTPResponse(500, res, null);
+    }
+
     @Override
     public String toString() {
         return "SimpleHTTPResponse{" + "errorcode=" + errorcode + ", resource=" + resource + ", customHeaders=" + customHeaders + '}';

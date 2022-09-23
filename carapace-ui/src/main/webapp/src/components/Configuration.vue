@@ -1,6 +1,16 @@
 <template>
     <div>
         <h2>Configuration</h2>
+        <div id="maintenance-switch" >
+            <b-form-checkbox
+                v-model="checked" 
+                name="check-button" 
+                size="lg" 
+                @change="$bvModal.show('maintenance')" 
+                switch>
+                Maintenance Mode <b>(Enable: {{ checked }})</b>
+            </b-form-checkbox>
+        </div>
         <b-alert
             id="status-alert"
             fade
@@ -24,23 +34,39 @@
             <b-button variant="outline-primary" @click="validate">Validate</b-button>
             <b-button variant="primary" @click="save">Save</b-button>
         </div>
+        <div>
+            <b-modal 
+            id="maintenance" 
+            title="Maintenance"
+            cancel-title="Close"
+            no-close-on-backdrop
+            @ok="setupMaintenanceMode"
+            @hidden="reset"
+            >
+                <p class="my-4" v-if="checked">You are about to enable maintenance mode</p>
+                <p class="my-4" v-else>You are about to disable maintenance mode</p>
+            </b-modal>
+        </div>
     </div>
 </template>
 
 <script>
 import { doGet } from "./../mockserver";
 import { doPost } from "./../mockserver";
+
 export default {
     name: "Configuration",
     data() {
         return {
             configuration: "",
             opSuccess: null,
-            opMessage: ""
+            opMessage: "",
+            checked: false
         };
     },
     created() {
         this.fetch();
+        this.getMaintenanceStatus();
     },
     methods: {
         save() {
@@ -97,7 +123,35 @@ export default {
                         ").";
                 }
             );
-        }
+        },
+       setupMaintenanceMode(bvModalEvent) {
+           bvModalEvent.preventDefault()
+           doPost("/api/config/maintenance?enable=" + this.checked,
+               this.checked,
+               data => {
+                   this.checked = data.ok;
+                   this.opSuccess = true;
+                   this.opMessage = data.ok
+                        ? "Maintenance mode has been enabled.\n Refresh page to see the change."
+                        : "Maintenance mode has been disabled.\n Refresh page to see the change.";
+               },
+               error => {
+                   this.opSuccess = false;
+                   this.opMessage = "Something went wrong (" + error + ")";
+               }
+           );
+           this.$nextTick(() => {
+             this.$bvModal.hide('maintenance')
+           })
+       },
+       getMaintenanceStatus() {
+            doGet("/api/config/maintenance", data => {
+                this.checked = data.ok;
+            });
+       },
+       reset() {
+           this.getMaintenanceStatus();
+       },
     }
 };
 </script>
@@ -113,6 +167,10 @@ export default {
     left: 25%;
     right: 25%;
     z-index: 999;
+}
+
+#maintenance-switch {
+    float: right;
 }
 
 button {

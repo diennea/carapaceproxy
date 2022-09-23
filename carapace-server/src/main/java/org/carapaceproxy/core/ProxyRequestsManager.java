@@ -19,8 +19,7 @@
  */
 package org.carapaceproxy.core;
 
-import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTP;
-import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTPS;
+import static org.carapaceproxy.server.mapper.MapResult.*;
 import static reactor.netty.Metrics.CONNECTION_PROVIDER_PREFIX;
 import com.google.common.annotations.VisibleForTesting;
 import io.micrometer.core.instrument.Metrics;
@@ -125,6 +124,7 @@ public class ProxyRequestsManager {
             LOGGER.log(Level.INFO, "Mapper returned NULL action for {0}", this);
             action = MapResult.internalError(MapResult.NO_ROUTE);
         }
+
         request.setAction(action);
 
         if (LOGGER.isLoggable(Level.FINER)) {
@@ -138,6 +138,8 @@ public class ProxyRequestsManager {
 
                 case INTERNAL_ERROR:
                     return serveInternalErrorMessage(request);
+                case MAINTENANCE_MODE:
+                    return  serverMaintenanceMessage(request);
 
                 case STATIC:
                 case ACME_CHALLENGE:
@@ -208,6 +210,31 @@ public class ProxyRequestsManager {
         }
         if (resource == null) {
             resource = StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
+        }
+        if (code <= 0) {
+            code = 500;
+        }
+        FullHttpResponse response = parent.getStaticContentsManager().buildResponse(code, resource);
+
+        return writeSimpleResponse(request, response, customHeaders);
+    }
+
+    private Publisher<Void> serverMaintenanceMessage(ProxyRequest request) {
+        if (request.getResponse().hasSentHeaders()) {
+            return Mono.empty();
+        }
+
+        SimpleHTTPResponse res = parent.getMapper().mapMaintenanceMode(request.getAction().routeId);
+        int code = 0;
+        String resource = null;
+        List<CustomHeader> customHeaders = null;
+        if (res != null) {
+            code = res.getErrorcode();
+            resource = res.getResource();
+            customHeaders = res.getCustomHeaders();
+        }
+        if (resource == null) {
+            resource = StaticContentsManager.DEFAULT_MAINTENANCE_MODE_ERROR;
         }
         if (code <= 0) {
             code = 500;

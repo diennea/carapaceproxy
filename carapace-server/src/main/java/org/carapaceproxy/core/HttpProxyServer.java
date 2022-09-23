@@ -634,20 +634,26 @@ public class HttpProxyServer implements AutoCloseable {
         Properties props = dynamicConfigurationStore.asProperties(null);
         boolean newCertificate = !dynamicConfigurationStore.anyPropertyMatches((k, v) -> {
             if (k.matches("certificate\\.[0-9]+\\.hostname") && v.equals(cert.getDomain())) {
-                performUpdate(props, k, cert); // updating existing certificate
+                performCertificateUpdate(props, k, cert); // updating existing certificate
                 return true;
             }
             return false;
         });
         if (newCertificate) {
-            performCreate(props, cert);
+            performCertificateCreate(props, cert);
         }
 
         // Configuration reloading
         applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(props));
     }
 
-    private void performUpdate(Properties props, String key, CertificateData cert) {
+    public void UpdateMaintenanceMode(boolean value) throws ConfigurationChangeInProgressException, InterruptedException {
+        Properties props = dynamicConfigurationStore.asProperties(null);
+        props.setProperty("carapace.maintenancemode.enabled", String.valueOf(value));
+        applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(props));
+    }
+
+    private void performCertificateUpdate(Properties props, String key, CertificateData cert) {
         props.setProperty(key.replace("hostname", "mode"), cert.isManual() ? "manual" : "acme");
         if (cert.isManual()) {
             props.remove(key.replace("hostname", "daysbeforerenewal")); // type changed from acme to manual
@@ -656,7 +662,7 @@ public class HttpProxyServer implements AutoCloseable {
         }
     }
 
-    private void performCreate(Properties props, CertificateData cert) {
+    private void performCertificateCreate(Properties props, CertificateData cert) {
         int index = dynamicConfigurationStore.findMaxIndexForPrefix("certificate") + 1;
         String prefix = "certificate." + index + ".";
         props.setProperty(prefix + "hostname", cert.getDomain());

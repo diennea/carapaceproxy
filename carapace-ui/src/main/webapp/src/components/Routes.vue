@@ -37,6 +37,7 @@ export default {
                 { key: "matcher", label: "Request Matcher", sortable: true },
                 { key: "action", label: "Action", sortable: true },
                 { key: "errorAction", label: "Error Action", sortable: true },
+                { key: "maintenanceAction", label: "Maintenance Action", sortable: true },
                 {
                     key: "enabled",
                     label: "Enabled",

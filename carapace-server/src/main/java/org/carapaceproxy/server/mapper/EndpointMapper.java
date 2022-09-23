@@ -57,12 +57,16 @@ public abstract class EndpointMapper {
 
     public abstract MapResult map(ProxyRequest request);
 
-    public SimpleHTTPResponse mapPageNotFound(String routeid) {
+    public SimpleHTTPResponse mapPageNotFound(String routeId) {
         return SimpleHTTPResponse.NOT_FOUND(StaticContentsManager.DEFAULT_NOT_FOUND);
     }
 
-    public SimpleHTTPResponse mapInternalError(String routeid) {
+    public SimpleHTTPResponse mapInternalError(String routeId) {
         return SimpleHTTPResponse.INTERNAL_ERROR(StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR);
+    }
+
+    public SimpleHTTPResponse mapMaintenanceMode(String routeId) {
+        return SimpleHTTPResponse.MAINTENANCE_MODE(StaticContentsManager.DEFAULT_MAINTENANCE_MODE_ERROR);
     }
 
     public abstract void configure(ConfigurationStore properties) throws ConfigurationNotValidException;

@@ -32,6 +32,7 @@ public class RouteConfiguration {
     private final RequestMatcher matcher;
     private final String action;
     private String errorAction;
+    private String maintenanceModeAction;
 
     public RouteConfiguration(String id, String action, boolean enabled, RequestMatcher matcher) {
         this.id = id;
@@ -52,8 +53,16 @@ public class RouteConfiguration {
         return errorAction;
     }
 
+    public String getMaintenanceModeAction() {
+        return maintenanceModeAction;
+    }
+
     public void setErrorAction(String errorAction) {
         this.errorAction = errorAction;
+    }
+
+    public void setMaintenanceModeAction(String maintenanceModeAction) {
+        this.maintenanceModeAction = maintenanceModeAction;
     }
 
     public boolean isEnabled() {

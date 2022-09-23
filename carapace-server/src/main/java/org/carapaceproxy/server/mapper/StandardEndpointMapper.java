@@ -31,14 +31,13 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.carapaceproxy.server.mapper.MapResult.Action;
 import org.carapaceproxy.configstore.ConfigurationStore;
-import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
-import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_NOT_FOUND;
-import static org.carapaceproxy.core.StaticContentsManager.IN_MEMORY_RESOURCE;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.BackendSelector;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.DirectorConfiguration;
+
+import static org.carapaceproxy.core.StaticContentsManager.*;
 import static org.carapaceproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
 import java.util.Optional;
 import org.carapaceproxy.SimpleHTTPResponse;
@@ -68,6 +67,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     private String defaultInternalErrorAction = "internal-error";
     private String forceDirectorParameter = "x-director";
     private String forceBackendParameter = "x-backend";
+    private String defaultMaintenanceAction = "maintenance";
 
     private static final Logger LOG = Logger.getLogger(StandardEndpointMapper.class.getName());
     private static final String ACME_CHALLENGE_URI_PATTERN = "/\\.well-known/acme-challenge/";
@@ -115,11 +115,19 @@ public class StandardEndpointMapper extends EndpointMapper {
             if (!route.isEnabled()) {
                 continue;
             }
+
             boolean matchResult = route.matches(request);
             if (LOG.isLoggable(Level.FINER)) {
                 LOG.log(Level.FINER, "route {0}, map {1} -> {2}", new Object[]{route.getId(), request.getUri(), matchResult});
             }
             if (matchResult) {
+                if(parent.getCurrentConfiguration().isMaintenanceModeEnabled()) {
+                    if(LOG.isLoggable(Level.FINER)) {
+                        LOG.log(Level.FINER, "Maintenance mode is enable: request uri: {0}",request.getUri());
+                    }
+                    return MapResult.maintenanceMode(route.getId());
+                }
+
                 ActionConfiguration action = actions.get(route.getAction());
                 if (action == null) {
                     LOG.log(Level.INFO, "no action ''{0}'' -> not-found for {1}, valid {2}", new Object[]{route.getAction(), request.getUri(), actions.keySet()});
@@ -244,6 +252,28 @@ public class StandardEndpointMapper extends EndpointMapper {
     }
 
     @Override
+    public SimpleHTTPResponse mapMaintenanceMode(String routeid) {
+        ActionConfiguration maintenanceAction = null;
+        // custom for route
+        Optional<RouteConfiguration> config = routes.stream().filter(r -> r.getId().equalsIgnoreCase(routeid)).findFirst();
+        if (config.isPresent()) {
+            String action = config.get().getMaintenanceModeAction();
+            if (action != null) {
+                maintenanceAction = actions.get(action);
+            }
+        }
+        // custom global
+        if (maintenanceAction == null && defaultMaintenanceAction != null) {
+            maintenanceAction = actions.get(defaultMaintenanceAction);
+        }
+        if (maintenanceAction != null) {
+            return new SimpleHTTPResponse(maintenanceAction.getErrorCode(), maintenanceAction.getFile(), maintenanceAction.getCustomHeaders());
+        }
+        // fallback
+        return super.mapMaintenanceMode(routeid);
+    }
+
+    @Override
     public SimpleHTTPResponse mapPageNotFound(String routeid) {
         // custom global
         if (defaultNotFoundAction != null) {
@@ -263,6 +293,7 @@ public class StandardEndpointMapper extends EndpointMapper {
         addAction(new ActionConfiguration("cache-if-possible", ActionConfiguration.TYPE_CACHE, DirectorConfiguration.DEFAULT, null, -1));
         addAction(new ActionConfiguration("not-found", ActionConfiguration.TYPE_STATIC, null, DEFAULT_NOT_FOUND, 404));
         addAction(new ActionConfiguration("internal-error", ActionConfiguration.TYPE_STATIC, null, DEFAULT_INTERNAL_SERVER_ERROR, 500));
+        addAction(new ActionConfiguration("maintenance", ActionConfiguration.TYPE_STATIC, null, DEFAULT_MAINTENANCE_MODE_ERROR, 500));
 
         // Route+Action configuration for Let's Encrypt ACME challenging
         addAction(new ActionConfiguration(
@@ -278,6 +309,8 @@ public class StandardEndpointMapper extends EndpointMapper {
         LOG.log(Level.INFO, "configured default.action.notfound={0}", defaultNotFoundAction);
         this.defaultInternalErrorAction = properties.getString("default.action.internalerror", "internal-error");
         LOG.log(Level.INFO, "configured default.action.internalerror={0}", defaultInternalErrorAction);
+        this.defaultMaintenanceAction = properties.getString("default.action.maintenance", "maintenance");
+        LOG.log(Level.INFO, "configured default.action.maintenance={0}", defaultMaintenanceAction);
         this.forceDirectorParameter = properties.getString("mapper.forcedirector.parameter", forceDirectorParameter);
         LOG.log(Level.INFO, "configured mapper.forcedirector.parameter={0}", forceDirectorParameter);
         this.forceBackendParameter = properties.getString("mapper.forcebackend.parameter", forceBackendParameter);
@@ -430,6 +463,15 @@ public class StandardEndpointMapper extends EndpointMapper {
                     }
                 }
                 config.setErrorAction(errorAction);
+                //Maintenance action
+                String maintenanceAction = properties.getString(prefix + "maintenanceaction", "");
+                if(!maintenanceAction.isEmpty()) {
+                    ActionConfiguration defined = actions.get(maintenanceAction);
+                    if(defined == null || !ActionConfiguration.TYPE_STATIC.equals(defined.getType())) {
+                        throw new ConfigurationNotValidException("Maintenance action for route " + id + " has to be defined and has to be type STATIC");
+                    }
+                }
+                config.setMaintenanceModeAction(maintenanceAction);
                 addRoute(config);
             } catch (ParseException | ConfigurationNotValidException ex) {
                 throw new ConfigurationNotValidException(
