@@ -104,6 +104,7 @@ public class RuntimeServerConfiguration {
     private boolean ocspEnabled = false;
     private int maxHeaderSize = 8_192; //bytes; default 8kb
     private boolean maintenanceModeEnabled = false;
+    private boolean http10BackwardCompatibilityEnabled = false;
 
     public RuntimeServerConfiguration() {
         defaultConnectionPool = new ConnectionPoolConfiguration(
@@ -234,6 +235,9 @@ public class RuntimeServerConfiguration {
 
         maintenanceModeEnabled = properties.getBoolean("carapace.maintenancemode.enabled", maintenanceModeEnabled);
         LOG.log(Level.INFO, "carapace.maintenancemode.enabled={0}", maintenanceModeEnabled);
+
+        http10BackwardCompatibilityEnabled = properties.getBoolean("carapace.http10backwardcompatibility.enabled", http10BackwardCompatibilityEnabled);
+        LOG.log(Level.INFO, "carapace.http10backwardcompatibility.enabled={0}", http10BackwardCompatibilityEnabled);
     }
 
     private void configureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
