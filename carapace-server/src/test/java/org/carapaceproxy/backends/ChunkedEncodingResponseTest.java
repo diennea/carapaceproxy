@@ -19,23 +19,26 @@
  */
 package org.carapaceproxy.backends;
 
-import org.carapaceproxy.utils.TestEndpointMapper;
-import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import static com.github.tomakehurst.wiremock.client.WireMock.get;
-import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpVersion;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.utils.RawHttpClient;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import org.carapaceproxy.utils.CarapaceLogger;
+import org.carapaceproxy.utils.RawHttpClient;
+import org.carapaceproxy.utils.TestEndpointMapper;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static org.junit.Assert.*;
+
 /**
- *
  * @author enrico.olivelli
  */
 public class ChunkedEncodingResponseTest {
@@ -57,7 +60,7 @@ public class ChunkedEncodingResponseTest {
         );
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-        
+
         CarapaceLogger.setLoggingDebugEnabled(true);
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
@@ -102,7 +105,7 @@ public class ChunkedEncodingResponseTest {
         );
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-        
+
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
@@ -139,4 +142,77 @@ public class ChunkedEncodingResponseTest {
             assertEquals(1, server.getCache().getStats().getMisses());
         }
     }
+
+
+    @Test
+    public void testChunkedHttp10() throws Exception {
+        wireMockRule.stubFor(
+                get(urlEqualTo("/index.html")).
+                        willReturn(aResponse()
+                                .withStatus(200)
+                                .withHeader("Content-Type", "text/html")
+                                .withBody("it <b>works</b> !!"))
+        );
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            server.start();
+            int port = server.getLocalPort();
+
+            server.getCurrentConfiguration().setHttp10BackwardCompatibilityEnabled(true);
+
+            CloseableHttpClient httpclient = HttpClients.createDefault();
+            HttpGet request = new HttpGet("http://localhost:" + port + "/index.html");
+            request.setProtocolVersion(HttpVersion.HTTP_1_1);
+            HttpResponse httpresponse = httpclient.execute(request);
+
+            assertEquals("chunked",
+                    httpresponse.getFirstHeader(String.valueOf(HttpHeaderNames.TRANSFER_ENCODING)).getValue());
+            assertNull(httpresponse.getFirstHeader(String.valueOf(HttpHeaderNames.CONTENT_LENGTH)));
+
+            server.getCache().getStats().resetCacheMetrics();
+            server.getCache().clear();
+            assertEquals(0, server.getCache().getCacheSize());
+            assertEquals(0, server.getCache().getStats().getHits());
+
+            request.setProtocolVersion(HttpVersion.HTTP_1_0);
+            httpresponse = httpclient.execute(request);
+
+            assertNull(httpresponse.getFirstHeader(String.valueOf(HttpHeaderNames.TRANSFER_ENCODING)));
+            assertNotNull(httpresponse.getFirstHeader(String.valueOf(HttpHeaderNames.CONTENT_LENGTH)));
+            assertNull(httpresponse.getFirstHeader("X-cached"));
+
+            //File must be in cache
+            assertEquals(1, server.getCache().getCacheSize());
+
+            CloseableHttpClient httpclient2 = HttpClients.createDefault();
+
+            request.setProtocolVersion(HttpVersion.HTTP_1_1);
+            httpresponse = httpclient2.execute(request);
+
+            //Response must come from cache
+            assertEquals(1, server.getCache().getStats().getHits());
+
+            //Http 1.1 chunked encoding
+            assertEquals("chunked",
+                    httpresponse.getFirstHeader(String.valueOf(HttpHeaderNames.TRANSFER_ENCODING)).getValue());
+            assertNull(httpresponse.getFirstHeader(String.valueOf(HttpHeaderNames.CONTENT_LENGTH)));
+            assertNotNull(httpresponse.getFirstHeader("X-cached"));
+
+
+            request.setProtocolVersion(HttpVersion.HTTP_1_0);
+            httpresponse = httpclient2.execute(request);
+
+            //Response must come from cache
+            assertEquals(2, server.getCache().getStats().getHits());
+            //Http 1.0 no chunked encoding
+            assertNull(httpresponse.getFirstHeader(String.valueOf(HttpHeaderNames.TRANSFER_ENCODING)));
+            assertNotNull(httpresponse.getFirstHeader(String.valueOf(HttpHeaderNames.CONTENT_LENGTH)));
+            assertNotNull(httpresponse.getFirstHeader("X-cached"));
+
+        }
+    }
+
+
 }

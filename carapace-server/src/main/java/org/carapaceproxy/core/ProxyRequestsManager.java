@@ -19,58 +19,52 @@
  */
 package org.carapaceproxy.core;
 
-import static org.carapaceproxy.server.mapper.MapResult.*;
-import static reactor.netty.Metrics.CONNECTION_PROVIDER_PREFIX;
 import com.google.common.annotations.VisibleForTesting;
 import io.micrometer.core.instrument.Metrics;
+import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.socket.nio.NioChannelOption;
-import io.netty.handler.codec.http.DefaultFullHttpResponse;
-import io.netty.handler.codec.http.DefaultHttpHeaders;
-import io.netty.handler.codec.http.FullHttpResponse;
-import io.netty.handler.codec.http.HttpHeaderNames;
-import io.netty.handler.codec.http.HttpHeaderValues;
-import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpResponseStatus;
-import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.codec.http.*;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
-import java.net.ConnectException;
-import java.net.InetSocketAddress;
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import java.util.regex.Pattern;
 import jdk.net.ExtendedSocketOptions;
 import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.SimpleHTTPResponse;
-import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.server.mapper.CustomHeader;
+import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.HttpUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.netty.ByteBufFlux;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.http.client.HttpClientResponse;
 import reactor.netty.resources.ConnectionProvider;
+
+import java.net.ConnectException;
+import java.net.InetSocketAddress;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.regex.Pattern;
+
+import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTP;
+import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTPS;
+import static reactor.netty.Metrics.CONNECTION_PROVIDER_PREFIX;
 
 /**
  * Manager forwarding {@link ProxyRequest} from clients to proper endpoints.
@@ -139,7 +133,7 @@ public class ProxyRequestsManager {
                 case INTERNAL_ERROR:
                     return serveInternalErrorMessage(request);
                 case MAINTENANCE_MODE:
-                    return  serverMaintenanceMessage(request);
+                    return serverMaintenanceMessage(request);
 
                 case STATIC:
                 case ACME_CHALLENGE:
@@ -428,6 +422,22 @@ public class ProxyRequestsManager {
                     }
                     addCustomResponseHeaders(request, request.getAction().customHeaders);
 
+                    if (parent.getCurrentConfiguration().isHttp10BackwardCompatibilityEnabled() &&
+                            request.getRequest().version() == HttpVersion.HTTP_1_0) {
+                        return request.sendResponseData(flux.aggregate().retain().map(ByteBuf::asByteBuf)
+                                .doOnNext(data -> {
+                                    request.setLastActivity(System.currentTimeMillis());
+                                    endpointStats.getLastActivity().set(System.currentTimeMillis());
+                                    if (cacheable.get()) {
+                                        cacheReceiver.receivedFromRemote(data);
+                                    }
+                                }).doOnSuccess(data -> {
+                                    if (cacheable.get()) {
+                                        parent.getCache().cacheContent(cacheReceiver);
+                                    }
+                                }));
+                    }
+
                     return request.sendResponseData(flux.retain().doOnNext(data -> { // response data
                         request.setLastActivity(System.currentTimeMillis());
                         endpointStats.getLastActivity().set(System.currentTimeMillis());
@@ -446,29 +456,29 @@ public class ProxyRequestsManager {
                             parent.getCache().cacheContent(cacheReceiver);
                         }
                     }));
-            }).onErrorResume(err -> { // custom endpoint request/response error handling
-                PENDING_REQUESTS_GAUGE.dec();
+                }).onErrorResume(err -> { // custom endpoint request/response error handling
+                    PENDING_REQUESTS_GAUGE.dec();
 
-                String endpoint = request.getAction().host + ":" + request.getAction().port;
-                if (err instanceof io.netty.handler.timeout.ReadTimeoutException) {
-                    STUCK_REQUESTS_COUNTER.inc();
-                    LOGGER.log(Level.SEVERE, "Read timeout error occurred for endpoint {0}; request: {1}", new Object[]{endpoint, request});
-                    if (parent.getCurrentConfiguration().isBackendsUnreachableOnStuckRequests()) {
+                    String endpoint = request.getAction().host + ":" + request.getAction().port;
+                    if (err instanceof io.netty.handler.timeout.ReadTimeoutException) {
+                        STUCK_REQUESTS_COUNTER.inc();
+                        LOGGER.log(Level.SEVERE, "Read timeout error occurred for endpoint {0}; request: {1}", new Object[]{endpoint, request});
+                        if (parent.getCurrentConfiguration().isBackendsUnreachableOnStuckRequests()) {
+                            parent.getBackendHealthManager().reportBackendUnreachable(
+                                    endpoint, System.currentTimeMillis(), "Error: " + err
+                            );
+                        }
+                        return serveInternalErrorMessage(request);
+                    }
+
+                    LOGGER.log(Level.SEVERE, "Error proxying request for endpoint {0}; request: {1};\nError: {2}", new Object[]{endpoint, request, err});
+                    if (err instanceof ConnectException) {
                         parent.getBackendHealthManager().reportBackendUnreachable(
                                 endpoint, System.currentTimeMillis(), "Error: " + err
                         );
                     }
-                    return serveInternalErrorMessage(request);
-                }
-
-                LOGGER.log(Level.SEVERE, "Error proxying request for endpoint {0}; request: {1};\nError: {2}", new Object[]{endpoint, request, err});
-                if (err instanceof ConnectException) {
-                    parent.getBackendHealthManager().reportBackendUnreachable(
-                            endpoint, System.currentTimeMillis(), "Error: " + err
-                    );
-                }
-                return serveServiceNotAvailable(request);
-            });
+                    return serveServiceNotAvailable(request);
+                });
     }
 
     private Publisher<Void> serveServiceNotAvailable(ProxyRequest request) {
@@ -522,6 +532,11 @@ public class ProxyRequestsManager {
             headers.add(HttpHeaderNames.EXPIRES, HttpUtils.formatDateHeader(new java.util.Date(content.getExpiresTs())));
             request.setResponseHeaders(headers);
             addCustomResponseHeaders(request, request.getAction().customHeaders);
+            //If the request is http 1.0 we make sure to send without chunked
+            if (parent.getCurrentConfiguration().isHttp10BackwardCompatibilityEnabled() &&
+                    request.getRequest().version() == HttpVersion.HTTP_1_0) {
+                return request.sendResponseData(Mono.from(ByteBufFlux.fromIterable(content.getChunks())));
+            }
             // body
             return request.sendResponseData(Flux.fromIterable(content.getChunks()).doOnNext(data -> { // response data
                 request.setLastActivity(System.currentTimeMillis());
