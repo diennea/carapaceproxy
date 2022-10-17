@@ -1,21 +1,21 @@
 /*
- Licensed to Diennea S.r.l. under one
- or more contributor license agreements. See the NOTICE file
- distributed with this work for additional information
- regarding copyright ownership. Diennea S.r.l. licenses this file
- to you under the Apache License, Version 2.0 (the
- "License"); you may not use this file except in compliance
- with the License.  You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing,
- software distributed under the License is distributed on an
- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, either express or implied.  See the License for the
- specific language governing permissions and limitations
- under the License.
-
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
  */
 package org.carapaceproxy.server.certificates;
 
@@ -42,7 +42,6 @@ import static org.mockito.Mockito.when;
 import static org.shredzone.acme4j.Status.VALID;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import javax.net.ssl.ExtendedSSLSession;
@@ -70,12 +69,18 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.shredzone.acme4j.Login;
-import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.util.KeyPairUtils;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
 import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
 
+import java.io.File;
+import java.io.StringWriter;
+import java.nio.file.Files;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.Set;
+import org.bouncycastle.util.io.pem.PemObject;
+import org.bouncycastle.util.io.pem.PemWriter;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.powermock.reflect.Whitebox;
 
@@ -498,18 +503,16 @@ public class CertificatesTest extends UseAdminServer {
         CertificateData cert = dcMan.getCertificateDataForDomain("localhost");
         cert.setState(DynamicCertificateState.ORDERING);
         cert.setPendingOrderLocation("https://localhost/orderlocation");
-        cert = dcMan.getCertificateDataForDomain("localhost");
-        assertNotNull(cert);
-        assertEquals(DynamicCertificateState.ORDERING, cert.getState());
+        store.saveCertificate(cert);
+        assertEquals(DynamicCertificateState.ORDERING, dcMan.getStateOfCertificate("localhost"));
 
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
-        Order o = mock(Order.class);
         when(ac.getLogin()).thenReturn(mock(Login.class));
         when(ac.checkResponseForOrder(any())).thenReturn(VALID);
         org.shredzone.acme4j.Certificate _cert = mock(org.shredzone.acme4j.Certificate.class);
-        X509Certificate renewed = (X509Certificate) generateSampleChain(keyPair, false)[0];
-        when(_cert.getCertificateChain()).thenReturn(Arrays.asList(renewed));
+        List<X509Certificate> renewed = Arrays.asList((X509Certificate[]) generateSampleChain(keyPair, false));
+        when(_cert.getCertificateChain()).thenReturn(renewed);
         when(ac.fetchCertificateForOrder(any())).thenReturn(_cert);
         Whitebox.setInternalState(dcMan, ac);
 
@@ -527,7 +530,7 @@ public class CertificatesTest extends UseAdminServer {
             assertEquals("it <b>works</b> !!", r.getBodyString());
             Certificate[] obtainedChain = cl.getServerCertificate();
             assertNotNull(obtainedChain);
-            assertTrue(renewed.equals(obtainedChain[0]));
+            assertEquals(renewed.get(0), obtainedChain[0]);
         }
     }
 
@@ -570,6 +573,261 @@ public class CertificatesTest extends UseAdminServer {
             assertArrayEquals(CertificatesUtils.readChainFromKeystore(chainData1), saveChain3);
             assertFalse(data.isWildcard());
         }
+    }
+
+    @Test
+    public void testLocalCertificatesStoring() throws Exception {
+        configureAndStartServer();
+        int port = server.getLocalPort();
+        DynamicCertificatesManager dcMan = server.getDynamicCertificatesManager();
+        dcMan.setPeriod(0);
+
+        // Uploading ACME certificate with data
+        KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        Certificate[] chain1 = generateSampleChain(endUserKeyPair, false);
+        try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
+            byte[] chainData = createKeystore(chain1, endUserKeyPair.getPrivate());
+            HttpResponse resp = uploadCertificate("localhost", "type=acme&daysbeforerenewal=45", chainData, client, credentials);
+            assertTrue(resp.getBodyString().contains("SUCCESS"));
+            CertificateData data = dcMan.getCertificateDataForDomain("localhost");
+            assertNotNull(data);
+            assertEquals(DynamicCertificateState.AVAILABLE, data.getState());
+            assertEquals(45, data.getDaysBeforeRenewal());
+            assertFalse(data.isManual());
+            // check uploaded certificate
+            try (RawHttpClient c = new RawHttpClient("localhost", port, true, "localhost")) {
+                RawHttpClient.HttpResponse r = c.get("/index.html", credentials);
+                assertEquals("it <b>works</b> !!", r.getBodyString());
+                Certificate[] obtainedChain = c.getServerCertificate();
+                assertNotNull(obtainedChain);
+                assertTrue(chain1[0].equals(obtainedChain[0]));
+            }
+        }
+
+        // Renew
+        KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+
+        ConfigurationStore store = dcMan.getConfigurationStore();
+        store.saveKeyPairForDomain(keyPair, "localhost", false);
+        CertificateData cert = dcMan.getCertificateDataForDomain("localhost");
+        cert.setState(DynamicCertificateState.ORDERING);
+        cert.setPendingOrderLocation("https://localhost/orderlocation");
+        store.saveCertificate(cert);
+        assertEquals(DynamicCertificateState.ORDERING, dcMan.getStateOfCertificate("localhost"));
+
+        // ACME mocking
+        ACMEClient ac = mock(ACMEClient.class);
+        when(ac.getLogin()).thenReturn(mock(Login.class));
+        when(ac.checkResponseForOrder(any())).thenReturn(VALID);
+        org.shredzone.acme4j.Certificate _cert = mock(org.shredzone.acme4j.Certificate.class);
+        List<X509Certificate> renewed = Arrays.asList((X509Certificate[]) generateSampleChain(keyPair, false));
+        when(_cert.getCertificateChain()).thenReturn(renewed);
+        when(ac.fetchCertificateForOrder(any())).thenReturn(_cert);
+        Whitebox.setInternalState(dcMan, ac);
+
+        // Renew
+        File certsDir = tmpDir.newFolder("certs");
+        server.getCurrentConfiguration().setLocalCertificatesStorePath(certsDir.getAbsolutePath());
+        server.getCurrentConfiguration().setLocalCertificatesStorePeersIds(Set.of("peerPippo")); // storing enabled on fake peer only
+        dcMan.run();
+        CertificateData updated = dcMan.getCertificateDataForDomain("localhost");
+        assertNotNull(updated);
+        assertEquals(DynamicCertificateState.AVAILABLE, updated.getState());
+        assertEquals(45, updated.getDaysBeforeRenewal());
+        assertFalse(updated.isManual());
+
+        // Check renewed certificate
+        try (RawHttpClient cl = new RawHttpClient("localhost", port, true, "localhost")) {
+            RawHttpClient.HttpResponse r = cl.get("/index.html", credentials);
+            assertEquals("it <b>works</b> !!", r.getBodyString());
+            Certificate[] obtainedChain = cl.getServerCertificate();
+            assertNotNull(obtainedChain);
+            assertEquals(renewed.get(0), obtainedChain[0]);
+        }
+
+        // local certificate path
+        File[] f = certsDir.listFiles((dir, name) -> name.equals("localhost"));
+        assertTrue(f.length == 0);
+
+        cert = dcMan.getCertificateDataForDomain("localhost");
+        cert.setState(DynamicCertificateState.ORDERING);
+        cert.setPendingOrderLocation("https://localhost/orderlocation");
+        store.saveCertificate(cert);
+        assertEquals(DynamicCertificateState.ORDERING, dcMan.getStateOfCertificate("localhost"));
+        server.getCurrentConfiguration().setLocalCertificatesStorePeersIds(Set.of(server.getPeerId()));
+        dcMan.run();
+
+        f = certsDir.listFiles((dir, name) -> name.equals("localhost"));
+        assertTrue(f.length == 1);
+        assertTrue(f[0].isDirectory());
+        File localhostDir = f[0];
+
+        f = localhostDir.listFiles((dir, name) -> name.equals("privatekey.pem"));
+        assertTrue(f.length == 1);
+        assertTrue(f[0].isFile());
+        String pkPem = Files.readString(f[0].toPath());
+        System.out.println("[PRIVARE KEY]: " + pkPem);
+        var sw = new StringWriter();
+        try (var writer = new PemWriter(sw)) {
+            writer.writeObject(new PemObject("", keyPair.getPrivate().getEncoded()));
+        }
+        assertEquals(sw.toString(), pkPem);
+
+        f = localhostDir.listFiles((dir, name) -> name.equals("chain.pem"));
+        assertTrue(f.length == 1);
+        assertTrue(f[0].isFile());
+        String chainPem = Files.readString(f[0].toPath());
+        System.out.println("[CHAIN]: " + chainPem);
+        sw = new StringWriter();
+        try (var writer = new PemWriter(sw)) {
+            for (int i = 1; i < renewed.size(); i++) {
+                writer.writeObject(new PemObject("", renewed.get(i).getEncoded()));
+            }
+        }
+        assertEquals(sw.toString(), chainPem);
+
+        f = localhostDir.listFiles((dir, name) -> name.equals("fullchain.pem"));
+        assertTrue(f.length == 1);
+        assertTrue(f[0].isFile());
+        String fullchainPem = Files.readString(f[0].toPath());
+        System.out.println("[FULLCHAIN]: " + fullchainPem);
+        assertTrue(fullchainPem.endsWith(chainPem));
+
+        // Renew 2
+        keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        store.saveKeyPairForDomain(keyPair, "localhost", true);
+        cert = dcMan.getCertificateDataForDomain("localhost");
+        cert.setState(DynamicCertificateState.ORDERING);
+        cert.setPendingOrderLocation("https://localhost/orderlocation");
+        store.saveCertificate(cert);
+        assertEquals(DynamicCertificateState.ORDERING, dcMan.getStateOfCertificate("localhost"));
+        renewed = Arrays.asList((X509Certificate[]) generateSampleChain(keyPair, false));
+        when(_cert.getCertificateChain()).thenReturn(renewed);
+        dcMan.run();
+        updated = dcMan.getCertificateDataForDomain("localhost");
+        assertNotNull(updated);
+        assertEquals(DynamicCertificateState.AVAILABLE, updated.getState());
+        assertEquals(45, updated.getDaysBeforeRenewal());
+        assertFalse(updated.isManual());
+        // Check renewed certificate
+        try (RawHttpClient cl = new RawHttpClient("localhost", port, true, "localhost")) {
+            RawHttpClient.HttpResponse r = cl.get("/index.html", credentials);
+            assertEquals("it <b>works</b> !!", r.getBodyString());
+            Certificate[] obtainedChain = cl.getServerCertificate();
+            assertNotNull(obtainedChain);
+            assertEquals(renewed.get(0), obtainedChain[0]);
+        }
+
+        // local certificate path
+        f = certsDir.listFiles((dir, name) -> name.equals("localhost"));
+        assertTrue(f.length == 1);
+        assertTrue(f[0].isDirectory());
+        localhostDir = f[0];
+
+        f = localhostDir.listFiles((dir, name) -> name.equals("privatekey.pem"));
+        assertTrue(f.length == 1);
+        assertTrue(f[0].isFile());
+        pkPem = Files.readString(f[0].toPath());
+        System.out.println("[PRIVARE KEY]: " + pkPem);
+        sw = new StringWriter();
+        try (var writer = new PemWriter(sw)) {
+            writer.writeObject(new PemObject("", keyPair.getPrivate().getEncoded()));
+        }
+        assertEquals(sw.toString(), pkPem);
+
+        f = localhostDir.listFiles((dir, name) -> name.equals("chain.pem"));
+        assertTrue(f.length == 1);
+        assertTrue(f[0].isFile());
+        chainPem = Files.readString(f[0].toPath());
+        System.out.println("[CHAIN]: " + chainPem);
+        sw = new StringWriter();
+        try (var writer = new PemWriter(sw)) {
+            for (int i = 1; i < renewed.size(); i++) {
+                writer.writeObject(new PemObject("", renewed.get(i).getEncoded()));
+            }
+        }
+        assertEquals(sw.toString(), chainPem);
+
+        f = localhostDir.listFiles((dir, name) -> name.equals("fullchain.pem"));
+        assertTrue(f.length == 1);
+        assertTrue(f[0].isFile());
+        fullchainPem = Files.readString(f[0].toPath());
+        System.out.println("[FULLCHAIN]: " + fullchainPem);
+        assertTrue(fullchainPem.endsWith(chainPem));
+
+        // other cert
+        endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        Certificate[] chain2 = generateSampleChain(endUserKeyPair, false);
+        try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
+            byte[] chainData = createKeystore(chain2, endUserKeyPair.getPrivate());
+            HttpResponse resp = uploadCertificate("localhost2", "type=acme&daysbeforerenewal=45", chainData, client, credentials);
+            assertTrue(resp.getBodyString().contains("SUCCESS"));
+            CertificateData data = dcMan.getCertificateDataForDomain("localhost2");
+            assertNotNull(data);
+            assertEquals(DynamicCertificateState.AVAILABLE, data.getState());
+            assertEquals(45, data.getDaysBeforeRenewal());
+            assertFalse(data.isManual());
+        }
+
+        // Renew
+        keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+
+        store.saveKeyPairForDomain(keyPair, "localhost2", false);
+        cert = dcMan.getCertificateDataForDomain("localhost2");
+        cert.setState(DynamicCertificateState.ORDERING);
+        cert.setPendingOrderLocation("https://localhost/orderlocation");
+        store.saveCertificate(cert);
+        assertEquals(DynamicCertificateState.ORDERING, dcMan.getStateOfCertificate("localhost2"));
+
+        // ACME mocking
+        renewed = Arrays.asList((X509Certificate[]) generateSampleChain(keyPair, false));
+        when(_cert.getCertificateChain()).thenReturn(renewed);
+
+        server.getCurrentConfiguration().setLocalCertificatesStorePath(certsDir.getAbsolutePath());
+        dcMan.run();
+        updated = dcMan.getCertificateDataForDomain("localhost2");
+        assertNotNull(updated);
+        assertEquals(DynamicCertificateState.AVAILABLE, updated.getState());
+        assertEquals(45, updated.getDaysBeforeRenewal());
+        assertFalse(updated.isManual());
+
+        // local certificate path
+        assertTrue(certsDir.listFiles((dir, name) -> name.equals("localhost")).length == 1);
+        f = certsDir.listFiles((dir, name) -> name.equals("localhost2"));
+        assertTrue(f.length == 1);
+        assertTrue(f[0].isDirectory());
+        localhostDir = f[0];
+
+        f = localhostDir.listFiles((dir, name) -> name.equals("privatekey.pem"));
+        assertTrue(f.length == 1);
+        assertTrue(f[0].isFile());
+        pkPem = Files.readString(f[0].toPath());
+        System.out.println("[PRIVARE KEY]: " + pkPem);
+        sw = new StringWriter();
+        try (var writer = new PemWriter(sw)) {
+            writer.writeObject(new PemObject("", keyPair.getPrivate().getEncoded()));
+        }
+        assertEquals(sw.toString(), pkPem);
+
+        f = localhostDir.listFiles((dir, name) -> name.equals("chain.pem"));
+        assertTrue(f.length == 1);
+        assertTrue(f[0].isFile());
+        chainPem = Files.readString(f[0].toPath());
+        System.out.println("[CHAIN]: " + chainPem);
+        sw = new StringWriter();
+        try (var writer = new PemWriter(sw)) {
+            for (int i = 1; i < renewed.size(); i++) {
+                writer.writeObject(new PemObject("", renewed.get(i).getEncoded()));
+            }
+        }
+        assertEquals(sw.toString(), chainPem);
+
+        f = localhostDir.listFiles((dir, name) -> name.equals("fullchain.pem"));
+        assertTrue(f.length == 1);
+        assertTrue(f[0].isFile());
+        fullchainPem = Files.readString(f[0].toPath());
+        System.out.println("[FULLCHAIN]: " + fullchainPem);
+        assertTrue(fullchainPem.endsWith(chainPem));
     }
 
 }

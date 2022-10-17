@@ -45,7 +45,7 @@ public class NullGroupMembershipHandler implements GroupMembershipHandler {
     }
 
     @Override
-    public void fireEvent(String eventId) {
+    public void fireEvent(String eventId, Map<String, Object> data) {
         // nothing to do, 'cause self events have to be ignored.
     }
 

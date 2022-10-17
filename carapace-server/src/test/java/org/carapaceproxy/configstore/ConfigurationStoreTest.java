@@ -259,12 +259,12 @@ public class ConfigurationStoreTest {
 
         // Certificates saving
         CertificateData cert1 = new CertificateData(
-                d1, "encodedPK1", "encodedChain1", DynamicCertificateState.AVAILABLE, order, challenge
+                d1, "encodedChain1", DynamicCertificateState.AVAILABLE, order, challenge
         );
         store.saveCertificate(cert1);
 
         CertificateData cert2 = new CertificateData(
-                d2, "encodedPK2", "encodedChain2", DynamicCertificateState.WAITING, null, null
+                d2, "encodedChain2", DynamicCertificateState.WAITING, null, null
         );
         store.saveCertificate(cert2);
 

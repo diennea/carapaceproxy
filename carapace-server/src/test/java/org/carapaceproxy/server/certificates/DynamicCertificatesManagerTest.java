@@ -138,20 +138,20 @@ public class DynamicCertificatesManagerTest {
 
         // yet available certificate
         String d0 = "localhost0";
-        CertificateData cd0 = new CertificateData(d0, "", chain, AVAILABLE, "", "");
+        CertificateData cd0 = new CertificateData(d0, chain, AVAILABLE, "", "");
         when(store.loadCertificateForDomain(eq(d0))).thenReturn(cd0);
         // certificate to order
         String d1 = "localhost1";
-        CertificateData cd1 = new CertificateData(d1, "", "", WAITING, "", "");
+        CertificateData cd1 = new CertificateData(d1, "", WAITING, "", "");
         when(store.loadCertificateForDomain(eq(d1))).thenReturn(cd1);
         man.setConfigurationStore(store);
         // manual certificate
         String d2 = "manual";
-        CertificateData cd2 = new CertificateData(d2, "", chain, AVAILABLE, "", "");
+        CertificateData cd2 = new CertificateData(d2, chain, AVAILABLE, "", "");
         when(store.loadCertificateForDomain(eq(d2))).thenReturn(cd2);
         // empty manual certificate
         String d3 = "emptymanual";
-        CertificateData cd3 = new CertificateData(d3, "", "", AVAILABLE, "", "");
+        CertificateData cd3 = new CertificateData(d3, "", AVAILABLE, "", "");
         when(store.loadCertificateForDomain(eq(d3))).thenReturn(cd3);
 
         man.setConfigurationStore(store);
@@ -173,6 +173,7 @@ public class DynamicCertificatesManagerTest {
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(configStore);
+        when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
 
         assertCertificateState(d0, AVAILABLE, man);
@@ -306,7 +307,7 @@ public class DynamicCertificatesManagerTest {
 
         // certificate to order
         String domain = "*.localhost";
-        CertificateData cd1 = new CertificateData(domain, "", "", WAITING, "", "");
+        CertificateData cd1 = new CertificateData(domain, "", WAITING, "", "");
         when(store.loadCertificateForDomain(eq(domain))).thenReturn(cd1);
         man.setConfigurationStore(store);
 
@@ -319,6 +320,7 @@ public class DynamicCertificatesManagerTest {
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(configStore);
+        when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
 
         CertificateData certData = man.getCertificateDataForDomain(domain);
@@ -410,7 +412,7 @@ public class DynamicCertificatesManagerTest {
         when(store.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
 
         // certificate to order
-        CertificateData cd1 = new CertificateData(domain, "", "", WAITING, "", "");
+        CertificateData cd1 = new CertificateData(domain, "", WAITING, "", "");
         when(store.loadCertificateForDomain(eq(domain))).thenReturn(cd1);
         man.setConfigurationStore(store);
 
@@ -427,6 +429,7 @@ public class DynamicCertificatesManagerTest {
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(configStore);
+        when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
 
         int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
