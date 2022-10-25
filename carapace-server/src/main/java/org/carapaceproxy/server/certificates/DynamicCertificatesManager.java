@@ -49,6 +49,7 @@ import org.carapaceproxy.core.RuntimeServerConfiguration;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.MANUAL;
+import static org.carapaceproxy.server.config.SSLCertificateConfiguration.WILDCARD_SYMBOL;
 import static org.carapaceproxy.utils.CertificatesUtils.isCertificateExpired;
 import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
 import java.io.File;
@@ -638,7 +639,10 @@ public class DynamicCertificatesManager implements Runnable {
             CertificateData oldCert = oldCertificates != null ? oldCertificates.get(cert.getDomain()) : null;
             return cert != null && !cert.isManual() && (oldCert == null || (cert.getState() == AVAILABLE && oldCert.getState() != AVAILABLE));
         }).forEach(cert -> {
-            var parent = new File(getConfig().getLocalCertificatesStorePath(), cert.getDomain());
+            final var domainDir = cert.getDomain().startsWith(WILDCARD_SYMBOL)
+                    ? cert.getDomain().substring(WILDCARD_SYMBOL.length())
+                    : cert.getDomain();
+            var parent = new File(getConfig().getLocalCertificatesStorePath(), domainDir);
             parent.mkdirs();
             LOG.log(Level.INFO, "Store certificate {0} to local path {1}", new Object[]{
                 cert.getDomain(), parent.getAbsolutePath()
