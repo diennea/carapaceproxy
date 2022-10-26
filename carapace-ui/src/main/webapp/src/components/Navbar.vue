@@ -4,7 +4,7 @@
             <img id="logo" :src="logo" height="45px" width="45px" />
             <span id="label">{{label}}</span>
         </a>
-        <b v-if="maintenanceStatus">MAINTENANCE MODE IS ENABLE</b>
+        <b v-if="maintenanceStatus">SYSTEM IS IN MAINTENANCE MODE</b>
         <router-link to="/peers">
             <b>Node:</b> {{nodeId}}
         </router-link>

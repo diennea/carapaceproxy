@@ -34,7 +34,6 @@ import org.shredzone.acme4j.toolbox.JSON;
 public class CertificateData {
 
     private String domain;
-    private String privateKey; // base64 encoded string.
     private String chain; // base64 encoded string of the KeyStore.
     private volatile DynamicCertificateState state;
     private String pendingOrderLocation;
@@ -48,10 +47,9 @@ public class CertificateData {
     private String serialNumber; // hex
     private byte[] keystoreData; // decoded chain
 
-    public CertificateData(String domain, String privateKey, String chain, DynamicCertificateState state,
+    public CertificateData(String domain, String chain, DynamicCertificateState state,
                            String orderLocation, String challengeData) {
         this.domain = domain;
-        this.privateKey = privateKey;
         this.chain = chain;
         this.state = state;
         this.pendingOrderLocation = orderLocation;
@@ -60,10 +58,6 @@ public class CertificateData {
 
     public String getDomain() {
         return domain;
-    }
-
-    public String getPrivateKey() {
-        return privateKey;
     }
 
     public String getChain() {
@@ -84,10 +78,6 @@ public class CertificateData {
 
     public void setDomain(String domain) {
         this.domain = domain;
-    }
-
-    public void setPrivateKey(String keypair) {
-        this.privateKey = keypair;
     }
 
     public void setChain(String chain) {
@@ -166,7 +156,6 @@ public class CertificateData {
     public int hashCode() {
         int hash = 7;
         hash = 89 * hash + Objects.hashCode(this.domain);
-        hash = 89 * hash + Objects.hashCode(this.privateKey);
         hash = 89 * hash + Objects.hashCode(this.chain);
         hash = 89 * hash + Objects.hashCode(this.state);
         hash = 89 * hash + Objects.hashCode(this.pendingOrderLocation);
@@ -197,9 +186,6 @@ public class CertificateData {
         if (!Objects.equals(this.domain, other.domain)) {
             return false;
         }
-        if (!Objects.equals(this.privateKey, other.privateKey)) {
-            return false;
-        }
         if (!Objects.equals(this.chain, other.chain)) {
             return false;
         }
@@ -218,7 +204,7 @@ public class CertificateData {
     @Override
     public String toString() {
         return "CertificateData{" + "domain=" + domain + ","
-                +" state=" + state + ", manual=" + manual
+                + " state=" + state + ", manual=" + manual
                 + ",expiringDate=" + expiringDate + ",serialNumber " + serialNumber + '}';
     }
 

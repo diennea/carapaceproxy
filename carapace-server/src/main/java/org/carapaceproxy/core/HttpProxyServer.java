@@ -142,6 +142,7 @@ public class HttpProxyServer implements AutoCloseable {
     @Getter
     private final ProxyRequestsManager proxyRequestsManager;
 
+    @Getter
     private String peerId = "localhost";
     private String zkAddress;
     private Properties zkProperties = new Properties();
@@ -684,7 +685,7 @@ public class HttpProxyServer implements AutoCloseable {
         applyDynamicConfiguration(newConfigurationStore, false);
 
         // this will trigger a reload on other peers
-        groupMembershipHandler.fireEvent("configurationChange");
+        groupMembershipHandler.fireEvent("configurationChange", null);
     }
 
     private void applyDynamicConfiguration(ConfigurationStore newConfigurationStore, boolean atBoot) throws InterruptedException, ConfigurationChangeInProgressException {
@@ -793,7 +794,7 @@ public class HttpProxyServer implements AutoCloseable {
     private class ConfigurationChangeCallback implements GroupMembershipHandler.EventCallback {
 
         @Override
-        public void eventFired(String eventId) {
+        public void eventFired(String eventId, Map<String, Object> data) {
             LOG.log(Level.INFO, "Configuration changed");
             try {
                 dynamicConfigurationStore.reload();

@@ -69,7 +69,6 @@ export default {
     max-width: $sidebar-width;
     background: $sidebar-background;
     color: $white;
-    transition: all 0.15s linear;
     text-align: left;
     -webkit-box-shadow: 2px 0px 7px -2px $shadow;
     box-shadow: 2px 0px 7px -2px $shadow;
@@ -98,7 +97,6 @@ export default {
     &.collapsed {
         min-width: $sidebar-collapsed-width;
         max-width: $sidebar-collapsed-width;
-        transition: all 0.15s linear;
 
         #sidebar-toogle-button {
             svg {

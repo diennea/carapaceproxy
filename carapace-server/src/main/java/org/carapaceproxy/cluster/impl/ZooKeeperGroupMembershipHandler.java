@@ -56,8 +56,7 @@ import org.apache.zookeeper.data.Stat;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 
 /**
- * Implementation based on ZooKeeper. This class is very simple, we are not
- * expecting heavy traffic on ZooKeeper. We have two systems:
+ * Implementation based on ZooKeeper. This class is very simple, we are not expecting heavy traffic on ZooKeeper. We have two systems:
  * <ul>
  * <li>Peer discovery
  * <li>Configuration changes event broadcast
@@ -82,8 +81,8 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     private final ExecutorService callbacksExecutor = Executors.newSingleThreadExecutor();
 
     public ZooKeeperGroupMembershipHandler(String zkAddress, int zkTimeout, boolean zkAcl,
-            String peerId, Map<String, String> peerInfo,
-            Properties zkProperties) {
+                                           String peerId, Map<String, String> peerInfo,
+                                           Properties zkProperties) {
         ACLProvider aclProvider = new DefaultACLProvider();
         if (zkAcl) {
             aclProvider = new ACLProvider() {
@@ -212,13 +211,13 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
                     byte[] content = data.getData();
                     LOG.log(Level.INFO, "ZK event content {0}", new Object[]{new String(content, StandardCharsets.UTF_8)});
                     if (content != null) {
-                        Map<String, String> info = MAPPER.readValue(new ByteArrayInputStream(content), Map.class);
-                        String origin = info.get("origin");
+                        Map<String, Object> info = MAPPER.readValue(new ByteArrayInputStream(content), Map.class);
+                        String origin = info.remove("origin") + "";
                         if (peerId.equals(origin)) {
-                            LOG.log(Level.INFO, "discard self originated event " + info);
+                            LOG.log(Level.INFO, "discard self originated event {0}", origin);
                         } else {
-                            LOG.log(Level.INFO, "handle event " + info);
-                            callback.eventFired(eventId);
+                            LOG.log(Level.INFO, "handle event {0}", info);
+                            callback.eventFired(eventId, info);
                         }
                     }
                 } else if (pcce.getType() == PathChildrenCacheEvent.Type.CONNECTION_RECONNECTED) {
@@ -233,7 +232,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     }
 
     @Override
-    public void fireEvent(String eventId) {
+    public void fireEvent(String eventId, Map<String, Object> data) {
 
         try {
             final String path = "/proxy/events/" + eventId;
@@ -246,8 +245,11 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
                         .forPath(path);
             }
             LOG.log(Level.INFO, "Fire event {0}", path);
-            Map<String, String> info = new HashMap<>();
+            Map<String, Object> info = new HashMap<>();
             info.put("origin", peerId);
+            if (data != null) {
+                info.putAll(data);
+            }
             byte[] content = MAPPER.writeValueAsBytes(info);
             // perform an update
             client.setData()

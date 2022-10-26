@@ -113,7 +113,8 @@ public class CertificatesTestUtils {
         return new X509Certificate[]{
             endUserCert,
             intermediateCA,
-            rootCA,};
+            rootCA
+        };
     }
 
     public static byte[] generateSampleChainData() throws Exception {

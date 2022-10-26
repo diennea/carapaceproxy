@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.server.certificates;
 
+import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.DNS_CHALLENGE_WAIT;
@@ -48,18 +49,26 @@ import org.carapaceproxy.core.RuntimeServerConfiguration;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.MANUAL;
+import static org.carapaceproxy.server.config.SSLCertificateConfiguration.WILDCARD_SYMBOL;
 import static org.carapaceproxy.utils.CertificatesUtils.isCertificateExpired;
 import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.net.InetAddress;
 import java.net.URL;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.logging.Level;
+import org.bouncycastle.util.io.pem.PemObject;
+import org.bouncycastle.util.io.pem.PemWriter;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
@@ -91,6 +100,7 @@ public class DynamicCertificatesManager implements Runnable {
 
     private static final Logger LOG = Logger.getLogger(DynamicCertificatesManager.class.getName());
     private static final String EVENT_CERTIFICATES_STATE_CHANGED = "certificates_state_changed";
+    private static final String EVENT_CERTIFICATES_REQUEST_STORE = "certificates_request_store";
 
     private Map<String, CertificateData> certificates = new ConcurrentHashMap();
     private ACMEClient acmeClient; // Let's Encrypt client
@@ -127,6 +137,7 @@ public class DynamicCertificatesManager implements Runnable {
     public void attachGroupMembershipHandler(GroupMembershipHandler groupMembershipHandler) {
         this.groupMembershipHandler = groupMembershipHandler;
         groupMembershipHandler.watchEvent(EVENT_CERTIFICATES_STATE_CHANGED, new OnCertificatesStateChanged());
+        groupMembershipHandler.watchEvent(EVENT_CERTIFICATES_REQUEST_STORE, new OnCertificatesRequestStore());
     }
 
     @VisibleForTesting
@@ -213,7 +224,7 @@ public class DynamicCertificatesManager implements Runnable {
                                                                     int daysBeforeRenewal) throws GeneralSecurityException, MalformedURLException {
         CertificateData cert = store.loadCertificateForDomain(domain);
         if (cert == null) {
-            cert = new CertificateData(domain, "", "", WAITING, "", "");
+            cert = new CertificateData(domain, "", WAITING, "", "");
         } else if (cert.getChain() != null && !cert.getChain().isEmpty()) {
             byte[] keystoreData = Base64.getDecoder().decode(cert.getChain());
             cert.setKeystoreData(keystoreData);
@@ -276,16 +287,18 @@ public class DynamicCertificatesManager implements Runnable {
     }
 
     private void certificatesLifecycle() {
-        boolean flushCache = false;
+        var flushCache = false;
         List<CertificateData> _certificates = certificates.entrySet().stream()
                 .filter(e -> !e.getValue().isManual())
                 .sorted((e1, e2) -> e1.getKey().compareTo(e2.getKey()))
                 .map(e -> e.getValue())
                 .collect(Collectors.toList());
-        for (CertificateData cert : _certificates) {
-            boolean updateCertificate = true;
-            final String domain = cert.getDomain();
+        for (CertificateData data : _certificates) {
+            var updateCertificate = true;
+            final var domain = data.getDomain();
             try {
+                // this has to be always fetch from db!
+                CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, data.isWildcard(), false, data.getDaysBeforeRenewal());
                 switch (cert.getState()) {
                     case WAITING: // certificate waiting to be issues/renew
                     case DOMAIN_UNREACHABLE: { // certificate domain reported as unreachable for issuing/renewing
@@ -373,7 +386,7 @@ public class DynamicCertificatesManager implements Runnable {
             }
         }
         if (flushCache) {
-            groupMembershipHandler.fireEvent(EVENT_CERTIFICATES_STATE_CHANGED);
+            groupMembershipHandler.fireEvent(EVENT_CERTIFICATES_STATE_CHANGED, null);
             // remember that events  are not delivered to the local JVM
             reloadCertificatesFromDB();
         }
@@ -497,6 +510,7 @@ public class DynamicCertificatesManager implements Runnable {
         return pair;
     }
 
+    @VisibleForTesting
     public DynamicCertificateState getStateOfCertificate(String id) {
         if (certificates.containsKey(id)) {
             CertificateData cert = store.loadCertificateForDomain(id);
@@ -508,6 +522,7 @@ public class DynamicCertificatesManager implements Runnable {
         return null;
     }
 
+    @VisibleForTesting
     public void setStateOfCertificate(String id, DynamicCertificateState state) {
         if (certificates.containsKey(id)) {
             CertificateData cert = store.loadCertificateForDomain(id);
@@ -517,10 +532,14 @@ public class DynamicCertificatesManager implements Runnable {
                 // remember that events  are not delivered to the local JVM
                 reloadCertificatesFromDB();
                 if (groupMembershipHandler != null) {
-                    groupMembershipHandler.fireEvent(EVENT_CERTIFICATES_STATE_CHANGED);
+                    groupMembershipHandler.fireEvent(EVENT_CERTIFICATES_STATE_CHANGED, null);
                 }
             }
         }
+    }
+
+    private RuntimeServerConfiguration getConfig() {
+        return server.getCurrentConfiguration();
     }
 
     /**
@@ -528,7 +547,7 @@ public class DynamicCertificatesManager implements Runnable {
      * @param domain
      * @return PKCS12 Keystore content
      */
-    public byte[] getCertificateForDomain(String domain) throws GeneralSecurityException {
+    public byte[] getCertificateForDomain(String domain) {
         CertificateData cert = certificates.get(domain); // certs always retrived from cache
         if (cert == null || cert.getKeystoreData() == null || cert.getKeystoreData().length == 0) {
             LOG.log(Level.SEVERE, "No dynamic certificate available for domain {0}", domain);
@@ -537,50 +556,142 @@ public class DynamicCertificatesManager implements Runnable {
         return cert.getKeystoreData();
     }
 
-    public CertificateData getCertificateDataForDomain(String domain) throws GeneralSecurityException {
+    public CertificateData getCertificateDataForDomain(String domain) {
         return certificates.get(domain);
     }
 
     private class OnCertificatesStateChanged implements GroupMembershipHandler.EventCallback {
 
         @Override
-        public void eventFired(String eventId) {
+        public void eventFired(String eventId, Map<String, Object> data) {
             LOG.log(Level.INFO, "Certificates state changed");
             try {
                 reloadCertificatesFromDB();
             } catch (Exception err) {
-                LOG.log(Level.SEVERE, "Cannot apply new configuration");
+                LOG.log(Level.SEVERE, "Failed to reload certificates from db. Cause: {0}", err);
             }
         }
 
         @Override
         public void reconnected() {
-            LOG.log(Level.INFO, "Configuration listener - reloading configuration after ZK reconnection");
+            LOG.log(Level.INFO, "Reloading certificates after ZK reconnection");
             try {
                 reloadCertificatesFromDB();
             } catch (Exception err) {
-                LOG.log(Level.SEVERE, "Cannot apply new configuration");
+                LOG.log(Level.SEVERE, "Failed to reload certificates from db. Cause: {0}", err);
             }
+        }
+    }
+
+    private class OnCertificatesRequestStore implements GroupMembershipHandler.EventCallback {
+
+        @Override
+        public void eventFired(String eventId, Map<String, Object> data) {
+            LOG.log(Level.INFO, "Certificates request store");
+            try {
+                final var certs = (List<String>) data.get("certs");
+                final var _certificates = certs.isEmpty()
+                        ? DynamicCertificatesManager.this.certificates.values()
+                        : certs.stream()
+                                .map(d -> getCertificateDataForDomain(d))
+                                .collect(Collectors.toList());
+                storeLocalCertificates(_certificates, null);
+            } catch (Exception err) {
+                LOG.log(Level.SEVERE, "Failed to store certificates. Cause: {0}", err);
+            }
+        }
+
+        @Override
+        public void reconnected() {
         }
     }
 
     private void reloadCertificatesFromDB() {
         LOG.log(Level.INFO, "Reloading certificates from db");
         try {
-            Map<String, CertificateData> _certificates = new ConcurrentHashMap<>();
+            Map<String, CertificateData> newCertificates = new ConcurrentHashMap<>();
             for (Entry<String, CertificateData> entry : certificates.entrySet()) {
                 String domain = entry.getKey();
                 CertificateData cert = entry.getValue();
                 // "wildcard" and "manual" flags and "daysBeforeRenewal" are not stored in db > have to be re-set from existing config
                 CertificateData freshCert = loadOrCreateDynamicCertificateForDomain(domain, cert.isWildcard(), cert.isManual(), cert.getDaysBeforeRenewal());
-                _certificates.put(domain, freshCert);
+                newCertificates.put(domain, freshCert);
                 LOG.log(Level.INFO, "RELOADED certificate for domain {0}: {1}", new Object[]{domain, freshCert});
             }
-            this.certificates = _certificates; // only certificates/domains specified in the config have to be managed.
+            var oldCertificates = this.certificates;
+            this.certificates = newCertificates; // only certificates/domains specified in the config have to be managed.
             server.getListeners().reloadCurrentConfiguration();
+            // storing certificates on local path
+            storeLocalCertificates(newCertificates.values(), oldCertificates);
         } catch (GeneralSecurityException | MalformedURLException | InterruptedException e) {
             throw new DynamicCertificatesManagerException("Unable to load dynamic certificates from db.", e);
         }
     }
 
+    private void storeLocalCertificates(Collection<CertificateData> newCertificates, Map<String, CertificateData> oldCertificates) {
+        if (getConfig().getLocalCertificatesStorePath() == null
+                || (!getConfig().getLocalCertificatesStorePeersIds().isEmpty()
+                && !getConfig().getLocalCertificatesStorePeersIds().contains(server.getPeerId()))) {
+            return;
+        }
+
+        newCertificates.stream().filter(cert -> {
+            CertificateData oldCert = oldCertificates != null ? oldCertificates.get(cert.getDomain()) : null;
+            return cert != null && !cert.isManual() && (oldCert == null || (cert.getState() == AVAILABLE && oldCert.getState() != AVAILABLE));
+        }).forEach(cert -> {
+            final var domainDir = cert.getDomain().startsWith(WILDCARD_SYMBOL)
+                    ? cert.getDomain().substring(WILDCARD_SYMBOL.length())
+                    : cert.getDomain();
+            var parent = new File(getConfig().getLocalCertificatesStorePath(), domainDir);
+            parent.mkdirs();
+            LOG.log(Level.INFO, "Store certificate {0} to local path {1}", new Object[]{
+                cert.getDomain(), parent.getAbsolutePath()
+            });
+            try (var fos = new FileOutputStream(new File(parent, "privatekey.pem"));
+                    var osw = new OutputStreamWriter(fos);
+                    var writer = new PemWriter(osw)) {
+                var key = loadOrCreateKeyPairForDomain(cert.getDomain()).getPrivate();
+                writer.writeObject(new PemObject("", key.getEncoded()));
+            } catch (IOException ex) {
+                LOG.log(Level.SEVERE, "Failed to save privatekey for certificate domain {0} to local path {1}", new Object[]{
+                    cert.getDomain(), parent.getAbsolutePath()
+                });
+            }
+            try (var fos = new FileOutputStream(new File(parent, "chain.pem"));
+                    var fos2 = new FileOutputStream(new File(parent, "fullchain.pem"));
+                    var osw = new OutputStreamWriter(fos);
+                    var osw2 = new OutputStreamWriter(fos2);
+                    var writer = new PemWriter(osw);
+                    var writer2 = new PemWriter(osw2)) {
+                var chain = base64DecodeCertificateChain(cert.getChain());
+                for (int i = 0; i < chain.length; i++) {
+                    byte[] encoded = chain[i].getEncoded();
+                    if (i > 0) {
+                        writer.writeObject(new PemObject("", encoded));
+                    }
+                    writer2.writeObject(new PemObject("", encoded));
+                }
+            } catch (IOException ex) {
+                LOG.log(Level.SEVERE, "Failed to save chains for certificate domain {0} to local path {1}", new Object[]{
+                    cert.getDomain(), parent.getAbsolutePath()
+                });
+            } catch (GeneralSecurityException ex) {
+                LOG.log(Level.SEVERE, "Failed to read certificate data for domain {0}", new Object[]{cert.getDomain()});
+            }
+        });
+    }
+
+    public void forceStoreLocalCertificates(String... certs) {
+        final var _certs = Arrays.asList(certs);
+        groupMembershipHandler.fireEvent(EVENT_CERTIFICATES_REQUEST_STORE, Map.of("certs", _certs));
+
+        // remember that events  are not delivered to the local JVM
+        final var _certificates = _certs.isEmpty()
+                ? this.certificates.values()
+                : _certs.stream()
+                        .map(d -> getCertificateDataForDomain(d))
+                        .collect(Collectors.toList());
+
+        storeLocalCertificates(_certificates, null);
+    }
 }

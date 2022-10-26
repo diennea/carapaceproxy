@@ -20,7 +20,6 @@
 package org.carapaceproxy.api;
 
 import org.carapaceproxy.configstore.CertificateData;
-import org.carapaceproxy.configstore.ConfigurationStoreUtils;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
@@ -29,7 +28,6 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode;
 import org.carapaceproxy.utils.CertificatesUtils;
 
-import javax.servlet.ServletContext;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -55,6 +53,11 @@ import static org.carapaceproxy.server.config.SSLCertificateConfiguration.Certif
 import static org.carapaceproxy.utils.APIUtils.*;
 import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
 import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
+import java.util.Collection;
+import java.util.List;
+import javax.servlet.ServletContext;
+import lombok.AllArgsConstructor;
+import lombok.Data;
 
 /**
  * Access to certificates
@@ -71,6 +74,21 @@ public class CertificatesResource {
     @javax.ws.rs.core.Context
     ServletContext context;
 
+    @Data
+    @AllArgsConstructor
+    public static final class CertificatesResponse {
+
+        private final Collection<CertificateBean> certificates;
+        private final String localStorePath;
+
+        public CertificatesResponse(Collection<CertificateBean> certificates, HttpProxyServer server) {
+            this.certificates = certificates;
+            this.localStorePath = server.getCurrentConfiguration().getLocalCertificatesStorePath();
+        }
+
+    }
+
+    @Data
     public static final class CertificateBean {
 
         private final String id;
@@ -91,63 +109,11 @@ public class CertificatesResource {
             this.sslCertificateFile = sslCertificateFile;
         }
 
-        public String getId() {
-            return id;
-        }
-
-        public String getHostname() {
-            return hostname;
-        }
-
-        public String getMode() {
-            return mode;
-        }
-
-        public boolean isDynamic() {
-            return dynamic;
-        }
-
-        public String getStatus() {
-            return status;
-        }
-
-        public void setStatus(String status) {
-            this.status = status;
-        }
-
-        public String getSslCertificateFile() {
-            return sslCertificateFile;
-        }
-
-        public String getExpiringDate() {
-            return expiringDate;
-        }
-
-        public void setExpiringDate(String expiringDate) {
-            this.expiringDate = expiringDate;
-        }
-
-        public String getDaysBeforeRenewal() {
-            return daysBeforeRenewal;
-        }
-
-        public void setDaysBeforeRenewal(String daysBeforeRenewal) {
-            this.daysBeforeRenewal = daysBeforeRenewal;
-        }
-
-        public String getSerialNumber() {
-            return serialNumber;
-        }
-
-        public void setSerialNumber(String serialNumber) {
-            this.serialNumber = serialNumber;
-        }
-
     }
 
     @GET
     @Path("/")
-    public Map<String, CertificateBean> getAllCertificates() {
+    public CertificatesResponse getAllCertificates() {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         RuntimeServerConfiguration conf = server.getCurrentConfiguration();
         DynamicCertificatesManager dCManager = server.getDynamicCertificatesManager();
@@ -165,7 +131,7 @@ public class CertificatesResource {
             res.put(certificateEntry.getKey(), certBean);
         }
 
-        return res;
+        return new CertificatesResponse(res.values(), server);
     }
 
     private static void fillCertificateBean(CertificateBean bean, SSLCertificateConfiguration certificate, DynamicCertificatesManager dCManager, HttpProxyServer server) {
@@ -207,8 +173,11 @@ public class CertificatesResource {
 
     @GET
     @Path("{certId}")
-    public CertificateBean getCertificateById(@PathParam("certId") String certId) {
-        return findCertificateById(certId);
+    public CertificatesResponse getCertificateById(@PathParam("certId") String certId) {
+        return new CertificatesResponse(
+                List.of(findCertificateById(certId)),
+                (HttpProxyServer) context.getAttribute("server")
+        );
     }
 
     @GET
@@ -289,7 +258,7 @@ public class CertificatesResource {
                 state = AVAILABLE;
             }
 
-            CertificateData cert = new CertificateData(domain, "", encodedData, state, "", "");
+            CertificateData cert = new CertificateData(domain, encodedData, state, "", "");
             cert.setManual(MANUAL.equals(certType));
 
             cert.setDaysBeforeRenewal(daysbeforerenewal != null ? daysbeforerenewal : DEFAULT_DAYS_BEFORE_RENEWAL);
@@ -298,6 +267,22 @@ public class CertificatesResource {
 
             return Response.status(200).entity("SUCCESS: Certificate saved").build();
         }
+    }
+
+    @POST
+    @Path("{domain}/store")
+    public SimpleResponse storeLocalCertificate(@PathParam("domain") String domain) throws Exception {
+        var server = ((HttpProxyServer) context.getAttribute("server"));
+        server.getDynamicCertificatesManager().forceStoreLocalCertificates(domain);
+        return SimpleResponse.success();
+    }
+
+    @POST
+    @Path("/storeall")
+    public SimpleResponse storeAllCertificates() throws Exception {
+        var server = ((HttpProxyServer) context.getAttribute("server"));
+        server.getDynamicCertificatesManager().forceStoreLocalCertificates();
+        return SimpleResponse.success();
     }
 
 }

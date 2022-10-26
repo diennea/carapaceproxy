@@ -53,10 +53,11 @@ public interface GroupMembershipHandler {
      * Notify an event on the group.
      *
      * @param eventId
+     * @param data
      */
-    void fireEvent(String eventId);
+    void fireEvent(String eventId, Map<String, Object> data);
 
-     /**
+    /**
      * To execute code in mutual exclusion to other peers.
      *
      * Whether the peer fails to acquire/release the mutex code passed will be skipped and no exceptions will be thrown.
@@ -87,15 +88,16 @@ public interface GroupMembershipHandler {
      */
     String describePeer(String peerId);
 
-
     /**
-     * To store some key-value info for the local peer.     
+     * To store some key-value info for the local peer.
+     *
      * @param info properties of the peer.
      */
     void storeLocalPeerInfo(Map<String, String> info);
 
     /**
      * To load info associated to the peer.
+     *
      * @param id
      * @return properties of the peer
      */
@@ -104,12 +106,13 @@ public interface GroupMembershipHandler {
     interface EventCallback {
 
         /**
-         * Called whenever an event is fired. This method should not access external resources and it must not be
-         * expensive. Inside this method you cannot call other methods of the same {@link GroupMembershipHandler}.
+         * Called whenever an event is fired. This method should not access external resources and it must not be expensive. Inside this method you cannot call other methods of the same
+         * {@link GroupMembershipHandler}.
          *
          * @param eventId
+         * @param data
          */
-        void eventFired(String eventId);
+        void eventFired(String eventId, Map<String, Object> data);
 
         /**
          * Called whenever ZK connection has been re-established.

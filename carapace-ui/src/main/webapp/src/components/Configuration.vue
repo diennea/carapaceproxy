@@ -1,14 +1,13 @@
 <template>
     <div>
-        <h2>Configuration</h2>
-        <div id="maintenance-switch" >
-            <b-form-checkbox
-                v-model="checked" 
-                name="check-button" 
-                size="lg" 
-                @change="$bvModal.show('maintenance')" 
-                switch>
-                Maintenance Mode <b>(Enable: {{ checked }})</b>
+        <div class="page-header">
+            <h2>Configuration</h2>
+            <b-form-checkbox name="check-button"
+                             v-model="checked"
+                             size="lg"
+                             switch
+                             @change="onMaintenanceModeChange()">
+                Maintenance Mode
             </b-form-checkbox>
         </div>
         <b-alert
@@ -18,7 +17,7 @@
             :show="opMessage ? 10 : 0"
             @dismissed="opMessage = ''"
             :variant="opSuccess ? 'success' : 'danger'"
-        >{{opMessage}}</b-alert>
+            >{{opMessage}}</b-alert>
         <b-form-textarea
             id="config-editor"
             rows="30"
@@ -26,23 +25,22 @@
             no-resize
             v-model="configuration"
             :state="opSuccess"
-            placeholder="Edit Dynamic Configuration"
-            class="mb-2"
-        ></b-form-textarea>
+            placeholder="Edit Dynamic Configuration">
+        </b-form-textarea>
         <div>
-            <b-button variant="outline-primary" @click="fetch">Fetch</b-button>
-            <b-button variant="outline-primary" @click="validate">Validate</b-button>
-            <b-button variant="primary" @click="save">Save</b-button>
+            <b-button variant="outline-secondary" @click="fetch">Fetch</b-button>
+            <b-button variant="outline-secondary" @click="validate">Validate</b-button>
+            <b-button @click="save">Save</b-button>
         </div>
         <div>
-            <b-modal 
-            id="maintenance" 
-            title="Maintenance"
-            cancel-title="Close"
-            no-close-on-backdrop
-            @ok="setupMaintenanceMode"
-            @hidden="reset"
-            >
+            <b-modal
+                id="maintenance"
+                title="Maintenance"
+                cancel-title="Close"
+                no-close-on-backdrop
+                @ok="setupMaintenanceMode"
+                @hidden="reset"
+                >
                 <p class="my-4" v-if="checked">You are about to enable maintenance mode</p>
                 <p class="my-4" v-else>You are about to disable maintenance mode</p>
             </b-modal>
@@ -51,129 +49,143 @@
 </template>
 
 <script>
-import { doGet } from "./../mockserver";
-import { doPost } from "./../mockserver";
+    import { doGet } from "./../mockserver";
+    import { doPost } from "./../mockserver";
 
-export default {
-    name: "Configuration",
-    data() {
-        return {
-            configuration: "",
-            opSuccess: null,
-            opMessage: "",
-            checked: false
-        };
-    },
-    created() {
-        this.fetch();
-        this.getMaintenanceStatus();
-    },
-    methods: {
-        save() {
-            doPost(
-                "/api/config/apply",
-                this.configuration,
-                data => {
-                    this.opSuccess = data.ok;
-                    this.opMessage = data.ok
-                        ? "Configuration saved successfully."
-                        : "Error: unable to save the configuration. Reason: " + data.error;
-                },
-                error => {
-                    this.opSuccess = false;
-                    this.opMessage =
-                        "Error: unable to save the configuration (" +
-                        error +
-                        ").";
-                }
-            );
+    export default {
+        name: "Configuration",
+        data() {
+            return {
+                configuration: "",
+                opSuccess: null,
+                opMessage: "",
+                checked: false
+            };
         },
-        fetch() {
-            doGet(
-                "/api/config",
-                conf => {
-                    this.configuration = conf;
-                    this.opSuccess = true;
-                    this.opMessage = "";
-                },
-                error => {
-                    this.opSuccess = false;
-                    this.opMessage =
-                        "Error: unable to fetch current configuration (" +
-                        error +
-                        ").";
-                }
-            );
+        created() {
+            this.fetch();
+            this.getMaintenanceStatus();
         },
-        validate() {
-            doPost(
-                "/api/config/validate",
-                this.configuration,
-                data => {
-                    this.opSuccess = data.ok;
-                    this.opMessage = data.ok
-                        ? "Configuration is ok."
-                        : "Error: configuration contains some errors. Details: " + data.error;
-                },
-                error => {
-                    this.opSuccess = false;
-                    this.opMessage =
-                        "Error: unable to validate the configuration (" +
-                        error +
-                        ").";
-                }
-            );
-        },
-       setupMaintenanceMode(bvModalEvent) {
-           bvModalEvent.preventDefault()
-           doPost("/api/config/maintenance?enable=" + this.checked,
-               this.checked,
-               data => {
-                   this.checked = data.ok;
-                   this.opSuccess = true;
-                   this.opMessage = data.ok
-                        ? "Maintenance mode has been enabled.\n Refresh page to see the change."
-                        : "Maintenance mode has been disabled.\n Refresh page to see the change.";
-               },
-               error => {
-                   this.opSuccess = false;
-                   this.opMessage = "Something went wrong (" + error + ")";
-               }
-           );
-           this.$nextTick(() => {
-             this.$bvModal.hide('maintenance')
-           })
-       },
-       getMaintenanceStatus() {
-            doGet("/api/config/maintenance", data => {
-                this.checked = data.ok;
-            });
-       },
-       reset() {
-           this.getMaintenanceStatus();
-       },
-    }
-};
+        methods: {
+            save() {
+                doPost(
+                        "/api/config/apply",
+                        this.configuration,
+                        data => {
+                            this.opSuccess = data.ok;
+                            this.opMessage = data.ok
+                                    ? "Configuration saved successfully."
+                                    : "Error: unable to save the configuration. Reason: " + data.error;
+                        },
+                        error => {
+                            this.opSuccess = false;
+                            this.opMessage =
+                                    "Error: unable to save the configuration (" +
+                                    error +
+                                    ").";
+                        }
+                );
+            },
+            fetch() {
+                doGet(
+                        "/api/config",
+                        conf => {
+                            this.configuration = conf;
+                            this.opSuccess = true;
+                            this.opMessage = "";
+                        },
+                        error => {
+                            this.opSuccess = false;
+                            this.opMessage =
+                                    "Error: unable to fetch current configuration (" +
+                                    error +
+                                    ").";
+                        }
+                );
+            },
+            validate() {
+                doPost(
+                        "/api/config/validate",
+                        this.configuration,
+                        data => {
+                            this.opSuccess = data.ok;
+                            this.opMessage = data.ok
+                                    ? "Configuration is ok."
+                                    : "Error: configuration contains some errors. Details: " + data.error;
+                        },
+                        error => {
+                            this.opSuccess = false;
+                            this.opMessage =
+                                    "Error: unable to validate the configuration (" +
+                                    error +
+                                    ").";
+                        }
+                );
+            },
+            onMaintenanceModeChange() {
+                const newChecked = this.checked;
+                this.checked = !newChecked;
+                const message = this.$createElement('div', {
+                    domProps: {
+                        innerHTML: 'System gonna <strong>' + (newChecked ? 'enter' : 'exit') + '</strong> maintenance mode, proceed?'
+                    }
+                });
+                this.$bvModal.msgBoxConfirm(message, {
+                    title: 'Attention',
+                    okVariant: newChecked ? 'warning' : "success",
+                    okTitle: 'Yes',
+                    footerClass: 'p-2',
+                    hideHeaderClose: false,
+                    centered: true
+                }).then(value => {
+                    if (value != true) {
+                        return;
+                    }
+                    doPost("/api/config/maintenance?enable=" + newChecked,
+                            newChecked,
+                            () => window.location.reload(),
+                            error => {
+                                this.opSuccess = false;
+                                this.opMessage = "Something went wrong (" + error + ")";
+                            }
+                    );
+                })
+            },
+            getMaintenanceStatus() {
+                doGet("/api/config/maintenance", data => {
+                    this.checked = data.ok;
+                });
+            },
+            reset() {
+                this.getMaintenanceStatus();
+            }
+        }
+    };
 </script>
 
-<style scoped>
-#config-editor {
-    height: 72vh;
-}
+<style lang="scss" scoped>
+    @import "../variables.scss";
 
-#status-alert {
-    position: absolute;
-    top: 2rem;
-    left: 25%;
-    right: 25%;
-    z-index: 999;
-}
+    .page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
 
-#maintenance-switch {
-    float: right;
-}
+    #config-editor {
+        height: 72vh;
+        margin: 0.5rem auto;
+    }
 
-button {
-    margin-right: 0.5rem;
-}
+    #status-alert {
+        position: absolute;
+        top: 2rem;
+        left: 25%;
+        right: 25%;
+        z-index: 999;
+    }
+
+    button {
+        margin-right: 0.5rem;
+    }
 </style>

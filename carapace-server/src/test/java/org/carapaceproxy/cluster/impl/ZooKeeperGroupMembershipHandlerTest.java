@@ -31,6 +31,10 @@ import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import java.util.HashMap;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -79,6 +83,16 @@ public class ZooKeeperGroupMembershipHandlerTest {
         }
     }
 
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DummyObject {
+
+        private int number;
+        private String string;
+
+    }
+
     @Test
     public void testWatchEvent() throws Exception {
         try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder());) {
@@ -94,11 +108,13 @@ public class ZooKeeperGroupMembershipHandlerTest {
                 assertEquals(Arrays.asList(peerId1, peerId2), peersFrom1);
                 assertEquals(Arrays.asList(peerId1, peerId2), peersFrom2);
 
-                AtomicInteger eventFired2 = new AtomicInteger();;
+                AtomicInteger eventFired2 = new AtomicInteger();
+                Map<String, Object> dataRes2 = new HashMap<>();
                 peer2.watchEvent("foo", new GroupMembershipHandler.EventCallback() {
                     @Override
-                    public void eventFired(String eventId) {
+                    public void eventFired(String eventId, Map<String, Object> data) {
                         eventFired2.incrementAndGet();
+                        dataRes2.putAll(data);
                     }
 
                     @Override
@@ -107,23 +123,45 @@ public class ZooKeeperGroupMembershipHandlerTest {
                     }
                 });
 
-                peer1.fireEvent("foo");
-
+                peer1.fireEvent("foo", null);
                 TestUtils.waitForCondition(() -> {
                     return eventFired2.get() >= 1;
                 }, 100);
                 assertTrue(eventFired2.get() >= 1);
+                assertTrue(dataRes2.isEmpty());
                 eventFired2.set(0);
 
+                peer1.fireEvent("foo", Map.of(
+                        "number", 1,
+                        "string", "mystring",
+                        "list", List.of(1, 2),
+                        "obj", new DummyObject(1, "s")
+                ));
+                TestUtils.waitForCondition(() -> {
+                    return eventFired2.get() >= 1;
+                }, 100);
+                assertTrue(eventFired2.get() >= 1);
+                assertTrue(((int) dataRes2.get("number")) == 1);
+                assertTrue(dataRes2.get("string").equals("mystring"));
+                assertTrue(((List<Integer>) dataRes2.get("list")).containsAll(List.of(1, 2)));
+                assertTrue(((Map<String, Object>) dataRes2.get("obj")).get("number").equals(1));
+                assertTrue(((Map<String, Object>) dataRes2.get("obj")).get("string").equals("s"));
+                eventFired2.set(0);
+                dataRes2.clear();
+
                 try (ZooKeeperGroupMembershipHandler peer3 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
-                        6000, false /*acl */, peerId3, Collections.EMPTY_MAP, new Properties())) {
+                        6000, false /*
+                         * acl
+                         */, peerId3, Collections.EMPTY_MAP, new Properties())) {
                     peer3.start();
 
                     AtomicInteger eventFired3 = new AtomicInteger();
+                    Map<String, Object> dataRes3 = new HashMap<>();
                     peer3.watchEvent("foo", new GroupMembershipHandler.EventCallback() {
                         @Override
-                        public void eventFired(String eventId) {
+                        public void eventFired(String eventId, Map<String, Object> data) {
                             eventFired3.incrementAndGet();
+                            dataRes3.putAll(data);
                         }
 
                         @Override
@@ -132,20 +170,51 @@ public class ZooKeeperGroupMembershipHandlerTest {
                         }
                     });
 
-                    peer1.fireEvent("foo");
-
+                    peer1.fireEvent("foo", null);
                     TestUtils.waitForCondition(() -> {
                         return (eventFired2.get() >= 1
                                 && eventFired3.get() >= 1);
                     }, 100);
-                    assertTrue(eventFired3.get() >= 1);
                     assertTrue(eventFired2.get() >= 1);
-
-                    eventFired3.set(0);
+                    assertTrue(dataRes2.isEmpty());
                     eventFired2.set(0);
+                    assertTrue(eventFired3.get() >= 1);
+                    assertTrue(dataRes3.isEmpty());
+                    eventFired3.set(0);
 
-                    peer3.fireEvent("foo");
+                    peer1.fireEvent("foo", Map.of(
+                            "number", 1,
+                            "string", "mystring",
+                            "list", List.of("1", "2"),
+                            "obj", new DummyObject(1, "s")
+                    ));
+                    TestUtils.waitForCondition(() -> {
+                        return (eventFired2.get() >= 1
+                                && eventFired3.get() >= 1);
+                    }, 100);
+                    assertTrue(eventFired2.get() >= 1);
+                    assertTrue(((int) dataRes2.get("number")) == 1);
+                    assertTrue(dataRes2.get("string").equals("mystring"));
+                    assertTrue(((List<String>) dataRes2.get("list")).containsAll(List.of("1", "2")));
+                    assertTrue(((Map<String, Object>) dataRes2.get("obj")).get("number").equals(1));
+                    assertTrue(((Map<String, Object>) dataRes2.get("obj")).get("string").equals("s"));
+                    eventFired2.set(0);
+                    dataRes2.clear();
+                    assertTrue(eventFired3.get() >= 1);
+                    assertTrue(((int) dataRes3.get("number")) == 1);
+                    assertTrue(dataRes3.get("string").equals("mystring"));
+                    assertTrue(((List<Integer>) dataRes3.get("list")).containsAll(List.of("1", "2")));
+                    assertTrue(((Map<String, Object>) dataRes3.get("obj")).get("number").equals(1));
+                    assertTrue(((Map<String, Object>) dataRes3.get("obj")).get("string").equals("s"));
+                    eventFired3.set(0);
+                    dataRes3.clear();
 
+                    peer3.fireEvent("foo", Map.of(
+                            "number", 1,
+                            "string", "mystring",
+                            "list", List.of(1, 2),
+                            "obj", new DummyObject(1, "s")
+                    ));
                     for (int i = 0; i < 10; i++) {
                         if (eventFired2.get() >= 1
                                 && eventFired3.get() >= 1) {
@@ -153,8 +222,15 @@ public class ZooKeeperGroupMembershipHandlerTest {
                         }
                         Thread.sleep(100);
                     }
-                    assertTrue(eventFired3.get() == 0); // self events are not fired
                     assertTrue(eventFired2.get() > 0);
+                    assertTrue(((int) dataRes2.get("number")) == 1);
+                    assertTrue(dataRes2.get("string").equals("mystring"));
+                    assertTrue(((List<Integer>) dataRes2.get("list")).containsAll(List.of(1, 2)));
+                    assertTrue(((Map<String, Object>) dataRes2.get("obj")).get("number").equals(1));
+                    assertTrue(((Map<String, Object>) dataRes2.get("obj")).get("string").equals("s"));
+                    // self events are not fired
+                    assertTrue(eventFired3.get() == 0);
+                    assertTrue(dataRes3.isEmpty());
                 }
 
             }

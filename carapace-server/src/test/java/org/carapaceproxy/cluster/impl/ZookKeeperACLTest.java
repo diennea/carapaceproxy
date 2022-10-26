@@ -36,7 +36,6 @@ import org.carapaceproxy.utils.TestUtils;
 import org.junit.AfterClass;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Rule;
@@ -104,10 +103,12 @@ public class ZookKeeperACLTest {
                 assertEquals(Arrays.asList(peerId1, peerId2), peersFrom2);
 
                 AtomicInteger eventFired2 = new AtomicInteger();
+                Map<String, Object> dataRes2 = new HashMap<>();
                 peer2.watchEvent("foo", new GroupMembershipHandler.EventCallback() {
                     @Override
-                    public void eventFired(String eventId) {
+                    public void eventFired(String eventId, Map<String, Object> data) {
                         eventFired2.incrementAndGet();
+                        dataRes2.putAll(data);
                     }
 
                     @Override
@@ -116,24 +117,34 @@ public class ZookKeeperACLTest {
                     }
                 });
 
-                peer1.fireEvent("foo");
-
+                peer1.fireEvent("foo", null);
                 TestUtils.waitForCondition(() -> {
                     return eventFired2.get() >= 1;
                 }, 100);
-
                 assertTrue(eventFired2.get() >= 1);
+                assertTrue(dataRes2.isEmpty());
                 eventFired2.set(0);
+
+                peer1.fireEvent("foo", Map.of("data", "mydata"));
+                TestUtils.waitForCondition(() -> {
+                    return eventFired2.get() >= 1;
+                }, 100);
+                assertTrue(eventFired2.get() >= 1);
+                assertTrue(dataRes2.get("data").equals("mydata"));
+                eventFired2.set(0);
+                dataRes2.clear();
 
                 try (ZooKeeperGroupMembershipHandler peer3 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
                         6000, false /*acl */, peerId3, Collections.EMPTY_MAP, new Properties())) {
                     peer3.start();
 
                     AtomicInteger eventFired3 = new AtomicInteger();
+                    Map<String, Object> dataRes3 = new HashMap<>();
                     peer3.watchEvent("foo", new GroupMembershipHandler.EventCallback() {
                         @Override
-                        public void eventFired(String eventId) {
+                        public void eventFired(String eventId, Map<String, Object> data) {
                             eventFired3.incrementAndGet();
+                            dataRes3.putAll(data);
                         }
 
                         @Override
@@ -142,21 +153,33 @@ public class ZookKeeperACLTest {
                         }
                     });
 
-                    peer1.fireEvent("foo");
-
+                    peer1.fireEvent("foo", null);
                     TestUtils.waitForCondition(() -> {
                         return (eventFired2.get() >= 1
                                 && eventFired3.get() >= 1);
                     }, 100);
-
-                    assertTrue(eventFired3.get() >= 1);
                     assertTrue(eventFired2.get() >= 1);
-
-                    eventFired3.set(0);
+                    assertTrue(dataRes2.isEmpty());
                     eventFired2.set(0);
+                    assertTrue(eventFired3.get() >= 1);
+                    assertTrue(dataRes3.isEmpty());
+                    eventFired3.set(0);
 
-                    peer3.fireEvent("foo");
+                    peer1.fireEvent("foo", Map.of("data", "mydata"));
+                    TestUtils.waitForCondition(() -> {
+                        return (eventFired2.get() >= 1
+                                && eventFired3.get() >= 1);
+                    }, 100);
+                    assertTrue(eventFired2.get() >= 1);
+                    assertTrue(dataRes2.get("data").equals("mydata"));
+                    eventFired2.set(0);
+                    dataRes2.clear();
+                    assertTrue(eventFired3.get() >= 1);
+                    assertTrue(dataRes3.get("data").equals("mydata"));
+                    eventFired3.set(0);
+                    dataRes3.clear();
 
+                    peer3.fireEvent("foo", Map.of("data", "mydata"));
                     for (int i = 0; i < 10; i++) {
                         if (eventFired2.get() >= 1
                                 && eventFired3.get() >= 1) {
@@ -164,8 +187,11 @@ public class ZookKeeperACLTest {
                         }
                         Thread.sleep(100);
                     }
-                    assertTrue(eventFired3.get() == 0); // self events are not fired
                     assertTrue(eventFired2.get() > 0);
+                    assertTrue(dataRes2.get("data").equals("mydata"));
+                    // self events are not fired
+                    assertTrue(eventFired3.get() == 0);
+                    assertTrue(dataRes3.isEmpty());
                 }
 
             }

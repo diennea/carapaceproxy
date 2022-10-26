@@ -23,7 +23,6 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.security.KeyStore;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Properties;
@@ -56,6 +55,7 @@ import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.carapaceproxy.utils.CertificatesUtils.KEYSTORE_PW;
 import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertThrows;
 import java.nio.file.Files;
 import java.security.KeyPair;
 import java.security.cert.Certificate;
@@ -313,6 +313,13 @@ public class StartAPIServerTest extends UseAdminServer {
         properties.put("certificate.3.hostname", dynDomain);
         properties.put("certificate.3.mode", "acme");
 
+        // local certificate storing
+        File nowrite = tmpDir.newFolder("nowrite");
+        nowrite.setWritable(false);
+        properties.put("dynamiccertificatesmanager.localcertificates.store.path", nowrite.getAbsolutePath());
+        assertThrows(Exception.class, () -> startServer(properties));
+        nowrite.setWritable(true);
+
         startServer(properties);
 
         DynamicCertificatesManager man = server.getDynamicCertificatesManager();
@@ -325,7 +332,7 @@ public class StartAPIServerTest extends UseAdminServer {
         String serialNumber = certificate.getSerialNumber().toString(16).toUpperCase();
         String expiringDate = certificate.getNotAfter().toString();
         String dynChain = Base64.getEncoder().encodeToString(createKeystore(originalChain, endUserKeyPair.getPrivate()));
-        store.saveCertificate(new CertificateData(dynDomain, "", dynChain, WAITING, "", ""));
+        store.saveCertificate(new CertificateData(dynDomain, dynChain, WAITING, "", ""));
         man.setStateOfCertificate(dynDomain, WAITING); // this reloads certificates from the store
 
         // Static certificates

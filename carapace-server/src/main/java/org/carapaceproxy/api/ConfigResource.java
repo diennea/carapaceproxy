@@ -32,7 +32,6 @@ import javax.ws.rs.*;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 
@@ -71,7 +70,7 @@ public class ConfigResource {
     @Path("/validate")
     @Consumes(value = "text/plain")
     @POST
-    public ConfigurationValidationResult validate(String newConfiguration) {
+    public SimpleResponse validate(String newConfiguration) {
         LOG.info("Validating configuration from API:");
         LOG.info(newConfiguration);
 
@@ -80,9 +79,9 @@ public class ConfigResource {
             PropertiesConfigurationStore simpleStore = buildStore(newConfiguration);
             dumpAndValidateInputConfiguration(simpleStore);
             server.buildValidConfiguration(simpleStore);
-            return ConfigurationValidationResult.OK;
+            return SimpleResponse.success();
         } catch (ConfigurationNotValidException | RuntimeException err) {
-            return ConfigurationValidationResult.error(err);
+            return SimpleResponse.error(err);
         }
     }
 
@@ -103,7 +102,7 @@ public class ConfigResource {
     @Path("/apply")
     @Consumes(value = "text/plain")
     @POST
-    public ConfigurationChangeResult apply(String newConfiguration) {
+    public SimpleResponse apply(String newConfiguration) {
         LOG.info("Apply configuration from API:");
         LOG.info(newConfiguration);
         LOG.info("**");
@@ -112,14 +111,14 @@ public class ConfigResource {
             PropertiesConfigurationStore simpleStore = buildStore(newConfiguration);
             dumpAndValidateInputConfiguration(simpleStore);
             server.applyDynamicConfigurationFromAPI(simpleStore);
-            return ConfigurationChangeResult.OK;
+            return SimpleResponse.success();
         } catch (ConfigurationNotValidException
                 | ConfigurationChangeInProgressException
                 | RuntimeException err) {
-            return ConfigurationChangeResult.error(err);
+            return SimpleResponse.error(err);
         } catch (InterruptedException err) {
             Thread.currentThread().interrupt();
-            return ConfigurationChangeResult.error(err);
+            return SimpleResponse.error(err);
         }
     }
 
@@ -156,34 +155,6 @@ public class ConfigResource {
         if (count[0] == 0) {
             throw new ConfigurationNotValidException("No entries in the new configuration ?");
         }
-    }
-
-    public static final class ConfigurationValidationResult {
-
-        private final boolean ok;
-        private final String error;
-
-        public static final ConfigurationValidationResult OK = new ConfigurationValidationResult(true, "");
-
-        public static final ConfigurationValidationResult error(Throwable error) {
-            StringWriter w = new StringWriter();
-            error.printStackTrace(new PrintWriter(w));
-            return new ConfigurationValidationResult(false, w.toString());
-        }
-
-        private ConfigurationValidationResult(boolean ok, String error) {
-            this.ok = ok;
-            this.error = error;
-        }
-
-        public boolean isOk() {
-            return ok;
-        }
-
-        public String getError() {
-            return error;
-        }
-
     }
 
     public static final class ConfigurationChangeResult {

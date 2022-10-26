@@ -84,13 +84,13 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     // Table for ACME Certificates
     private static final String DIGITAL_CERTIFICATES_TABLE_NAME = "digital_certificates";
     private static final String CREATE_DIGITAL_CERTIFICATES_TABLE = "CREATE TABLE " + DIGITAL_CERTIFICATES_TABLE_NAME
-            + "(domain string primary key, privateKey string, chain string, "
+            + "(domain string primary key, chain string, "
             + "state string, pendingOrder string, pendingChallenge string)";
     private static final String SELECT_FROM_DIGITAL_CERTIFICATES_TABLE = "SELECT * from " + DIGITAL_CERTIFICATES_TABLE_NAME + " WHERE domain=?";
     private static final String UPDATE_DIGITAL_CERTIFICATES_TABLE = "UPDATE " + DIGITAL_CERTIFICATES_TABLE_NAME
-            + " SET privateKey=?, chain=?, state=?, pendingOrder=?, pendingChallenge=? WHERE domain=?";
+            + " SET chain=?, state=?, pendingOrder=?, pendingChallenge=? WHERE domain=?";
     private static final String INSERT_INTO_DIGITAL_CERTIFICATES_TABLE = "INSERT INTO " + DIGITAL_CERTIFICATES_TABLE_NAME
-            + "(domain, privateKey, chain, state, pendingOrder, pendingChallenge) values (?, ?, ?, ?, ?, ?)";
+            + "(domain, chain, state, pendingOrder, pendingChallenge) values (?, ?, ?, ?, ?)";
 
     // Table for ACME challenge tokens
     private static final String ACME_CHALLENGE_TOKENS_TABLE_NAME = "acme_challenge_tokens";
@@ -201,7 +201,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             tablesDDL.forEach((tableDDL) -> {
                 try (PreparedStatement ps = con.prepareStatement(tableDDL);) {
                     ps.executeUpdate();
-                    LOG.log(Level.INFO, "Created table " + tableDDL);
+                    LOG.log(Level.INFO, "Created table {0}", tableDDL);
                 } catch (SQLException err) {
                     LOG.log(Level.FINE, "Could not create table " + tableDDL, err);
                 }
@@ -241,7 +241,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                     PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_CONFIG_TABLE)) {
                 newConfigurationStore.forEach((k, v) -> {
                     try {
-                        LOG.log(Level.INFO, "Saving '" + k + "'='" + v + "'");
+                        LOG.log(Level.INFO, "Saving ''{0}''=''{1}''", new Object[]{k, v});
                         currentKeys.remove(k);
                         newProperties.put(k, v);
                         psUpdate.setString(1, v);
@@ -257,7 +257,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 });
                 currentKeys.forEach(k -> {
                     try {
-                        LOG.log(Level.INFO, "Deleting '" + k + "'");
+                        LOG.log(Level.INFO, "Deleting ''{0}''", k);
                         psDelete.setString(1, k);
                         psDelete.executeUpdate();
                     } catch (SQLException err) {
@@ -375,14 +375,12 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 ps.setString(1, domain);
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
-                        String privateKey = rs.getString(2);
-                        String chain = rs.getString(3);
-                        String state = rs.getString(4);
-                        String pendingOrder = rs.getString(5);
-                        String pendigChallenge = rs.getString(6);
+                        String chain = rs.getString(2);
+                        String state = rs.getString(3);
+                        String pendingOrder = rs.getString(4);
+                        String pendigChallenge = rs.getString(5);
                         return new CertificateData(
                                 domain,
-                                privateKey,
                                 chain,
                                 DynamicCertificateState.fromStorableFormat(state),
                                 pendingOrder,
@@ -404,25 +402,22 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_DIGITAL_CERTIFICATES_TABLE);
                 PreparedStatement psUpdate = con.prepareStatement(UPDATE_DIGITAL_CERTIFICATES_TABLE)) {
             String domain = cert.getDomain();
-            String privateKey = cert.getPrivateKey();
             String chain = cert.getChain();
             String state = cert.getState().toStorableFormat();
             String pendingOrder = cert.getPendingOrderLocation();
             String pendigChallenge = cert.getPendingChallengeData();
 
-            psUpdate.setString(1, privateKey);
-            psUpdate.setString(2, chain);
-            psUpdate.setString(3, state);
-            psUpdate.setString(4, pendingOrder);
-            psUpdate.setString(5, pendigChallenge);
-            psUpdate.setString(6, domain);
+            psUpdate.setString(1, chain);
+            psUpdate.setString(2, state);
+            psUpdate.setString(3, pendingOrder);
+            psUpdate.setString(4, pendigChallenge);
+            psUpdate.setString(5, domain);
             if (psUpdate.executeUpdate() == 0) {
                 psInsert.setString(1, domain);
-                psInsert.setString(2, privateKey);
-                psInsert.setString(3, chain);
-                psInsert.setString(4, state);
-                psInsert.setString(5, pendingOrder);
-                psInsert.setString(6, pendigChallenge);
+                psInsert.setString(2, chain);
+                psInsert.setString(3, state);
+                psInsert.setString(4, pendingOrder);
+                psInsert.setString(5, pendigChallenge);
                 psInsert.executeUpdate();
             }
 
@@ -467,7 +462,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     public void deleteAcmeChallengeToken(String id) {
         try (Connection con = datasource.getConnection();
                 PreparedStatement psDelete = con.prepareStatement(DELETE_FROM_ACME_CHALLENGE_TOKENS_TABLE)) {
-            LOG.log(Level.INFO, "Deleting ACME challenge token with id'" + id + "'");
+            LOG.log(Level.INFO, "Deleting ACME challenge token with id''{0}''", id);
             psDelete.setString(1, id);
             psDelete.executeUpdate();
         } catch (SQLException err) {

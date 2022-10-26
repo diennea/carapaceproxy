@@ -42,6 +42,7 @@ import javax.net.ssl.SSLContext;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
+import java.io.File;
 import java.util.Set;
 import lombok.Data;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
@@ -105,6 +106,8 @@ public class RuntimeServerConfiguration {
     private int maxHeaderSize = 8_192; //bytes; default 8kb
     private boolean maintenanceModeEnabled = false;
     private boolean http10BackwardCompatibilityEnabled = false;
+    private String localCertificatesStorePath;
+    private Set<String> localCertificatesStorePeersIds;
 
     public RuntimeServerConfiguration() {
         defaultConnectionPool = new ConnectionPoolConfiguration(
@@ -238,6 +241,19 @@ public class RuntimeServerConfiguration {
 
         http10BackwardCompatibilityEnabled = properties.getBoolean("carapace.http10backwardcompatibility.enabled", http10BackwardCompatibilityEnabled);
         LOG.log(Level.INFO, "carapace.http10backwardcompatibility.enabled={0}", http10BackwardCompatibilityEnabled);
+
+        localCertificatesStorePath = properties.getString("dynamiccertificatesmanager.localcertificates.store.path", localCertificatesStorePath);
+        LOG.log(Level.INFO, "dynamiccertificatesmanager.localcertificates.store.path={0}", localCertificatesStorePath);
+        if (localCertificatesStorePath != null) {
+            var root = new File(localCertificatesStorePath);
+            if (!root.canWrite()) {
+                throw new ConfigurationNotValidException("Cannot write local certificates to path: " + root.getAbsolutePath());
+            }
+        }
+
+        // storing enabled for all peers by default
+        localCertificatesStorePeersIds = Set.of(properties.getArray("dynamiccertificatesmanager.localcertificates.peers.ids", new String[]{}));
+        LOG.log(Level.INFO, "dynamiccertificatesmanager.localcertificates.peers.ids={0}", localCertificatesStorePeersIds);
     }
 
     private void configureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
