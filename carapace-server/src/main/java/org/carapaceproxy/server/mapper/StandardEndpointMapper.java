@@ -19,6 +19,11 @@
  */
 package org.carapaceproxy.server.mapper;
 
+import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
+import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_MAINTENANCE_MODE_ERROR;
+import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_NOT_FOUND;
+import static org.carapaceproxy.core.StaticContentsManager.IN_MEMORY_RESOURCE;
+import static org.carapaceproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -26,27 +31,24 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.carapaceproxy.server.mapper.MapResult.Action;
+import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.configstore.ConfigurationStore;
+import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.BackendSelector;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.DirectorConfiguration;
-
-import static org.carapaceproxy.core.StaticContentsManager.*;
-import static org.carapaceproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
-import java.util.Optional;
-import org.carapaceproxy.SimpleHTTPResponse;
-import org.carapaceproxy.core.ProxyRequest;
-import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 import org.carapaceproxy.server.config.RouteConfiguration;
-import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import org.carapaceproxy.server.mapper.CustomHeader.HeaderMode;
+import org.carapaceproxy.server.mapper.MapResult.Action;
+import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
+import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.ParseException;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.RequestMatchParser;
 
@@ -353,7 +355,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                 // Headers
                 List<CustomHeader> customHeaders = new ArrayList();
                 Set<String> usedIds = new HashSet();
-                String[] headersIds = properties.getArray(prefix + "headers", new String[0]);
+                final var headersIds = properties.getValues(prefix + "headers");
                 for (String headerId : headersIds) {
                     if (usedIds.contains(headerId)) {
                         throw new ConfigurationNotValidException("while configuring action '" + id + "': header '" + headerId + "' duplicated");
@@ -421,11 +423,10 @@ public class StandardEndpointMapper extends EndpointMapper {
             String id = properties.getString(prefix + "id", "");
             if (!id.isEmpty()) {
                 boolean enabled = properties.getBoolean(prefix + "enabled", false);
-                String[] backendids = properties.getArray(prefix + "backends", new String[0]);
                 LOG.log(Level.INFO, "configured director {0} backends:{1}, enabled:{2}", new Object[]{id, backends, enabled});
                 if (enabled) {
                     DirectorConfiguration config = new DirectorConfiguration(id);
-                    for (String backendId : backendids) {
+                    for (String backendId : properties.getValues(prefix + "backends")) {
                         if (!backendId.equals(DirectorConfiguration.ALL_BACKENDS) && !this.backends.containsKey(backendId)) {
                             throw new ConfigurationNotValidException("while configuring director '" + id + "': backend '" + backendId + "' does not exist");
                         }

@@ -62,4 +62,8 @@ public class StringUtils {
         return str.trim();
     }
 
+    public static boolean isBlank(final String str) {
+        return str == null || str.isBlank();
+    }
+
 }

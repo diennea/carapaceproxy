@@ -1,9 +1,18 @@
 package org.carapaceproxy.server.filters;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.absent;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
+import static org.junit.Assert.assertTrue;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import java.util.Collections;
+import java.util.Set;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
@@ -13,15 +22,6 @@ import org.carapaceproxy.utils.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
-import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
-import static org.junit.Assert.assertTrue;
 
 public class XTlsProtocolFilterTest {
 
@@ -53,9 +53,9 @@ public class XTlsProtocolFilterTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
-            server.addCertificate(new SSLCertificateConfiguration("*", certificate, "testproxy", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration("*", null, certificate, "testproxy", STATIC));
             server.addRequestFilter(new RequestFilterConfiguration(XTlsProtocolRequestFilter.TYPE, Collections.emptyMap()));
-            server.addListener(new NetworkListenerConfiguration("0.0.0.0", 0, true, null, "*", "TLSv1.2"));
+            server.addListener(new NetworkListenerConfiguration("0.0.0.0", 0, true, null, "*", Set.of("TLSv1.2")));
             server.start();
             int port = server.getLocalPort();
 
@@ -67,8 +67,8 @@ public class XTlsProtocolFilterTest {
         }
         //SSL request but filter is not set
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
-            server.addCertificate(new SSLCertificateConfiguration("*", certificate, "testproxy", STATIC));
-            server.addListener(new NetworkListenerConfiguration("0.0.0.0", 0, true, null, "*", "TLSv1.2"));
+            server.addCertificate(new SSLCertificateConfiguration("*", null, certificate, "testproxy", STATIC));
+            server.addListener(new NetworkListenerConfiguration("0.0.0.0", 0, true, null, "*", Set.of("TLSv1.2")));
             server.start();
             int port = server.getLocalPort();
 

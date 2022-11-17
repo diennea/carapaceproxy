@@ -21,63 +21,58 @@ package org.carapaceproxy.server.config;
 
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.ACME;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Objects;
+import java.util.Set;
+import lombok.Data;
+import org.carapaceproxy.utils.CertificatesUtils;
 
 /**
  * Configuration for a TLS Certificate
  *
  * @author enrico.olivelli
  */
+@Data
 public class SSLCertificateConfiguration {
-
-    public static final String WILDCARD_SYMBOL = "*.";
 
     public static enum CertificateMode {
         STATIC, ACME, MANUAL
     }
 
-    private final String id;
+    private final String id; // hostname or *.hostname or *
     private final String hostname;
+    private final Set<String> subjectAlternativeNames;
     private final String file;
     private final String password;
     private final boolean wildcard;
     private final CertificateMode mode;
     private int daysBeforeRenewal;
 
-    public SSLCertificateConfiguration(String hostname, String file, String password, CertificateMode mode) {
-        this.id = hostname;
+    public SSLCertificateConfiguration(String hostname,
+                                       Set<String> subjectAlternativeNames,
+                                       String file,
+                                       String password,
+                                       CertificateMode mode) {
+        this.id = Objects.requireNonNull(hostname);
         if (hostname.equals("*")) {
             this.hostname = "";
             this.wildcard = true;
-        } else if (hostname.startsWith(WILDCARD_SYMBOL)) {
-            this.hostname = hostname.substring(2);
+        } else if (CertificatesUtils.isWildcard(hostname)) {
+            this.hostname = CertificatesUtils.removeWildcard(hostname);
             this.wildcard = true;
         } else {
             this.hostname = hostname;
             this.wildcard = false;
         }
+        this.subjectAlternativeNames = subjectAlternativeNames;
         this.file = file;
         this.password = password;
         this.mode = mode;
     }
 
-    public String getId() {
-        return id;
-    }
-
-    public String getHostname() {
-        return hostname;
-    }
-
     public boolean isWildcard() {
-        return wildcard;
-    }
-
-    public String getFile() {
-        return file;
-    }
-
-    public String getPassword() {
-        return password;
+        return wildcard || subjectAlternativeNames != null && subjectAlternativeNames.stream().anyMatch(CertificatesUtils::isWildcard);
     }
 
     public boolean isDynamic() {
@@ -88,25 +83,26 @@ public class SSLCertificateConfiguration {
         return ACME.equals(mode);
     }
 
-    public CertificateMode getMode() {
-        return mode;
-    }
-
     public boolean isMoreSpecific(SSLCertificateConfiguration other) {
-        return hostname.length() > other.getHostname().length();
+        if (subjectAlternativeNames == null || subjectAlternativeNames.isEmpty()) {
+            return hostname.length() > other.getHostname().length();
+        }
+        final var otherNames = other.getNames().stream().map(CertificatesUtils::removeWildcard);
+        for (var n: getNames()) {
+            final var name = CertificatesUtils.removeWildcard(n);
+            if (otherNames.anyMatch(on -> name.length() > on.length())) {
+                return true;
+            }
+        }
+        return false;
     }
 
-    public int getDaysBeforeRenewal() {
-        return daysBeforeRenewal;
+    public Collection<String> getNames() {
+        return new ArrayList<>() {{
+            add(id); // hostname or *.hostname
+            if (subjectAlternativeNames != null) {
+                addAll(subjectAlternativeNames);
+            }
+        }};
     }
-
-    public void setDaysBeforeRenewal(int daysBeforeRenewal) {
-        this.daysBeforeRenewal = daysBeforeRenewal;
-    }
-
-    @Override
-    public String toString() {
-        return "SSLCertificateConfiguration{" + "id=" + id + ", hostname=" + hostname + ", mode=" + mode + '}';
-    }
-
 }

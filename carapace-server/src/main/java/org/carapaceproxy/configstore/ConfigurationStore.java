@@ -21,8 +21,10 @@ package org.carapaceproxy.configstore;
 
 import herddb.utils.BooleanHolder;
 import java.security.KeyPair;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
@@ -36,7 +38,7 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
  */
 public interface ConfigurationStore extends AutoCloseable {
 
-    public static final String PROPERTY_ARRAY_SEPARATOR = ",";
+    public static final String PROPERTY_VALUES_SEPARATOR = ",";
 
     String getProperty(String key, String defaultValue);
 
@@ -80,9 +82,17 @@ public interface ConfigurationStore extends AutoCloseable {
         return Boolean.parseBoolean(property);
     }
 
-    default String[] getArray(String key, String[] defaultValue) throws ConfigurationNotValidException {
-        String[] array = getString(key, "").replaceAll(" ", "").split(PROPERTY_ARRAY_SEPARATOR);
-        return array.length == 1 && (array[0] == null || array[0].isEmpty()) ? defaultValue : array;
+    default Set<String> getValues(String key) throws ConfigurationNotValidException {
+        return getValues(key, Collections.emptySet());
+    }
+
+    default Set<String> getValues(String key, Set<String> defaultValue) throws ConfigurationNotValidException {
+        final var values = getString(key, "")
+                .replaceAll(" ", "")
+                .split(PROPERTY_VALUES_SEPARATOR);
+        return values.length == 1 && (values[0] == null || values[0].isEmpty())
+                ? defaultValue
+                : new HashSet<>(List.of(values));
     }
 
     default String getClassname(String key, String defaultValue) throws ConfigurationNotValidException {

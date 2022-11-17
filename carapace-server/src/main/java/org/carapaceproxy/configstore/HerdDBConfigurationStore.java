@@ -19,11 +19,18 @@
  */
 package org.carapaceproxy.configstore;
 
+import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePrivateKey;
+import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePublicKey;
+import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeKey;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import herddb.client.ClientConfiguration;
 import herddb.jdbc.HerdDBEmbeddedDataSource;
+import herddb.security.SimpleSingleUserManager;
 import herddb.server.ServerConfiguration;
 import java.io.File;
+import java.net.URL;
 import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.PublicKey;
@@ -32,6 +39,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -42,13 +50,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 import org.apache.bookkeeper.stats.StatsLogger;
-import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePrivateKey;
-import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePublicKey;
-import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeKey;
-import herddb.security.SimpleSingleUserManager;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.carapaceproxy.utils.StringUtils;
+import org.shredzone.acme4j.toolbox.JSON;
 
 /**
  * Reads/Write the configuration to a JDBC database. This configuration store is able to track versions of configuration properties
@@ -84,13 +91,15 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     // Table for ACME Certificates
     private static final String DIGITAL_CERTIFICATES_TABLE_NAME = "digital_certificates";
     private static final String CREATE_DIGITAL_CERTIFICATES_TABLE = "CREATE TABLE " + DIGITAL_CERTIFICATES_TABLE_NAME
-            + "(domain string primary key, chain string, "
-            + "state string, pendingOrder string, pendingChallenge string)";
-    private static final String SELECT_FROM_DIGITAL_CERTIFICATES_TABLE = "SELECT * from " + DIGITAL_CERTIFICATES_TABLE_NAME + " WHERE domain=?";
+            + "(domain string primary key, subjectAltNames string, chain string, "
+            + "state string, pendingOrder string, pendingChallenges string)";
+    private static final String SELECT_FROM_DIGITAL_CERTIFICATES_TABLE =
+            "SELECT domain, subjectAltNames, chain, state, pendingOrder, pendingChallenges " +
+            "FROM " + DIGITAL_CERTIFICATES_TABLE_NAME + " WHERE domain=?";
     private static final String UPDATE_DIGITAL_CERTIFICATES_TABLE = "UPDATE " + DIGITAL_CERTIFICATES_TABLE_NAME
-            + " SET chain=?, state=?, pendingOrder=?, pendingChallenge=? WHERE domain=?";
+            + " SET subjectAltNames=?, chain=?, state=?, pendingOrder=?, pendingChallenges=? WHERE domain=?";
     private static final String INSERT_INTO_DIGITAL_CERTIFICATES_TABLE = "INSERT INTO " + DIGITAL_CERTIFICATES_TABLE_NAME
-            + "(domain, chain, state, pendingOrder, pendingChallenge) values (?, ?, ?, ?, ?)";
+            + "(domain, subjectAltNames, chain, state, pendingOrder, pendingChallenges) values (?, ?, ?, ?, ?, ?)";
 
     // Table for ACME challenge tokens
     private static final String ACME_CHALLENGE_TOKENS_TABLE_NAME = "acme_challenge_tokens";
@@ -103,6 +112,8 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             + " WHERE id=?";
 
     private static final Logger LOG = Logger.getLogger(HerdDBConfigurationStore.class.getName());
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final Map<String, String> properties = new ConcurrentHashMap<>();
     private final HerdDBEmbeddedDataSource datasource;
@@ -375,16 +386,18 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 ps.setString(1, domain);
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
-                        String chain = rs.getString(2);
-                        String state = rs.getString(3);
-                        String pendingOrder = rs.getString(4);
-                        String pendigChallenge = rs.getString(5);
+                        final var subjectAltNames = rs.getString(2);
+                        final var chain = rs.getString(3);
+                        final var state = DynamicCertificateState.fromStorableFormat(rs.getString(4));
+                        final var pendingOrder = rs.getString(5);
+                        final var pendingChallenges = parseChallengesData(rs.getString(6));
                         return new CertificateData(
                                 domain,
+                                subjectAltNames != null ? Set.of(subjectAltNames.split(",")) : Collections.emptySet(),
                                 chain,
-                                DynamicCertificateState.fromStorableFormat(state),
-                                pendingOrder,
-                                pendigChallenge
+                                state,
+                                pendingOrder != null ? new URL(pendingOrder) : null,
+                                pendingChallenges
                         );
                     }
                 }
@@ -396,28 +409,42 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         }
     }
 
+    private static Map<String, JSON> parseChallengesData(String challengesData) throws JsonProcessingException {
+        if (StringUtils.isBlank(challengesData)) {
+            return null;
+        }
+        return ((Map<String, String>) MAPPER.readValue(challengesData, Map.class)).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> JSON.parse(e.getValue())));
+    }
+
     @Override
     public void saveCertificate(CertificateData cert) {
         try (Connection con = datasource.getConnection();
                 PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_DIGITAL_CERTIFICATES_TABLE);
                 PreparedStatement psUpdate = con.prepareStatement(UPDATE_DIGITAL_CERTIFICATES_TABLE)) {
-            String domain = cert.getDomain();
-            String chain = cert.getChain();
-            String state = cert.getState().toStorableFormat();
-            String pendingOrder = cert.getPendingOrderLocation();
-            String pendigChallenge = cert.getPendingChallengeData();
-
-            psUpdate.setString(1, chain);
-            psUpdate.setString(2, state);
-            psUpdate.setString(3, pendingOrder);
-            psUpdate.setString(4, pendigChallenge);
-            psUpdate.setString(5, domain);
+            final var domain = cert.getDomain();
+            final var subjectAltNames = cert.getSubjectAlternativeNames() != null
+                    ? String.join(",", cert.getSubjectAlternativeNames())
+                    : null;
+            final var chain = cert.getChain();
+            final var state = cert.getState().toStorableFormat();
+            final var pendingOrder = cert.getPendingOrderLocation() != null
+                    ? cert.getPendingOrderLocation().toString()
+                    : null;
+            final var pendingChallenges = formatChallengesData(cert.getPendingChallengesData());
+            psUpdate.setString(1, subjectAltNames);
+            psUpdate.setString(2, chain);
+            psUpdate.setString(3, state);
+            psUpdate.setString(4, pendingOrder);
+            psUpdate.setString(5, pendingChallenges);
+            psUpdate.setString(6, domain);
             if (psUpdate.executeUpdate() == 0) {
                 psInsert.setString(1, domain);
-                psInsert.setString(2, chain);
-                psInsert.setString(3, state);
-                psInsert.setString(4, pendingOrder);
-                psInsert.setString(5, pendigChallenge);
+                psInsert.setString(2, subjectAltNames);
+                psInsert.setString(3, chain);
+                psInsert.setString(4, state);
+                psInsert.setString(5, pendingOrder);
+                psInsert.setString(6, pendingChallenges);
                 psInsert.executeUpdate();
             }
 
@@ -425,6 +452,15 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             LOG.log(Level.SEVERE, "Error while performing Certificate saving for domain " + cert.getDomain() + ".", err);
             throw new ConfigurationStoreException(err);
         }
+    }
+
+    private static String formatChallengesData(Map<String, JSON> challengesData) throws JsonProcessingException {
+        if (challengesData == null || challengesData.isEmpty()) {
+            return null;
+        }
+        return MAPPER.writeValueAsString(challengesData.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().toString()))
+        );
     }
 
     @Override

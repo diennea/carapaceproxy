@@ -19,33 +19,31 @@
  */
 package org.carapaceproxy.core;
 
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
+import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
+import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
+import java.io.File;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
+import javax.net.ssl.SSLContext;
+import lombok.Data;
 import org.carapaceproxy.configstore.ConfigurationStore;
-import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode;
-import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
-import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
-import javax.net.ssl.SSLContext;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
-import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
-import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
-import java.io.File;
-import java.util.Set;
-import lombok.Data;
-import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;
 
 /**
@@ -95,7 +93,7 @@ public class RuntimeServerConfiguration {
     private int dynamicCertificatesManagerPeriod = 0;
     private int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
     private Set<String> domainsCheckerIPAddresses;
-    private List<String> supportedSSLProtocols = null;
+    private Set<String> supportedSSLProtocols = null;
     private int ocspStaplingManagerPeriod = 0;
     private int clientsIdleTimeoutSeconds = 120;
     private int responseCompressionThreshold; // bytes; default (0) enabled for all requests
@@ -203,7 +201,7 @@ public class RuntimeServerConfiguration {
         keyPairsSize = properties.getInt("dynamiccertificatesmanager.keypairssize", DEFAULT_KEYPAIRS_SIZE);
         LOG.log(Level.INFO, "dynamiccertificatesmanager.keypairssize={0}", keyPairsSize);
 
-        domainsCheckerIPAddresses = Set.of(properties.getArray("dynamiccertificatesmanager.domainschecker.ipaddresses", new String[]{}));
+        domainsCheckerIPAddresses = properties.getValues("dynamiccertificatesmanager.domainschecker.ipaddresses");
         LOG.log(Level.INFO, "dynamiccertificatesmanager.domainschecker.ipaddresses={0}", domainsCheckerIPAddresses);
 
         ocspStaplingManagerPeriod = properties.getInt("ocspstaplingmanager.period", 0);
@@ -252,30 +250,27 @@ public class RuntimeServerConfiguration {
         }
 
         // storing enabled for all peers by default
-        localCertificatesStorePeersIds = Set.of(properties.getArray("dynamiccertificatesmanager.localcertificates.peers.ids", new String[]{}));
+        localCertificatesStorePeersIds = properties.getValues("dynamiccertificatesmanager.localcertificates.peers.ids");
         LOG.log(Level.INFO, "dynamiccertificatesmanager.localcertificates.peers.ids={0}", localCertificatesStorePeersIds);
     }
 
     private void configureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
-        int max = properties.findMaxIndexForPrefix("certificate");
+        final var max = properties.findMaxIndexForPrefix("certificate");
         for (int i = 0; i <= max; i++) {
-            String prefix = "certificate." + i + ".";
-            String hostname = properties.getString(prefix + "hostname", "");
+            final var prefix = "certificate." + i + ".";
+            final var hostname = properties.getString(prefix + "hostname", "");
             if (!hostname.isEmpty()) {
-                String file = properties.getString(prefix + "file", "");
-                String pw = properties.getString(prefix + "password", "");
-                String mode = properties.getString(prefix + "mode", "static");
-                int daysBeforeRenewal = properties.getInt(prefix + "daysbeforerenewal", DEFAULT_DAYS_BEFORE_RENEWAL);
+                final var subjectAlternativeNames = properties.getValues(prefix + "san", null);
+                final var file = properties.getString(prefix + "file", "");
+                final var pw = properties.getString(prefix + "password", "");
+                final var mode = properties.getString(prefix + "mode", "static");
+                final var daysBeforeRenewal = properties.getInt(prefix + "daysbeforerenewal", DEFAULT_DAYS_BEFORE_RENEWAL);
                 try {
-                    CertificateMode _mode = CertificateMode.valueOf(mode.toUpperCase());
-                    LOG.log(Level.INFO,
-                            "Configuring SSL certificate {0}: hostname={1}, file={2}, password={3}, mode={4}",
-                            new Object[]{prefix, hostname, file, pw, mode}
-                    );
-                    SSLCertificateConfiguration config = new SSLCertificateConfiguration(hostname, file, pw, _mode);
+                    final var config = new SSLCertificateConfiguration(hostname, subjectAlternativeNames, file, pw, CertificateMode.valueOf(mode.toUpperCase()));
                     if (config.isAcme()) {
                         config.setDaysBeforeRenewal(daysBeforeRenewal);
                     }
+                    LOG.log(Level.INFO,"Configuring SSL certificate {0}: {1}", new Object[]{prefix, config});
                     this.addCertificate(config);
                 } catch (IllegalArgumentException e) {
                     throw new ConfigurationNotValidException(
@@ -289,20 +284,17 @@ public class RuntimeServerConfiguration {
     private void configureListeners(ConfigurationStore properties) throws ConfigurationNotValidException {
         int max = properties.findMaxIndexForPrefix("listener");
         for (int i = 0; i <= max; i++) {
-            String prefix = "listener." + i + ".";
-            String host = properties.getString(prefix + "host", "0.0.0.0");
-            int port = properties.getInt(prefix + "port", 0);
+            final var prefix = "listener." + i + ".";
+            final var port = properties.getInt(prefix + "port", 0);
             if (port > 0) {
-                boolean ssl = properties.getBoolean(prefix + "ssl", false);
-                String sslciphers = properties.getString(prefix + "sslciphers", "");
-                String defautlSslCertificate = properties.getString(prefix + "defaultcertificate", "*");
-                NetworkListenerConfiguration config = new NetworkListenerConfiguration(
-                        host, port, ssl, sslciphers, defautlSslCertificate
-                );
-                if (ssl) {
-                    config.setSslProtocols(properties.getArray(prefix + "sslprotocols", DEFAULT_SSL_PROTOCOLS.toArray(new String[0])));
-                }
-                this.addListener(config);
+                this.addListener(new NetworkListenerConfiguration(
+                        properties.getString(prefix + "host", "0.0.0.0"),
+                        port,
+                        properties.getBoolean(prefix + "ssl", false),
+                        properties.getString(prefix + "sslciphers", ""),
+                        properties.getString(prefix + "defaultcertificate", "*"),
+                        properties.getValues(prefix + "sslprotocols", DEFAULT_SSL_PROTOCOLS)
+                ));
             }
         }
     }
@@ -397,11 +389,11 @@ public class RuntimeServerConfiguration {
         if (listener.isSsl()) {
             try {
                 if (supportedSSLProtocols == null) {
-                    supportedSSLProtocols = Arrays.asList(SSLContext.getDefault().getSupportedSSLParameters().getProtocols());
+                    supportedSSLProtocols = Set.of(SSLContext.getDefault().getSupportedSSLParameters().getProtocols());
                 }
-                if (!supportedSSLProtocols.containsAll(Arrays.asList(listener.getSslProtocols()))) {
+                if (!supportedSSLProtocols.containsAll(listener.getSslProtocols())) {
                     throw new ConfigurationNotValidException(
-                            "Unsupported SSL Protocols " + Arrays.toString(listener.getSslProtocols())
+                            "Unsupported SSL Protocols " + listener.getSslProtocols()
                             + " for listener " + listener.getHost() + ":" + listener.getPort()
                     );
                 }
@@ -438,7 +430,7 @@ public class RuntimeServerConfiguration {
     NetworkListenerConfiguration getListener(NetworkListenerConfiguration.HostPort hostPort) {
         return listeners
                 .stream()
-                .filter(s -> s.getHost().equalsIgnoreCase(hostPort.getHost()) && s.getPort() == hostPort.getPort())
+                .filter(s -> s.getHost().equalsIgnoreCase(hostPort.host()) && s.getPort() == hostPort.port())
                 .findFirst()
                 .orElse(null);
     }

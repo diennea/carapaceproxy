@@ -60,6 +60,7 @@
                 return [
                     {key: "id", label: "ID", sortable: true},
                     {key: "hostname", label: "Hostname", sortable: true},
+                    {key: "subjectAlternativeNames", label: "SANs", sortable: true},
                     {key: "mode", label: "Mode", sortable: true},
                     {
                         key: "dynamic",
