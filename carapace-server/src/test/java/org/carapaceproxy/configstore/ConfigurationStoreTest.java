@@ -19,24 +19,26 @@
  */
 package org.carapaceproxy.configstore;
 
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
+import static org.carapaceproxy.utils.TestUtils.assertEqualsKey;
+import static org.hamcrest.CoreMatchers.hasItems;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import java.net.URL;
 import java.security.KeyPair;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
 import org.apache.bookkeeper.stats.NullStatsLogger;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
-import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
-import static org.carapaceproxy.utils.TestUtils.assertEqualsKey;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.collection.ArrayMatching.arrayContaining;
-import org.junit.After;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 import org.carapaceproxy.utils.TestUtils;
 import org.hamcrest.core.IsNull;
+import org.junit.After;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -138,11 +140,11 @@ public class ConfigurationStoreTest {
         assertThat(store.getString("property.string.2", null), is(IsNull.nullValue())); // empty > default
         assertThat(store.getString("property.string.3", "default"), is("default")); // not exists
 
-        assertThat(store.getArray("property.array.1", new String[]{"default"}), arrayContaining("1", "2", "3", "4"));
-        assertThat(store.getArray("property.array.2", new String[]{"default"}), arrayContaining("a1", "a2", "a3", "a4"));
-        assertThat(store.getArray("property.array.3", new String[]{"default"}), arrayContaining("default")); // no elements > default
-        assertThat(store.getArray("property.array.4", new String[]{"default"}), arrayContaining("default")); // empty > default
-        assertThat(store.getArray("property.array.11", new String[]{"default"}), arrayContaining("default")); // not exitst
+        assertThat(store.getValues("property.array.1", Set.of("default")), hasItems("1", "2", "3", "4"));
+        assertThat(store.getValues("property.array.2", Set.of("default")), hasItems("a1", "a2", "a3", "a4"));
+        assertThat(store.getValues("property.array.3", Set.of("default")), hasItems("default")); // no elements > default
+        assertThat(store.getValues("property.array.4", Set.of("default")), hasItems("default")); // empty > default
+        assertThat(store.getValues("property.array.11", Set.of("default")), hasItems("default")); // not exitst
 
         String DClassName = Object.class.getName();
         assertThat(store.getClassname("property.class.1", DClassName), is(className));
@@ -254,17 +256,19 @@ public class ConfigurationStoreTest {
     }
 
     private void testCertificateOperations() throws Exception {
-        String order = new URL("http://locallhost/order").toString();
-        String challenge = JSON.parse("{\"challenge\": \"data\"}").toString();
-
         // Certificates saving
         CertificateData cert1 = new CertificateData(
-                d1, "encodedChain1", DynamicCertificateState.AVAILABLE, order, challenge
+                d1,
+                null,
+                "encodedChain1",
+                DynamicCertificateState.AVAILABLE,
+                new URL("http://locallhost/order"),
+                Map.of(d1, JSON.parse("{\"challenge\": \"data\"}"))
         );
         store.saveCertificate(cert1);
 
         CertificateData cert2 = new CertificateData(
-                d2, "encodedChain2", DynamicCertificateState.WAITING, null, null
+                d2, null, "encodedChain2", DynamicCertificateState.WAITING
         );
         store.saveCertificate(cert2);
 
@@ -274,8 +278,8 @@ public class ConfigurationStoreTest {
 
         // Cert Updating
         cert1.setState(DynamicCertificateState.WAITING);
-        cert1.setPendingOrderLocation(new URL("http://locallhost/updatedorder").toString());
-        cert1.setPendingChallengeData(JSON.parse("{\"challenge\": \"updateddata\"}").toString());
+        cert1.setPendingOrderLocation(new URL("http://locallhost/updatedorder"));
+        cert1.setPendingChallengesData(Map.of(cert1.getDomain(), JSON.parse("{\"challenge\": \"updateddata\"}")));
         store.saveCertificate(cert1);
         assertEquals(cert1, store.loadCertificateForDomain(d1));
     }

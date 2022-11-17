@@ -21,63 +21,52 @@ package org.carapaceproxy.server.config;
 
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.ACME;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
+import java.util.List;
+import java.util.Set;
+import lombok.Data;
+import org.carapaceproxy.utils.CertificatesUtils;
 
 /**
  * Configuration for a TLS Certificate
  *
  * @author enrico.olivelli
  */
+@Data
 public class SSLCertificateConfiguration {
-
-    public static final String WILDCARD_SYMBOL = "*.";
 
     public static enum CertificateMode {
         STATIC, ACME, MANUAL
     }
 
-    private final String id;
+    private final String id; // hostname or *.hostname or *
     private final String hostname;
+    private final Set<String> subjectAlternativeNames;
     private final String file;
     private final String password;
     private final boolean wildcard;
     private final CertificateMode mode;
     private int daysBeforeRenewal;
 
-    public SSLCertificateConfiguration(String hostname, String file, String password, CertificateMode mode) {
+    public SSLCertificateConfiguration(String hostname,
+                                       Set<String> subjectAlternativeNames,
+                                       String file,
+                                       String password,
+                                       CertificateMode mode) {
         this.id = hostname;
         if (hostname.equals("*")) {
             this.hostname = "";
             this.wildcard = true;
-        } else if (hostname.startsWith(WILDCARD_SYMBOL)) {
+        } else if (CertificatesUtils.isWildcard(hostname)) {
             this.hostname = hostname.substring(2);
             this.wildcard = true;
         } else {
             this.hostname = hostname;
             this.wildcard = false;
         }
+        this.subjectAlternativeNames = subjectAlternativeNames;
         this.file = file;
         this.password = password;
         this.mode = mode;
-    }
-
-    public String getId() {
-        return id;
-    }
-
-    public String getHostname() {
-        return hostname;
-    }
-
-    public boolean isWildcard() {
-        return wildcard;
-    }
-
-    public String getFile() {
-        return file;
-    }
-
-    public String getPassword() {
-        return password;
     }
 
     public boolean isDynamic() {
@@ -88,25 +77,8 @@ public class SSLCertificateConfiguration {
         return ACME.equals(mode);
     }
 
-    public CertificateMode getMode() {
-        return mode;
-    }
-
     public boolean isMoreSpecific(SSLCertificateConfiguration other) {
         return hostname.length() > other.getHostname().length();
-    }
-
-    public int getDaysBeforeRenewal() {
-        return daysBeforeRenewal;
-    }
-
-    public void setDaysBeforeRenewal(int daysBeforeRenewal) {
-        this.daysBeforeRenewal = daysBeforeRenewal;
-    }
-
-    @Override
-    public String toString() {
-        return "SSLCertificateConfiguration{" + "id=" + id + ", hostname=" + hostname + ", mode=" + mode + '}';
     }
 
 }

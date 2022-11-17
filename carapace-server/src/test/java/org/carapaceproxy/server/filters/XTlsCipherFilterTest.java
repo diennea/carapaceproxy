@@ -1,6 +1,16 @@
 package org.carapaceproxy.server.filters;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.absent;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.matching;
+import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
+import static org.junit.Assert.assertTrue;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import java.util.Collections;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -12,12 +22,6 @@ import org.carapaceproxy.utils.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-
-import java.util.Collections;
-
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
-import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
-import static org.junit.Assert.assertTrue;
 
 public class XTlsCipherFilterTest {
     @Rule
@@ -49,7 +53,7 @@ public class XTlsCipherFilterTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
-            server.addCertificate(new SSLCertificateConfiguration("*", certificate, "testproxy", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration("*", null, certificate, "testproxy", STATIC));
             server.addRequestFilter(new RequestFilterConfiguration(XTlsCipherRequestFilter.TYPE, Collections.emptyMap()));
             server.addRequestFilter(new RequestFilterConfiguration(XTlsProtocolRequestFilter.TYPE, Collections.emptyMap()));
             server.addListener(new NetworkListenerConfiguration("0.0.0.0", 0, true, null, "*", "TLSv1.2"));
@@ -64,7 +68,7 @@ public class XTlsCipherFilterTest {
         }
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
-            server.addCertificate(new SSLCertificateConfiguration("*", certificate, "testproxy", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration("*", null, certificate, "testproxy", STATIC));
             server.addRequestFilter(new RequestFilterConfiguration(XTlsProtocolRequestFilter.TYPE, Collections.emptyMap()));
             server.addListener(new NetworkListenerConfiguration("0.0.0.0", 0, true, null, "*", "TLSv1.2"));
             server.start();

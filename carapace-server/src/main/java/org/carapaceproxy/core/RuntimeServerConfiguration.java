@@ -19,33 +19,33 @@
  */
 package org.carapaceproxy.core;
 
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
+import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
+import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
+import java.io.File;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
+import javax.net.ssl.SSLContext;
+import lombok.Data;
 import org.carapaceproxy.configstore.ConfigurationStore;
-import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode;
-import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
-import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
-import javax.net.ssl.SSLContext;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
-import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
-import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
-import java.io.File;
-import java.util.Set;
-import lombok.Data;
-import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;
 
 /**
@@ -203,7 +203,7 @@ public class RuntimeServerConfiguration {
         keyPairsSize = properties.getInt("dynamiccertificatesmanager.keypairssize", DEFAULT_KEYPAIRS_SIZE);
         LOG.log(Level.INFO, "dynamiccertificatesmanager.keypairssize={0}", keyPairsSize);
 
-        domainsCheckerIPAddresses = Set.of(properties.getArray("dynamiccertificatesmanager.domainschecker.ipaddresses", new String[]{}));
+        domainsCheckerIPAddresses = properties.getValues("dynamiccertificatesmanager.domainschecker.ipaddresses", Collections.emptySet());
         LOG.log(Level.INFO, "dynamiccertificatesmanager.domainschecker.ipaddresses={0}", domainsCheckerIPAddresses);
 
         ocspStaplingManagerPeriod = properties.getInt("ocspstaplingmanager.period", 0);
@@ -252,7 +252,7 @@ public class RuntimeServerConfiguration {
         }
 
         // storing enabled for all peers by default
-        localCertificatesStorePeersIds = Set.of(properties.getArray("dynamiccertificatesmanager.localcertificates.peers.ids", new String[]{}));
+        localCertificatesStorePeersIds = properties.getValues("dynamiccertificatesmanager.localcertificates.peers.ids", Collections.emptySet());
         LOG.log(Level.INFO, "dynamiccertificatesmanager.localcertificates.peers.ids={0}", localCertificatesStorePeersIds);
     }
 
@@ -262,6 +262,7 @@ public class RuntimeServerConfiguration {
             String prefix = "certificate." + i + ".";
             String hostname = properties.getString(prefix + "hostname", "");
             if (!hostname.isEmpty()) {
+                final var subjectAlternativeNames = properties.getValues(prefix + "san", Collections.emptySet());
                 String file = properties.getString(prefix + "file", "");
                 String pw = properties.getString(prefix + "password", "");
                 String mode = properties.getString(prefix + "mode", "static");
@@ -272,7 +273,7 @@ public class RuntimeServerConfiguration {
                             "Configuring SSL certificate {0}: hostname={1}, file={2}, password={3}, mode={4}",
                             new Object[]{prefix, hostname, file, pw, mode}
                     );
-                    SSLCertificateConfiguration config = new SSLCertificateConfiguration(hostname, file, pw, _mode);
+                    SSLCertificateConfiguration config = new SSLCertificateConfiguration(hostname, subjectAlternativeNames, file, pw, _mode);
                     if (config.isAcme()) {
                         config.setDaysBeforeRenewal(daysBeforeRenewal);
                     }
@@ -300,7 +301,7 @@ public class RuntimeServerConfiguration {
                         host, port, ssl, sslciphers, defautlSslCertificate
                 );
                 if (ssl) {
-                    config.setSslProtocols(properties.getArray(prefix + "sslprotocols", DEFAULT_SSL_PROTOCOLS.toArray(new String[0])));
+                    config.setSslProtocols(properties.getValues(prefix + "sslprotocols", DEFAULT_SSL_PROTOCOLS).toArray(new String[]{}));
                 }
                 this.addListener(config);
             }

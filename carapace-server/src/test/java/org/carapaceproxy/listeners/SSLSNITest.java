@@ -19,27 +19,27 @@
  */
 package org.carapaceproxy.listeners;
 
-import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import org.carapaceproxy.core.HttpProxyServer;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import java.net.InetAddress;
-import java.security.cert.X509Certificate;
-import org.carapaceproxy.client.EndpointKey;
-import org.carapaceproxy.server.config.NetworkListenerConfiguration;
-import org.carapaceproxy.server.config.SSLCertificateConfiguration;
-import org.carapaceproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import java.net.InetAddress;
+import java.security.cert.X509Certificate;
 import javax.net.ssl.SSLSession;
+import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.carapaceproxy.server.config.NetworkListenerConfiguration;
+import org.carapaceproxy.server.config.SSLCertificateConfiguration;
+import org.carapaceproxy.utils.RawHttpClient;
+import org.carapaceproxy.utils.TestEndpointMapper;
+import org.carapaceproxy.utils.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -70,7 +70,7 @@ public class SSLSNITest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
         
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
-            server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost /*
                      * default
                      */));
@@ -92,9 +92,9 @@ public class SSLSNITest {
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
 
-            server.addCertificate(new SSLCertificateConfiguration("other", "cert", "pwd", STATIC));
-            server.addCertificate(new SSLCertificateConfiguration("*.example.com", "cert", "pwd", STATIC));
-            server.addCertificate(new SSLCertificateConfiguration("www.example.com", "cert", "pwd", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration("other", null, "cert", "pwd", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration("*.example.com", null, "cert", "pwd", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration("www.example.com", null, "cert", "pwd", STATIC));
 
             // client requests bad SNI, bad default in listener
             assertNull(server.getListeners().chooseCertificate("no", "no-default"));
@@ -111,12 +111,12 @@ public class SSLSNITest {
             assertEquals("*.example.com", server.getListeners().chooseCertificate("test.example.com", "no-default").getId());
 
             // full wildcard
-            server.addCertificate(new SSLCertificateConfiguration("*", "cert", "pwd", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration("*", null, "cert", "pwd", STATIC));
             // full wildcard has not to hide more specific wildcard one
             assertEquals("*.example.com", server.getListeners().chooseCertificate("test.example.com", "no-default").getId());
 
             // more specific wildcard
-            server.addCertificate(new SSLCertificateConfiguration("*.test.example.com", "cert", "pwd", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration("*.test.example.com", null, "cert", "pwd", STATIC));
             // more specific wildcard has to hide less specific one (*.example.com)
             assertEquals("*.test.example.com", server.getListeners().chooseCertificate("pippo.test.example.com", "no-default").getId());
         }
@@ -124,7 +124,7 @@ public class SSLSNITest {
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
 
             // full wildcard
-            server.addCertificate(new SSLCertificateConfiguration("*", "cert", "pwd", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration("*", null, "cert", "pwd", STATIC));
 
             assertEquals("*", server.getListeners().chooseCertificate(null, "www.example.com").getId());
             assertEquals("*", server.getListeners().chooseCertificate("www.example.com", null).getId());
@@ -149,7 +149,7 @@ public class SSLSNITest {
 
         // TLS 1.3 support checking
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
-            server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost,"TLSv1.3"));
             server.start();
             int port = server.getLocalPort();
@@ -164,7 +164,7 @@ public class SSLSNITest {
         // default ssl protocol version support checking
         for (String proto : DEFAULT_SSL_PROTOCOLS) {
             try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
-                server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
+                server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
                 server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost, proto));
                 server.start();
                 int port = server.getLocalPort();
@@ -177,7 +177,7 @@ public class SSLSNITest {
             }
         }
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
-            server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost));
             server.start();
             int port = server.getLocalPort();
@@ -192,7 +192,7 @@ public class SSLSNITest {
         // wrong ssl protocol version checking
         TestUtils.assertThrows(ConfigurationNotValidException.class, () -> {
             try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
-                server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, certificate, "testproxy", STATIC));
+                server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
                 server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost, "TLSvWRONG"));
             }
         });

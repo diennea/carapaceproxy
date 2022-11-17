@@ -19,19 +19,7 @@
  */
 package org.carapaceproxy.server.certificates;
 
-import java.net.URL;
-import java.security.KeyPair;
-import java.security.cert.X509Certificate;
-import java.util.Arrays;
-import java.util.Properties;
-import junitparams.JUnitParamsRunner;
-import junitparams.Parameters;
-import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
-import org.carapaceproxy.configstore.CertificateData;
-import org.carapaceproxy.configstore.ConfigurationStore;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
-import org.carapaceproxy.configstore.PropertiesConfigurationStore;
-import org.carapaceproxy.core.RuntimeServerConfiguration;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.DNS_CHALLENGE_WAIT;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.DOMAIN_UNREACHABLE;
@@ -43,13 +31,9 @@ import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERI
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertEquals;
-import org.junit.Test;
-import org.junit.runner.RunWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -58,15 +42,30 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.shredzone.acme4j.Status.INVALID;
+import static org.shredzone.acme4j.Status.VALID;
+import java.net.URL;
+import java.security.GeneralSecurityException;
+import java.security.KeyPair;
+import java.security.cert.X509Certificate;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Properties;
+import junitparams.JUnitParamsRunner;
+import junitparams.Parameters;
+import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
+import org.carapaceproxy.configstore.CertificateData;
+import org.carapaceproxy.configstore.ConfigurationStore;
+import org.carapaceproxy.configstore.PropertiesConfigurationStore;
+import org.carapaceproxy.core.HttpProxyServer;
+import org.carapaceproxy.core.Listeners;
+import org.carapaceproxy.core.RuntimeServerConfiguration;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.powermock.reflect.Whitebox;
 import org.shredzone.acme4j.Certificate;
 import org.shredzone.acme4j.Login;
 import org.shredzone.acme4j.Order;
-import static org.shredzone.acme4j.Status.INVALID;
-import static org.shredzone.acme4j.Status.VALID;
-import java.security.GeneralSecurityException;
-import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.core.Listeners;
-import org.powermock.reflect.Whitebox;
 import org.shredzone.acme4j.Session;
 import org.shredzone.acme4j.Status;
 import org.shredzone.acme4j.challenge.Dns01Challenge;
@@ -112,7 +111,7 @@ public class DynamicCertificatesManagerTest {
                 "{\"url\": \"https://localhost/index\", \"type\": \"http-01\", \"token\": \"mytoken\"}"
         ));
         when(c.getAuthorization()).thenReturn("");
-        when(ac.getChallengeForOrder(any(), eq(false))).thenReturn(runCase.equals("challenge_null") ? null : c);
+        when(ac.getChallengesForOrder(any())).thenReturn(runCase.equals("challenge_null") ? null : Map.of("domain", c));
         when(ac.checkResponseForChallenge(any())).thenReturn(runCase.equals("challenge_status_invalid") ? INVALID : VALID);
         when(ac.checkResponseForOrder(any())).thenReturn(runCase.equals("order_response_error") ? INVALID : VALID);
         if (runCase.equals("order_already_valid") || runCase.equals("order_finalization_error")) {
@@ -138,20 +137,20 @@ public class DynamicCertificatesManagerTest {
 
         // yet available certificate
         String d0 = "localhost0";
-        CertificateData cd0 = new CertificateData(d0, chain, AVAILABLE, "", "");
+        CertificateData cd0 = new CertificateData(d0, null, chain, AVAILABLE);
         when(store.loadCertificateForDomain(eq(d0))).thenReturn(cd0);
         // certificate to order
         String d1 = "localhost1";
-        CertificateData cd1 = new CertificateData(d1, "", WAITING, "", "");
+        CertificateData cd1 = new CertificateData(d1, null, "", WAITING);
         when(store.loadCertificateForDomain(eq(d1))).thenReturn(cd1);
         man.setConfigurationStore(store);
         // manual certificate
         String d2 = "manual";
-        CertificateData cd2 = new CertificateData(d2, chain, AVAILABLE, "", "");
+        CertificateData cd2 = new CertificateData(d2, null, chain, AVAILABLE);
         when(store.loadCertificateForDomain(eq(d2))).thenReturn(cd2);
         // empty manual certificate
         String d3 = "emptymanual";
-        CertificateData cd3 = new CertificateData(d3, "", AVAILABLE, "", "");
+        CertificateData cd3 = new CertificateData(d3, null, "", AVAILABLE);
         when(store.loadCertificateForDomain(eq(d3))).thenReturn(cd3);
 
         man.setConfigurationStore(store);
@@ -279,7 +278,7 @@ public class DynamicCertificatesManagerTest {
                 "{\"url\": \"https://localhost/index\", \"type\": \"dns-01\", \"token\": \"mytoken\"}"
         ));
 
-        when(ac.getChallengeForOrder(any(), eq(true))).thenReturn(c);
+        when(ac.getChallengesForOrder(any())).thenReturn(Map.of("domain", c));
         when(ac.checkResponseForChallenge(any())).thenReturn(runCase.equals("challenge_failed") ? INVALID : VALID);
 
         KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
@@ -307,7 +306,7 @@ public class DynamicCertificatesManagerTest {
 
         // certificate to order
         String domain = "*.localhost";
-        CertificateData cd1 = new CertificateData(domain, "", WAITING, "", "");
+        CertificateData cd1 = new CertificateData(domain, null, "", WAITING);
         when(store.loadCertificateForDomain(eq(domain))).thenReturn(cd1);
         man.setConfigurationStore(store);
 
@@ -324,7 +323,6 @@ public class DynamicCertificatesManagerTest {
         man.reloadConfiguration(conf);
 
         CertificateData certData = man.getCertificateDataForDomain(domain);
-        assertThat(certData.isWildcard(), is(true));
         int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
 
         // WAITING
@@ -392,7 +390,7 @@ public class DynamicCertificatesManagerTest {
                 "{\"url\": \"https://localhost/index\", \"type\": \"http-01\", \"token\": \"mytoken\"}"
         ));
         when(c.getAuthorization()).thenReturn("");
-        when(ac.getChallengeForOrder(any(), eq(true))).thenReturn(c);
+        when(ac.getChallengesForOrder(any())).thenReturn(Map.of("domain", c));
         when(ac.checkResponseForChallenge(any())).thenReturn(VALID);
 
         KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
@@ -412,7 +410,7 @@ public class DynamicCertificatesManagerTest {
         when(store.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
 
         // certificate to order
-        CertificateData cd1 = new CertificateData(domain, "", WAITING, "", "");
+        CertificateData cd1 = new CertificateData(domain, null, "", WAITING);
         when(store.loadCertificateForDomain(eq(domain))).thenReturn(cd1);
         man.setConfigurationStore(store);
 

@@ -20,9 +20,8 @@
 package org.carapaceproxy.server.config;
 
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import lombok.Data;
 
 /**
@@ -30,7 +29,7 @@ import lombok.Data;
  */
 public class NetworkListenerConfiguration {
 
-    public static final List<String> DEFAULT_SSL_PROTOCOLS = Collections.unmodifiableList(Arrays.asList("TLSv1.2", "TLSv1.3"));
+    public static final Set<String> DEFAULT_SSL_PROTOCOLS = Set.of("TLSv1.2", "TLSv1.3");
 
     private final String host;
     private final int port;

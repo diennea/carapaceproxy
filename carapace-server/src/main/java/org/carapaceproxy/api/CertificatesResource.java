@@ -19,18 +19,16 @@
  */
 package org.carapaceproxy.api;
 
-import org.carapaceproxy.configstore.CertificateData;
-import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.core.RuntimeServerConfiguration;
-import org.carapaceproxy.server.certificates.DynamicCertificateState;
-import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
-import org.carapaceproxy.server.config.SSLCertificateConfiguration;
-import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode;
-import org.carapaceproxy.utils.CertificatesUtils;
-
-import javax.ws.rs.*;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
+import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.MANUAL;
+import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
+import static org.carapaceproxy.utils.APIUtils.certificateModeToString;
+import static org.carapaceproxy.utils.APIUtils.certificateStateToString;
+import static org.carapaceproxy.utils.APIUtils.stringToCertificateMode;
+import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
+import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
@@ -39,25 +37,34 @@ import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
-import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
-import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
-import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.MANUAL;
-import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
-import static org.carapaceproxy.utils.APIUtils.*;
-import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
-import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
-import java.util.Collection;
-import java.util.List;
 import javax.servlet.ServletContext;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.DefaultValue;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import org.carapaceproxy.configstore.CertificateData;
+import org.carapaceproxy.core.HttpProxyServer;
+import org.carapaceproxy.core.RuntimeServerConfiguration;
+import org.carapaceproxy.server.certificates.DynamicCertificateState;
+import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
+import org.carapaceproxy.server.config.SSLCertificateConfiguration;
+import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode;
+import org.carapaceproxy.utils.CertificatesUtils;
 
 /**
  * Access to certificates
@@ -258,7 +265,7 @@ public class CertificatesResource {
                 state = AVAILABLE;
             }
 
-            CertificateData cert = new CertificateData(domain, encodedData, state, "", "");
+            CertificateData cert = new CertificateData(domain, null, encodedData, state);
             cert.setManual(MANUAL.equals(certType));
 
             cert.setDaysBeforeRenewal(daysbeforerenewal != null ? daysbeforerenewal : DEFAULT_DAYS_BEFORE_RENEWAL);

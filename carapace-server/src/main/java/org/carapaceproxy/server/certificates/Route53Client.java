@@ -22,11 +22,11 @@ package org.carapaceproxy.server.certificates;
 import static org.carapaceproxy.server.certificates.Route53Client.DnsChallengeAction.CHECK;
 import static org.carapaceproxy.server.certificates.Route53Client.DnsChallengeAction.DELETE;
 import static org.carapaceproxy.server.certificates.Route53Client.DnsChallengeAction.UPSERT;
-import static org.carapaceproxy.server.config.SSLCertificateConfiguration.WILDCARD_SYMBOL;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.carapaceproxy.utils.CertificatesUtils;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
@@ -98,7 +98,7 @@ public class Route53Client {
     }
 
     private boolean performActionOnDnsChallengeForDomain(String domain, String digest, DnsChallengeAction action) {
-        String dnsName = domain.replace(WILDCARD_SYMBOL, "") + ".";
+        String dnsName = CertificatesUtils.removeWildcard(domain) + ".";
         String challengeName = DNS_CHALLENGE_PREFIX + dnsName;
 
         try {

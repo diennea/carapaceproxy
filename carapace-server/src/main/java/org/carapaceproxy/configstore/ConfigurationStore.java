@@ -23,6 +23,7 @@ import herddb.utils.BooleanHolder;
 import java.security.KeyPair;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
@@ -80,9 +81,13 @@ public interface ConfigurationStore extends AutoCloseable {
         return Boolean.parseBoolean(property);
     }
 
-    default String[] getArray(String key, String[] defaultValue) throws ConfigurationNotValidException {
-        String[] array = getString(key, "").replaceAll(" ", "").split(PROPERTY_ARRAY_SEPARATOR);
-        return array.length == 1 && (array[0] == null || array[0].isEmpty()) ? defaultValue : array;
+    default Set<String> getValues(String key, Set<String> defaultValue) throws ConfigurationNotValidException {
+        final var values = getString(key, "")
+                .replaceAll(" ", "")
+                .split(PROPERTY_ARRAY_SEPARATOR);
+        return values.length == 1 && (values[0] == null || values[0].isEmpty())
+                ? defaultValue
+                : new HashSet<>(List.of(values));
     }
 
     default String getClassname(String key, String defaultValue) throws ConfigurationNotValidException {

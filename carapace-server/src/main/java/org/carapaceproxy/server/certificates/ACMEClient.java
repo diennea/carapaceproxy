@@ -23,13 +23,20 @@ import java.io.IOException;
 import java.net.URI;
 import java.security.KeyPair;
 import java.security.Security;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.carapaceproxy.utils.CertificatesUtils;
 import org.shredzone.acme4j.Account;
 import org.shredzone.acme4j.AccountBuilder;
 import org.shredzone.acme4j.Authorization;
 import org.shredzone.acme4j.Certificate;
+import org.shredzone.acme4j.Identifier;
 import org.shredzone.acme4j.Login;
 import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.Session;
@@ -93,35 +100,37 @@ public class ACMEClient {
      * Methods for step-by-step certificate issuing
      */
     public Order createOrderForDomain(String... domains) throws AcmeException {
-        Account acct = getLogin().getAccount();
-
-        return acct.newOrder().domains(domains).create();
+        return getLogin().getAccount().newOrder()
+                .domains(domains)
+                .create();
     }
 
-    public Challenge getChallengeForOrder(Order order, boolean dnsChallenge) throws AcmeException {
-        Authorization auth = order.getAuthorizations().get(0);
-        String domain = auth.getIdentifier().getDomain();
-        LOG.debug("Authorization for domain {} status:{}", domain, auth.getStatus());
+    public Map<String, Challenge> getChallengesForOrder(Order order) throws AcmeException {
+        final var challenges = new HashMap<String, Challenge>();
+        for (var auth: order.getAuthorizations()) {
+            final var domain = auth.getIdentifier().getDomain();
+            LOG.debug("Authorization for domain {} status: {}", domain, auth.getStatus());
+            // The authorization is already valid. No need to process a challenge.
+            if (auth.getStatus() == Status.VALID) {
+                continue;
+            }
 
-        // The authorization is already valid. No need to process a challenge.
-        if (auth.getStatus() == Status.VALID) {
-            return null;
+            LOG.debug("Retrieving challenge...");
+            final var challenge = CertificatesUtils.isWildcard(domain) ? dnsChallenge(auth) : httpChallenge(auth);
+            if (challenge == null) {
+                throw new AcmeException("No challenge found for domain " + domain);
+            }
+
+            // If the challenge is already verified, there's no need to execute it again.
+            LOG.debug("Challenge for domain {} status:{}", domain, challenge.getStatus());
+            if (challenge.getStatus() == Status.VALID) {
+                continue;
+            }
+
+            challenges.put(domain, challenge);
         }
 
-        LOG.debug("Retrieving challenge...");
-        Challenge challenge = dnsChallenge ? dnsChallenge(auth) : httpChallenge(auth);
-
-        if (challenge == null) {
-            throw new AcmeException("No challenge found");
-        }
-
-        // If the challenge is already verified, there's no need to execute it again.
-        LOG.debug("Challenge for domain {} status:{}", domain, challenge.getStatus());
-        if (challenge.getStatus() == Status.VALID) {
-            return null;
-        }
-
-        return challenge;
+        return challenges;
     }
 
     /**
@@ -189,13 +198,13 @@ public class ACMEClient {
      * @throws AcmeException
      */
     public void orderCertificate(Order order, KeyPair domainKeyPair) throws IOException, AcmeException {
-        List<String> domains = order.getIdentifiers().stream().map(e -> e.getDomain()).collect(Collectors.toList());
-
+        final var domains = order.getIdentifiers().stream()
+                .map(Identifier::getDomain)
+                .collect(Collectors.toList());
+        LOG.info("Certificate ordering for domains {}", domains);
         CSRBuilder csrb = new CSRBuilder();
         csrb.addDomains(domains);
         csrb.sign(domainKeyPair);
-
-        LOG.info("Certificate ordering for domains {}", domains);
         order.execute(csrb.getEncoded());
     }
 
