@@ -7,7 +7,7 @@
 </template>
 
 <script>
-    import { doGet } from "./../mockserver";
+    import { doGet } from "../serverapi";
     import { toBooleanSymbol } from "../lib/formatter";
     export default {
         name: "ConnectionPools",

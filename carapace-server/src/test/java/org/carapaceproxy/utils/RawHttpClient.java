@@ -19,8 +19,11 @@
  */
 package org.carapaceproxy.utils;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -49,6 +52,8 @@ public final class RawHttpClient implements AutoCloseable {
 
     private static final boolean DEBUG = false;
     private static final int DEFAULT_SOCKET_SO_TIMEOUT = 10_000; // millis
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final Socket socket;
     private final String host;
@@ -130,6 +135,20 @@ public final class RawHttpClient implements AutoCloseable {
                 + "\r\n" + HttpHeaderNames.CONNECTION + ": " + HttpHeaderValues.KEEP_ALIVE
                 + "\r\nAuthorization: Basic " + credentials.toBase64()
                 + "\r\n\r\n");
+    }
+
+    public HttpResponse post(String uri, String params, Object data, BasicAuthCredentials credentials) throws Exception {
+        ByteArrayOutputStream oo = new ByteArrayOutputStream();
+        final var json = (data != null ? OBJECT_MAPPER.writeValueAsString(data) : "").getBytes(StandardCharsets.US_ASCII);
+        params = (params == null || params.isEmpty()) ? "" : "?" + params;
+        oo.write(("POST " + uri + params + " HTTP/1.1\r\n"
+                + HttpHeaderNames.HOST + ": " + host + "\r\n"
+                + HttpHeaderNames.CONTENT_TYPE + ": " + HttpHeaderValues.APPLICATION_JSON + "\r\n"
+                + HttpHeaderNames.CONTENT_LENGTH + ": " + json.length+ "\r\n"
+                + HttpHeaderNames.AUTHORIZATION + ": Basic " + credentials.toBase64() + "\r\n\r\n"
+        ).getBytes(StandardCharsets.US_ASCII));
+        oo.write(json);
+        return executeRequest(new ByteArrayInputStream(oo.toByteArray()));
     }
 
     public void sendRequest(String request) throws IOException {
@@ -236,16 +255,32 @@ public final class RawHttpClient implements AutoCloseable {
         }
 
         public String getBodyString() throws UnsupportedEncodingException {
-            return body.toString("utf-8");
+            return body.toString(StandardCharsets.UTF_8);
+        }
+
+        public boolean isOk() {
+            return statusLine.contains(HttpResponseStatus.OK.codeAsText());
+        }
+
+        public boolean isCreated() {
+            return statusLine.contains(HttpResponseStatus.CREATED.codeAsText());
+        }
+
+        public boolean isError() {
+            return statusLine.contains(HttpResponseStatus.UNPROCESSABLE_ENTITY.codeAsText());
+        }
+
+        public boolean isConflict() {
+            return statusLine.contains(HttpResponseStatus.CONFLICT.codeAsText());
+        }
+
+        public <T> T getData(Class<T> c) throws UnsupportedEncodingException, JsonProcessingException {
+            return OBJECT_MAPPER.readValue(getBodyString(), c);
         }
 
         @Override
         public String toString() {
-            try {
-                return rawResponse.toString("utf-8");
-            } catch (UnsupportedEncodingException ex) {
-                throw new RuntimeException(ex);
-            }
+            return rawResponse.toString(StandardCharsets.UTF_8);
         }
 
     }

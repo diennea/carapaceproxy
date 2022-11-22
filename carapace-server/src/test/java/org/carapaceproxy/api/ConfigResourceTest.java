@@ -19,13 +19,13 @@
  */
 package org.carapaceproxy.api;
 
-import java.util.Properties;
-import org.carapaceproxy.utils.RawHttpClient;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import java.util.Properties;
+import org.carapaceproxy.utils.RawHttpClient;
 import org.junit.Test;
 
 /**
@@ -72,9 +72,7 @@ public class ConfigResourceTest extends UseAdminServer {
                     + "Authorization: Basic " + credentials.toBase64() + "\r\n"
                     + "\r\n"
                     + body);
-            String s = resp.getBodyString();
-            System.out.println("s:" + s);
-            assertTrue(s.equals("{\"ok\":true,\"error\":\"\"}"));
+            assertTrue(resp.isOk());
 
             // 2) Dumping + check
             resp = client.get("/api/config", credentials);
@@ -97,9 +95,7 @@ public class ConfigResourceTest extends UseAdminServer {
                     + "Authorization: Basic " + credentials.toBase64() + "\r\n"
                     + "\r\n"
                     + dumpedToReApply);
-            s = resp.getBodyString();
-            System.out.println("s:" + s);
-            assertTrue(s.equals("{\"ok\":true,\"error\":\"\"}"));
+            assertTrue(resp.isOk());
 
             // 4) Dumping + check
             resp = client.get("/api/config", credentials);
@@ -128,10 +124,7 @@ public class ConfigResourceTest extends UseAdminServer {
                     + "Authorization: Basic " + credentials.toBase64() + "\r\n"
                     + "\r\n"
                     + body);
-            String s = resp.getBodyString();
-            System.out.println("s:" + s);
-            assertTrue(s.equals("{\"ok\":true,\"error\":\"\"}"));
-
+            assertTrue(resp.isOk());
         }
 
         // restart, same "static" configuration
@@ -151,10 +144,7 @@ public class ConfigResourceTest extends UseAdminServer {
                     + "Authorization: Basic " + credentials.toBase64() + "\r\n"
                     + "\r\n"
                     + body);
-            String s = resp.getBodyString();
-            System.out.println("s:" + s);
-            assertTrue(s.equals("{\"ok\":true,\"error\":\"\"}"));
-
+            assertTrue(resp.isOk());
         }
         assertEquals(9000, server.getCurrentConfiguration().getConnectTimeout());
         assertEquals(30, server.getBackendHealthManager().getPeriod());

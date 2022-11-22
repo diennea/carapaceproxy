@@ -19,10 +19,29 @@
  */
 package org.carapaceproxy.api;
 
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
+import static org.carapaceproxy.utils.APIUtils.certificateStateToString;
+import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
+import static org.carapaceproxy.utils.CertificatesTestUtils.uploadCertificate;
+import static org.carapaceproxy.utils.CertificatesUtils.KEYSTORE_PW;
+import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.security.KeyPair;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Properties;
@@ -30,37 +49,19 @@ import javax.servlet.http.HttpServletResponse;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
-import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
-import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
-import org.carapaceproxy.server.filters.*;
+import org.carapaceproxy.server.filters.RegexpMapSessionIdFilter;
+import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;
+import org.carapaceproxy.server.filters.XForwardedForRequestFilter;
+import org.carapaceproxy.server.filters.XTlsCipherRequestFilter;
+import org.carapaceproxy.server.filters.XTlsProtocolRequestFilter;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchAllRequestMatcher;
-
-import static org.carapaceproxy.utils.CertificatesTestUtils.uploadCertificate;
-
 import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestUtils;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.not;
 import org.junit.Assert;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
-import org.junit.Test;
-import static org.carapaceproxy.utils.APIUtils.certificateStateToString;
-import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
-import static org.carapaceproxy.utils.CertificatesUtils.KEYSTORE_PW;
-import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertThrows;
-import java.nio.file.Files;
-import java.security.KeyPair;
-import java.security.cert.Certificate;
-import java.security.cert.X509Certificate;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.shredzone.acme4j.util.KeyPairUtils;
 
@@ -231,11 +232,7 @@ public class StartAPIServerTest extends UseAdminServer {
                     + "Authorization: Basic " + credentials.toBase64() + "\r\n"
                     + "\r\n"
                     + body);
-            String s = resp.getBodyString();
-            System.out.println("s:" + s);
-            // no backend configured
-            assertTrue(s.equals("{\"ok\":true,\"error\":\"\"}"));
-
+            assertTrue(resp.isOk());
         }
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             String body = "connectionsmanager.maxconnectionsperendpoint=20-BAD-VALUE";
@@ -246,11 +243,8 @@ public class StartAPIServerTest extends UseAdminServer {
                     + "Authorization: Basic " + credentials.toBase64() + "\r\n"
                     + "\r\n"
                     + body);
-            String s = resp.getBodyString();
-            System.out.println("s:" + s);
-            // no backend configured
-            assertTrue(s.contains("\"ok\":false"));
-            assertTrue(s.contains("Invalid integer value '20-BAD-VALUE' for parameter 'connectionsmanager.maxconnectionsperendpoint'"));
+            assertTrue(resp.isError());
+            assertTrue(resp.getBodyString().contains("Invalid integer value '20-BAD-VALUE' for parameter 'connectionsmanager.maxconnectionsperendpoint'"));
         }
     }
 

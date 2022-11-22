@@ -23,27 +23,34 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.carapaceproxy.api.UseAdminServer.DEFAULT_ADMIN_PORT;
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import java.security.KeyPair;
-import java.security.cert.Certificate;
-import java.util.Properties;
-import org.carapaceproxy.api.UseAdminServer;
 import static org.carapaceproxy.utils.CertificatesTestUtils.uploadCertificate;
-import org.carapaceproxy.utils.RawHttpClient;
-import org.carapaceproxy.utils.RawHttpClient.HttpResponse;
-
-import static org.junit.Assert.*;
+import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.shredzone.acme4j.Status.VALID;
+import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import java.io.File;
+import java.io.StringWriter;
+import java.nio.file.Files;
+import java.security.KeyPair;
+import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.Date;
 import java.util.List;
+import java.util.Properties;
+import java.util.Set;
 import javax.net.ssl.ExtendedSSLSession;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
@@ -59,30 +66,26 @@ import org.bouncycastle.cert.ocsp.OCSPRespBuilder;
 import org.bouncycastle.operator.DigestCalculatorProvider;
 import org.bouncycastle.operator.bc.BcDigestCalculatorProvider;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
+import org.bouncycastle.util.io.pem.PemObject;
+import org.bouncycastle.util.io.pem.PemWriter;
+import org.carapaceproxy.api.CertificatesResource;
+import org.carapaceproxy.api.UseAdminServer;
+import org.carapaceproxy.api.response.FormValidationResponse;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.certificates.ocsp.OcspStaplingManager;
+import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.HttpTestUtils;
+import org.carapaceproxy.utils.RawHttpClient;
+import org.carapaceproxy.utils.RawHttpClient.HttpResponse;
 import org.carapaceproxy.utils.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.powermock.reflect.Whitebox;
 import org.shredzone.acme4j.Login;
 import org.shredzone.acme4j.util.KeyPairUtils;
-import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
-import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
-
-import java.io.File;
-import java.io.StringWriter;
-import java.nio.file.Files;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.Set;
-import org.bouncycastle.util.io.pem.PemObject;
-import org.bouncycastle.util.io.pem.PemWriter;
-import org.carapaceproxy.server.config.SSLCertificateConfiguration;
-import org.powermock.reflect.Whitebox;
 
 /**
  * Test use cases for basic certificates management and client requests.
@@ -828,6 +831,81 @@ public class CertificatesTest extends UseAdminServer {
         fullchainPem = Files.readString(f[0].toPath());
         System.out.println("[FULLCHAIN]: " + fullchainPem);
         assertTrue(fullchainPem.endsWith(chainPem));
+    }
+
+    @Test
+    public void testCreateCertificateFromUI() throws Exception {
+        configureAndStartServer();
+        int port = server.getLocalPort();
+        try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
+            final var form = new CertificatesResource.CertificateForm();
+
+            // empty domain name
+            var resp = client.post("/api/certificates/", null, form, credentials);
+            assertTrue(resp.isError());
+            var result = resp.getData(FormValidationResponse.class);
+            assertEquals("domain", result.getField());
+            assertEquals(FormValidationResponse.ERROR_FIELD_REQUIRED, result.getMessage());
+
+            // domain name in subject alternative names
+            form.setDomain("test.domain.tld");
+            form.setSubjectAltNames(Set.of("test.domain.tld", "test2.domain.tld"));
+            resp = client.post("/api/certificates/", null, form, credentials);
+            assertTrue(resp.isError());
+            result = resp.getData(FormValidationResponse.class);
+            assertEquals("subjectAltNames", result.getField());
+            assertEquals("Subject alternative names cannot include the Domain", result.getMessage());
+
+            // invalid certificate type
+            form.setDomain("test.domain.tld");
+            form.setSubjectAltNames(Set.of("test1.domain.tld", "test2.domain.tld"));
+            form.setType("manual");
+            resp = client.post("/api/certificates/", null, form, credentials);
+            assertTrue(resp.isError());
+            result = resp.getData(FormValidationResponse.class);
+            assertEquals("type", result.getField());
+            assertEquals(FormValidationResponse.ERROR_FIELD_INVALID, result.getMessage());
+
+            // invalid days before renewal
+            form.setDomain("test.domain.tld");
+            form.setSubjectAltNames(Set.of("test1.domain.tld", "test2.domain.tld"));
+            form.setType("acme");
+            form.setDaysBeforeRenewal(-1);
+            resp = client.post("/api/certificates/", null, form, credentials);
+            assertTrue(resp.isError());
+            result = resp.getData(FormValidationResponse.class);
+            assertEquals("daysBeforeRenewal", result.getField());
+            assertEquals(FormValidationResponse.ERROR_FIELD_INVALID, result.getMessage());
+
+            // all ok
+            form.setDomain("test.domain.tld");
+            form.setSubjectAltNames(Set.of("test1.domain.tld", "test2.domain.tld"));
+            form.setType("acme");
+            form.setDaysBeforeRenewal(10);
+            resp = client.post("/api/certificates/", null, form, credentials);
+            assertTrue(resp.isCreated());
+            CertificateData data = server.getDynamicCertificatesManager().getCertificateDataForDomain("test.domain.tld");
+            assertNotNull(data);
+            ConfigurationStore store = server.getDynamicConfigurationStore();
+            assertTrue(store.anyPropertyMatches((k, v) -> {
+                if (k.matches("certificate\\.[0-9]+\\.hostname") && v.equals("test.domain.tld")) {
+                    return store.getProperty(k.replace("hostname", "mode"), null).equals("acme")
+                    && store.getProperty(k.replace("hostname", "daysbeforerenewal"), null).equals("10");
+                }
+                return false;
+            }));
+
+            // domain name already used
+            form.setDomain("test.domain.tld");
+            form.setSubjectAltNames(Set.of("test1.domain.tld", "test2.domain.tld"));
+            form.setType("acme");
+            form.setDaysBeforeRenewal(10);
+            resp = client.post("/api/certificates/", null, form, credentials);
+            assertTrue(resp.isConflict());
+            result = resp.getData(FormValidationResponse.class);
+            assertEquals("domain", result.getField());
+            assertEquals(FormValidationResponse.ERROR_FIELD_DUPLICATED, result.getMessage());
+        }
     }
 
 }

@@ -19,11 +19,11 @@
  */
 package org.carapaceproxy.api;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.Properties;
 import org.apache.curator.test.TestingServer;
 import org.carapaceproxy.utils.RawHttpClient;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 public class ClusterReconfigTest extends UseAdminServer {
@@ -51,10 +51,7 @@ public class ClusterReconfigTest extends UseAdminServer {
                         + "Authorization: Basic " + credentials.toBase64() + "\r\n"
                         + "\r\n"
                         + body);
-                String s = resp.getBodyString();
-                System.out.println("s:" + s);
-                assertTrue(s.equals("{\"ok\":true,\"error\":\"\"}"));
-
+                assertTrue(resp.isOk());
             }
 
             // restart, same "static" configuration
@@ -73,10 +70,7 @@ public class ClusterReconfigTest extends UseAdminServer {
                         + "Authorization: Basic " + credentials.toBase64() + "\r\n"
                         + "\r\n"
                         + body);
-                String s = resp.getBodyString();
-                System.out.println("s:" + s);
-                assertTrue(s.equals("{\"ok\":true,\"error\":\"\"}"));
-
+                assertTrue(resp.isOk());
             }
             assertEquals(9000, server.getCurrentConfiguration().getConnectTimeout());
             assertEquals(30, server.getBackendHealthManager().getPeriod());

@@ -2,8 +2,10 @@
     <div>
         <div class="page-header">
             <h2>Certificates</h2>
+            <b-button v-b-modal.edit>Create certificate</b-button>
+            <certificate-form id="edit" @done="loadCertificates"></certificate-form>
             <b-button v-if="localStorePath"
-                      @click="openConfirmModal"                      
+                      @click="openConfirmModal"
                       class="btn">
                 Dump all certificates
             </b-button>
@@ -35,10 +37,14 @@
 </template>
 
 <script>
-    import { doGet, doPost } from './../mockserver'
-    import { toBooleanSymbol } from "./../lib/formatter";
+    import { doGet, doPost } from '../serverapi'
+    import { toBooleanSymbol } from "../lib/formatter";
+    import CertificateForm from "./certificates/CertificateForm.vue";
     export default {
         name: "Certificates",
+        components: {
+            "certificate-form": CertificateForm
+        },
         data() {
             return {
                 certificates: [],
@@ -49,11 +55,7 @@
             };
         },
         created() {
-            doGet("/api/certificates", data => {
-                this.certificates = data.certificates || {}
-                this.localStorePath = data.localStorePath
-                this.loading = false
-            });
+            this.loadCertificates()
         },
         computed: {
             fields() {
@@ -83,6 +85,14 @@
             },
         },
         methods: {
+            loadCertificates() {
+                this.loading = true
+                doGet("/api/certificates", data => {
+                    this.certificates = data.certificates || {}
+                    this.localStorePath = data.localStorePath
+                    this.loading = false
+                });
+            },
             showCertDetail(cert) {
                 this.$router.push({name: "Certificate", params: {id: cert.id}});
             },
@@ -116,19 +126,13 @@
                     if (value != true) {
                         return;
                     }
-                    doPost("/api/certificates/storeall",
-                            null,
-                            resp => {
-                                this.opSuccess = resp.ok;
-                                if (resp.ok) {
-                                    this.opMessage = 'Certificates dump started';
-                                } else {
-                                    this.opMessage = 'Unable to dump certificates to path: ' + this.localStorePath + '. Cause: ' + resp.error;
-                                }
+                    doPost("/api/certificates/storeall", null,() => {
+                                this.opSuccess = true
+                                this.opMessage = 'Certificates dump started'
                             },
                             error => {
                                 this.opSuccess = false;
-                                this.opMessage = 'Unable to dump certificates to path: ' + this.localStorePath + '. Cause: ' + error;
+                                this.opMessage = 'Unable to dump certificates to path: ' + this.localStorePath + '. Cause: ' + error.message;
                             }
                     );
                 })

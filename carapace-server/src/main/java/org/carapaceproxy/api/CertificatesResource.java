@@ -19,6 +19,48 @@
  */
 package org.carapaceproxy.api;
 
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
+import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.ACME;
+import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.MANUAL;
+import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
+import static org.carapaceproxy.utils.APIUtils.certificateModeToString;
+import static org.carapaceproxy.utils.APIUtils.certificateStateToString;
+import static org.carapaceproxy.utils.APIUtils.stringToCertificateMode;
+import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
+import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
+import java.io.IOException;
+import java.io.InputStream;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
+import java.security.PrivateKey;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
+import java.util.Base64;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.servlet.ServletContext;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.DefaultValue;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.carapaceproxy.api.response.FormValidationResponse;
+import org.carapaceproxy.api.response.SimpleResponse;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
@@ -28,44 +70,13 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode;
 import org.carapaceproxy.utils.CertificatesUtils;
 
-import javax.ws.rs.*;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-import java.io.IOException;
-import java.io.InputStream;
-import java.security.GeneralSecurityException;
-import java.security.KeyStore;
-import java.security.PrivateKey;
-import java.security.cert.Certificate;
-import java.security.cert.X509Certificate;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
-import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
-import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
-import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.MANUAL;
-import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
-import static org.carapaceproxy.utils.APIUtils.*;
-import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
-import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
-import java.util.Collection;
-import java.util.List;
-import javax.servlet.ServletContext;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-
 /**
  * Access to certificates
  *
  * @author matteo.minardi
  */
 @Path("/certificates")
-@Produces("application/json")
+@Produces(MediaType.APPLICATION_JSON)
 public class CertificatesResource {
 
     public static final Set<DynamicCertificateState> AVAILABLE_CERTIFICATES_STATES_FOR_UPLOAD = Set.of(AVAILABLE, WAITING);
@@ -180,6 +191,46 @@ public class CertificatesResource {
         );
     }
 
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static final class CertificateForm {
+        private String domain;
+        private Set<String> subjectAltNames;
+        private String type;
+        private int daysBeforeRenewal = DEFAULT_DAYS_BEFORE_RENEWAL;
+    }
+
+    @POST
+    @Path("/")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response createCertificate(CertificateForm form) throws Exception {
+        if (form.domain == null || form.domain.isBlank()) {
+            return FormValidationResponse.fieldRequired("domain");
+        }
+        if (form.subjectAltNames != null && form.subjectAltNames.contains(form.domain)) {
+            return FormValidationResponse.fieldError(
+                    "subjectAltNames",
+                    "Subject alternative names cannot include the Domain"
+            );
+        }
+        CertificateMode certType = stringToCertificateMode(form.type);
+        if (certType == null || !certType.equals(ACME)) {
+            return FormValidationResponse.fieldInvalid("type");
+        }
+        if (form.daysBeforeRenewal < 0) {
+            return FormValidationResponse.fieldInvalid("daysBeforeRenewal");
+        }
+        if (findCertificateById(form.domain) != null) {
+            return FormValidationResponse.fieldConflict("domain");
+        }
+
+        final var cert = new CertificateData(form.domain, null, WAITING, "", "");
+        cert.setDaysBeforeRenewal(form.daysBeforeRenewal);
+        ((HttpProxyServer) context.getAttribute("server")).updateDynamicCertificateForDomain(cert);
+        return FormValidationResponse.created();
+    }
+
     @GET
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @Path("{certId}/download")
@@ -271,18 +322,18 @@ public class CertificatesResource {
 
     @POST
     @Path("{domain}/store")
-    public SimpleResponse storeLocalCertificate(@PathParam("domain") String domain) throws Exception {
+    public Response storeLocalCertificate(@PathParam("domain") String domain) throws Exception {
         var server = ((HttpProxyServer) context.getAttribute("server"));
         server.getDynamicCertificatesManager().forceStoreLocalCertificates(domain);
-        return SimpleResponse.success();
+        return SimpleResponse.ok();
     }
 
     @POST
     @Path("/storeall")
-    public SimpleResponse storeAllCertificates() throws Exception {
+    public Response storeAllCertificates() throws Exception {
         var server = ((HttpProxyServer) context.getAttribute("server"));
         server.getDynamicCertificatesManager().forceStoreLocalCertificates();
-        return SimpleResponse.success();
+        return SimpleResponse.ok();
     }
 
 }

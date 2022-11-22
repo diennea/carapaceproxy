@@ -54,7 +54,7 @@
 </template>
 
 <script>
-    import { doGet, doPost } from './../mockserver'
+    import { doGet, doPost } from '../serverapi'
     export default {
         name: 'Certificate',
         data() {
@@ -108,19 +108,13 @@
                     if (value != true) {
                         return;
                     }
-                    doPost("/api/certificates/" + this.certificate.id + "/store",
-                            null,
-                            resp => {
-                                this.opSuccess = resp.ok;
-                                if (resp.ok) {
-                                    this.opMessage = 'Certificate dumped';
-                                } else {
-                                    this.opMessage = 'Unable to dump certificate to path: ' + this.localStorePath + '. Cause: ' + resp.error;
-                                }
+                    doPost("/api/certificates/" + this.certificate.id + "/store", null, () => {
+                                this.opSuccess = true
+                                this.opMessage = 'Certificate dumped'
                             },
                             error => {
-                                this.opSuccess = false;
-                                this.opMessage = 'Unable to dump certificate to path: ' + this.localStorePath + '. Cause: ' + error;
+                                this.opSuccess = false
+                                this.opMessage = 'Unable to dump certificate to path: ' + this.localStorePath + '. Cause: ' + error.message
                             }
                     );
                 })

@@ -123,15 +123,11 @@ public abstract class APIUtils {
         if (mode == null) {
             return null;
         }
-        switch (mode.toLowerCase()) {
-            case "static":
-                return STATIC;
-            case "acme":
-                return ACME;
-            case "manual":
-                return MANUAL;
-            default:
-                return null;
-        }
+        return switch (mode.toLowerCase()) {
+            case "static" -> STATIC;
+            case "acme" -> ACME;
+            case "manual" -> MANUAL;
+            default -> null;
+        };
     }
 }

@@ -19,71 +19,10 @@
  */
 package org.carapaceproxy.core;
 
-import com.google.common.annotations.VisibleForTesting;
-import io.netty.handler.codec.http.HttpMethod;
-import io.prometheus.client.exporter.MetricsServlet;
-
-import java.io.File;
-import java.io.FileInputStream;
-import java.lang.reflect.InvocationTargetException;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.security.KeyStore;
-import java.util.ArrayList;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.concurrent.locks.ReentrantLock;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import javax.naming.ConfigurationException;
-import javax.servlet.DispatcherType;
-
-import org.apache.bookkeeper.stats.*;
-import org.apache.commons.configuration.PropertiesConfiguration;
-import org.carapaceproxy.server.mapper.EndpointMapper;
-import org.carapaceproxy.api.ApplicationConfig;
-import org.carapaceproxy.api.AuthAPIRequestsFilter;
-import org.carapaceproxy.api.ForceHeadersAPIRequestsFilter;
-import org.carapaceproxy.cluster.GroupMembershipHandler;
-import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
-import org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler;
-
 import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_HOST;
-import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_PORT;
 import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_HTTPS_PORT;
-
-import org.carapaceproxy.configstore.CertificateData;
-import org.carapaceproxy.configstore.ConfigurationStore;
-import org.carapaceproxy.configstore.HerdDBConfigurationStore;
-import org.carapaceproxy.configstore.PropertiesConfigurationStore;
-import org.carapaceproxy.server.backends.BackendHealthManager;
-import org.carapaceproxy.server.cache.ContentsCache;
-import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
-import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
-import org.carapaceproxy.server.config.ConfigurationNotValidException;
-import org.carapaceproxy.server.config.NetworkListenerConfiguration;
-import org.carapaceproxy.server.config.RequestFilterConfiguration;
-import org.carapaceproxy.server.config.SSLCertificateConfiguration;
-
+import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_PORT;
 import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
-
-import org.carapaceproxy.user.SimpleUserRealm;
-import org.carapaceproxy.user.UserRealm;
-import org.eclipse.jetty.security.ConstraintMapping;
-import org.eclipse.jetty.security.ConstraintSecurityHandler;
-import org.eclipse.jetty.server.*;
-import org.eclipse.jetty.server.handler.ContextHandlerCollection;
-import org.eclipse.jetty.server.handler.RequestLogHandler;
-import org.eclipse.jetty.servlet.ServletContextHandler;
-import org.eclipse.jetty.servlet.ServletHolder;
-import org.eclipse.jetty.util.security.Constraint;
-import org.eclipse.jetty.util.ssl.SslContextFactory;
-import org.eclipse.jetty.webapp.WebAppContext;
-import org.glassfish.jersey.servlet.ServletContainer;
-
 import static org.glassfish.jersey.servlet.ServletProperties.JAXRS_APPLICATION_CLASS;
 import static reactor.netty.Metrics.ACTIVE_CONNECTIONS;
 import static reactor.netty.Metrics.CONNECTION_PROVIDER_PREFIX;
@@ -92,7 +31,7 @@ import static reactor.netty.Metrics.NAME;
 import static reactor.netty.Metrics.PENDING_CONNECTIONS;
 import static reactor.netty.Metrics.REMOTE_ADDRESS;
 import static reactor.netty.Metrics.TOTAL_CONNECTIONS;
-
+import com.google.common.annotations.VisibleForTesting;
 import io.micrometer.core.instrument.Measurement;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Metrics;
@@ -100,17 +39,75 @@ import io.micrometer.core.instrument.config.MeterFilter;
 import io.micrometer.prometheus.PrometheusConfig;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
 import io.micrometer.prometheus.PrometheusRenameFilter;
-
+import io.netty.handler.codec.http.HttpMethod;
+import io.prometheus.client.exporter.MetricsServlet;
+import java.io.File;
+import java.io.FileInputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.security.KeyStore;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
-
+import java.util.Properties;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.naming.ConfigurationException;
+import javax.servlet.DispatcherType;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.bookkeeper.stats.StatsLogger;
 import org.apache.bookkeeper.stats.prometheus.PrometheusMetricsProvider;
+import org.apache.commons.configuration.PropertiesConfiguration;
+import org.carapaceproxy.api.ApplicationConfig;
+import org.carapaceproxy.api.AuthAPIRequestsFilter;
+import org.carapaceproxy.api.ForceHeadersAPIRequestsFilter;
 import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.cluster.GroupMembershipHandler;
+import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
+import org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler;
+import org.carapaceproxy.configstore.CertificateData;
+import org.carapaceproxy.configstore.ConfigurationStore;
+import org.carapaceproxy.configstore.HerdDBConfigurationStore;
+import org.carapaceproxy.configstore.PropertiesConfigurationStore;
+import org.carapaceproxy.server.backends.BackendHealthManager;
+import org.carapaceproxy.server.cache.ContentsCache;
+import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
 import org.carapaceproxy.server.certificates.ocsp.OcspStaplingManager;
 import org.carapaceproxy.server.config.BackendConfiguration;
+import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.carapaceproxy.server.config.NetworkListenerConfiguration;
+import org.carapaceproxy.server.config.RequestFilterConfiguration;
+import org.carapaceproxy.server.config.SSLCertificateConfiguration;
+import org.carapaceproxy.server.mapper.EndpointMapper;
+import org.carapaceproxy.user.SimpleUserRealm;
+import org.carapaceproxy.user.UserRealm;
+import org.eclipse.jetty.security.ConstraintMapping;
+import org.eclipse.jetty.security.ConstraintSecurityHandler;
+import org.eclipse.jetty.server.Handler;
+import org.eclipse.jetty.server.HttpConfiguration;
+import org.eclipse.jetty.server.HttpConnectionFactory;
+import org.eclipse.jetty.server.NCSARequestLog;
+import org.eclipse.jetty.server.SecureRequestCustomizer;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.SslConnectionFactory;
+import org.eclipse.jetty.server.handler.ContextHandlerCollection;
+import org.eclipse.jetty.server.handler.RequestLogHandler;
+import org.eclipse.jetty.servlet.ServletContextHandler;
+import org.eclipse.jetty.servlet.ServletHolder;
+import org.eclipse.jetty.util.security.Constraint;
+import org.eclipse.jetty.util.ssl.SslContextFactory;
+import org.eclipse.jetty.webapp.WebAppContext;
+import org.glassfish.jersey.servlet.ServletContainer;
 
 public class HttpProxyServer implements AutoCloseable {
 
