@@ -207,7 +207,7 @@ public class DynamicCertificatesManager implements Runnable {
                     }
                     boolean forceManual = MANUAL == config.getMode();
                     _certificates.put(domain, loadOrCreateDynamicCertificateForDomain(
-                            domain, config.getSubjectAlternativeNames(), forceManual, config.getDaysBeforeRenewal()
+                            domain, config.getSubjectAltNames(), forceManual, config.getDaysBeforeRenewal()
                     ));
                 }
             }
@@ -218,12 +218,12 @@ public class DynamicCertificatesManager implements Runnable {
     }
 
     private CertificateData loadOrCreateDynamicCertificateForDomain(String domain,
-                                                                    Set<String> subjectAlternativeNames,
+                                                                    Set<String> subjectAltNames,
                                                                     boolean forceManual,
                                                                     int daysBeforeRenewal) throws GeneralSecurityException, MalformedURLException {
         CertificateData cert = store.loadCertificateForDomain(domain);
         if (cert == null) {
-            cert = new CertificateData(domain, subjectAlternativeNames, null, WAITING, null, null);
+            cert = new CertificateData(domain, subjectAltNames, null, WAITING, null, null);
         } else if (cert.getChain() != null && !cert.getChain().isEmpty()) {
             byte[] keystoreData = Base64.getDecoder().decode(cert.getChain());
             cert.setKeystoreData(keystoreData);
@@ -290,7 +290,7 @@ public class DynamicCertificatesManager implements Runnable {
             final var domain = data.getDomain();
             try {
                 // this has to be always fetch from db!
-                CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, data.getSubjectAlternativeNames(), false, data.getDaysBeforeRenewal());
+                CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, data.getSubjectAltNames(), false, data.getDaysBeforeRenewal());
                 switch (cert.getState()) { // certificate waiting to be issues/renew
                     case WAITING, DOMAIN_UNREACHABLE -> { // certificate domain reported as unreachable for issuing/renewing
                         LOG.log(Level.INFO, "WAITING for certificate issuing process start for domain: {0}.", domain);
@@ -654,7 +654,7 @@ public class DynamicCertificatesManager implements Runnable {
                 String domain = entry.getKey();
                 CertificateData cert = entry.getValue();
                 // "wildcard" and "manual" flags and "daysBeforeRenewal" are not stored in db > have to be re-set from existing config
-                CertificateData freshCert = loadOrCreateDynamicCertificateForDomain(domain, cert.getSubjectAlternativeNames(), cert.isManual(), cert.getDaysBeforeRenewal());
+                CertificateData freshCert = loadOrCreateDynamicCertificateForDomain(domain, cert.getSubjectAltNames(), cert.isManual(), cert.getDaysBeforeRenewal());
                 newCertificates.put(domain, freshCert);
                 LOG.log(Level.INFO, "RELOADED certificate for domain {0}: {1}", new Object[]{domain, freshCert});
             }

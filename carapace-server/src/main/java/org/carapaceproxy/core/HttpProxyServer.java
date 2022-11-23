@@ -658,10 +658,10 @@ public class HttpProxyServer implements AutoCloseable {
         } else {
             props.setProperty(key.replace("hostname", "daysbeforerenewal"), cert.getDaysBeforeRenewal() + "");
         }
-        if (cert.getSubjectAlternativeNames() != null && !cert.getSubjectAlternativeNames().isEmpty()) {
+        if (cert.getSubjectAltNames() != null && !cert.getSubjectAltNames().isEmpty()) {
             props.setProperty(
                     key.replace("hostname", "san"),
-                    String.join(",", cert.getSubjectAlternativeNames())
+                    String.join(",", cert.getSubjectAltNames())
             );
         } else {
             props.remove(key.replace("hostname", "san"));
@@ -676,8 +676,8 @@ public class HttpProxyServer implements AutoCloseable {
         if (!cert.isManual()) {
             props.setProperty(prefix + "daysbeforerenewal", cert.getDaysBeforeRenewal() + "");
         }
-        if (cert.getSubjectAlternativeNames() != null && !cert.getSubjectAlternativeNames().isEmpty()) {
-            props.setProperty(prefix + "san", String.join(",", cert.getSubjectAlternativeNames()));
+        if (cert.getSubjectAltNames() != null && !cert.getSubjectAltNames().isEmpty()) {
+            props.setProperty(prefix + "san", String.join(",", cert.getSubjectAltNames()));
         }
     }
 

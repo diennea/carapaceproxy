@@ -44,7 +44,7 @@ public class CertificateData {
 
     private String domain; // hostname or *.hostname
     @EqualsAndHashCode.Exclude
-    private Set<String> subjectAlternativeNames;
+    private Set<String> subjectAltNames;
     @ToString.Exclude
     private String chain; // base64 encoded string of the KeyStore.
     private volatile DynamicCertificateState state;
@@ -65,13 +65,13 @@ public class CertificateData {
         this(domain, null, chain, state, null, null);
     }
     public CertificateData(String domain,
-                           Set<String> subjectAlternativeNames,
+                           Set<String> subjectAltNames,
                            String chain,
                            DynamicCertificateState state,
                            URL orderLocation,
                            Map<String, JSON> challengesData) {
         this.domain = Objects.requireNonNull(domain);
-        this.subjectAlternativeNames = subjectAlternativeNames;
+        this.subjectAltNames = subjectAltNames;
         this.chain = chain;
         this.state = state;
         this.pendingOrderLocation = orderLocation;
@@ -81,8 +81,8 @@ public class CertificateData {
     public Collection<String> getNames() {
         return new ArrayList<>() {{
             add(domain);
-            if (subjectAlternativeNames != null) {
-                addAll(subjectAlternativeNames);
+            if (subjectAltNames != null) {
+                addAll(subjectAltNames);
             }
         }};
     }

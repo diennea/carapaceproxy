@@ -42,7 +42,7 @@ public class SSLCertificateConfiguration {
 
     private final String id; // hostname or *.hostname or *
     private final String hostname;
-    private final Set<String> subjectAlternativeNames;
+    private final Set<String> subjectAltNames;
     private final String file;
     private final String password;
     private final boolean wildcard;
@@ -50,7 +50,7 @@ public class SSLCertificateConfiguration {
     private int daysBeforeRenewal;
 
     public SSLCertificateConfiguration(String hostname,
-                                       Set<String> subjectAlternativeNames,
+                                       Set<String> subjectAltNames,
                                        String file,
                                        String password,
                                        CertificateMode mode) {
@@ -65,14 +65,14 @@ public class SSLCertificateConfiguration {
             this.hostname = hostname;
             this.wildcard = false;
         }
-        this.subjectAlternativeNames = subjectAlternativeNames;
+        this.subjectAltNames = subjectAltNames;
         this.file = file;
         this.password = password;
         this.mode = mode;
     }
 
     public boolean isWildcard() {
-        return wildcard || subjectAlternativeNames != null && subjectAlternativeNames.stream().anyMatch(CertificatesUtils::isWildcard);
+        return wildcard || subjectAltNames != null && subjectAltNames.stream().anyMatch(CertificatesUtils::isWildcard);
     }
 
     public boolean isDynamic() {
@@ -84,7 +84,7 @@ public class SSLCertificateConfiguration {
     }
 
     public boolean isMoreSpecific(SSLCertificateConfiguration other) {
-        if (subjectAlternativeNames == null || subjectAlternativeNames.isEmpty()) {
+        if (subjectAltNames == null || subjectAltNames.isEmpty()) {
             return hostname.length() > other.getHostname().length();
         }
         final var otherNames = other.getNames().stream().map(CertificatesUtils::removeWildcard);
@@ -100,8 +100,8 @@ public class SSLCertificateConfiguration {
     public Collection<String> getNames() {
         return new ArrayList<>() {{
             add(id); // hostname or *.hostname
-            if (subjectAlternativeNames != null) {
-                addAll(subjectAlternativeNames);
+            if (subjectAltNames != null) {
+                addAll(subjectAltNames);
             }
         }};
     }

@@ -450,7 +450,7 @@ public class Listeners {
     }
 
     private static boolean certificateMatches(String hostname, SSLCertificateConfiguration c, boolean exact) {
-        if (c.getSubjectAlternativeNames() == null || c.getSubjectAlternativeNames().isEmpty()) {
+        if (c.getSubjectAltNames() == null || c.getSubjectAltNames().isEmpty()) {
             if (exact) {
                 return !c.isWildcard() && hostname.equals(c.getHostname());
             } else {

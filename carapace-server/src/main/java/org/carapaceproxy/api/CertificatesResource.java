@@ -101,7 +101,7 @@ public class CertificatesResource {
 
         private final String id;
         private final String hostname;
-        private final String subjectAlternativeNames;
+        private final String subjectAltNames;
         private final String mode;
         private final boolean dynamic;
         private String status;
@@ -111,11 +111,11 @@ public class CertificatesResource {
         private String serialNumber;
 
         public CertificateBean(String id, String hostname,
-                               Set<String> subjectAlternativeNames,
+                               Set<String> subjectAltNames,
                                String mode, boolean dynamic, String sslCertificateFile) {
             this.id = id;
             this.hostname = hostname;
-            this.subjectAlternativeNames = subjectAlternativeNames != null ? String.join(", ", subjectAlternativeNames) : "";
+            this.subjectAltNames = subjectAltNames != null ? String.join(", ", subjectAltNames) : "";
             this.mode = mode;
             this.dynamic = dynamic;
             this.sslCertificateFile = sslCertificateFile;
@@ -135,7 +135,7 @@ public class CertificatesResource {
             CertificateBean certBean = new CertificateBean(
                     certificate.getId(),
                     certificate.getHostname(),
-                    certificate.getSubjectAlternativeNames(),
+                    certificate.getSubjectAltNames(),
                     certificateModeToString(certificate.getMode()),
                     certificate.isDynamic(),
                     certificate.getFile()
@@ -222,7 +222,7 @@ public class CertificatesResource {
             CertificateBean certBean = new CertificateBean(
                     certificate.getId(),
                     certificate.getHostname(),
-                    certificate.getSubjectAlternativeNames(),
+                    certificate.getSubjectAltNames(),
                     certificateModeToString(certificate.getMode()),
                     certificate.isDynamic(),
                     certificate.getFile()
@@ -239,7 +239,7 @@ public class CertificatesResource {
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     public Response uploadCertificate(
             @PathParam("domain") String domain,
-            @QueryParam("subjectaltnames") @DefaultValue("") String subjectAlternativeNames,
+            @QueryParam("subjectaltnames") @DefaultValue("") String subjectAltNames,
             @QueryParam("type") @DefaultValue("manual") String type,
             @QueryParam("daysbeforerenewal") Integer daysbeforerenewal,
             InputStream uploadedInputStream) throws Exception {
@@ -278,7 +278,7 @@ public class CertificatesResource {
 
             CertificateData cert = new CertificateData(domain, encodedData, state);
             cert.setManual(MANUAL.equals(certType));
-            cert.setSubjectAlternativeNames(Set.of(subjectAlternativeNames.split(",")));
+            cert.setSubjectAltNames(Set.of(subjectAltNames.split(",")));
             cert.setDaysBeforeRenewal(daysbeforerenewal != null ? daysbeforerenewal : DEFAULT_DAYS_BEFORE_RENEWAL);
 
             ((HttpProxyServer) context.getAttribute("server")).updateDynamicCertificateForDomain(cert);

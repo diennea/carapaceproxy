@@ -260,13 +260,13 @@ public class RuntimeServerConfiguration {
             final var prefix = "certificate." + i + ".";
             final var hostname = properties.getString(prefix + "hostname", "");
             if (!hostname.isEmpty()) {
-                final var subjectAlternativeNames = properties.getValues(prefix + "san", null);
+                final var subjectAltNames = properties.getValues(prefix + "san", null);
                 final var file = properties.getString(prefix + "file", "");
                 final var pw = properties.getString(prefix + "password", "");
                 final var mode = properties.getString(prefix + "mode", "static");
                 final var daysBeforeRenewal = properties.getInt(prefix + "daysbeforerenewal", DEFAULT_DAYS_BEFORE_RENEWAL);
                 try {
-                    final var config = new SSLCertificateConfiguration(hostname, subjectAlternativeNames, file, pw, CertificateMode.valueOf(mode.toUpperCase()));
+                    final var config = new SSLCertificateConfiguration(hostname, subjectAltNames, file, pw, CertificateMode.valueOf(mode.toUpperCase()));
                     if (config.isAcme()) {
                         config.setDaysBeforeRenewal(daysBeforeRenewal);
                     }

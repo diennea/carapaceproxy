@@ -423,8 +423,8 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_DIGITAL_CERTIFICATES_TABLE);
                 PreparedStatement psUpdate = con.prepareStatement(UPDATE_DIGITAL_CERTIFICATES_TABLE)) {
             final var domain = cert.getDomain();
-            final var subjectAltNames = cert.getSubjectAlternativeNames() != null
-                    ? String.join(",", cert.getSubjectAlternativeNames())
+            final var subjectAltNames = cert.getSubjectAltNames() != null
+                    ? String.join(",", cert.getSubjectAltNames())
                     : null;
             final var chain = cert.getChain();
             final var state = cert.getState().toStorableFormat();
