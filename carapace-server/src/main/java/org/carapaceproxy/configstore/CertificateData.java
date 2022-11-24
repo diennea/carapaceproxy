@@ -20,8 +20,16 @@
 package org.carapaceproxy.configstore;
 
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.shredzone.acme4j.toolbox.JSON;
 
@@ -31,181 +39,52 @@ import org.shredzone.acme4j.toolbox.JSON;
  *
  * @author paolo.venturi
  */
+@Data
 public class CertificateData {
 
-    private String domain;
+    private String domain; // hostname or *.hostname
+    @EqualsAndHashCode.Exclude
+    private Set<String> subjectAltNames;
+    @ToString.Exclude
     private String chain; // base64 encoded string of the KeyStore.
     private volatile DynamicCertificateState state;
-    private String pendingOrderLocation;
-    private String pendingChallengeData;
-
-    // Data available at run-time only
-    private boolean wildcard;
+    private URL pendingOrderLocation;
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private Map<String, JSON> pendingChallengesData = new HashMap<>();
     private boolean manual;
     private int daysBeforeRenewal;
     private Date expiringDate;
     private String serialNumber; // hex
+    @ToString.Exclude
     private byte[] keystoreData; // decoded chain
 
-    public CertificateData(String domain, String chain, DynamicCertificateState state,
-                           String orderLocation, String challengeData) {
-        this.domain = domain;
+    public CertificateData(String domain,
+                           String chain,
+                           DynamicCertificateState state) {
+        this(domain, null, chain, state, null, null);
+    }
+    public CertificateData(String domain,
+                           Set<String> subjectAltNames,
+                           String chain,
+                           DynamicCertificateState state,
+                           URL orderLocation,
+                           Map<String, JSON> challengesData) {
+        this.domain = Objects.requireNonNull(domain);
+        this.subjectAltNames = subjectAltNames;
         this.chain = chain;
         this.state = state;
         this.pendingOrderLocation = orderLocation;
-        this.pendingChallengeData = challengeData;
+        this.pendingChallengesData = challengesData;
     }
 
-    public String getDomain() {
-        return domain;
-    }
-
-    public String getChain() {
-        return chain;
-    }
-
-    public DynamicCertificateState getState() {
-        return state;
-    }
-
-    public String getPendingOrderLocation() {
-        return pendingOrderLocation;
-    }
-
-    public String getPendingChallengeData() {
-        return pendingChallengeData;
-    }
-
-    public void setDomain(String domain) {
-        this.domain = domain;
-    }
-
-    public void setChain(String chain) {
-        this.chain = chain;
-    }
-
-    public void setState(DynamicCertificateState state) {
-        this.state = state;
-    }
-
-    public void setPendingOrderLocation(String orderLocation) {
-        this.pendingOrderLocation = orderLocation;
-    }
-
-    public void setPendingOrderLocation(URL orderLocation) {
-        this.pendingOrderLocation = orderLocation.toString();
-    }
-
-    public void setPendingChallengeData(String challengeData) {
-        this.pendingChallengeData = challengeData;
-    }
-
-    public void setPendingChallengeData(JSON challengeData) {
-        this.pendingChallengeData = challengeData.toString();
-    }
-
-    public boolean isWildcard() {
-        return wildcard;
-    }
-
-    public void setWildcard(boolean wildcard) {
-        this.wildcard = wildcard;
-    }
-
-    public boolean isManual() {
-        return manual;
-    }
-
-    public void setManual(boolean manual) {
-        this.manual = manual;
-    }
-
-    public int getDaysBeforeRenewal() {
-        return daysBeforeRenewal;
-    }
-
-    public void setDaysBeforeRenewal(int daysBeforeRenewal) {
-        this.daysBeforeRenewal = daysBeforeRenewal;
-    }
-
-    public Date getExpiringDate() {
-        return expiringDate;
-    }
-
-    public void setExpiringDate(Date expiringDate) {
-        this.expiringDate = expiringDate;
-    }
-
-    public String getSerialNumber() {
-        return serialNumber;
-    }
-
-    public void setSerialNumber(String serialNumber) {
-        this.serialNumber = serialNumber;
-    }
-
-    public byte[] getKeystoreData() {
-        return keystoreData;
-    }
-
-    public void setKeystoreData(byte[] keystoreData) {
-        this.keystoreData = keystoreData;
-    }
-
-    @Override
-    public int hashCode() {
-        int hash = 7;
-        hash = 89 * hash + Objects.hashCode(this.domain);
-        hash = 89 * hash + Objects.hashCode(this.chain);
-        hash = 89 * hash + Objects.hashCode(this.state);
-        hash = 89 * hash + Objects.hashCode(this.pendingOrderLocation);
-        hash = 89 * hash + Objects.hashCode(this.pendingChallengeData);
-        hash = 89 * hash + (this.manual ? 1 : 0);
-        hash = 89 * hash + this.daysBeforeRenewal;
-        return hash;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null) {
-            return false;
-        }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        final CertificateData other = (CertificateData) obj;
-        if (this.manual != other.manual) {
-            return false;
-        }
-        if (this.daysBeforeRenewal != other.daysBeforeRenewal) {
-            return false;
-        }
-        if (!Objects.equals(this.domain, other.domain)) {
-            return false;
-        }
-        if (!Objects.equals(this.chain, other.chain)) {
-            return false;
-        }
-        if (!Objects.equals(this.pendingOrderLocation, other.pendingOrderLocation)) {
-            return false;
-        }
-        if (!Objects.equals(this.pendingChallengeData, other.pendingChallengeData)) {
-            return false;
-        }
-        if (this.state != other.state) {
-            return false;
-        }
-        return true;
-    }
-
-    @Override
-    public String toString() {
-        return "CertificateData{" + "domain=" + domain + ","
-                + " state=" + state + ", manual=" + manual
-                + ",expiringDate=" + expiringDate + ",serialNumber " + serialNumber + '}';
+    public Collection<String> getNames() {
+        return new ArrayList<>() {{
+            add(domain);
+            if (subjectAltNames != null) {
+                addAll(subjectAltNames);
+            }
+        }};
     }
 
 }

@@ -36,7 +36,7 @@ import java.util.*;
  * @author paolo
  */
 public final class CertificatesUtils {
-
+    private static final String WILDCARD_PREFIX = "*.";
     private static final String KEYSTORE_FORMAT = "PKCS12";
     private static final String KEYSTORE_CERT_ALIAS = "cert-chain";
     public static final char[] KEYSTORE_PW = new char[0];
@@ -197,6 +197,18 @@ public final class CertificatesUtils {
             }
         }
         return true;
+    }
+
+    public static boolean isWildcard(String name) {
+        return Objects.requireNonNull(name).startsWith(WILDCARD_PREFIX);
+    }
+
+    public static String removeWildcard(String name) {
+        return Objects.requireNonNull(name).replace(WILDCARD_PREFIX, "");
+    }
+
+    public static String addWildcard(String name) {
+        return WILDCARD_PREFIX + Objects.requireNonNull(name);
     }
 
 }

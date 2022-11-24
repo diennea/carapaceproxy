@@ -20,6 +20,7 @@
 package org.carapaceproxy.api;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import javax.servlet.ServletContext;
 import javax.ws.rs.GET;
@@ -49,7 +50,7 @@ public class ListenersResource {
         private final int port;
         private final boolean ssl;
         private final String sslCiphers;
-        private final String[] sslProtocols;
+        private final Set<String> sslProtocols;
         private final String defaultCertificate;
         private final int totalRequests;
 
@@ -61,7 +62,7 @@ public class ListenersResource {
 
         return server.getListeners().getListeningChannels().entrySet().stream().map(listener -> {
             NetworkListenerConfiguration config = listener.getValue().getConfig();
-            int port = listener.getKey().getPort();
+            int port = listener.getKey().port();
             ListenerBean bean = new ListenerBean(
                     config.getHost(),
                     port,

@@ -6,11 +6,11 @@ import ConnectionPools from './components/ConnectionPools';
 import Routes from './components/Routes';
 import Actions from './components/Actions';
 import Directors from './components/Directors';
-import CacheStatus from './components/CacheStatus';
-import ListenersStatus from './components/ListenersStatus';
-import UserRealmStatus from './components/UserRealmStatus';
-import RequestFiltersStatus from './components/RequestFiltersStatus';
-import CertificatesStatus from './components/CertificatesStatus';
+import Cache from './components/Cache';
+import Listeners from './components/Listeners';
+import UserRealm from './components/UserRealm';
+import RequestFilters from './components/RequestFilters';
+import Certificates from './components/Certificates';
 import Certificate from './components/Certificate';
 import DatatableList from './components/DatatableList';
 import Configuration from './components/Configuration';
@@ -18,16 +18,16 @@ import Metrics from './components/Metrics';
 import Peers from './components/Peers';
 import Headers from './components/Headers';
 
-Vue.component('backends-status', Backends);
+Vue.component('backends', Backends);
 Vue.component('connection-pools', ConnectionPools);
 Vue.component('routes', Routes);
 Vue.component('actions', Actions);
 Vue.component('directors', Directors);
-Vue.component('cache-status', CacheStatus);
-Vue.component('listeners-status', ListenersStatus);
-Vue.component('userrealm-status', UserRealmStatus);
-Vue.component('requestfilters-status', RequestFiltersStatus);
-Vue.component('certificates-status', CertificatesStatus);
+Vue.component('cache', Cache);
+Vue.component('listeners', Listeners);
+Vue.component('userrealm', UserRealm);
+Vue.component('requestfilters', RequestFilters);
+Vue.component('certificates', Certificates);
 Vue.component('datatable-list', DatatableList);
 Vue.component('configuration', Configuration);
 Vue.component('metrics', Metrics);
@@ -66,27 +66,27 @@ export default new Router({
         {
             path: '/cache',
             name: 'Cache',
-            component: CacheStatus
+            component: Cache
         },
         {
             path: '/listeners',
             name: 'Listeners',
-            component: ListenersStatus
+            component: Listeners
         },
         {
             path: '/requestfilters',
             name: 'Request filters',
-            component: RequestFiltersStatus
+            component: RequestFilters
         },
         {
             path: '/users',
             name: 'Users',
-            component: UserRealmStatus
+            component: UserRealm
         },
         {
             path: '/certificates',
             name: 'Certificates',
-            component: CertificatesStatus
+            component: Certificates
         },
         {
             path: '/certificates/:id',

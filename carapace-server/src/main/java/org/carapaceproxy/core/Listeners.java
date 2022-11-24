@@ -19,13 +19,23 @@
  */
 package org.carapaceproxy.core;
 
+import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreData;
+import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
+import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelOption;
 import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.ssl.*;
+import io.netty.handler.ssl.OpenSsl;
+import io.netty.handler.ssl.OpenSslCachingX509KeyManagerFactory;
+import io.netty.handler.ssl.ReferenceCountedOpenSslEngine;
+import io.netty.handler.ssl.SniHandler;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslHandler;
+import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
@@ -33,18 +43,6 @@ import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.Promise;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
-import lombok.Data;
-import org.carapaceproxy.server.config.ConfigurationNotValidException;
-import org.carapaceproxy.server.config.NetworkListenerConfiguration;
-import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
-import org.carapaceproxy.server.config.SSLCertificateConfiguration;
-import org.carapaceproxy.utils.CarapaceLogger;
-import org.carapaceproxy.utils.PrometheusUtils;
-import reactor.netty.DisposableServer;
-import reactor.netty.NettyPipeline;
-import reactor.netty.http.server.HttpServer;
-
-import javax.net.ssl.KeyManagerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -54,14 +52,28 @@ import java.security.cert.Certificate;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import static org.carapaceproxy.utils.CertificatesUtils.*;
+import javax.net.ssl.KeyManagerFactory;
+import lombok.Data;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.carapaceproxy.server.config.NetworkListenerConfiguration;
+import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
+import org.carapaceproxy.server.config.SSLCertificateConfiguration;
+import org.carapaceproxy.utils.CarapaceLogger;
+import org.carapaceproxy.utils.CertificatesUtils;
+import org.carapaceproxy.utils.PrometheusUtils;
+import reactor.netty.DisposableServer;
+import reactor.netty.NettyPipeline;
+import reactor.netty.http.server.HttpServer;
 
 /**
  * Listeners waiting for incoming clients requests
@@ -201,12 +213,12 @@ public class Listeners {
     private void bootListener(NetworkListenerConfiguration config) throws InterruptedException {
         HostPort hostPort = new HostPort(config.getHost(), config.getPort() + parent.getListenersOffsetPort());
         ListeningChannel listeningChannel = new ListeningChannel(hostPort, config);
-        LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{hostPort.getHost(), hostPort.getPort() + "", config.isSsl()});
+        LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{hostPort.host(), hostPort.port() + "", config.isSsl()});
 
         // Listener setup
         HttpServer httpServer = HttpServer.create()
-                .host(hostPort.getHost())
-                .port(hostPort.getPort())
+                .host(hostPort.host())
+                .port(hostPort.port())
                 //.protocol(HttpProtocol.H2) // HTTP/2.0 setup
                 .metrics(true, Function.identity())
                 .option(ChannelOption.SO_BACKLOG, 128)
@@ -302,7 +314,7 @@ public class Listeners {
         public ListeningChannel(HostPort hostPort, NetworkListenerConfiguration config) {
             this.hostPort = hostPort;
             this.config = config;
-            totalRequests = TOTAL_REQUESTS_PER_LISTENER_COUNTER.labels(hostPort.getHost() + "_" + hostPort.getPort());
+            totalRequests = TOTAL_REQUESTS_PER_LISTENER_COUNTER.labels(hostPort.host() + "_" + hostPort.port());
         }
 
         public void incRequests() {
@@ -316,7 +328,7 @@ public class Listeners {
         @Override
         public Future<SslContext> map(String sniHostname, Promise<SslContext> promise) {
             try {
-                String key = config.getHost() + ":" + hostPort.getPort() + "+" + sniHostname;
+                String key = config.getHost() + ":" + hostPort.port() + "+" + sniHostname;
                 if (LOG.isLoggable(Level.FINER)) {
                     LOG.log(Level.FINER, "resolve SNI mapping {0}, key: {1}", new Object[]{sniHostname, key});
                 }
@@ -438,10 +450,23 @@ public class Listeners {
     }
 
     private static boolean certificateMatches(String hostname, SSLCertificateConfiguration c, boolean exact) {
-        if (exact) {
-            return !c.isWildcard() && hostname.equals(c.getHostname());
+        if (c.getSubjectAltNames() == null || c.getSubjectAltNames().isEmpty()) {
+            if (exact) {
+                return !c.isWildcard() && hostname.equals(c.getHostname());
+            } else {
+                return c.isWildcard() && hostname.endsWith(c.getHostname());
+            }
         } else {
-            return c.isWildcard() && hostname.endsWith(c.getHostname());
+            for (var name: c.getNames()) {
+                final var wildcard = CertificatesUtils.isWildcard(name);
+                if (exact && !wildcard && hostname.equals(name)) {
+                    return true;
+                }
+                if (!exact && wildcard && hostname.endsWith(CertificatesUtils.removeWildcard(name))) {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 
