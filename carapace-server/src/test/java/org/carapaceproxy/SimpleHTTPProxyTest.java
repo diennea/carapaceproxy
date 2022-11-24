@@ -19,11 +19,14 @@ package org.carapaceproxy;
  under the License.
 
  */
+
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
@@ -33,12 +36,10 @@ import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
-import static org.junit.Assert.assertEquals;
+import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.HttpTestUtils;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
-import static org.junit.Assert.fail;
-import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -106,7 +107,7 @@ public class SimpleHTTPProxyTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
-            server.addCertificate(new SSLCertificateConfiguration("localhost", certificate, "changeit", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration("localhost", null, certificate, "changeit", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost"));
             server.start();
             int port = server.getLocalPort();

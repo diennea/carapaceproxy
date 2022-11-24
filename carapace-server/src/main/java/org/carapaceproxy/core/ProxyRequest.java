@@ -106,7 +106,7 @@ public class ProxyRequest implements MatchingContext {
                 case PROPERTY_LISTENER_IPADDRESS:
                     return getLocalAddress().getAddress().getHostAddress();
                 case PROPERTY_LISTENER_HOST_PORT: {
-                    return listener.getHost() + ":" + listener.getPort();
+                    return listener.host() + ":" + listener.port();
                 }
                 default: {
                     throw new IllegalArgumentException("Property name " + name + " does not exists.");

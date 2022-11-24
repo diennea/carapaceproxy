@@ -24,18 +24,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.carapaceproxy.server.cache.ContentsCache.CACHE_CONTROL_CACHE_DISABLED_VALUES;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import java.util.List;
-import java.util.Map;
-import org.carapaceproxy.EndpointStats;
-import org.carapaceproxy.client.EndpointKey;
-import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.server.config.NetworkListenerConfiguration;
-import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
-import org.carapaceproxy.utils.RawHttpClient;
-import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -43,10 +32,21 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import io.netty.handler.codec.http.HttpHeaderNames;
+import java.util.List;
+import java.util.Map;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
+import org.carapaceproxy.EndpointStats;
+import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
+import org.carapaceproxy.server.config.NetworkListenerConfiguration;
+import org.carapaceproxy.server.config.SSLCertificateConfiguration;
+import org.carapaceproxy.utils.RawHttpClient;
+import org.carapaceproxy.utils.TestEndpointMapper;
+import org.carapaceproxy.utils.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -203,7 +203,7 @@ public class CacheTest {
 
         EndpointStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
-            server.addCertificate(new SSLCertificateConfiguration("localhost", "localhost.p12", "testproxy", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost"));
             server.start();
         }
@@ -226,7 +226,7 @@ public class CacheTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
-            server.addCertificate(new SSLCertificateConfiguration("localhost", "localhost.p12", "testproxy", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost"));
 
             RuntimeServerConfiguration currentConfiguration = server.getCurrentConfiguration();
@@ -357,7 +357,7 @@ public class CacheTest {
         int httpsPort = 1235;
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
-            server.addCertificate(new SSLCertificateConfiguration("localhost", "localhost.p12", "testproxy", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", httpsPort, true, null, "localhost"));
             server.addListener(new NetworkListenerConfiguration("localhost", httpPort));
             server.start();
@@ -653,7 +653,7 @@ public class CacheTest {
                         .willReturn(aResponse()
                                 .withStatus(200)
                                 .withHeader("Content-Type", "text/html")
-                                .withHeader(HttpHeaderNames.CACHE_CONTROL + "", noCacheValue)
+                                .withHeader(HttpHeaderNames.CACHE_CONTROL.toString(), noCacheValue)
                                 .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                                 .withBody("it <b>works</b> !!")));
 
@@ -680,7 +680,7 @@ public class CacheTest {
                         .willReturn(aResponse()
                                 .withStatus(200)
                                 .withHeader("Content-Type", "text/html")
-                                .withHeader(HttpHeaderNames.CACHE_CONTROL + "", "no-cache, no-store")
+                                .withHeader(HttpHeaderNames.CACHE_CONTROL.toString(), "no-cache, no-store")
                                 .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                                 .withBody("it <b>works</b> !!")));
 
@@ -707,7 +707,7 @@ public class CacheTest {
                         .willReturn(aResponse()
                                 .withStatus(200)
                                 .withHeader("Content-Type", "text/html")
-                                .withHeader(HttpHeaderNames.CACHE_CONTROL + "", "max-age  = 0")
+                                .withHeader(HttpHeaderNames.CACHE_CONTROL.toString(), "max-age  = 0")
                                 .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                                 .withBody("it <b>works</b> !!")));
 
@@ -734,7 +734,7 @@ public class CacheTest {
                         .willReturn(aResponse()
                                 .withStatus(200)
                                 .withHeader("Content-Type", "text/html")
-                                .withHeader(HttpHeaderNames.CACHE_CONTROL + "", "No-CacHe")
+                                .withHeader(HttpHeaderNames.CACHE_CONTROL.toString(), "No-CacHe")
                                 .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                                 .withBody("it <b>works</b> !!")));
 
@@ -761,7 +761,7 @@ public class CacheTest {
                         .willReturn(aResponse()
                                 .withStatus(200)
                                 .withHeader("Content-Type", "text/html")
-                                .withHeader(HttpHeaderNames.PRAGMA + "", "No-CacHe")
+                                .withHeader(HttpHeaderNames.PRAGMA.toString(), "No-CacHe")
                                 .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                                 .withBody("it <b>works</b> !!")));
 

@@ -32,6 +32,9 @@ public class SimpleResponse {
     }
 
     public static Response error(Throwable error) {
+        while (error.getCause() != null) {
+            error = error.getCause();
+        }
         return Response.status(HttpResponseStatus.UNPROCESSABLE_ENTITY.code())
                 .entity(new SimpleResponse(error.getMessage()))
                 .build();

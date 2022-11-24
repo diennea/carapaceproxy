@@ -7,6 +7,11 @@
         @hidden="resetModal"
         @ok="handleOk"
     >
+        <status-box
+            v-if="globalError"
+            v-bind="globalError"
+            status="error"
+        ></status-box>
         <b-form ref="form" @submit.stop.prevent="handleSubmit">
             <b-form-group
                 id="domain-group"
@@ -84,8 +89,12 @@
 
 <script>
     import {doPost} from "../../serverapi";
+    import StatusBox from "../StatusBox.vue";
     export default {
         name: "CertificateForm",
+        components: {
+            "status-box": StatusBox
+        },
         props: {
             id: String
         },
@@ -96,7 +105,8 @@
                     subjectAltNames: [],
                     type: 'acme',
                     daysBeforeRenewal: 30
-                }
+                },
+                globalError: null
             }
         },
         computed: {
@@ -115,6 +125,7 @@
                 this.clearFormErrors()
             },
             clearFormErrors() {
+                this.globalError = null
                 for (const ref in this.$refs) {
                     if (ref.startsWith('field-')) {
                         const field = this.$refs[ref]
@@ -138,7 +149,20 @@
                         this.$nextTick(() => this.$bvModal.hide(this.id))
                         this.$emit('done')
                     },
-                    error => this.setErrorForField(error.field, error.message)
+                    error => {
+                        if (error.field) {
+                            this.globalError = {
+                                title: "Fields error",
+                                message: "Some fields are invalid, check them before creating the certificate"
+                            }
+                            this.setErrorForField(error.field, error.message)
+                        } else {
+                            this.globalError = {
+                                title: "An error occurred",
+                                message: error.message
+                            }
+                        }
+                    }
                 );
             },
             setErrorForField(fieldId, error) {

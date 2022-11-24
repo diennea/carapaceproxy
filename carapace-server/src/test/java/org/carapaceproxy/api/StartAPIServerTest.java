@@ -326,7 +326,7 @@ public class StartAPIServerTest extends UseAdminServer {
         String serialNumber = certificate.getSerialNumber().toString(16).toUpperCase();
         String expiringDate = certificate.getNotAfter().toString();
         String dynChain = Base64.getEncoder().encodeToString(createKeystore(originalChain, endUserKeyPair.getPrivate()));
-        store.saveCertificate(new CertificateData(dynDomain, dynChain, WAITING, "", ""));
+        store.saveCertificate(new CertificateData(dynDomain, dynChain, WAITING));
         man.setStateOfCertificate(dynDomain, WAITING); // this reloads certificates from the store
 
         // Static certificates

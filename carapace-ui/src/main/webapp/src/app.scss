@@ -26,14 +26,22 @@ secondary: $primary-dark
 }
 
 /* Other Styles */
-.box-warning {
+.status-box {
     display: inline-block;
-    background-color: $warning;
     padding: 0.5rem;
     margin: 0.3em auto;
     border-radius: 3px;
-    border-left: 5px solid $warning-dark;
     font-size: 0.95rem;
+
+    &.status-box_warning {
+        background-color: $warning;
+        border-left: 5px solid $warning-dark;
+    }
+
+    &.status-box_error {
+        background-color: $error;
+        border-left: 5px solid $error-dark;
+    }
 }
 
 * {

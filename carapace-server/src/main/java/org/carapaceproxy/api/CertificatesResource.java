@@ -39,6 +39,7 @@ import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -104,6 +105,7 @@ public class CertificatesResource {
 
         private final String id;
         private final String hostname;
+        private final String subjectAltNames;
         private final String mode;
         private final boolean dynamic;
         private String status;
@@ -112,9 +114,12 @@ public class CertificatesResource {
         private String daysBeforeRenewal;
         private String serialNumber;
 
-        public CertificateBean(String id, String hostname, String mode, boolean dynamic, String sslCertificateFile) {
+        public CertificateBean(String id, String hostname,
+                               Set<String> subjectAltNames,
+                               String mode, boolean dynamic, String sslCertificateFile) {
             this.id = id;
             this.hostname = hostname;
+            this.subjectAltNames = subjectAltNames != null ? String.join(", ", subjectAltNames) : "";
             this.mode = mode;
             this.dynamic = dynamic;
             this.sslCertificateFile = sslCertificateFile;
@@ -134,6 +139,7 @@ public class CertificatesResource {
             CertificateBean certBean = new CertificateBean(
                     certificate.getId(),
                     certificate.getHostname(),
+                    certificate.getSubjectAltNames(),
                     certificateModeToString(certificate.getMode()),
                     certificate.isDynamic(),
                     certificate.getFile()
@@ -164,12 +170,14 @@ public class CertificatesResource {
                     return;
                 }
                 Certificate[] chain = CertificatesUtils.readChainFromKeystore(keystore);
-                if (chain != null && chain.length > 0) {
+                if (chain.length > 0) {
                     X509Certificate _cert = ((X509Certificate) chain[0]);
                     bean.setExpiringDate(_cert.getNotAfter().toString());
                     bean.setSerialNumber(_cert.getSerialNumber().toString(16).toUpperCase()); // HEX
                     if (!certificate.isAcme()) {
-                        state = CertificatesUtils.isCertificateExpired(_cert.getNotAfter(), 0) ? DynamicCertificateState.EXPIRED : DynamicCertificateState.AVAILABLE;
+                        state = CertificatesUtils.isCertificateExpired(_cert.getNotAfter(), 0)
+                                ? DynamicCertificateState.EXPIRED
+                                : DynamicCertificateState.AVAILABLE;
                     }
                 }
             }
@@ -185,8 +193,9 @@ public class CertificatesResource {
     @GET
     @Path("{certId}")
     public CertificatesResponse getCertificateById(@PathParam("certId") String certId) {
+        final var cert = findCertificateById(certId);
         return new CertificatesResponse(
-                List.of(findCertificateById(certId)),
+                cert != null ? List.of(cert) : Collections.emptyList(),
                 (HttpProxyServer) context.getAttribute("server")
         );
     }
@@ -204,7 +213,7 @@ public class CertificatesResource {
     @POST
     @Path("/")
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response createCertificate(CertificateForm form) throws Exception {
+    public Response createCertificate(CertificateForm form) {
         if (form.domain == null || form.domain.isBlank()) {
             return FormValidationResponse.fieldRequired("domain");
         }
@@ -225,9 +234,14 @@ public class CertificatesResource {
             return FormValidationResponse.fieldConflict("domain");
         }
 
-        final var cert = new CertificateData(form.domain, null, WAITING, "", "");
+        final var cert = new CertificateData(form.domain, null, WAITING);
+        cert.setSubjectAltNames(form.subjectAltNames);
         cert.setDaysBeforeRenewal(form.daysBeforeRenewal);
-        ((HttpProxyServer) context.getAttribute("server")).updateDynamicCertificateForDomain(cert);
+        try {
+            ((HttpProxyServer) context.getAttribute("server")).updateDynamicCertificateForDomain(cert);
+        } catch (Exception e) {
+            return FormValidationResponse.error(e);
+        }
         return FormValidationResponse.created();
     }
 
@@ -257,6 +271,7 @@ public class CertificatesResource {
             CertificateBean certBean = new CertificateBean(
                     certificate.getId(),
                     certificate.getHostname(),
+                    certificate.getSubjectAltNames(),
                     certificateModeToString(certificate.getMode()),
                     certificate.isDynamic(),
                     certificate.getFile()
@@ -273,6 +288,7 @@ public class CertificatesResource {
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     public Response uploadCertificate(
             @PathParam("domain") String domain,
+            @QueryParam("subjectaltnames") @DefaultValue("") String subjectAltNames,
             @QueryParam("type") @DefaultValue("manual") String type,
             @QueryParam("daysbeforerenewal") Integer daysbeforerenewal,
             InputStream uploadedInputStream) throws Exception {
@@ -309,12 +325,12 @@ public class CertificatesResource {
                 state = AVAILABLE;
             }
 
-            CertificateData cert = new CertificateData(domain, encodedData, state, "", "");
+            CertificateData cert = new CertificateData(domain, encodedData, state);
             cert.setManual(MANUAL.equals(certType));
-
+            cert.setSubjectAltNames(Set.of(subjectAltNames.split(",")));
             cert.setDaysBeforeRenewal(daysbeforerenewal != null ? daysbeforerenewal : DEFAULT_DAYS_BEFORE_RENEWAL);
-            HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-            server.updateDynamicCertificateForDomain(cert);
+
+            ((HttpProxyServer) context.getAttribute("server")).updateDynamicCertificateForDomain(cert);
 
             return Response.status(200).entity("SUCCESS: Certificate saved").build();
         }

@@ -18,14 +18,17 @@
                  :variant="opSuccess ? 'success' : 'danger'">
             {{opMessage}}
         </b-alert>
-        <div v-if="expiredCertificates.length > 0" class="box-warning">
-            <strong>These certificates are expired:</strong>
+        <status-box
+            v-if="expiredCertificates.length > 0"
+            title="These certificates are expired"
+            status="warning"
+        >
             <ul>
                 <li v-for="cert in expiredCertificates" :key="cert.id">
                     <strong>{{cert.id}}</strong> since {{cert.expiringDate}}
                 </li>
             </ul>
-        </div>
+        </status-box>
         <datatable-list :fields="fields" :items="certificates" :rowClicked="showCertDetail" :loading="loading">
             <template v-slot:status="{ item }">
                 <div class="badge-status" :class="[statusClass(item)]">
@@ -37,13 +40,15 @@
 </template>
 
 <script>
-    import { doGet, doPost } from '../serverapi'
-    import { toBooleanSymbol } from "../lib/formatter";
-    import CertificateForm from "./certificates/CertificateForm.vue";
+    import { doGet, doPost } from '../../serverapi'
+    import { toBooleanSymbol } from "../../lib/formatter";
+    import CertificateForm from "./CertificateForm.vue";
+    import StatusBox from "../StatusBox.vue";
     export default {
         name: "Certificates",
         components: {
-            "certificate-form": CertificateForm
+            "certificate-form": CertificateForm,
+            "status-box": StatusBox
         },
         data() {
             return {
@@ -62,6 +67,7 @@
                 return [
                     {key: "id", label: "ID", sortable: true},
                     {key: "hostname", label: "Hostname", sortable: true},
+                    {key: "subjectAltNames", label: "SANs", sortable: true},
                     {key: "mode", label: "Mode", sortable: true},
                     {
                         key: "dynamic",

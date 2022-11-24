@@ -23,6 +23,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
@@ -40,13 +41,13 @@ import static org.shredzone.acme4j.Status.VALID;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.File;
 import java.io.StringWriter;
+import java.net.URL;
 import java.nio.file.Files;
 import java.security.KeyPair;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 import java.util.Properties;
@@ -145,8 +146,8 @@ public class CertificatesTest extends UseAdminServer {
         // Default route
         config.put("route.100.id", "default");
         config.put("route.100.enabled", "true");
-        config.put("route.100.match", "all");
         config.put("route.100.action", "proxy-all");
+        config.put("route.100.match", "all");
 
         //Enabled ocsp stapling
         config.put("ocsp.enabled", "true");
@@ -505,7 +506,7 @@ public class CertificatesTest extends UseAdminServer {
         store.saveKeyPairForDomain(keyPair, "localhost", false);
         CertificateData cert = dcMan.getCertificateDataForDomain("localhost");
         cert.setState(DynamicCertificateState.ORDERING);
-        cert.setPendingOrderLocation("https://localhost/orderlocation");
+        cert.setPendingOrderLocation(new URL("https://localhost/orderlocation"));
         store.saveCertificate(cert);
         assertEquals(DynamicCertificateState.ORDERING, dcMan.getStateOfCertificate("localhost"));
 
@@ -543,18 +544,15 @@ public class CertificatesTest extends UseAdminServer {
         DynamicCertificatesManager dynCertsMan = server.getDynamicCertificatesManager();
 
         try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
-
             // upload exact
             KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
             Certificate[] chain = generateSampleChain(endUserKeyPair, false);
             byte[] chainData1 = createKeystore(chain, endUserKeyPair.getPrivate());
             uploadCertificate("localhost2", null, chainData1, client, credentials);
             CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost2");
-            byte[] keyStoreData = Base64.getDecoder().decode(data.getChain());
-            Certificate[] saveChain = CertificatesUtils.readChainFromKeystore(keyStoreData);
+            Certificate[] saveChain = base64DecodeCertificateChain(data.getChain());
             assertNotNull(data);
             assertArrayEquals(CertificatesUtils.readChainFromKeystore(chainData1), saveChain);
-            assertFalse(data.isWildcard());
 
             // upload wildcard
             endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
@@ -562,19 +560,15 @@ public class CertificatesTest extends UseAdminServer {
             byte[] chainData2 = createKeystore(chain, endUserKeyPair.getPrivate());
             uploadCertificate("*.localhost2", null, chainData2, client, credentials);
             data = dynCertsMan.getCertificateDataForDomain("*.localhost2");
-            byte[] keyStoreData2 = Base64.getDecoder().decode(data.getChain());
-            Certificate[] saveChain2 = CertificatesUtils.readChainFromKeystore(keyStoreData2);
+            Certificate[] saveChain2 = base64DecodeCertificateChain(data.getChain());
             assertNotNull(data);
             assertArrayEquals(CertificatesUtils.readChainFromKeystore(chainData2), saveChain2);
-            assertTrue(data.isWildcard());
 
             // exact still different from wildcard
             data = dynCertsMan.getCertificateDataForDomain("localhost2");
-            byte[] keyStoreData3 = Base64.getDecoder().decode(data.getChain());
-            Certificate[] saveChain3 = CertificatesUtils.readChainFromKeystore(keyStoreData3);
+            Certificate[] saveChain3 = base64DecodeCertificateChain(data.getChain());
             assertNotNull(data);
             assertArrayEquals(CertificatesUtils.readChainFromKeystore(chainData1), saveChain3);
-            assertFalse(data.isWildcard());
         }
     }
 
@@ -614,7 +608,7 @@ public class CertificatesTest extends UseAdminServer {
         store.saveKeyPairForDomain(keyPair, "localhost", false);
         CertificateData cert = dcMan.getCertificateDataForDomain("localhost");
         cert.setState(DynamicCertificateState.ORDERING);
-        cert.setPendingOrderLocation("https://localhost/orderlocation");
+        cert.setPendingOrderLocation(new URL("https://localhost/orderlocation"));
         store.saveCertificate(cert);
         assertEquals(DynamicCertificateState.ORDERING, dcMan.getStateOfCertificate("localhost"));
 
@@ -654,7 +648,7 @@ public class CertificatesTest extends UseAdminServer {
 
         cert = dcMan.getCertificateDataForDomain("localhost");
         cert.setState(DynamicCertificateState.ORDERING);
-        cert.setPendingOrderLocation("https://localhost/orderlocation");
+        cert.setPendingOrderLocation(new URL("https://localhost/orderlocation"));
         store.saveCertificate(cert);
         assertEquals(DynamicCertificateState.ORDERING, dcMan.getStateOfCertificate("localhost"));
         server.getCurrentConfiguration().setLocalCertificatesStorePeersIds(Set.of(server.getPeerId()));
@@ -701,7 +695,7 @@ public class CertificatesTest extends UseAdminServer {
         store.saveKeyPairForDomain(keyPair, "localhost", true);
         cert = dcMan.getCertificateDataForDomain("localhost");
         cert.setState(DynamicCertificateState.ORDERING);
-        cert.setPendingOrderLocation("https://localhost/orderlocation");
+        cert.setPendingOrderLocation(new URL("https://localhost/orderlocation"));
         store.saveCertificate(cert);
         assertEquals(DynamicCertificateState.ORDERING, dcMan.getStateOfCertificate("localhost"));
         renewed = Arrays.asList((X509Certificate[]) generateSampleChain(keyPair, false));
@@ -778,7 +772,7 @@ public class CertificatesTest extends UseAdminServer {
         store.saveKeyPairForDomain(keyPair, "localhost2", false);
         cert = dcMan.getCertificateDataForDomain("localhost2");
         cert.setState(DynamicCertificateState.ORDERING);
-        cert.setPendingOrderLocation("https://localhost/orderlocation");
+        cert.setPendingOrderLocation(new URL("https://localhost/orderlocation"));
         store.saveCertificate(cert);
         assertEquals(DynamicCertificateState.ORDERING, dcMan.getStateOfCertificate("localhost2"));
 
@@ -890,6 +884,7 @@ public class CertificatesTest extends UseAdminServer {
             assertTrue(store.anyPropertyMatches((k, v) -> {
                 if (k.matches("certificate\\.[0-9]+\\.hostname") && v.equals("test.domain.tld")) {
                     return store.getProperty(k.replace("hostname", "mode"), null).equals("acme")
+                    && store.getProperty(k.replace("hostname", "san"), null).equals("test1.domain.tld,test2.domain.tld")
                     && store.getProperty(k.replace("hostname", "daysbeforerenewal"), null).equals("10");
                 }
                 return false;

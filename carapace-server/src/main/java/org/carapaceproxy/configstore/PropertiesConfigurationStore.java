@@ -32,9 +32,9 @@ import java.util.function.BiConsumer;
 public class PropertiesConfigurationStore implements ConfigurationStore {
 
     private final Properties properties;
-    private final ConcurrentHashMap<String, CertificateData> certificates = new ConcurrentHashMap();
-    private final ConcurrentHashMap<String, KeyPair> domainsKeyPair = new ConcurrentHashMap();
-    private final ConcurrentHashMap<String, String> acmeChallengeTokens = new ConcurrentHashMap();
+    private final ConcurrentHashMap<String, CertificateData> certificates = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, KeyPair> domainsKeyPair = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, String> acmeChallengeTokens = new ConcurrentHashMap<>();
     private KeyPair acmeUserKey;
 
     public PropertiesConfigurationStore(Properties properties) {
