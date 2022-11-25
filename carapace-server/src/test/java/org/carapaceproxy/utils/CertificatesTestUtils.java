@@ -19,6 +19,9 @@
  */
 package org.carapaceproxy.utils;
 
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
+import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
+import static org.shredzone.acme4j.util.KeyPairUtils.createKeyPair;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
@@ -37,12 +40,9 @@ import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
-import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
-import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
 import org.carapaceproxy.utils.RawHttpClient.BasicAuthCredentials;
 import org.carapaceproxy.utils.RawHttpClient.HttpResponse;
 import org.shredzone.acme4j.util.KeyPairUtils;
-import static org.shredzone.acme4j.util.KeyPairUtils.createKeyPair;
 
 /**
  *

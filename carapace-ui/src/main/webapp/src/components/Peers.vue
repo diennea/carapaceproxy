@@ -19,7 +19,7 @@
 </template>
 
 <script>
-import { doGet } from "./../mockserver";
+import { doGet } from "../serverapi";
 export default {
     name: "Peers",
     data() {

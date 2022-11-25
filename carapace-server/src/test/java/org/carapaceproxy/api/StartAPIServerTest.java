@@ -232,11 +232,7 @@ public class StartAPIServerTest extends UseAdminServer {
                     + "Authorization: Basic " + credentials.toBase64() + "\r\n"
                     + "\r\n"
                     + body);
-            String s = resp.getBodyString();
-            System.out.println("s:" + s);
-            // no backend configured
-            assertTrue(s.equals("{\"ok\":true,\"error\":\"\"}"));
-
+            assertTrue(resp.isOk());
         }
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             String body = "connectionsmanager.maxconnectionsperendpoint=20-BAD-VALUE";
@@ -247,11 +243,8 @@ public class StartAPIServerTest extends UseAdminServer {
                     + "Authorization: Basic " + credentials.toBase64() + "\r\n"
                     + "\r\n"
                     + body);
-            String s = resp.getBodyString();
-            System.out.println("s:" + s);
-            // no backend configured
-            assertTrue(s.contains("\"ok\":false"));
-            assertTrue(s.contains("Invalid integer value '20-BAD-VALUE' for parameter 'connectionsmanager.maxconnectionsperendpoint'"));
+            assertTrue(resp.isError());
+            assertTrue(resp.getBodyString().contains("Invalid integer value '20-BAD-VALUE' for parameter 'connectionsmanager.maxconnectionsperendpoint'"));
         }
     }
 

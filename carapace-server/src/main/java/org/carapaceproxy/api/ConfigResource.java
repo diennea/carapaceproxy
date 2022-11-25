@@ -23,12 +23,20 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringReader;
 import java.io.StringWriter;
-import java.util.*;
+import java.util.Properties;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.servlet.ServletContext;
-import javax.ws.rs.*;
-
+import javax.ws.rs.Consumes;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.Response;
+import org.carapaceproxy.api.response.SimpleResponse;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
@@ -70,7 +78,7 @@ public class ConfigResource {
     @Path("/validate")
     @Consumes(value = "text/plain")
     @POST
-    public SimpleResponse validate(String newConfiguration) {
+    public Response validate(String newConfiguration) {
         LOG.info("Validating configuration from API:");
         LOG.info(newConfiguration);
 
@@ -79,7 +87,7 @@ public class ConfigResource {
             PropertiesConfigurationStore simpleStore = buildStore(newConfiguration);
             dumpAndValidateInputConfiguration(simpleStore);
             server.buildValidConfiguration(simpleStore);
-            return SimpleResponse.success();
+            return SimpleResponse.ok();
         } catch (ConfigurationNotValidException | RuntimeException err) {
             return SimpleResponse.error(err);
         }
@@ -102,7 +110,7 @@ public class ConfigResource {
     @Path("/apply")
     @Consumes(value = "text/plain")
     @POST
-    public SimpleResponse apply(String newConfiguration) {
+    public Response apply(String newConfiguration) {
         LOG.info("Apply configuration from API:");
         LOG.info(newConfiguration);
         LOG.info("**");
@@ -111,7 +119,7 @@ public class ConfigResource {
             PropertiesConfigurationStore simpleStore = buildStore(newConfiguration);
             dumpAndValidateInputConfiguration(simpleStore);
             server.applyDynamicConfigurationFromAPI(simpleStore);
-            return SimpleResponse.success();
+            return SimpleResponse.ok();
         } catch (ConfigurationNotValidException
                 | ConfigurationChangeInProgressException
                 | RuntimeException err) {

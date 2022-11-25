@@ -82,7 +82,7 @@
 </template>
 
 <script>
-import { doGet } from "./mockserver";
+import { doGet } from "./serverapi";
 import Navbar from "./components/Navbar.vue";
 import Sidebar from "./components/Sidebar.vue";
 

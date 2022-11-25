@@ -49,8 +49,8 @@
 </template>
 
 <script>
-    import { doGet } from "./../mockserver";
-    import { doPost } from "./../mockserver";
+    import { doGet } from "../serverapi";
+    import { doPost } from "../serverapi";
 
     export default {
         name: "Configuration",
@@ -71,18 +71,13 @@
                 doPost(
                         "/api/config/apply",
                         this.configuration,
-                        data => {
-                            this.opSuccess = data.ok;
-                            this.opMessage = data.ok
-                                    ? "Configuration saved successfully."
-                                    : "Error: unable to save the configuration. Reason: " + data.error;
+                        () => {
+                            this.opSuccess = true
+                            this.opMessage = "Configuration saved successfully."
                         },
                         error => {
-                            this.opSuccess = false;
-                            this.opMessage =
-                                    "Error: unable to save the configuration (" +
-                                    error +
-                                    ").";
+                            this.opSuccess = false
+                            this.opMessage = "Error: unable to save the configuration (" + error.message +")."
                         }
                 );
             },
@@ -90,16 +85,13 @@
                 doGet(
                         "/api/config",
                         conf => {
-                            this.configuration = conf;
-                            this.opSuccess = true;
-                            this.opMessage = "";
+                            this.configuration = conf
+                            this.opSuccess = true
+                            this.opMessage = ""
                         },
                         error => {
-                            this.opSuccess = false;
-                            this.opMessage =
-                                    "Error: unable to fetch current configuration (" +
-                                    error +
-                                    ").";
+                            this.opSuccess = false
+                            this.opMessage = "Error: unable to fetch current configuration (" + error.message + ")."
                         }
                 );
             },
@@ -107,18 +99,13 @@
                 doPost(
                         "/api/config/validate",
                         this.configuration,
-                        data => {
-                            this.opSuccess = data.ok;
-                            this.opMessage = data.ok
-                                    ? "Configuration is ok."
-                                    : "Error: configuration contains some errors. Details: " + data.error;
+                        () => {
+                            this.opSuccess = true
+                            this.opMessage = "Configuration is ok."
                         },
                         error => {
-                            this.opSuccess = false;
-                            this.opMessage =
-                                    "Error: unable to validate the configuration (" +
-                                    error +
-                                    ").";
+                            this.opSuccess = false
+                            this.opMessage = "Error: unable to validate the configuration (" + error.message + ")."
                         }
                 );
             },
@@ -145,8 +132,8 @@
                             newChecked,
                             () => window.location.reload(),
                             error => {
-                                this.opSuccess = false;
-                                this.opMessage = "Something went wrong (" + error + ")";
+                                this.opSuccess = false
+                                this.opMessage = "Something went wrong (" + error.message + ")"
                             }
                     );
                 })

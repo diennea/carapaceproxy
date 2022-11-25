@@ -2,8 +2,10 @@
     <div>
         <div class="page-header">
             <h2>Certificates</h2>
+            <b-button v-b-modal.edit>Create certificate</b-button>
+            <certificate-form id="edit" @done="loadCertificates"></certificate-form>
             <b-button v-if="localStorePath"
-                      @click="openConfirmModal"                      
+                      @click="openConfirmModal"
                       class="btn">
                 Dump all certificates
             </b-button>
@@ -16,14 +18,17 @@
                  :variant="opSuccess ? 'success' : 'danger'">
             {{opMessage}}
         </b-alert>
-        <div v-if="expiredCertificates.length > 0" class="box-warning">
-            <strong>These certificates are expired:</strong>
+        <status-box
+            v-if="expiredCertificates.length > 0"
+            title="These certificates are expired"
+            status="warning"
+        >
             <ul>
                 <li v-for="cert in expiredCertificates" :key="cert.id">
                     <strong>{{cert.id}}</strong> since {{cert.expiringDate}}
                 </li>
             </ul>
-        </div>
+        </status-box>
         <datatable-list :fields="fields" :items="certificates" :rowClicked="showCertDetail" :loading="loading">
             <template v-slot:status="{ item }">
                 <div class="badge-status" :class="[statusClass(item)]">
@@ -35,10 +40,16 @@
 </template>
 
 <script>
-    import { doGet, doPost } from './../mockserver'
-    import { toBooleanSymbol } from "./../lib/formatter";
+    import { doGet, doPost } from '../../serverapi'
+    import { toBooleanSymbol } from "../../lib/formatter";
+    import CertificateForm from "./CertificateForm.vue";
+    import StatusBox from "../StatusBox.vue";
     export default {
         name: "Certificates",
+        components: {
+            "certificate-form": CertificateForm,
+            "status-box": StatusBox
+        },
         data() {
             return {
                 certificates: [],
@@ -49,11 +60,7 @@
             };
         },
         created() {
-            doGet("/api/certificates", data => {
-                this.certificates = data.certificates || {}
-                this.localStorePath = data.localStorePath
-                this.loading = false
-            });
+            this.loadCertificates()
         },
         computed: {
             fields() {
@@ -84,6 +91,14 @@
             },
         },
         methods: {
+            loadCertificates() {
+                this.loading = true
+                doGet("/api/certificates", data => {
+                    this.certificates = data.certificates || {}
+                    this.localStorePath = data.localStorePath
+                    this.loading = false
+                });
+            },
             showCertDetail(cert) {
                 this.$router.push({name: "Certificate", params: {id: cert.id}});
             },
@@ -117,19 +132,13 @@
                     if (value != true) {
                         return;
                     }
-                    doPost("/api/certificates/storeall",
-                            null,
-                            resp => {
-                                this.opSuccess = resp.ok;
-                                if (resp.ok) {
-                                    this.opMessage = 'Certificates dump started';
-                                } else {
-                                    this.opMessage = 'Unable to dump certificates to path: ' + this.localStorePath + '. Cause: ' + resp.error;
-                                }
+                    doPost("/api/certificates/storeall", null,() => {
+                                this.opSuccess = true
+                                this.opMessage = 'Certificates dump started'
                             },
                             error => {
                                 this.opSuccess = false;
-                                this.opMessage = 'Unable to dump certificates to path: ' + this.localStorePath + '. Cause: ' + error;
+                                this.opMessage = 'Unable to dump certificates to path: ' + this.localStorePath + '. Cause: ' + error.message;
                             }
                     );
                 })

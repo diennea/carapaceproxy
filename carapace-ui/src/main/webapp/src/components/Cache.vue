@@ -66,7 +66,7 @@
 </template>
 
 <script>
-    import { doGet } from "./../mockserver";
+    import { doGet } from "../serverapi";
     import { formatTimestamp } from "./../lib/formatter";
     export default {
         name: "CacheStatus",
@@ -116,7 +116,7 @@
             },
             flushCache() {
                 // eslint-disable-next-line
-                doGet("/api/cache/flush", data => {
+                doGet("/api/cache/flush", () => {
                     this.cacheitems = [];
                     this.loadData();
                 });

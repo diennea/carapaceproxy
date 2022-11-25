@@ -1,18 +1,24 @@
 <template>
     <div>
         <h2>Routes</h2>
-        <div class="box-warning">
-            With no route matching the request, NOT-FOUND action will be performed
-        </div>
+        <status-box
+            title="Reminder"
+            message="With no route matching the request, NOT-FOUND action will be performed"
+            status="warning"
+        ></status-box>
         <datatable-list :fields="fields" :items="routes"></datatable-list>
     </div>
 </template>
 
 <script>
-import { doGet } from "./../mockserver";
+import { doGet } from "../serverapi";
 import { toBooleanSymbol } from "../lib/formatter";
+import StatusBox from "./StatusBox.vue";
 export default {
     name: "Routes",
+    components: {
+        "status-box": StatusBox
+    },
     data() {
         return {
             routes: []
@@ -28,7 +34,6 @@ export default {
             });
         });
     },
-
     computed: {
         fields() {
             return [

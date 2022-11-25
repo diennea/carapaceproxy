@@ -30,7 +30,7 @@
 </template>
 
 <script>
-    import { doGet } from "./../mockserver";
+    import { doGet } from "../serverapi";
     import { formatTimestamp } from "./../lib/formatter";
     export default {
         name: "Backends",

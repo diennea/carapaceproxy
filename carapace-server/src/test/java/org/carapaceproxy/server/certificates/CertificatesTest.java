@@ -69,7 +69,9 @@ import org.bouncycastle.operator.bc.BcDigestCalculatorProvider;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.util.io.pem.PemObject;
 import org.bouncycastle.util.io.pem.PemWriter;
+import org.carapaceproxy.api.CertificatesResource;
 import org.carapaceproxy.api.UseAdminServer;
+import org.carapaceproxy.api.response.FormValidationResponse;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.certificates.ocsp.OcspStaplingManager;
@@ -823,6 +825,82 @@ public class CertificatesTest extends UseAdminServer {
         fullchainPem = Files.readString(f[0].toPath());
         System.out.println("[FULLCHAIN]: " + fullchainPem);
         assertTrue(fullchainPem.endsWith(chainPem));
+    }
+
+    @Test
+    public void testCreateCertificateFromUI() throws Exception {
+        configureAndStartServer();
+        int port = server.getLocalPort();
+        try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
+            final var form = new CertificatesResource.CertificateForm();
+
+            // empty domain name
+            var resp = client.post("/api/certificates/", null, form, credentials);
+            assertTrue(resp.isError());
+            var result = resp.getData(FormValidationResponse.class);
+            assertEquals("domain", result.getField());
+            assertEquals(FormValidationResponse.ERROR_FIELD_REQUIRED, result.getMessage());
+
+            // domain name in subject alternative names
+            form.setDomain("test.domain.tld");
+            form.setSubjectAltNames(Set.of("test.domain.tld", "test2.domain.tld"));
+            resp = client.post("/api/certificates/", null, form, credentials);
+            assertTrue(resp.isError());
+            result = resp.getData(FormValidationResponse.class);
+            assertEquals("subjectAltNames", result.getField());
+            assertEquals("Subject alternative names cannot include the Domain", result.getMessage());
+
+            // invalid certificate type
+            form.setDomain("test.domain.tld");
+            form.setSubjectAltNames(Set.of("test1.domain.tld", "test2.domain.tld"));
+            form.setType("manual");
+            resp = client.post("/api/certificates/", null, form, credentials);
+            assertTrue(resp.isError());
+            result = resp.getData(FormValidationResponse.class);
+            assertEquals("type", result.getField());
+            assertEquals(FormValidationResponse.ERROR_FIELD_INVALID, result.getMessage());
+
+            // invalid days before renewal
+            form.setDomain("test.domain.tld");
+            form.setSubjectAltNames(Set.of("test1.domain.tld", "test2.domain.tld"));
+            form.setType("acme");
+            form.setDaysBeforeRenewal(-1);
+            resp = client.post("/api/certificates/", null, form, credentials);
+            assertTrue(resp.isError());
+            result = resp.getData(FormValidationResponse.class);
+            assertEquals("daysBeforeRenewal", result.getField());
+            assertEquals(FormValidationResponse.ERROR_FIELD_INVALID, result.getMessage());
+
+            // all ok
+            form.setDomain("test.domain.tld");
+            form.setSubjectAltNames(Set.of("test1.domain.tld", "test2.domain.tld"));
+            form.setType("acme");
+            form.setDaysBeforeRenewal(10);
+            resp = client.post("/api/certificates/", null, form, credentials);
+            assertTrue(resp.isCreated());
+            CertificateData data = server.getDynamicCertificatesManager().getCertificateDataForDomain("test.domain.tld");
+            assertNotNull(data);
+            ConfigurationStore store = server.getDynamicConfigurationStore();
+            assertTrue(store.anyPropertyMatches((k, v) -> {
+                if (k.matches("certificate\\.[0-9]+\\.hostname") && v.equals("test.domain.tld")) {
+                    return store.getProperty(k.replace("hostname", "mode"), null).equals("acme")
+                    && store.getProperty(k.replace("hostname", "san"), null).equals("test1.domain.tld,test2.domain.tld")
+                    && store.getProperty(k.replace("hostname", "daysbeforerenewal"), null).equals("10");
+                }
+                return false;
+            }));
+
+            // domain name already used
+            form.setDomain("test.domain.tld");
+            form.setSubjectAltNames(Set.of("test1.domain.tld", "test2.domain.tld"));
+            form.setType("acme");
+            form.setDaysBeforeRenewal(10);
+            resp = client.post("/api/certificates/", null, form, credentials);
+            assertTrue(resp.isConflict());
+            result = resp.getData(FormValidationResponse.class);
+            assertEquals("domain", result.getField());
+            assertEquals(FormValidationResponse.ERROR_FIELD_DUPLICATED, result.getMessage());
+        }
     }
 
 }
