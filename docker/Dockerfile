@@ -1,4 +1,4 @@
-FROM ubuntu:latest
+FROM ubuntu:22.04
 
 ARG TARBALL
 RUN test -n "$TARBALL"
