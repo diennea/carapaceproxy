@@ -102,12 +102,12 @@ public class DynamicCertificatesManager implements Runnable {
     private static final String EVENT_CERTIFICATES_STATE_CHANGED = "certificates_state_changed";
     private static final String EVENT_CERTIFICATES_REQUEST_STORE = "certificates_request_store";
 
-    private Map<String, CertificateData> certificates = new ConcurrentHashMap();
+    private Map<String, CertificateData> certificates = new ConcurrentHashMap<>();
     private ACMEClient acmeClient; // Let's Encrypt client
     private Route53Client r53Client;
     private String awsAccessKey;
     private String awsSecretKey;
-    private final Map<String, Integer> dnsChallegeReachabilityChecks = new ConcurrentHashMap();
+    private final Map<String, Integer> dnsChallengeReachabilityChecks = new ConcurrentHashMap<>();
 
     private Set<String> domainsCheckerIPAddresses;
 
@@ -195,7 +195,7 @@ public class DynamicCertificatesManager implements Runnable {
 
     private void loadCertificates(Map<String, SSLCertificateConfiguration> certificates) throws ConfigurationNotValidException {
         try {
-            final var _certificates = new ConcurrentHashMap();
+            final var _certificates = new ConcurrentHashMap<String, CertificateData>();
             for (Entry<String, SSLCertificateConfiguration> e : certificates.entrySet()) {
                 SSLCertificateConfiguration config = e.getValue();
                 if (config.isDynamic()) {
@@ -294,17 +294,18 @@ public class DynamicCertificatesManager implements Runnable {
                 switch (cert.getState()) { // certificate waiting to be issues/renew
                     case WAITING, DOMAIN_UNREACHABLE -> { // certificate domain reported as unreachable for issuing/renewing
                         LOG.log(Level.INFO, "WAITING for certificate issuing process start for domain: {0}.", domain);
-                        final var allNamesReachable = cert.getNames().stream().allMatch(name -> {
+                        final var unreachableNames = cert.getNames().stream().filter(name -> {
                             try {
-                                return CertificatesUtils.isWildcard(name) || checkDomain(name);
+                                return !CertificatesUtils.isWildcard(name) && !checkDomain(name);
                             } catch (AcmeException e) {
-                                return false;
+                                return true;
                             }
-                        });
-                        if (allNamesReachable) {
+                        }).collect(Collectors.toUnmodifiableSet());
+                        if (unreachableNames.isEmpty()) {
                             createOrderAndChallengesForCertificate(cert);
                         } else {
-                            cert.setState(DOMAIN_UNREACHABLE);
+                            // todo consider using cert.error(DOMAIN_UNREACHABLE, "Some of the names are not reachable: " + unreachableNames);
+                            cert.step(DOMAIN_UNREACHABLE);
                         }
                     }
                     case DNS_CHALLENGE_WAIT -> { // waiting for dns propagation for all dns challenges
@@ -322,11 +323,11 @@ public class DynamicCertificatesManager implements Runnable {
                                 acmeClient.orderCertificate(pendingOrder, keys);
                             } catch (AcmeException ex) { // order finalization failed
                                 LOG.log(Level.SEVERE, "Certificate order finalization for domain {0} FAILED.", domain);
-                                cert.setState(REQUEST_FAILED);
+                                cert.error(ex.getMessage());
                                 break;
                             }
                         }
-                        cert.setState(ORDERING);
+                        cert.step(ORDERING);
                     }
                     case ORDERING -> { // certificate ordering
                         LOG.log(Level.INFO, "ORDERING certificate for domain {0}.", domain);
@@ -337,26 +338,28 @@ public class DynamicCertificatesManager implements Runnable {
                             PrivateKey key = loadOrCreateKeyPairForDomain(domain).getPrivate();
                             String chain = base64EncodeCertificateChain(certificateChain.toArray(new Certificate[0]), key);
                             cert.setChain(chain);
-                            cert.setState(AVAILABLE);
+                            cert.success(AVAILABLE);
                             LOG.log(Level.INFO, "Certificate issuing for domain: {0} SUCCEED. Certificate AVAILABLE.", domain);
                         } else if (status == Status.INVALID) {
-                            cert.setState(REQUEST_FAILED);
+                            cert.error("Order status for certificate is " + status);
                         }
                     }
                     case REQUEST_FAILED -> { // challenge/order failed
                         LOG.log(Level.INFO, "Certificate issuing for domain: {0} current status is FAILED, setting status=WAITING again.", domain);
-                        cert.setState(WAITING);
+                        if (cert.getStateData().cycleCount() <= 10 /* todo make it configurable */){
+                            cert.step(WAITING);
+                        } // else stay here, must unlock manually
                     }
                     case AVAILABLE -> { // certificate saved/available/not expired
                         if (isCertificateExpired(cert.getExpiringDate(), cert.getDaysBeforeRenewal())) {
-                            cert.setState(EXPIRED);
+                            cert.step(EXPIRED);
                         } else {
                             updateCertificate = false;
                         }
                     }
                     case EXPIRED -> {     // certificate expired
                         LOG.log(Level.INFO, "Certificate for domain: {0} EXPIRED.", domain);
-                        cert.setState(WAITING);
+                        cert.step(WAITING);
                     }
                     default -> throw new IllegalStateException();
                 }
@@ -393,6 +396,14 @@ public class DynamicCertificatesManager implements Runnable {
         return true;
     }
 
+    /**
+     * Exists with the following states:
+     * <ul>
+     *     <li>{@link DynamicCertificateState#DNS_CHALLENGE_WAIT} whether there is at least a wildcard domain;</li>
+     *     <li>{@link DynamicCertificateState#REQUEST_FAILED} whether there is at least a dns challenge record that cannot be created;</li>
+     *     <li>{@link DynamicCertificateState#VERIFYING} otherwise</li>
+     * </ul>
+     */
     private void createOrderAndChallengesForCertificate(CertificateData cert) throws AcmeException {
         Order order = acmeClient.createOrderForDomain(cert.getNames());
         cert.setPendingOrderLocation(order.getLocation());
@@ -400,9 +411,9 @@ public class DynamicCertificatesManager implements Runnable {
 
         final var challenges = acmeClient.getChallengesForOrder(order);
         if (challenges.isEmpty()) {
-            cert.setState(VERIFIED);
+            cert.success(VERIFIED);
         } else {
-            var state = VERIFYING;
+            cert.step(VERIFYING);
             final var challengesData = new HashMap<String, JSON>();
             for (final var e: challenges.entrySet()) {
                 final var domain = e.getKey();
@@ -413,10 +424,10 @@ public class DynamicCertificatesManager implements Runnable {
                 });
                 if (challenge instanceof final Dns01Challenge dns01Challenge) {
                     if (r53Client.createDnsChallengeForDomain(domain, dns01Challenge.getDigest())) {
-                        state = DNS_CHALLENGE_WAIT;
+                        cert.step(DNS_CHALLENGE_WAIT);
                         LOG.log(Level.INFO, "Created new TXT DNS challenge-record for domain {0}.", domain);
                     } else {
-                        state = REQUEST_FAILED;
+                        cert.error("Creation of TXT DNS challenge-record failed");
                         LOG.log(Level.SEVERE, "Creation of TXT DNS challenge-record for domain {0} FAILED.", domain);
                         break;
                     }
@@ -426,23 +437,19 @@ public class DynamicCertificatesManager implements Runnable {
                     http01Challenge.trigger();
                 }
             }
-            if (state == REQUEST_FAILED) {
+            if (cert.getState() == REQUEST_FAILED) {
                 LOG.log(Level.INFO, "Cleaning up all challenges for certificate {0}", cert);
                 challenges.forEach(this::cleanupChallengeForDomain);
             } else {
                 cert.setPendingChallengesData(challengesData);
             }
-            // DNS_CHALLENGE_WAIT whether there is at least a wildcard domain;
-            // REQUEST_FAILED whether there is at least a dns challenge record that cannot be created;
-            // VERIFYING otherwise
-            cert.setState(state);
         }
     }
 
     private void checkDnsChallengesReachabilityForCertificate(CertificateData cert) throws AcmeException {
         var totalCount = 0;
         var okCount = 0;
-        var state = DNS_CHALLENGE_WAIT;
+        cert.step(DNS_CHALLENGE_WAIT);
         final var challenges = getChallengesFromCertificate(cert).entrySet();
         for (var c: challenges) {
             if (!(c.getValue() instanceof final Dns01Challenge challenge)) {
@@ -453,30 +460,28 @@ public class DynamicCertificatesManager implements Runnable {
             LOG.log(Level.INFO, "DNS CHALLENGE WAITING for domain {0}: {1}.", new Object[]{domain, challenge});
             if (r53Client.isDnsChallengeForDomainAvailable(domain, challenge.getDigest())) {
                 okCount++;
-                dnsChallegeReachabilityChecks.remove(domain);
+                dnsChallengeReachabilityChecks.remove(domain);
                 challenge.trigger();
             } else {
-                Integer value = dnsChallegeReachabilityChecks.getOrDefault(domain, 0);
+                Integer value = dnsChallengeReachabilityChecks.getOrDefault(domain, 0);
                 if (++value >= DNS_CHALLENGE_REACHABILITY_CHECKS_LIMIT) {
                     LOG.log(Level.INFO, "Too many reachability attempts of TXT DNS challenge-record for domain {0}: {1}", new Object[]{domain, challenge});
-                    state = REQUEST_FAILED;
+                    cert.error("Too many reachability attempts of TXT DNS challenge-record: " + value);
                 } else {
-                    dnsChallegeReachabilityChecks.put(domain, value);
+                    dnsChallengeReachabilityChecks.put(domain, value);
                 }
             }
         }
-        if (okCount == totalCount) {
-            state = VERIFYING;
-        }
-        if (state == REQUEST_FAILED) {
+        if (cert.getState() == REQUEST_FAILED) {
             LOG.log(Level.INFO, "Cleaning up all challenges for certificate {0}", cert);
             for (var c: challenges) {
                 final var domain = c.getKey();
-                dnsChallegeReachabilityChecks.remove(domain);
+                dnsChallengeReachabilityChecks.remove(domain);
                 cleanupChallengeForDomain(domain, c.getValue());
             }
+        } else if (okCount == totalCount) {
+            cert.step(VERIFYING);
         }
-        cert.setState(state);
     }
 
     private Map<String, Challenge> getChallengesFromCertificate(CertificateData cert) throws AcmeException {
@@ -496,7 +501,7 @@ public class DynamicCertificatesManager implements Runnable {
 
     private void checkChallengesResponsesForCertificate(CertificateData cert) throws AcmeException {
         var okCount = 0;
-        var state = VERIFYING;
+        cert.step(VERIFYING);
         final var challenges = getChallengesFromCertificate(cert).entrySet();
         for (var c: challenges) {
             final var domain = c.getKey();
@@ -508,17 +513,15 @@ public class DynamicCertificatesManager implements Runnable {
                 okCount++;
                 cleanupChallengeForDomain(domain, challenge);
             } else if (status == Status.INVALID) {
-                state = REQUEST_FAILED;
+                cert.error("Challenge response verification failed, status is " + status);
             }
         }
-        if (okCount == challenges.size()) {
-            state = VERIFIED;
-        }
-        if (state == REQUEST_FAILED) {
+        if (cert.getState() == REQUEST_FAILED) {
             LOG.log(Level.INFO, "Cleaning up all challenges for certificate {0}", cert);
             challenges.forEach(c -> cleanupChallengeForDomain(c.getKey(), c.getValue()));
+        } else if (okCount == challenges.size()) {
+            cert.success(VERIFIED);
         }
-        cert.setState(state);
     }
 
     private void cleanupChallengeForDomain(String domain, Challenge challenge) {
@@ -633,7 +636,7 @@ public class DynamicCertificatesManager implements Runnable {
                 final var _certificates = certs.isEmpty()
                         ? DynamicCertificatesManager.this.certificates.values()
                         : certs.stream()
-                                .map(d -> getCertificateDataForDomain(d))
+                                .map(DynamicCertificatesManager.this::getCertificateDataForDomain)
                                 .collect(Collectors.toList());
                 storeLocalCertificates(_certificates, null);
             } catch (Exception err) {
@@ -727,7 +730,7 @@ public class DynamicCertificatesManager implements Runnable {
         final var _certificates = _certs.isEmpty()
                 ? this.certificates.values()
                 : _certs.stream()
-                        .map(d -> getCertificateDataForDomain(d))
+                        .map(this::getCertificateDataForDomain)
                         .collect(Collectors.toList());
 
         storeLocalCertificates(_certificates, null);

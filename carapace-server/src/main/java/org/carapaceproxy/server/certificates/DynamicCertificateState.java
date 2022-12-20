@@ -28,10 +28,10 @@ public enum DynamicCertificateState {
     DOMAIN_UNREACHABLE, // certificate domain reported as unreachable for issuing/renewing
     DNS_CHALLENGE_WAIT, // for dns-challenge, wait for dns propagation
     VERIFYING, // challenge verification by LE pending
-    VERIFIED, // challenge succeded
+    VERIFIED, // challenge succeeded
     ORDERING, // certificate order pending
     REQUEST_FAILED, // challenge/order failed
-    AVAILABLE, // certificate available(saved) and not expired
+    AVAILABLE, // certificate available (saved) and not expired
     EXPIRED; // certificate expired
 
     public String toStorableFormat() {

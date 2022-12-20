@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.configstore;
 
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.REQUEST_FAILED;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -34,7 +35,6 @@ import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.shredzone.acme4j.toolbox.JSON;
 
 /**
- *
  * Bean for ACME Certificates ({@link DynamicCertificate}) data stored in database.
  *
  * @author paolo.venturi
@@ -48,6 +48,7 @@ public class CertificateData {
     @ToString.Exclude
     private String chain; // base64 encoded string of the KeyStore.
     private volatile DynamicCertificateState state;
+    private StateData stateData;
     private URL pendingOrderLocation;
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
@@ -64,6 +65,7 @@ public class CertificateData {
                            DynamicCertificateState state) {
         this(domain, null, chain, state, null, null);
     }
+
     public CertificateData(String domain,
                            Set<String> subjectAltNames,
                            String chain,
@@ -74,6 +76,7 @@ public class CertificateData {
         this.subjectAltNames = subjectAltNames;
         this.chain = chain;
         this.state = state;
+        this.stateData = StateData.empty();
         this.pendingOrderLocation = orderLocation;
         this.pendingChallengesData = challengesData;
     }
@@ -87,4 +90,27 @@ public class CertificateData {
         }};
     }
 
+    /**
+     * Mark the request as failed, storing a message and counting the number of errors.
+     * @param message a message to store for the failure
+     *
+     * @see DynamicCertificateState#REQUEST_FAILED
+     */
+    public void error(final String message) {
+        this.state = REQUEST_FAILED;
+        this.stateData = new StateData(this.stateData.cycleCount() + 1, message);
+    }
+
+    /**
+     * Change {@link DynamicCertificateState state} without resetting error counter and message.
+     * @param state the state to move to
+     */
+    public void step(final DynamicCertificateState state) {
+        this.state = state;
+    }
+
+    public void success(final DynamicCertificateState state) {
+        this.state = state;
+        this.stateData = StateData.empty();
+    }
 }
