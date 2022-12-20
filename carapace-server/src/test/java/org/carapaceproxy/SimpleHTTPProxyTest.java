@@ -92,7 +92,7 @@ public class SimpleHTTPProxyTest {
     @Test
     public void testSsl() throws Exception {
 
-        HttpTestUtils.overideJvmWideHttpsVerifier();
+        HttpTestUtils.overrideJvmWideHttpsVerifier();
 
         String certificate = TestUtils.deployResource("ia.p12", tmpDir.getRoot());
         String caCertificate = TestUtils.deployResource("ca.p12", tmpDir.getRoot());

@@ -64,7 +64,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
     private void configureAndStartServer() throws Exception {
 
-        HttpTestUtils.overideJvmWideHttpsVerifier();
+        HttpTestUtils.overrideJvmWideHttpsVerifier();
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
