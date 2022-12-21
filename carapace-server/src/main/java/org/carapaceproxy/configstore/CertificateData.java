@@ -48,7 +48,8 @@ public class CertificateData {
     @ToString.Exclude
     private String chain; // base64 encoded string of the KeyStore.
     private volatile DynamicCertificateState state;
-    private StateData stateData;
+    private int cycleCount;
+    private String message;
     private URL pendingOrderLocation;
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
@@ -76,7 +77,8 @@ public class CertificateData {
         this.subjectAltNames = subjectAltNames;
         this.chain = chain;
         this.state = state;
-        this.stateData = StateData.empty();
+        this.cycleCount = 0;
+        this.message = "";
         this.pendingOrderLocation = orderLocation;
         this.pendingChallengesData = challengesData;
     }
@@ -98,7 +100,8 @@ public class CertificateData {
      */
     public void error(final String message) {
         this.state = REQUEST_FAILED;
-        this.stateData = new StateData(this.stateData.cycleCount() + 1, message);
+        this.cycleCount++;
+        this.message = message;
     }
 
     /**
@@ -111,6 +114,7 @@ public class CertificateData {
 
     public void success(final DynamicCertificateState state) {
         this.state = state;
-        this.stateData = StateData.empty();
+        this.cycleCount = 0;
+        this.message = "";
     }
 }

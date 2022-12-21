@@ -346,7 +346,7 @@ public class DynamicCertificatesManager implements Runnable {
                     }
                     case REQUEST_FAILED -> { // challenge/order failed
                         LOG.log(Level.INFO, "Certificate issuing for domain: {0} current status is FAILED, setting status=WAITING again.", domain);
-                        if (cert.getStateData().cycleCount() <= 10 /* todo make it configurable */){
+                        if (cert.getCycleCount() <= 10 /* todo make it configurable */){
                             cert.step(WAITING);
                         } // else stay here, must unlock manually
                     }

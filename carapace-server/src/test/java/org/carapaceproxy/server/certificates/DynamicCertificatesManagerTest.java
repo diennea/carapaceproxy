@@ -60,7 +60,6 @@ import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
-import org.carapaceproxy.configstore.StateData;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.Listeners;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
@@ -151,17 +150,17 @@ public class DynamicCertificatesManagerTest {
         when(store.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
 
         // yet available certificate
-        final var stateData = maxedOutTrials
-                ? new StateData(/* todo link to config property */ 10, "Foo bar") // next error will fail
-                : StateData.empty();
+        final var cycleCount = maxedOutTrials
+                ? /* todo link to config property */ 10 // next error will fail
+                : 0;
         String d0 = "localhost0";
         CertificateData cd0 = new CertificateData(d0, chain, AVAILABLE);
-        cd0.setStateData(stateData);
+        cd0.setCycleCount(cycleCount);
         when(store.loadCertificateForDomain(eq(d0))).thenReturn(cd0);
         // certificate to order
         String d1 = "localhost1";
         CertificateData cd1 = new CertificateData(d1, null, WAITING);
-        cd1.setStateData(stateData);
+        cd1.setCycleCount(cycleCount);
         when(store.loadCertificateForDomain(eq(d1))).thenReturn(cd1);
         man.setConfigurationStore(store);
         // manual certificate
@@ -197,7 +196,7 @@ public class DynamicCertificatesManagerTest {
         when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
 
-        assertCertificateState(d0, AVAILABLE, stateData.cycleCount(), man);
+        assertCertificateState(d0, AVAILABLE, cycleCount, man);
         assertCertificateState(d2, AVAILABLE, 0, man);
         assertCertificateState(d3, AVAILABLE, 0, man);
         assertNotNull(man.getCertificateForDomain(d2));
@@ -205,11 +204,11 @@ public class DynamicCertificatesManagerTest {
         man.setStateOfCertificate(d2, WAITING); // has not to be renewed by the manager (saveCounter = 1)
         assertCertificateState(d2, WAITING, 0, man);
 
-        int expectedCycleCount = stateData.cycleCount();
+        int expectedCycleCount = cycleCount;
         int saveCounter = 1; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
 
         // WAITING
-        assertCertificateState(d1, WAITING, stateData.cycleCount(), man);
+        assertCertificateState(d1, WAITING, cycleCount, man);
         man.run();
         verify(store, times(++saveCounter)).saveCertificate(any());
         assertCertificateState(d1, runCase.equals("challenge_null") ? VERIFIED : VERIFYING, expectedCycleCount, man);
@@ -282,7 +281,7 @@ public class DynamicCertificatesManagerTest {
     private void assertCertificateState(String domain, DynamicCertificateState expectedState, int expectedCycleCount, DynamicCertificatesManager dCMan) {
         assertEquals(expectedState, dCMan.getStateOfCertificate(domain)); // on db
         assertEquals(expectedState, dCMan.getCertificateDataForDomain(domain).getState()); // on cache
-        assertEquals(expectedCycleCount, dCMan.getCertificateDataForDomain(domain).getStateData().cycleCount());
+        assertEquals(expectedCycleCount, dCMan.getCertificateDataForDomain(domain).getCycleCount());
     }
 
     @Test
