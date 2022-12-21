@@ -22,7 +22,7 @@ docker/build.sh
 ```
 Then you can run the container and the admin interface will be listening on 0.0.0.0:8001
 ```
-docker run -p8001:8001 carapace/carapace-server:latest
+docker run -p 8001:8001 carapace/carapace-server:latest
 ```
 You can also pass system properties using docker option `-e` with the prefix `CARAPACE`:
 
