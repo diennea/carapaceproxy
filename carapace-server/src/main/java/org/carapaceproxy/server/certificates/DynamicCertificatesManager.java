@@ -397,7 +397,7 @@ public class DynamicCertificatesManager implements Runnable {
     }
 
     /**
-     * Exists with the following states:
+     * At the end, we can expect the following states:
      * <ul>
      *     <li>{@link DynamicCertificateState#DNS_CHALLENGE_WAIT} whether there is at least a wildcard domain;</li>
      *     <li>{@link DynamicCertificateState#REQUEST_FAILED} whether there is at least a dns challenge record that cannot be created;</li>
@@ -411,7 +411,7 @@ public class DynamicCertificatesManager implements Runnable {
 
         final var challenges = acmeClient.getChallengesForOrder(order);
         if (challenges.isEmpty()) {
-            cert.success(VERIFIED);
+            cert.step(VERIFIED);
         } else {
             cert.step(VERIFYING);
             final var challengesData = new HashMap<String, JSON>();
@@ -520,7 +520,7 @@ public class DynamicCertificatesManager implements Runnable {
             LOG.log(Level.INFO, "Cleaning up all challenges for certificate {0}", cert);
             challenges.forEach(c -> cleanupChallengeForDomain(c.getKey(), c.getValue()));
         } else if (okCount == challenges.size()) {
-            cert.success(VERIFIED);
+            cert.step(VERIFIED);
         }
     }
 
