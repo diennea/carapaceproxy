@@ -27,7 +27,7 @@ docker run -p8001:8001 carapace/carapace-server:latest
 You can also pass system properties using docker option `-e` with the prefix `CARAPACE`:
 
 ```
-docker run -p8001:8001 -e CARAPACE_mode=cluster -e CARAPACE_zkAddress=localhost:2181 carapace/carapace-server:latest
+docker run -p 8001:8001 -e CARAPACE_mode=cluster -e CARAPACE_zkAddress=localhost:2181 carapace/carapace-server:latest
 ```
 
 ### Docker start a simple cluster with 1 node
