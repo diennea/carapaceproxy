@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  zookeeper:
+    image: zookeeper:3.7
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+  carapace:
+    image: carapace/carapace-server:latest
+    container_name: carapace
+    environment:
+      CARAPACE_mode: cluster
+      CARAPACE_zkAddress: zookeeper:2181
+      CARAPACE_peer.id: test
+    depends_on:
+      - zookeeper
+    ports:
+      - "8001:8001"
+      - "4089:4089"
+      - "8089:8089"
+
+
