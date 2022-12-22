@@ -48,7 +48,7 @@ public class CertificateData {
     @ToString.Exclude
     private String chain; // base64 encoded string of the KeyStore.
     private volatile DynamicCertificateState state;
-    private int cycleCount;
+    private int attemptCount;
     private String message;
     private URL pendingOrderLocation;
     @ToString.Exclude
@@ -73,14 +73,25 @@ public class CertificateData {
                            DynamicCertificateState state,
                            URL orderLocation,
                            Map<String, JSON> challengesData) {
+        this(domain, subjectAltNames, chain, state, orderLocation, challengesData, 0, "");
+    }
+
+    public CertificateData(String domain,
+                           Set<String> subjectAltNames,
+                           String chain,
+                           DynamicCertificateState state,
+                           URL orderLocation,
+                           Map<String, JSON> challengesData,
+                           int attemptCount,
+                           String message) {
         this.domain = Objects.requireNonNull(domain);
         this.subjectAltNames = subjectAltNames;
         this.chain = chain;
         this.state = state;
-        this.cycleCount = 0;
-        this.message = "";
         this.pendingOrderLocation = orderLocation;
         this.pendingChallengesData = challengesData;
+        this.attemptCount = attemptCount;
+        this.message = message;
     }
 
     public Collection<String> getNames() {
@@ -100,7 +111,7 @@ public class CertificateData {
      */
     public void error(final String message) {
         this.state = REQUEST_FAILED;
-        this.cycleCount++;
+        this.attemptCount++;
         this.message = message;
     }
 
@@ -114,7 +125,7 @@ public class CertificateData {
 
     public void success(final DynamicCertificateState state) {
         this.state = state;
-        this.cycleCount = 0;
+        this.attemptCount = 0;
         this.message = "";
     }
 }

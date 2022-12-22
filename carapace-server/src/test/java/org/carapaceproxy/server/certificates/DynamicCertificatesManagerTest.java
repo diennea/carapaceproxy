@@ -155,12 +155,12 @@ public class DynamicCertificatesManagerTest {
                 : 0;
         String d0 = "localhost0";
         CertificateData cd0 = new CertificateData(d0, chain, AVAILABLE);
-        cd0.setCycleCount(cycleCount);
+        cd0.setAttemptCount(cycleCount);
         when(store.loadCertificateForDomain(eq(d0))).thenReturn(cd0);
         // certificate to order
         String d1 = "localhost1";
         CertificateData cd1 = new CertificateData(d1, null, WAITING);
-        cd1.setCycleCount(cycleCount);
+        cd1.setAttemptCount(cycleCount);
         when(store.loadCertificateForDomain(eq(d1))).thenReturn(cd1);
         man.setConfigurationStore(store);
         // manual certificate
@@ -281,7 +281,7 @@ public class DynamicCertificatesManagerTest {
     private void assertCertificateState(String domain, DynamicCertificateState expectedState, int expectedCycleCount, DynamicCertificatesManager dCMan) {
         assertEquals(expectedState, dCMan.getStateOfCertificate(domain)); // on db
         assertEquals(expectedState, dCMan.getCertificateDataForDomain(domain).getState()); // on cache
-        assertEquals(expectedCycleCount, dCMan.getCertificateDataForDomain(domain).getCycleCount());
+        assertEquals(expectedCycleCount, dCMan.getCertificateDataForDomain(domain).getAttemptCount());
     }
 
     @Test
