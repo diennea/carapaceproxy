@@ -150,9 +150,7 @@ public class DynamicCertificatesManagerTest {
         when(store.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
 
         // yet available certificate
-        final var cycleCount = maxedOutTrials
-                ? /* todo link to config property */ 10 // next error will fail
-                : 0;
+        final var cycleCount = maxedOutTrials ? 10 : 0; // next error will fail
         String d0 = "localhost0";
         CertificateData cd0 = new CertificateData(d0, chain, AVAILABLE);
         cd0.setAttemptCount(cycleCount);
@@ -166,12 +164,10 @@ public class DynamicCertificatesManagerTest {
         // manual certificate
         String d2 = "manual";
         CertificateData cd2 = new CertificateData(d2, chain, AVAILABLE);
-        // cd2.setStateData(stateData); // todo this is manual, don't care
         when(store.loadCertificateForDomain(eq(d2))).thenReturn(cd2);
         // empty manual certificate
         String d3 = "emptymanual";
         CertificateData cd3 = new CertificateData(d3, null, AVAILABLE);
-        // cd3.setStateData(stateData); // todo this is manual, don't care
         when(store.loadCertificateForDomain(eq(d3))).thenReturn(cd3);
 
         man.setConfigurationStore(store);
