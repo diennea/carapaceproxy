@@ -352,4 +352,12 @@ public class CertificatesResource {
         return SimpleResponse.ok();
     }
 
+    @POST
+    @Path("{domain}/reset")
+    public Response resetCertificateState(@PathParam("domain") String domain) throws Exception {
+        var server = ((HttpProxyServer) context.getAttribute("server"));
+        server.getDynamicCertificatesManager().setStateOfCertificate(domain, WAITING);
+        return SimpleResponse.ok();
+    }
+
 }

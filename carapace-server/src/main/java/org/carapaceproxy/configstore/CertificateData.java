@@ -48,7 +48,7 @@ public class CertificateData {
     @ToString.Exclude
     private String chain; // base64 encoded string of the KeyStore.
     private volatile DynamicCertificateState state;
-    private int attemptCount;
+    private int attemptsCount;
     private String message;
     private URL pendingOrderLocation;
     @ToString.Exclude
@@ -82,7 +82,7 @@ public class CertificateData {
                            DynamicCertificateState state,
                            URL orderLocation,
                            Map<String, JSON> challengesData,
-                           int attemptCount,
+                           int attemptsCount,
                            String message) {
         this.domain = Objects.requireNonNull(domain);
         this.subjectAltNames = subjectAltNames;
@@ -90,7 +90,7 @@ public class CertificateData {
         this.state = state;
         this.pendingOrderLocation = orderLocation;
         this.pendingChallengesData = challengesData;
-        this.attemptCount = attemptCount;
+        this.attemptsCount = attemptsCount;
         this.message = message;
     }
 
@@ -111,7 +111,7 @@ public class CertificateData {
      */
     public void error(final String message) {
         this.state = REQUEST_FAILED;
-        this.attemptCount++;
+        this.attemptsCount++;
         this.message = message;
     }
 
@@ -123,9 +123,13 @@ public class CertificateData {
         this.state = state;
     }
 
+    /**
+     * Change state and reset error counter and message.
+     * @param state the state to move to
+     */
     public void success(final DynamicCertificateState state) {
         this.state = state;
-        this.attemptCount = 0;
+        this.attemptsCount = 0;
         this.message = "";
     }
 }

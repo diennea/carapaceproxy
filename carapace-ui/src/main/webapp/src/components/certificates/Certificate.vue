@@ -19,19 +19,36 @@
                         <li class="list-group-item"><strong>Mode:</strong> {{certificate.mode}}</li>
                         <li class="list-group-item"><strong>Dynamic:</strong> {{certificate.dynamic | symbolFormat}}</li>
                         <li class="list-group-item">
-                            <strong>Status: </strong>
-                            <span class="badge-status" :class="[statusClass(certificate)]">
-                                {{certificate.status}}
-                            </span>
+                            <div class="flex-container">
+                                <div>
+                                    <strong>Status: </strong>
+                                    <span class="badge-status" :class="[statusClass(certificate)]">
+                                        {{certificate.status}}
+                                    </span>
+                                </div>
+                                <b-button v-b-toggle.details variant="outline-secondary">
+                                    <font-awesome-icon icon="circle-info" />
+                                </b-button>
+                            </div>
+                            <b-collapse id="details" class="mt-2">
+                                <b-card>
+                                    <strong>Attempts:</strong>
+                                    {{certificate.attemptsCount || 0}}
+                                    <b-button class="btn" variant="outline-secondary" @click="reset">Reset</b-button>
+                                </b-card>
+                                <b-card v-if="!!certificate.message">
+                                    {{certificate.message}}
+                                </b-card>
+                            </b-collapse>
                         </li>
                         <li class="list-group-item"><strong>Expiring Date:</strong> {{certificate.expiringDate}}</li>
-                        <li v-if="certificate.mode == 'acme'" class="list-group-item"><strong>Days Before Renewal:</strong> {{certificate.daysBeforeRenewal}}</li>
+                        <li v-if="certificate.mode === 'acme'" class="list-group-item"><strong>Days Before Renewal:</strong> {{certificate.daysBeforeRenewal}}</li>
                         <li class="list-group-item"><strong>Serial Number:</strong> {{certificate.serialNumber}}</li>
                         <li v-if="certificate.dynamic" class="p-2 text-center">
                         <b-button :href="'/api/certificates/' + certificate.id + '/download'" class="btn">
                             Download
                         </b-button>
-                        <b-button v-if="certificate.mode == 'acme' && localStorePath"
+                        <b-button v-if="certificate.mode === 'acme' && localStorePath"
                                   @click="openConfirmModal"
                                   variant="outline-secondary"
                                   class="btn">
@@ -68,16 +85,19 @@
             }
         },
         created() {
-            var url = "/api/certificates/" + (this.$route.params.id || 0)
-            doGet(url, data => {
-                this.certificate = data.certificates[0] || {}
-                this.localStorePath = data.localStorePath
-                if (!data) {
-                    this.found = false
-                }
-            })
+            this.fetchCertificateData();
         },
         methods: {
+            fetchCertificateData() {
+                const url = "/api/certificates/" + (this.$route.params.id || 0);
+                doGet(url, data => {
+                    this.certificate = data.certificates[0] || {}
+                    this.localStorePath = data.localStorePath
+                    if (!data) {
+                        this.found = false
+                    }
+                })
+            },
             statusClass(cert) {
                 if (cert.status === 'available') {
                     return "success"
@@ -106,7 +126,7 @@
                     hideHeaderClose: false,
                     centered: true
                 }).then(value => {
-                    if (value != true) {
+                    if (value !== true) {
                         return;
                     }
                     doPost("/api/certificates/" + this.certificate.id + "/store", null, () => {
@@ -119,6 +139,19 @@
                             }
                     );
                 })
+            },
+            reset() {
+                doPost("/api/certificates/" + this.certificate.id + "/reset", null, () => {
+                        this.opSuccess = true;
+                        this.opMessage = 'Certificate state reset';
+                        this.fetchCertificateData();
+                    },
+                    error => {
+                        this.opSuccess = false;
+                        this.opMessage = 'Unable to reset certificate for ' + this.certificate.id + '. Cause: ' + error.message;
+                        this.fetchCertificateData();
+                    }
+                );
             }
         }
     }
@@ -128,14 +161,11 @@
     .panel {
         max-width: 30rem;
     }
-
     li {
         word-wrap: break-word;
-
         .btn {
             margin: auto 0.5rem;
         }
-
     }
     #status-alert {
         position: absolute;
@@ -143,5 +173,10 @@
         left: 25%;
         right: 25%;
         z-index: 999;
+    }
+    .flex-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
     }
 </style>

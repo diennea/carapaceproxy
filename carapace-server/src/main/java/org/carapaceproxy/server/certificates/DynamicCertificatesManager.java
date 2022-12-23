@@ -346,7 +346,7 @@ public class DynamicCertificatesManager implements Runnable {
                     }
                     case REQUEST_FAILED -> { // challenge/order failed
                         LOG.log(Level.INFO, "Certificate issuing for domain: {0} current status is FAILED, setting status=WAITING again.", domain);
-                        if (cert.getAttemptCount() <= getConfig().getMaxAttempts()){
+                        if (cert.getAttemptsCount() <= getConfig().getMaxAttempts()){
                             cert.step(WAITING);
                         } // else stay here, must unlock manually
                     }
@@ -570,9 +570,9 @@ public class DynamicCertificatesManager implements Runnable {
         if (certificates.containsKey(id)) {
             CertificateData cert = store.loadCertificateForDomain(id);
             if (cert != null) {
-                cert.setState(state);
+                cert.success(state);
                 store.saveCertificate(cert);
-                // remember that events  are not delivered to the local JVM
+                // remember that events are not delivered to the local JVM
                 reloadCertificatesFromDB();
                 if (groupMembershipHandler != null) {
                     groupMembershipHandler.fireEvent(EVENT_CERTIFICATES_STATE_CHANGED, null);

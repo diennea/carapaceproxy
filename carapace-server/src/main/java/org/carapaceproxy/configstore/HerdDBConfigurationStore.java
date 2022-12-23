@@ -103,7 +103,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         )""".formatted(DIGITAL_CERTIFICATES_TABLE_NAME);
 
     private static final String SELECT_FROM_DIGITAL_CERTIFICATES_TABLE = """
-        SELECT domain, subjectAltNames, chain, state, pendingOrder, pendingChallenges
+        SELECT domain, subjectAltNames, chain, state, pendingOrder, pendingChallenges, attemptCount, message
         FROM %s
         WHERE domain=?
         """.formatted(DIGITAL_CERTIFICATES_TABLE_NAME);
@@ -459,7 +459,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             psUpdate.setString(3, state);
             psUpdate.setString(4, pendingOrder);
             psUpdate.setString(5, pendingChallenges);
-            psUpdate.setInt(6, cert.getAttemptCount());
+            psUpdate.setInt(6, cert.getAttemptsCount());
             psUpdate.setString(7, cert.getMessage());
             psUpdate.setString(8, domain);
             if (psUpdate.executeUpdate() == 0) {
@@ -469,7 +469,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 psInsert.setString(4, state);
                 psInsert.setString(5, pendingOrder);
                 psInsert.setString(6, pendingChallenges);
-                psInsert.setInt(7, cert.getAttemptCount());
+                psInsert.setInt(7, cert.getAttemptsCount());
                 psInsert.setString(8, cert.getMessage());
                 psInsert.executeUpdate();
             }
