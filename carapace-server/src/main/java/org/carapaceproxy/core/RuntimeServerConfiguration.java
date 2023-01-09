@@ -77,7 +77,10 @@ public class RuntimeServerConfiguration {
     private boolean cacheDisabledForSecureRequestsWithoutPublic = false;
     private String mapperClassname;
     private String accessLogPath = "access.log";
+
     private String accessLogTimestampFormat = "yyyy-MM-dd HH:mm:ss.SSS";
+    private SimpleDateFormat accessLogTimestampFormatter;
+
     private String accessLogFormat =
             "[<timestamp>] [<method> <host> <uri>] [uid:<user_id>, sid:<session_id>, ip:<client_ip>] "
             + "server=<server_ip>, act=<action_id>, route=<route_id>, backend=<backend_id>. "
@@ -435,4 +438,7 @@ public class RuntimeServerConfiguration {
                 .orElse(null);
     }
 
+    public void generateAccessLogTimestampFormatter() {
+        this.setAccessLogTimestampFormatter(new SimpleDateFormat(getAccessLogTimestampFormat()));
+    }
 }

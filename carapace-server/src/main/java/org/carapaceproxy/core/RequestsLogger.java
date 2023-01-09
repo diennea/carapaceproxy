@@ -214,11 +214,12 @@ public class RequestsLogger implements Runnable, Closeable {
             closeAccessLogFile();
             // File opening will be retried at next cycle start
         }
+        this.currentConfiguration.generateAccessLogTimestampFormatter();
         newConfiguration = null;
     }
 
     public void logRequest(ProxyRequest request) {
-        Entry entry = new Entry(request, currentConfiguration.getAccessLogFormat(), currentConfiguration.getAccessLogTimestampFormat());
+        Entry entry = new Entry(request, currentConfiguration.getAccessLogFormat(), currentConfiguration.getAccessLogTimestampFormatter());
 
         if (closeRequested) {
             LOG.log(Level.SEVERE, "Request {0} not logged to access log because RequestsLogger is closed", entry.render());
@@ -367,9 +368,7 @@ public class RequestsLogger implements Runnable, Closeable {
 
         private final ST format;
 
-        public Entry(ProxyRequest request, String format, String timestampFormat) {
-            SimpleDateFormat tsFormatter = new SimpleDateFormat(timestampFormat);
-
+        public Entry(final ProxyRequest request, final String format, final SimpleDateFormat tsFormatter) {
             this.format = new ST(format);
 
             this.format.add("client_ip", request.getRemoteAddress().getAddress().getHostAddress());
