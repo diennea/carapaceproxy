@@ -88,11 +88,8 @@ public class ProxyRequestsManager {
     private final Map<String, HttpClient> forwardersPool = new ConcurrentHashMap<>(); // endpoint_connectionpool -> forwarder to use
     private final ConnectionsManager connectionsManager = new ConnectionsManager();
 
-    private RuntimeServerConfiguration currentConfiguration;
-
     public ProxyRequestsManager(HttpProxyServer parent) {
         this.parent = parent;
-        this.currentConfiguration = parent.getCurrentConfiguration();
     }
 
     public EndpointStats getEndpointStats(EndpointKey key) {
@@ -349,7 +346,7 @@ public class ProxyRequestsManager {
             return HttpClient.create(connectionProvider)
                     .host(endpointHost)
                     .port(endpointPort)
-                    .followRedirect(false) // clients has to request the redirect, not the proxy
+                    .followRedirect(false) // client has to request the redirect, not the proxy
                     .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
                     .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
                     .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
@@ -363,7 +360,7 @@ public class ProxyRequestsManager {
                     .option(Epoll.isAvailable()
                             ? EpollChannelOption.TCP_KEEPCNT
                             : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), connectionConfig.getKeepaliveCount())
-                    .httpResponseDecoder(option -> option.maxHeaderSize(currentConfiguration.getMaxHeaderSize()))
+                    .httpResponseDecoder(option -> option.maxHeaderSize(parent.getCurrentConfiguration().getMaxHeaderSize()))
                     .doOnRequest((req, conn) -> {
                         if (CarapaceLogger.isLoggingDebugEnabled()) {
                             CarapaceLogger.debug("Start sending request for "
@@ -532,7 +529,7 @@ public class ProxyRequestsManager {
             headers.add(HttpHeaderNames.EXPIRES, HttpUtils.formatDateHeader(new java.util.Date(content.getExpiresTs())));
             request.setResponseHeaders(headers);
             addCustomResponseHeaders(request, request.getAction().customHeaders);
-            //If the request is http 1.0 we make sure to send without chunked
+            // If the request is http 1.0, we make sure to send without chunked
             if (parent.getCurrentConfiguration().isHttp10BackwardCompatibilityEnabled() &&
                     request.getRequest().version() == HttpVersion.HTTP_1_0) {
                 return request.sendResponseData(Mono.from(ByteBufFlux.fromIterable(content.getChunks())));
@@ -544,7 +541,7 @@ public class ProxyRequestsManager {
         }
     }
 
-    public class ConnectionsManager implements AutoCloseable, Function<ProxyRequest, Map.Entry<ConnectionPoolConfiguration, ConnectionProvider>> {
+    public static class ConnectionsManager implements AutoCloseable, Function<ProxyRequest, Map.Entry<ConnectionPoolConfiguration, ConnectionProvider>> {
 
         private final Map<ConnectionPoolConfiguration, ConnectionProvider> connectionPools = new ConcurrentHashMap<>();
         private volatile Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> defaultConnectionPool;
