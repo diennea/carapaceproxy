@@ -80,10 +80,14 @@ public class RequestsLogger implements Runnable, Closeable {
     private boolean verbose = false;
     private boolean breakRunForTests = false;
 
+    private DateTimeFormatter accessLogTimestampFormatter;
+
     public RequestsLogger(RuntimeServerConfiguration currentConfiguration) {
         this.currentConfiguration = currentConfiguration;
         this.queue = new ArrayBlockingQueue<>(this.currentConfiguration.getAccessLogMaxQueueCapacity());
         this.thread = new Thread(this);
+        final var tsFormatPattern = this.currentConfiguration.getAccessLogTimestampFormat();
+        this.accessLogTimestampFormatter = DateTimeFormatter.ofPattern(tsFormatPattern);
     }
 
     private void ensureAccessLogFileOpened() throws IOException {
@@ -215,12 +219,13 @@ public class RequestsLogger implements Runnable, Closeable {
             closeAccessLogFile();
             // File opening will be retried at next cycle start
         }
-        this.currentConfiguration.generateAccessLogTimestampFormatter();
+        final var tsFormatPattern = this.currentConfiguration.getAccessLogTimestampFormat();
+        this.accessLogTimestampFormatter = DateTimeFormatter.ofPattern(tsFormatPattern);
         newConfiguration = null;
     }
 
     public void logRequest(ProxyRequest request) {
-        Entry entry = new Entry(request, currentConfiguration.getAccessLogFormat(), currentConfiguration.getAccessLogTimestampFormatter());
+        Entry entry = new Entry(request, currentConfiguration.getAccessLogFormat(), accessLogTimestampFormatter);
 
         if (closeRequested) {
             LOG.log(Level.SEVERE, "Request {0} not logged to access log because RequestsLogger is closed", entry.render());

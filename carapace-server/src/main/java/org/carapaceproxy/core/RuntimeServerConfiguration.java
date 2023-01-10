@@ -80,7 +80,6 @@ public class RuntimeServerConfiguration {
     private String accessLogPath = "access.log";
 
     private String accessLogTimestampFormat = "yyyy-MM-dd HH:mm:ss.SSS";
-    private DateTimeFormatter accessLogTimestampFormatter;
 
     private String accessLogFormat =
             "[<timestamp>] [<method> <host> <uri>] [uid:<user_id>, sid:<session_id>, ip:<client_ip>] "
@@ -437,9 +436,5 @@ public class RuntimeServerConfiguration {
                 .filter(s -> s.getHost().equalsIgnoreCase(hostPort.host()) && s.getPort() == hostPort.port())
                 .findFirst()
                 .orElse(null);
-    }
-
-    public void generateAccessLogTimestampFormatter() {
-        this.setAccessLogTimestampFormatter(DateTimeFormatter.ofPattern(getAccessLogTimestampFormat()));
     }
 }
