@@ -27,7 +27,6 @@ import java.io.File;
 import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -78,9 +77,7 @@ public class RuntimeServerConfiguration {
     private boolean cacheDisabledForSecureRequestsWithoutPublic = false;
     private String mapperClassname;
     private String accessLogPath = "access.log";
-
     private String accessLogTimestampFormat = "yyyy-MM-dd HH:mm:ss.SSS";
-
     private String accessLogFormat =
             "[<timestamp>] [<method> <host> <uri>] [uid:<user_id>, sid:<session_id>, ip:<client_ip>] "
             + "server=<server_ip>, act=<action_id>, route=<route_id>, backend=<backend_id>. "
@@ -437,4 +434,5 @@ public class RuntimeServerConfiguration {
                 .findFirst()
                 .orElse(null);
     }
+
 }
