@@ -35,9 +35,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.sql.Timestamp;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -368,7 +369,7 @@ public class RequestsLogger implements Runnable, Closeable {
 
         private final ST format;
 
-        public Entry(final ProxyRequest request, final String format, final SimpleDateFormat tsFormatter) {
+        public Entry(final ProxyRequest request, final String format, final DateTimeFormatter tsFormatter) {
             this.format = new ST(format);
 
             this.format.add("client_ip", request.getRemoteAddress().getAddress().getHostAddress());
@@ -376,7 +377,7 @@ public class RequestsLogger implements Runnable, Closeable {
             this.format.add("method", request.getRequest().method().name());
             this.format.add("host", request.getRequest().requestHeaders().getAsString(HttpHeaderNames.HOST));
             this.format.add("uri", request.getUri());
-            this.format.add("timestamp", tsFormatter.format(new Timestamp(request.getStartTs())));
+            this.format.add("timestamp", tsFormatter.format(Instant.ofEpochMilli(request.getStartTs())));
             this.format.add("total_time", request.getLastActivity() - request.getStartTs());
             this.format.add("action_id", request.getAction().action);
             this.format.add("route_id", request.getAction().routeId);

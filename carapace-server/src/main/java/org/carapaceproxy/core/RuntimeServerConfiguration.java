@@ -27,6 +27,7 @@ import java.io.File;
 import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -79,7 +80,7 @@ public class RuntimeServerConfiguration {
     private String accessLogPath = "access.log";
 
     private String accessLogTimestampFormat = "yyyy-MM-dd HH:mm:ss.SSS";
-    private SimpleDateFormat accessLogTimestampFormatter;
+    private DateTimeFormatter accessLogTimestampFormatter;
 
     private String accessLogFormat =
             "[<timestamp>] [<method> <host> <uri>] [uid:<user_id>, sid:<session_id>, ip:<client_ip>] "
@@ -439,6 +440,6 @@ public class RuntimeServerConfiguration {
     }
 
     public void generateAccessLogTimestampFormatter() {
-        this.setAccessLogTimestampFormatter(new SimpleDateFormat(getAccessLogTimestampFormat()));
+        this.setAccessLogTimestampFormatter(DateTimeFormatter.ofPattern(getAccessLogTimestampFormat()));
     }
 }
