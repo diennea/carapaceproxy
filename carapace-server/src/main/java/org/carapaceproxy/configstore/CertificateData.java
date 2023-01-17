@@ -86,14 +86,14 @@ public class CertificateData {
                            Map<String, JSON> challengesData,
                            int attemptsCount,
                            String message) {
-        this.domain = Objects.requireNonNull(domain);
-        this.subjectAltNames = subjectAltNames;
-        this.chain = chain;
-        this.state = state;
-        this.pendingOrderLocation = orderLocation;
-        this.pendingChallengesData = challengesData;
-        this.attemptsCount = attemptsCount;
-        this.message = message;
+        this.setDomain(Objects.requireNonNull(domain));
+        this.setSubjectAltNames(subjectAltNames);
+        this.setChain(chain);
+        this.setState(state);
+        this.setPendingOrderLocation(orderLocation);
+        this.setPendingChallengesData(challengesData);
+        this.setAttemptsCount(attemptsCount);
+        this.setMessage(message);
     }
 
     public Collection<String> getNames() {
@@ -143,5 +143,17 @@ public class CertificateData {
         this.state = state;
         this.attemptsCount = 0;
         this.message = "";
+    }
+
+    public void setDomain(final String domain) {
+        this.domain = domain.trim();
+    }
+
+    public void setSubjectAltNames(final Set<String> subjectAltNames) {
+        this.subjectAltNames = Optional
+                .ofNullable(subjectAltNames)
+                .stream().flatMap(Set::stream)
+                .map(String::trim)
+                .collect(Collectors.toUnmodifiableSet());
     }
 }
