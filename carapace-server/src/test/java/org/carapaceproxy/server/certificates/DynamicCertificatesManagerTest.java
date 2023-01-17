@@ -34,7 +34,6 @@ import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -49,7 +48,6 @@ import static org.shredzone.acme4j.Status.VALID;
 import java.net.URL;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -364,7 +362,6 @@ public class DynamicCertificatesManagerTest {
         when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
 
-        CertificateData certData = man.getCertificateDataForDomain(domain);
         int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
 
         // WAITING
@@ -503,7 +500,6 @@ public class DynamicCertificatesManagerTest {
         when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
 
-        CertificateData certData = man.getCertificateDataForDomain(domain);
         int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
 
         // WAITING
@@ -581,7 +577,7 @@ public class DynamicCertificatesManagerTest {
         KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         Certificate cert = mock(Certificate.class);
         X509Certificate _cert = (X509Certificate) generateSampleChain(keyPair, false)[0];
-        when(cert.getCertificateChain()).thenReturn(Arrays.asList(_cert));
+        when(cert.getCertificateChain()).thenReturn(List.of(_cert));
         when(ac.fetchCertificateForOrder(any())).thenReturn(cert);
 
         HttpProxyServer parent = mock(HttpProxyServer.class);
@@ -622,10 +618,10 @@ public class DynamicCertificatesManagerTest {
         man.run(); // checking domain
         verify(store, times(++saveCounter)).saveCertificate(any());
         if (domainCase.equals("localhost-ip-check-partial")) {
-            assertCertificateState(domain, DOMAIN_UNREACHABLE, 0, man);
+            assertCertificateState(domain, DOMAIN_UNREACHABLE, 1, man);
             man.run();
             verify(store, times(++saveCounter)).saveCertificate(any());
-            assertCertificateState(domain, DOMAIN_UNREACHABLE, 0, man);
+            assertCertificateState(domain, DOMAIN_UNREACHABLE, 2, man);
         } else {
             assertCertificateState(domain, VERIFYING, 0, man);
             man.run();
