@@ -102,7 +102,6 @@ public class CertificateData {
                     Stream.of(domain),
                     Optional.ofNullable(subjectAltNames).stream().map(Set::stream).map(String.class::cast)
                 )
-                .filter(String::isBlank)
                 .collect(Collectors.toUnmodifiableSet());
     }
 

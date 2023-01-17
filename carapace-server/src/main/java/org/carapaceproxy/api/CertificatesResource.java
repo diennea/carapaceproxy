@@ -327,7 +327,7 @@ public class CertificatesResource {
 
             CertificateData cert = new CertificateData(domain, encodedData, state);
             cert.setManual(MANUAL.equals(certType));
-            cert.setSubjectAltNames(Set.of(subjectAltNames.split(",")));
+            cert.setSubjectAltNames(subjectAltNames.isBlank() ? Set.of() : Set.of(subjectAltNames.split(",")));
             cert.setDaysBeforeRenewal(daysbeforerenewal != null ? daysbeforerenewal : DEFAULT_DAYS_BEFORE_RENEWAL);
 
             ((HttpProxyServer) context.getAttribute("server")).updateDynamicCertificateForDomain(cert);
