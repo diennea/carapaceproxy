@@ -39,7 +39,7 @@
                                         class="btn"
                                         variant="outline-secondary"
                                         @click="reset">
-                                        Reset
+                                        Reset to waiting
                                     </b-button>
                                 </b-card>
                                 <b-card v-if="!!certificate.message">
