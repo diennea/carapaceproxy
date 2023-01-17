@@ -288,7 +288,7 @@ public class CertificatesResource {
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     public Response uploadCertificate(
             @PathParam("domain") String domain,
-            @QueryParam("subjectaltnames") @DefaultValue("") String subjectAltNames,
+            @QueryParam("subjectaltnames") List<String> subjectAltNames,
             @QueryParam("type") @DefaultValue("manual") String type,
             @QueryParam("daysbeforerenewal") Integer daysbeforerenewal,
             InputStream uploadedInputStream) throws Exception {
@@ -327,7 +327,7 @@ public class CertificatesResource {
 
             CertificateData cert = new CertificateData(domain, encodedData, state);
             cert.setManual(MANUAL.equals(certType));
-            cert.setSubjectAltNames(subjectAltNames.isBlank() ? Set.of() : Set.of(subjectAltNames.split(",")));
+            cert.setSubjectAltNames(Set.copyOf(subjectAltNames));
             cert.setDaysBeforeRenewal(daysbeforerenewal != null ? daysbeforerenewal : DEFAULT_DAYS_BEFORE_RENEWAL);
 
             ((HttpProxyServer) context.getAttribute("server")).updateDynamicCertificateForDomain(cert);
