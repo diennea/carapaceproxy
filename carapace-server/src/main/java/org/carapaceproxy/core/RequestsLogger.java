@@ -38,6 +38,7 @@ import java.nio.file.StandardCopyOption;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
 import java.util.Locale;
@@ -86,8 +87,14 @@ public class RequestsLogger implements Runnable, Closeable {
         this.currentConfiguration = currentConfiguration;
         this.queue = new ArrayBlockingQueue<>(this.currentConfiguration.getAccessLogMaxQueueCapacity());
         this.thread = new Thread(this);
-        final var tsFormatPattern = this.currentConfiguration.getAccessLogTimestampFormat();
-        this.accessLogTimestampFormatter = DateTimeFormatter.ofPattern(tsFormatPattern);
+        this.accessLogTimestampFormatter = buildTimestampFormatter(currentConfiguration);
+    }
+
+    private static DateTimeFormatter buildTimestampFormatter(final RuntimeServerConfiguration currentConfiguration) {
+        return DateTimeFormatter
+                .ofPattern(currentConfiguration.getAccessLogTimestampFormat())
+                .withLocale(Locale.getDefault())
+                .withZone(ZoneId.systemDefault());
     }
 
     private void ensureAccessLogFileOpened() throws IOException {
@@ -219,8 +226,7 @@ public class RequestsLogger implements Runnable, Closeable {
             closeAccessLogFile();
             // File opening will be retried at next cycle start
         }
-        final var tsFormatPattern = this.currentConfiguration.getAccessLogTimestampFormat();
-        this.accessLogTimestampFormatter = DateTimeFormatter.ofPattern(tsFormatPattern);
+        this.accessLogTimestampFormatter = buildTimestampFormatter(this.currentConfiguration);
         newConfiguration = null;
     }
 
