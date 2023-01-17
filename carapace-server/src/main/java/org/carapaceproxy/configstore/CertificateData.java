@@ -100,7 +100,7 @@ public class CertificateData {
         return Stream
                 .concat(
                     Stream.of(domain),
-                    Optional.ofNullable(subjectAltNames).stream().map(Set::stream).map(String.class::cast)
+                    Optional.ofNullable(subjectAltNames).stream().flatMap(Set::stream)
                 )
                 .collect(Collectors.toUnmodifiableSet());
     }
