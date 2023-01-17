@@ -392,21 +392,7 @@ public class DynamicCertificatesManager implements Runnable {
         if (unreachableNames.isEmpty()) {
             createOrderAndChallengesForCertificate(cert);
         } else {
-            final var messageBuilder = new StringBuilder(unreachableNames.size() * 5 + 2).append("""
-                    <table>
-                    <tr>
-                    <th>Domain</th>
-                    <th>Error</th>
-                    <tr>
-                    """);
-            unreachableNames.forEach((name, error) -> messageBuilder
-                    .append("<tr><td>")
-                    .append(name)
-                    .append("</td><td>")
-                    .append(error)
-                    .append("</td></tr>"));
-            messageBuilder.append("</table>");
-            cert.error(DOMAIN_UNREACHABLE, messageBuilder.toString());
+            cert.error(DOMAIN_UNREACHABLE, unreachableNames.toString());
         }
     }
 
