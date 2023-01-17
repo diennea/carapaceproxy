@@ -26,7 +26,10 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
@@ -94,12 +97,13 @@ public class CertificateData {
     }
 
     public Collection<String> getNames() {
-        return new ArrayList<>() {{
-            add(domain);
-            if (subjectAltNames != null) {
-                addAll(subjectAltNames);
-            }
-        }};
+        return Stream
+                .concat(
+                    Stream.of(domain),
+                    Optional.ofNullable(subjectAltNames).stream().map(Set::stream).map(String.class::cast)
+                )
+                .filter(String::isBlank)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     /**
