@@ -487,7 +487,7 @@ public class BasicStandardEndpointMapperTest {
     }
 
     @Test
-    public void testCustomAndDebbugingHeaders() throws Exception {
+    public void testCustomAndDebuggingHeaders() throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
