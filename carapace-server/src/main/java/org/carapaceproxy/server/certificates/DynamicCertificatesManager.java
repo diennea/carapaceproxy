@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.server.certificates;
 
+import static java.util.function.Predicate.not;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
@@ -40,6 +41,7 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.net.InetAddress;
 import java.net.MalformedURLException;
+import java.net.UnknownHostException;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.PrivateKey;
@@ -291,30 +293,16 @@ public class DynamicCertificatesManager implements Runnable {
             try {
                 // this has to be always fetch from db!
                 CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, data.getSubjectAltNames(), false, data.getDaysBeforeRenewal());
-                switch (cert.getState()) { // certificate waiting to be issues/renew
-                    case WAITING, DOMAIN_UNREACHABLE -> { // certificate domain reported as unreachable for issuing/renewing
-                        LOG.log(Level.INFO, "WAITING for certificate issuing process start for domain: {0}.", domain);
-                        final var unreachableNames = cert.getNames().stream().filter(name -> {
-                            try {
-                                return !CertificatesUtils.isWildcard(name) && !checkDomain(name);
-                            } catch (AcmeException e) {
-                                return true;
-                            }
-                        }).collect(Collectors.toUnmodifiableSet());
-                        if (unreachableNames.isEmpty()) {
-                            createOrderAndChallengesForCertificate(cert);
-                        } else {
-                            // todo consider using cert.error(DOMAIN_UNREACHABLE, "Some of the names are not reachable: " + unreachableNames);
-                            cert.step(DOMAIN_UNREACHABLE);
-                        }
-                    }
-                    case DNS_CHALLENGE_WAIT -> { // waiting for dns propagation for all dns challenges
-                        checkDnsChallengesReachabilityForCertificate(cert);
-                    }
-                    case VERIFYING -> { // challenges verification by LE pending
-                        checkChallengesResponsesForCertificate(cert);
-                    }
-                    case VERIFIED -> { // challenge succeeded
+                switch (cert.getState()) {
+                    // certificate waiting to be issues/renew
+                    // certificate domain reported as unreachable for issuing/renewing
+                    case WAITING, DOMAIN_UNREACHABLE -> startCertificateProcessing(domain, cert);
+                    // waiting for dns propagation for all dns challenges
+                    case DNS_CHALLENGE_WAIT -> checkDnsChallengesReachabilityForCertificate(cert);
+                    // challenges verification by LE pending
+                    case VERIFYING -> checkChallengesResponsesForCertificate(cert);
+                    // challenge succeeded
+                    case VERIFIED -> {
                         LOG.log(Level.INFO, "Certificate for domain {0} VERIFIED.", domain);
                         Order pendingOrder = acmeClient.getLogin().bindOrder(cert.getPendingOrderLocation());
                         if (pendingOrder.getStatus() != Status.VALID) { // whether the order is already valid we have to skip finalization
@@ -329,7 +317,8 @@ public class DynamicCertificatesManager implements Runnable {
                         }
                         cert.step(ORDERING);
                     }
-                    case ORDERING -> { // certificate ordering
+                    // certificate ordering
+                    case ORDERING -> {
                         LOG.log(Level.INFO, "ORDERING certificate for domain {0}.", domain);
                         Order order = acmeClient.getLogin().bindOrder(cert.getPendingOrderLocation());
                         Status status = acmeClient.checkResponseForOrder(order);
@@ -344,20 +333,23 @@ public class DynamicCertificatesManager implements Runnable {
                             cert.error("Order status for certificate is " + status);
                         }
                     }
-                    case REQUEST_FAILED -> { // challenge/order failed
+                    // challenge/order failed
+                    case REQUEST_FAILED -> {
                         LOG.log(Level.INFO, "Certificate issuing for domain: {0} current status is FAILED, setting status=WAITING again.", domain);
                         if (cert.getAttemptsCount() <= getConfig().getMaxAttempts()){
                             cert.step(WAITING);
                         } // else stay here, must unlock manually
                     }
-                    case AVAILABLE -> { // certificate saved/available/not expired
+                    // certificate saved/available/not expired
+                    case AVAILABLE -> {
                         if (isCertificateExpired(cert.getExpiringDate(), cert.getDaysBeforeRenewal())) {
                             cert.step(EXPIRED);
                         } else {
                             updateCertificate = false;
                         }
                     }
-                    case EXPIRED -> {     // certificate expired
+                    // certificate expired
+                    case EXPIRED -> {
                         LOG.log(Level.INFO, "Certificate for domain: {0} EXPIRED.", domain);
                         cert.step(WAITING);
                     }
@@ -379,21 +371,52 @@ public class DynamicCertificatesManager implements Runnable {
         }
     }
 
-    private boolean checkDomain(String domain) throws AcmeException {
-        if (!domainsCheckerIPAddresses.isEmpty()) {
+    private void startCertificateProcessing(final String domain, final CertificateData cert) throws AcmeException {
+        LOG.log(Level.INFO, "WAITING for certificate issuing process start for domain: {0}.", domain);
+        final var unreachableNames = new HashMap<String, String>();
+        for (final var name : cert.getNames()) {
             try {
-                for (InetAddress address : InetAddress.getAllByName(domain)) {
-                    if (!domainsCheckerIPAddresses.contains(address.getHostAddress())) {
-                        return false;
+                if (!CertificatesUtils.isWildcard(name)) {
+                    final var unmatchedIps = matchDomainIps(name);
+                    if (!unmatchedIps.isEmpty()) {
+                        unreachableNames.put(name, "The resolved IPs " + unmatchedIps + " where not expected");
                     }
                 }
-            } catch (IOException ex) {
-                LOG.log(Level.SEVERE, "Domain checking failed for {0}: {1}", new Object[]{domain, ex});
-                return false;
+            } catch (AcmeException | IOException ex) {
+                LOG.log(Level.SEVERE, "Domain checking failed for {0}: {1}", new Object[]{name, ex});
+                unreachableNames.put(name, ex.getMessage());
             }
         }
+        if (unreachableNames.isEmpty()) {
+            createOrderAndChallengesForCertificate(cert);
+        } else {
+            final var messageBuilder = new StringBuilder(unreachableNames.size() * 5 + 2).append("""
+                    <table>
+                    <tr>
+                    <th>Domain</th>
+                    <th>Error</th>
+                    <tr>
+                    """);
+            unreachableNames.forEach((name, error) -> messageBuilder
+                    .append("<tr><td>")
+                    .append(name)
+                    .append("</td><td>")
+                    .append(error)
+                    .append("</td></tr>"));
+            messageBuilder.append("</table>");
+            cert.error(DOMAIN_UNREACHABLE, messageBuilder.toString());
+        }
+    }
 
-        return true;
+    private Set<String> matchDomainIps(String domain) throws AcmeException, UnknownHostException {
+        if (!domainsCheckerIPAddresses.isEmpty()) {
+            return Arrays
+                    .stream(InetAddress.getAllByName(domain))
+                    .map(InetAddress::getHostAddress)
+                    .filter(not(domainsCheckerIPAddresses::contains))
+                    .collect(Collectors.toUnmodifiableSet());
+        }
+        return Set.of();
     }
 
     /**
@@ -586,8 +609,7 @@ public class DynamicCertificatesManager implements Runnable {
     }
 
     /**
-     *
-     * @param domain
+     * @param domain the domain to resolve certificate keystore for
      * @return PKCS12 Keystore content
      */
     public byte[] getCertificateForDomain(String domain) {
@@ -632,10 +654,11 @@ public class DynamicCertificatesManager implements Runnable {
         public void eventFired(String eventId, Map<String, Object> data) {
             LOG.log(Level.INFO, "Certificates request store");
             try {
-                final var certs = (List<String>) data.get("certs");
+                final var certs = (List<?>) data.get("certs");
                 final var _certificates = certs.isEmpty()
                         ? DynamicCertificatesManager.this.certificates.values()
                         : certs.stream()
+                                .map(String.class::cast)
                                 .map(DynamicCertificatesManager.this::getCertificateDataForDomain)
                                 .collect(Collectors.toList());
                 storeLocalCertificates(_certificates, null);

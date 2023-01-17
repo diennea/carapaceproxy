@@ -24,7 +24,6 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -35,7 +34,7 @@ import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.shredzone.acme4j.toolbox.JSON;
 
 /**
- * Bean for ACME Certificates ({@link DynamicCertificate}) data stored in database.
+ * Bean for ACME Certificates data stored in database.
  *
  * @author paolo.venturi
  */
@@ -53,7 +52,7 @@ public class CertificateData {
     private URL pendingOrderLocation;
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
-    private Map<String, JSON> pendingChallengesData = new HashMap<>();
+    private Map<String, JSON> pendingChallengesData;
     private boolean manual;
     private int daysBeforeRenewal;
     private Date expiringDate;
@@ -110,7 +109,17 @@ public class CertificateData {
      * @see DynamicCertificateState#REQUEST_FAILED
      */
     public void error(final String message) {
-        this.state = REQUEST_FAILED;
+        error(REQUEST_FAILED, message);
+    }
+
+    /**
+     * Mark the request as an error of some kind, storing a message and counting the number of errors.
+     *
+     * @param state the state to set
+     * @param message a message to store for the failure
+     */
+    public void error(final DynamicCertificateState state, final String message) {
+        this.state = state;
         this.attemptsCount++;
         this.message = message;
     }
