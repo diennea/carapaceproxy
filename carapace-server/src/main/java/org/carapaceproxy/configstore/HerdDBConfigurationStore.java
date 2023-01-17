@@ -413,7 +413,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                         final var message = rs.getString(8);
                         return new CertificateData(
                                 domain,
-                                subjectAltNames != null ? Set.of(subjectAltNames.split(",")) : Collections.emptySet(),
+                                subjectAltNames != null && !subjectAltNames.isBlank() ? Set.of(subjectAltNames.split(",")) : Set.of(),
                                 chain,
                                 state,
                                 pendingOrder != null ? new URL(pendingOrder) : null,
@@ -445,7 +445,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_DIGITAL_CERTIFICATES_TABLE);
                 PreparedStatement psUpdate = con.prepareStatement(UPDATE_DIGITAL_CERTIFICATES_TABLE)) {
             final var domain = cert.getDomain();
-            final var subjectAltNames = cert.getSubjectAltNames() != null
+            final var subjectAltNames = cert.getSubjectAltNames() != null && !cert.getSubjectAltNames().isEmpty()
                     ? String.join(",", cert.getSubjectAltNames())
                     : null;
             final var chain = cert.getChain();
