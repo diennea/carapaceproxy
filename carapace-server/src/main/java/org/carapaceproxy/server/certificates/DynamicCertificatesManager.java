@@ -374,7 +374,9 @@ public class DynamicCertificatesManager implements Runnable {
     private void startCertificateProcessing(final String domain, final CertificateData cert) throws AcmeException {
         LOG.log(Level.INFO, "WAITING for certificate issuing process start for domain: {0}.", domain);
         final var unreachableNames = new HashMap<String, String>();
-        for (final var name : cert.getNames()) {
+        final var names = cert.getNames();
+        LOG.log(Level.INFO, "Names to check for {0} are {1}", new Object[]{domain, names});
+        for (final var name : names) {
             try {
                 if (!CertificatesUtils.isWildcard(name)) {
                     final var unmatchedIps = matchDomainIps(name);
@@ -410,8 +412,9 @@ public class DynamicCertificatesManager implements Runnable {
 
     private Set<String> matchDomainIps(String domain) throws AcmeException, UnknownHostException {
         if (!domainsCheckerIPAddresses.isEmpty()) {
-            return Arrays
-                    .stream(InetAddress.getAllByName(domain))
+            final var allByName = InetAddress.getAllByName(domain);
+            LOG.log(Level.INFO, "Resolved names for {0} are {1}", new Object[]{domain, allByName});
+            return Arrays.stream(allByName)
                     .map(InetAddress::getHostAddress)
                     .filter(not(domainsCheckerIPAddresses::contains))
                     .collect(Collectors.toUnmodifiableSet());

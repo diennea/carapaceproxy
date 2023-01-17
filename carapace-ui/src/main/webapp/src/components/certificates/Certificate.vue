@@ -43,6 +43,7 @@
                                     </b-button>
                                 </b-card>
                                 <b-card v-if="!!certificate.message">
+                                    <strong>Message:</strong>
                                     {{certificate.message}}
                                 </b-card>
                             </b-collapse>
