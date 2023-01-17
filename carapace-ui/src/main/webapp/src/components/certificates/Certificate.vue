@@ -34,7 +34,13 @@
                                 <b-card>
                                     <strong>Attempts:</strong>
                                     {{certificate.attemptsCount || 0}}
-                                    <b-button class="btn" variant="outline-secondary" @click="reset">Reset</b-button>
+                                    <b-button
+                                        v-if="certificate.mode === 'acme'"
+                                        class="btn"
+                                        variant="outline-secondary"
+                                        @click="reset">
+                                        Reset
+                                    </b-button>
                                 </b-card>
                                 <b-card v-if="!!certificate.message">
                                     {{certificate.message}}
