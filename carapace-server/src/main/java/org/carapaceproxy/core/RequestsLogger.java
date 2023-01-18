@@ -35,9 +35,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.sql.Timestamp;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -79,10 +81,20 @@ public class RequestsLogger implements Runnable, Closeable {
     private boolean verbose = false;
     private boolean breakRunForTests = false;
 
+    private DateTimeFormatter accessLogTimestampFormatter;
+
     public RequestsLogger(RuntimeServerConfiguration currentConfiguration) {
         this.currentConfiguration = currentConfiguration;
         this.queue = new ArrayBlockingQueue<>(this.currentConfiguration.getAccessLogMaxQueueCapacity());
         this.thread = new Thread(this);
+        this.accessLogTimestampFormatter = buildTimestampFormatter(currentConfiguration);
+    }
+
+    private static DateTimeFormatter buildTimestampFormatter(final RuntimeServerConfiguration currentConfiguration) {
+        return DateTimeFormatter
+                .ofPattern(currentConfiguration.getAccessLogTimestampFormat())
+                .withLocale(Locale.getDefault())
+                .withZone(ZoneId.systemDefault());
     }
 
     private void ensureAccessLogFileOpened() throws IOException {
@@ -214,11 +226,12 @@ public class RequestsLogger implements Runnable, Closeable {
             closeAccessLogFile();
             // File opening will be retried at next cycle start
         }
+        this.accessLogTimestampFormatter = buildTimestampFormatter(this.currentConfiguration);
         newConfiguration = null;
     }
 
     public void logRequest(ProxyRequest request) {
-        Entry entry = new Entry(request, currentConfiguration.getAccessLogFormat(), currentConfiguration.getAccessLogTimestampFormat());
+        Entry entry = new Entry(request, currentConfiguration.getAccessLogFormat(), accessLogTimestampFormatter);
 
         if (closeRequested) {
             LOG.log(Level.SEVERE, "Request {0} not logged to access log because RequestsLogger is closed", entry.render());
@@ -367,9 +380,7 @@ public class RequestsLogger implements Runnable, Closeable {
 
         private final ST format;
 
-        public Entry(ProxyRequest request, String format, String timestampFormat) {
-            SimpleDateFormat tsFormatter = new SimpleDateFormat(timestampFormat);
-
+        public Entry(final ProxyRequest request, final String format, final DateTimeFormatter tsFormatter) {
             this.format = new ST(format);
 
             this.format.add("client_ip", request.getRemoteAddress().getAddress().getHostAddress());
@@ -377,7 +388,7 @@ public class RequestsLogger implements Runnable, Closeable {
             this.format.add("method", request.getRequest().method().name());
             this.format.add("host", request.getRequest().requestHeaders().getAsString(HttpHeaderNames.HOST));
             this.format.add("uri", request.getUri());
-            this.format.add("timestamp", tsFormatter.format(new Timestamp(request.getStartTs())));
+            this.format.add("timestamp", tsFormatter.format(Instant.ofEpochMilli(request.getStartTs())));
             this.format.add("total_time", request.getLastActivity() - request.getStartTs());
             this.format.add("action_id", request.getAction().action);
             this.format.add("route_id", request.getAction().routeId);
