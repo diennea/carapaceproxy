@@ -95,6 +95,18 @@ public class CertificateData {
         this.setMessage(message);
     }
 
+    public void setDomain(final String domain) {
+        this.domain = domain.trim();
+    }
+
+    public void setSubjectAltNames(final Set<String> subjectAltNames) {
+        this.subjectAltNames = Optional
+                .ofNullable(subjectAltNames)
+                .stream().flatMap(Set::stream)
+                .map(String::trim)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
     public Collection<String> getNames() {
         return Stream
                 .concat(
@@ -142,17 +154,5 @@ public class CertificateData {
         this.state = state;
         this.attemptsCount = 0;
         this.message = "";
-    }
-
-    public void setDomain(final String domain) {
-        this.domain = domain.trim();
-    }
-
-    public void setSubjectAltNames(final Set<String> subjectAltNames) {
-        this.subjectAltNames = Optional
-                .ofNullable(subjectAltNames)
-                .stream().flatMap(Set::stream)
-                .map(String::trim)
-                .collect(Collectors.toUnmodifiableSet());
     }
 }

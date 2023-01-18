@@ -84,6 +84,8 @@ import org.shredzone.acme4j.util.KeyPairUtils;
 @RunWith(JUnitParamsRunner.class)
 public class DynamicCertificatesManagerTest {
 
+    protected static final int MAX_ATTEMPTS = 7;
+
     @Test
     @Parameters({
         "challenge_null,true",
@@ -148,7 +150,7 @@ public class DynamicCertificatesManagerTest {
         when(store.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
 
         // yet available certificate
-        final var cycleCount = maxedOutTrials ? 10 : 0; // next error will fail
+        final var cycleCount = maxedOutTrials ? MAX_ATTEMPTS : 0; // next error will fail
         String d0 = "localhost0";
         CertificateData cd0 = new CertificateData(d0, chain, AVAILABLE);
         cd0.setAttemptsCount(cycleCount);
@@ -184,6 +186,7 @@ public class DynamicCertificatesManagerTest {
         props.setProperty("certificate.3.hostname", d3);
         props.setProperty("certificate.3.mode", "manual");
         props.setProperty("certificate.3.daysbeforerenewal", "0");
+        props.setProperty("dynamiccertificatesmanager.errors.maxattempts", String.valueOf(MAX_ATTEMPTS));
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(configStore);

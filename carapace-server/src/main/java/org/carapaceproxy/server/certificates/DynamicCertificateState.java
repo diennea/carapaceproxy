@@ -24,15 +24,32 @@ package org.carapaceproxy.server.certificates;
  * @author paolo.venturi
  */
 public enum DynamicCertificateState {
-    WAITING, // certificate waiting for issuing/renews
-    DOMAIN_UNREACHABLE, // certificate domain reported as unreachable for issuing/renewing
-    DNS_CHALLENGE_WAIT, // for dns-challenge, wait for dns propagation
-    VERIFYING, // challenge verification by LE pending
-    VERIFIED, // challenge succeeded
-    ORDERING, // certificate order pending
-    REQUEST_FAILED, // challenge/order failed
-    AVAILABLE, // certificate available (saved) and not expired
-    EXPIRED; // certificate expired
+    /** Certificate waiting for issuing/renews */
+    WAITING,
+
+    /** Certificate domain reported as unreachable for issuing/renewing */
+    DOMAIN_UNREACHABLE,
+
+    /** For dns-challenge, wait for dns propagation */
+    DNS_CHALLENGE_WAIT,
+
+    /** Challenge verification by LE pending */
+    VERIFYING,
+
+    /** Challenge succeeded */
+    VERIFIED,
+
+    /** Certificate order pending */
+    ORDERING,
+
+    /** Challenge/order failed */
+    REQUEST_FAILED,
+
+    /** Certificate available (saved) and not expired */
+    AVAILABLE,
+
+    /** Certificate expired */
+    EXPIRED;
 
     public String toStorableFormat() {
         return this.name();

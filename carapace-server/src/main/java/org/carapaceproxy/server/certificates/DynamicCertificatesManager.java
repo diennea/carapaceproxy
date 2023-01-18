@@ -295,8 +295,13 @@ public class DynamicCertificatesManager implements Runnable {
                 CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, data.getSubjectAltNames(), false, data.getDaysBeforeRenewal());
                 switch (cert.getState()) {
                     // certificate waiting to be issues/renew
+                    case WAITING -> startCertificateProcessing(domain, cert);
                     // certificate domain reported as unreachable for issuing/renewing
-                    case WAITING, DOMAIN_UNREACHABLE -> startCertificateProcessing(domain, cert);
+                    case DOMAIN_UNREACHABLE -> {
+                        if (cert.getAttemptsCount() <= getConfig().getMaxAttempts()) {
+                            startCertificateProcessing(domain, cert);
+                        }
+                    }
                     // waiting for dns propagation for all dns challenges
                     case DNS_CHALLENGE_WAIT -> checkDnsChallengesReachabilityForCertificate(cert);
                     // challenges verification by LE pending
@@ -305,7 +310,8 @@ public class DynamicCertificatesManager implements Runnable {
                     case VERIFIED -> {
                         LOG.log(Level.INFO, "Certificate for domain {0} VERIFIED.", domain);
                         Order pendingOrder = acmeClient.getLogin().bindOrder(cert.getPendingOrderLocation());
-                        if (pendingOrder.getStatus() != Status.VALID) { // whether the order is already valid we have to skip finalization
+                        // if the order is already valid, we have to skip finalization
+                        if (pendingOrder.getStatus() != Status.VALID) {
                             try {
                                 KeyPair keys = loadOrCreateKeyPairForDomain(domain);
                                 acmeClient.orderCertificate(pendingOrder, keys);
@@ -335,10 +341,10 @@ public class DynamicCertificatesManager implements Runnable {
                     }
                     // challenge/order failed
                     case REQUEST_FAILED -> {
-                        LOG.log(Level.INFO, "Certificate issuing for domain: {0} current status is FAILED, setting status=WAITING again.", domain);
                         if (cert.getAttemptsCount() <= getConfig().getMaxAttempts()){
+                            LOG.log(Level.INFO, "Certificate issuing for domain: {0} current status is FAILED, setting status=WAITING again.", domain);
                             cert.step(WAITING);
-                        } // else stay here, must unlock manually
+                        }
                     }
                     // certificate saved/available/not expired
                     case AVAILABLE -> {

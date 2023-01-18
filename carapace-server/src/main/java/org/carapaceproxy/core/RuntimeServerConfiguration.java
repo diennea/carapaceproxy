@@ -254,8 +254,8 @@ public class RuntimeServerConfiguration {
         localCertificatesStorePeersIds = properties.getValues("dynamiccertificatesmanager.localcertificates.peers.ids");
         LOG.log(Level.INFO, "dynamiccertificatesmanager.localcertificates.peers.ids={0}", localCertificatesStorePeersIds);
 
-        maxAttempts = properties.getInt("carapage.maxattempts", maxAttempts);
-        LOG.log(Level.INFO, "carapage.maxattempts={0}", maxAttempts);
+        maxAttempts = properties.getInt("dynamiccertificatesmanager.errors.maxattempts", maxAttempts);
+        LOG.log(Level.INFO, "dynamiccertificatesmanager.errors.maxattempts={0}", maxAttempts);
     }
 
     private void configureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
