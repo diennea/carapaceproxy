@@ -33,7 +33,7 @@
                             <b-collapse id="details" class="mt-2">
                                 <b-card>
                                     <strong>Attempts:</strong>
-                                    {{certificate.attemptsCount || 0}}
+                                    {{certificate.attemptsCount}}
                                     <b-button
                                         v-if="certificate.mode === 'acme'"
                                         class="btn"

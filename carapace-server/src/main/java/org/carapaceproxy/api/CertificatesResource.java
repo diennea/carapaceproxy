@@ -113,18 +113,32 @@ public class CertificatesResource {
         private String expiringDate;
         private String daysBeforeRenewal;
         private String serialNumber;
+        private int attemptsCount;
+        private String message;
 
-        public CertificateBean(String id, String hostname,
-                               Set<String> subjectAltNames,
-                               String mode, boolean dynamic, String sslCertificateFile) {
+        public CertificateBean(
+                final String id,
+                final String hostname,
+                final Set<String> subjectAltNames,
+                final String mode,
+                final boolean dynamic,
+                final String sslCertificateFile,
+                final int attemptsCount,
+                final String message
+        ) {
             this.id = id;
             this.hostname = hostname;
             this.subjectAltNames = subjectAltNames != null ? String.join(", ", subjectAltNames) : "";
             this.mode = mode;
             this.dynamic = dynamic;
             this.sslCertificateFile = sslCertificateFile;
+            this.attemptsCount = attemptsCount;
+            this.message = message;
         }
 
+        public CertificateBean(final String id, final String hostname, final Set<String> subjectAltNames, final String mode, final boolean dynamic, final String file) {
+            this(id, hostname, subjectAltNames, mode, dynamic, file, 0, "");
+        }
     }
 
     @GET
@@ -164,6 +178,8 @@ public class CertificatesResource {
                         : CertificatesUtils.isCertificateExpired(cert.getExpiringDate(), 0) ? DynamicCertificateState.EXPIRED : DynamicCertificateState.AVAILABLE;
                 bean.setExpiringDate(cert.getExpiringDate() != null ? cert.getExpiringDate().toString() : "");
                 bean.setSerialNumber(cert.getSerialNumber());
+                bean.setAttemptsCount(cert.getAttemptsCount());
+                bean.setMessage(cert.getMessage());
             } else {
                 KeyStore keystore = loadKeyStoreFromFile(certificate.getFile(), certificate.getPassword(), server.getBasePath());
                 if (keystore == null) {

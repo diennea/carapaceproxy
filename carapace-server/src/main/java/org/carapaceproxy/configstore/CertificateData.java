@@ -21,7 +21,6 @@ package org.carapaceproxy.configstore;
 
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.REQUEST_FAILED;
 import java.net.URL;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.Map;
