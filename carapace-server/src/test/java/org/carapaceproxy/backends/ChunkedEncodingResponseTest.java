@@ -19,6 +19,15 @@
  */
 package org.carapaceproxy.backends;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_LENGTH;
+import static io.netty.handler.codec.http.HttpHeaderNames.TRANSFER_ENCODING;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.util.Objects;
 import junitparams.JUnitParamsRunner;
@@ -28,20 +37,15 @@ import org.apache.http.HttpVersion;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
-import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
+import org.carapaceproxy.utils.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
-
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
-import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_LENGTH;
-import static io.netty.handler.codec.http.HttpHeaderNames.TRANSFER_ENCODING;
-import static org.junit.Assert.*;
 
 /**
  * @author enrico.olivelli
@@ -65,7 +69,6 @@ public class ChunkedEncodingResponseTest {
                                 .withBody("it <b>works</b> !!"))
         );
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         CarapaceLogger.setLoggingDebugEnabled(true);
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
@@ -119,7 +122,6 @@ public class ChunkedEncodingResponseTest {
                                 .withBody("it <b>works</b> !!"))
         );
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.start();
@@ -180,7 +182,6 @@ public class ChunkedEncodingResponseTest {
                                 .withBody("it <b>works</b> !!"))
         );
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.start();
@@ -193,6 +194,7 @@ public class ChunkedEncodingResponseTest {
                     HttpGet request = new HttpGet("http://localhost:" + port + "/index.html");
                     request.setProtocolVersion(httpVersion);
                     client.execute(request);
+                    TestUtils.waitForCondition(() -> server.getCache().getCacheSize() > 0, 10);
                 }
 
                 HttpGet request = new HttpGet("http://localhost:" + port + "/index.html");
