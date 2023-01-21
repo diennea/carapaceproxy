@@ -494,7 +494,7 @@ public class HttpTestUtils {
         }
     }
 
-    public static void overideJvmWideHttpsVerifier() {
+    public static void overrideJvmWideHttpsVerifier() {
         HttpsURLConnection.setDefaultHostnameVerifier(hostname_verifier);
         HttpsURLConnection.setDefaultSSLSocketFactory(socket_factory);
     }    

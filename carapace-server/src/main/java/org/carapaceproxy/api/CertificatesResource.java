@@ -113,18 +113,32 @@ public class CertificatesResource {
         private String expiringDate;
         private String daysBeforeRenewal;
         private String serialNumber;
+        private int attemptsCount;
+        private String message;
 
-        public CertificateBean(String id, String hostname,
-                               Set<String> subjectAltNames,
-                               String mode, boolean dynamic, String sslCertificateFile) {
+        public CertificateBean(
+                final String id,
+                final String hostname,
+                final Set<String> subjectAltNames,
+                final String mode,
+                final boolean dynamic,
+                final String sslCertificateFile,
+                final int attemptsCount,
+                final String message
+        ) {
             this.id = id;
             this.hostname = hostname;
             this.subjectAltNames = subjectAltNames != null ? String.join(", ", subjectAltNames) : "";
             this.mode = mode;
             this.dynamic = dynamic;
             this.sslCertificateFile = sslCertificateFile;
+            this.attemptsCount = attemptsCount;
+            this.message = message;
         }
 
+        public CertificateBean(final String id, final String hostname, final Set<String> subjectAltNames, final String mode, final boolean dynamic, final String file) {
+            this(id, hostname, subjectAltNames, mode, dynamic, file, 0, "");
+        }
     }
 
     @GET
@@ -164,6 +178,8 @@ public class CertificatesResource {
                         : CertificatesUtils.isCertificateExpired(cert.getExpiringDate(), 0) ? DynamicCertificateState.EXPIRED : DynamicCertificateState.AVAILABLE;
                 bean.setExpiringDate(cert.getExpiringDate() != null ? cert.getExpiringDate().toString() : "");
                 bean.setSerialNumber(cert.getSerialNumber());
+                bean.setAttemptsCount(cert.getAttemptsCount());
+                bean.setMessage(cert.getMessage());
             } else {
                 KeyStore keystore = loadKeyStoreFromFile(certificate.getFile(), certificate.getPassword(), server.getBasePath());
                 if (keystore == null) {
@@ -288,7 +304,7 @@ public class CertificatesResource {
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     public Response uploadCertificate(
             @PathParam("domain") String domain,
-            @QueryParam("subjectaltnames") @DefaultValue("") String subjectAltNames,
+            @QueryParam("subjectaltnames") List<String> subjectAltNames,
             @QueryParam("type") @DefaultValue("manual") String type,
             @QueryParam("daysbeforerenewal") Integer daysbeforerenewal,
             InputStream uploadedInputStream) throws Exception {
@@ -327,7 +343,7 @@ public class CertificatesResource {
 
             CertificateData cert = new CertificateData(domain, encodedData, state);
             cert.setManual(MANUAL.equals(certType));
-            cert.setSubjectAltNames(Set.of(subjectAltNames.split(",")));
+            cert.setSubjectAltNames(Set.copyOf(subjectAltNames));
             cert.setDaysBeforeRenewal(daysbeforerenewal != null ? daysbeforerenewal : DEFAULT_DAYS_BEFORE_RENEWAL);
 
             ((HttpProxyServer) context.getAttribute("server")).updateDynamicCertificateForDomain(cert);
@@ -349,6 +365,14 @@ public class CertificatesResource {
     public Response storeAllCertificates() throws Exception {
         var server = ((HttpProxyServer) context.getAttribute("server"));
         server.getDynamicCertificatesManager().forceStoreLocalCertificates();
+        return SimpleResponse.ok();
+    }
+
+    @POST
+    @Path("{domain}/reset")
+    public Response resetCertificateState(@PathParam("domain") String domain) throws Exception {
+        var server = ((HttpProxyServer) context.getAttribute("server"));
+        server.getDynamicCertificatesManager().setStateOfCertificate(domain, WAITING);
         return SimpleResponse.ok();
     }
 

@@ -24,7 +24,9 @@ import static org.carapaceproxy.server.config.SSLCertificateConfiguration.Certif
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.Data;
 import org.carapaceproxy.utils.CertificatesUtils;
 
@@ -59,13 +61,17 @@ public class SSLCertificateConfiguration {
             this.hostname = "";
             this.wildcard = true;
         } else if (CertificatesUtils.isWildcard(hostname)) {
-            this.hostname = CertificatesUtils.removeWildcard(hostname);
+            this.hostname = CertificatesUtils.removeWildcard(hostname).trim();
             this.wildcard = true;
         } else {
-            this.hostname = hostname;
+            this.hostname = hostname.trim();
             this.wildcard = false;
         }
-        this.subjectAltNames = subjectAltNames;
+        this.subjectAltNames = Optional
+                .ofNullable(subjectAltNames)
+                .stream().flatMap(Set::stream)
+                .map(String::trim)
+                .collect(Collectors.toUnmodifiableSet());
         this.file = file;
         this.password = password;
         this.mode = mode;

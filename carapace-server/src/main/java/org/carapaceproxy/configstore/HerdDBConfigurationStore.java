@@ -90,16 +90,34 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
 
     // Table for ACME Certificates
     private static final String DIGITAL_CERTIFICATES_TABLE_NAME = "digital_certificates";
-    private static final String CREATE_DIGITAL_CERTIFICATES_TABLE = "CREATE TABLE " + DIGITAL_CERTIFICATES_TABLE_NAME
-            + "(domain string primary key, subjectAltNames string, chain string, "
-            + "state string, pendingOrder string, pendingChallenges string)";
-    private static final String SELECT_FROM_DIGITAL_CERTIFICATES_TABLE =
-            "SELECT domain, subjectAltNames, chain, state, pendingOrder, pendingChallenges " +
-            "FROM " + DIGITAL_CERTIFICATES_TABLE_NAME + " WHERE domain=?";
-    private static final String UPDATE_DIGITAL_CERTIFICATES_TABLE = "UPDATE " + DIGITAL_CERTIFICATES_TABLE_NAME
-            + " SET subjectAltNames=?, chain=?, state=?, pendingOrder=?, pendingChallenges=? WHERE domain=?";
-    private static final String INSERT_INTO_DIGITAL_CERTIFICATES_TABLE = "INSERT INTO " + DIGITAL_CERTIFICATES_TABLE_NAME
-            + "(domain, subjectAltNames, chain, state, pendingOrder, pendingChallenges) values (?, ?, ?, ?, ?, ?)";
+    private static final String CREATE_DIGITAL_CERTIFICATES_TABLE = """
+        CREATE TABLE %s (
+            domain string primary key,
+            subjectAltNames string,
+            chain string,
+            state string,
+            pendingOrder string,
+            pendingChallenges string,
+            attemptCount int,
+            message string
+        )""".formatted(DIGITAL_CERTIFICATES_TABLE_NAME);
+
+    private static final String SELECT_FROM_DIGITAL_CERTIFICATES_TABLE = """
+        SELECT domain, subjectAltNames, chain, state, pendingOrder, pendingChallenges, attemptCount, message
+        FROM %s
+        WHERE domain=?
+        """.formatted(DIGITAL_CERTIFICATES_TABLE_NAME);
+
+    private static final String UPDATE_DIGITAL_CERTIFICATES_TABLE = """
+        UPDATE %s
+        SET subjectAltNames=?, chain=?, state=?, pendingOrder=?, pendingChallenges=?, attemptCount=?, message=?
+        WHERE domain=?
+        """.formatted(DIGITAL_CERTIFICATES_TABLE_NAME);
+
+    private static final String INSERT_INTO_DIGITAL_CERTIFICATES_TABLE = """
+        INSERT INTO %s(domain, subjectAltNames, chain, state, pendingOrder, pendingChallenges, attemptCount, message)
+        values (?, ?, ?, ?, ?, ?, ?, ?)
+        """.formatted(DIGITAL_CERTIFICATES_TABLE_NAME);
 
     // Table for ACME challenge tokens
     private static final String ACME_CHALLENGE_TOKENS_TABLE_NAME = "acme_challenge_tokens";
@@ -391,13 +409,17 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                         final var state = DynamicCertificateState.fromStorableFormat(rs.getString(4));
                         final var pendingOrder = rs.getString(5);
                         final var pendingChallenges = parseChallengesData(rs.getString(6));
+                        final var attemptCount = rs.getInt(7);
+                        final var message = rs.getString(8);
                         return new CertificateData(
                                 domain,
-                                subjectAltNames != null ? Set.of(subjectAltNames.split(",")) : Collections.emptySet(),
+                                subjectAltNames != null && !subjectAltNames.isBlank() ? Set.of(subjectAltNames.split(",")) : Set.of(),
                                 chain,
                                 state,
                                 pendingOrder != null ? new URL(pendingOrder) : null,
-                                pendingChallenges
+                                pendingChallenges,
+                                attemptCount,
+                                message
                         );
                     }
                 }
@@ -423,7 +445,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_DIGITAL_CERTIFICATES_TABLE);
                 PreparedStatement psUpdate = con.prepareStatement(UPDATE_DIGITAL_CERTIFICATES_TABLE)) {
             final var domain = cert.getDomain();
-            final var subjectAltNames = cert.getSubjectAltNames() != null
+            final var subjectAltNames = cert.getSubjectAltNames() != null && !cert.getSubjectAltNames().isEmpty()
                     ? String.join(",", cert.getSubjectAltNames())
                     : null;
             final var chain = cert.getChain();
@@ -437,7 +459,9 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             psUpdate.setString(3, state);
             psUpdate.setString(4, pendingOrder);
             psUpdate.setString(5, pendingChallenges);
-            psUpdate.setString(6, domain);
+            psUpdate.setInt(6, cert.getAttemptsCount());
+            psUpdate.setString(7, cert.getMessage());
+            psUpdate.setString(8, domain);
             if (psUpdate.executeUpdate() == 0) {
                 psInsert.setString(1, domain);
                 psInsert.setString(2, subjectAltNames);
@@ -445,6 +469,8 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 psInsert.setString(4, state);
                 psInsert.setString(5, pendingOrder);
                 psInsert.setString(6, pendingChallenges);
+                psInsert.setInt(7, cert.getAttemptsCount());
+                psInsert.setString(8, cert.getMessage());
                 psInsert.executeUpdate();
             }
 

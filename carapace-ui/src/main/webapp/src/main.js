@@ -11,40 +11,44 @@ import "bootstrap-vue/dist/bootstrap-vue.css";
 // Icons
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { library } from "@fortawesome/fontawesome-svg-core";
-import { faAngleRight } from "@fortawesome/free-solid-svg-icons";
-import { faHome } from "@fortawesome/free-solid-svg-icons";
-import { faInfo } from "@fortawesome/free-solid-svg-icons";
-import { faServer } from "@fortawesome/free-solid-svg-icons";
-import { faDatabase } from "@fortawesome/free-solid-svg-icons";
-import { faCrosshairs } from "@fortawesome/free-solid-svg-icons";
-import { faBolt } from "@fortawesome/free-solid-svg-icons";
-import { faMapSigns } from "@fortawesome/free-solid-svg-icons";
-import { faDoorOpen } from "@fortawesome/free-solid-svg-icons";
-import { faHeading } from "@fortawesome/free-solid-svg-icons";
-import { faFilter } from "@fortawesome/free-solid-svg-icons";
-import { faFileSignature } from "@fortawesome/free-solid-svg-icons";
-import { faArchive } from "@fortawesome/free-solid-svg-icons";
-import { faUsers } from "@fortawesome/free-solid-svg-icons";
-import { faChartBar } from "@fortawesome/free-solid-svg-icons";
-import { faNetworkWired } from "@fortawesome/free-solid-svg-icons";
-import { faSlidersH } from "@fortawesome/free-solid-svg-icons";
+import {
+    faAngleRight,
+    faArchive,
+    faBolt,
+    faChartBar,
+    faCircleInfo,
+    faCrosshairs,
+    faDatabase,
+    faDoorOpen,
+    faFileSignature,
+    faFilter,
+    faHeading,
+    faHome,
+    faInfo,
+    faMapSigns,
+    faNetworkWired,
+    faServer,
+    faSlidersH,
+    faUsers
+} from "@fortawesome/free-solid-svg-icons";
 library.add(faAngleRight);
+library.add(faArchive);
+library.add(faBolt);
+library.add(faChartBar);
+library.add(faCircleInfo);
+library.add(faCrosshairs);
+library.add(faDatabase);
+library.add(faDoorOpen);
+library.add(faFileSignature);
+library.add(faFilter);
+library.add(faHeading);
 library.add(faHome);
 library.add(faInfo);
-library.add(faServer);
-library.add(faDatabase);
-library.add(faCrosshairs);
-library.add(faBolt);
 library.add(faMapSigns);
-library.add(faDoorOpen);
-library.add(faHeading);
-library.add(faFilter);
-library.add(faFileSignature);
-library.add(faArchive);
-library.add(faUsers);
-library.add(faChartBar);
 library.add(faNetworkWired);
+library.add(faServer);
 library.add(faSlidersH);
+library.add(faUsers);
 
 Vue.component("font-awesome-icon", FontAwesomeIcon);
 

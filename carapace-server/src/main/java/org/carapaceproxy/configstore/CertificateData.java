@@ -19,14 +19,16 @@
  */
 package org.carapaceproxy.configstore;
 
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.REQUEST_FAILED;
 import java.net.URL;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
@@ -34,8 +36,7 @@ import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.shredzone.acme4j.toolbox.JSON;
 
 /**
- *
- * Bean for ACME Certificates ({@link DynamicCertificate}) data stored in database.
+ * Bean for ACME Certificates data stored in database.
  *
  * @author paolo.venturi
  */
@@ -48,10 +49,12 @@ public class CertificateData {
     @ToString.Exclude
     private String chain; // base64 encoded string of the KeyStore.
     private volatile DynamicCertificateState state;
+    private int attemptsCount;
+    private String message;
     private URL pendingOrderLocation;
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
-    private Map<String, JSON> pendingChallengesData = new HashMap<>();
+    private Map<String, JSON> pendingChallengesData;
     private boolean manual;
     private int daysBeforeRenewal;
     private Date expiringDate;
@@ -64,27 +67,92 @@ public class CertificateData {
                            DynamicCertificateState state) {
         this(domain, null, chain, state, null, null);
     }
+
     public CertificateData(String domain,
                            Set<String> subjectAltNames,
                            String chain,
                            DynamicCertificateState state,
                            URL orderLocation,
                            Map<String, JSON> challengesData) {
-        this.domain = Objects.requireNonNull(domain);
-        this.subjectAltNames = subjectAltNames;
-        this.chain = chain;
-        this.state = state;
-        this.pendingOrderLocation = orderLocation;
-        this.pendingChallengesData = challengesData;
+        this(domain, subjectAltNames, chain, state, orderLocation, challengesData, 0, "");
+    }
+
+    public CertificateData(String domain,
+                           Set<String> subjectAltNames,
+                           String chain,
+                           DynamicCertificateState state,
+                           URL orderLocation,
+                           Map<String, JSON> challengesData,
+                           int attemptsCount,
+                           String message) {
+        this.setDomain(Objects.requireNonNull(domain));
+        this.setSubjectAltNames(subjectAltNames);
+        this.setChain(chain);
+        this.setState(state);
+        this.setPendingOrderLocation(orderLocation);
+        this.setPendingChallengesData(challengesData);
+        this.setAttemptsCount(attemptsCount);
+        this.setMessage(message);
+    }
+
+    public void setDomain(final String domain) {
+        this.domain = domain.trim();
+    }
+
+    public void setSubjectAltNames(final Set<String> subjectAltNames) {
+        this.subjectAltNames = Optional
+                .ofNullable(subjectAltNames)
+                .stream().flatMap(Set::stream)
+                .map(String::trim)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     public Collection<String> getNames() {
-        return new ArrayList<>() {{
-            add(domain);
-            if (subjectAltNames != null) {
-                addAll(subjectAltNames);
-            }
-        }};
+        return Stream
+                .concat(
+                    Stream.of(domain),
+                    Optional.ofNullable(subjectAltNames).stream().flatMap(Set::stream)
+                )
+                .collect(Collectors.toUnmodifiableSet());
     }
 
+    /**
+     * Mark the request as failed, storing a message and counting the number of errors.
+     * @param message a message to store for the failure
+     *
+     * @see DynamicCertificateState#REQUEST_FAILED
+     */
+    public void error(final String message) {
+        error(REQUEST_FAILED, message);
+    }
+
+    /**
+     * Mark the request as an error of some kind, storing a message and counting the number of errors.
+     *
+     * @param state the state to set
+     * @param message a message to store for the failure
+     */
+    public void error(final DynamicCertificateState state, final String message) {
+        this.state = state;
+        this.attemptsCount++;
+        this.message = message;
+    }
+
+    /**
+     * Change {@link DynamicCertificateState state} without resetting error counter and message.
+     * @param state the state to move to
+     */
+    public void step(final DynamicCertificateState state) {
+        this.state = state;
+    }
+
+    /**
+     * Change state and reset error counter and message.
+     * @param state the state to move to
+     */
+    public void success(final DynamicCertificateState state) {
+        this.state = state;
+        this.attemptsCount = 0;
+        this.message = "";
+    }
 }

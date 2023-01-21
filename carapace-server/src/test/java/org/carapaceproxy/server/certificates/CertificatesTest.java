@@ -29,10 +29,14 @@ import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.D
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.carapaceproxy.utils.CertificatesTestUtils.uploadCertificate;
 import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -50,8 +54,10 @@ import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 import javax.net.ssl.ExtendedSSLSession;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
@@ -102,7 +108,7 @@ public class CertificatesTest extends UseAdminServer {
     private Properties config;
 
     private void configureAndStartServer() throws Exception {
-        HttpTestUtils.overideJvmWideHttpsVerifier();
+        HttpTestUtils.overrideJvmWideHttpsVerifier();
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -156,13 +162,15 @@ public class CertificatesTest extends UseAdminServer {
     }
 
     /**
-     * Test case: - Start server with a default certificate - Make request expected default certificate
-     *
-     * - Add a manual certificate to config (without upload) - Make request expected default certificate
-     *
-     * - Upload the certificate - Make request expected uploaded certificate
-     *
-     * - Update the certificate - Make request expected updated certificate
+     * Test case:
+     * - Start server with a default certificate
+     * - Make request expected default certificate
+     * - Add a manual certificate to config (without upload)
+     * - Make request expected default certificate
+     * - Upload the certificate
+     * - Make request expected uploaded certificate
+     * - Update the certificate
+     * - Make request expected updated certificate
      */
     @Test
     public void test() throws Exception {
@@ -195,7 +203,7 @@ public class CertificatesTest extends UseAdminServer {
             assertEquals("it <b>works</b> !!", resp.getBodyString());
             chain1 = client.getServerCertificate();
             assertNotNull(chain1);
-            assertTrue(chain0[0].equals(chain1[0]));
+            assertEquals(chain0[0], chain1[0]);
         }
 
         // Upload manual certificate
@@ -209,7 +217,7 @@ public class CertificatesTest extends UseAdminServer {
             data = dynCertMan.getCertificateDataForDomain("localhost");
             assertNotNull(data);
             assertTrue(data.isManual());
-            assertTrue(data.getState() == DynamicCertificateState.AVAILABLE);
+            assertSame(data.getState(), DynamicCertificateState.AVAILABLE);
         }
 
         // Request #2: expected uploaded certificate
@@ -219,7 +227,7 @@ public class CertificatesTest extends UseAdminServer {
             assertEquals("it <b>works</b> !!", resp.getBodyString());
             chain2 = client.getServerCertificate();
             assertNotNull(chain2);
-            assertTrue(uploadedChain[0].equals(chain2[0]));
+            assertEquals(uploadedChain[0], chain2[0]);
         }
 
         // Update manual certificate
@@ -227,14 +235,14 @@ public class CertificatesTest extends UseAdminServer {
         try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
             KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
             uploadedChain2 = generateSampleChain(endUserKeyPair, false);
-            assertFalse(uploadedChain[0].equals(uploadedChain2[0]));
+            assertNotEquals(uploadedChain[0], uploadedChain2[0]);
             byte[] chainData = createKeystore(uploadedChain2, endUserKeyPair.getPrivate());
             HttpResponse resp = uploadCertificate("localhost", null, chainData, client, credentials);
             assertTrue(resp.getBodyString().contains("SUCCESS"));
             data = dynCertMan.getCertificateDataForDomain("localhost");
             assertNotNull(data);
             assertTrue(data.isManual());
-            assertTrue(data.getState() == DynamicCertificateState.AVAILABLE);
+            assertSame(data.getState(), DynamicCertificateState.AVAILABLE);
         }
 
         // Request #3: expected last uploaded certificate
@@ -244,7 +252,7 @@ public class CertificatesTest extends UseAdminServer {
             assertEquals("it <b>works</b> !!", resp.getBodyString());
             chain3 = client.getServerCertificate();
             assertNotNull(chain3);
-            assertTrue(uploadedChain2[0].equals(chain3[0]));
+            assertEquals(uploadedChain2[0], chain3[0]);
         }
 
         // this calls "reloadFromDB" > "manual" flag has to be retained even if not stored in db.
@@ -294,7 +302,7 @@ public class CertificatesTest extends UseAdminServer {
                 assertEquals("it <b>works</b> !!", r.getBodyString());
                 Certificate[] obtainedChain = c.getServerCertificate();
                 assertNotNull(obtainedChain);
-                assertTrue(chain[0].equals(obtainedChain[0]));
+                assertEquals(chain[0], obtainedChain[0]);
             }
         }
 
@@ -323,7 +331,7 @@ public class CertificatesTest extends UseAdminServer {
                 assertEquals("it <b>works</b> !!", r.getBodyString());
                 Certificate[] obtainedChain = c.getServerCertificate();
                 assertNotNull(obtainedChain);
-                assertTrue(chain[0].equals(obtainedChain[0]));
+                assertEquals(chain[0], obtainedChain[0]);
             }
 
             resp = uploadCertificate("localhost", "type=" + type, new byte[0], client, credentials);
@@ -431,7 +439,7 @@ public class CertificatesTest extends UseAdminServer {
             CertificateData data = dynCertMan.getCertificateDataForDomain("localhost");
             assertNotNull(data);
             assertTrue(data.isManual());
-            assertTrue(data.getState() == DynamicCertificateState.AVAILABLE);
+            assertSame(data.getState(), DynamicCertificateState.AVAILABLE);
         }
         // check ocsp response
         try (RawHttpClient c = new RawHttpClient("localhost", port, true, "localhost")) {
@@ -495,7 +503,7 @@ public class CertificatesTest extends UseAdminServer {
                 assertEquals("it <b>works</b> !!", r.getBodyString());
                 Certificate[] obtainedChain = c.getServerCertificate();
                 assertNotNull(obtainedChain);
-                assertTrue(chain1[0].equals(obtainedChain[0]));
+                assertEquals(chain1[0], obtainedChain[0]);
             }
         }
 
@@ -597,7 +605,7 @@ public class CertificatesTest extends UseAdminServer {
                 assertEquals("it <b>works</b> !!", r.getBodyString());
                 Certificate[] obtainedChain = c.getServerCertificate();
                 assertNotNull(obtainedChain);
-                assertTrue(chain1[0].equals(obtainedChain[0]));
+                assertEquals(chain1[0], obtainedChain[0]);
             }
         }
 
@@ -644,7 +652,7 @@ public class CertificatesTest extends UseAdminServer {
 
         // local certificate path
         File[] f = certsDir.listFiles((dir, name) -> name.equals("localhost"));
-        assertTrue(f.length == 0);
+        assertEquals(0, f.length);
 
         cert = dcMan.getCertificateDataForDomain("localhost");
         cert.setState(DynamicCertificateState.ORDERING);
@@ -655,12 +663,12 @@ public class CertificatesTest extends UseAdminServer {
         dcMan.run();
 
         f = certsDir.listFiles((dir, name) -> name.equals("localhost"));
-        assertTrue(f.length == 1);
+        assertEquals(1, f.length);
         assertTrue(f[0].isDirectory());
         File localhostDir = f[0];
 
         f = localhostDir.listFiles((dir, name) -> name.equals("privatekey.pem"));
-        assertTrue(f.length == 1);
+        assertEquals(1, f.length);
         assertTrue(f[0].isFile());
         String pkPem = Files.readString(f[0].toPath());
         System.out.println("[PRIVARE KEY]: " + pkPem);
@@ -671,7 +679,7 @@ public class CertificatesTest extends UseAdminServer {
         assertEquals(sw.toString(), pkPem);
 
         f = localhostDir.listFiles((dir, name) -> name.equals("chain.pem"));
-        assertTrue(f.length == 1);
+        assertEquals(1, f.length);
         assertTrue(f[0].isFile());
         String chainPem = Files.readString(f[0].toPath());
         System.out.println("[CHAIN]: " + chainPem);
@@ -684,7 +692,7 @@ public class CertificatesTest extends UseAdminServer {
         assertEquals(sw.toString(), chainPem);
 
         f = localhostDir.listFiles((dir, name) -> name.equals("fullchain.pem"));
-        assertTrue(f.length == 1);
+        assertEquals(1, f.length);
         assertTrue(f[0].isFile());
         String fullchainPem = Files.readString(f[0].toPath());
         System.out.println("[FULLCHAIN]: " + fullchainPem);
@@ -717,12 +725,12 @@ public class CertificatesTest extends UseAdminServer {
 
         // local certificate path
         f = certsDir.listFiles((dir, name) -> name.equals("localhost"));
-        assertTrue(f.length == 1);
+        assertEquals(1, f.length);
         assertTrue(f[0].isDirectory());
         localhostDir = f[0];
 
         f = localhostDir.listFiles((dir, name) -> name.equals("privatekey.pem"));
-        assertTrue(f.length == 1);
+        assertEquals(1, f.length);
         assertTrue(f[0].isFile());
         pkPem = Files.readString(f[0].toPath());
         System.out.println("[PRIVARE KEY]: " + pkPem);
@@ -733,7 +741,7 @@ public class CertificatesTest extends UseAdminServer {
         assertEquals(sw.toString(), pkPem);
 
         f = localhostDir.listFiles((dir, name) -> name.equals("chain.pem"));
-        assertTrue(f.length == 1);
+        assertEquals(1, f.length);
         assertTrue(f[0].isFile());
         chainPem = Files.readString(f[0].toPath());
         System.out.println("[CHAIN]: " + chainPem);
@@ -746,7 +754,7 @@ public class CertificatesTest extends UseAdminServer {
         assertEquals(sw.toString(), chainPem);
 
         f = localhostDir.listFiles((dir, name) -> name.equals("fullchain.pem"));
-        assertTrue(f.length == 1);
+        assertEquals(1, f.length);
         assertTrue(f[0].isFile());
         fullchainPem = Files.readString(f[0].toPath());
         System.out.println("[FULLCHAIN]: " + fullchainPem);
@@ -789,14 +797,14 @@ public class CertificatesTest extends UseAdminServer {
         assertFalse(updated.isManual());
 
         // local certificate path
-        assertTrue(certsDir.listFiles((dir, name) -> name.equals("localhost")).length == 1);
+        assertEquals(1, certsDir.listFiles((dir, name) -> name.equals("localhost")).length);
         f = certsDir.listFiles((dir, name) -> name.equals("localhost2"));
-        assertTrue(f.length == 1);
+        assertEquals(1, f.length);
         assertTrue(f[0].isDirectory());
         localhostDir = f[0];
 
         f = localhostDir.listFiles((dir, name) -> name.equals("privatekey.pem"));
-        assertTrue(f.length == 1);
+        assertEquals(1, f.length);
         assertTrue(f[0].isFile());
         pkPem = Files.readString(f[0].toPath());
         System.out.println("[PRIVARE KEY]: " + pkPem);
@@ -807,7 +815,7 @@ public class CertificatesTest extends UseAdminServer {
         assertEquals(sw.toString(), pkPem);
 
         f = localhostDir.listFiles((dir, name) -> name.equals("chain.pem"));
-        assertTrue(f.length == 1);
+        assertEquals(1, f.length);
         assertTrue(f[0].isFile());
         chainPem = Files.readString(f[0].toPath());
         System.out.println("[CHAIN]: " + chainPem);
@@ -820,7 +828,7 @@ public class CertificatesTest extends UseAdminServer {
         assertEquals(sw.toString(), chainPem);
 
         f = localhostDir.listFiles((dir, name) -> name.equals("fullchain.pem"));
-        assertTrue(f.length == 1);
+        assertEquals(1, f.length);
         assertTrue(f[0].isFile());
         fullchainPem = Files.readString(f[0].toPath());
         System.out.println("[FULLCHAIN]: " + fullchainPem);
@@ -881,14 +889,12 @@ public class CertificatesTest extends UseAdminServer {
             CertificateData data = server.getDynamicCertificatesManager().getCertificateDataForDomain("test.domain.tld");
             assertNotNull(data);
             ConfigurationStore store = server.getDynamicConfigurationStore();
-            assertTrue(store.anyPropertyMatches((k, v) -> {
-                if (k.matches("certificate\\.[0-9]+\\.hostname") && v.equals("test.domain.tld")) {
-                    return store.getProperty(k.replace("hostname", "mode"), null).equals("acme")
-                    && store.getProperty(k.replace("hostname", "san"), null).equals("test1.domain.tld,test2.domain.tld")
-                    && store.getProperty(k.replace("hostname", "daysbeforerenewal"), null).equals("10");
-                }
-                return false;
-            }));
+            final var indices = getCertificateIndicesWithHostname(store, "test.domain.tld");
+            for (final var index : indices) {
+                assertThat(store.getProperty("certificate." + index + ".mode", null), is("acme"));
+                assertThat(store.getValues("certificate." + index + ".san"), is(Set.of("test1.domain.tld", "test2.domain.tld")));
+                assertThat(store.getProperty("certificate." + index +".daysbeforerenewal", null), is("10"));
+            }
 
             // domain name already used
             form.setDomain("test.domain.tld");
@@ -901,6 +907,15 @@ public class CertificatesTest extends UseAdminServer {
             assertEquals("domain", result.getField());
             assertEquals(FormValidationResponse.ERROR_FIELD_DUPLICATED, result.getMessage());
         }
+    }
+
+    private static Set<Integer> getCertificateIndicesWithHostname(final ConfigurationStore store, final String hostname) {
+        return store.asProperties("certificate").entrySet().stream()
+                .map(entry -> Map.entry(String.valueOf(entry.getKey()), String.valueOf(entry.getValue())))
+                .filter(entry -> entry.getKey().matches("[0-9]+\\.hostname"))
+                .filter(entry -> entry.getValue().matches(hostname))
+                .map(entry -> Integer.parseInt(entry.getKey().split("\\.")[0]))
+                .collect(Collectors.toUnmodifiableSet());
     }
 
 }

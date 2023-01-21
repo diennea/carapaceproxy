@@ -106,6 +106,7 @@ public class RuntimeServerConfiguration {
     private boolean http10BackwardCompatibilityEnabled = false;
     private String localCertificatesStorePath;
     private Set<String> localCertificatesStorePeersIds;
+    private int maxAttempts = 10;
 
     public RuntimeServerConfiguration() {
         defaultConnectionPool = new ConnectionPoolConfiguration(
@@ -252,6 +253,9 @@ public class RuntimeServerConfiguration {
         // storing enabled for all peers by default
         localCertificatesStorePeersIds = properties.getValues("dynamiccertificatesmanager.localcertificates.peers.ids");
         LOG.log(Level.INFO, "dynamiccertificatesmanager.localcertificates.peers.ids={0}", localCertificatesStorePeersIds);
+
+        maxAttempts = properties.getInt("dynamiccertificatesmanager.errors.maxattempts", maxAttempts);
+        LOG.log(Level.INFO, "dynamiccertificatesmanager.errors.maxattempts={0}", maxAttempts);
     }
 
     private void configureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
@@ -434,5 +438,4 @@ public class RuntimeServerConfiguration {
                 .findFirst()
                 .orElse(null);
     }
-
 }

@@ -46,11 +46,10 @@ import static org.mockito.Mockito.when;
 import static org.shredzone.acme4j.Status.INVALID;
 import static org.shredzone.acme4j.Status.VALID;
 import java.net.URL;
-import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
-import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import junitparams.JUnitParamsRunner;
@@ -85,17 +84,26 @@ import org.shredzone.acme4j.util.KeyPairUtils;
 @RunWith(JUnitParamsRunner.class)
 public class DynamicCertificatesManagerTest {
 
+    protected static final int MAX_ATTEMPTS = 7;
+
     @Test
     @Parameters({
-        "challenge_null",
-        "challenge_status_invalid",
-        "order_already_valid",
-        "order_finalization_error",
-        "order_response_error",
-        "available_to_expired",
-        "all_ok"
+        "challenge_null,true",
+        "challenge_null,false",
+        "challenge_status_invalid,true",
+        "challenge_status_invalid,false",
+        "order_already_valid,true",
+        "order_already_valid,false",
+        "order_finalization_error,true",
+        "order_finalization_error,false",
+        "order_response_error,true",
+        "order_response_error,false",
+        "available_to_expired,true",
+        "available_to_expired,false",
+        "all_ok,true",
+        "all_ok,false"
     })
-    public void testCertificateSimpleStateManagement(String runCase) throws Exception {
+    public void testCertificateSimpleStateManagement(String runCase, boolean maxedOutTrials) throws Exception {
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
         Order o = mock(Order.class);
@@ -109,8 +117,12 @@ public class DynamicCertificatesManagerTest {
         when(ac.createOrderForDomain(any())).thenReturn(o);
         Http01Challenge c = mock(Http01Challenge.class);
         when(c.getToken()).thenReturn("");
-        when(c.getJSON()).thenReturn(JSON.parse(
-                "{\"url\": \"https://localhost/index\", \"type\": \"http-01\", \"token\": \"mytoken\"}"
+        when(c.getJSON()).thenReturn(JSON.parse("""
+            {
+                "url": "https://localhost/index",
+                "type": "http-01",
+                "token": "mytoken"
+            }"""
         ));
         when(c.getAuthorization()).thenReturn("");
         when(ac.getChallengesForOrder(any())).thenReturn(runCase.equals("challenge_null") ? Collections.emptyMap() : Map.of("domain", c));
@@ -123,7 +135,7 @@ public class DynamicCertificatesManagerTest {
         KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         Certificate cert = mock(Certificate.class);
         X509Certificate _cert = (X509Certificate) generateSampleChain(keyPair, runCase.equals("available_to_expired"))[0];
-        when(cert.getCertificateChain()).thenReturn(Arrays.asList(_cert));
+        when(cert.getCertificateChain()).thenReturn(List.of(_cert));
         when(ac.fetchCertificateForOrder(any())).thenReturn(cert);
 
         HttpProxyServer parent = mock(HttpProxyServer.class);
@@ -138,12 +150,15 @@ public class DynamicCertificatesManagerTest {
         when(store.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
 
         // yet available certificate
+        final var cycleCount = maxedOutTrials ? MAX_ATTEMPTS : 0; // next error will fail
         String d0 = "localhost0";
         CertificateData cd0 = new CertificateData(d0, chain, AVAILABLE);
+        cd0.setAttemptsCount(cycleCount);
         when(store.loadCertificateForDomain(eq(d0))).thenReturn(cd0);
         // certificate to order
         String d1 = "localhost1";
         CertificateData cd1 = new CertificateData(d1, null, WAITING);
+        cd1.setAttemptsCount(cycleCount);
         when(store.loadCertificateForDomain(eq(d1))).thenReturn(cd1);
         man.setConfigurationStore(store);
         // manual certificate
@@ -171,74 +186,99 @@ public class DynamicCertificatesManagerTest {
         props.setProperty("certificate.3.hostname", d3);
         props.setProperty("certificate.3.mode", "manual");
         props.setProperty("certificate.3.daysbeforerenewal", "0");
+        props.setProperty("dynamiccertificatesmanager.errors.maxattempts", String.valueOf(MAX_ATTEMPTS));
         ConfigurationStore configStore = new PropertiesConfigurationStore(props);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(configStore);
         when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
 
-        assertCertificateState(d0, AVAILABLE, man);
-        assertCertificateState(d2, AVAILABLE, man);
-        assertCertificateState(d3, AVAILABLE, man);
+        assertCertificateState(d0, AVAILABLE, cycleCount, man);
+        assertCertificateState(d2, AVAILABLE, 0, man);
+        assertCertificateState(d3, AVAILABLE, 0, man);
         assertNotNull(man.getCertificateForDomain(d2));
         assertNull(man.getCertificateForDomain(d3)); // empty
         man.setStateOfCertificate(d2, WAITING); // has not to be renewed by the manager (saveCounter = 1)
-        assertCertificateState(d2, WAITING, man);
+        assertCertificateState(d2, WAITING, 0, man);
 
+        int expectedCycleCount = cycleCount;
         int saveCounter = 1; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
 
         // WAITING
-        assertCertificateState(d1, WAITING, man);
+        assertCertificateState(d1, WAITING, cycleCount, man);
         man.run();
         verify(store, times(++saveCounter)).saveCertificate(any());
-        assertCertificateState(d1, runCase.equals("challenge_null") ? VERIFIED : VERIFYING, man);
+        assertCertificateState(d1, runCase.equals("challenge_null") ? VERIFIED : VERIFYING, expectedCycleCount, man);
 
         man.run();
         verify(store, times(++saveCounter)).saveCertificate(any());
         if (runCase.equals("challenge_null")) { // VERIFIED
-            assertCertificateState(d1, ORDERING, man);
-        } else { // VERIFYING
-            assertCertificateState(d1, runCase.equals("challenge_status_invalid") ? REQUEST_FAILED : VERIFIED, man);
+            assertCertificateState(d1, ORDERING, expectedCycleCount, man);
+        } else if (runCase.equals("challenge_status_invalid")) {
+            assertCertificateState(d1, REQUEST_FAILED, ++expectedCycleCount, man);
             man.run();
             verify(store, times(++saveCounter)).saveCertificate(any());
-            if (runCase.equals("challenge_status_invalid")) {
-                assertCertificateState(d1, WAITING, man);
-                return;
-            } else if (runCase.equals("order_finalization_error")) {
-                assertCertificateState(d1, REQUEST_FAILED, man);
+            assertCertificateState(d1, maxedOutTrials ? REQUEST_FAILED : WAITING, expectedCycleCount, man);
+            return;
+        } else { // VERIFYING
+            assertCertificateState(d1, VERIFIED, expectedCycleCount, man);
+            man.run();
+            verify(store, times(++saveCounter)).saveCertificate(any());
+            if (runCase.equals("order_finalization_error")) {
+                assertCertificateState(d1, REQUEST_FAILED, ++expectedCycleCount, man);
                 man.run();
                 verify(store, times(++saveCounter)).saveCertificate(any());
-                assertCertificateState(d1, WAITING, man);
+                assertCertificateState(d1, maxedOutTrials ? REQUEST_FAILED : WAITING, expectedCycleCount, man);
                 return;
             } else {
-                assertCertificateState(d1, ORDERING, man);
+                assertCertificateState(d1, ORDERING, expectedCycleCount, man);
             }
         }
         // ORDERING
         man.run();
         verify(store, times(++saveCounter)).saveCertificate(any());
-        assertCertificateState(d1, runCase.equals("order_response_error") ? REQUEST_FAILED : AVAILABLE, man);
+        switch (runCase) {
+            case "challenge_null", "order_already_valid", "available_to_expired", "all_ok" -> expectedCycleCount = 0;
+            case "order_response_error" -> expectedCycleCount++;
+        }
+        assertCertificateState(
+                d1,
+                runCase.equals("order_response_error") ? REQUEST_FAILED : AVAILABLE,
+                expectedCycleCount,
+                man
+        );
         man.run();
         if (runCase.equals("order_response_error")) { // REQUEST_FAILED
             verify(store, times(++saveCounter)).saveCertificate(any());
-            assertCertificateState(d1, WAITING, man);
+            assertCertificateState(d1, maxedOutTrials ? REQUEST_FAILED : WAITING, expectedCycleCount, man);
         } else { // AVAILABLE
             DynamicCertificateState state = man.getStateOfCertificate(d1);
             saveCounter += AVAILABLE.equals(state) ? 0 : 1; // only with state AVAILABLE the certificate hasn't to be saved.
             verify(store, times(saveCounter)).saveCertificate(any());
-            assertCertificateState(d1, runCase.equals("available_to_expired") ? EXPIRED : AVAILABLE, man);
+            assertCertificateState(
+                    d1,
+                    runCase.equals("available_to_expired") ? EXPIRED : AVAILABLE,
+                    expectedCycleCount,
+                    man
+            );
 
             man.run();
             state = man.getStateOfCertificate(d1);
             saveCounter += AVAILABLE.equals(state) ? 0 : 1; // only with state AVAILABLE the certificate hasn't to be saved.
             verify(store, times(saveCounter)).saveCertificate(any());
-            assertCertificateState(d1, runCase.equals("available_to_expired") ? WAITING : AVAILABLE, man);
+            assertCertificateState(
+                    d1,
+                    runCase.equals("available_to_expired") ? WAITING : AVAILABLE,
+                    expectedCycleCount,
+                    man
+            );
         }
     }
 
-    private void assertCertificateState(String domain, DynamicCertificateState expectedState, DynamicCertificatesManager dCMan) throws GeneralSecurityException {
+    private void assertCertificateState(String domain, DynamicCertificateState expectedState, int expectedCycleCount, DynamicCertificatesManager dCMan) {
         assertEquals(expectedState, dCMan.getStateOfCertificate(domain)); // on db
         assertEquals(expectedState, dCMan.getCertificateDataForDomain(domain).getState()); // on cache
+        assertEquals(expectedCycleCount, dCMan.getCertificateDataForDomain(domain).getAttemptsCount());
     }
 
     @Test
@@ -253,7 +293,7 @@ public class DynamicCertificatesManagerTest {
         "challenge_failed",
         "challenge_verified",
     })
-    public void testWidlcardCertificateStateManagement(String runCase) throws Exception {
+    public void testWildcardCertificateStateManagement(String runCase) throws Exception {
         final var domain = "*.localhost";
         System.setProperty("carapace.acme.dnschallengereachabilitycheck.limit", "2");
 
@@ -325,41 +365,40 @@ public class DynamicCertificatesManagerTest {
         when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
 
-        CertificateData certData = man.getCertificateDataForDomain(domain);
         int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
 
         // WAITING
-        assertCertificateState(domain, WAITING, man);
+        assertCertificateState(domain, WAITING, 0, man);
         man.run();
         verify(store, times(++saveCounter)).saveCertificate(any());
         if (runCase.equals("challenge_creation_failed")) {
             // WAITING
-            assertCertificateState(domain, REQUEST_FAILED, man);
+            assertCertificateState(domain, REQUEST_FAILED, 1, man);
         } else {
             // DNS_CHALLENGE_WAIT
-            assertCertificateState(domain, DNS_CHALLENGE_WAIT, man);
+            assertCertificateState(domain, DNS_CHALLENGE_WAIT, 0, man);
             man.run();
             verify(store, times(++saveCounter)).saveCertificate(any());
             if (runCase.equals("challenge_check_limit_expired")) {
-                assertCertificateState(domain, DNS_CHALLENGE_WAIT, man);
+                assertCertificateState(domain, DNS_CHALLENGE_WAIT, 0, man);
                 man.run();
                 verify(store, times(++saveCounter)).saveCertificate(any());
-                assertCertificateState(domain, REQUEST_FAILED, man);
+                assertCertificateState(domain, REQUEST_FAILED, 1, man);
                 // check dns-challenge-record deleted
                 verify(r53Client, times(1)).deleteDnsChallengeForDomain(any(), any());
             } else {
                 // VERIFYING
-                assertCertificateState(domain, VERIFYING, man);
+                assertCertificateState(domain, VERIFYING, 0, man);
                 man.run();
                 verify(store, times(++saveCounter)).saveCertificate(any());
                 if (runCase.equals("challenge_failed")) {
                     // REQUEST_FAILED
-                    assertCertificateState(domain, REQUEST_FAILED, man);
+                    assertCertificateState(domain, REQUEST_FAILED, 1, man);
                     // check dns-challenge-record deleted
                     verify(r53Client, times(1)).deleteDnsChallengeForDomain(any(), any());
                 } else if (runCase.equals("challenge_verified")) {
                     // VERIFIED
-                    assertCertificateState(domain, VERIFIED, man);
+                    assertCertificateState(domain, VERIFIED, 0, man);
                     // check dns-challenge-record deleted
                     verify(r53Client, times(1)).deleteDnsChallengeForDomain(any(), any());
                 }
@@ -464,44 +503,43 @@ public class DynamicCertificatesManagerTest {
         when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
 
-        CertificateData certData = man.getCertificateDataForDomain(domain);
         int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
 
         // WAITING
-        assertCertificateState(domain, WAITING, man);
+        assertCertificateState(domain, WAITING, 0, man);
         man.run();
         verify(store, times(++saveCounter)).saveCertificate(any());
         if (runCase.equals("challenge_creation_failed")) {
             // WAITING
-            assertCertificateState(domain, REQUEST_FAILED, man);
+            assertCertificateState(domain, REQUEST_FAILED, 1, man);
             verify(r53Client, atLeastOnce()).deleteDnsChallengeForDomain(any(), any());
             verify(store, times(1)).deleteAcmeChallengeToken(any());
         } else {
             // DNS_CHALLENGE_WAIT
-            assertCertificateState(domain, DNS_CHALLENGE_WAIT, man);
+            assertCertificateState(domain, DNS_CHALLENGE_WAIT, 0, man);
             man.run();
             verify(store, times(++saveCounter)).saveCertificate(any());
             if (runCase.equals("challenge_check_limit_expired")) {
-                assertCertificateState(domain, DNS_CHALLENGE_WAIT, man);
+                assertCertificateState(domain, DNS_CHALLENGE_WAIT, 0, man);
                 man.run();
                 verify(store, times(++saveCounter)).saveCertificate(any());
-                assertCertificateState(domain, REQUEST_FAILED, man);
+                assertCertificateState(domain, REQUEST_FAILED, 2, man);
                 verify(r53Client, times(2)).deleteDnsChallengeForDomain(any(), any());
                 verify(store, times(1)).deleteAcmeChallengeToken(any());
             } else {
                 // VERIFYING
-                assertCertificateState(domain, VERIFYING, man);
+                assertCertificateState(domain, VERIFYING, 0, man);
                 man.run();
                 verify(store, times(++saveCounter)).saveCertificate(any());
                 if (runCase.equals("challenge_failed")) {
                     // REQUEST_FAILED
-                    assertCertificateState(domain, REQUEST_FAILED, man);
+                    assertCertificateState(domain, REQUEST_FAILED, 3, man);
                     // check dns-challenge-record deleted
                     verify(r53Client, times(2)).deleteDnsChallengeForDomain(any(), any());
                     verify(store, times(1)).deleteAcmeChallengeToken(any());
                 } else if (runCase.equals("challenge_verified")) {
                     // VERIFIED
-                    assertCertificateState(domain, VERIFIED, man);
+                    assertCertificateState(domain, VERIFIED, 0, man);
                     // check dns-challenge-record deleted
                     verify(r53Client, times(2)).deleteDnsChallengeForDomain(any(), any());
                     verify(store, times(1)).deleteAcmeChallengeToken(any());
@@ -542,7 +580,7 @@ public class DynamicCertificatesManagerTest {
         KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         Certificate cert = mock(Certificate.class);
         X509Certificate _cert = (X509Certificate) generateSampleChain(keyPair, false)[0];
-        when(cert.getCertificateChain()).thenReturn(Arrays.asList(_cert));
+        when(cert.getCertificateChain()).thenReturn(List.of(_cert));
         when(ac.fetchCertificateForOrder(any())).thenReturn(cert);
 
         HttpProxyServer parent = mock(HttpProxyServer.class);
@@ -579,19 +617,19 @@ public class DynamicCertificatesManagerTest {
         int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
 
         // WAITING
-        assertCertificateState(domain, WAITING, man);
+        assertCertificateState(domain, WAITING, 0, man);
         man.run(); // checking domain
         verify(store, times(++saveCounter)).saveCertificate(any());
         if (domainCase.equals("localhost-ip-check-partial")) {
-            assertCertificateState(domain, DOMAIN_UNREACHABLE, man);
+            assertCertificateState(domain, DOMAIN_UNREACHABLE, 1, man);
             man.run();
             verify(store, times(++saveCounter)).saveCertificate(any());
-            assertCertificateState(domain, DOMAIN_UNREACHABLE, man);
+            assertCertificateState(domain, DOMAIN_UNREACHABLE, 2, man);
         } else {
-            assertCertificateState(domain, VERIFYING, man);
+            assertCertificateState(domain, VERIFYING, 0, man);
             man.run();
             verify(store, times(++saveCounter)).saveCertificate(any());
-            assertCertificateState(domain, VERIFIED, man);
+            assertCertificateState(domain, VERIFIED, 0, man);
         }
     }
 

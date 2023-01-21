@@ -38,7 +38,7 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
  */
 public interface ConfigurationStore extends AutoCloseable {
 
-    public static final String PROPERTY_VALUES_SEPARATOR = ",";
+    String PROPERTY_VALUES_SEPARATOR = ",";
 
     String getProperty(String key, String defaultValue);
 
@@ -87,12 +87,11 @@ public interface ConfigurationStore extends AutoCloseable {
     }
 
     default Set<String> getValues(String key, Set<String> defaultValue) throws ConfigurationNotValidException {
-        final var values = getString(key, "")
-                .replaceAll(" ", "")
-                .split(PROPERTY_VALUES_SEPARATOR);
-        return values.length == 1 && (values[0] == null || values[0].isEmpty())
-                ? defaultValue
-                : new HashSet<>(List.of(values));
+        final var values = getString(key, "");
+        if (values.isBlank()) {
+            return defaultValue;
+        }
+        return Set.of(values.replaceAll(" ", "").split(PROPERTY_VALUES_SEPARATOR));
     }
 
     default String getClassname(String key, String defaultValue) throws ConfigurationNotValidException {

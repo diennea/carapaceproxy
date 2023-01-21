@@ -30,10 +30,13 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -44,7 +47,10 @@ import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import javax.servlet.http.HttpServletResponse;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
@@ -82,7 +88,7 @@ public class StartAPIServerTest extends UseAdminServer {
             RawHttpClient.HttpResponse resp = client.get("/api/up", credentials);
             String s = resp.getBodyString();
             System.out.println("s:" + s);
-            assertTrue(s.equals("ok"));
+            assertEquals("ok", s);
             // API calls cannot be cached by the client (browser)
             assertTrue(resp.getHeaderLines().contains("Cache-Control: no-cache\r\n"));
             // Allow CORS
@@ -109,7 +115,7 @@ public class StartAPIServerTest extends UseAdminServer {
         RawHttpClient.BasicAuthCredentials correctCredentials = new RawHttpClient.BasicAuthCredentials("test", "test");
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/up", correctCredentials);
-            assertTrue(resp.getBodyString().equals("ok"));
+            assertEquals("ok", resp.getBodyString());
         }
 
         // Add new user
@@ -119,7 +125,7 @@ public class StartAPIServerTest extends UseAdminServer {
         correctCredentials = new RawHttpClient.BasicAuthCredentials("test2", "test2");
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/up", correctCredentials);
-            assertTrue(resp.getBodyString().equals("ok"));
+            assertEquals("ok", resp.getBodyString());
         }
     }
 
@@ -150,7 +156,7 @@ public class StartAPIServerTest extends UseAdminServer {
             RawHttpClient.HttpResponse resp = client.get("/api/backends", credentials);
             String s = resp.getBodyString();
             // no backend configured
-            assertTrue(s.equals("{}"));
+            assertEquals("{}", s);
         }
     }
 
@@ -213,8 +219,12 @@ public class StartAPIServerTest extends UseAdminServer {
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/directors", credentials);
-            String s = resp.getBodyString();
-            assertTrue(s.contains("\"id\":\"iddirector2\",\"backends\":[\"localhost:8086\",\"localhost:8087\"]"));
+            final List<Map<?, ?>> s = new ObjectMapper().readValue(resp.getBody(), new TypeReference<>() {});
+            assertThat(s.size(), is(1));
+            final var id = s.get(0).get("id");
+            assertThat(id, is("iddirector2"));
+            final var backends = Set.copyOf((List<?>) s.get(0).get("backends"));
+            assertThat(backends, is(Set.of("localhost:8086", "localhost:8087")));
         }
     }
 
@@ -413,7 +423,7 @@ public class StartAPIServerTest extends UseAdminServer {
             store.saveCertificate(cert);
             man.setStateOfCertificate(dynDomain, DynamicCertificateState.AVAILABLE);
             response = client.get("/api/certificates/" + dynDomain + "/download", credentials);
-            assertTrue(Arrays.equals(newKeystore, response.getBody()));
+            assertArrayEquals(newKeystore, response.getBody());
         }
 
         // Manual certificate
@@ -465,7 +475,7 @@ public class StartAPIServerTest extends UseAdminServer {
             // Downloading
             response = client.get("/api/certificates/" + manualDomain + "/download", credentials);
             Certificate[] responseChain = CertificatesUtils.readChainFromKeystore(response.getBody());
-            assertTrue(Arrays.equals(CertificatesUtils.readChainFromKeystore(chain1), responseChain));
+            assertArrayEquals(CertificatesUtils.readChainFromKeystore(chain1), responseChain);
 
             // Certificate updating
             // Uploading
@@ -508,7 +518,7 @@ public class StartAPIServerTest extends UseAdminServer {
             // Downloading
             response = client.get("/api/certificates/" + manualDomain + "/download", credentials);
             Certificate[] responseChain2 = CertificatesUtils.readChainFromKeystore(response.getBody());
-            assertTrue(Arrays.equals(CertificatesUtils.readChainFromKeystore(chain2), responseChain2));
+            assertArrayEquals(CertificatesUtils.readChainFromKeystore(chain2), responseChain2);
         }
     }
 
