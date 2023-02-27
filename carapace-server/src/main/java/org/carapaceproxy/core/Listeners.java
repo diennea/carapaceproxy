@@ -240,9 +240,9 @@ public class Listeners {
                 .childOption(Epoll.isAvailable()
                         ? EpollChannelOption.TCP_KEEPCNT
                         : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), config.getKeepAliveCount())
-                .idleTimeout(Duration.ofMillis(currentConfiguration.getIdleTimeout()))
                 .maxKeepAliveRequests(config.getMaxKeepAliveRequests())
                 .doOnChannelInit((observer, channel, remoteAddress) -> {
+                    channel.pipeline().addFirst("idleStateHandler", new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds()));
                     if (config.isSsl()) {
                         SniHandler sni = new SniHandler(listeningChannel) {
                             @Override
