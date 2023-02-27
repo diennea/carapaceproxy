@@ -63,6 +63,7 @@ public class ConnectionPoolsResource {
         private int keepaliveIdle;
         private int keepaliveInterval;
         private int keepaliveCount;
+        private boolean keepAlive;
         private boolean enabled;
 
         private int totalConnections;
@@ -95,6 +96,7 @@ public class ConnectionPoolsResource {
                     conf.getKeepaliveIdle(),
                     conf.getKeepaliveInterval(),
                     conf.getKeepaliveCount(),
+                    conf.isKeepAlive(),
                     conf.isEnabled(),
                     poolsStats.getOrDefault(conf.getId(), 0)
             );
@@ -116,6 +118,7 @@ public class ConnectionPoolsResource {
                 defaultConnectionPool.getKeepaliveIdle(),
                 defaultConnectionPool.getKeepaliveInterval(),
                 defaultConnectionPool.getKeepaliveCount(),
+                defaultConnectionPool.isKeepAlive(),
                 defaultConnectionPool.isEnabled(),
                 poolsStats.getOrDefault(defaultConnectionPool.getId(), 0)
         ));

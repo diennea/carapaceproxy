@@ -37,6 +37,12 @@ public class NetworkListenerConfiguration {
     private final String sslCiphers;
     private final String defaultCertificate;
     private Set<String> sslProtocols = Collections.emptySet();
+    private int soBacklog;
+    private boolean keepAlive;
+    private int keepAliveIdle;
+    private int keepAliveInterval;
+    private int keepAliveCount;
+    private int maxKeepAliveRequests;
 
     public HostPort getKey() {
         return new HostPort(host, port);
@@ -45,15 +51,8 @@ public class NetworkListenerConfiguration {
     public record HostPort(String host, int port) {}
 
     public NetworkListenerConfiguration(String host, int port) {
-        this(host, port, false, null, null, Collections.emptySet());
-    }
-
-    public NetworkListenerConfiguration(String host,
-                                        int port,
-                                        boolean ssl,
-                                        String sslCiphers,
-                                        String defaultCertificate) {
-        this(host, port, ssl, sslCiphers, defaultCertificate, DEFAULT_SSL_PROTOCOLS);
+        this(host, port, false, null, null, Collections.emptySet(),
+                128,true, 300, 60, 8, 1000);
     }
 
     public NetworkListenerConfiguration(String host,
@@ -61,7 +60,28 @@ public class NetworkListenerConfiguration {
                                         boolean ssl,
                                         String sslCiphers,
                                         String defaultCertificate,
-                                        Set<String> sslProtocols) {
+                                        int soBacklog,
+                                        boolean keepAlive,
+                                        int keepAliveIdle,
+                                        int keepAliveInterval,
+                                        int keepAliveCount,
+                                        int maxKeepAliveRequests) {
+        this(host, port, ssl, sslCiphers, defaultCertificate, DEFAULT_SSL_PROTOCOLS,
+                soBacklog, keepAlive, keepAliveIdle, keepAliveInterval, keepAliveCount, maxKeepAliveRequests);
+    }
+
+    public NetworkListenerConfiguration(String host,
+                                        int port,
+                                        boolean ssl,
+                                        String sslCiphers,
+                                        String defaultCertificate,
+                                        Set<String> sslProtocols,
+                                        int soBacklog,
+                                        boolean keepAlive,
+                                        int keepAliveIdle,
+                                        int keepAliveInterval,
+                                        int keepAliveCount,
+                                        int maxKeepAliveRequests) {
         this.host = host;
         this.port = port;
         this.ssl = ssl;
@@ -70,6 +90,12 @@ public class NetworkListenerConfiguration {
         if (ssl) {
             this.sslProtocols = sslProtocols;
         }
+        this.soBacklog = soBacklog;
+        this.keepAlive = keepAlive;
+        this.keepAliveIdle = keepAliveIdle;
+        this.keepAliveInterval = keepAliveInterval;
+        this.keepAliveCount = keepAliveCount;
+        this.maxKeepAliveRequests = maxKeepAliveRequests;
     }
 
 }

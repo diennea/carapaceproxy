@@ -165,7 +165,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         // default pool
         ConnectionPoolConfiguration defaultPool = new ConnectionPoolConfiguration(
-                "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 50_000, 500, 50, 5, true
+                "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 50_000, 500, 50, 5, true,true
         );
         {
             ConnectionProvider provider = connectionPools.get(defaultPool);
@@ -177,7 +177,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         // pool with defaults
         ConnectionPoolConfiguration poolWithDefaults = new ConnectionPoolConfiguration(
-                "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, 50_000, 500, 50, 5, true
+                "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, 50_000, 500, 50, 5, true, true
         );
         {
             ConnectionProvider provider = connectionPools.get(poolWithDefaults);
@@ -189,7 +189,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         // custom pool
         ConnectionPoolConfiguration customPool = new ConnectionPoolConfiguration(
-                "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, 25_000, 250, 25, 2, true
+                "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, 25_000, 250, 25, 2, true,true
         );
         {
             ConnectionProvider provider = connectionPools.get(customPool);
@@ -294,22 +294,22 @@ public class ConnectionPoolTest extends UseAdminServer {
 
             // default pool
             assertThat(pools.get("*"), is(new ConnectionPoolsResource.ConnectionPoolBean(
-                    "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 50_000, 500, 50, 5, true, 0
+                    "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 50_000, 500, 50, 5, true,true, 0
             )));
 
             // pool with defaults
             assertThat(pools.get("localhost"), is(new ConnectionPoolsResource.ConnectionPoolBean(
-                    "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, 50_000, 500, 50, 5, true, 1
+                    "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, 50_000, 500, 50, 5, true,true, 1
             )));
 
             // disabled custom pool
             assertThat(pools.get("localhost2"), is(new ConnectionPoolsResource.ConnectionPoolBean(
-                    "localhost2", "localhost2", 10, 5_000, 10_000, 15_000, 20_000, 50_000, 500, 50, 5, false, 0
+                    "localhost2", "localhost2", 10, 5_000, 10_000, 15_000, 20_000, 50_000, 500, 50, 5, true, false, 0
             )));
 
             // custom pool
             assertThat(pools.get("localhosts"), is(new ConnectionPoolsResource.ConnectionPoolBean(
-                    "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, 25_000, 250, 25, 2, true, 0
+                    "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, 25_000, 250, 25, 2, true, true, 0
             )));
         }
     }

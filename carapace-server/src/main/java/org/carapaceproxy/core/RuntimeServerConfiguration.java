@@ -69,9 +69,13 @@ public class RuntimeServerConfiguration {
     private int connectTimeout = 10_000;
     private int borrowTimeout = 60_000;
     private int disposeTimeout = 300_000; // 5 min;
+    private int soBacklog = 128;
     private int keepaliveIdle = 300; // sec
     private int keepaliveInterval = 60; // sec
     private int keepaliveCount = 8;
+    private boolean clientKeepAlive = true;
+    private boolean serverKeepAlive = true;
+    private int maxKeepAliveRequests = 1000;
     private long cacheMaxSize = 0;
     private long cacheMaxFileSize = 0;
     private boolean cacheDisabledForSecureRequestsWithoutPublic = false;
@@ -120,6 +124,7 @@ public class RuntimeServerConfiguration {
                 keepaliveIdle,
                 keepaliveInterval,
                 keepaliveCount,
+                true,
                 true
         );
     }
@@ -297,7 +302,14 @@ public class RuntimeServerConfiguration {
                         properties.getBoolean(prefix + "ssl", false),
                         properties.getString(prefix + "sslciphers", ""),
                         properties.getString(prefix + "defaultcertificate", "*"),
-                        properties.getValues(prefix + "sslprotocols", DEFAULT_SSL_PROTOCOLS)
+                        properties.getValues(prefix + "sslprotocols", DEFAULT_SSL_PROTOCOLS),
+                        properties.getInt(prefix + "sobacklog", soBacklog),
+                        properties.getBoolean(prefix + "keepalive",  serverKeepAlive),
+                        properties.getInt(prefix + "keepaliveidle", keepaliveIdle),
+                        properties.getInt(prefix + "keepaliveinterval", keepaliveInterval),
+                        properties.getInt(prefix + "keepalivecount", keepaliveCount),
+                        properties.getInt(prefix + "maxkeepaliverequests", maxKeepAliveRequests)
+
                 ));
             }
         }
@@ -347,6 +359,7 @@ public class RuntimeServerConfiguration {
             int keepaliveinterval = properties.getInt(prefix + "keepaliveinterval", keepaliveInterval);
             int keepalivecount = properties.getInt(prefix + "keepalivecount", keepaliveCount);
             boolean enabled = properties.getBoolean(prefix + "enabled", false);
+            boolean keepAlive = properties.getBoolean(prefix + "keepalive", true);
 
             ConnectionPoolConfiguration connectionPool = new ConnectionPoolConfiguration(
                     id, domain,
@@ -359,6 +372,7 @@ public class RuntimeServerConfiguration {
                     keepaliveidle,
                     keepaliveinterval,
                     keepalivecount,
+                    keepAlive,
                     enabled
             );
             connectionPools.add(connectionPool);
@@ -377,6 +391,7 @@ public class RuntimeServerConfiguration {
                 getKeepaliveIdle(),
                 getKeepaliveInterval(),
                 getKeepaliveCount(),
+                isClientKeepAlive(),
                 true
         );
         LOG.log(Level.INFO, "Configured default connectionpool: {0}", defaultConnectionPool);

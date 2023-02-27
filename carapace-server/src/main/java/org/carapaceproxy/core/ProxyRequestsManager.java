@@ -353,7 +353,7 @@ public class ProxyRequestsManager {
                     .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
                     .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
                     .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
-                    .option(ChannelOption.SO_KEEPALIVE, true) // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
+                    .option(ChannelOption.SO_KEEPALIVE, connectionConfig.isKeepAlive()) // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
                     .option(Epoll.isAvailable()
                             ? EpollChannelOption.TCP_KEEPIDLE
                             : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE), connectionConfig.getKeepaliveIdle())

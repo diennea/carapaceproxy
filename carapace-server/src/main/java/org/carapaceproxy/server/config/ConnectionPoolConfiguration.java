@@ -40,6 +40,7 @@ public class ConnectionPoolConfiguration {
     private int keepaliveIdle;
     private int keepaliveInterval;
     private int keepaliveCount;
+    private boolean keepAlive;
 
     private boolean enabled;
 
