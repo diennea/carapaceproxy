@@ -25,6 +25,8 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollChannelOption;
+import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioChannelOption;
 import io.netty.handler.codec.http.*;
 import io.prometheus.client.Counter;
@@ -347,6 +349,7 @@ public class ProxyRequestsManager {
                     .host(endpointHost)
                     .port(endpointPort)
                     .followRedirect(false) // client has to request the redirect, not the proxy
+                    .runOn(Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup())
                     .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
                     .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
                     .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
