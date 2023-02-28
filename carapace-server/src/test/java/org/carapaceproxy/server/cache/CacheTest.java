@@ -204,7 +204,8 @@ public class CacheTest {
         EndpointStats stats;
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost"));
+            server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost",
+                    128, true, 300, 60, 8, 1000));
             server.start();
         }
     }
@@ -227,7 +228,8 @@ public class CacheTest {
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost"));
+            server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost",
+                    128, true, 300, 60, 8, 1000));
 
             RuntimeServerConfiguration currentConfiguration = server.getCurrentConfiguration();
             currentConfiguration.setCacheDisabledForSecureRequestsWithoutPublic(cacheDisabledForSecureRequestsWithoutPublic);
@@ -358,7 +360,8 @@ public class CacheTest {
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
-            server.addListener(new NetworkListenerConfiguration("localhost", httpsPort, true, null, "localhost"));
+            server.addListener(new NetworkListenerConfiguration("localhost", httpsPort, true, null, "localhost",
+                    128, true, 300, 60, 8, 1000));
             server.addListener(new NetworkListenerConfiguration("localhost", httpPort));
             server.start();
             server.getCache().getStats().resetCacheMetrics();

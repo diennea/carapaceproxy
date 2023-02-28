@@ -27,6 +27,11 @@ import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelOption;
+import io.netty.channel.epoll.Epoll;
+import io.netty.channel.epoll.EpollChannelOption;
+import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.nio.NioChannelOption;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.OpenSslCachingX509KeyManagerFactory;
@@ -63,6 +68,8 @@ import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.net.ssl.KeyManagerFactory;
+
+import jdk.net.ExtendedSocketOptions;
 import lombok.Data;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -221,8 +228,19 @@ public class Listeners {
                 .port(hostPort.port())
                 //.protocol(HttpProtocol.H2) // HTTP/2.0 setup
                 .metrics(true, Function.identity())
-                .option(ChannelOption.SO_BACKLOG, 128)
-                .childOption(ChannelOption.SO_KEEPALIVE, true)
+                .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())
+                .childOption(ChannelOption.SO_KEEPALIVE, config.isKeepAlive())
+                .runOn(Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup())
+                .childOption(Epoll.isAvailable()
+                        ? EpollChannelOption.TCP_KEEPIDLE
+                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE), config.getKeepAliveIdle())
+                .childOption(Epoll.isAvailable()
+                        ? EpollChannelOption.TCP_KEEPINTVL
+                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL), config.getKeepAliveInterval())
+                .childOption(Epoll.isAvailable()
+                        ? EpollChannelOption.TCP_KEEPCNT
+                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), config.getKeepAliveCount())
+                .maxKeepAliveRequests(config.getMaxKeepAliveRequests())
                 .doOnChannelInit((observer, channel, remoteAddress) -> {
                     channel.pipeline().addFirst("idleStateHandler", new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds()));
                     if (config.isSsl()) {
