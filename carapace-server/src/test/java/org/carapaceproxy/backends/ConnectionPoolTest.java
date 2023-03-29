@@ -27,18 +27,33 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import io.netty.handler.codec.http.HttpHeaderNames;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.net.Socket;
 import java.net.SocketAddress;
+import java.net.URI;
+import java.net.UnknownHostException;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.HashMap;
 import java.util.Properties;
+
 import org.carapaceproxy.utils.RawHttpClient;
+
 import java.util.Map;
+
 import org.carapaceproxy.api.ConnectionPoolsResource;
 import org.carapaceproxy.api.UseAdminServer;
 import org.carapaceproxy.client.EndpointKey;
@@ -154,6 +169,54 @@ public class ConnectionPoolTest extends UseAdminServer {
     }
 
     @Test
+    public void NullHostHeaderTest() throws Exception {
+        configureAndStartServer();
+        int port = server.getLocalPort();
+        String hostname = "localhost";
+        String path = "/index.html";
+
+        //No Http header host
+        String response = sendRequest(false, hostname, port, path);
+        // no response because NullPointerException occurred before.
+        // java.lang.NullPointerException: Cannot invoke "java.lang.CharSequence.length()" because "this.text" is null
+        assertFalse(response.contains("it <b>works</b> !!"));
+
+        //Add Http header host
+        String response2 = sendRequest(true, hostname, port, path);
+        assertTrue(response2.contains("it <b>works</b> !!"));
+    }
+
+    public String sendRequest(boolean addHeaderHost, String hostname, int port, String path) throws IOException {
+
+        Socket socket = new Socket(hostname, port);
+        OutputStreamWriter out = new OutputStreamWriter(socket.getOutputStream());
+        BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        StringBuilder sb = new StringBuilder();
+
+        // Send the HTTP request without the Host header
+        out.write("GET " + path + " HTTP/1.1\r\n");
+        out.write("Connection: close\r\n");
+        if (addHeaderHost) {
+            out.write("Host: localhost3\r\n");
+        }
+        out.write("\r\n");
+        out.flush();
+
+        // Read the response from the server
+        String line;
+        while ((line = in.readLine()) != null) {
+            sb.append(line);
+        }
+
+        // Close the socket and streams
+        in.close();
+        out.close();
+        socket.close();
+
+        return sb.toString();
+    }
+
+    @Test
     public void test() throws Exception {
         configureAndStartServer();
         int port = server.getLocalPort();
@@ -165,7 +228,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         // default pool
         ConnectionPoolConfiguration defaultPool = new ConnectionPoolConfiguration(
-                "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 50_000, 500, 50, 5, true,true
+                "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 50_000, 500, 50, 5, true, true
         );
         {
             ConnectionProvider provider = connectionPools.get(defaultPool);
@@ -189,7 +252,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         // custom pool
         ConnectionPoolConfiguration customPool = new ConnectionPoolConfiguration(
-                "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, 25_000, 250, 25, 2, true,true
+                "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, 25_000, 250, 25, 2, true, true
         );
         {
             ConnectionProvider provider = connectionPools.get(customPool);
@@ -294,12 +357,12 @@ public class ConnectionPoolTest extends UseAdminServer {
 
             // default pool
             assertThat(pools.get("*"), is(new ConnectionPoolsResource.ConnectionPoolBean(
-                    "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 50_000, 500, 50, 5, true,true, 0
+                    "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 50_000, 500, 50, 5, true, true, 0
             )));
 
             // pool with defaults
             assertThat(pools.get("localhost"), is(new ConnectionPoolsResource.ConnectionPoolBean(
-                    "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, 50_000, 500, 50, 5, true,true, 1
+                    "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, 50_000, 500, 50, 5, true, true, 1
             )));
 
             // disabled custom pool
