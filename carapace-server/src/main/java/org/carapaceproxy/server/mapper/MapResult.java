@@ -49,6 +49,10 @@ public class MapResult {
          */
         MAINTENANCE_MODE,
         /**
+         * Bad request
+         */
+        BAD_REQUEST,
+        /**
          * Custom static message
          */
         STATIC,
@@ -101,5 +105,12 @@ public class MapResult {
                 .routeId(routeId)
                 .build();
     }
+
+    public static MapResult badRequest() {
+        return MapResult.builder()
+                .action(Action.BAD_REQUEST)
+                .build();
+    }
+
 
 }

@@ -177,9 +177,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         //No Http header host
         String response = sendRequest(false, hostname, port, path);
-        // no response because NullPointerException occurred before.
-        // java.lang.NullPointerException: Cannot invoke "java.lang.CharSequence.length()" because "this.text" is null
-        assertFalse(response.contains("it <b>works</b> !!"));
+        assertTrue(response.contains("Bad request"));
 
         //Add Http header host
         String response2 = sendRequest(true, hostname, port, path);

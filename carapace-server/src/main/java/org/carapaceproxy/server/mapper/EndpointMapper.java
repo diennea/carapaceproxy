@@ -69,6 +69,10 @@ public abstract class EndpointMapper {
         return SimpleHTTPResponse.MAINTENANCE_MODE(StaticContentsManager.DEFAULT_MAINTENANCE_MODE_ERROR);
     }
 
+    public SimpleHTTPResponse mapBadRequest() {
+        return SimpleHTTPResponse.BAD_REQUEST(StaticContentsManager.DEFAULT_BAD_REQUEST);
+    }
+
     public abstract void configure(ConfigurationStore properties) throws ConfigurationNotValidException;
 
 }

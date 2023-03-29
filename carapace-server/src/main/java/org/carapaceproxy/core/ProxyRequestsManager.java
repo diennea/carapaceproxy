@@ -131,6 +131,8 @@ public class ProxyRequestsManager {
                     return serveInternalErrorMessage(request);
                 case MAINTENANCE_MODE:
                     return serverMaintenanceMessage(request);
+                case BAD_REQUEST:
+                    return serverBadRequestMessage(request);
 
                 case STATIC:
                 case ACME_CHALLENGE:
@@ -229,6 +231,31 @@ public class ProxyRequestsManager {
         }
         if (code <= 0) {
             code = 500;
+        }
+        FullHttpResponse response = parent.getStaticContentsManager().buildResponse(code, resource);
+
+        return writeSimpleResponse(request, response, customHeaders);
+    }
+
+    private Publisher<Void> serverBadRequestMessage(ProxyRequest request) {
+        if (request.getResponse().hasSentHeaders()) {
+            return Mono.empty();
+        }
+
+        SimpleHTTPResponse res = parent.getMapper().mapBadRequest();
+        int code = 0;
+        String resource = null;
+        List<CustomHeader> customHeaders = null;
+        if (res != null) {
+            code = res.getErrorcode();
+            resource = res.getResource();
+            customHeaders = res.getCustomHeaders();
+        }
+        if (resource == null) {
+            resource = StaticContentsManager.DEFAULT_BAD_REQUEST;
+        }
+        if (code <= 0) {
+            code = 400;
         }
         FullHttpResponse response = parent.getStaticContentsManager().buildResponse(code, resource);
 
