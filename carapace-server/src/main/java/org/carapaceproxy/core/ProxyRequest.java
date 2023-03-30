@@ -26,11 +26,14 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpScheme;
 import io.netty.handler.ssl.SslHandler;
+
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.http.conn.util.InetAddressUtils;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import org.carapaceproxy.server.mapper.MapResult;
@@ -169,6 +172,27 @@ public class ProxyRequest implements MatchingContext {
 
     public String getRequestHostname() {
         return request.requestHeaders().get(HttpHeaderNames.HOST);
+    }
+
+    public String getHostname() {
+        String requestHostname = getRequestHostname();
+        int colonIndex = requestHostname.indexOf(":");
+        if (colonIndex != -1) {
+            String portString = requestHostname.substring(colonIndex + 1);
+            try {
+                int port = Integer.parseInt(portString);
+                if (port > 0 && port <= 65535) {
+                    return requestHostname.substring(0, colonIndex);
+                }
+            } catch (NumberFormatException e) {
+                return "";
+            }
+        }
+        return requestHostname;
+    }
+
+    public boolean isValidIPAddress(String ipAddress) {
+        return InetAddressUtils.isIPv4Address(ipAddress);
     }
 
     public UrlEncodedQueryString getQueryString() {

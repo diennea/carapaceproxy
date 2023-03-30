@@ -42,11 +42,6 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.Socket;
 import java.net.SocketAddress;
-import java.net.URI;
-import java.net.UnknownHostException;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.util.HashMap;
 import java.util.Properties;
 
@@ -169,22 +164,58 @@ public class ConnectionPoolTest extends UseAdminServer {
     }
 
     @Test
-    public void NullHostHeaderTest() throws Exception {
+    public void hostHeaderTest() throws Exception {
         configureAndStartServer();
         int port = server.getLocalPort();
         String hostname = "localhost";
         String path = "/index.html";
 
         //No Http header host
-        String response = sendRequest(false, hostname, port, path);
+        String response = sendRequest(false, hostname, port, path, null);
         assertTrue(response.contains("Bad request"));
 
         //Add Http header host
-        String response2 = sendRequest(true, hostname, port, path);
+        String response2 = sendRequest(true, hostname, port, path, "localhost3");
         assertTrue(response2.contains("it <b>works</b> !!"));
+
+        //Empty header host
+        String response3 = sendRequest(true, hostname, port, path, "");
+        assertTrue(response3.contains("Bad request"));
+
+        //Empty header host
+        String response4 = sendRequest(true, hostname, port, path, " ");
+        assertTrue(response4.contains("Bad request"));
+
+        //Header host with special character
+        String response5 = sendRequest(true, hostname, port, path, "local%&&host");
+        assertTrue(response5.contains("Bad request"));
+
+        //Header host with multiple domain
+        String response6 = sendRequest(true, hostname, port, path, "localhost1,localhost2");
+        assertTrue(response6.contains("Bad request"));
+
+        //Ip address as host header
+        String response7 = sendRequest(true, hostname, port, path, "127.0.0.1");
+        assertTrue(response7.contains("it <b>works</b> !!"));
+
+        //Invalid ip address
+        String response8 = sendRequest(true, hostname, port, path, "256.0.0.0");
+        assertTrue(response8.contains("Bad request"));
+
+        //Ip address as host header with port
+        String response9 = sendRequest(true, hostname, port, path, "127.0.0.1:8080");
+        assertTrue(response9.contains("it <b>works</b> !!"));
+
+        //Hostname as host header with port
+        String response10 = sendRequest(true, hostname, port, path, "localhost:8080");
+        assertTrue(response10.contains("it <b>works</b> !!"));
+
+        //Hostname as host header with port
+        String response11 = sendRequest(true, hostname, port, path, "localhost:8080&");
+        assertTrue(response11.contains("Bad request"));
     }
 
-    public String sendRequest(boolean addHeaderHost, String hostname, int port, String path) throws IOException {
+    public String sendRequest(boolean addHeaderHost, String hostname, int port, String path, String headerHost) throws IOException {
 
         Socket socket = new Socket(hostname, port);
         OutputStreamWriter out = new OutputStreamWriter(socket.getOutputStream());
@@ -195,7 +226,7 @@ public class ConnectionPoolTest extends UseAdminServer {
         out.write("GET " + path + " HTTP/1.1\r\n");
         out.write("Connection: close\r\n");
         if (addHeaderHost) {
-            out.write("Host: localhost3\r\n");
+            out.write("Host: " + headerHost + "\r\n");
         }
         out.write("\r\n");
         out.flush();
@@ -268,7 +299,7 @@ public class ConnectionPoolTest extends UseAdminServer {
             HttpServerRequest request = mock(HttpServerRequest.class);
             ProxyRequest proxyRequest = mock(ProxyRequest.class);
             when(proxyRequest.getRequest()).thenReturn(request);
-            when(proxyRequest.getRequestHostname()).thenReturn("localhost*");
+            when(proxyRequest.getRequestHostname()).thenReturn("localhostx");
 
             Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> res = connectionsManager.apply(proxyRequest);
             assertThat(res.getKey(), is(defaultPool));
@@ -278,7 +309,7 @@ public class ConnectionPoolTest extends UseAdminServer {
             maxConnectionsPerHost.values().stream().allMatch(e -> e == 10);
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\n" + HttpHeaderNames.HOST + ": localhost*" + "\r\n\r\n");
+                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\n" + HttpHeaderNames.HOST + ": localhostx" + "\r\n\r\n");
                 assertEquals("it <b>works</b> !!", resp.getBodyString());
             }
             Map<String, HttpProxyServer.ConnectionPoolStats> stats = server.getConnectionPoolsStats().get(EndpointKey.make("localhost", wireMockRule.port()));
