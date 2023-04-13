@@ -130,9 +130,9 @@ public class ProxyRequestsManager {
                 case INTERNAL_ERROR:
                     return serveInternalErrorMessage(request);
                 case MAINTENANCE_MODE:
-                    return serverMaintenanceMessage(request);
+                    return serveMaintenanceMessage(request);
                 case BAD_REQUEST:
-                    return serverBadRequestMessage(request);
+                    return serveBadRequestMessage(request);
 
                 case STATIC:
                 case ACME_CHALLENGE:
@@ -212,7 +212,7 @@ public class ProxyRequestsManager {
         return writeSimpleResponse(request, response, customHeaders);
     }
 
-    private Publisher<Void> serverMaintenanceMessage(ProxyRequest request) {
+    private Publisher<Void> serveMaintenanceMessage(ProxyRequest request) {
         if (request.getResponse().hasSentHeaders()) {
             return Mono.empty();
         }
@@ -237,7 +237,7 @@ public class ProxyRequestsManager {
         return writeSimpleResponse(request, response, customHeaders);
     }
 
-    private Publisher<Void> serverBadRequestMessage(ProxyRequest request) {
+    private Publisher<Void> serveBadRequestMessage(ProxyRequest request) {
         if (request.getResponse().hasSentHeaders()) {
             return Mono.empty();
         }
