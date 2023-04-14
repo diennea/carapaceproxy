@@ -175,7 +175,7 @@ public class ConnectionPoolTest extends UseAdminServer {
         assertTrue(response.contains("Bad request"));
 
         //Add Http header host
-        String response2 = sendRequest(true, hostname, port, path, "localhost3");
+        String response2 = sendRequest(true, hostname, port, path, "localhost");
         assertTrue(response2.contains("it <b>works</b> !!"));
 
         //Empty header host
@@ -213,6 +213,14 @@ public class ConnectionPoolTest extends UseAdminServer {
         //Hostname as host header with port
         String response11 = sendRequest(true, hostname, port, path, "localhost:8080&");
         assertTrue(response11.contains("Bad request"));
+
+        //Invalid hostname
+        String response12 = sendRequest(true, hostname, port, path, "::::8080::9999");
+        assertTrue(response12.contains("Bad request"));
+
+        //Add Http header host
+        String response13 = sendRequest(true, hostname, port, path, "localhost3");
+        assertTrue(response13.contains("it <b>works</b> !!"));
     }
 
     public String sendRequest(boolean addHeaderHost, String hostname, int port, String path, String headerHost) throws IOException {

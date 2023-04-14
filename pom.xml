@@ -134,7 +134,7 @@
         <libs.jaxws.jaxb-impl>3.0.2</libs.jaxws.jaxb-impl>
         <libs.javaxactivation-api>1.2.0</libs.javaxactivation-api>
         <libs.slf4j>1.7.33</libs.slf4j>
-        <libs.guava>31.0.1-jre</libs.guava>
+        <libs.guava>31.1-jre</libs.guava>
         <libs.lombok>1.18.22</libs.lombok>
         <libs.spotbugsannotations>4.5.3</libs.spotbugsannotations>
 

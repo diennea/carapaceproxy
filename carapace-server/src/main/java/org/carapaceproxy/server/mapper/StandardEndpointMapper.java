@@ -27,7 +27,6 @@ import static org.carapaceproxy.server.config.DirectorConfiguration.ALL_BACKENDS
 
 import io.netty.handler.codec.http.HttpResponseStatus;
 
-import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -39,7 +38,6 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.apache.curator.shaded.com.google.common.net.InternetDomainName;
 import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.core.ProxyRequest;
@@ -121,15 +119,15 @@ public class StandardEndpointMapper extends EndpointMapper {
     public MapResult map(ProxyRequest request) {
         //If header host is null return bad request
         //https://www.rfc-editor.org/rfc/rfc2616#page-38
-        if (request.getRequestHostname() == null) {
+        if (request.getRequestHostname() == null ||
+            request.getRequestHostname().isBlank()) {
             if (LOG.isLoggable(Level.FINER)) {
-                LOG.log(Level.FINER, "Request " + request.getUri() + " header host is null");
+                LOG.log(Level.FINER, "Request " + request.getUri() + " header host is null or empty");
             }
             return MapResult.badRequest();
-        } else if (!request.isValidIPAddress(request.getHostname()) &&
-                !InternetDomainName.isValid(request.getHostname())) {  //Invalid header host
+        } else if (!request.isValidHostAndPort(request.getRequestHostname())) {  //Invalid header host
             if (LOG.isLoggable(Level.FINER)) {
-                LOG.log(Level.FINER, "Invalid header host {0} for request {1}", new Object[]{request.getHostname(), request.getUri()});
+                LOG.log(Level.FINER, "Invalid header host {0} for request {1}", new Object[]{request.getRequestHostname(), request.getUri()});
             }
             return MapResult.badRequest();
         }
