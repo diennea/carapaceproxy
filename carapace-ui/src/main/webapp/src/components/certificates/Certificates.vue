@@ -3,7 +3,7 @@
         <div class="page-header">
             <h2>Certificates</h2>
             <b-button v-b-modal.edit>Create certificate</b-button>
-            <certificate-form id="edit" @done="loadCertificates"></certificate-form>
+            <certificate-form id="edit" @done="showCertStatus"></certificate-form>
             <b-button v-if="localStorePath"
                       @click="openConfirmModal"
                       class="btn">
@@ -106,6 +106,9 @@
             },
             showCertDetail(cert) {
                 this.$router.push({name: "Certificate", params: {id: cert.id}});
+            },
+            showCertStatus(domain) {
+                this.$router.push({name: "Certificate", params: {id: domain}});
             },
             statusClass(cert) {
                 if (cert.status === "available") {
