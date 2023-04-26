@@ -21,11 +21,13 @@ package org.carapaceproxy.server.cache;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.prometheus.client.Counter;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -291,7 +293,7 @@ public class ContentsCache {
     public static class CachedContent {
 
         HttpClientResponse response;
-        final List<ByteBuf> chunks = new ArrayList<>();
+        final List<ByteBuffer> chunks = new ArrayList<>();
         final long creationTs = System.currentTimeMillis();
         long lastModified;
         long expiresTs = -1;
@@ -300,7 +302,7 @@ public class ContentsCache {
         int hits;
 
         private void addChunk(ByteBuf chunk) {
-            chunks.add(chunk.retainedDuplicate());
+            chunks.add(chunk.nioBuffer());
             if (chunk.isDirect()) {
                 directSize += chunk.capacity();
             } else {
@@ -309,17 +311,12 @@ public class ContentsCache {
         }
 
         void clear() {
-            chunks.forEach(ByteBuf::release);
-            if (LOG.isLoggable(Level.FINE)) {
-                LOG.log(Level.FINE, "ConcentsCache refCnt after release");
-                chunks.forEach(buff -> LOG.log(Level.FINE, "refCnt: {0}", buff.refCnt()));
-            }
             chunks.clear();
         }
 
         public List<ByteBuf> getChunks() {
             return chunks.stream()
-                    .map(c -> c.retainedDuplicate())
+                    .map(c -> Unpooled.wrappedBuffer(c))
                     .collect(Collectors.toList());
         }
 
