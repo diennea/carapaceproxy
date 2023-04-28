@@ -21,6 +21,8 @@ package org.carapaceproxy.server.cache;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufAllocator;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
@@ -293,7 +295,7 @@ public class ContentsCache {
     public static class CachedContent {
 
         HttpClientResponse response;
-        final List<ByteBuffer> chunks = new ArrayList<>();
+        final List<ByteBuf> chunks = new ArrayList<>();
         final long creationTs = System.currentTimeMillis();
         long lastModified;
         long expiresTs = -1;
@@ -301,22 +303,31 @@ public class ContentsCache {
         long directSize;
         int hits;
 
-        private void addChunk(ByteBuf chunk) {
-            chunks.add(chunk.nioBuffer());
-            if (chunk.isDirect()) {
-                directSize += chunk.capacity();
+        private synchronized void addChunk(ByteBuf chunk, ByteBufAllocator allocator) {
+            ByteBuf originalChunk = chunk.retainedDuplicate();
+            ByteBuf directBuffer = allocator.directBuffer(originalChunk.readableBytes());
+            directBuffer.writeBytes(originalChunk);
+            chunks.add(directBuffer);
+            if (directBuffer.isDirect()) {
+                directSize += directBuffer.capacity();
             } else {
-                heapSize += chunk.capacity();
+                heapSize += directBuffer.capacity();
             }
+            originalChunk.release();
         }
 
-        void clear() {
+        synchronized void clear() {
+            chunks.forEach(ByteBuf::release);
+            if (LOG.isLoggable(Level.FINE)) {
+                LOG.log(Level.FINE, "ContentsCache refCnt after release");
+                chunks.forEach(buff -> LOG.log(Level.FINE, "refCnt: {0}", buff.refCnt()));
+            }
             chunks.clear();
         }
 
         public List<ByteBuf> getChunks() {
             return chunks.stream()
-                    .map(c -> Unpooled.wrappedBuffer(c))
+                    .map(c -> c.retainedDuplicate())
                     .collect(Collectors.toList());
         }
 
@@ -520,13 +531,13 @@ public class ContentsCache {
             return true;
         }
 
-        public void receivedFromRemote(ByteBuf chunk) {
+        public void receivedFromRemote(ByteBuf chunk, ByteBufAllocator allocator) {
             if (notReallyCacheable) {
                 LOG.log(Level.FINEST, "{0} rejecting non-cacheable response", key);
                 abort();
                 return;
             }
-            content.addChunk(chunk);
+            content.addChunk(chunk, allocator);
         }
     }
 

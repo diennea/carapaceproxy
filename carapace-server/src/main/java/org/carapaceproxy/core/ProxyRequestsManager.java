@@ -429,7 +429,7 @@ public class ProxyRequestsManager {
                                     request.setLastActivity(System.currentTimeMillis());
                                     endpointStats.getLastActivity().set(System.currentTimeMillis());
                                     if (cacheable.get()) {
-                                        cacheReceiver.receivedFromRemote(data);
+                                        cacheReceiver.receivedFromRemote(data, parent.getCacheAllocator());
                                     }
                                 }).doOnSuccess(data -> {
                                     if (cacheable.get()) {
@@ -442,7 +442,7 @@ public class ProxyRequestsManager {
                         request.setLastActivity(System.currentTimeMillis());
                         endpointStats.getLastActivity().set(System.currentTimeMillis());
                         if (cacheable.get()) {
-                            cacheReceiver.receivedFromRemote(data);
+                            cacheReceiver.receivedFromRemote(data, parent.getCacheAllocator());
                         }
                     }).doOnComplete(() -> {
                         if (CarapaceLogger.isLoggingDebugEnabled()) {

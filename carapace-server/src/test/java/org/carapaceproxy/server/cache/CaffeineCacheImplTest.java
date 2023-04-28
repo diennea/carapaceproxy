@@ -156,8 +156,8 @@ public class CaffeineCacheImplTest {
     private static CacheEntry genCacheEntry(String resource, int payloadLength, long expireTs) {
         ContentKey key = new ContentKey("", "", "", resource);
         CachedContent payload = new CachedContent();
-        payload.chunks.add(Unpooled.EMPTY_BUFFER.nioBuffer());
-        payload.chunks.add(Unpooled.EMPTY_BUFFER.nioBuffer());
+        payload.chunks.add(Unpooled.EMPTY_BUFFER);
+        payload.chunks.add(Unpooled.EMPTY_BUFFER);
         payload.directSize = payloadLength / 2;
         payload.heapSize = payloadLength - payload.directSize;
         if (expireTs > 0) {

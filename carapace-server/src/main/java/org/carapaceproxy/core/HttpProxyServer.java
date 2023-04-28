@@ -39,6 +39,8 @@ import io.micrometer.core.instrument.config.MeterFilter;
 import io.micrometer.prometheus.PrometheusConfig;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
 import io.micrometer.prometheus.PrometheusRenameFilter;
+import io.netty.buffer.ByteBufAllocator;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.handler.codec.http.HttpMethod;
 import io.prometheus.client.exporter.MetricsServlet;
 import java.io.File;
@@ -178,6 +180,9 @@ public class HttpProxyServer implements AutoCloseable {
     private List<RequestFilter> filters;
     private volatile boolean started;
 
+    @Getter
+    private ByteBufAllocator cacheAllocator;
+
     /**
      * Guards concurrent configuration changes
      */
@@ -241,6 +246,7 @@ public class HttpProxyServer implements AutoCloseable {
             mapper.setParent(this);
             this.proxyRequestsManager.reloadConfiguration(currentConfiguration, mapper.getBackends().values());
         }
+        this.cacheAllocator = new PooledByteBufAllocator(true);
     }
 
     public int getLocalPort() {
