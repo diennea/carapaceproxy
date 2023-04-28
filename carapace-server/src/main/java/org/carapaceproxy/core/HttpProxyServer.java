@@ -39,7 +39,6 @@ import io.micrometer.core.instrument.config.MeterFilter;
 import io.micrometer.prometheus.PrometheusConfig;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
 import io.micrometer.prometheus.PrometheusRenameFilter;
-import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.handler.codec.http.HttpMethod;
 import io.prometheus.client.exporter.MetricsServlet;
@@ -80,6 +79,7 @@ import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.backends.BackendHealthManager;
+import org.carapaceproxy.server.cache.CachePooledByteBufDirectUsage;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
 import org.carapaceproxy.server.certificates.ocsp.OcspStaplingManager;
@@ -181,7 +181,8 @@ public class HttpProxyServer implements AutoCloseable {
     private volatile boolean started;
 
     @Getter
-    private ByteBufAllocator cacheAllocator;
+    private PooledByteBufAllocator cacheAllocator;
+    private CachePooledByteBufDirectUsage cachePooledByteBufDirectUsage;
 
     /**
      * Guards concurrent configuration changes
@@ -247,6 +248,7 @@ public class HttpProxyServer implements AutoCloseable {
             this.proxyRequestsManager.reloadConfiguration(currentConfiguration, mapper.getBackends().values());
         }
         this.cacheAllocator = new PooledByteBufAllocator(true);
+        this.cachePooledByteBufDirectUsage = new CachePooledByteBufDirectUsage(this);
     }
 
     public int getLocalPort() {
@@ -417,6 +419,7 @@ public class HttpProxyServer implements AutoCloseable {
             dynamicCertificatesManager.attachGroupMembershipHandler(groupMembershipHandler);
             dynamicCertificatesManager.start();
             ocspStaplingManager.start();
+            cachePooledByteBufDirectUsage.start();
             groupMembershipHandler.watchEvent("configurationChange", new ConfigurationChangeCallback());
         } catch (RuntimeException err) {
             close();
@@ -439,6 +442,7 @@ public class HttpProxyServer implements AutoCloseable {
         backendHealthManager.stop();
         dynamicCertificatesManager.stop();
         ocspStaplingManager.stop();
+        cachePooledByteBufDirectUsage.stop();
 
         if (adminserver != null) {
             try {
