@@ -79,6 +79,7 @@ import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.backends.BackendHealthManager;
+import org.carapaceproxy.server.cache.CachePoolTrimmer;
 import org.carapaceproxy.server.cache.CachePooledByteBufDirectUsage;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
@@ -181,8 +182,9 @@ public class HttpProxyServer implements AutoCloseable {
     private volatile boolean started;
 
     @Getter
-    private PooledByteBufAllocator cacheAllocator;
+    private PooledByteBufAllocator cachePoolAllocator;
     private CachePooledByteBufDirectUsage cachePooledByteBufDirectUsage;
+    private CachePoolTrimmer cachePoolTrimmer;
 
     /**
      * Guards concurrent configuration changes
@@ -247,8 +249,10 @@ public class HttpProxyServer implements AutoCloseable {
             mapper.setParent(this);
             this.proxyRequestsManager.reloadConfiguration(currentConfiguration, mapper.getBackends().values());
         }
-        this.cacheAllocator = new PooledByteBufAllocator(true);
+
+        this.cachePoolAllocator = new PooledByteBufAllocator(true);
         this.cachePooledByteBufDirectUsage = new CachePooledByteBufDirectUsage(this);
+        this.cachePoolTrimmer = new CachePoolTrimmer(this);
     }
 
     public int getLocalPort() {
@@ -420,6 +424,7 @@ public class HttpProxyServer implements AutoCloseable {
             dynamicCertificatesManager.start();
             ocspStaplingManager.start();
             cachePooledByteBufDirectUsage.start();
+            cachePoolTrimmer.start();
             groupMembershipHandler.watchEvent("configurationChange", new ConfigurationChangeCallback());
         } catch (RuntimeException err) {
             close();
@@ -443,6 +448,7 @@ public class HttpProxyServer implements AutoCloseable {
         dynamicCertificatesManager.stop();
         ocspStaplingManager.stop();
         cachePooledByteBufDirectUsage.stop();
+        cachePoolTrimmer.stop();
 
         if (adminserver != null) {
             try {
@@ -655,6 +661,13 @@ public class HttpProxyServer implements AutoCloseable {
         applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(props));
     }
 
+    public boolean trimCachePool() {
+        if (cachePoolAllocator != null) {
+            return cachePoolAllocator.trimCurrentThreadCache();
+        }
+        return false;
+    }
+
     public void UpdateMaintenanceMode(boolean value) throws ConfigurationChangeInProgressException, InterruptedException {
         Properties props = dynamicConfigurationStore.asProperties(null);
         props.setProperty("carapace.maintenancemode.enabled", String.valueOf(value));
@@ -733,6 +746,7 @@ public class HttpProxyServer implements AutoCloseable {
             this.listeners.reloadConfiguration(newConfiguration);
             this.cache.reloadConfiguration(newConfiguration);
             this.requestsLogger.reloadConfiguration(newConfiguration);
+            this.cachePoolTrimmer.reloadConfiguration(newConfiguration);
             this.realm = newRealm;
             Map<String, BackendConfiguration> currentBackends = mapper != null ? mapper.getBackends() : Collections.emptyMap();
             Map<String, BackendConfiguration> newBackends = newMapper.getBackends();

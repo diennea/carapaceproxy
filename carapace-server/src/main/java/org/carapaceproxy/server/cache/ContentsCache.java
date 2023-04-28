@@ -303,7 +303,7 @@ public class ContentsCache {
         long directSize;
         int hits;
 
-        private synchronized void addChunk(ByteBuf chunk, ByteBufAllocator allocator) {
+        private synchronized void addChunk(ByteBuf chunk, PooledByteBufAllocator allocator) {
             ByteBuf originalChunk = chunk.retainedDuplicate();
             ByteBuf directBuffer = allocator.directBuffer(originalChunk.readableBytes());
             directBuffer.writeBytes(originalChunk);
@@ -531,7 +531,7 @@ public class ContentsCache {
             return true;
         }
 
-        public void receivedFromRemote(ByteBuf chunk, ByteBufAllocator allocator) {
+        public void receivedFromRemote(ByteBuf chunk, PooledByteBufAllocator allocator) {
             if (notReallyCacheable) {
                 LOG.log(Level.FINEST, "{0} rejecting non-cacheable response", key);
                 abort();

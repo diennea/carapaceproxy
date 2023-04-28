@@ -1,26 +1,19 @@
 package org.carapaceproxy.server.cache;
 
-import io.prometheus.client.Gauge;
 import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.utils.CarapaceLogger;
-import org.carapaceproxy.utils.PrometheusUtils;
+import org.carapaceproxy.core.RuntimeServerConfiguration;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class CachePooledByteBufDirectUsage implements Runnable {
+public class CachePoolTrimmer implements Runnable {
 
-    public static final int DEFAULT_PERIOD = 5; // seconds
-    private static final Logger LOG = Logger.getLogger(CachePooledByteBufDirectUsage.class.getName());
-
-
-    private static final Gauge CACHE_ALLOCATOR_DIRECT_MEMORY_USAGE = PrometheusUtils.createGauge(
-            "cacheAllocator", "cache_allocator_direct_memory_usage", "Amount of direct memory usage by cache allocator"
-    ).register();
-
+    public static final int DEFAULT_CACHE_POOL_TRIM_INTERVAL = 3600; // seconds
+    private static final Logger LOG = Logger.getLogger(CachePoolTrimmer.class.getName());
 
     private ScheduledExecutorService timer;
     private ScheduledFuture<?> scheduledFuture;
@@ -30,11 +23,10 @@ public class CachePooledByteBufDirectUsage implements Runnable {
     private volatile int period;
     private volatile boolean started; // keep track of start() calling
 
-    public CachePooledByteBufDirectUsage(HttpProxyServer parent) {
-        this.period = DEFAULT_PERIOD;
+    public CachePoolTrimmer(HttpProxyServer parent) {
+        this.period = DEFAULT_CACHE_POOL_TRIM_INTERVAL;
         this.parent = parent;
     }
-
 
     public int getPeriod() {
         return period;
@@ -52,7 +44,7 @@ public class CachePooledByteBufDirectUsage implements Runnable {
         if (timer == null) {
             timer = Executors.newSingleThreadScheduledExecutor();
         }
-        LOG.info("Starting cache pooledByteBufAllocator usage, period: " + period + " seconds");
+        LOG.info("Starting cache trim scheduler, period: " + period + " seconds");
         scheduledFuture = timer.scheduleAtFixedRate(this, period, period, TimeUnit.SECONDS);
     }
 
@@ -71,11 +63,32 @@ public class CachePooledByteBufDirectUsage implements Runnable {
     }
 
 
+    public synchronized void reloadConfiguration(RuntimeServerConfiguration newConfiguration) {
+        int newPeriod = newConfiguration.getCachePoolTrimInterval();
+        boolean changePeriod = period != newPeriod;
+        boolean restart = scheduledFuture != null && changePeriod;
+
+        if (restart) {
+            scheduledFuture.cancel(true);
+        }
+
+        if (changePeriod) {
+            period = newPeriod;
+            LOG.info("Applying new cache trim interval " + period + " s");
+        }
+
+        if (restart || started) {
+            start();
+        }
+    }
+
     @Override
     public void run() {
-        if(CarapaceLogger.isLoggingDebugEnabled()) {
-            CarapaceLogger.debug("cache allocator status: " + parent.getCachePoolAllocator().metric().toString());
+        if (parent.trimCachePool()) {
+            LOG.log(Level.INFO, "Cache PooledByteBufAllocator: trim successful");
+        } else {
+            LOG.log(Level.INFO, "Cache PooledByteBufAllocator: No memory released by cache trim");
         }
-        CACHE_ALLOCATOR_DIRECT_MEMORY_USAGE.set(parent.getCachePoolAllocator().metric().usedDirectMemory());
     }
+
 }
