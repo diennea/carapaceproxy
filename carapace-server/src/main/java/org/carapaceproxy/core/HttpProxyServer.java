@@ -40,6 +40,10 @@ import io.micrometer.prometheus.PrometheusConfig;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
 import io.micrometer.prometheus.PrometheusRenameFilter;
 import io.netty.buffer.PooledByteBufAllocator;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.epoll.Epoll;
+import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.codec.http.HttpMethod;
 import io.prometheus.client.exporter.MetricsServlet;
 import java.io.File;
@@ -79,6 +83,7 @@ import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.backends.BackendHealthManager;
+import org.carapaceproxy.server.cache.CachePoolTrimScheduler;
 import org.carapaceproxy.server.cache.CachePooledByteBufDirectUsage;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
@@ -183,6 +188,9 @@ public class HttpProxyServer implements AutoCloseable {
     @Getter
     private PooledByteBufAllocator cachePoolAllocator;
     private CachePooledByteBufDirectUsage cachePooledByteBufDirectUsage;
+    private CachePoolTrimScheduler cachePoolTrimScheduler;
+    @Getter
+    private EventLoopGroup eventLoopGroup;
 
     /**
      * Guards concurrent configuration changes
@@ -250,6 +258,8 @@ public class HttpProxyServer implements AutoCloseable {
 
         this.cachePoolAllocator = new PooledByteBufAllocator(true);
         this.cachePooledByteBufDirectUsage = new CachePooledByteBufDirectUsage(this);
+        this.cachePoolTrimScheduler = new CachePoolTrimScheduler(this);
+        this.eventLoopGroup = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
     }
 
     public int getLocalPort() {
@@ -417,6 +427,7 @@ public class HttpProxyServer implements AutoCloseable {
             requestsLogger.start();
             listeners.start();
             backendHealthManager.start();
+            cachePoolTrimScheduler.start();
             dynamicCertificatesManager.attachGroupMembershipHandler(groupMembershipHandler);
             dynamicCertificatesManager.start();
             ocspStaplingManager.start();
@@ -444,6 +455,7 @@ public class HttpProxyServer implements AutoCloseable {
         dynamicCertificatesManager.stop();
         ocspStaplingManager.stop();
         cachePooledByteBufDirectUsage.stop();
+        cachePoolTrimScheduler.stop();
 
         if (adminserver != null) {
             try {
@@ -734,6 +746,7 @@ public class HttpProxyServer implements AutoCloseable {
             this.listeners.reloadConfiguration(newConfiguration);
             this.cache.reloadConfiguration(newConfiguration);
             this.requestsLogger.reloadConfiguration(newConfiguration);
+            this.cachePoolTrimScheduler.reloadConfiguration(newConfiguration);
             this.realm = newRealm;
             Map<String, BackendConfiguration> currentBackends = mapper != null ? mapper.getBackends() : Collections.emptyMap();
             Map<String, BackendConfiguration> newBackends = newMapper.getBackends();

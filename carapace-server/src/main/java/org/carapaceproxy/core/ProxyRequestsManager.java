@@ -25,8 +25,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollChannelOption;
-import io.netty.channel.epoll.EpollEventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioChannelOption;
 import io.netty.handler.codec.http.*;
 import io.prometheus.client.Counter;
@@ -344,49 +342,47 @@ public class ProxyRequestsManager {
             CarapaceLogger.debug("Max connections for {0}: {1}", connectionConfig.getId(), connectionProvider.maxConnectionsPerHost());
         }
 
-        HttpClient forwarder = forwardersPool.computeIfAbsent(key.getHostPort() + "_" + connectionConfig.getId(), hostname -> {
-            return HttpClient.create(connectionProvider)
-                    .host(endpointHost)
-                    .port(endpointPort)
-                    .followRedirect(false) // client has to request the redirect, not the proxy
-                    .runOn(Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup())
-                    .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
-                    .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
-                    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
-                    .option(ChannelOption.SO_KEEPALIVE, connectionConfig.isKeepAlive()) // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
-                    .option(Epoll.isAvailable()
-                            ? EpollChannelOption.TCP_KEEPIDLE
-                            : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE), connectionConfig.getKeepaliveIdle())
-                    .option(Epoll.isAvailable()
-                            ? EpollChannelOption.TCP_KEEPINTVL
-                            : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL), connectionConfig.getKeepaliveInterval())
-                    .option(Epoll.isAvailable()
-                            ? EpollChannelOption.TCP_KEEPCNT
-                            : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), connectionConfig.getKeepaliveCount())
-                    .httpResponseDecoder(option -> option.maxHeaderSize(parent.getCurrentConfiguration().getMaxHeaderSize()))
-                    .doOnRequest((req, conn) -> {
-                        if (CarapaceLogger.isLoggingDebugEnabled()) {
-                            CarapaceLogger.debug("Start sending request for "
-                                    + " Using client id " + key.getHostPort() + "_" + connectionConfig.getId()
-                                    + " Uri " + req.resourceUrl()
-                                    + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
-                                    + " Backend " + endpointHost + ":" + endpointPort);
-                        }
-                        endpointStats.getTotalRequests().incrementAndGet();
-                        endpointStats.getLastActivity().set(System.currentTimeMillis());
-                    }).doAfterRequest((req, conn) -> {
-                        if (CarapaceLogger.isLoggingDebugEnabled()) {
-                            CarapaceLogger.debug("Finished sending request for "
-                                    + " Using client id " + key.getHostPort() + "_" + connectionConfig.getId()
-                                    + " Uri " + request.getUri()
-                                    + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
-                                    + " Backend " + endpointHost + ":" + endpointPort);
-                        }
-                    }).doAfterResponseSuccess((resp, conn) -> {
-                        PENDING_REQUESTS_GAUGE.dec();
-                        endpointStats.getLastActivity().set(System.currentTimeMillis());
-                    });
-        });
+        HttpClient forwarder = forwardersPool.computeIfAbsent(key.getHostPort() + "_" + connectionConfig.getId(), hostname -> HttpClient.create(connectionProvider)
+                .host(endpointHost)
+                .port(endpointPort)
+                .followRedirect(false) // client has to request the redirect, not the proxy
+                .runOn(parent.getEventLoopGroup())
+                .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
+                .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
+                .option(ChannelOption.SO_KEEPALIVE, connectionConfig.isKeepAlive()) // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
+                .option(Epoll.isAvailable()
+                        ? EpollChannelOption.TCP_KEEPIDLE
+                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE), connectionConfig.getKeepaliveIdle())
+                .option(Epoll.isAvailable()
+                        ? EpollChannelOption.TCP_KEEPINTVL
+                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL), connectionConfig.getKeepaliveInterval())
+                .option(Epoll.isAvailable()
+                        ? EpollChannelOption.TCP_KEEPCNT
+                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), connectionConfig.getKeepaliveCount())
+                .httpResponseDecoder(option -> option.maxHeaderSize(parent.getCurrentConfiguration().getMaxHeaderSize()))
+                .doOnRequest((req, conn) -> {
+                    if (CarapaceLogger.isLoggingDebugEnabled()) {
+                        CarapaceLogger.debug("Start sending request for "
+                                + " Using client id " + key.getHostPort() + "_" + connectionConfig.getId()
+                                + " Uri " + req.resourceUrl()
+                                + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
+                                + " Backend " + endpointHost + ":" + endpointPort);
+                    }
+                    endpointStats.getTotalRequests().incrementAndGet();
+                    endpointStats.getLastActivity().set(System.currentTimeMillis());
+                }).doAfterRequest((req, conn) -> {
+                    if (CarapaceLogger.isLoggingDebugEnabled()) {
+                        CarapaceLogger.debug("Finished sending request for "
+                                + " Using client id " + key.getHostPort() + "_" + connectionConfig.getId()
+                                + " Uri " + request.getUri()
+                                + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
+                                + " Backend " + endpointHost + ":" + endpointPort);
+                    }
+                }).doAfterResponseSuccess((resp, conn) -> {
+                    PENDING_REQUESTS_GAUGE.dec();
+                    endpointStats.getLastActivity().set(System.currentTimeMillis());
+                }));
 
         AtomicBoolean cacheable = new AtomicBoolean(cache);
         final ContentsCache.ContentReceiver cacheReceiver = cacheable.get() ? parent.getCache().createCacheReceiver(request) : null;

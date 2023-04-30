@@ -94,6 +94,7 @@ public class RuntimeServerConfiguration {
     private int accessLogAdvancedBodySize = 1_000; // bytes
     private String userRealmClassname;
     private int healthProbePeriod = 0;
+    private int cachePoolTrimInterval = 3600;
     private int dynamicCertificatesManagerPeriod = 0;
     private int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
     private Set<String> domainsCheckerIPAddresses;
@@ -200,6 +201,12 @@ public class RuntimeServerConfiguration {
         LOG.log(Level.INFO, "healthmanager.period={0}", healthProbePeriod);
         if (healthProbePeriod <= 0) {
             LOG.warning("BACKEND-HEALTH-MANAGER DISABLED");
+        }
+
+        cachePoolTrimInterval = properties.getInt("cache.pool.triminterval", cachePoolTrimInterval);
+        LOG.log(Level.INFO, "cache.pool.triminterval={0}", cachePoolTrimInterval);
+        if (cachePoolTrimInterval <= 0) {
+            LOG.warning("CACHE TRIM DISABLED");
         }
 
         dynamicCertificatesManagerPeriod = properties.getInt("dynamiccertificatesmanager.period", 0);
