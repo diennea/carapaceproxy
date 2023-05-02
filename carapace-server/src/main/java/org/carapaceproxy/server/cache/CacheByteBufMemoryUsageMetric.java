@@ -1,8 +1,9 @@
 package org.carapaceproxy.server.cache;
 
+import io.netty.buffer.PooledByteBufAllocator;
+import io.netty.buffer.UnpooledByteBufAllocator;
 import io.prometheus.client.Gauge;
 import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.PrometheusUtils;
 
 import java.util.concurrent.Executors;
@@ -11,17 +12,16 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
-public class CachePooledByteBufDirectUsage implements Runnable {
+public class CacheByteBufMemoryUsageMetric implements Runnable {
 
     public static final int DEFAULT_PERIOD = 5; // seconds
-    private static final Logger LOG = Logger.getLogger(CachePooledByteBufDirectUsage.class.getName());
-
-
-    private static final Gauge CACHE_ALLOCATOR_DIRECT_MEMORY_USAGE = PrometheusUtils.createGauge(
-            "cacheAllocator", "cache_allocator_direct_memory_usage", "Amount of direct memory usage by cache allocator"
-    ).register();
-
-
+    private static final Logger LOG = Logger.getLogger(CacheByteBufMemoryUsageMetric.class.getName());
+    private static final Gauge CACHE_POOLED_BYTEBUF_ALLOCATOR = PrometheusUtils.createGauge("cacheAllocator",
+            "cache_pooled_allocator_direct_memory_usage",
+            "Amount of direct memory usage by cache allocator").register();
+    private static final Gauge CACHE_UNPOOLED_BYTEBUF_ALLOCATOR = PrometheusUtils.createGauge("cacheAllocator",
+            "cache_unpooled_allocator_direct_memory_usage",
+            "Amount of direct memory usage by cache allocator").register();
     private ScheduledExecutorService timer;
     private ScheduledFuture<?> scheduledFuture;
     private HttpProxyServer parent;
@@ -30,7 +30,7 @@ public class CachePooledByteBufDirectUsage implements Runnable {
     private volatile int period;
     private volatile boolean started; // keep track of start() calling
 
-    public CachePooledByteBufDirectUsage(HttpProxyServer parent) {
+    public CacheByteBufMemoryUsageMetric(HttpProxyServer parent) {
         this.period = DEFAULT_PERIOD;
         this.parent = parent;
     }
@@ -52,7 +52,7 @@ public class CachePooledByteBufDirectUsage implements Runnable {
         if (timer == null) {
             timer = Executors.newSingleThreadScheduledExecutor();
         }
-        LOG.info("Starting cache pooledByteBufAllocator usage, period: " + period + " seconds");
+        LOG.info("Starting cache ByteBufAllocator usage, period: " + period + " seconds");
         scheduledFuture = timer.scheduleAtFixedRate(this, period, period, TimeUnit.SECONDS);
     }
 
@@ -73,9 +73,10 @@ public class CachePooledByteBufDirectUsage implements Runnable {
 
     @Override
     public void run() {
-        if(CarapaceLogger.isLoggingDebugEnabled()) {
-            CarapaceLogger.debug("cache allocator status: " + parent.getCachePoolAllocator().metric().toString());
+        if(parent.getCachePoolAllocator() instanceof PooledByteBufAllocator) {
+            CACHE_POOLED_BYTEBUF_ALLOCATOR.set(((PooledByteBufAllocator) parent.getCachePoolAllocator()).metric().usedDirectMemory());
+        } else {
+            CACHE_UNPOOLED_BYTEBUF_ALLOCATOR.set(((UnpooledByteBufAllocator) parent.getCachePoolAllocator()).metric().usedDirectMemory());
         }
-        CACHE_ALLOCATOR_DIRECT_MEMORY_USAGE.set(parent.getCachePoolAllocator().metric().usedDirectMemory());
     }
 }
