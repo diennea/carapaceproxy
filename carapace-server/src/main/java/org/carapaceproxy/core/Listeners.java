@@ -230,7 +230,7 @@ public class Listeners {
                 .metrics(true, Function.identity())
                 .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())
                 .childOption(ChannelOption.SO_KEEPALIVE, config.isKeepAlive())
-                .runOn(Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup())
+                .runOn(parent.getEventLoopGroup())
                 .childOption(Epoll.isAvailable()
                         ? EpollChannelOption.TCP_KEEPIDLE
                         : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE), config.getKeepAliveIdle())

@@ -39,6 +39,13 @@ import io.micrometer.core.instrument.config.MeterFilter;
 import io.micrometer.prometheus.PrometheusConfig;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
 import io.micrometer.prometheus.PrometheusRenameFilter;
+import io.netty.buffer.ByteBufAllocator;
+import io.netty.buffer.PooledByteBufAllocator;
+import io.netty.buffer.UnpooledByteBufAllocator;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.epoll.Epoll;
+import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.codec.http.HttpMethod;
 import io.prometheus.client.exporter.MetricsServlet;
 import java.io.File;
@@ -78,6 +85,7 @@ import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.backends.BackendHealthManager;
+import org.carapaceproxy.server.cache.CacheByteBufMemoryUsageMetric;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
 import org.carapaceproxy.server.certificates.ocsp.OcspStaplingManager;
@@ -178,6 +186,12 @@ public class HttpProxyServer implements AutoCloseable {
     private List<RequestFilter> filters;
     private volatile boolean started;
 
+    @Getter
+    private ByteBufAllocator cachePoolAllocator;
+    private CacheByteBufMemoryUsageMetric cacheByteBufMemoryUsageMetric;
+    @Getter
+    private EventLoopGroup eventLoopGroup;
+
     /**
      * Guards concurrent configuration changes
      */
@@ -194,7 +208,8 @@ public class HttpProxyServer implements AutoCloseable {
     private int adminServerHttpsPort = -1;
     private String adminServerCertFile;
     private String adminServerCertFilePwd = "";
-
+    @Getter
+    private boolean usePooledByteBufAllocator;
     @Getter
     private String metricsUrl;
     private String userRealmClassname;
@@ -241,6 +256,14 @@ public class HttpProxyServer implements AutoCloseable {
             mapper.setParent(this);
             this.proxyRequestsManager.reloadConfiguration(currentConfiguration, mapper.getBackends().values());
         }
+
+        this.usePooledByteBufAllocator = Boolean.getBoolean("cache.allocator.usepooledbytebufallocator");
+        this.cachePoolAllocator = usePooledByteBufAllocator ?
+                new PooledByteBufAllocator(true): new UnpooledByteBufAllocator(true);
+        this.cacheByteBufMemoryUsageMetric = new CacheByteBufMemoryUsageMetric(this);
+        //Best practice is to reuse EventLoopGroup
+        // http://normanmaurer.me/presentations/2014-facebook-eng-netty/slides.html#25.0
+        this.eventLoopGroup = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
     }
 
     public int getLocalPort() {
@@ -411,6 +434,7 @@ public class HttpProxyServer implements AutoCloseable {
             dynamicCertificatesManager.attachGroupMembershipHandler(groupMembershipHandler);
             dynamicCertificatesManager.start();
             ocspStaplingManager.start();
+            cacheByteBufMemoryUsageMetric.start();
             groupMembershipHandler.watchEvent("configurationChange", new ConfigurationChangeCallback());
         } catch (RuntimeException err) {
             close();
@@ -433,6 +457,7 @@ public class HttpProxyServer implements AutoCloseable {
         backendHealthManager.stop();
         dynamicCertificatesManager.stop();
         ocspStaplingManager.stop();
+        cacheByteBufMemoryUsageMetric.stop();
 
         if (adminserver != null) {
             try {
@@ -550,7 +575,6 @@ public class HttpProxyServer implements AutoCloseable {
         adminAccessLogPath = properties.getString("admin.accesslog.path", adminAccessLogPath);
         adminAccessLogTimezone = properties.getString("admin.accesslog.format.timezone", adminAccessLogTimezone);
         adminLogRetentionDays = properties.getInt("admin.accesslog.retention.days", adminLogRetentionDays);
-
         userRealmClassname = properties.getClassname("userrealm.class", SimpleUserRealm.class.getName());
 
         LOG.log(Level.INFO, "http.admin.enabled={0}", adminServerEnabled);
@@ -561,6 +585,7 @@ public class HttpProxyServer implements AutoCloseable {
         LOG.log(Level.INFO, "admin.advertised.host={0}", adminAdvertisedServerHost);
         LOG.log(Level.INFO, "listener.offset.port={0}", listenersOffsetPort);
         LOG.log(Level.INFO, "userrealm.class={0}", userRealmClassname);
+        LOG.log(Level.INFO, "cache.allocator.usepooledbytebufallocator={0}", this.usePooledByteBufAllocator);
 
         String awsAccessKey = properties.getString("aws.accesskey", null);
         LOG.log(Level.INFO, "aws.accesskey={0}", awsAccessKey);
