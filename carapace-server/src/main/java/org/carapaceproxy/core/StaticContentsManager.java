@@ -21,10 +21,8 @@ package org.carapaceproxy.core;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.handler.codec.http.DefaultFullHttpResponse;
-import io.netty.handler.codec.http.HttpHeaderNames;
-import io.netty.handler.codec.http.HttpResponseStatus;
-import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.codec.http.*;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -49,6 +47,7 @@ public class StaticContentsManager {
     public static final String DEFAULT_INTERNAL_SERVER_ERROR = CLASSPATH_RESOURCE + "/default-error-pages/500_internalservererror.html";
     public static final String DEFAULT_MAINTENANCE_MODE_ERROR =  CLASSPATH_RESOURCE + "/default-error-pages/500_maintenance.html";
     public static final String DEFAULT_BAD_REQUEST =  CLASSPATH_RESOURCE + "/default-error-pages/400_badrequest.html";
+    public static final String DEFAULT_SERVICE_UNAVAILABLE_ERROR =  CLASSPATH_RESOURCE + "/default-error-pages/503_serviceunavailable.html";
 
     private static final Logger LOG = Logger.getLogger(StaticContentsManager.class.getName());
 
@@ -57,10 +56,6 @@ public class StaticContentsManager {
     public void close() {
         contents.values().forEach(ByteBuf::release);
         contents.clear();
-    }
-
-    public DefaultFullHttpResponse buildServiceNotAvailableResponse() {
-        return buildResponse(500, DEFAULT_INTERNAL_SERVER_ERROR);
     }
 
     public DefaultFullHttpResponse buildResponse(int code, String resource) {

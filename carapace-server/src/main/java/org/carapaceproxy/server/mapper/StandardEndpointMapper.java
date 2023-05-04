@@ -74,6 +74,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     private String forceBackendParameter = "x-backend";
     private String defaultMaintenanceAction = "maintenance";
     private String defaultBadRequestAction = "bad-request";
+    private String defaultServiceUnavailable = "service-unavailable";
 
     private static final Logger LOG = Logger.getLogger(StandardEndpointMapper.class.getName());
     private static final String ACME_CHALLENGE_URI_PATTERN = "/\\.well-known/acme-challenge/";
@@ -274,6 +275,19 @@ public class StandardEndpointMapper extends EndpointMapper {
     }
 
     @Override
+    public SimpleHTTPResponse mapServiceUnavailableError(String routeId) {
+        // custom global
+        if (defaultServiceUnavailable != null) {
+            ActionConfiguration errorAction = actions.get(defaultServiceUnavailable);
+            if (errorAction != null) {
+                return new SimpleHTTPResponse(errorAction.getErrorCode(), errorAction.getFile(), errorAction.getCustomHeaders());
+            }
+        }
+        // fallback
+        return super.mapServiceUnavailableError(routeId);
+    }
+
+    @Override
     public SimpleHTTPResponse mapMaintenanceMode(String routeId) {
         ActionConfiguration maintenanceAction = null;
         // custom for route
@@ -348,6 +362,8 @@ public class StandardEndpointMapper extends EndpointMapper {
         LOG.log(Level.INFO, "configured default.action.maintenance={0}", defaultMaintenanceAction);
         this.defaultBadRequestAction = properties.getString("default.action.badrequest", "bad-request");
         LOG.log(Level.INFO, "configured default.action.badrequest={0}", defaultBadRequestAction);
+        this.defaultServiceUnavailable = properties.getString("default.action.serviceunavailable", "service-unavailable");
+        LOG.log(Level.INFO, "configured default.action.serviceunavailable={0}", defaultServiceUnavailable);
         this.forceDirectorParameter = properties.getString("mapper.forcedirector.parameter", forceDirectorParameter);
         LOG.log(Level.INFO, "configured mapper.forcedirector.parameter={0}", forceDirectorParameter);
         this.forceBackendParameter = properties.getString("mapper.forcebackend.parameter", forceBackendParameter);

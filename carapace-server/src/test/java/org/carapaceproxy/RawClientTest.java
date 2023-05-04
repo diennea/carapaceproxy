@@ -679,7 +679,7 @@ public class RawClientTest {
                             try (RawHttpClient client2 = new RawHttpClient("localhost", port, 300_000)) {
                                 String resp = client2.get("/index.html").getBodyString();
                                 System.out.println("### RESP client2: " + resp);
-                                if (!resp.contains("An internal error occurred")) { // borrow timeout
+                                if (!resp.contains("Service Unavailable")) { // borrow timeout
                                     failed.set(true);
                                     return;
                                 }

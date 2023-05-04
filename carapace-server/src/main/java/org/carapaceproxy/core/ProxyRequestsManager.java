@@ -129,6 +129,8 @@ public class ProxyRequestsManager {
 
                 case INTERNAL_ERROR:
                     return serveInternalErrorMessage(request);
+                case SERVICE_UNAVAILABLE:
+                    return serveServiceUnavailable(request);
                 case MAINTENANCE_MODE:
                     return serveMaintenanceMessage(request);
                 case BAD_REQUEST:
@@ -500,17 +502,33 @@ public class ProxyRequestsManager {
                                 endpoint, System.currentTimeMillis(), "Error: " + err
                         );
                     }
-                    return serveServiceNotAvailable(request);
+                    return serveServiceUnavailable(request);
                 });
     }
 
-    private Publisher<Void> serveServiceNotAvailable(ProxyRequest request) {
+    private Publisher<Void> serveServiceUnavailable(ProxyRequest request) {
         if (request.getResponse().hasSentHeaders()) {
             return Mono.empty();
         }
 
-        FullHttpResponse response = parent.getStaticContentsManager().buildServiceNotAvailableResponse();
-        return writeSimpleResponse(request, response, request.getAction().customHeaders);
+        SimpleHTTPResponse res = parent.getMapper().mapServiceUnavailableError(request.getAction().routeId);
+        int code = 0;
+        String resource = null;
+        List<CustomHeader> customHeaders = null;
+        if (res != null) {
+            code = res.getErrorcode();
+            resource = res.getResource();
+            customHeaders = res.getCustomHeaders();
+        }
+        if (resource == null) {
+            resource = StaticContentsManager.DEFAULT_SERVICE_UNAVAILABLE_ERROR;
+        }
+        if (code <= 0) {
+            code = 503;
+        }
+        FullHttpResponse response = parent.getStaticContentsManager().buildResponse(code, resource);
+
+        return writeSimpleResponse(request, response, customHeaders);
     }
 
     private static void cleanRequestFromCacheValidators(ProxyRequest request) {

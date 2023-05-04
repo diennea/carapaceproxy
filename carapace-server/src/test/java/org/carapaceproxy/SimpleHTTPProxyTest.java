@@ -143,7 +143,7 @@ public class SimpleHTTPProxyTest {
 
             HttpTestUtils.ResourceInfos result = HttpTestUtils.downloadFromUrl(new URL("http://localhost:" + port + "/index.html"),
                     new ByteArrayOutputStream(), Collections.singletonMap("return_errors", "true"));
-            assertEquals(500, result.responseCode);
+            assertEquals(503, result.responseCode);
         }
     }
 }
