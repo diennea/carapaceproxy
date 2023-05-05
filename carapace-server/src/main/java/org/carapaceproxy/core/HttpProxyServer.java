@@ -776,6 +776,7 @@ public class HttpProxyServer implements AutoCloseable {
                 || newConfiguration.getConnectTimeout() != currentConfiguration.getConnectTimeout()
                 || newConfiguration.getStuckRequestTimeout() != currentConfiguration.getStuckRequestTimeout()
                 || newConfiguration.getIdleTimeout() != currentConfiguration.getIdleTimeout()
+                || newConfiguration.getMaxLifeTime() != currentConfiguration.getMaxLifeTime()
                 || !newConfiguration.getConnectionPools().equals(currentConfiguration.getConnectionPools());
     }
 

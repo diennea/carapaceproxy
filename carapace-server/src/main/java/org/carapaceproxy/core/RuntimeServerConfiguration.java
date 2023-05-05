@@ -64,6 +64,7 @@ public class RuntimeServerConfiguration {
 
     private int maxConnectionsPerEndpoint = 10;
     private int idleTimeout = 60_000;
+    private int maxLifeTime = 100_000;
     private int stuckRequestTimeout = 120_000;
     private boolean backendsUnreachableOnStuckRequests = false;
     private int connectTimeout = 10_000;
@@ -120,6 +121,7 @@ public class RuntimeServerConfiguration {
                 connectTimeout,
                 stuckRequestTimeout,
                 idleTimeout,
+                maxLifeTime,
                 disposeTimeout,
                 keepaliveIdle,
                 keepaliveInterval,
@@ -136,6 +138,10 @@ public class RuntimeServerConfiguration {
         if (this.idleTimeout <= 0) {
             throw new ConfigurationNotValidException("Invalid value '" + this.idleTimeout + "' for connectionsmanager.idletimeout");
         }
+        this.maxLifeTime = properties.getInt("connectionsmanager.maxlifetime", maxLifeTime);
+        if (this.maxLifeTime <= 0) {
+            throw new ConfigurationNotValidException("Invalid value '" + this.maxLifeTime + "' for connectionsmanager.maxlifetime");
+        }
         this.stuckRequestTimeout = properties.getInt("connectionsmanager.stuckrequesttimeout", stuckRequestTimeout);
         this.backendsUnreachableOnStuckRequests = properties.getBoolean("connectionsmanager.backendsunreachableonstuckrequests", backendsUnreachableOnStuckRequests);
         this.connectTimeout = properties.getInt("connectionsmanager.connecttimeout", connectTimeout);
@@ -146,6 +152,7 @@ public class RuntimeServerConfiguration {
         this.keepaliveCount = properties.getInt("connectionsmanager.keepalivecount", keepaliveCount);
         LOG.log(Level.INFO, "connectionsmanager.maxconnectionsperendpoint={0}", maxConnectionsPerEndpoint);
         LOG.log(Level.INFO, "connectionsmanager.idletimeout={0}", idleTimeout);
+        LOG.log(Level.INFO, "connectionsmanager.maxlifetime={0}", maxLifeTime);
         LOG.log(Level.INFO, "connectionsmanager.stuckrequesttimeout={0}", stuckRequestTimeout);
         LOG.log(Level.INFO, "connectionsmanager.backendsunreachableonstuckrequests={0}", backendsUnreachableOnStuckRequests);
         LOG.log(Level.INFO, "connectionsmanager.connecttimeout={0}", connectTimeout);
@@ -354,6 +361,7 @@ public class RuntimeServerConfiguration {
             int connecttimeout = properties.getInt(prefix + "connecttimeout", connectTimeout);
             int stuckrequesttimeout = properties.getInt(prefix + "stuckrequesttimeout", stuckRequestTimeout);
             int idletimeout = properties.getInt(prefix + "idletimeout", idleTimeout);
+            int maxlifetime = properties.getInt(prefix + "maxlifetime", maxLifeTime);
             int disposetimeout = properties.getInt(prefix + "disposetimeout", disposeTimeout);
             int keepaliveidle = properties.getInt(prefix + "keepaliveidle", keepaliveIdle);
             int keepaliveinterval = properties.getInt(prefix + "keepaliveinterval", keepaliveInterval);
@@ -368,6 +376,7 @@ public class RuntimeServerConfiguration {
                     connecttimeout,
                     stuckrequesttimeout,
                     idletimeout,
+                    maxlifetime,
                     disposetimeout,
                     keepaliveidle,
                     keepaliveinterval,
@@ -387,6 +396,7 @@ public class RuntimeServerConfiguration {
                 getConnectTimeout(),
                 getStuckRequestTimeout(),
                 getIdleTimeout(),
+                getMaxLifeTime(),
                 getDisposeTimeout(),
                 getKeepaliveIdle(),
                 getKeepaliveInterval(),
