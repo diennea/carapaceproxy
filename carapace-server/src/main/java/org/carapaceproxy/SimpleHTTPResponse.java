@@ -64,6 +64,10 @@ public class SimpleHTTPResponse {
         return new SimpleHTTPResponse(500, res, null);
     }
 
+    public static final SimpleHTTPResponse BAD_REQUEST(String res) {
+        return new SimpleHTTPResponse(400, res, null);
+    }
+
     @Override
     public String toString() {
         return "SimpleHTTPResponse{" + "errorcode=" + errorcode + ", resource=" + resource + ", customHeaders=" + customHeaders + '}';

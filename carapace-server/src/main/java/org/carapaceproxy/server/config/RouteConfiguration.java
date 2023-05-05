@@ -34,6 +34,8 @@ public class RouteConfiguration {
     private String errorAction;
     private String maintenanceModeAction;
 
+    private String badRequestAction;
+
     public RouteConfiguration(String id, String action, boolean enabled, RequestMatcher matcher) {
         this.id = id;
         this.action = action;

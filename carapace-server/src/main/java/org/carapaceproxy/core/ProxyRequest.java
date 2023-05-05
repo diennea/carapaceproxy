@@ -19,6 +19,9 @@
  */
 package org.carapaceproxy.core;
 
+import com.google.common.net.HostAndPort;
+import com.google.common.net.InetAddresses;
+import com.google.common.net.InternetDomainName;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
@@ -26,8 +29,10 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpScheme;
 import io.netty.handler.ssl.SslHandler;
+
 import java.net.InetSocketAddress;
 import java.util.concurrent.atomic.AtomicLong;
+
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
@@ -129,7 +134,6 @@ public class ProxyRequest implements MatchingContext {
     }
 
     /**
-     *
      * @return the uri path (starting from /) + query params
      */
     public String getUri() {
@@ -169,6 +173,26 @@ public class ProxyRequest implements MatchingContext {
 
     public String getRequestHostname() {
         return request.requestHeaders().get(HttpHeaderNames.HOST);
+    }
+
+    public boolean isValidHostAndPort(String hostAndPort) {
+        try {
+            HostAndPort parsed = HostAndPort.fromString(hostAndPort);
+            if (!parsed.hasPort()) {
+                return parsed.getHost() != null &&
+                        !parsed.getHost().isBlank() &&
+                        (InternetDomainName.isValid(parsed.getHost()) ||
+                                InetAddresses.isInetAddress(parsed.getHost()));
+            } else {
+                return parsed.getHost() != null &&
+                        !parsed.getHost().isBlank() &&
+                        (InternetDomainName.isValid(parsed.getHost()) ||
+                                InetAddresses.isInetAddress(parsed.getHost())) &&
+                        parsed.getPort() >= 0 && parsed.getPort() <= 65535;
+            }
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     public UrlEncodedQueryString getQueryString() {

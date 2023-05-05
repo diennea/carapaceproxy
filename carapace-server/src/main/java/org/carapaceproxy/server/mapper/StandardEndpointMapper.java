@@ -24,7 +24,9 @@ import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_MAINTENANCE_M
 import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_NOT_FOUND;
 import static org.carapaceproxy.core.StaticContentsManager.IN_MEMORY_RESOURCE;
 import static org.carapaceproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
+
 import io.netty.handler.codec.http.HttpResponseStatus;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -35,6 +37,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
 import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.core.ProxyRequest;
@@ -70,6 +73,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     private String forceDirectorParameter = "x-director";
     private String forceBackendParameter = "x-backend";
     private String defaultMaintenanceAction = "maintenance";
+    private String defaultBadRequestAction = "bad-request";
 
     private static final Logger LOG = Logger.getLogger(StandardEndpointMapper.class.getName());
     private static final String ACME_CHALLENGE_URI_PATTERN = "/\\.well-known/acme-challenge/";
@@ -113,6 +117,21 @@ public class StandardEndpointMapper extends EndpointMapper {
 
     @Override
     public MapResult map(ProxyRequest request) {
+        //If header host is null return bad request
+        //https://www.rfc-editor.org/rfc/rfc2616#page-38
+        if (request.getRequestHostname() == null ||
+            request.getRequestHostname().isBlank()) {
+            if (LOG.isLoggable(Level.FINER)) {
+                LOG.log(Level.FINER, "Request " + request.getUri() + " header host is null or empty");
+            }
+            return MapResult.badRequest();
+        } else if (!request.isValidHostAndPort(request.getRequestHostname())) {  //Invalid header host
+            if (LOG.isLoggable(Level.FINER)) {
+                LOG.log(Level.FINER, "Invalid header host {0} for request {1}", new Object[]{request.getRequestHostname(), request.getUri()});
+            }
+            return MapResult.badRequest();
+        }
+
         for (RouteConfiguration route : routes) {
             if (!route.isEnabled()) {
                 continue;
@@ -122,10 +141,11 @@ public class StandardEndpointMapper extends EndpointMapper {
             if (LOG.isLoggable(Level.FINER)) {
                 LOG.log(Level.FINER, "route {0}, map {1} -> {2}", new Object[]{route.getId(), request.getUri(), matchResult});
             }
+
             if (matchResult) {
-                if(parent.getCurrentConfiguration().isMaintenanceModeEnabled()) {
-                    if(LOG.isLoggable(Level.FINER)) {
-                        LOG.log(Level.FINER, "Maintenance mode is enable: request uri: {0}",request.getUri());
+                if (parent.getCurrentConfiguration().isMaintenanceModeEnabled()) {
+                    if (LOG.isLoggable(Level.FINER)) {
+                        LOG.log(Level.FINER, "Maintenance mode is enable: request uri: {0}", request.getUri());
                     }
                     return MapResult.maintenanceMode(route.getId());
                 }
@@ -254,10 +274,10 @@ public class StandardEndpointMapper extends EndpointMapper {
     }
 
     @Override
-    public SimpleHTTPResponse mapMaintenanceMode(String routeid) {
+    public SimpleHTTPResponse mapMaintenanceMode(String routeId) {
         ActionConfiguration maintenanceAction = null;
         // custom for route
-        Optional<RouteConfiguration> config = routes.stream().filter(r -> r.getId().equalsIgnoreCase(routeid)).findFirst();
+        Optional<RouteConfiguration> config = routes.stream().filter(r -> r.getId().equalsIgnoreCase(routeId)).findFirst();
         if (config.isPresent()) {
             String action = config.get().getMaintenanceModeAction();
             if (action != null) {
@@ -272,11 +292,24 @@ public class StandardEndpointMapper extends EndpointMapper {
             return new SimpleHTTPResponse(maintenanceAction.getErrorCode(), maintenanceAction.getFile(), maintenanceAction.getCustomHeaders());
         }
         // fallback
-        return super.mapMaintenanceMode(routeid);
+        return super.mapMaintenanceMode(routeId);
     }
 
     @Override
-    public SimpleHTTPResponse mapPageNotFound(String routeid) {
+    public SimpleHTTPResponse mapBadRequest() {
+        // custom global
+        if (defaultBadRequestAction != null) {
+            ActionConfiguration errorAction = actions.get(defaultBadRequestAction);
+            if (errorAction != null) {
+                return new SimpleHTTPResponse(errorAction.getErrorCode(), errorAction.getFile(), errorAction.getCustomHeaders());
+            }
+        }
+        // fallback
+        return super.mapBadRequest();
+    }
+
+    @Override
+    public SimpleHTTPResponse mapPageNotFound(String routeId) {
         // custom global
         if (defaultNotFoundAction != null) {
             ActionConfiguration errorAction = actions.get(defaultNotFoundAction);
@@ -285,7 +318,7 @@ public class StandardEndpointMapper extends EndpointMapper {
             }
         }
         // fallback
-        return super.mapPageNotFound(routeid);
+        return super.mapPageNotFound(routeId);
     }
 
     @Override
@@ -313,6 +346,8 @@ public class StandardEndpointMapper extends EndpointMapper {
         LOG.log(Level.INFO, "configured default.action.internalerror={0}", defaultInternalErrorAction);
         this.defaultMaintenanceAction = properties.getString("default.action.maintenance", "maintenance");
         LOG.log(Level.INFO, "configured default.action.maintenance={0}", defaultMaintenanceAction);
+        this.defaultBadRequestAction = properties.getString("default.action.badrequest", "bad-request");
+        LOG.log(Level.INFO, "configured default.action.badrequest={0}", defaultBadRequestAction);
         this.forceDirectorParameter = properties.getString("mapper.forcedirector.parameter", forceDirectorParameter);
         LOG.log(Level.INFO, "configured mapper.forcedirector.parameter={0}", forceDirectorParameter);
         this.forceBackendParameter = properties.getString("mapper.forcebackend.parameter", forceBackendParameter);
@@ -466,9 +501,9 @@ public class StandardEndpointMapper extends EndpointMapper {
                 config.setErrorAction(errorAction);
                 //Maintenance action
                 String maintenanceAction = properties.getString(prefix + "maintenanceaction", "");
-                if(!maintenanceAction.isEmpty()) {
+                if (!maintenanceAction.isEmpty()) {
                     ActionConfiguration defined = actions.get(maintenanceAction);
-                    if(defined == null || !ActionConfiguration.TYPE_STATIC.equals(defined.getType())) {
+                    if (defined == null || !ActionConfiguration.TYPE_STATIC.equals(defined.getType())) {
                         throw new ConfigurationNotValidException("Maintenance action for route " + id + " has to be defined and has to be type STATIC");
                     }
                 }
