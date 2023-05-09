@@ -59,6 +59,7 @@ public class ConnectionPoolsResource {
         private int connectTimeout;
         private int stuckRequestTimeout;
         private int idleTimeout;
+        private int maxLifeTime;
         private int disposeTimeout;
         private int keepaliveIdle;
         private int keepaliveInterval;
@@ -92,6 +93,7 @@ public class ConnectionPoolsResource {
                     conf.getConnectTimeout(),
                     conf.getStuckRequestTimeout(),
                     conf.getIdleTimeout(),
+                    conf.getMaxLifeTime(),
                     conf.getDisposeTimeout(),
                     conf.getKeepaliveIdle(),
                     conf.getKeepaliveInterval(),
@@ -114,6 +116,7 @@ public class ConnectionPoolsResource {
                 defaultConnectionPool.getConnectTimeout(),
                 defaultConnectionPool.getStuckRequestTimeout(),
                 defaultConnectionPool.getIdleTimeout(),
+                defaultConnectionPool.getMaxLifeTime(),
                 defaultConnectionPool.getDisposeTimeout(),
                 defaultConnectionPool.getKeepaliveIdle(),
                 defaultConnectionPool.getKeepaliveInterval(),

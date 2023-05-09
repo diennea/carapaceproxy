@@ -616,6 +616,7 @@ public class ProxyRequestsManager {
                         spec.maxConnections(connectionPool.getMaxConnectionsPerEndpoint());
                         spec.pendingAcquireTimeout(Duration.ofMillis(connectionPool.getBorrowTimeout()));
                         spec.maxIdleTime(Duration.ofMillis(connectionPool.getIdleTimeout()));
+                        spec.maxLifeTime(Duration.ofMillis(connectionPool.getMaxLifeTime()));
                         spec.evictInBackground(Duration.ofMillis(connectionPool.getIdleTimeout() * 2));
                         spec.metrics(true);
                         spec.lifo();
