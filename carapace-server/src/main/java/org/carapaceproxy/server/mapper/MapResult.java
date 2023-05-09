@@ -45,6 +45,10 @@ public class MapResult {
          */
         INTERNAL_ERROR,
         /**
+         * Service not available
+         */
+        SERVICE_UNAVAILABLE,
+        /**
          * Maintenance mode
          */
         MAINTENANCE_MODE,

@@ -65,6 +65,9 @@ public abstract class EndpointMapper {
         return SimpleHTTPResponse.INTERNAL_ERROR(StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR);
     }
 
+    public SimpleHTTPResponse mapServiceUnavailableError(String routeId) {
+        return SimpleHTTPResponse.SERVICE_UNAVAILABLE(StaticContentsManager.DEFAULT_SERVICE_UNAVAILABLE_ERROR);
+    }
     public SimpleHTTPResponse mapMaintenanceMode(String routeId) {
         return SimpleHTTPResponse.MAINTENANCE_MODE(StaticContentsManager.DEFAULT_MAINTENANCE_MODE_ERROR);
     }

@@ -68,6 +68,10 @@ public class SimpleHTTPResponse {
         return new SimpleHTTPResponse(400, res, null);
     }
 
+    public static final SimpleHTTPResponse SERVICE_UNAVAILABLE(String res) {
+        return new SimpleHTTPResponse(503, res, null);
+    }
+
     @Override
     public String toString() {
         return "SimpleHTTPResponse{" + "errorcode=" + errorcode + ", resource=" + resource + ", customHeaders=" + customHeaders + '}';

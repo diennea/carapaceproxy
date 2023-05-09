@@ -95,11 +95,11 @@ public class UnreachableBackendTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
+                assertEquals("HTTP/1.1 503 Service Unavailable\r\n", resp.getStatusLine());
                 assertEquals("<html>\n"
                         + "    <body>\n"
-                        + "        An internal error occurred\n"
-                        + "    </body>        \n"
+                        + "        Service Unavailable\n"
+                        + "    </body>\n"
                         + "</html>\n", resp.getBodyString());
             }
             assertFalse(server.getBackendHealthManager().isAvailable(key.getHostPort()));
@@ -131,11 +131,11 @@ public class UnreachableBackendTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
+                assertEquals("HTTP/1.1 503 Service Unavailable\r\n", resp.getStatusLine());
                 assertEquals("<html>\n"
                         + "    <body>\n"
-                        + "        An internal error occurred\n"
-                        + "    </body>        \n"
+                        + "        Service Unavailable\n"
+                        + "    </body>\n"
                         + "</html>\n", resp.getBodyString());
             }
             assertTrue(server.getBackendHealthManager().isAvailable(key.getHostPort())); // no troubles for new connections
@@ -161,11 +161,11 @@ public class UnreachableBackendTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
+                assertEquals("HTTP/1.1 503 Service Unavailable\r\n", resp.getStatusLine());
                 assertEquals("<html>\n"
                         + "    <body>\n"
-                        + "        An internal error occurred\n"
-                        + "    </body>        \n"
+                        + "        Service Unavailable\n"
+                        + "    </body>\n"
                         + "</html>\n", resp.getBodyString());
             }
             assertTrue(server.getBackendHealthManager().isAvailable(key.getHostPort())); // no troubles for new connections
@@ -195,11 +195,11 @@ public class UnreachableBackendTest {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
+                assertEquals("HTTP/1.1 503 Service Unavailable\r\n", resp.getStatusLine());
                 assertEquals("<html>\n"
                         + "    <body>\n"
-                        + "        An internal error occurred\n"
-                        + "    </body>        \n"
+                        + "        Service Unavailable\n"
+                        + "    </body>\n"
                         + "</html>\n", resp.getBodyString());
             }
             assertTrue(server.getBackendHealthManager().isAvailable(key.getHostPort()));
