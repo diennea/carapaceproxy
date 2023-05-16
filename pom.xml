@@ -108,8 +108,8 @@
         <maven.compiler.target>17</maven.compiler.target>
         <javacc-maven-plugin.version>2.4</javacc-maven-plugin.version>
 
-        <libs.projectreactor>2020.0.23</libs.projectreactor>
-        <libs.netty.ssl>2.0.54.Final</libs.netty.ssl>
+        <libs.projectreactor>2022.0.7</libs.projectreactor>
+        <libs.netty.ssl>2.0.61.Final</libs.netty.ssl>
         <libs.acme4j>2.12</libs.acme4j>
         <libs.bouncycastle>1.70</libs.bouncycastle>
         <libs.awssdk>2.17.113</libs.awssdk>
@@ -120,7 +120,7 @@
         <libs.curator>5.2.0</libs.curator>
         <libs.prometheus>0.14.1</libs.prometheus>
         <libs.prometheus.metrics>4.14.4</libs.prometheus.metrics>
-        <libs.micrometer>1.8.2</libs.micrometer>
+        <libs.micrometer>1.11.0</libs.micrometer>
         <libs.herddb>0.26.1</libs.herddb>
 
         <libs.commons.lang3>3.12.0</libs.commons.lang3>
