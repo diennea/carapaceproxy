@@ -99,6 +99,6 @@ public class MaxHeaderSizeTest extends UseAdminServer {
 
         HttpResponse<String> response2 = httpClient2.send(request, HttpResponse.BodyHandlers.ofString());
 
-        assertEquals(413, response2.statusCode());
+        assertEquals(431, response2.statusCode());
     }
 }
