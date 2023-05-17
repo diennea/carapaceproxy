@@ -41,6 +41,7 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
@@ -96,7 +97,7 @@ public class BasicStandardEndpointMapperTest {
         mapper.addBackend(new BackendConfiguration("backend-b", "localhost", backendPort, "/"));
         mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
         mapper.addDirector(new DirectorConfiguration("director-2").addBackend("backend-b"));
-        mapper.addDirector(new DirectorConfiguration("director-all").addBackend("*")); // all of the known backends
+        mapper.addDirector(new DirectorConfiguration("director-all").addBackend("*")); // all the known backends
         mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1));
         mapper.addAction(new ActionConfiguration("cache-1", ActionConfiguration.TYPE_CACHE, "director-2", null, -1));
         mapper.addAction(new ActionConfiguration("all-1", ActionConfiguration.TYPE_CACHE, "director-all", null, -1));
@@ -111,50 +112,50 @@ public class BasicStandardEndpointMapperTest {
         mapper.addRoute(new RouteConfiguration("route-2-not-found", "not-found-custom", true, new RegexpRequestMatcher(PROPERTY_URI, ".*notfound.html.*")));
         mapper.addRoute(new RouteConfiguration("route-3-error", "error-custom", true, new RegexpRequestMatcher(PROPERTY_URI, ".*error.html.*")));
         mapper.addRoute(new RouteConfiguration("route-4-static", "static-custom", true, new RegexpRequestMatcher(PROPERTY_URI, ".*static.html.*")));
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.start();
             int port = server.getLocalPort();
             {
                 // proxy on director 1
-                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8");
+                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), StandardCharsets.UTF_8);
                 assertEquals("it <b>works</b> !!", s);
             }
 
             {
                 // cache on director 2
-                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index2.html").toURI(), "utf-8");
+                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index2.html").toURI(), StandardCharsets.UTF_8);
                 assertEquals("it <b>works</b> !!", s);
             }
 
             {
                 // director "all"
-                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index3.html").toURI(), "utf-8");
+                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index3.html").toURI(), StandardCharsets.UTF_8);
                 assertEquals("it <b>works</b> !!", s);
             }
 
             try {
-                IOUtils.toString(new URL("http://localhost:" + port + "/notfound.html").toURI(), "utf-8");
+                IOUtils.toString(new URL("http://localhost:" + port + "/notfound.html").toURI(), StandardCharsets.UTF_8);
                 fail("expected 404");
             } catch (FileNotFoundException ok) {
             }
 
             {
-                String staticContent = IOUtils.toString(new URL("http://localhost:" + port + "/static.html").toURI(), "utf-8");
+                String staticContent = IOUtils.toString(new URL("http://localhost:" + port + "/static.html").toURI(), StandardCharsets.UTF_8);
                 assertEquals("Test static page", staticContent);
             }
             {
-                String staticContent = IOUtils.toString(new URL("http://localhost:" + port + "/static.html").toURI(), "utf-8");
+                String staticContent = IOUtils.toString(new URL("http://localhost:" + port + "/static.html").toURI(), StandardCharsets.UTF_8);
                 assertEquals("Test static page", staticContent);
             }
 
             try {
-                IOUtils.toString(new URL("http://localhost:" + port + "/error.html").toURI(), "utf-8");
+                IOUtils.toString(new URL("http://localhost:" + port + "/error.html").toURI(), StandardCharsets.UTF_8);
                 fail("expected 500");
             } catch (IOException ok) {
             }
 
             try {
-                IOUtils.toString(new URL("http://localhost:" + port + "/notmapped.html").toURI(), "utf-8");
+                IOUtils.toString(new URL("http://localhost:" + port + "/notmapped.html").toURI(), StandardCharsets.UTF_8);
                 fail("expected 404");
             } catch (FileNotFoundException ok) {
             }
@@ -169,7 +170,7 @@ public class BasicStandardEndpointMapperTest {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
 
             Properties configuration = new Properties();
             configuration.put("listener.1.host", "0.0.0.0");
@@ -179,7 +180,7 @@ public class BasicStandardEndpointMapperTest {
 
             configuration.put("backend.1.id", "backend");
             configuration.put("backend.1.host", "localhost");
-            configuration.put("backend.1.port", backend1.port() + "");
+            configuration.put("backend.1.port", String.valueOf(backend1.port()));
             configuration.put("backend.1.enabled", "true");
 
             configuration.put("director.1.id", "director");
@@ -189,7 +190,7 @@ public class BasicStandardEndpointMapperTest {
             // unreachable backend -> expected Internal Error
             configuration.put("backend.2.id", "backend-down");
             configuration.put("backend.2.host", "localhost-down");
-            configuration.put("backend.2.port", backend1.port() + "");
+            configuration.put("backend.2.port", String.valueOf(backend1.port()));
             configuration.put("backend.2.enabled", "true");
 
             configuration.put("director.2.id", "director-down");
@@ -321,23 +322,23 @@ public class BasicStandardEndpointMapperTest {
         when(bhMan.isAvailable(eq("localhost:" + backendPort))).thenReturn(true);
         when(bhMan.isAvailable(eq("localhost-down:" + backendPort))).thenReturn(false); // simulate unreachable backend -> expected 500 error
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.setBackendHealthManager(bhMan);
             server.start();
             int port = server.getLocalPort();
             // index.html matches with route
             {
-                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), "utf-8");
+                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), StandardCharsets.UTF_8);
                 assertEquals("it <b>works</b> !!", s);
             }
             // notmapped.html matches with route-default
             {
-                String s = IOUtils.toString(new URL("http://localhost:" + port + "/notmapped.html").toURI(), "utf-8");
+                String s = IOUtils.toString(new URL("http://localhost:" + port + "/notmapped.html").toURI(), StandardCharsets.UTF_8);
                 assertEquals("it <b>works</b> !!", s);
             }
             // down.html (request to unreachable backend) has NOT to match to route-deafult BUT get internal-error
             try {
-                IOUtils.toString(new URL("http://localhost:" + port + "/down.html").toURI(), "utf-8");
+                IOUtils.toString(new URL("http://localhost:" + port + "/down.html").toURI(), StandardCharsets.UTF_8);
                 fail("expected 500");
             } catch (IOException ok) {
             }
@@ -353,13 +354,13 @@ public class BasicStandardEndpointMapperTest {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
 
             {
                 Properties configuration = new Properties();
                 configuration.put("backend.1.id", "foo");
                 configuration.put("backend.1.host", "localhost");
-                configuration.put("backend.1.port", backend1.port() + "");
+                configuration.put("backend.1.port", String.valueOf(backend1.port()));
                 configuration.put("backend.1.enabled", "true");
 
                 configuration.put("director.1.id", "*");
@@ -404,20 +405,20 @@ public class BasicStandardEndpointMapperTest {
 
             {
                 String url = "http://localhost:" + server.getLocalPort() + "/index.html";
-                String s = IOUtils.toString(new URL(url).toURI(), "utf-8");
+                String s = IOUtils.toString(new URL(url).toURI(), StandardCharsets.UTF_8);
                 assertEquals("Test static page", s);
             }
             {
 
                 String url = "http://localhost:" + server.getLocalPort() + "/seconda.html";
-                String s = IOUtils.toString(new URL(url).toURI(), "utf-8");
+                String s = IOUtils.toString(new URL(url).toURI(), StandardCharsets.UTF_8);
                 assertEquals("it <b>works</b> !!", s);
             }
             // resource not esists > Not Found
             try {
                 String url = "http://localhost:" + server.getLocalPort() + "/not-exists.html";
-                String s = IOUtils.toString(new URL(url).toURI(), "utf-8");
-                fail("Expected Not Found");
+                String s = IOUtils.toString(new URL(url).toURI(), StandardCharsets.UTF_8);
+                fail("Expected Not Found, received " + s + " instead");
             } catch (Exception ex) {
                 assertTrue(ex instanceof FileNotFoundException);
             }
@@ -436,7 +437,7 @@ public class BasicStandardEndpointMapperTest {
             Properties configuration = new Properties();
             configuration.put("backend.1.id", "foo");
             configuration.put("backend.1.host", "localhost");
-            configuration.put("backend.1.port", backend1.port() + "");
+            configuration.put("backend.1.port", String.valueOf(backend1.port()));
             configuration.put("backend.1.enabled", "true");
 
             configuration.put("director.1.id", "*");
@@ -471,13 +472,13 @@ public class BasicStandardEndpointMapperTest {
 
             // Test existent token
             String url = "http://localhost:" + server.getLocalPort() + "/.well-known/acme-challenge/" + tokenName;
-            String s = IOUtils.toString(new URL(url).toURI(), "utf-8");
+            String s = IOUtils.toString(new URL(url).toURI(), StandardCharsets.UTF_8);
             assertEquals(tokenData, s);
 
             // Test not existent token
             try {
                 url = "http://localhost:" + server.getLocalPort() + "/.well-known/acme-challenge/not-existent-token";
-                IOUtils.toString(new URL(url).toURI(), "utf-8");
+                IOUtils.toString(new URL(url).toURI(), StandardCharsets.UTF_8);
                 fail();
             } catch (Throwable t) {
                 assertTrue(t instanceof FileNotFoundException);
@@ -510,11 +511,11 @@ public class BasicStandardEndpointMapperTest {
             Properties configuration = new Properties();
             configuration.put("backend.1.id", "b1");
             configuration.put("backend.1.host", "localhost");
-            configuration.put("backend.1.port", backend1.port() + "");
+            configuration.put("backend.1.port", String.valueOf(backend1.port()));
             configuration.put("backend.1.enabled", "true");
             configuration.put("backend.2.id", "b2");
             configuration.put("backend.2.host", "localhost");
-            configuration.put("backend.2.port", backend1.port() + "");
+            configuration.put("backend.2.port", String.valueOf(backend1.port()));
             configuration.put("backend.2.enabled", "true");
 
             configuration.put("director.1.id", "d1");

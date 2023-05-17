@@ -23,8 +23,10 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.*;
@@ -70,8 +72,6 @@ public class ConnectionPoolTest extends UseAdminServer {
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
 
-    private Properties config;
-
     private void configureAndStartServer() throws Exception {
 
         HttpTestUtils.overrideJvmWideHttpsVerifier();
@@ -80,10 +80,10 @@ public class ConnectionPoolTest extends UseAdminServer {
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "text/html")
-                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withHeader("Content-Length", String.valueOf("it <b>works</b> !!".length()))
                         .withBody("it <b>works</b> !!")));
 
-        config = new Properties(HTTP_ADMIN_SERVER_CONFIG);
+        final Properties config = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         config.put("config.type", "database");
         config.put("db.jdbc.url", "jdbc:herddb:localhost");
         config.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
@@ -107,12 +107,12 @@ public class ConnectionPoolTest extends UseAdminServer {
         config.put("backend.1.id", "localhost");
         config.put("backend.1.enabled", "true");
         config.put("backend.1.host", "localhost");
-        config.put("backend.1.port", wireMockRule.port() + "");
+        config.put("backend.1.port", String.valueOf(wireMockRule.port()));
 
         config.put("backend.2.id", "localhost2");
         config.put("backend.2.enabled", "true");
         config.put("backend.2.host", "localhost2");
-        config.put("backend.2.port", wireMockRule.port() + "");
+        config.put("backend.2.port", String.valueOf(wireMockRule.port()));
 
         // Default director
         config.put("director.1.id", "*");
@@ -172,55 +172,55 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         //No Http header host
         String response = sendRequest(false, hostname, port, path, null);
-        assertTrue(response.contains("Bad request"));
+        assertThat(response, containsString("Bad request"));
 
         //Add Http header host
         String response2 = sendRequest(true, hostname, port, path, "localhost");
-        assertTrue(response2.contains("it <b>works</b> !!"));
+        assertThat(response2, containsString("it <b>works</b> !!"));
 
         //Empty header host
         String response3 = sendRequest(true, hostname, port, path, "");
-        assertTrue(response3.contains("Bad request"));
+        assertThat(response3, containsString("Bad request"));
 
         //Empty header host
         String response4 = sendRequest(true, hostname, port, path, " ");
-        assertTrue(response4.contains("Bad request"));
+        assertThat(response4, containsString("Bad request"));
 
         //Header host with special character
         String response5 = sendRequest(true, hostname, port, path, "local%&&host");
-        assertTrue(response5.contains("Bad request"));
+        assertThat(response5, containsString("Bad request"));
 
         //Header host with multiple domain
         String response6 = sendRequest(true, hostname, port, path, "localhost1,localhost2");
-        assertTrue(response6.contains("Bad request"));
+        assertThat(response6, containsString("Bad request"));
 
         //Ip address as host header
         String response7 = sendRequest(true, hostname, port, path, "127.0.0.1");
-        assertTrue(response7.contains("it <b>works</b> !!"));
+        assertThat(response7, containsString("it <b>works</b> !!"));
 
         //Invalid ip address
         String response8 = sendRequest(true, hostname, port, path, "256.0.0.0");
-        assertTrue(response8.contains("Bad request"));
+        assertThat(response8, containsString("Bad request"));
 
         //Ip address as host header with port
         String response9 = sendRequest(true, hostname, port, path, "127.0.0.1:8080");
-        assertTrue(response9.contains("it <b>works</b> !!"));
+        assertThat(response9, containsString("it <b>works</b> !!"));
 
         //Hostname as host header with port
         String response10 = sendRequest(true, hostname, port, path, "localhost:8080");
-        assertTrue(response10.contains("it <b>works</b> !!"));
+        assertThat(response10, containsString("it <b>works</b> !!"));
 
         //Hostname as host header with port
         String response11 = sendRequest(true, hostname, port, path, "localhost:8080&");
-        assertTrue(response11.contains("Bad request"));
+        assertThat(response11, containsString("Bad Request"));
 
         //Invalid hostname
         String response12 = sendRequest(true, hostname, port, path, "::::8080::9999");
-        assertTrue(response12.contains("Bad request"));
+        assertThat(response12, containsString("Bad Request"));
 
         //Add Http header host
         String response13 = sendRequest(true, hostname, port, path, "localhost3");
-        assertTrue(response13.contains("it <b>works</b> !!"));
+        assertThat(response13, containsString("it <b>works</b> !!"));
     }
 
     public String sendRequest(boolean addHeaderHost, String hostname, int port, String path, String headerHost) throws IOException {
@@ -271,8 +271,9 @@ public class ConnectionPoolTest extends UseAdminServer {
             ConnectionProvider provider = connectionPools.get(defaultPool);
             assertThat(provider, not(nullValue()));
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
+            assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));
             assertThat(maxConnectionsPerHost.size(), is(2));
-            maxConnectionsPerHost.values().stream().allMatch(e -> e == 10);
+            assertTrue(maxConnectionsPerHost.values().stream().allMatch(e -> e == 10));
         }
 
         // pool with defaults
@@ -283,8 +284,9 @@ public class ConnectionPoolTest extends UseAdminServer {
             ConnectionProvider provider = connectionPools.get(poolWithDefaults);
             assertThat(provider, not(nullValue()));
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
+            assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));
             assertThat(maxConnectionsPerHost.size(), is(2));
-            maxConnectionsPerHost.values().stream().allMatch(e -> e == 10);
+            assertTrue(maxConnectionsPerHost.values().stream().allMatch(e -> e == 10));
         }
 
         // custom pool
@@ -295,8 +297,9 @@ public class ConnectionPoolTest extends UseAdminServer {
             ConnectionProvider provider = connectionPools.get(customPool);
             assertThat(provider, not(nullValue()));
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
+            assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));
             assertThat(maxConnectionsPerHost.size(), is(2));
-            maxConnectionsPerHost.values().stream().allMatch(e -> e == 20);
+            assertTrue(maxConnectionsPerHost.values().stream().allMatch(e -> e == 20));
         }
 
         // connection pool selection
@@ -313,8 +316,9 @@ public class ConnectionPoolTest extends UseAdminServer {
             assertThat(res.getKey(), is(defaultPool));
             ConnectionProvider provider = res.getValue();
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
+            assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));
             assertThat(maxConnectionsPerHost.size(), is(2));
-            maxConnectionsPerHost.values().stream().allMatch(e -> e == 10);
+            assertTrue(maxConnectionsPerHost.values().stream().allMatch(e -> e == 10));
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\n" + HttpHeaderNames.HOST + ": localhostx" + "\r\n\r\n");
@@ -337,8 +341,9 @@ public class ConnectionPoolTest extends UseAdminServer {
             assertThat(res.getKey(), is(poolWithDefaults));
             ConnectionProvider provider = res.getValue();
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
+            assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));
             assertThat(maxConnectionsPerHost.size(), is(2));
-            maxConnectionsPerHost.values().stream().allMatch(e -> e == 10);
+            assertTrue(maxConnectionsPerHost.values().stream().allMatch(e -> e == 10));
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\n" + HttpHeaderNames.HOST + ": localhost" + "\r\n\r\n");
@@ -361,8 +366,9 @@ public class ConnectionPoolTest extends UseAdminServer {
             assertThat(res.getKey(), is(customPool));
             ConnectionProvider provider = res.getValue();
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
+            assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));
             assertThat(maxConnectionsPerHost.size(), is(2));
-            maxConnectionsPerHost.values().stream().allMatch(e -> e == 20);
+            assertTrue(maxConnectionsPerHost.values().stream().allMatch(e -> e == 20));
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\n" + HttpHeaderNames.HOST + ": localhost3" + "\r\n\r\n");
