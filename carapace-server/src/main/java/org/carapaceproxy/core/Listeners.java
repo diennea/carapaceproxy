@@ -19,9 +19,6 @@
  */
 package org.carapaceproxy.core;
 
-import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreData;
-import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
-import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelHandlerContext;
@@ -29,18 +26,9 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollChannelOption;
-import io.netty.channel.epoll.EpollEventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioChannelOption;
 import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.ssl.OpenSsl;
-import io.netty.handler.ssl.OpenSslCachingX509KeyManagerFactory;
-import io.netty.handler.ssl.ReferenceCountedOpenSslEngine;
-import io.netty.handler.ssl.SniHandler;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
-import io.netty.handler.ssl.SslHandler;
-import io.netty.handler.ssl.SslProvider;
+import io.netty.handler.ssl.*;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
@@ -48,27 +36,6 @@ import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.Promise;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
-import java.io.File;
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.security.GeneralSecurityException;
-import java.security.KeyStore;
-import java.security.cert.Certificate;
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import javax.net.ssl.KeyManagerFactory;
-
 import jdk.net.ExtendedSocketOptions;
 import lombok.Data;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
@@ -81,6 +48,25 @@ import org.carapaceproxy.utils.PrometheusUtils;
 import reactor.netty.DisposableServer;
 import reactor.netty.NettyPipeline;
 import reactor.netty.http.server.HttpServer;
+
+import javax.net.ssl.KeyManagerFactory;
+import java.io.File;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
+import java.security.cert.Certificate;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import static org.carapaceproxy.utils.CertificatesUtils.*;
 
 /**
  * Listeners waiting for incoming clients requests
@@ -155,6 +141,12 @@ public class Listeners {
         reloadConfiguration(this.currentConfiguration);
     }
 
+    /**
+     * Apply the new configuration and refresh the listeners according to it.
+     *
+     * @param newConfiguration the configuration
+     * @throws InterruptedException if it is interrupted while starting or stopping a listener
+     */
     void reloadConfiguration(RuntimeServerConfiguration newConfiguration) throws InterruptedException {
         if (!started) {
             this.currentConfiguration = newConfiguration;
@@ -220,13 +212,15 @@ public class Listeners {
     private void bootListener(NetworkListenerConfiguration config) throws InterruptedException {
         HostPort hostPort = new HostPort(config.getHost(), config.getPort() + parent.getListenersOffsetPort());
         ListeningChannel listeningChannel = new ListeningChannel(hostPort, config);
-        LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{hostPort.host(), hostPort.port() + "", config.isSsl()});
+        LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{hostPort.host(), String.valueOf(hostPort.port()), config.isSsl()});
 
         // Listener setup
         HttpServer httpServer = HttpServer.create()
                 .host(hostPort.host())
                 .port(hostPort.port())
-                //.protocol(HttpProtocol.H2) // HTTP/2.0 setup
+                // .protocol(HttpProtocol.H2C)
+                // .protocol(HttpProtocol.HTTP11, HttpProtocol.H2) // todo see config.isSsl()
+                // .secure() // todo see snimappings
                 .metrics(true, Function.identity())
                 .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())
                 .childOption(ChannelOption.SO_KEEPALIVE, config.isKeepAlive())
@@ -248,6 +242,7 @@ public class Listeners {
                             @Override
                             protected SslHandler newSslHandler(SslContext context, ByteBufAllocator allocator) {
                                 SslHandler handler = super.newSslHandler(context, allocator);
+                                // todo does it even work with HTTP 2.0?
                                 if (currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported()) {
                                     Certificate cert = (Certificate) context.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN)).get();
                                     if (cert != null) {
@@ -269,8 +264,7 @@ public class Listeners {
                     channel.pipeline().addAfter(NettyPipeline.HttpCodec, "uriEncoder", new ChannelInboundHandlerAdapter() {
                         @Override
                         public void channelRead(ChannelHandlerContext ctx, Object msg) {
-                            if (msg instanceof HttpRequest) {
-                                HttpRequest request = (HttpRequest) msg;
+                            if (msg instanceof final HttpRequest request) {
                                 request.setUri(request.uri()
                                         .replaceAll("\\[", "%5B")
                                         .replaceAll("\\]", "%5D")
@@ -286,7 +280,7 @@ public class Listeners {
                 })
                 .httpRequestDecoder(option -> option.maxHeaderSize(currentConfiguration.getMaxHeaderSize()))
                 .handle((request, response) -> { // Custom request-response handling
-                    if(CarapaceLogger.isLoggingDebugEnabled()) {
+                    if (CarapaceLogger.isLoggingDebugEnabled()) {
                         CarapaceLogger.debug("Receive request " + request.uri()
                         + " From " + request.remoteAddress()
                         + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")));

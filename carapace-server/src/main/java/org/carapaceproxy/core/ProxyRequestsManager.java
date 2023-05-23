@@ -30,12 +30,14 @@ import io.netty.handler.codec.http.*;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import jdk.net.ExtendedSocketOptions;
+import org.apache.http.HttpStatus;
 import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
+import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.mapper.CustomHeader;
 import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.utils.CarapaceLogger;
@@ -45,6 +47,7 @@ import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.ByteBufFlux;
+import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.http.client.HttpClientResponse;
 import reactor.netty.resources.ConnectionProvider;
@@ -104,6 +107,12 @@ public class ProxyRequestsManager {
         connectionsManager.close();
     }
 
+    /**
+     * Process a request received by the HttpServer of a {@link NetworkListenerConfiguration}.
+     *
+     * @param request the request of a to-be-proxied resource
+     * @return a publisher that models the non-blocking request handling result
+     */
     public Publisher<Void> processRequest(ProxyRequest request) {
         request.setStartTs(System.currentTimeMillis());
         request.setLastActivity(request.getStartTs());
@@ -123,42 +132,18 @@ public class ProxyRequestsManager {
         }
 
         try {
-            switch (action.action) {
-                case NOTFOUND:
-                    return serveNotFoundMessage(request);
-
-                case INTERNAL_ERROR:
-                    return serveInternalErrorMessage(request);
-                case SERVICE_UNAVAILABLE:
-                    return serveServiceUnavailable(request);
-                case MAINTENANCE_MODE:
-                    return serveMaintenanceMessage(request);
-                case BAD_REQUEST:
-                    return serveBadRequestMessage(request);
-
-                case STATIC:
-                case ACME_CHALLENGE:
-                    return serveStaticMessage(request);
-
-                case REDIRECT:
-                    return serveRedirect(request);
-
-                case PROXY: {
-                    return forward(request, false);
-                }
-
-                case CACHE: {
-                    ContentsCache.ContentSender cacheSender = parent.getCache().getCacheSender(request);
-                    if (cacheSender != null) {
-                        request.setServedFromCache(true);
-                        return serveFromCache(request, cacheSender); // cached content
-                    }
-                    return forward(request, true);
-                }
-
-                default:
-                    throw new IllegalStateException("Action " + action.action + " not supported");
-            }
+            return switch (action.action) {
+                case NOTFOUND -> serveNotFoundMessage(request);
+                case INTERNAL_ERROR -> serveInternalErrorMessage(request);
+                case SERVICE_UNAVAILABLE -> serveServiceUnavailable(request);
+                case MAINTENANCE_MODE -> serveMaintenanceMessage(request);
+                case BAD_REQUEST -> serveBadRequestMessage(request);
+                case STATIC, ACME_CHALLENGE -> serveStaticMessage(request);
+                case REDIRECT -> serveRedirect(request);
+                case PROXY -> forward(request, false);
+                case CACHE -> serveFromCache(request); // cached content
+                default -> throw new IllegalStateException("Action " + action.action + " not supported");
+            };
         } finally {
             parent.getRequestsLogger().logRequest(request);
         }
@@ -182,9 +167,10 @@ public class ProxyRequestsManager {
             resource = StaticContentsManager.DEFAULT_NOT_FOUND;
         }
         if (code <= 0) {
-            code = 404;
+            code = HttpStatus.SC_NOT_FOUND;
         }
-        FullHttpResponse response = parent.getStaticContentsManager().buildResponse(code, resource);
+        final var httpVersion = HttpVersion.valueOf(request.getHttpProtocol());
+        FullHttpResponse response = parent.getStaticContentsManager().buildResponse(code, resource, httpVersion);
 
         return writeSimpleResponse(request, response, customHeaders);
     }
@@ -207,9 +193,10 @@ public class ProxyRequestsManager {
             resource = StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
         }
         if (code <= 0) {
-            code = 500;
+            code = HttpStatus.SC_INTERNAL_SERVER_ERROR;
         }
-        FullHttpResponse response = parent.getStaticContentsManager().buildResponse(code, resource);
+        final var httpVersion = HttpVersion.valueOf(request.getHttpProtocol());
+        FullHttpResponse response = parent.getStaticContentsManager().buildResponse(code, resource, httpVersion);
 
         return writeSimpleResponse(request, response, customHeaders);
     }
@@ -232,9 +219,10 @@ public class ProxyRequestsManager {
             resource = StaticContentsManager.DEFAULT_MAINTENANCE_MODE_ERROR;
         }
         if (code <= 0) {
-            code = 500;
+            code = HttpStatus.SC_INTERNAL_SERVER_ERROR;
         }
-        FullHttpResponse response = parent.getStaticContentsManager().buildResponse(code, resource);
+        final var httpVersion = HttpVersion.valueOf(request.getHttpProtocol());
+        FullHttpResponse response = parent.getStaticContentsManager().buildResponse(code, resource, httpVersion);
 
         return writeSimpleResponse(request, response, customHeaders);
     }
@@ -257,9 +245,10 @@ public class ProxyRequestsManager {
             resource = StaticContentsManager.DEFAULT_BAD_REQUEST;
         }
         if (code <= 0) {
-            code = 400;
+            code = HttpStatus.SC_BAD_REQUEST;
         }
-        FullHttpResponse response = parent.getStaticContentsManager().buildResponse(code, resource);
+        final var httpVersion = HttpVersion.valueOf(request.getHttpProtocol());
+        FullHttpResponse response = parent.getStaticContentsManager().buildResponse(code, resource, httpVersion);
 
         return writeSimpleResponse(request, response, customHeaders);
     }
@@ -268,9 +257,9 @@ public class ProxyRequestsManager {
         if (request.getResponse().hasSentHeaders()) {
             return Mono.empty();
         }
-
+        final var httpVersion = HttpVersion.valueOf(request.getHttpProtocol());
         FullHttpResponse response = parent.getStaticContentsManager()
-                .buildResponse(request.getAction().errorCode, request.getAction().resource);
+                .buildResponse(request.getAction().errorCode, request.getAction().resource, httpVersion);
 
         return writeSimpleResponse(request, response, request.getAction().customHeaders);
     }
@@ -281,10 +270,10 @@ public class ProxyRequestsManager {
         }
 
         MapResult action = request.getAction();
-
         DefaultFullHttpResponse response = new DefaultFullHttpResponse(
-                HttpVersion.HTTP_1_1,
-                HttpResponseStatus.valueOf(action.errorCode < 0 ? 302 : action.errorCode) // redirect: 3XX
+                HttpVersion.valueOf(request.getHttpProtocol()),
+                // redirect: 3XX
+                HttpResponseStatus.valueOf(action.errorCode < 0 ? HttpStatus.SC_MOVED_TEMPORARILY : action.errorCode)
         );
         response.headers().set(HttpHeaderNames.CACHE_CONTROL, "no-cache");
 
@@ -312,7 +301,7 @@ public class ProxyRequestsManager {
 
         // - redirect to https
         location = (REDIRECT_PROTO_HTTPS.equals(action.redirectProto) ? REDIRECT_PROTO_HTTPS : REDIRECT_PROTO_HTTP)
-                + "://" + location.replaceFirst("http.?:\\/\\/", "");
+                + "://" + location.replaceFirst("http.?://", "");
         response.headers().set(HttpHeaderNames.LOCATION, location);
 
         return writeSimpleResponse(request, response, request.getAction().customHeaders);
@@ -374,6 +363,9 @@ public class ProxyRequestsManager {
         HttpClient forwarder = forwardersPool.computeIfAbsent(key.getHostPort() + "_" + connectionConfig.getId(), hostname -> HttpClient.create(connectionProvider)
                 .host(endpointHost)
                 .port(endpointPort)
+                // support both HTTP/1.1 and HTTP/2.0, Netty will adapt accordingly
+                .protocol(HttpProtocol.HTTP11, HttpProtocol.H2C /* todo HttpProtocol.H2*/)
+                // .secure() // todo to enable alongside HttpProtocol.H2
                 .followRedirect(false) // client has to request the redirect, not the proxy
                 .runOn(parent.getEventLoopGroup())
                 .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
@@ -524,9 +516,10 @@ public class ProxyRequestsManager {
             resource = StaticContentsManager.DEFAULT_SERVICE_UNAVAILABLE_ERROR;
         }
         if (code <= 0) {
-            code = 503;
+            code = HttpStatus.SC_SERVICE_UNAVAILABLE;
         }
-        FullHttpResponse response = parent.getStaticContentsManager().buildResponse(code, resource);
+        final var httpVersion = HttpVersion.valueOf(request.getHttpProtocol());
+        FullHttpResponse response = parent.getStaticContentsManager().buildResponse(code, resource, httpVersion);
 
         return writeSimpleResponse(request, response, customHeaders);
     }
@@ -549,7 +542,14 @@ public class ProxyRequestsManager {
         }
     }
 
-    private Publisher<Void> serveFromCache(ProxyRequest request, ContentsCache.ContentSender cacheSender) {
+    private Publisher<Void> serveFromCache(ProxyRequest request) {
+        ContentsCache.ContentSender cacheSender = parent.getCache().getCacheSender(request);
+        if (cacheSender == null) {
+            // content non cached, forwarding and caching...
+            return forward(request, true);
+        }
+        request.setServedFromCache(true);
+
         ContentsCache.CachedContent content = cacheSender.getCached();
         HttpClientResponse response = content.getResponse();
 
@@ -617,7 +617,7 @@ public class ProxyRequestsManager {
                         spec.pendingAcquireTimeout(Duration.ofMillis(connectionPool.getBorrowTimeout()));
                         spec.maxIdleTime(Duration.ofMillis(connectionPool.getIdleTimeout()));
                         spec.maxLifeTime(Duration.ofMillis(connectionPool.getMaxLifeTime()));
-                        spec.evictInBackground(Duration.ofMillis(connectionPool.getIdleTimeout() * 2));
+                        spec.evictInBackground(Duration.ofMillis(connectionPool.getIdleTimeout() * 2L));
                         spec.metrics(true);
                         spec.lifo();
                     });
