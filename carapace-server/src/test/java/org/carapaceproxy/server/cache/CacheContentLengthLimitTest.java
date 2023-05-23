@@ -51,7 +51,7 @@ public class CacheContentLengthLimitTest {
     public TemporaryFolder tmpDir = new TemporaryFolder();
 
     @Test
-    public void testWithContentLenghtHeader() throws Exception {
+    public void testWithContentLengthHeader() throws Exception {
 
         String body = "01234567890123456789";
 
@@ -59,14 +59,14 @@ public class CacheContentLengthLimitTest {
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "text/html")
-                        .withHeader("Content-Length", body.length() + "")
+                        .withHeader("Content-Length", String.valueOf(body.length()))
                         .withBody(body)));
 
         testFileSizeCache(body, false);
     }
 
     @Test
-    public void testWithoutContentLenghtHeader() throws Exception {
+    public void testWithoutContentLengthHeader() throws Exception {
 
         String body = "01234567890123456789";
 
@@ -86,7 +86,7 @@ public class CacheContentLengthLimitTest {
 
         // No size checking
         {
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(0);
                 server.getCurrentConfiguration().setRequestCompressionEnabled(false);
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
@@ -102,7 +102,7 @@ public class CacheContentLengthLimitTest {
 
         // Max size set to current content size
         {
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(body.length());
                 server.getCurrentConfiguration().setRequestCompressionEnabled(false);
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
@@ -118,7 +118,7 @@ public class CacheContentLengthLimitTest {
 
         // Max size set to drop current content
         {
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(body.length() - 1);
                 server.getCurrentConfiguration().setRequestCompressionEnabled(false);
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());

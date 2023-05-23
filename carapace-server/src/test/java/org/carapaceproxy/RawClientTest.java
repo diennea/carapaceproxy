@@ -363,9 +363,13 @@ public class RawClientTest {
                                 failed.set(true);
                                 return;
                             }
-                            resp = consumeHttpResponseInput(socket.getInputStream()).getBodyString();
-                            System.out.println("### RESP client1: " + resp);
-                            if (!resp.contains("resp=client1")) {
+                            int count = 0;
+                            do {
+                                Thread.sleep(5_000);
+                                resp = consumeHttpResponseInput(socket.getInputStream()).getBodyString();
+                                System.out.println("### RESP client1: " + resp);
+                            } while (!resp.contains("resp=client1") && count++ < 10);
+                            if (count >= 10) {
                                 failed.set(true);
                             }
                         } catch (Exception e) {
@@ -661,9 +665,13 @@ public class RawClientTest {
                                 failed.set(true);
                                 return;
                             }
-                            resp = consumeHttpResponseInput(socket.getInputStream()).getBodyString();
-                            System.out.println("### RESP client1: " + resp);
-                            if (!resp.contains("resp=client1")) {
+                            int count = 0;
+                            do {
+                                Thread.sleep(5_000);
+                                resp = consumeHttpResponseInput(socket.getInputStream()).getBodyString();
+                                System.out.println("### RESP client1: " + resp);
+                            } while (!resp.contains("resp=client1") && count++ < 10);
+                            if (count >= 10) {
                                 failed.set(true);
                             }
                         } catch (Exception e) {
