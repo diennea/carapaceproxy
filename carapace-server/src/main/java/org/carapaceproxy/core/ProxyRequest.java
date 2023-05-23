@@ -34,8 +34,6 @@ import java.net.InetSocketAddress;
 import java.util.concurrent.atomic.AtomicLong;
 
 import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import org.carapaceproxy.server.mapper.MapResult;
@@ -78,14 +76,14 @@ public class ProxyRequest implements MatchingContext {
     private UrlEncodedQueryString queryString;
     private String sslProtocol;
     private String cipherSuite;
-    @Getter
-    @Setter
     private boolean servedFromCache;
+    private String httpProtocol;
 
     public ProxyRequest(HttpServerRequest request, HttpServerResponse response, HostPort listener) {
         this.request = request;
         this.response = response;
         this.listener = listener;
+        this.httpProtocol = request.protocol();
         request.withConnection(conn -> {
             SslHandler handler = conn.channel().pipeline().get(SslHandler.class);
             if (handler != null) {
@@ -99,24 +97,16 @@ public class ProxyRequest implements MatchingContext {
     public String getProperty(String name) {
         if (name.startsWith(PROPERTY_HEADERS)) {
             // In case of multiple headers with same name, the first one is returned.
-            return request.requestHeaders().get(name.substring(HEADERS_SUBSTRING_INDEX, name.length()), "");
+            return request.requestHeaders().get(name.substring(HEADERS_SUBSTRING_INDEX), "");
         } else {
-            switch (name) {
-                case PROPERTY_URI:
-                    return request.uri();
-                case PROPERTY_METHOD:
-                    return request.method().name();
-                case PROPERTY_CONTENT_TYPE:
-                    return request.requestHeaders().get(HttpHeaderNames.CONTENT_TYPE, "");
-                case PROPERTY_LISTENER_IPADDRESS:
-                    return getLocalAddress().getAddress().getHostAddress();
-                case PROPERTY_LISTENER_HOST_PORT: {
-                    return listener.host() + ":" + listener.port();
-                }
-                default: {
-                    throw new IllegalArgumentException("Property name " + name + " does not exists.");
-                }
-            }
+            return switch (name) {
+                case PROPERTY_URI -> request.uri();
+                case PROPERTY_METHOD -> request.method().name();
+                case PROPERTY_CONTENT_TYPE -> request.requestHeaders().get(HttpHeaderNames.CONTENT_TYPE, "");
+                case PROPERTY_LISTENER_IPADDRESS -> getLocalAddress().getAddress().getHostAddress();
+                case PROPERTY_LISTENER_HOST_PORT -> listener.host() + ":" + listener.port();
+                default -> throw new IllegalArgumentException("Property name " + name + " does not exists.");
+            };
         }
     }
 
