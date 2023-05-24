@@ -218,9 +218,8 @@ public class Listeners {
         HttpServer httpServer = HttpServer.create()
                 .host(hostPort.host())
                 .port(hostPort.port())
-                // .protocol(HttpProtocol.H2C)
-                // .protocol(HttpProtocol.HTTP11, HttpProtocol.H2) // todo see config.isSsl()
-                // .secure() // todo see snimappings
+                .protocol(config.getHttpProtocols())
+                // .secure() // todo see config.isSsl() & snimappings
                 .metrics(true, Function.identity())
                 .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())
                 .childOption(ChannelOption.SO_KEEPALIVE, config.isKeepAlive())
@@ -261,18 +260,23 @@ public class Listeners {
                         };
                         channel.pipeline().addFirst(sni);
                     }
-                    channel.pipeline().addAfter(NettyPipeline.HttpCodec, "uriEncoder", new ChannelInboundHandlerAdapter() {
+                    final var uriCleaner = new ChannelInboundHandlerAdapter() {
                         @Override
                         public void channelRead(ChannelHandlerContext ctx, Object msg) {
                             if (msg instanceof final HttpRequest request) {
                                 request.setUri(request.uri()
                                         .replaceAll("\\[", "%5B")
-                                        .replaceAll("\\]", "%5D")
+                                        .replaceAll("]", "%5D")
                                 );
                             }
                             ctx.fireChannelRead(msg);
                         }
-                    });
+                    };
+                    if (channel.pipeline().context(NettyPipeline.HttpCodec) != null) {
+                        channel.pipeline().addAfter(NettyPipeline.HttpCodec, "uriEncoder", uriCleaner);
+                    } else {
+                        channel.pipeline().addLast("uriEncoder", uriCleaner);
+                    }
                 })
                 .doOnConnection(conn -> {
                     CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
