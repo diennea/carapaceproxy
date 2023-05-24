@@ -84,7 +84,7 @@ public class CacheExpireTest {
                     System.out.println("HEADER LINE :" + h);
                 });
                 assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("X-Cached")));
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
+                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("expires: " + formatted)));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -189,7 +189,7 @@ public class CacheExpireTest {
                     System.out.println("HEADER LINE :" + h);
                 });
                 assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("X-Cached")));
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
+                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("expires: " + formatted)));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -201,7 +201,7 @@ public class CacheExpireTest {
                     System.out.println("HEADER LINE :" + h);
                 });
                 assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("X-Cached")));
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
+                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("expires: " + formatted)));
             }
 
             assertEquals(0, server.getCache().getCacheSize());
@@ -244,7 +244,7 @@ public class CacheExpireTest {
                     System.out.println("HEADER LINE :" + h);
                 });
                 assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("X-Cached")));
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
+                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("expires: " + formatted)));
             }
 
             assertEquals(1, server.getCache().getCacheSize());
@@ -263,7 +263,7 @@ public class CacheExpireTest {
                     System.out.println("HEADER LINE :" + h);
                 });
                 assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("X-Cached")));
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
+                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("expires: " + formatted)));
             }
 
             assertEquals(0, server.getCache().getCacheSize());
@@ -303,11 +303,9 @@ public class CacheExpireTest {
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertTrue(s.contains("it <b>works</b> !!"));
-                resp.getHeaderLines().forEach(h -> {
-                    System.out.println("HEADER LINE :" + h);
-                });
+                resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
                 assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("X-Cached")));
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
+                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("expires: " + formatted)));
             }
 
             assertEquals(1, server.getCache().getCacheSize());
