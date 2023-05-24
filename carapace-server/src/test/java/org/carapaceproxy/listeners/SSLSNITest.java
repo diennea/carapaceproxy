@@ -64,7 +64,7 @@ public class SSLSNITest {
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "text/html")
-                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withHeader("Content-Length", String.valueOf("it <b>works</b> !!".length()))
                         .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
@@ -152,7 +152,7 @@ public class SSLSNITest {
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "text/html")
-                        .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
+                        .withHeader("Content-Length", String.valueOf("it <b>works</b> !!".length()))
                         .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
@@ -161,14 +161,14 @@ public class SSLSNITest {
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
             server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost, Set.of("TLSv1.3"),
-                    128, true, 300, 60, 8, 1000));
+                    128, true, 300, 60, 8, 1000, Set.of("http11")));
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 assertTrue(resp.toString().contains("it <b>works</b> !!"));
                 SSLSession session = client.getSSLSocket().getSession();
-                assertTrue("TLSv1.3".equals(session.getProtocol()));
+                assertEquals("TLSv1.3", session.getProtocol());
             }
         }
 
@@ -177,7 +177,7 @@ public class SSLSNITest {
             try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
                 server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
                 server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost, Set.of(proto),
-                        128, true, 300, 60, 8, 1000));
+                        128, true, 300, 60, 8, 1000, Set.of("http11")));
                 server.start();
                 int port = server.getLocalPort();
                 try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
@@ -207,7 +207,7 @@ public class SSLSNITest {
             try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
                 server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
                 server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost, Set.of("TLSvWRONG"),
-                        128, true, 300, 60, 8, 1000));
+                        128, true, 300, 60, 8, 1000, Set.of("http11")));
             }
         });
     }
