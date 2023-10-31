@@ -26,6 +26,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import herddb.client.ClientConfiguration;
+import herddb.jdbc.BasicHerdDBDataSource;
 import herddb.jdbc.HerdDBEmbeddedDataSource;
 import herddb.security.SimpleSingleUserManager;
 import herddb.server.ServerConfiguration;
@@ -39,7 +40,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -58,7 +58,10 @@ import org.carapaceproxy.utils.StringUtils;
 import org.shredzone.acme4j.toolbox.JSON;
 
 /**
- * Reads/Write the configuration to a JDBC database. This configuration store is able to track versions of configuration properties
+ * Configuration storage implementation tha reads the configuration from a JDBC database,
+ * i.e., and {@link BasicHerdDBDataSource HerdDB instance}.
+ * <br>
+ * This configuration store is able to commit edits to the database and track versions of configuration properties.
  *
  * @author enrico.olivelli
  */
@@ -262,7 +265,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     @Override
     public void commitConfiguration(ConfigurationStore newConfigurationStore) {
         Set<String> currentKeys = new HashSet<>(this.properties.keySet());
-        Map<String, String> newProperties = new HashMap();
+        Map<String, String> newProperties = new HashMap<>();
         try (Connection con = datasource.getConnection()) {
             con.setAutoCommit(false);
             try (PreparedStatement psUpdate = con.prepareStatement(UPDATE_CONFIG_TABLE);

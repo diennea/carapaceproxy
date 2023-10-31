@@ -24,15 +24,18 @@ import java.security.KeyPair;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
+import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 
 /**
- * Stores configuration
+ * Abstraction over a configuration storage.
+ * <br>
+ * The {@link RuntimeServerConfiguration Carapace configuration} is mostly a collection of key-value pairs.
+ * Aside from providing access to these properties, it also stores the keys for certificates management.
  *
  * @author enrico.olivelli
  */

@@ -117,6 +117,12 @@ import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.webapp.WebAppContext;
 import org.glassfish.jersey.servlet.ServletContainer;
 
+/**
+ * The main server implementation of Carapace proxy.
+ *
+ * @see Listeners The logic handling incomping requests
+ * @see RuntimeServerConfiguration The server confingurations, e.g., the route-to-listener mapping
+ */
 public class HttpProxyServer implements AutoCloseable {
 
     private static final Logger LOG = Logger.getLogger(HttpProxyServer.class.getName());
@@ -228,7 +234,7 @@ public class HttpProxyServer implements AutoCloseable {
         return res;
     }
 
-    public HttpProxyServer(EndpointMapper mapper, File basePath) throws Exception {
+    public HttpProxyServer(EndpointMapper mapper, File basePath) {
         // metrics
         statsProvider = new PrometheusMetricsProvider();
         mainLogger = statsProvider.getStatsLogger("");

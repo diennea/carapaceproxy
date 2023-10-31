@@ -18,7 +18,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <libs.yarn>v1.22.19</libs.yarn>
-        <libs.node>v20.9.0</libs.node>
+        <libs.node>v18.18.2</libs.node>
         <libs.frontend.plugin>1.7.6</libs.frontend.plugin>
         <carapace.ui.dir>src/main/webapp</carapace.ui.dir>
     </properties>

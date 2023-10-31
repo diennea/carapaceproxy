@@ -19,7 +19,9 @@
  */
 package org.carapaceproxy.core;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreData;
+import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
+import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -28,7 +30,14 @@ import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.socket.nio.NioChannelOption;
 import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.ssl.*;
+import io.netty.handler.ssl.OpenSsl;
+import io.netty.handler.ssl.OpenSslCachingX509KeyManagerFactory;
+import io.netty.handler.ssl.ReferenceCountedOpenSslEngine;
+import io.netty.handler.ssl.SniHandler;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslHandler;
+import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
@@ -36,6 +45,26 @@ import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.Promise;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
+import java.io.File;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
+import java.security.cert.Certificate;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.net.ssl.KeyManagerFactory;
 import jdk.net.ExtendedSocketOptions;
 import lombok.Data;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
@@ -49,31 +78,14 @@ import reactor.netty.DisposableServer;
 import reactor.netty.NettyPipeline;
 import reactor.netty.http.server.HttpServer;
 
-import javax.net.ssl.KeyManagerFactory;
-import java.io.File;
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.security.GeneralSecurityException;
-import java.security.KeyStore;
-import java.security.cert.Certificate;
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
-import java.util.Map.Entry;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import static org.carapaceproxy.utils.CertificatesUtils.*;
-
 /**
- * Listeners waiting for incoming clients requests
+ * Collection of listeners waiting for incoming clients requests on the configured HTTP ports.
+ * <br>
+ * While the {@link RuntimeServerConfiguration} is actually <i>mutable</i>, this class won't watch it for updates;
+ * the caller should request a {@link #reloadCurrentConfiguration() reload of the configuration} manually instead.
  *
  * @author enrico.olivelli
  */
-@SuppressFBWarnings(value = "OBL_UNSATISFIED_OBLIGATION", justification = "https://github.com/spotbugs/spotbugs/issues/432")
 public class Listeners {
 
     public static final String OCSP_CERTIFICATE_CHAIN = "ocsp-certificate";
@@ -137,15 +149,21 @@ public class Listeners {
         }
     }
 
+    /**
+     * Re-apply the current configuration; it should be invoked after editing it.
+     *
+     * @throws InterruptedException if it is interrupted while starting or stopping a listener
+     */
     public void reloadCurrentConfiguration() throws InterruptedException {
         reloadConfiguration(this.currentConfiguration);
     }
 
     /**
-     * Apply the new configuration and refresh the listeners according to it.
+     * Apply a new configuration and refresh the listeners according to it.
      *
      * @param newConfiguration the configuration
      * @throws InterruptedException if it is interrupted while starting or stopping a listener
+     * @see #reloadCurrentConfiguration()
      */
     void reloadConfiguration(RuntimeServerConfiguration newConfiguration) throws InterruptedException {
         if (!started) {
@@ -157,7 +175,6 @@ public class Listeners {
 
         // stop dropped listeners, start new one
         List<HostPort> listenersToStop = new ArrayList<>();
-        List<HostPort> listenersToStart = new ArrayList<>();
         List<HostPort> listenersToRestart = new ArrayList<>();
         for (Entry<HostPort, ListeningChannel> channel : listeningChannels.entrySet()) {
             HostPort key = channel.getKey();
@@ -174,6 +191,7 @@ public class Listeners {
             }
             channel.getValue().clear();
         }
+        List<HostPort> listenersToStart = new ArrayList<>();
         for (NetworkListenerConfiguration config : newConfiguration.getListeners()) {
             HostPort key = config.getKey();
             if (!listeningChannels.containsKey(key)) {

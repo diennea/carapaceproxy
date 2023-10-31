@@ -48,7 +48,14 @@ import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import org.carapaceproxy.utils.CarapaceLogger;
 
 /**
- * Configuration
+ * Implementation of a configuration for the whole server.
+ * Among other settings, it defines:
+ * <ul>
+ *     <li>{@link Listeners HTTP listeners} {@link NetworkListenerConfiguration mapping configuration};</li>
+ *     <li>{@link SSLCertificateConfiguration SSL certificates configuration};</li>
+ *     <li>{@link RequestFilter filters} {@link RequestFilterConfiguration configuration};</li>
+ *     <li>{@link ConnectionPoolConfiguration connection pool configuration}.</li>
+ * </ul>
  *
  * @author enrico.olivelli
  */

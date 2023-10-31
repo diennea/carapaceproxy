@@ -21,8 +21,13 @@ package org.carapaceproxy.launcher;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateException;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.logging.Level;
@@ -31,18 +36,15 @@ import java.util.logging.Logger;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
 
 /**
- * @autor enrico.olivelli
+ * Main entrypoint for the {@code server} service.
+ *
+ * @author enrico.olivelli
+ * @see org.carapaceproxy.launcher.ZooKeeperMainWrapper for the alternative entrypoint
  */
 public class ServerMain implements AutoCloseable {
-
-    static {
-        // see https://github.com/netty/netty/pull/7650
-        if (System.getProperty("io.netty.tryReflectionSetAccessible") == null) {
-            System.setProperty("io.netty.tryReflectionSetAccessible", "true");
-        }
-    }
 
     private static final Logger LOG = Logger.getLogger(ServerMain.class.getName());
     private final static CountDownLatch running = new CountDownLatch(1);
@@ -153,6 +155,24 @@ public class ServerMain implements AutoCloseable {
         started = false;
     }
 
+    /**
+     * Start an {@link HttpProxyServer}.
+     *
+     * @throws ConfigurationNotValidException if the configuration provided at server boot is not valid
+     * @throws InterruptedException           if it is interrupted while starting or stopping a listener
+     * @throws KeyStoreException              if no {@code Provider} supports a {@code KeyStoreSpi} implementation for the specified type
+     * @throws FileNotFoundException          if the SSL certificate file does not exist,
+     *                                        or is a directory rather than a regular file,
+     *                                        or for some other reason cannot be opened for reading.
+     * @throws IOException                    if something goes wrong while locking the PID file,
+     *                                        or if there is an I/O or format problem with the keystore data,
+     *                                        or if a password is required but not given,
+     *                                        or if the given password was incorrect.
+     * @throws NoSuchAlgorithmException       if the algorithm used to check the integrity of the keystore cannot be found
+     * @throws CertificateException           if any of the certificates in the keystore could not be loaded
+     * @throws SecurityException              if a security manager exists and its {@code checkRead} method denies read access to the file.
+     * @throws Exception                      If the component fails to start for some other reasons
+     */
     public void start() throws Exception {
         pidFileLocker.lock();
 
