@@ -350,13 +350,20 @@ public class ProxyRequestsManager {
         });
     }
 
+    /**
+     * Forward a requested received by the {@link Listeners} to the corresponding backend endpoint.
+     *
+     * @param request the unpacked incoming request to forward to the corresponding backend endpoint
+     * @param cache whether the request is cacheable or not
+     * @return a {@link Flux} forwarding the returned {@link Publisher} sequence
+     */
     public Publisher<Void> forward(ProxyRequest request, boolean cache) {
         final String endpointHost = request.getAction().host;
         final int endpointPort = request.getAction().port;
         EndpointKey key = EndpointKey.make(endpointHost, endpointPort);
         EndpointStats endpointStats = endpointsStats.computeIfAbsent(key, EndpointStats::new);
 
-        Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> connectionToEndpoint = connectionsManager.apply(request);
+        var connectionToEndpoint = connectionsManager.apply(request);
         ConnectionPoolConfiguration connectionConfig = connectionToEndpoint.getKey();
         ConnectionProvider connectionProvider = connectionToEndpoint.getValue();
         if (CarapaceLogger.isLoggingDebugEnabled()) {

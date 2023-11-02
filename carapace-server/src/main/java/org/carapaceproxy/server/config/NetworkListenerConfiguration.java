@@ -71,7 +71,11 @@ public class NetworkListenerConfiguration {
     }
 
     public static Set<String> getDefaultHttpProtocols(boolean ssl) {
-        return Set.of(HTTP11.name(), (ssl ? H2 : H2C).name());
+        // return Set.of(HTTP11.name(), (ssl ? H2 : H2C).name()); // todo
+        if (ssl) {
+            return Set.of(HTTP11.name());
+        }
+        return Set.of(HTTP11.name(), H2C.name());
     }
 
     public NetworkListenerConfiguration(
