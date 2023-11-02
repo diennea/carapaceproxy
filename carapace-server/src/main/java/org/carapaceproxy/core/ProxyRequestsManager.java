@@ -73,7 +73,6 @@ import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.ByteBufFlux;
-import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.http.client.HttpClientResponse;
 import reactor.netty.resources.ConnectionProvider;
@@ -379,8 +378,9 @@ public class ProxyRequestsManager {
                 .host(endpointHost)
                 .port(endpointPort)
                 // support both HTTP/1.1 and HTTP/2.0, Netty will adapt accordingly
-                .protocol(HttpProtocol.HTTP11, HttpProtocol.H2C, HttpProtocol.H2)
-                .secure() // todo to enable alongside HttpProtocol.H2
+                // .protocol(HttpProtocol.HTTP11, HttpProtocol.H2C /* todo HttpProtocol.H2*/)
+                .protocol(connectionConfig.getProtocol())
+                // .secure() // todo to enable alongside HttpProtocol.H2
                 .followRedirect(false) // client has to request the redirect, not the proxy
                 .runOn(parent.getEventLoopGroup())
                 .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
