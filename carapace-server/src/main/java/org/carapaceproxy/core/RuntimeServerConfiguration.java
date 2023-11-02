@@ -136,8 +136,7 @@ public class RuntimeServerConfiguration {
                 keepaliveInterval,
                 keepaliveCount,
                 true,
-                true,
-                HttpProtocol.HTTP11
+                true
         );
     }
 
@@ -394,8 +393,7 @@ public class RuntimeServerConfiguration {
                     keepaliveinterval,
                     keepalivecount,
                     keepAlive,
-                    enabled,
-                    HttpProtocol.valueOf(protocol.toUpperCase())
+                    enabled
             );
             connectionPools.add(connectionPool);
             LOG.log(Level.INFO, "Configured connectionpool." + i + ": {0}", connectionPool);
@@ -415,8 +413,7 @@ public class RuntimeServerConfiguration {
                 getKeepaliveInterval(),
                 getKeepaliveCount(),
                 isClientKeepAlive(),
-                true,
-                HttpProtocol.HTTP11
+                true
         );
         LOG.log(Level.INFO, "Configured default connectionpool: {0}", defaultConnectionPool);
     }

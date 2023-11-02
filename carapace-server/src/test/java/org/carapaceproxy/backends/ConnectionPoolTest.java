@@ -29,15 +29,14 @@ import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import io.netty.handler.codec.http.HttpHeaderNames;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -45,12 +44,8 @@ import java.io.OutputStreamWriter;
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.util.HashMap;
-import java.util.Properties;
-
-import org.carapaceproxy.utils.RawHttpClient;
-
 import java.util.Map;
-
+import java.util.Properties;
 import org.carapaceproxy.api.ConnectionPoolsResource;
 import org.carapaceproxy.api.UseAdminServer;
 import org.carapaceproxy.client.EndpointKey;
@@ -59,10 +54,10 @@ import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.core.ProxyRequestsManager;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.utils.HttpTestUtils;
+import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
-import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.server.HttpServerRequest;
 import reactor.netty.resources.ConnectionProvider;
 
@@ -266,7 +261,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         // default pool
         ConnectionPoolConfiguration defaultPool = new ConnectionPoolConfiguration(
-                "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 100_000, 50_000, 500, 50, 5, true,true, HttpProtocol.HTTP11
+                "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 100_000, 50_000, 500, 50, 5, true,true
         );
         {
             ConnectionProvider provider = connectionPools.get(defaultPool);
@@ -279,7 +274,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         // pool with defaults
         ConnectionPoolConfiguration poolWithDefaults = new ConnectionPoolConfiguration(
-                "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, 100_000, 50_000, 500, 50, 5, true, true, HttpProtocol.HTTP11
+                "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, 100_000, 50_000, 500, 50, 5, true, true
         );
         {
             ConnectionProvider provider = connectionPools.get(poolWithDefaults);
@@ -292,7 +287,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         // custom pool
         ConnectionPoolConfiguration customPool = new ConnectionPoolConfiguration(
-                "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, 100_000, 25_000, 250, 25, 2, true,true, HttpProtocol.HTTP11
+                "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, 100_000, 25_000, 250, 25, 2, true,true
         );
         {
             ConnectionProvider provider = connectionPools.get(customPool);
