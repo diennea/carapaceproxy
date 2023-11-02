@@ -19,7 +19,11 @@
  */
 package org.carapaceproxy.server.config;
 
+import static reactor.netty.http.HttpProtocol.H2;
+import static reactor.netty.http.HttpProtocol.H2C;
+import static reactor.netty.http.HttpProtocol.HTTP11;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.Data;
 import reactor.netty.http.HttpProtocol;
 
@@ -30,7 +34,6 @@ import reactor.netty.http.HttpProtocol;
 public class NetworkListenerConfiguration {
 
     public static final Set<String> DEFAULT_SSL_PROTOCOLS = Set.of("TLSv1.2", "TLSv1.3");
-    public static final String DEFAULT_HTTP_PROTOCOL = HttpProtocol.HTTP11.name();
 
     private final String host;
     private final int port;
@@ -44,11 +47,11 @@ public class NetworkListenerConfiguration {
     private final int keepAliveInterval;
     private final int keepAliveCount;
     private final int maxKeepAliveRequests;
-    private final HttpProtocol httpProtocol;
+    private final Set<HttpProtocol> protocols;
 
     public NetworkListenerConfiguration(final String host, final int port) {
         this(host, port, false, null, null, Set.of(),
-                128, true, 300, 60, 8, 1000, DEFAULT_HTTP_PROTOCOL);
+                128, true, 300, 60, 8, 1000, getDefaultHttpProtocols(false));
     }
 
     public NetworkListenerConfiguration(
@@ -64,7 +67,11 @@ public class NetworkListenerConfiguration {
             final int keepAliveCount,
             final int maxKeepAliveRequests) {
         this(host, port, ssl, sslCiphers, defaultCertificate, DEFAULT_SSL_PROTOCOLS,
-                soBacklog, keepAlive, keepAliveIdle, keepAliveInterval, keepAliveCount, maxKeepAliveRequests, DEFAULT_HTTP_PROTOCOL);
+                soBacklog, keepAlive, keepAliveIdle, keepAliveInterval, keepAliveCount, maxKeepAliveRequests, getDefaultHttpProtocols(ssl));
+    }
+
+    public static Set<String> getDefaultHttpProtocols(boolean ssl) {
+        return Set.of(HTTP11.name(), (ssl ? H2 : H2C).name());
     }
 
     public NetworkListenerConfiguration(
@@ -80,7 +87,7 @@ public class NetworkListenerConfiguration {
             final int keepAliveInterval,
             final int keepAliveCount,
             final int maxKeepAliveRequests,
-            final String httpProtocol
+            final Set<String> protocols
     ) {
         this.host = host;
         this.port = port;
@@ -94,13 +101,17 @@ public class NetworkListenerConfiguration {
         this.keepAliveInterval = keepAliveInterval;
         this.keepAliveCount = keepAliveCount;
         this.maxKeepAliveRequests = maxKeepAliveRequests;
-        if (httpProtocol == null) {
+        if (protocols == null || protocols.isEmpty()) {
             throw new IllegalArgumentException("At least one HTTP protocol is required!!!");
         }
-        if (!ssl && "h2".equalsIgnoreCase(httpProtocol)) {
+        final var httpProtocols = protocols.stream()
+                .map(String::toUpperCase)
+                .map(HttpProtocol::valueOf)
+                .collect(Collectors.toUnmodifiableSet());
+        if (!ssl && httpProtocols.contains(H2)) {
             throw new IllegalArgumentException("H2 requires SSL support");
         }
-        this.httpProtocol = HttpProtocol.valueOf(httpProtocol.toUpperCase());
+        this.protocols = httpProtocols;
     }
 
     public HostPort getKey() {

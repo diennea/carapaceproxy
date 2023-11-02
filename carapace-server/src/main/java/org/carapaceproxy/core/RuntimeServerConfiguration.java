@@ -21,8 +21,8 @@ package org.carapaceproxy.core;
 
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
-import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_HTTP_PROTOCOL;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
+import static org.carapaceproxy.server.config.NetworkListenerConfiguration.getDefaultHttpProtocols;
 import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
 import java.io.File;
 import java.security.NoSuchAlgorithmException;
@@ -313,10 +313,11 @@ public class RuntimeServerConfiguration {
             final var prefix = "listener." + i + ".";
             final var port = properties.getInt(prefix + "port", 0);
             if (port > 0) {
+                boolean ssl = properties.getBoolean(prefix + "ssl", false);
                 this.addListener(new NetworkListenerConfiguration(
                         properties.getString(prefix + "host", "0.0.0.0"),
                         port,
-                        properties.getBoolean(prefix + "ssl", false),
+                        ssl,
                         properties.getString(prefix + "sslciphers", ""),
                         properties.getString(prefix + "defaultcertificate", "*"),
                         properties.getValues(prefix + "sslprotocols", DEFAULT_SSL_PROTOCOLS),
@@ -326,7 +327,7 @@ public class RuntimeServerConfiguration {
                         properties.getInt(prefix + "keepaliveinterval", keepaliveInterval),
                         properties.getInt(prefix + "keepalivecount", keepaliveCount),
                         properties.getInt(prefix + "maxkeepaliverequests", maxKeepAliveRequests),
-                        properties.getString(prefix + "protocol", DEFAULT_HTTP_PROTOCOL)
+                        properties.getValues(prefix + "protocol", getDefaultHttpProtocols(ssl))
                 ));
             }
         }

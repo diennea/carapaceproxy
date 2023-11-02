@@ -76,6 +76,7 @@ import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
 import reactor.netty.DisposableServer;
 import reactor.netty.NettyPipeline;
+import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.server.HttpServer;
 
 /**
@@ -236,7 +237,7 @@ public class Listeners {
         HttpServer httpServer = HttpServer.create()
                 .host(hostPort.host())
                 .port(hostPort.port())
-                .protocol(config.getHttpProtocol())
+                .protocol(config.getProtocols().toArray(HttpProtocol[]::new))
                 // .secure() // todo see config.isSsl() & snimappings
                 .metrics(true, Function.identity())
                 .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())
