@@ -19,10 +19,9 @@
  */
 package org.carapaceproxy.server.config;
 
+import java.util.Set;
 import lombok.Data;
 import reactor.netty.http.HttpProtocol;
-
-import java.util.Set;
 
 /**
  * Listens for connections on the network
@@ -31,7 +30,7 @@ import java.util.Set;
 public class NetworkListenerConfiguration {
 
     public static final Set<String> DEFAULT_SSL_PROTOCOLS = Set.of("TLSv1.2", "TLSv1.3");
-    public static final Set<String> DEFAULT_HTTP_PROTOCOLS = Set.of("http11", "h2c" /* todo "h2" */);
+    public static final String DEFAULT_HTTP_PROTOCOL = HttpProtocol.HTTP11.name();
 
     private final String host;
     private final int port;
@@ -45,12 +44,11 @@ public class NetworkListenerConfiguration {
     private final int keepAliveInterval;
     private final int keepAliveCount;
     private final int maxKeepAliveRequests;
-
-    private final Set<String> protocols;
+    private final HttpProtocol httpProtocol;
 
     public NetworkListenerConfiguration(final String host, final int port) {
         this(host, port, false, null, null, Set.of(),
-                128, true, 300, 60, 8, 1000, DEFAULT_HTTP_PROTOCOLS);
+                128, true, 300, 60, 8, 1000, DEFAULT_HTTP_PROTOCOL);
     }
 
     public NetworkListenerConfiguration(
@@ -66,7 +64,7 @@ public class NetworkListenerConfiguration {
             final int keepAliveCount,
             final int maxKeepAliveRequests) {
         this(host, port, ssl, sslCiphers, defaultCertificate, DEFAULT_SSL_PROTOCOLS,
-                soBacklog, keepAlive, keepAliveIdle, keepAliveInterval, keepAliveCount, maxKeepAliveRequests, DEFAULT_HTTP_PROTOCOLS);
+                soBacklog, keepAlive, keepAliveIdle, keepAliveInterval, keepAliveCount, maxKeepAliveRequests, DEFAULT_HTTP_PROTOCOL);
     }
 
     public NetworkListenerConfiguration(
@@ -82,7 +80,7 @@ public class NetworkListenerConfiguration {
             final int keepAliveInterval,
             final int keepAliveCount,
             final int maxKeepAliveRequests,
-            final Set<String> httpProtocols
+            final String httpProtocol
     ) {
         this.host = host;
         this.port = port;
@@ -96,13 +94,13 @@ public class NetworkListenerConfiguration {
         this.keepAliveInterval = keepAliveInterval;
         this.keepAliveCount = keepAliveCount;
         this.maxKeepAliveRequests = maxKeepAliveRequests;
-        if (httpProtocols == null) {
+        if (httpProtocol == null) {
             throw new IllegalArgumentException("At least one HTTP protocol is required!!!");
         }
-        if (!ssl && httpProtocols.stream().anyMatch("h2"::equalsIgnoreCase)) {
+        if (!ssl && "h2".equalsIgnoreCase(httpProtocol)) {
             throw new IllegalArgumentException("H2 requires SSL support");
         }
-        this.protocols = Set.copyOf(httpProtocols);
+        this.httpProtocol = HttpProtocol.valueOf(httpProtocol.toUpperCase());
     }
 
     public HostPort getKey() {
@@ -111,12 +109,4 @@ public class NetworkListenerConfiguration {
 
     public record HostPort(String host, int port) {
     }
-
-    public HttpProtocol[] getHttpProtocols() {
-        return this.getProtocols().stream()
-                .map(String::toUpperCase)
-                .map(HttpProtocol::valueOf)
-                .toArray(HttpProtocol[]::new);
-    }
-
 }

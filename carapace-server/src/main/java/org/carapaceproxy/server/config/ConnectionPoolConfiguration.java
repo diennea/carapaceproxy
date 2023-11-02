@@ -21,6 +21,7 @@ package org.carapaceproxy.server.config;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import reactor.netty.http.HttpProtocol;
 
 /**
  * Configuration of a single connection pool
@@ -28,7 +29,6 @@ import lombok.Data;
 @Data
 @AllArgsConstructor
 public class ConnectionPoolConfiguration {
-
     private String id;
     private String domain;
     private int maxConnectionsPerEndpoint;
@@ -42,7 +42,6 @@ public class ConnectionPoolConfiguration {
     private int keepaliveInterval;
     private int keepaliveCount;
     private boolean keepAlive;
-
     private boolean enabled;
-
+    private HttpProtocol protocol;
 }

@@ -230,13 +230,13 @@ public class Listeners {
     private void bootListener(NetworkListenerConfiguration config) throws InterruptedException {
         HostPort hostPort = new HostPort(config.getHost(), config.getPort() + parent.getListenersOffsetPort());
         ListeningChannel listeningChannel = new ListeningChannel(hostPort, config);
-        LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{hostPort.host(), String.valueOf(hostPort.port()), config.isSsl()});
+        LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{hostPort.host(), hostPort.port(), config.isSsl()});
 
         // Listener setup
         HttpServer httpServer = HttpServer.create()
                 .host(hostPort.host())
                 .port(hostPort.port())
-                .protocol(config.getHttpProtocols())
+                .protocol(config.getHttpProtocol())
                 // .secure() // todo see config.isSsl() & snimappings
                 .metrics(true, Function.identity())
                 .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())

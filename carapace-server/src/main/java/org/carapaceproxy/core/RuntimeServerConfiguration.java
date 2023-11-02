@@ -21,7 +21,7 @@ package org.carapaceproxy.core;
 
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
-import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_HTTP_PROTOCOLS;
+import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_HTTP_PROTOCOL;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
 import java.io.File;
@@ -46,6 +46,7 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import org.carapaceproxy.utils.CarapaceLogger;
+import reactor.netty.http.HttpProtocol;
 
 /**
  * Implementation of a configuration for the whole server.
@@ -135,7 +136,8 @@ public class RuntimeServerConfiguration {
                 keepaliveInterval,
                 keepaliveCount,
                 true,
-                true
+                true,
+                HttpProtocol.HTTP11
         );
     }
 
@@ -294,7 +296,7 @@ public class RuntimeServerConfiguration {
                     if (config.isAcme()) {
                         config.setDaysBeforeRenewal(daysBeforeRenewal);
                     }
-                    LOG.log(Level.INFO,"Configuring SSL certificate {0}: {1}", new Object[]{prefix, config});
+                    LOG.log(Level.INFO, "Configuring SSL certificate {0}: {1}", new Object[]{prefix, config});
                     this.addCertificate(config);
                 } catch (IllegalArgumentException e) {
                     throw new ConfigurationNotValidException(
@@ -324,7 +326,7 @@ public class RuntimeServerConfiguration {
                         properties.getInt(prefix + "keepaliveinterval", keepaliveInterval),
                         properties.getInt(prefix + "keepalivecount", keepaliveCount),
                         properties.getInt(prefix + "maxkeepaliverequests", maxKeepAliveRequests),
-                        properties.getValues(prefix + "protocol", DEFAULT_HTTP_PROTOCOLS)
+                        properties.getString(prefix + "protocol", DEFAULT_HTTP_PROTOCOL)
                 ));
             }
         }
@@ -376,6 +378,7 @@ public class RuntimeServerConfiguration {
             int keepalivecount = properties.getInt(prefix + "keepalivecount", keepaliveCount);
             boolean enabled = properties.getBoolean(prefix + "enabled", false);
             boolean keepAlive = properties.getBoolean(prefix + "keepalive", true);
+            String protocol = properties.getString(prefix + "protocol", HttpProtocol.HTTP11.name());
 
             ConnectionPoolConfiguration connectionPool = new ConnectionPoolConfiguration(
                     id, domain,
@@ -390,13 +393,14 @@ public class RuntimeServerConfiguration {
                     keepaliveinterval,
                     keepalivecount,
                     keepAlive,
-                    enabled
+                    enabled,
+                    HttpProtocol.valueOf(protocol.toUpperCase())
             );
             connectionPools.add(connectionPool);
             LOG.log(Level.INFO, "Configured connectionpool." + i + ": {0}", connectionPool);
         }
 
-        // dafault connection pool
+        // default connection pool
         defaultConnectionPool = new ConnectionPoolConfiguration(
                 "*", "*",
                 getMaxConnectionsPerEndpoint(),
@@ -410,7 +414,8 @@ public class RuntimeServerConfiguration {
                 getKeepaliveInterval(),
                 getKeepaliveCount(),
                 isClientKeepAlive(),
-                true
+                true,
+                HttpProtocol.HTTP11
         );
         LOG.log(Level.INFO, "Configured default connectionpool: {0}", defaultConnectionPool);
     }

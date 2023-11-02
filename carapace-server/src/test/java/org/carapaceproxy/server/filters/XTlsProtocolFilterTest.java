@@ -56,7 +56,7 @@ public class XTlsProtocolFilterTest {
             server.addCertificate(new SSLCertificateConfiguration("*", null, certificate, "testproxy", STATIC));
             server.addRequestFilter(new RequestFilterConfiguration(XTlsProtocolRequestFilter.TYPE, Collections.emptyMap()));
             server.addListener(new NetworkListenerConfiguration("0.0.0.0", 0, true, null, "*", Set.of("TLSv1.2"),
-                    128, true, 300, 60, 8, 1000, Set.of("http11")));
+                    128, true, 300, 60, 8, 1000, "http11"));
             server.start();
             int port = server.getLocalPort();
 
@@ -70,7 +70,7 @@ public class XTlsProtocolFilterTest {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.addCertificate(new SSLCertificateConfiguration("*", null, certificate, "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("0.0.0.0", 0, true, null, "*", Set.of("TLSv1.2"),
-                    128, true, 300, 60, 8, 1000, Set.of("http11")));
+                    128, true, 300, 60, 8, 1000, "http11"));
             server.start();
             int port = server.getLocalPort();
 

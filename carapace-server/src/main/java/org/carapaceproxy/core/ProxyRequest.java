@@ -28,6 +28,7 @@ import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpScheme;
+import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.ssl.SslHandler;
 
 import java.net.InetSocketAddress;
@@ -77,13 +78,13 @@ public class ProxyRequest implements MatchingContext {
     private String sslProtocol;
     private String cipherSuite;
     private boolean servedFromCache;
-    private String httpProtocol;
+    private HttpVersion httpProtocol;
 
     public ProxyRequest(HttpServerRequest request, HttpServerResponse response, HostPort listener) {
         this.request = request;
         this.response = response;
         this.listener = listener;
-        this.httpProtocol = request.protocol();
+        this.httpProtocol = HttpVersion.valueOf(request.protocol());
         request.withConnection(conn -> {
             SslHandler handler = conn.channel().pipeline().get(SslHandler.class);
             if (handler != null) {
@@ -96,7 +97,7 @@ public class ProxyRequest implements MatchingContext {
     @Override
     public String getProperty(String name) {
         if (name.startsWith(PROPERTY_HEADERS)) {
-            // In case of multiple headers with same name, the first one is returned.
+            // In case of multiple headers with the same name, the first one is returned.
             return request.requestHeaders().get(name.substring(HEADERS_SUBSTRING_INDEX), "");
         } else {
             return switch (name) {
@@ -167,18 +168,19 @@ public class ProxyRequest implements MatchingContext {
 
     public boolean isValidHostAndPort(String hostAndPort) {
         try {
+            if (hostAndPort == null) {
+                return false;
+            }
             HostAndPort parsed = HostAndPort.fromString(hostAndPort);
-            if (!parsed.hasPort()) {
-                return parsed.getHost() != null &&
-                        !parsed.getHost().isBlank() &&
-                        (InternetDomainName.isValid(parsed.getHost()) ||
-                                InetAddresses.isInetAddress(parsed.getHost()));
+            String host = parsed.getHost();
+            if (parsed.hasPort()) {
+                return !host.isBlank()
+                        && (InternetDomainName.isValid(host) || InetAddresses.isInetAddress(host))
+                        && parsed.getPort() >= 0
+                        && parsed.getPort() <= 65535;
             } else {
-                return parsed.getHost() != null &&
-                        !parsed.getHost().isBlank() &&
-                        (InternetDomainName.isValid(parsed.getHost()) ||
-                                InetAddresses.isInetAddress(parsed.getHost())) &&
-                        parsed.getPort() >= 0 && parsed.getPort() <= 65535;
+                return !host.isBlank()
+                        && (InternetDomainName.isValid(host) || InetAddresses.isInetAddress(host));
             }
         } catch (IllegalArgumentException e) {
             return false;

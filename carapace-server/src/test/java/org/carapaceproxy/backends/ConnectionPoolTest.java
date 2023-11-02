@@ -62,6 +62,7 @@ import org.carapaceproxy.utils.HttpTestUtils;
 import org.carapaceproxy.utils.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
+import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.server.HttpServerRequest;
 import reactor.netty.resources.ConnectionProvider;
 
@@ -265,7 +266,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         // default pool
         ConnectionPoolConfiguration defaultPool = new ConnectionPoolConfiguration(
-                "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 100_000, 50_000, 500, 50, 5, true,true
+                "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 100_000, 50_000, 500, 50, 5, true,true, HttpProtocol.HTTP11
         );
         {
             ConnectionProvider provider = connectionPools.get(defaultPool);
@@ -278,7 +279,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         // pool with defaults
         ConnectionPoolConfiguration poolWithDefaults = new ConnectionPoolConfiguration(
-                "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, 100_000, 50_000, 500, 50, 5, true, true
+                "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, 100_000, 50_000, 500, 50, 5, true, true, HttpProtocol.HTTP11
         );
         {
             ConnectionProvider provider = connectionPools.get(poolWithDefaults);
@@ -291,7 +292,7 @@ public class ConnectionPoolTest extends UseAdminServer {
 
         // custom pool
         ConnectionPoolConfiguration customPool = new ConnectionPoolConfiguration(
-                "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, 100_000, 25_000, 250, 25, 2, true,true
+                "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, 100_000, 25_000, 250, 25, 2, true,true, HttpProtocol.HTTP11
         );
         {
             ConnectionProvider provider = connectionPools.get(customPool);
