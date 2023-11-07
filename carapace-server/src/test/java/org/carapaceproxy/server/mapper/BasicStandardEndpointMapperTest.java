@@ -35,6 +35,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.matches;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static reactor.netty.http.HttpProtocol.HTTP11;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -43,6 +44,7 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
+import java.util.Set;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
@@ -93,8 +95,8 @@ public class BasicStandardEndpointMapperTest {
         int backendPort = backend1.port();
         StandardEndpointMapper mapper = new StandardEndpointMapper();
 
-        mapper.addBackend(new BackendConfiguration("backend-a", "localhost", backendPort, "/"));
-        mapper.addBackend(new BackendConfiguration("backend-b", "localhost", backendPort, "/"));
+        mapper.addBackend(new BackendConfiguration("backend-a", "localhost", backendPort, "/", Set.of(HTTP11.name())));
+        mapper.addBackend(new BackendConfiguration("backend-b", "localhost", backendPort, "/", Set.of(HTTP11.name())));
         mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
         mapper.addDirector(new DirectorConfiguration("director-2").addBackend("backend-b"));
         mapper.addDirector(new DirectorConfiguration("director-all").addBackend("*")); // all the known backends
@@ -308,8 +310,8 @@ public class BasicStandardEndpointMapperTest {
         int backendPort = backend1.port();
 
         StandardEndpointMapper mapper = new StandardEndpointMapper();
-        mapper.addBackend(new BackendConfiguration("backend", "localhost", backendPort, "/"));
-        mapper.addBackend(new BackendConfiguration("backend-down", "localhost-down", backendPort, "/"));
+        mapper.addBackend(new BackendConfiguration("backend", "localhost", backendPort, "/", Set.of(HTTP11.name())));
+        mapper.addBackend(new BackendConfiguration("backend-down", "localhost-down", backendPort, "/", Set.of(HTTP11.name())));
         mapper.addDirector(new DirectorConfiguration("director").addBackend("backend"));
         mapper.addDirector(new DirectorConfiguration("director-down").addBackend("backend-down"));
         mapper.addAction(new ActionConfiguration("cache", ActionConfiguration.TYPE_CACHE, "director", null, -1));

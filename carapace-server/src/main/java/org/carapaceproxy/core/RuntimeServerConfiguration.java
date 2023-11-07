@@ -46,7 +46,6 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import org.carapaceproxy.utils.CarapaceLogger;
-import reactor.netty.http.HttpProtocol;
 
 /**
  * Implementation of a configuration for the whole server.
@@ -136,8 +135,7 @@ public class RuntimeServerConfiguration {
                 keepaliveInterval,
                 keepaliveCount,
                 true,
-                true,
-                HttpProtocol.HTTP11
+                true
         );
     }
 
@@ -379,7 +377,6 @@ public class RuntimeServerConfiguration {
             int keepalivecount = properties.getInt(prefix + "keepalivecount", keepaliveCount);
             boolean enabled = properties.getBoolean(prefix + "enabled", false);
             boolean keepAlive = properties.getBoolean(prefix + "keepalive", true);
-            String protocol = properties.getString(prefix + "protocol", HttpProtocol.HTTP11.name());
 
             ConnectionPoolConfiguration connectionPool = new ConnectionPoolConfiguration(
                     id, domain,
@@ -394,8 +391,7 @@ public class RuntimeServerConfiguration {
                     keepaliveinterval,
                     keepalivecount,
                     keepAlive,
-                    enabled,
-                    HttpProtocol.valueOf(protocol.toUpperCase())
+                    enabled
             );
             connectionPools.add(connectionPool);
             LOG.log(Level.INFO, "Configured connectionpool." + i + ": {0}", connectionPool);
@@ -415,8 +411,7 @@ public class RuntimeServerConfiguration {
                 getKeepaliveInterval(),
                 getKeepaliveCount(),
                 isClientKeepAlive(),
-                true,
-                HttpProtocol.HTTP11
+                true
         );
         LOG.log(Level.INFO, "Configured default connectionpool: {0}", defaultConnectionPool);
     }

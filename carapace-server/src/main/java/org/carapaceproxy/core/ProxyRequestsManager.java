@@ -109,6 +109,7 @@ public class ProxyRequestsManager {
 
     public void reloadConfiguration(RuntimeServerConfiguration newConfiguration, Collection<BackendConfiguration> newEndpoints) {
         connectionsManager.reloadConfiguration(newConfiguration, newEndpoints);
+        forwardersPool.clear(); // todo check if it is actually needed
     }
 
     public void close() {
@@ -285,7 +286,7 @@ public class ProxyRequestsManager {
         response.headers().set(HttpHeaderNames.CACHE_CONTROL, "no-cache");
 
         String location = action.redirectLocation;
-        String host = request.getRequestHeaders().get(HttpHeaderNames.HOST, "localhost");
+        String host = request.getRequestHostname();
         String port = host.contains(":") ? host.replaceFirst(".*:", ":") : "";
         host = host.split(":")[0];
         String path = request.getUri();
@@ -379,7 +380,7 @@ public class ProxyRequestsManager {
                 .port(endpointPort)
                 // support both HTTP/1.1 and HTTP/2.0, Netty will adapt accordingly
                 // .protocol(HttpProtocol.HTTP11, HttpProtocol.H2C /* todo HttpProtocol.H2*/)
-                .protocol(connectionConfig.getProtocol())
+                .protocol(parent.getMapper().getBackends())
                 // .secure() // todo to enable alongside HttpProtocol.H2
                 .followRedirect(false) // client has to request the redirect, not the proxy
                 .runOn(parent.getEventLoopGroup())
@@ -433,7 +434,8 @@ public class ProxyRequestsManager {
         return forwarder.request(request.getMethod())
                 .uri(request.getUri())
                 .send((req, out) -> {
-                    req.headers(request.getRequestHeaders().copy()); // client request headers
+                    // client request headers
+                    req.headers(request.getRequestHeaders().copy());
                     req.header(HttpHeaderNames.HOST, request.getRequestHeaders().get(HttpHeaderNames.HOST)); // netty overrides the value, we need to force it
                     return out.send(request.getRequestData()); // client request body
                 }).response((resp, flux) -> { // endpoint response
@@ -628,9 +630,9 @@ public class ProxyRequestsManager {
                 // max connections per endpoint limit setup
                 newEndpoints.forEach(be -> {
                     CarapaceLogger.debug("Setup max connections per endpoint {0}:{1} = {2} for connectionpool {3}",
-                            be.getHost(), be.getPort() + "", connectionPool.getMaxConnectionsPerEndpoint(), connectionPool.getId()
+                            be.host(), be.port() + "", connectionPool.getMaxConnectionsPerEndpoint(), connectionPool.getId()
                     );
-                    builder.forRemoteHost(InetSocketAddress.createUnresolved(be.getHost(), be.getPort()), spec -> {
+                    builder.forRemoteHost(InetSocketAddress.createUnresolved(be.host(), be.port()), spec -> {
                         spec.maxConnections(connectionPool.getMaxConnectionsPerEndpoint());
                         spec.pendingAcquireTimeout(Duration.ofMillis(connectionPool.getBorrowTimeout()));
                         spec.maxIdleTime(Duration.ofMillis(connectionPool.getIdleTimeout()));

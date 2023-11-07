@@ -19,21 +19,13 @@
  */
 package org.carapaceproxy.server.config;
 
-import lombok.Data;
+import java.util.Set;
 
 /**
  * Configuration of a single backend server
  */
-@Data
-public class BackendConfiguration {
-
-    private final String id;
-    private final String host;
-    private final int port;
-    private final String probePath;
-
+public record BackendConfiguration(String id, String host, int port, String probePath, Set<String> protocols) {
     public String getHostPort() {
         return host + ":" + port;
     }
-
 }

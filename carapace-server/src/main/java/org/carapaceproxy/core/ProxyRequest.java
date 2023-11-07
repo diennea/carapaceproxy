@@ -29,11 +29,10 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpScheme;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.ssl.SslHandler;
-
 import java.net.InetSocketAddress;
 import java.util.concurrent.atomic.AtomicLong;
-
 import lombok.Data;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
@@ -41,6 +40,7 @@ import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchingContext;
 import org.reactivestreams.Publisher;
 import reactor.netty.ByteBufFlux;
+import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.server.HttpServerRequest;
 import reactor.netty.http.server.HttpServerResponse;
 
@@ -162,7 +162,25 @@ public class ProxyRequest implements MatchingContext {
         return request.scheme();
     }
 
+    /**
+     * Get the currently defined hostname, including port if provided.
+     * It leverages {@code :authority} pseudo-header over HTTP/2 and {@code HOST} header over HTTP/1.1 and older.
+     * <br>
+     * It doesn't use {@link HttpServerRequest#hostName()},
+     * nor it considers {@code X-Forwarded-Host}/{@code Forwarded} headers.
+     *
+     * @return the hostname and possibly the port of the request;
+     * it may be null over HTTP/1.1 if no {@code HOST} header is provided
+     */
     public String getRequestHostname() {
+        if (HttpProtocol.valueOf(request.protocol().toUpperCase()).equals(HttpProtocol.H2)) {
+            // RFC 3986 section 3.2 states that :authority may include port if provided, just like HTTP/1.1 HOST header
+            // authority = [ userinfo "@" ] host [ ":" port ]
+            return request.requestHeaders().get(Http2Headers.PseudoHeaderName.AUTHORITY.value());
+        }
+        // The Host request header specifies the host and port number of the server to which the request is being sent.
+        // If no port is included, the default port for the service requested is implied
+        // Host: <host>:<port>
         return request.requestHeaders().get(HttpHeaderNames.HOST);
     }
 

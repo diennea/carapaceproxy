@@ -19,9 +19,11 @@
  */
 package org.carapaceproxy.utils;
 
+import static reactor.netty.http.HttpProtocol.HTTP11;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.server.mapper.EndpointMapper;
@@ -39,17 +41,17 @@ public class TestEndpointMapper extends EndpointMapper {
     private final int port;
     private final boolean cacheAll;
     private final Map<String, BackendConfiguration> backends;
-    private final List<RouteConfiguration> routes = new ArrayList();
-    private final List<ActionConfiguration> actions = new ArrayList();
-    private final List<DirectorConfiguration> directors = new ArrayList();
-    private final List<CustomHeader> headers = new ArrayList();
+    private final List<RouteConfiguration> routes = new ArrayList<>();
+    private final List<ActionConfiguration> actions = new ArrayList<>();
+    private final List<DirectorConfiguration> directors = new ArrayList<>();
+    private final List<CustomHeader> headers = new ArrayList<>();
 
     public TestEndpointMapper(String host, int port) {
         this(host, port, false);
     }
 
     public TestEndpointMapper(String host, int port, boolean cacheAll) {
-        this(host, port, cacheAll, Map.of(host, new BackendConfiguration(host, host, port, "/index.html")));
+        this(host, port, cacheAll, Map.of(host, new BackendConfiguration(host, host, port, "/index.html", Set.of(HTTP11.name()))));
     }
 
     public TestEndpointMapper(String host, int port, boolean cacheAll, Map<String, BackendConfiguration> backends) {

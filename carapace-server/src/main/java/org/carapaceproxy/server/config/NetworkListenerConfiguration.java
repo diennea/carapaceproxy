@@ -124,4 +124,8 @@ public class NetworkListenerConfiguration {
 
     public record HostPort(String host, int port) {
     }
+
+    public Set<HttpProtocol> getProtocols() {
+        return protocols;
+    }
 }
