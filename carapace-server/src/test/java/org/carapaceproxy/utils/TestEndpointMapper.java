@@ -19,21 +19,19 @@
  */
 package org.carapaceproxy.utils;
 
-import static reactor.netty.http.HttpProtocol.HTTP11;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.core.ProxyRequest;
-import org.carapaceproxy.server.mapper.EndpointMapper;
-import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.mapper.CustomHeader;
+import org.carapaceproxy.server.mapper.EndpointMapper;
+import org.carapaceproxy.server.mapper.MapResult;
 
 public class TestEndpointMapper extends EndpointMapper {
 
@@ -51,7 +49,7 @@ public class TestEndpointMapper extends EndpointMapper {
     }
 
     public TestEndpointMapper(String host, int port, boolean cacheAll) {
-        this(host, port, cacheAll, Map.of(host, new BackendConfiguration(host, host, port, "/index.html", Set.of(HTTP11.name()))));
+        this(host, port, cacheAll, Map.of(host, new BackendConfiguration(host, host, port, "/index.html")));
     }
 
     public TestEndpointMapper(String host, int port, boolean cacheAll, Map<String, BackendConfiguration> backends) {

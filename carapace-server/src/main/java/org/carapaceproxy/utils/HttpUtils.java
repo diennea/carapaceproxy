@@ -19,9 +19,12 @@ package org.carapaceproxy.utils;
  under the License.
 
  */
+
+import static java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME;
+import io.netty.handler.codec.http.HttpVersion;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import static java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME;
+import reactor.netty.http.HttpProtocol;
 
 /**
  * HTTP utilities
@@ -32,8 +35,15 @@ public class HttpUtils {
 
     private static final ZoneId GMT = ZoneId.of("GMT");
 
-    public static final String formatDateHeader(java.util.Date date) {
+    public static String formatDateHeader(java.util.Date date) {
         return RFC_1123_DATE_TIME.format(ZonedDateTime.ofInstant(date.toInstant(), GMT));
     }
 
+    public static HttpProtocol toHttpProtocol(final HttpVersion httpVersion, final boolean ssl) {
+        return switch (httpVersion.majorVersion()) {
+            case 1 -> HttpProtocol.HTTP11;
+            case 2 -> ssl ? HttpProtocol.H2 : HttpProtocol.H2C;
+            default -> throw new IllegalStateException("Unexpected HTTP Protocol: " + httpVersion);
+        };
+    }
 }

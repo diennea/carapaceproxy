@@ -27,11 +27,9 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static reactor.netty.http.HttpProtocol.HTTP11;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.backends.BackendHealthCheck;
 import org.carapaceproxy.server.backends.BackendHealthManager;
@@ -58,7 +56,7 @@ public class HealthCheckTest {
     public void test() throws Exception {
 
         Map<String, BackendConfiguration> backends = new HashMap<>();
-        BackendConfiguration b1conf = new BackendConfiguration("myid", "localhost", wireMockRule.port(), "/status.html", Set.of(HTTP11.name()));
+        BackendConfiguration b1conf = new BackendConfiguration("myid", "localhost", wireMockRule.port(), "/status.html");
         backends.put(b1conf.getHostPort(), b1conf);
 
         EndpointMapper mapper = new TestEndpointMapper(null, 0, false, backends);

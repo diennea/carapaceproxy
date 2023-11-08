@@ -26,11 +26,9 @@ import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.carapaceproxy.core.ProxyRequest.PROPERTY_URI;
 import static org.junit.Assert.assertEquals;
-import static reactor.netty.http.HttpProtocol.HTTP11;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.net.URL;
 import java.util.Properties;
-import java.util.Set;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
@@ -78,8 +76,8 @@ public class ForceBackendTest {
         assertEquals("thedirector", mapper.getForceDirectorParameter());
         assertEquals("thebackend", mapper.getForceBackendParameter());
 
-        mapper.addBackend(new BackendConfiguration("backend-a", "localhost", backendPort, "/", Set.of(HTTP11.name())));
-        mapper.addBackend(new BackendConfiguration("backend-b", "localhost", backendPort, "/", Set.of(HTTP11.name())));
+        mapper.addBackend(new BackendConfiguration("backend-a", "localhost", backendPort, "/"));
+        mapper.addBackend(new BackendConfiguration("backend-b", "localhost", backendPort, "/"));
         mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
         mapper.addDirector(new DirectorConfiguration("director-2").addBackend("backend-b"));
 

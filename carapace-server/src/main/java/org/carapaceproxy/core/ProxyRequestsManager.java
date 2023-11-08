@@ -73,6 +73,7 @@ import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.ByteBufFlux;
+import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.http.client.HttpClientResponse;
 import reactor.netty.resources.ConnectionProvider;
@@ -96,7 +97,7 @@ public class ProxyRequestsManager {
 
     private final HttpProxyServer parent;
     private final Map<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
-    private final Map<String, HttpClient> forwardersPool = new ConcurrentHashMap<>(); // endpoint_connectionpool -> forwarder to use
+    private final Map<Map.Entry<String, HttpProtocol>, HttpClient> forwardersPool = new ConcurrentHashMap<>(); // endpoint_connectionpool -> forwarder to use
     private final ConnectionsManager connectionsManager = new ConnectionsManager();
 
     public ProxyRequestsManager(HttpProxyServer parent) {
@@ -109,7 +110,7 @@ public class ProxyRequestsManager {
 
     public void reloadConfiguration(RuntimeServerConfiguration newConfiguration, Collection<BackendConfiguration> newEndpoints) {
         connectionsManager.reloadConfiguration(newConfiguration, newEndpoints);
-        forwardersPool.clear(); // todo check if it is actually needed
+        forwardersPool.clear();
     }
 
     public void close() {
@@ -375,19 +376,19 @@ public class ProxyRequestsManager {
             CarapaceLogger.debug("Max connections for {0}: {1}", connectionConfig.getId(), connectionProvider.maxConnectionsPerHost());
         }
 
-        HttpClient forwarder = forwardersPool.computeIfAbsent(key.getHostPort() + "_" + connectionConfig.getId(), hostname -> HttpClient.create(connectionProvider)
+        final var protocol = HttpUtils.toHttpProtocol(request.getHttpProtocol(), request.isSecure());
+        final var clientKey = Map.entry(key.getHostPort() + "_" + connectionConfig.getId(), protocol);
+        HttpClient forwarder = forwardersPool.computeIfAbsent(clientKey, hostname -> HttpClient.create(connectionProvider)
                 .host(endpointHost)
                 .port(endpointPort)
-                // support both HTTP/1.1 and HTTP/2.0, Netty will adapt accordingly
-                // .protocol(HttpProtocol.HTTP11, HttpProtocol.H2C /* todo HttpProtocol.H2*/)
-                .protocol(parent.getMapper().getBackends())
-                // .secure() // todo to enable alongside HttpProtocol.H2
-                .followRedirect(false) // client has to request the redirect, not the proxy
+                .protocol(protocol)
+                .followRedirect(false)
                 .runOn(parent.getEventLoopGroup())
                 .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
                 .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
-                .option(ChannelOption.SO_KEEPALIVE, connectionConfig.isKeepAlive()) // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
+                // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
+                .option(ChannelOption.SO_KEEPALIVE, connectionConfig.isKeepAlive())
                 .option(Epoll.isAvailable()
                         ? EpollChannelOption.TCP_KEEPIDLE
                         : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE), connectionConfig.getKeepaliveIdle())
@@ -436,7 +437,8 @@ public class ProxyRequestsManager {
                 .send((req, out) -> {
                     // client request headers
                     req.headers(request.getRequestHeaders().copy());
-                    req.header(HttpHeaderNames.HOST, request.getRequestHeaders().get(HttpHeaderNames.HOST)); // netty overrides the value, we need to force it
+                    // netty overrides the value, we need to force it
+                    req.header(HttpHeaderNames.HOST, request.getRequestHeaders().get(HttpHeaderNames.HOST));
                     return out.send(request.getRequestData()); // client request body
                 }).response((resp, flux) -> { // endpoint response
                     if (CarapaceLogger.isLoggingDebugEnabled()) {

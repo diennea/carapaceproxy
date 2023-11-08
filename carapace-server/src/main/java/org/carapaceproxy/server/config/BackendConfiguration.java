@@ -19,12 +19,10 @@
  */
 package org.carapaceproxy.server.config;
 
-import java.util.Set;
-
 /**
  * Configuration of a single backend server
  */
-public record BackendConfiguration(String id, String host, int port, String probePath, Set<String> protocols) {
+public record BackendConfiguration(String id, String host, int port, String probePath) {
     public String getHostPort() {
         return host + ":" + port;
     }

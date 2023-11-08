@@ -40,7 +40,6 @@ import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchingContext;
 import org.reactivestreams.Publisher;
 import reactor.netty.ByteBufFlux;
-import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.server.HttpServerRequest;
 import reactor.netty.http.server.HttpServerResponse;
 
@@ -173,7 +172,7 @@ public class ProxyRequest implements MatchingContext {
      * it may be null over HTTP/1.1 if no {@code HOST} header is provided
      */
     public String getRequestHostname() {
-        if (HttpProtocol.valueOf(request.protocol().toUpperCase()).equals(HttpProtocol.H2)) {
+        if (HttpVersion.valueOf(request.protocol().toUpperCase()).majorVersion() == 2) {
             // RFC 3986 section 3.2 states that :authority may include port if provided, just like HTTP/1.1 HOST header
             // authority = [ userinfo "@" ] host [ ":" port ]
             return request.requestHeaders().get(Http2Headers.PseudoHeaderName.AUTHORITY.value());

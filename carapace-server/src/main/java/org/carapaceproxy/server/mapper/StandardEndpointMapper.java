@@ -24,7 +24,6 @@ import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_MAINTENANCE_M
 import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_NOT_FOUND;
 import static org.carapaceproxy.core.StaticContentsManager.IN_MEMORY_RESOURCE;
 import static org.carapaceproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
-import static reactor.netty.http.HttpProtocol.HTTP11;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -456,8 +455,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                 String probePath = properties.getString(prefix + "probePath", "");
                 LOG.log(Level.INFO, "configured backend {0} {1}:{2} enabled:{3}", new Object[]{id, host, port, enabled});
                 if (enabled) {
-                    final var protocols = properties.getValues("httpprotocols", Set.of(HTTP11.name()));
-                    BackendConfiguration config = new BackendConfiguration(id, host, port, probePath, protocols);
+                    BackendConfiguration config = new BackendConfiguration(id, host, port, probePath);
                     addBackend(config);
                 }
             }
