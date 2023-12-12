@@ -145,7 +145,7 @@ public class BackendHealthManager implements Runnable {
             BackendHealthStatus status = backends.computeIfAbsent(hostPort, (_hostPort) -> new BackendHealthStatus(_hostPort));
 
             BackendHealthCheck checkResult = BackendHealthCheck.check(
-                    bconf.getHost(), bconf.getPort(), bconf.getProbePath(), connectTimeout);
+                    bconf.host(), bconf.port(), bconf.probePath(), connectTimeout);
 
             if (checkResult.isOk()) {
                 if (status.isReportedAsUnreachable()) {
@@ -167,9 +167,9 @@ public class BackendHealthManager implements Runnable {
             status.setLastProbe(checkResult);
 
             if (status.isReportedAsUnreachable()) {
-                BACKEND_UPSTATUS_GAUGE.labels(bconf.getHost() + "_" + bconf.getPort()).set(0);
+                BACKEND_UPSTATUS_GAUGE.labels(bconf.host() + "_" + bconf.port()).set(0);
             } else {
-                BACKEND_UPSTATUS_GAUGE.labels(bconf.getHost() + "_" + bconf.getPort()).set(1);
+                BACKEND_UPSTATUS_GAUGE.labels(bconf.host() + "_" + bconf.port()).set(1);
             }
         }
         List<String> toRemove = new ArrayList<>();

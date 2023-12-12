@@ -24,9 +24,7 @@ import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_MAINTENANCE_M
 import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_NOT_FOUND;
 import static org.carapaceproxy.core.StaticContentsManager.IN_MEMORY_RESOURCE;
 import static org.carapaceproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
-
 import io.netty.handler.codec.http.HttpResponseStatus;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -37,7 +35,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
 import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.core.ProxyRequest;
@@ -66,7 +63,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     private final List<String> allbackendids = new ArrayList<>();
     private final List<RouteConfiguration> routes = new ArrayList<>();
     private final Map<String, ActionConfiguration> actions = new HashMap<>();
-    public final Map<String, CustomHeader> headers = new HashMap();
+    public final Map<String, CustomHeader> headers = new HashMap<>();
     private final BackendSelector backendSelector;
     private String defaultNotFoundAction = "not-found";
     private String defaultInternalErrorAction = "internal-error";
@@ -118,10 +115,9 @@ public class StandardEndpointMapper extends EndpointMapper {
 
     @Override
     public MapResult map(ProxyRequest request) {
-        //If header host is null return bad request
-        //https://www.rfc-editor.org/rfc/rfc2616#page-38
-        if (request.getRequestHostname() == null ||
-            request.getRequestHostname().isBlank()) {
+        // If the HOST header is null (when on HTTP/1.1 or less), then return bad request
+        // https://www.rfc-editor.org/rfc/rfc2616#page-38
+        if (request.getRequestHostname() == null || request.getRequestHostname().isBlank()) {
             if (LOG.isLoggable(Level.FINER)) {
                 LOG.log(Level.FINER, "Request " + request.getUri() + " header host is null or empty");
             }
@@ -226,7 +222,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                     if (backend != null && parent.getBackendHealthManager().isAvailable(backend.getHostPort())) {
                         List<CustomHeader> customHeaders = action.getCustomHeaders();
                         if (this.debuggingHeaderEnabled) {
-                            customHeaders = new ArrayList(customHeaders);
+                            customHeaders = new ArrayList<>(customHeaders);
                             String routingPath = route.getId() + ";"
                                     + action.getId() + ";"
                                     + action.getDirector() + ";"
@@ -234,8 +230,8 @@ public class StandardEndpointMapper extends EndpointMapper {
                             customHeaders.add(new CustomHeader(DEBUGGING_HEADER_ID, debuggingHeaderName, routingPath, HeaderMode.ADD));
                         }
                         return MapResult.builder()
-                                .host(backend.getHost())
-                                .port(backend.getPort())
+                                .host(backend.host())
+                                .port(backend.port())
                                 .action(selectedAction)
                                 .routeId(route.getId())
                                 .customHeaders(customHeaders)
@@ -374,7 +370,7 @@ public class StandardEndpointMapper extends EndpointMapper {
         this.debuggingHeaderName = properties.getString("mapper.debug.name", DEBUGGING_HEADER_DEFAULT_NAME);
         LOG.log(Level.INFO, "configured mapper.debug.name={0}", debuggingHeaderName);
 
-        /**
+        /*
          * HEADERS
          */
         int max = properties.findMaxIndexForPrefix("header");
@@ -390,7 +386,7 @@ public class StandardEndpointMapper extends EndpointMapper {
             }
         }
 
-        /**
+        /*
          * ACTIONS
          */
         max = properties.findMaxIndexForPrefix("action");
@@ -404,8 +400,8 @@ public class StandardEndpointMapper extends EndpointMapper {
                 String director = properties.getString(prefix + "director", DirectorConfiguration.DEFAULT);
                 int code = properties.getInt(prefix + "code", -1);
                 // Headers
-                List<CustomHeader> customHeaders = new ArrayList();
-                Set<String> usedIds = new HashSet();
+                List<CustomHeader> customHeaders = new ArrayList<>();
+                Set<String> usedIds = new HashSet<>();
                 final var headersIds = properties.getValues(prefix + "headers");
                 for (String headerId : headersIds) {
                     if (usedIds.contains(headerId)) {
@@ -445,7 +441,7 @@ public class StandardEndpointMapper extends EndpointMapper {
             }
         }
 
-        /**
+        /*
          * BACKENDS
          */
         max = properties.findMaxIndexForPrefix("backend");
@@ -465,7 +461,7 @@ public class StandardEndpointMapper extends EndpointMapper {
             }
         }
 
-        /**
+        /*
          * DIRECTORS
          */
         max = properties.findMaxIndexForPrefix("director");
@@ -488,7 +484,7 @@ public class StandardEndpointMapper extends EndpointMapper {
             }
         }
 
-        /**
+        /*
          * ROUTES
          */
         max = properties.findMaxIndexForPrefix("route");
@@ -534,20 +530,12 @@ public class StandardEndpointMapper extends EndpointMapper {
     }
 
     private void addHeader(String id, String name, String value, String mode) throws ConfigurationNotValidException {
-        HeaderMode _mode = HeaderMode.ADD;
-        switch (mode) {
-            case "set":
-                _mode = HeaderMode.SET;
-                break;
-            case "add":
-                _mode = HeaderMode.ADD;
-                break;
-            case "remove":
-                _mode = HeaderMode.REMOVE;
-                break;
-            default:
-                throw new ConfigurationNotValidException("invalid value of mode " + mode + " for header " + id);
-        }
+        final HeaderMode _mode = switch (mode) {
+            case "set" -> HeaderMode.SET;
+            case "add" -> HeaderMode.ADD;
+            case "remove" -> HeaderMode.REMOVE;
+            default -> throw new ConfigurationNotValidException("invalid value of mode " + mode + " for header " + id);
+        };
 
         if (headers.put(id, new CustomHeader(id, name, value, _mode)) != null) {
             throw new ConfigurationNotValidException("header " + id + " is already configured");
@@ -561,10 +549,10 @@ public class StandardEndpointMapper extends EndpointMapper {
     }
 
     public void addBackend(BackendConfiguration backend) throws ConfigurationNotValidException {
-        if (backends.put(backend.getId(), backend) != null) {
-            throw new ConfigurationNotValidException("backend " + backend.getId() + " is already configured");
+        if (backends.put(backend.id(), backend) != null) {
+            throw new ConfigurationNotValidException("backend " + backend.id() + " is already configured");
         }
-        allbackendids.add(backend.getId());
+        allbackendids.add(backend.id());
     }
 
     public void addAction(ActionConfiguration action) throws ConfigurationNotValidException {
@@ -592,17 +580,17 @@ public class StandardEndpointMapper extends EndpointMapper {
 
     @Override
     public List<ActionConfiguration> getActions() {
-        return new ArrayList(actions.values());
+        return new ArrayList<>(actions.values());
     }
 
     @Override
     public List<DirectorConfiguration> getDirectors() {
-        return new ArrayList(directors.values());
+        return new ArrayList<>(directors.values());
     }
 
     @Override
     public List<CustomHeader> getHeaders() {
-        return new ArrayList(headers.values());
+        return new ArrayList<>(headers.values());
     }
 
     public String getForceDirectorParameter() {

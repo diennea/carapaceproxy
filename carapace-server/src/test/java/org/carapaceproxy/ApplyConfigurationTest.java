@@ -27,6 +27,7 @@ import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
@@ -403,7 +404,7 @@ public class ApplyConfigurationTest {
     private void testIt(int port, boolean ok) throws URISyntaxException, IOException {
         try {
             String url = "http://localhost:" + port + "/index.html?redir";
-            String s = IOUtils.toString(new URL(url).toURI(), "utf-8");
+            String s = IOUtils.toString(new URL(url).toURI(), StandardCharsets.UTF_8);
             System.out.println("RES FOR: " + url + " -> " + s);
             assertEquals("it <b>works</b> !!", s);
             if (!ok) {
@@ -411,7 +412,7 @@ public class ApplyConfigurationTest {
             }
         } catch (IOException err) {
             if (ok) {
-                fail("unexpected errro " + err + " for port " + port);
+                fail("unexpected error " + err + " for port " + port);
             }
         }
     }

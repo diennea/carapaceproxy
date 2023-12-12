@@ -32,9 +32,12 @@ import org.apache.zookeeper.server.ZooKeeperServerMain;
 import org.apache.zookeeper.server.quorum.QuorumPeerConfig;
 
 /**
- * Simple wrapper for standalone ZooKeeper server (for local demos/tests)
+ * Simple wrapper for standalone ZooKeeper server (for local demos/tests).
+ * <br>
+ * It is the alternative entrypoint for the provided service.
  *
  * @author enrico.olivelli
+ * @see ServerMain for the standard main entrypoint
  */
 public class ZooKeeperMainWrapper implements AutoCloseable {
 

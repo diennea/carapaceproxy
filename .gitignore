@@ -1,7 +1,6 @@
 **/.classpath
 **/.project
 **/.settings/
-**/.classpath
 **/target/
 **/node/
 *.pyc
@@ -11,6 +10,8 @@ dependency-reduced-pom.xml
 **/pom.xml.releaseBackup
 release.properties
 **/*.p12
+!**/test/resources/*.p12
+!localhost.p12
 **/*.DS_Store
 **/.idea/
 *.iml

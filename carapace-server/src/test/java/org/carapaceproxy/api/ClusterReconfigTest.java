@@ -20,7 +20,8 @@
 package org.carapaceproxy.api;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.Assert.assertTrue;
+
 import java.util.Properties;
 import org.apache.curator.test.TestingServer;
 import org.carapaceproxy.utils.RawHttpClient;

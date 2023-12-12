@@ -29,15 +29,14 @@ import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import io.netty.handler.codec.http.HttpHeaderNames;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -45,12 +44,8 @@ import java.io.OutputStreamWriter;
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.util.HashMap;
-import java.util.Properties;
-
-import org.carapaceproxy.utils.RawHttpClient;
-
 import java.util.Map;
-
+import java.util.Properties;
 import org.carapaceproxy.api.ConnectionPoolsResource;
 import org.carapaceproxy.api.UseAdminServer;
 import org.carapaceproxy.client.EndpointKey;
@@ -59,6 +54,7 @@ import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.core.ProxyRequestsManager;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.utils.HttpTestUtils;
+import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;

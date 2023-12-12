@@ -19,16 +19,14 @@
  */
 package org.carapaceproxy.server.cache;
 
+import static io.netty.handler.codec.http.HttpHeaderNames.IF_MODIFIED_SINCE;
 import com.google.common.annotations.VisibleForTesting;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
-import io.netty.buffer.PooledByteBufAllocator;
-import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.prometheus.client.Counter;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -41,7 +39,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
-
 import lombok.Data;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
@@ -301,6 +298,11 @@ public class ContentsCache {
         long heapSize;
         long directSize;
         int hits;
+
+        public boolean modifiedSince(ProxyRequest request) {
+            final long ifModifiedSince = request.getRequestHeaders().getTimeMillis(IF_MODIFIED_SINCE, -1);
+            return ifModifiedSince == -1 || getLastModified() <= 0 || ifModifiedSince < getLastModified();
+        }
 
         private synchronized void addChunk(ByteBuf chunk, ByteBufAllocator allocator) {
             ByteBuf originalChunk = chunk.retainedDuplicate();

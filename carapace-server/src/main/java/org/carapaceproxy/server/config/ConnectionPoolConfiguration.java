@@ -28,7 +28,6 @@ import lombok.Data;
 @Data
 @AllArgsConstructor
 public class ConnectionPoolConfiguration {
-
     private String id;
     private String domain;
     private int maxConnectionsPerEndpoint;
@@ -42,7 +41,5 @@ public class ConnectionPoolConfiguration {
     private int keepaliveInterval;
     private int keepaliveCount;
     private boolean keepAlive;
-
     private boolean enabled;
-
 }

@@ -24,14 +24,14 @@ import java.util.List;
 import java.util.Map;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.core.ProxyRequest;
-import org.carapaceproxy.server.mapper.EndpointMapper;
-import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.mapper.CustomHeader;
+import org.carapaceproxy.server.mapper.EndpointMapper;
+import org.carapaceproxy.server.mapper.MapResult;
 
 public class TestEndpointMapper extends EndpointMapper {
 
@@ -39,10 +39,10 @@ public class TestEndpointMapper extends EndpointMapper {
     private final int port;
     private final boolean cacheAll;
     private final Map<String, BackendConfiguration> backends;
-    private final List<RouteConfiguration> routes = new ArrayList();
-    private final List<ActionConfiguration> actions = new ArrayList();
-    private final List<DirectorConfiguration> directors = new ArrayList();
-    private final List<CustomHeader> headers = new ArrayList();
+    private final List<RouteConfiguration> routes = new ArrayList<>();
+    private final List<ActionConfiguration> actions = new ArrayList<>();
+    private final List<DirectorConfiguration> directors = new ArrayList<>();
+    private final List<CustomHeader> headers = new ArrayList<>();
 
     public TestEndpointMapper(String host, int port) {
         this(host, port, false);

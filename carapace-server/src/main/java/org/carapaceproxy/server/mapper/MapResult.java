@@ -27,7 +27,7 @@ import lombok.Data;
 @Builder
 public class MapResult {
 
-    public static enum Action {
+    public enum Action {
         /**
          * Proxy the request, do not cache locally
          */
