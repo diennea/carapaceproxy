@@ -93,10 +93,13 @@ public class SSLCertificateConfiguration {
         if (subjectAltNames == null || subjectAltNames.isEmpty()) {
             return hostname.length() > other.getHostname().length();
         }
-        final var otherNames = other.getNames().stream().map(CertificatesUtils::removeWildcard);
-        for (var n: getNames()) {
+
+        final var otherNamesList = other.getNames().stream().map(CertificatesUtils::removeWildcard)
+                .collect(Collectors.toList());
+
+        for (var n : getNames()) {
             final var name = CertificatesUtils.removeWildcard(n);
-            if (otherNames.anyMatch(on -> name.length() > on.length())) {
+            if (otherNamesList.stream().anyMatch(on -> name.length() > on.length())) {
                 return true;
             }
         }
