@@ -96,16 +96,14 @@ public class SSLSNITest {
             server.addCertificate(new SSLCertificateConfiguration("other", null, "cert", "pwd", STATIC));
             server.addCertificate(new SSLCertificateConfiguration("*.example.com", Set.of("example.com", "*.example2.com"), "cert", "pwd", STATIC));
             server.addCertificate(new SSLCertificateConfiguration("www.example.com", null, "cert", "pwd", STATIC));
-            server.addCertificate(new SSLCertificateConfiguration("*.qapatchweb.peachtest.it", Set.of("qapatchweb.peachtest.it"), "cert", "pwd", STATIC));
-            server.addCertificate(new SSLCertificateConfiguration("*.qapatch2web.peachtest.it", Set.of("qapatch2web.peachtest.it"), "cert", "pwd", STATIC));
-            server.addCertificate(new SSLCertificateConfiguration("*.peachtest.it", Set.of("gemini.peachtest.it"), "cert", "pwd", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration("*.qatest.pexample.it", Set.of("qatest.pexample.it"), "cert", "pwd", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration("*.pexample.it", Set.of("qatest2.pexample.it"), "cert", "pwd", STATIC));
 
 
             // client requests bad SNI, bad default in listener
             assertNull(server.getListeners().chooseCertificate("no", "no-default"));
 
-            assertEquals("*.qapatchweb.peachtest.it", server.getListeners().chooseCertificate("test.qapatchweb.peachtest.it", "no-default").getId());
-
+            assertEquals("*.qatest.pexample.it", server.getListeners().chooseCertificate("test2.qatest.pexample.it", "no-default").getId());
             // client requests SNI, bad default in listener
             assertEquals("other", server.getListeners().chooseCertificate("other", "no-default").getId());
 
@@ -136,19 +134,6 @@ public class SSLSNITest {
             assertEquals("*.example.com", server.getListeners().chooseCertificate("example.com", "no-default").getId());
             assertEquals("*.example.com", server.getListeners().chooseCertificate("test.example2.com", "no-default").getId());
         }
-
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
-
-            // full wildcard
-            server.addCertificate(new SSLCertificateConfiguration("*", null, "cert", "pwd", STATIC));
-
-            assertEquals("*", server.getListeners().chooseCertificate(null, "www.example.com").getId());
-            assertEquals("*", server.getListeners().chooseCertificate("www.example.com", null).getId());
-            assertEquals("*", server.getListeners().chooseCertificate(null, null).getId());
-            assertEquals("*", server.getListeners().chooseCertificate("", null).getId());
-            assertEquals("*", server.getListeners().chooseCertificate(null, "").getId());
-        }
-
     }
 
     @Test

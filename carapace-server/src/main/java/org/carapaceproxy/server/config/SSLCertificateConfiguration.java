@@ -96,20 +96,25 @@ public class SSLCertificateConfiguration {
 
         final int maxOtherNameLength = other.getNames().stream()
                 .map(CertificatesUtils::removeWildcard)
-                .map(String::length)
-                .max(Integer::compareTo)
+                .mapToInt(String::length)
+                .max()
+                .orElse(0);
+
+        final int maxSubDomainLength = other.getNames().stream()
+                .map(name -> name.split("\\."))
+                .mapToInt(name -> name.length)
+                .max()
                 .orElse(0);
 
         for (var n : getNames()) {
             final var name = CertificatesUtils.removeWildcard(n);
-            if (name.length() > maxOtherNameLength) {
+            final int nameSegmentLength = n.split("\\.").length;
+            if (name.length() >= maxOtherNameLength && nameSegmentLength >= maxSubDomainLength) {
                 return true;
             }
         }
         return false;
     }
-
-
 
     public Collection<String> getNames() {
         return new ArrayList<>() {{
