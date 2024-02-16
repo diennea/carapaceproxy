@@ -94,17 +94,22 @@ public class SSLCertificateConfiguration {
             return hostname.length() > other.getHostname().length();
         }
 
-        final var otherNamesList = other.getNames().stream().map(CertificatesUtils::removeWildcard)
-                .collect(Collectors.toList());
+        final int maxOtherNameLength = other.getNames().stream()
+                .map(CertificatesUtils::removeWildcard)
+                .map(String::length)
+                .max(Integer::compareTo)
+                .orElse(0);
 
         for (var n : getNames()) {
             final var name = CertificatesUtils.removeWildcard(n);
-            if (otherNamesList.stream().anyMatch(on -> name.length() > on.length())) {
+            if (name.length() > maxOtherNameLength) {
                 return true;
             }
         }
         return false;
     }
+
+
 
     public Collection<String> getNames() {
         return new ArrayList<>() {{
