@@ -21,6 +21,10 @@ package org.carapaceproxy.server.config;
 
 import java.util.Collections;
 import java.util.Set;
+
+import io.netty.channel.group.ChannelGroup;
+import io.netty.channel.group.DefaultChannelGroup;
+import io.netty.util.concurrent.DefaultEventExecutor;
 import lombok.Data;
 
 /**
@@ -43,6 +47,8 @@ public class NetworkListenerConfiguration {
     private int keepAliveInterval;
     private int keepAliveCount;
     private int maxKeepAliveRequests;
+
+    private ChannelGroup group;
 
     public HostPort getKey() {
         return new HostPort(host, port);
@@ -96,6 +102,7 @@ public class NetworkListenerConfiguration {
         this.keepAliveInterval = keepAliveInterval;
         this.keepAliveCount = keepAliveCount;
         this.maxKeepAliveRequests = maxKeepAliveRequests;
+        this.group = new DefaultChannelGroup(new DefaultEventExecutor());
     }
 
 }

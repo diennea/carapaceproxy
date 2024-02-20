@@ -134,6 +134,19 @@ public class SSLSNITest {
             assertEquals("*.example.com", server.getListeners().chooseCertificate("example.com", "no-default").getId());
             assertEquals("*.example.com", server.getListeners().chooseCertificate("test.example2.com", "no-default").getId());
         }
+
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
+
+            // full wildcard
+            server.addCertificate(new SSLCertificateConfiguration("*", null, "cert", "pwd", STATIC));
+
+            assertEquals("*", server.getListeners().chooseCertificate(null, "www.example.com").getId());
+            assertEquals("*", server.getListeners().chooseCertificate("www.example.com", null).getId());
+            assertEquals("*", server.getListeners().chooseCertificate(null, null).getId());
+            assertEquals("*", server.getListeners().chooseCertificate("", null).getId());
+            assertEquals("*", server.getListeners().chooseCertificate(null, "").getId());
+        }
+
     }
 
     @Test

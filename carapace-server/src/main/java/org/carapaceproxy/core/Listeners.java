@@ -79,6 +79,7 @@ import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
 import reactor.netty.DisposableServer;
+import reactor.netty.FutureMono;
 import reactor.netty.NettyPipeline;
 import reactor.netty.http.server.HttpServer;
 
@@ -148,6 +149,7 @@ public class Listeners {
         ListeningChannel channel = listeningChannels.remove(hostport);
         if (channel != null) {
             channel.channel.disposeNow(Duration.ofSeconds(10));
+            FutureMono.from(channel.getConfig().getGroup().close()).block(Duration.ofSeconds(30));
         }
     }
 
@@ -283,6 +285,7 @@ public class Listeners {
                 .doOnConnection(conn -> {
                     CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
                     conn.channel().closeFuture().addListener(e -> CURRENT_CONNECTED_CLIENTS_GAUGE.dec());
+                    config.getGroup().add(conn.channel());
                 })
                 .httpRequestDecoder(option -> option.maxHeaderSize(currentConfiguration.getMaxHeaderSize()))
                 .handle((request, response) -> { // Custom request-response handling
