@@ -16,10 +16,6 @@
 name: Java CI - Code tests
 on:
   pull_request:
-permissions:
-  contents: read
-  actions: read
-  checks: write
 env:
   MAVEN_OPTS: >-
     -Dmaven.artifact.threads=4 
@@ -48,11 +44,9 @@ jobs:
           cache: 'maven'
       - name: 'Build and test with Maven'
         run: mvn verify
-      - name: 'Report test results'
-        uses: dorny/test-reporter@v1
+      - uses: actions/upload-artifact@v3
         if: always()
         with:
-          name: Maven Tests
+          name: test-results # as expected by pr-validation-report workflow
           path: carapace-*/target/surefire-reports/*.xml
-          reporter: java-junit
-          fail-on-error: true
+          retention-days: 1
