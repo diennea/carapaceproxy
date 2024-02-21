@@ -95,6 +95,7 @@ public class RuntimeServerConfiguration {
     private int accessLogAdvancedBodySize = 1_000; // bytes
     private String userRealmClassname;
     private int healthProbePeriod = 0;
+    private int healthConnectTimeout = 5_000;
     private int dynamicCertificatesManagerPeriod = 0;
     private int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
     private Set<String> domainsCheckerIPAddresses;
@@ -207,6 +208,12 @@ public class RuntimeServerConfiguration {
         LOG.log(Level.INFO, "healthmanager.period={0}", healthProbePeriod);
         if (healthProbePeriod <= 0) {
             LOG.warning("BACKEND-HEALTH-MANAGER DISABLED");
+        }
+
+        healthConnectTimeout = properties.getInt("healthmanager.connecttimeout", healthConnectTimeout);
+        LOG.log(Level.INFO, "healthmanager.connecttimeout={0}", healthConnectTimeout);
+        if (healthConnectTimeout < 0) {
+            throw new ConfigurationNotValidException("Invalid value '" + this.healthConnectTimeout + "' for healthmanager.connecttimeout. ConnectTimeout cannot be negative");
         }
 
         dynamicCertificatesManagerPeriod = properties.getInt("dynamiccertificatesmanager.period", 0);

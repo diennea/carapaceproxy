@@ -377,7 +377,7 @@ public class ApplyConfigurationTest {
 
             {
                 Properties configuration = new Properties();
-                configuration.put("connectionsmanager.connecttimeout", "9479");
+                configuration.put("healthmanager.connecttimeout", "9479");
                 server.configureAtBoot(new PropertiesConfigurationStore(configuration));
             }
             server.start();
@@ -386,7 +386,7 @@ public class ApplyConfigurationTest {
             // change configuration
             {
                 Properties configuration = new Properties();
-                configuration.put("connectionsmanager.connecttimeout", "9233");
+                configuration.put("healthmanager.connecttimeout", "9233");
                 reloadConfiguration(configuration, server);
 
                 assertEquals(9233, server.getBackendHealthManager().getConnectTimeout());

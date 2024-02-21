@@ -70,7 +70,7 @@ public class BackendHealthManager implements Runnable {
 
         // will be overridden before start
         this.period = DEFAULT_PERIOD;
-        this.connectTimeout = conf.getConnectTimeout();
+        this.connectTimeout = conf.getHealthConnectTimeout();
 
     }
 
@@ -122,8 +122,8 @@ public class BackendHealthManager implements Runnable {
             LOG.info("Applying health probe period " + period + " s");
         }
 
-        if (this.connectTimeout != newConfiguration.getConnectTimeout()) {
-            this.connectTimeout = newConfiguration.getConnectTimeout();
+        if (this.connectTimeout != newConfiguration.getHealthConnectTimeout()) {
+            this.connectTimeout = newConfiguration.getHealthConnectTimeout();
             LOG.info("Applying new connect timeout " + this.connectTimeout + " ms");
         }
 
