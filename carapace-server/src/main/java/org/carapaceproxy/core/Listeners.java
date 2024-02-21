@@ -149,7 +149,7 @@ public class Listeners {
         ListeningChannel channel = listeningChannels.remove(hostport);
         if (channel != null) {
             channel.channel.disposeNow(Duration.ofSeconds(10));
-            FutureMono.from(channel.getConfig().getGroup().close()).block(Duration.ofSeconds(30));
+            FutureMono.from(channel.getConfig().getGroup().close()).block(Duration.ofSeconds(10));
         }
     }
 
