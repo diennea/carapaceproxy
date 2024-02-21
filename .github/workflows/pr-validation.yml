@@ -14,7 +14,8 @@
 # specific language governing permissions and limitations under the License.
 #
 name: Java CI - Code tests
-on: [pull_request]
+on:
+  pull_request:
 env:
   MAVEN_OPTS: >-
     -Dmaven.artifact.threads=4 
@@ -34,25 +35,18 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: 'Set up JDK 17'
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-      - name: 'Cache Maven packages'
-        uses: actions/cache@v3
-        with:
-          path: ~/.m2
-          key: 'cache'
-          restore-keys: 'cache'
+          cache: 'maven'
       - name: 'Build and test with Maven'
         run: mvn verify
-      - name: 'Report test results'
-        uses: dorny/test-reporter@v1
+      - uses: actions/upload-artifact@v3
         if: always()
         with:
-          name: Maven Tests
+          name: test-results # as expected by pr-validation-report workflow
           path: carapace-*/target/surefire-reports/*.xml
-          reporter: java-junit
-          fail-on-error: true
+          retention-days: 1

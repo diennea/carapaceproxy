@@ -1,0 +1,21 @@
+name: Java CI - Test report
+on:
+  workflow_run:
+    workflows:
+      - 'Java CI - Code tests'
+    types:
+      - completed
+permissions:
+  contents: read
+  actions: read
+  checks: write
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dorny/test-reporter@v1
+        with:
+          artifact: test-results # as named in pr-validation workflow
+          name: Maven Tests
+          path: carapace-*/target/surefire-reports/*.xml # (inside artifact .zip)
+          reporter: java-junit

@@ -96,10 +96,14 @@ public class SSLSNITest {
             server.addCertificate(new SSLCertificateConfiguration("other", null, "cert", "pwd", STATIC));
             server.addCertificate(new SSLCertificateConfiguration("*.example.com", Set.of("example.com", "*.example2.com"), "cert", "pwd", STATIC));
             server.addCertificate(new SSLCertificateConfiguration("www.example.com", null, "cert", "pwd", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration("*.qatest.pexample.it", Set.of("qatest.pexample.it"), "cert", "pwd", STATIC));
+            server.addCertificate(new SSLCertificateConfiguration("*.pexample.it", Set.of("qatest2.pexample.it"), "cert", "pwd", STATIC));
+
 
             // client requests bad SNI, bad default in listener
             assertNull(server.getListeners().chooseCertificate("no", "no-default"));
 
+            assertEquals("*.qatest.pexample.it", server.getListeners().chooseCertificate("test2.qatest.pexample.it", "no-default").getId());
             // client requests SNI, bad default in listener
             assertEquals("other", server.getListeners().chooseCertificate("other", "no-default").getId());
 
@@ -142,6 +146,7 @@ public class SSLSNITest {
             assertEquals("*", server.getListeners().chooseCertificate("", null).getId());
             assertEquals("*", server.getListeners().chooseCertificate(null, "").getId());
         }
+
     }
 
     @Test
