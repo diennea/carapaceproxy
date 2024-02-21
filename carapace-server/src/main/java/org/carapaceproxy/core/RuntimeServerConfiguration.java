@@ -212,7 +212,7 @@ public class RuntimeServerConfiguration {
 
         healthConnectTimeout = properties.getInt("healthmanager.connecttimeout", healthConnectTimeout);
         LOG.log(Level.INFO, "healthmanager.connecttimeout={0}", healthConnectTimeout);
-        if(healthConnectTimeout < 0) {
+        if (healthConnectTimeout < 0) {
             throw new ConfigurationNotValidException("Invalid value '" + this.healthConnectTimeout + "' for healthmanager.connecttimeout. ConnectTimeout cannot be negative");
         }
 
