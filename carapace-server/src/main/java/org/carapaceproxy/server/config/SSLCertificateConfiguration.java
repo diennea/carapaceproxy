@@ -93,10 +93,23 @@ public class SSLCertificateConfiguration {
         if (subjectAltNames == null || subjectAltNames.isEmpty()) {
             return hostname.length() > other.getHostname().length();
         }
-        final var otherNames = other.getNames().stream().map(CertificatesUtils::removeWildcard);
-        for (var n: getNames()) {
+
+        final int maxOtherNameLength = other.getNames().stream()
+                .map(CertificatesUtils::removeWildcard)
+                .mapToInt(String::length)
+                .max()
+                .orElse(0);
+
+        final int maxSubDomainLength = other.getNames().stream()
+                .map(name -> name.split("\\."))
+                .mapToInt(name -> name.length)
+                .max()
+                .orElse(0);
+
+        for (var n : getNames()) {
             final var name = CertificatesUtils.removeWildcard(n);
-            if (otherNames.anyMatch(on -> name.length() > on.length())) {
+            final int nameSegmentLength = n.split("\\.").length;
+            if (name.length() >= maxOtherNameLength && nameSegmentLength >= maxSubDomainLength) {
                 return true;
             }
         }
