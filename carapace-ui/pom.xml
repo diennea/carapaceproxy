@@ -17,8 +17,8 @@
         <endorsed.dir>${project.build.directory}/endorsed</endorsed.dir>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-        <libs.yarn>v1.22.18</libs.yarn>
-        <libs.node>v16.14.2</libs.node>
+        <libs.yarn>v1.22.19</libs.yarn>
+        <libs.node>v20.11.1</libs.node>
         <libs.frontend.plugin>1.7.6</libs.frontend.plugin>
         <carapace.ui.dir>src/main/webapp</carapace.ui.dir>
     </properties>
