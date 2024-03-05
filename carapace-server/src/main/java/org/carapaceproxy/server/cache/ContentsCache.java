@@ -193,6 +193,7 @@ public class ContentsCache {
                 case "js":
                 case "css":
                 case "woff2":
+                case "webp":
                     return true;
                 default:
                     return false;
