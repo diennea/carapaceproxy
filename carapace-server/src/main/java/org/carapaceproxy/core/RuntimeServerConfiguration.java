@@ -113,6 +113,7 @@ public class RuntimeServerConfiguration {
     private String localCertificatesStorePath;
     private Set<String> localCertificatesStorePeersIds;
     private int maxAttempts = 10;
+    private Set<String> alwaysCachedExtensions;
 
     public RuntimeServerConfiguration() {
         defaultConnectionPool = new ConnectionPoolConfiguration(
@@ -275,6 +276,9 @@ public class RuntimeServerConfiguration {
 
         maxAttempts = properties.getInt("dynamiccertificatesmanager.errors.maxattempts", maxAttempts);
         LOG.log(Level.INFO, "dynamiccertificatesmanager.errors.maxattempts={0}", maxAttempts);
+
+        alwaysCachedExtensions = properties.getValues("cache.cachealways", alwaysCachedExtensions);
+        LOG.log(Level.INFO, "cache.cachealways={0}", alwaysCachedExtensions);
     }
 
     private void configureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
@@ -447,7 +451,7 @@ public class RuntimeServerConfiguration {
         }
     }
 
-    void addRequestFilter(RequestFilterConfiguration config) throws ConfigurationNotValidException {
+    void addRequestFilter(RequestFilterConfiguration config) {
         requestFilters.add(config);
     }
 

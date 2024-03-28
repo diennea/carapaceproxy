@@ -19,6 +19,8 @@
  */
 package org.carapaceproxy.server.cache;
 
+import java.util.Set;
+
 /**
  * Configuration for the ContentsCache
  *
@@ -29,11 +31,13 @@ public class CacheRuntimeConfiguration {
     private final long cacheMaxSize;
     private final long cacheMaxFileSize;
     private final boolean cacheDisabledForSecureRequestsWithoutPublic;
+    private final Set<String> alwaysCachedExtensions;
 
-    public CacheRuntimeConfiguration(long cacheMaxSize, long cacheMaxFileSize, boolean cacheDisabledForSecureRequestsWithoutPublic) {
+    public CacheRuntimeConfiguration(long cacheMaxSize, long cacheMaxFileSize, boolean cacheDisabledForSecureRequestsWithoutPublic, final Set<String> alwaysCachedExtensions) {
         this.cacheMaxSize = cacheMaxSize;
         this.cacheMaxFileSize = cacheMaxFileSize;
         this.cacheDisabledForSecureRequestsWithoutPublic = cacheDisabledForSecureRequestsWithoutPublic;
+        this.alwaysCachedExtensions = alwaysCachedExtensions;
     }
 
     @Override
@@ -81,4 +85,7 @@ public class CacheRuntimeConfiguration {
         return cacheDisabledForSecureRequestsWithoutPublic;
     }
 
+    public Set<String> getAlwaysCachedExtensions() {
+        return alwaysCachedExtensions;
+    }
 }
