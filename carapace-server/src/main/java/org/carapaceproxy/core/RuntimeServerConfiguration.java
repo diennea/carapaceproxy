@@ -113,6 +113,7 @@ public class RuntimeServerConfiguration {
     private String localCertificatesStorePath;
     private Set<String> localCertificatesStorePeersIds;
     private int maxAttempts = 10;
+    private Set<String> alwaysCachedExtensions = Set.of("png", "gif", "jpg", "jpeg", "js", "css", "woff2", "webp");
 
     public RuntimeServerConfiguration() {
         defaultConnectionPool = new ConnectionPoolConfiguration(
@@ -275,6 +276,9 @@ public class RuntimeServerConfiguration {
 
         maxAttempts = properties.getInt("dynamiccertificatesmanager.errors.maxattempts", maxAttempts);
         LOG.log(Level.INFO, "dynamiccertificatesmanager.errors.maxattempts={0}", maxAttempts);
+
+        alwaysCachedExtensions = properties.getValues("cache.cachealways", alwaysCachedExtensions);
+        LOG.log(Level.INFO, "cache.cachealways={0}", alwaysCachedExtensions);
     }
 
     private void configureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
@@ -293,7 +297,7 @@ public class RuntimeServerConfiguration {
                     if (config.isAcme()) {
                         config.setDaysBeforeRenewal(daysBeforeRenewal);
                     }
-                    LOG.log(Level.INFO,"Configuring SSL certificate {0}: {1}", new Object[]{prefix, config});
+                    LOG.log(Level.INFO, "Configuring SSL certificate {0}: {1}", new Object[]{prefix, config});
                     this.addCertificate(config);
                 } catch (IllegalArgumentException e) {
                     throw new ConfigurationNotValidException(
@@ -447,7 +451,7 @@ public class RuntimeServerConfiguration {
         }
     }
 
-    void addRequestFilter(RequestFilterConfiguration config) throws ConfigurationNotValidException {
+    void addRequestFilter(RequestFilterConfiguration config) {
         requestFilters.add(config);
     }
 

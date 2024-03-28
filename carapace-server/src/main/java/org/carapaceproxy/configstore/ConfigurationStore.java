@@ -21,10 +21,8 @@ package org.carapaceproxy.configstore;
 
 import herddb.utils.BooleanHolder;
 import java.security.KeyPair;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
@@ -83,7 +81,7 @@ public interface ConfigurationStore extends AutoCloseable {
     }
 
     default Set<String> getValues(String key) throws ConfigurationNotValidException {
-        return getValues(key, Collections.emptySet());
+        return getValues(key, Set.of());
     }
 
     default Set<String> getValues(String key, Set<String> defaultValue) throws ConfigurationNotValidException {
