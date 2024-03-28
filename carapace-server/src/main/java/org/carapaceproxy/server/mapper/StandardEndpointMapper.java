@@ -243,8 +243,9 @@ public class StandardEndpointMapper extends EndpointMapper {
                     }
                 }
                 // none of selected backends available
+                // return service unavailable if all backend is unavailable
                 if (!selectedBackends.isEmpty()) {
-                    return MapResult.internalError(route.getId());
+                    return MapResult.serviceUnavailable(route.getId());
                 }
             }
         }
@@ -276,12 +277,21 @@ public class StandardEndpointMapper extends EndpointMapper {
 
     @Override
     public SimpleHTTPResponse mapServiceUnavailableError(String routeId) {
-        // custom global
-        if (defaultServiceUnavailable != null) {
-            ActionConfiguration errorAction = actions.get(defaultServiceUnavailable);
-            if (errorAction != null) {
-                return new SimpleHTTPResponse(errorAction.getErrorCode(), errorAction.getFile(), errorAction.getCustomHeaders());
+        ActionConfiguration errorAction = null;
+        // custom for route
+        Optional<RouteConfiguration> config = routes.stream().filter(r -> r.getId().equalsIgnoreCase(routeId)).findFirst();
+        if (config.isPresent()) {
+            String action = config.get().getErrorAction();
+            if (action != null) {
+                errorAction = actions.get(action);
             }
+        }
+        // custom global
+        if (errorAction == null && defaultServiceUnavailable != null) {
+            errorAction = actions.get(defaultServiceUnavailable);
+        }
+        if (errorAction != null) {
+            return new SimpleHTTPResponse(errorAction.getErrorCode(), errorAction.getFile(), errorAction.getCustomHeaders());
         }
         // fallback
         return super.mapServiceUnavailableError(routeId);
