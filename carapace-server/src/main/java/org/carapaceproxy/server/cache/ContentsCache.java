@@ -22,13 +22,10 @@ package org.carapaceproxy.server.cache;
 import com.google.common.annotations.VisibleForTesting;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
-import io.netty.buffer.PooledByteBufAllocator;
-import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.prometheus.client.Counter;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -41,7 +38,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
-
 import lombok.Data;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
@@ -75,11 +71,11 @@ public class ContentsCache {
     public ContentsCache(RuntimeServerConfiguration currentConfiguration) {
         this.stats = new CacheStats();
         this.threadPool = Executors.newSingleThreadScheduledExecutor();
-
         this.currentConfiguration = new CacheRuntimeConfiguration(
                 currentConfiguration.getCacheMaxSize(),
                 currentConfiguration.getCacheMaxFileSize(),
-                currentConfiguration.isCacheDisabledForSecureRequestsWithoutPublic()
+                currentConfiguration.isCacheDisabledForSecureRequestsWithoutPublic(),
+                currentConfiguration.getAlwaysCachedExtensions()
         );
         this.cache = new CaffeineCacheImpl(stats, currentConfiguration.getCacheMaxSize(), LOG);
     }
@@ -122,23 +118,18 @@ public class ContentsCache {
     public boolean isCacheable(HttpClientResponse response) {
         HttpHeaders headers = response.responseHeaders();
         String cacheControl = headers.get(HttpHeaderNames.CACHE_CONTROL, "").replaceAll(" ", "").toLowerCase();
-        if ((!cacheControl.isEmpty() && CACHE_CONTROL_CACHE_DISABLED_VALUES.stream().anyMatch(v -> cacheControl.contains(v)))
+        if ((!cacheControl.isEmpty() && CACHE_CONTROL_CACHE_DISABLED_VALUES.stream().anyMatch(cacheControl::contains))
                 || headers.contains(HttpHeaderNames.PRAGMA, HttpHeaderValues.NO_CACHE, true)
                 || !isContentLengthCacheable(headers)) {
             // never cache Pragma: no-cache, Cache-Control: nostore/no-cache
             LOG.log(Level.FINER, "not cacheable {0}", response);
             return false;
         }
-        switch (response.status().codeClass()) {
-            case SUCCESS:
-                return true;
-            case REDIRECTION:
-            case INFORMATIONAL:
-            case SERVER_ERROR:
-            case UNKNOWN:
-            default:
-                return false;
-        }
+        return switch (response.status().codeClass()) {
+            case SUCCESS -> true;
+            case REDIRECTION, INFORMATIONAL, SERVER_ERROR, UNKNOWN -> false;
+            default -> false;
+        };
 
     }
 
@@ -146,7 +137,7 @@ public class ContentsCache {
         switch (request.getMethod().name()) {
             case "GET":
             case "HEAD":
-                // got haed and cache
+                // got head and cache
                 break;
             default:
                 return false;
@@ -165,7 +156,7 @@ public class ContentsCache {
                 && request.isSecure() && !cacheControl.contains(HttpHeaderValues.PUBLIC + "")) {
             return false;
         }
-        if ((!cacheControl.isEmpty() && CACHE_CONTROL_CACHE_DISABLED_VALUES.stream().anyMatch(v -> cacheControl.contains(v)))
+        if ((!cacheControl.isEmpty() && CACHE_CONTROL_CACHE_DISABLED_VALUES.stream().anyMatch(cacheControl::contains))
                 || headers.contains(HttpHeaderNames.PRAGMA, HttpHeaderValues.NO_CACHE, true)) {
             // never cache Pragma: no-cache, Cache-Control: nostore/no-cache
             return false;
@@ -185,19 +176,7 @@ public class ContentsCache {
             if (dot >= 0) {
                 extension = uri.substring(dot + 1);
             }
-            switch (extension) {
-                case "png":
-                case "gif":
-                case "jpg":
-                case "jpeg":
-                case "js":
-                case "css":
-                case "woff2":
-                case "webp":
-                    return true;
-                default:
-                    return false;
-            }
+            return this.currentConfiguration.getAlwaysCachedExtensions().contains(extension);
         }
 
         return true;
@@ -245,8 +224,8 @@ public class ContentsCache {
         CacheRuntimeConfiguration newCacheConfiguration = new CacheRuntimeConfiguration(
                 newConfiguration.getCacheMaxSize(),
                 newConfiguration.getCacheMaxFileSize(),
-                newConfiguration.isCacheDisabledForSecureRequestsWithoutPublic()
-        );
+                newConfiguration.isCacheDisabledForSecureRequestsWithoutPublic(),
+                newConfiguration.getAlwaysCachedExtensions());
         if (newCacheConfiguration.equals(currentConfiguration)) {
             LOG.info("Cache configuration not changed during hot reload");
             return;
@@ -327,17 +306,16 @@ public class ContentsCache {
 
         public List<ByteBuf> getChunks() {
             return chunks.stream()
-                    .map(c -> c.retainedDuplicate())
+                    .map(ByteBuf::retainedDuplicate)
                     .collect(Collectors.toList());
         }
 
         public long getMemUsage() {
             // Just an estimate
-            return chunks.size() * 8
+            return chunks.size() * 8L
                     + directSize + heapSize
                     + 8 * 5
-                    + // other fields
-                    4 * 1;
+                    + 4; // other fields
         }
 
         @Override
