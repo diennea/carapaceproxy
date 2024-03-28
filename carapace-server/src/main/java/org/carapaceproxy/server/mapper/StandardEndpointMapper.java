@@ -19,34 +19,11 @@
  */
 package org.carapaceproxy.server.mapper;
 
-import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
-import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_MAINTENANCE_MODE_ERROR;
-import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_NOT_FOUND;
-import static org.carapaceproxy.core.StaticContentsManager.IN_MEMORY_RESOURCE;
-import static org.carapaceproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
-
 import io.netty.handler.codec.http.HttpResponseStatus;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
 import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.core.ProxyRequest;
-import org.carapaceproxy.server.config.ActionConfiguration;
-import org.carapaceproxy.server.config.BackendConfiguration;
-import org.carapaceproxy.server.config.BackendSelector;
-import org.carapaceproxy.server.config.ConfigurationNotValidException;
-import org.carapaceproxy.server.config.DirectorConfiguration;
-import org.carapaceproxy.server.config.RouteConfiguration;
+import org.carapaceproxy.server.config.*;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import org.carapaceproxy.server.mapper.CustomHeader.HeaderMode;
 import org.carapaceproxy.server.mapper.MapResult.Action;
@@ -54,6 +31,13 @@ import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.ParseException;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.RequestMatchParser;
+
+import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import static org.carapaceproxy.core.StaticContentsManager.*;
+import static org.carapaceproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
 
 /**
  * Standard Endpoint mapping
@@ -243,8 +227,9 @@ public class StandardEndpointMapper extends EndpointMapper {
                     }
                 }
                 // none of selected backends available
+                // return service unavailable if all backend is unavailable
                 if (!selectedBackends.isEmpty()) {
-                    return MapResult.internalError(route.getId());
+                    return MapResult.serviceUnavailable(route.getId());
                 }
             }
         }
@@ -252,21 +237,29 @@ public class StandardEndpointMapper extends EndpointMapper {
         return MapResult.notFound(MapResult.NO_ROUTE);
     }
 
-    @Override
-    public SimpleHTTPResponse mapInternalError(String routeid) {
-        ActionConfiguration errorAction = null;
-        // custom for route
-        Optional<RouteConfiguration> config = routes.stream().filter(r -> r.getId().equalsIgnoreCase(routeid)).findFirst();
+    private ActionConfiguration getErrorActionConfiguration(String routeId, String defaultAction) {
+        // Attempt to find a route-specific configuration first
+        Optional<RouteConfiguration> config = routes.stream()
+                .filter(r -> r.getId().equalsIgnoreCase(routeId))
+                .findFirst();
         if (config.isPresent()) {
             String action = config.get().getErrorAction();
-            if (action != null) {
-                errorAction = actions.get(action);
+            if (action != null && actions.containsKey(action)) {
+                return actions.get(action);
             }
         }
-        // custom global
-        if (errorAction == null && defaultInternalErrorAction != null) {
-            errorAction = actions.get(defaultInternalErrorAction);
+        // If no route-specific configuration or action is found, fallback to the global default
+        if (defaultAction != null && actions.containsKey(defaultAction)) {
+            return actions.get(defaultAction);
         }
+        // Return null if no appropriate action configuration is found
+        return null;
+    }
+
+
+    @Override
+    public SimpleHTTPResponse mapInternalError(String routeid) {
+        ActionConfiguration errorAction = getErrorActionConfiguration(routeid, defaultInternalErrorAction);
         if (errorAction != null) {
             return new SimpleHTTPResponse(errorAction.getErrorCode(), errorAction.getFile(), errorAction.getCustomHeaders());
         }
@@ -276,12 +269,9 @@ public class StandardEndpointMapper extends EndpointMapper {
 
     @Override
     public SimpleHTTPResponse mapServiceUnavailableError(String routeId) {
-        // custom global
-        if (defaultServiceUnavailable != null) {
-            ActionConfiguration errorAction = actions.get(defaultServiceUnavailable);
-            if (errorAction != null) {
-                return new SimpleHTTPResponse(errorAction.getErrorCode(), errorAction.getFile(), errorAction.getCustomHeaders());
-            }
+        ActionConfiguration errorAction = getErrorActionConfiguration(routeId, defaultServiceUnavailable);
+        if (errorAction != null) {
+            return new SimpleHTTPResponse(errorAction.getErrorCode(), errorAction.getFile(), errorAction.getCustomHeaders());
         }
         // fallback
         return super.mapServiceUnavailableError(routeId);
