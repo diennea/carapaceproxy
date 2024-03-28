@@ -103,6 +103,13 @@ public class MapResult {
                 .build();
     }
 
+    public static MapResult serviceUnavailable(String routeId) {
+        return MapResult.builder()
+                .action(Action.SERVICE_UNAVAILABLE)
+                .routeId(routeId)
+                .build();
+    }
+
     public static MapResult maintenanceMode(String routeId) {
         return MapResult.builder()
                 .action(Action.MAINTENANCE_MODE)

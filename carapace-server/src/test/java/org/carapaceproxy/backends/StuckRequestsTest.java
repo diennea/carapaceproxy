@@ -123,11 +123,11 @@ public class StuckRequestsTest {
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 if (backendsUnreachableOnStuckRequests) {
-                    assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
+                    assertEquals("HTTP/1.1 503 Service Unavailable\r\n", resp.getStatusLine());
                     assertEquals("<html>\n"
                             + "    <body>\n"
-                            + "        An internal error occurred\n"
-                            + "    </body>        \n"
+                            + "        Service Unavailable\n"
+                            + "    </body>\n"
                             + "</html>\n", resp.getBodyString());
                 } else {
                     assertEquals("HTTP/1.1 200 OK\r\n", resp.getStatusLine());

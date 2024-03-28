@@ -187,7 +187,7 @@ public class BasicStandardEndpointMapperTest {
             configuration.put("director.1.backends", "backend");
             configuration.put("director.1.enabled", "true");
 
-            // unreachable backend -> expected Internal Error
+            // unreachable backend -> expected service unavailable
             configuration.put("backend.2.id", "backend-down");
             configuration.put("backend.2.host", "localhost-down");
             configuration.put("backend.2.port", String.valueOf(backend1.port()));
@@ -238,7 +238,7 @@ public class BasicStandardEndpointMapperTest {
             configuration.put("action.3.headers", "h-custom-global-error");
             configuration.put("default.action.notfound", "custom-global-error");
 
-            // route-custom error (Internal Errror)
+            // route-custom error (Service unavailable)
             configuration.put("route.1.id", "route-custom-error");
             configuration.put("route.1.enabled", "true");
             configuration.put("route.1.match", "request.uri ~ \".*custom-error.*\"");
@@ -265,6 +265,7 @@ public class BasicStandardEndpointMapperTest {
             // route-custom error (Internal Errror)
             {
                 HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + server.getLocalPort() + "/custom-error.html").openConnection();
+                System.out.println("response core " +  conn.getResponseCode());
                 assertEquals("h-custom-error-value; h-custom-error-value2;h-custom-error-value3", conn.getHeaderField("h-custom-error"));
                 assertEquals(555, conn.getResponseCode());
             }
