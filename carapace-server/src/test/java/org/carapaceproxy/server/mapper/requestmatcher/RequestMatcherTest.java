@@ -19,23 +19,23 @@
  */
 package org.carapaceproxy.server.mapper.requestmatcher;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import herddb.utils.TestUtils;
+import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import java.net.InetSocketAddress;
 import javax.ws.rs.core.HttpHeaders;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.ParseException;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.RequestMatchParser;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.TokenMgrError;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import org.junit.Test;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-import io.netty.handler.codec.http.DefaultHttpHeaders;
-import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
 import reactor.netty.http.server.HttpServerRequest;
 
 /**

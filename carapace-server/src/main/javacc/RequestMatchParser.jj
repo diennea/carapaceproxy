@@ -1,7 +1,7 @@
 options {
     STATIC = false;
     IGNORE_CASE = true;
-    UNICODE_INPUT = true;    
+    UNICODE_INPUT = true;
 }
 
 PARSER_BEGIN(RequestMatchParser)
@@ -26,7 +26,7 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
  * Criteria to apply a route to a request
  */
 public class RequestMatchParser {
-    private String matchingCondition;   
+    private String matchingCondition;
 
     public RequestMatchParser(String matchingCondition) {
         this(new StringReader(matchingCondition));
@@ -39,7 +39,7 @@ public class RequestMatchParser {
 }
 
 
-PARSER_END(RequestMatchParser)   
+PARSER_END(RequestMatchParser)
 
 SKIP :
 {
@@ -72,17 +72,17 @@ TOKEN :
     *   - request.PROPERTY_NAME = VALUE and secure
     */
 RequestMatcher parse() throws ConfigurationNotValidException:
-{        
-    RequestMatcher matcher;    
+{
+    RequestMatcher matcher;
 }
 {
-    <ALL> <EOF> { return new MatchAllRequestMatcher(); } |                
+    <ALL> <EOF> { return new MatchAllRequestMatcher(); } |
     { return orExpression(false); }
 }
 
 RequestMatcher orExpression(boolean wrap) throws ConfigurationNotValidException:
-{    
-    List<RequestMatcher> matchers = new ArrayList();
+{
+    List<RequestMatcher> matchers = new ArrayList<>();
 }
 {
     { matchers.add(andExpression()); }
@@ -94,7 +94,7 @@ RequestMatcher orExpression(boolean wrap) throws ConfigurationNotValidException:
 
 RequestMatcher andExpression() throws ConfigurationNotValidException:
 {
-    List<RequestMatcher> matchers = new ArrayList();
+    List<RequestMatcher> matchers = new ArrayList<>();
 }
 {
     { matchers.add(basicExpression()); }
@@ -111,9 +111,9 @@ RequestMatcher basicExpression() throws ConfigurationNotValidException:
 {
     (
         <NOT> basicMatcher = basicExpression() { return new NotRequestMatcher(basicMatcher); } |
-    
+
         <O_BRACKET> basicMatcher = orExpression(true) <C_BRACKET> |
-    
+
         basicMatcher = basicMatcher()
     )
     { return basicMatcher; }

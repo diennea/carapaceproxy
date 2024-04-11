@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
 /**
  *
  * Matcher for composing OR expressions with other matchers.
- * 
+ *
  * @author paolo.venturi
  */
 public class OrRequestMatcher implements RequestMatcher {
@@ -40,7 +40,7 @@ public class OrRequestMatcher implements RequestMatcher {
 
     @Override
     public boolean matches(MatchingContext context) {
-        for (RequestMatcher matcher : matchers) {            
+        for (RequestMatcher matcher : matchers) {
             if (matcher.matches(context)) {
                 return true;
             }
@@ -55,7 +55,6 @@ public class OrRequestMatcher implements RequestMatcher {
                     .map(RequestMatcher::getDescription)
                     .collect(Collectors.joining(" or "));
         desc += wrap ? ")" : "";
-        
         return desc;
     }
 
