@@ -303,4 +303,11 @@ public class RequestMatcherTest {
             assertFalse(matcher.matches(request));
         }
     }
+
+    @Test
+    public void test3() throws Exception {
+        final var config = "secure and (request.headers.host ~ \"(foo|bar|baz)-test\\.(.*)example.org(:443)?\")";
+        final RequestMatcher matcher = new RequestMatchParser(config).parse();
+        assertEquals(config, matcher.getDescription());
+    }
 }
