@@ -24,10 +24,16 @@ import static java.util.stream.Collectors.summingInt;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Stream;
 import javax.servlet.ServletContext;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.Response;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -44,8 +50,8 @@ import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 @Produces("application/json")
 public class ConnectionPoolsResource {
 
-    @javax.ws.rs.core.Context
-    ServletContext context;
+    @Context
+    private ServletContext context;
 
     @Data
     @NoArgsConstructor
@@ -68,6 +74,26 @@ public class ConnectionPoolsResource {
         private boolean enabled;
 
         private int totalConnections;
+
+        private static ConnectionPoolBean fromConfiguration(final ConnectionPoolConfiguration configuration, final int connections) {
+            return new ConnectionPoolBean(
+                    configuration.getId(),
+                    configuration.getDomain(),
+                    configuration.getMaxConnectionsPerEndpoint(),
+                    configuration.getBorrowTimeout(),
+                    configuration.getConnectTimeout(),
+                    configuration.getStuckRequestTimeout(),
+                    configuration.getIdleTimeout(),
+                    configuration.getMaxLifeTime(),
+                    configuration.getDisposeTimeout(),
+                    configuration.getKeepaliveIdle(),
+                    configuration.getKeepaliveInterval(),
+                    configuration.getKeepaliveCount(),
+                    configuration.isKeepAlive(),
+                    configuration.isEnabled(),
+                    connections
+            );
+        }
     }
 
     @GET
@@ -75,58 +101,46 @@ public class ConnectionPoolsResource {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         Map<String, ConnectionPoolBean> res = new HashMap<>();
 
-        Map<String, Integer> poolsStats = new HashMap<>();
         Collection<Map<String, ConnectionPoolStats>> stats = server.getConnectionPoolsStats().values();
-        if (stats != null) {
-            poolsStats.putAll(stats.stream()
-                    .flatMap(m -> m.entrySet().stream())
-                    .collect(groupingBy(Map.Entry::getKey, summingInt(e -> e.getValue().getTotalConnections())))
-            );
-        }
+        Map<String, Integer> poolsStats = new HashMap<>(stats.stream()
+                .flatMap(m -> m.entrySet().stream())
+                .collect(groupingBy(Map.Entry::getKey, summingInt(e -> e.getValue().getTotalConnections()))));
 
         // custom pools
         server.getCurrentConfiguration().getConnectionPools().forEach(conf -> {
-            ConnectionPoolBean bean = new ConnectionPoolBean(conf.getId(),
-                    conf.getDomain(),
-                    conf.getMaxConnectionsPerEndpoint(),
-                    conf.getBorrowTimeout(),
-                    conf.getConnectTimeout(),
-                    conf.getStuckRequestTimeout(),
-                    conf.getIdleTimeout(),
-                    conf.getMaxLifeTime(),
-                    conf.getDisposeTimeout(),
-                    conf.getKeepaliveIdle(),
-                    conf.getKeepaliveInterval(),
-                    conf.getKeepaliveCount(),
-                    conf.isKeepAlive(),
-                    conf.isEnabled(),
-                    poolsStats.getOrDefault(conf.getId(), 0)
-            );
+            ConnectionPoolBean bean = fromConfiguration(conf, poolsStats);
 
             res.put(conf.getId(), bean);
         });
 
         // default pool
         ConnectionPoolConfiguration defaultConnectionPool = server.getCurrentConfiguration().getDefaultConnectionPool();
-        res.put(defaultConnectionPool.getId(), new ConnectionPoolBean(
-                defaultConnectionPool.getId(),
-                defaultConnectionPool.getDomain(),
-                defaultConnectionPool.getMaxConnectionsPerEndpoint(),
-                defaultConnectionPool.getBorrowTimeout(),
-                defaultConnectionPool.getConnectTimeout(),
-                defaultConnectionPool.getStuckRequestTimeout(),
-                defaultConnectionPool.getIdleTimeout(),
-                defaultConnectionPool.getMaxLifeTime(),
-                defaultConnectionPool.getDisposeTimeout(),
-                defaultConnectionPool.getKeepaliveIdle(),
-                defaultConnectionPool.getKeepaliveInterval(),
-                defaultConnectionPool.getKeepaliveCount(),
-                defaultConnectionPool.isKeepAlive(),
-                defaultConnectionPool.isEnabled(),
-                poolsStats.getOrDefault(defaultConnectionPool.getId(), 0)
-        ));
+        res.put(defaultConnectionPool.getId(), ConnectionPoolBean.fromConfiguration(defaultConnectionPool, poolsStats.getOrDefault(defaultConnectionPool.getId(), 0)));
 
         return res;
+    }
+
+    @GET
+    @Path("/{poolId}")
+    public ConnectionPoolBean getConnectionPool(final @PathParam("poolId") String poolId) {
+        final var server = (HttpProxyServer) context.getAttribute("server");
+        final var connectionPoolsStats = server.getConnectionPoolsStats();
+        final var poolsStats = connectionPoolsStats.values().stream()
+                .map(Map::entrySet)
+                .flatMap(Set::stream)
+                .collect(groupingBy(Map.Entry::getKey, summingInt(e -> e.getValue().getTotalConnections())));
+        return Stream.concat(
+                        server.getCurrentConfiguration().getConnectionPools().stream(),
+                        Stream.of(server.getCurrentConfiguration().getDefaultConnectionPool())
+                )
+                .filter(configuration -> configuration.getId().equals(poolId))
+                .map(configuration -> fromConfiguration(configuration, poolsStats))
+                .findAny()
+                .orElseThrow(() -> new WebApplicationException(Response.Status.NOT_FOUND));
+    }
+
+    private static ConnectionPoolBean fromConfiguration(final ConnectionPoolConfiguration configuration, final Map<String, Integer> poolsStats) {
+        return ConnectionPoolBean.fromConfiguration(configuration, poolsStats.getOrDefault(configuration.getId(), 0));
     }
 
 }

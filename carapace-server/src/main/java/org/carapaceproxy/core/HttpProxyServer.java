@@ -863,7 +863,7 @@ public class HttpProxyServer implements AutoCloseable {
                 return;
             }
             EndpointKey key = EndpointKey.make(metric.getTag(REMOTE_ADDRESS));
-            Map<String, ConnectionPoolStats> pools = res.computeIfAbsent(key, k -> new HashMap<String, ConnectionPoolStats>());
+            Map<String, ConnectionPoolStats> pools = res.computeIfAbsent(key, k -> new HashMap<>());
             String poolName = metric.getTag(NAME);
             ConnectionPoolStats stats = pools.computeIfAbsent(poolName, k -> new ConnectionPoolStats());
             double value = 0;

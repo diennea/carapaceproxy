@@ -17,9 +17,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class FormValidationResponse extends SimpleResponse {
 
-    public final static String ERROR_FIELD_REQUIRED = "Value required";
-    public final static String ERROR_FIELD_INVALID = "Value invalid";
-    public final static String ERROR_FIELD_DUPLICATED = "Value already used";
+    public static final String ERROR_FIELD_REQUIRED = "Value required";
+    public static final String ERROR_FIELD_INVALID = "Value invalid";
+    public static final String ERROR_FIELD_DUPLICATED = "Value already used";
 
     private String field;
 

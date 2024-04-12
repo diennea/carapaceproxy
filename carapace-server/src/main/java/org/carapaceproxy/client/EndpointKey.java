@@ -38,13 +38,12 @@ public final class EndpointKey {
 
     public static EndpointKey make(String hostAndPort) {
         int pos = hostAndPort.indexOf(':');
-        if (pos > 0) {
-            String host = hostAndPort.substring(0, pos);
-            int port = Integer.parseInt(hostAndPort.substring(pos + 1, hostAndPort.length()));
-            return new EndpointKey(host, port);
-        } else {
+        if (pos <= 0) {
             return new EndpointKey(hostAndPort, 0);
         }
+        String host = hostAndPort.substring(0, pos);
+        int port = Integer.parseInt(hostAndPort.substring(pos + 1));
+        return new EndpointKey(host, port);
     }
 
     public EndpointKey(String host, int port) {
