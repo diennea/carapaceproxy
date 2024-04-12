@@ -65,6 +65,11 @@
             <name>Alessandro Luccaroni</name>
             <organization>Diennea</organization>
         </developer>
+        <developer>
+            <id>niccomlt</id>
+            <name>Niccolò Maltoni</name>
+            <organization>Diennea</organization>
+        </developer>
     </developers>
     <build>
         <plugins>
@@ -135,7 +140,7 @@
         <libs.javaxactivation-api>1.2.0</libs.javaxactivation-api>
         <libs.slf4j>1.7.33</libs.slf4j>
         <libs.guava>31.1-jre</libs.guava>
-        <libs.lombok>1.18.22</libs.lombok>
+        <libs.lombok>1.18.32</libs.lombok>
         <libs.spotbugsannotations>4.5.3</libs.spotbugsannotations>
 
         <!-- test dependecies -->
