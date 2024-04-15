@@ -25,6 +25,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
@@ -37,6 +38,14 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
 public interface ConfigurationStore extends AutoCloseable {
 
     String PROPERTY_VALUES_SEPARATOR = ",";
+
+    default String toStringConfiguration() {
+        Set<String> props = new TreeSet<>();
+        forEach((k, v) -> props.add(k + "=" + v));
+        StringBuilder builder = new StringBuilder();
+        props.forEach(p -> builder.append(p).append("\n"));
+        return builder.toString();
+    }
 
     String getProperty(String key, String defaultValue);
 

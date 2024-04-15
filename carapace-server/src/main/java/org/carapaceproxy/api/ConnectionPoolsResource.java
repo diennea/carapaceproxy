@@ -27,19 +27,28 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 import javax.servlet.ServletContext;
+import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
+import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Context;
+import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.carapaceproxy.api.response.FormValidationResponse;
+import org.carapaceproxy.api.response.SimpleResponse;
+import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.HttpProxyServer.ConnectionPoolStats;
+import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
+import org.carapaceproxy.utils.StringUtils;
 
 /**
  * Access to connection pools
@@ -97,6 +106,7 @@ public class ConnectionPoolsResource {
     }
 
     @GET
+    @Produces(MediaType.APPLICATION_JSON)
     public Map<String, ConnectionPoolBean> getAll() {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         Map<String, ConnectionPoolBean> res = new HashMap<>();
@@ -122,6 +132,7 @@ public class ConnectionPoolsResource {
 
     @GET
     @Path("/{poolId}")
+    @Produces(MediaType.APPLICATION_JSON)
     public ConnectionPoolBean getConnectionPool(final @PathParam("poolId") String poolId) {
         final var server = (HttpProxyServer) context.getAttribute("server");
         final var connectionPoolsStats = server.getConnectionPoolsStats();
@@ -137,6 +148,43 @@ public class ConnectionPoolsResource {
                 .map(configuration -> fromConfiguration(configuration, poolsStats))
                 .findAny()
                 .orElseThrow(() -> new WebApplicationException(Response.Status.NOT_FOUND));
+    }
+
+    @POST
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response createConnectionPool(final ConnectionPoolBean connectionPool) {
+        final var server = (HttpProxyServer) context.getAttribute("server");
+        final var configuration = new ConnectionPoolConfiguration(
+                connectionPool.id,
+                connectionPool.domain,
+                connectionPool.maxConnectionsPerEndpoint,
+                connectionPool.borrowTimeout,
+                connectionPool.connectTimeout,
+                connectionPool.stuckRequestTimeout,
+                connectionPool.idleTimeout,
+                connectionPool.maxLifeTime,
+                connectionPool.disposeTimeout,
+                connectionPool.keepaliveIdle,
+                connectionPool.keepaliveInterval,
+                connectionPool.keepaliveCount,
+                connectionPool.keepAlive,
+                connectionPool.enabled
+        );
+        if (StringUtils.isBlank(configuration.getId())) {
+            return FormValidationResponse.fieldRequired("id");
+        }
+        if (StringUtils.isBlank(configuration.getDomain())) {
+            return FormValidationResponse.fieldRequired("domain");
+        }
+        try {
+            final String currentConfiguration = server.getDynamicConfigurationStore().toStringConfiguration();
+            final PropertiesConfigurationStore configurationStore = ConfigResource.buildStore(currentConfiguration);
+            configurationStore.saveConnectionPool(configuration);
+            server.applyDynamicConfigurationFromAPI(configurationStore);
+            return SimpleResponse.created();
+        } catch (ConfigurationChangeInProgressException | InterruptedException | ConfigurationNotValidException e) {
+            return SimpleResponse.error(e);
+        }
     }
 
     private static ConnectionPoolBean fromConfiguration(final ConnectionPoolConfiguration configuration, final Map<String, Integer> poolsStats) {

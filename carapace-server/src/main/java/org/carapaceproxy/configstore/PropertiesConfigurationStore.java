@@ -23,6 +23,7 @@ import java.security.KeyPair;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
+import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 
 /**
  * Reads configuration from a Java properties file
@@ -115,6 +116,31 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
     @Override
     public void deleteAcmeChallengeToken(String id) {
         acmeChallengeTokens.remove(id);
+    }
+
+    public void saveConnectionPool(final ConnectionPoolConfiguration connectionPool) {
+        final var max = findMaxIndexForPrefix("connectionpool");
+        String prefix = "connectionpool.0.";
+        for (int index = 0; index <= max; prefix = "connectionpool." + ++index + '.') {
+            if (getProperty(prefix, null) != null) {
+                // found
+                break;
+            }
+        }
+        properties.setProperty(prefix + "id", connectionPool.getId());
+        properties.setProperty(prefix + "domain", connectionPool.getDomain());
+        properties.setProperty(prefix + "maxconnectionsperendpoint", String.valueOf(connectionPool.getMaxConnectionsPerEndpoint()));
+        properties.setProperty(prefix + "borrowtimeout", String.valueOf(connectionPool.getBorrowTimeout()));
+        properties.setProperty(prefix + "connecttimeout", String.valueOf(connectionPool.getConnectTimeout()));
+        properties.setProperty(prefix + "stuckrequesttimeout", String.valueOf(connectionPool.getStuckRequestTimeout()));
+        properties.setProperty(prefix + "idletimeout", String.valueOf(connectionPool.getIdleTimeout()));
+        properties.setProperty(prefix + "maxlifetime", String.valueOf(connectionPool.getMaxLifeTime()));
+        properties.setProperty(prefix + "disposetimeout", String.valueOf(connectionPool.getDisposeTimeout()));
+        properties.setProperty(prefix + "keepaliveidle", String.valueOf(connectionPool.getKeepaliveIdle()));
+        properties.setProperty(prefix + "keepaliveinterval", String.valueOf(connectionPool.getKeepaliveInterval()));
+        properties.setProperty(prefix + "keepalivecount", String.valueOf(connectionPool.getKeepaliveCount()));
+        properties.setProperty(prefix + "enabled", String.valueOf(connectionPool.isEnabled()));
+        properties.setProperty(prefix + "keepalive", String.valueOf(connectionPool.isKeepAlive()));
     }
 
 }
