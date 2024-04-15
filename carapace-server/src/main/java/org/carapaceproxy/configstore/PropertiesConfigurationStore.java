@@ -48,9 +48,7 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
 
     @Override
     public void forEach(BiConsumer<String, String> consumer) {
-        properties.forEach((k, v) -> {
-            consumer.accept(k.toString(), v.toString());
-        });
+        properties.forEach((k, v) -> consumer.accept(k.toString(), v.toString()));
     }
 
     @Override
