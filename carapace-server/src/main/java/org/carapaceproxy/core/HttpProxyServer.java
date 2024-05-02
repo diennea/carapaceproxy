@@ -74,12 +74,14 @@ import org.apache.bookkeeper.stats.prometheus.PrometheusMetricsProvider;
 import org.apache.commons.configuration.PropertiesConfiguration;
 import org.carapaceproxy.api.ApplicationConfig;
 import org.carapaceproxy.api.AuthAPIRequestsFilter;
+import org.carapaceproxy.api.ConfigResource;
 import org.carapaceproxy.api.ForceHeadersAPIRequestsFilter;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
 import org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler;
 import org.carapaceproxy.configstore.CertificateData;
+import org.carapaceproxy.configstore.ConfigurationConsumer;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
@@ -263,6 +265,13 @@ public class HttpProxyServer implements AutoCloseable {
         //Best practice is to reuse EventLoopGroup
         // http://normanmaurer.me/presentations/2014-facebook-eng-netty/slides.html#25.0
         this.eventLoopGroup = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
+    }
+
+    public void rewriteConfiguration(final ConfigurationConsumer function) throws ConfigurationNotValidException, InterruptedException, ConfigurationChangeInProgressException {
+        final String currentConfiguration = getDynamicConfigurationStore().toStringConfiguration();
+        final PropertiesConfigurationStore configurationStore = ConfigResource.buildStore(currentConfiguration);
+        function.accept(configurationStore);
+        applyDynamicConfigurationFromAPI(configurationStore);
     }
 
     public int getLocalPort() {

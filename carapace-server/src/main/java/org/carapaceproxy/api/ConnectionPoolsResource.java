@@ -21,7 +21,6 @@ package org.carapaceproxy.api;
 
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.summingInt;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -30,6 +29,7 @@ import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
@@ -42,9 +42,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.carapaceproxy.api.response.FormValidationResponse;
 import org.carapaceproxy.api.response.SimpleResponse;
-import org.carapaceproxy.configstore.PropertiesConfigurationStore;
+import org.carapaceproxy.configstore.ConfigurationConsumer;
 import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.core.HttpProxyServer.ConnectionPoolStats;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
@@ -103,16 +102,35 @@ public class ConnectionPoolsResource {
                     connections
             );
         }
+
+        private ConnectionPoolConfiguration asConfiguration() {
+            return new ConnectionPoolConfiguration(
+                    getId(),
+                    getDomain(),
+                    getMaxConnectionsPerEndpoint(),
+                    getBorrowTimeout(),
+                    getConnectTimeout(),
+                    getStuckRequestTimeout(),
+                    getIdleTimeout(),
+                    getMaxLifeTime(),
+                    getDisposeTimeout(),
+                    getKeepaliveIdle(),
+                    getKeepaliveInterval(),
+                    getKeepaliveCount(),
+                    isKeepAlive(),
+                    isEnabled()
+            );
+        }
     }
 
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     public Map<String, ConnectionPoolBean> getAll() {
-        HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-        Map<String, ConnectionPoolBean> res = new HashMap<>();
+        final var server = (HttpProxyServer) context.getAttribute("server");
+        final var res = new HashMap<String, ConnectionPoolBean>();
 
-        Collection<Map<String, ConnectionPoolStats>> stats = server.getConnectionPoolsStats().values();
-        Map<String, Integer> poolsStats = new HashMap<>(stats.stream()
+        final var stats = server.getConnectionPoolsStats().values();
+        final var poolsStats = new HashMap<>(stats.stream()
                 .flatMap(m -> m.entrySet().stream())
                 .collect(groupingBy(Map.Entry::getKey, summingInt(e -> e.getValue().getTotalConnections()))));
 
@@ -121,7 +139,7 @@ public class ConnectionPoolsResource {
                 .forEach((id, pool) -> res.put(id, fromConfiguration(pool, poolsStats)));
 
         // default pool
-        ConnectionPoolConfiguration defaultConnectionPool = server.getCurrentConfiguration().getDefaultConnectionPool();
+        final var defaultConnectionPool = server.getCurrentConfiguration().getDefaultConnectionPool();
         res.put(defaultConnectionPool.getId(), ConnectionPoolBean.fromConfiguration(defaultConnectionPool, poolsStats.getOrDefault(defaultConnectionPool.getId(), 0)));
 
         return res;
@@ -152,37 +170,31 @@ public class ConnectionPoolsResource {
     @Consumes(MediaType.APPLICATION_JSON)
     public Response createConnectionPool(final ConnectionPoolBean connectionPool) {
         final var server = (HttpProxyServer) context.getAttribute("server");
-        final var configuration = new ConnectionPoolConfiguration(
-                connectionPool.id,
-                connectionPool.domain,
-                connectionPool.maxConnectionsPerEndpoint,
-                connectionPool.borrowTimeout,
-                connectionPool.connectTimeout,
-                connectionPool.stuckRequestTimeout,
-                connectionPool.idleTimeout,
-                connectionPool.maxLifeTime,
-                connectionPool.disposeTimeout,
-                connectionPool.keepaliveIdle,
-                connectionPool.keepaliveInterval,
-                connectionPool.keepaliveCount,
-                connectionPool.keepAlive,
-                connectionPool.enabled
-        );
-        if (StringUtils.isBlank(configuration.getId())) {
+        if (StringUtils.isBlank(connectionPool.getId())) {
             return FormValidationResponse.fieldRequired("id");
         }
-        if (StringUtils.isBlank(configuration.getDomain())) {
+        if (StringUtils.isBlank(connectionPool.getDomain())) {
             return FormValidationResponse.fieldRequired("domain");
         }
-        try {
-            final String currentConfiguration = server.getDynamicConfigurationStore().toStringConfiguration();
-            final PropertiesConfigurationStore configurationStore = ConfigResource.buildStore(currentConfiguration);
-            configurationStore.saveConnectionPool(configuration);
-            server.applyDynamicConfigurationFromAPI(configurationStore);
-            return SimpleResponse.created();
-        } catch (ConfigurationChangeInProgressException | InterruptedException | ConfigurationNotValidException e) {
-            return SimpleResponse.error(e);
+        return applyOnConfiguration(server, it -> it.saveConnectionPool(connectionPool.asConfiguration()));
+    }
+
+    @PUT
+    @Path("/{poolId}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response updateConnectionPool(final @PathParam("poolId") String poolId, final ConnectionPoolBean connectionPool) {
+        final var server = (HttpProxyServer) context.getAttribute("server");
+        if (StringUtils.isBlank(connectionPool.getId())) {
+            return FormValidationResponse.fieldRequired("id");
         }
+        if (StringUtils.isBlank(connectionPool.getDomain())) {
+            return FormValidationResponse.fieldRequired("domain");
+        }
+        final var pools = server.getCurrentConfiguration().getConnectionPools();
+        if (pools.containsKey(poolId)) {
+            return applyOnConfiguration(server, it -> it.saveConnectionPool(connectionPool.asConfiguration()));
+        }
+        throw new WebApplicationException(Response.Status.NOT_FOUND);
     }
 
     @DELETE
@@ -194,11 +206,12 @@ public class ConnectionPoolsResource {
         if (!connectionPools.containsKey(poolId)) {
             throw new WebApplicationException(Response.Status.NOT_FOUND);
         }
+        return applyOnConfiguration(server, it -> it.deleteConnectionPool(poolId));
+    }
+
+    private static Response applyOnConfiguration(final HttpProxyServer server, final ConfigurationConsumer function) {
         try {
-            final var currentConfiguration = server.getDynamicConfigurationStore().toStringConfiguration();
-            final var configurationStore = ConfigResource.buildStore(currentConfiguration);
-            configurationStore.deleteConnectionPool(poolId);
-            server.applyDynamicConfigurationFromAPI(configurationStore);
+            server.rewriteConfiguration(function);
             return SimpleResponse.created();
         } catch (ConfigurationChangeInProgressException | InterruptedException | ConfigurationNotValidException e) {
             return SimpleResponse.error(e);
