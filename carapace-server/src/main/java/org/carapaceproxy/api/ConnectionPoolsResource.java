@@ -25,9 +25,9 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Stream;
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -117,11 +117,8 @@ public class ConnectionPoolsResource {
                 .collect(groupingBy(Map.Entry::getKey, summingInt(e -> e.getValue().getTotalConnections()))));
 
         // custom pools
-        server.getCurrentConfiguration().getConnectionPools().forEach(conf -> {
-            ConnectionPoolBean bean = fromConfiguration(conf, poolsStats);
-
-            res.put(conf.getId(), bean);
-        });
+        server.getCurrentConfiguration().getConnectionPools()
+                .forEach((id, pool) -> res.put(id, fromConfiguration(pool, poolsStats)));
 
         // default pool
         ConnectionPoolConfiguration defaultConnectionPool = server.getCurrentConfiguration().getDefaultConnectionPool();
@@ -140,14 +137,15 @@ public class ConnectionPoolsResource {
                 .map(Map::entrySet)
                 .flatMap(Set::stream)
                 .collect(groupingBy(Map.Entry::getKey, summingInt(e -> e.getValue().getTotalConnections())));
-        return Stream.concat(
-                        server.getCurrentConfiguration().getConnectionPools().stream(),
-                        Stream.of(server.getCurrentConfiguration().getDefaultConnectionPool())
-                )
-                .filter(configuration -> configuration.getId().equals(poolId))
-                .map(configuration -> fromConfiguration(configuration, poolsStats))
-                .findAny()
-                .orElseThrow(() -> new WebApplicationException(Response.Status.NOT_FOUND));
+        final var pools = server.getCurrentConfiguration().getConnectionPools();
+        if (pools.containsKey(poolId)) {
+            return fromConfiguration(pools.get(poolId), poolsStats);
+        }
+        final var defaultPool = server.getCurrentConfiguration().getDefaultConnectionPool();
+        if (defaultPool.getId().equals(poolId)) {
+            return fromConfiguration(defaultPool, poolsStats);
+        }
+        throw new WebApplicationException(Response.Status.NOT_FOUND);
     }
 
     @POST
@@ -180,6 +178,26 @@ public class ConnectionPoolsResource {
             final String currentConfiguration = server.getDynamicConfigurationStore().toStringConfiguration();
             final PropertiesConfigurationStore configurationStore = ConfigResource.buildStore(currentConfiguration);
             configurationStore.saveConnectionPool(configuration);
+            server.applyDynamicConfigurationFromAPI(configurationStore);
+            return SimpleResponse.created();
+        } catch (ConfigurationChangeInProgressException | InterruptedException | ConfigurationNotValidException e) {
+            return SimpleResponse.error(e);
+        }
+    }
+
+    @DELETE
+    @Path("/{poolId}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response deleteConnectionPool(final @PathParam("poolId") String poolId) {
+        final var server = (HttpProxyServer) context.getAttribute("server");
+        final var connectionPools = server.getCurrentConfiguration().getConnectionPools();
+        if (!connectionPools.containsKey(poolId)) {
+            throw new WebApplicationException(Response.Status.NOT_FOUND);
+        }
+        try {
+            final var currentConfiguration = server.getDynamicConfigurationStore().toStringConfiguration();
+            final var configurationStore = ConfigResource.buildStore(currentConfiguration);
+            configurationStore.deleteConnectionPool(poolId);
             server.applyDynamicConfigurationFromAPI(configurationStore);
             return SimpleResponse.created();
         } catch (ConfigurationChangeInProgressException | InterruptedException | ConfigurationNotValidException e) {

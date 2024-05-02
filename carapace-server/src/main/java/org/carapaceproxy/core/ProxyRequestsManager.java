@@ -19,6 +19,9 @@
  */
 package org.carapaceproxy.core;
 
+import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTP;
+import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTPS;
+import static reactor.netty.Metrics.CONNECTION_PROVIDER_PREFIX;
 import com.google.common.annotations.VisibleForTesting;
 import io.micrometer.core.instrument.Metrics;
 import io.netty.buffer.ByteBuf;
@@ -26,9 +29,32 @@ import io.netty.channel.ChannelOption;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.socket.nio.NioChannelOption;
-import io.netty.handler.codec.http.*;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.DefaultHttpHeaders;
+import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaderValues;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpVersion;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
+import java.net.ConnectException;
+import java.net.InetSocketAddress;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.regex.Pattern;
 import jdk.net.ExtendedSocketOptions;
 import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.SimpleHTTPResponse;
@@ -48,23 +74,6 @@ import reactor.netty.ByteBufFlux;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.http.client.HttpClientResponse;
 import reactor.netty.resources.ConnectionProvider;
-
-import java.net.ConnectException;
-import java.net.InetSocketAddress;
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import java.util.regex.Pattern;
-
-import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTP;
-import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTPS;
-import static reactor.netty.Metrics.CONNECTION_PROVIDER_PREFIX;
 
 /**
  * Manager forwarding {@link ProxyRequest} from clients to proper endpoints.
@@ -312,7 +321,7 @@ public class ProxyRequestsManager {
 
         // - redirect to https
         location = (REDIRECT_PROTO_HTTPS.equals(action.redirectProto) ? REDIRECT_PROTO_HTTPS : REDIRECT_PROTO_HTTP)
-                + "://" + location.replaceFirst("http.?:\\/\\/", "");
+                + "://" + location.replaceFirst("http.?://", "");
         response.headers().set(HttpHeaderNames.LOCATION, location);
 
         return writeSimpleResponse(request, response, request.getAction().customHeaders);
@@ -447,8 +456,8 @@ public class ProxyRequestsManager {
                     }
                     addCustomResponseHeaders(request, request.getAction().customHeaders);
 
-                    if (parent.getCurrentConfiguration().isHttp10BackwardCompatibilityEnabled() &&
-                            request.getRequest().version() == HttpVersion.HTTP_1_0) {
+                    if (parent.getCurrentConfiguration().isHttp10BackwardCompatibilityEnabled()
+                        && request.getRequest().version() == HttpVersion.HTTP_1_0) {
                         return request.sendResponseData(flux.aggregate().retain().map(ByteBuf::asByteBuf)
                                 .doOnNext(data -> {
                                     request.setLastActivity(System.currentTimeMillis());
@@ -574,8 +583,8 @@ public class ProxyRequestsManager {
             request.setResponseHeaders(headers);
             addCustomResponseHeaders(request, request.getAction().customHeaders);
             // If the request is http 1.0, we make sure to send without chunked
-            if (parent.getCurrentConfiguration().isHttp10BackwardCompatibilityEnabled() &&
-                    request.getRequest().version() == HttpVersion.HTTP_1_0) {
+            if (parent.getCurrentConfiguration().isHttp10BackwardCompatibilityEnabled()
+                && request.getRequest().version() == HttpVersion.HTTP_1_0) {
                 return request.sendResponseData(Mono.from(ByteBufFlux.fromIterable(content.getChunks())));
             }
             // body
@@ -594,12 +603,12 @@ public class ProxyRequestsManager {
             close();
 
             // custom pools
-            ArrayList<ConnectionPoolConfiguration> _connectionPools = new ArrayList<>(newConfiguration.getConnectionPools());
+            final var connectionPoolsCopy = new ArrayList<>(newConfiguration.getConnectionPools().values());
 
             // default pool
-            _connectionPools.add(newConfiguration.getDefaultConnectionPool());
+            connectionPoolsCopy.add(newConfiguration.getDefaultConnectionPool());
 
-            _connectionPools.forEach(connectionPool -> {
+            connectionPoolsCopy.forEach(connectionPool -> {
                 if (!connectionPool.isEnabled()) {
                     return;
                 }
@@ -617,7 +626,7 @@ public class ProxyRequestsManager {
                         spec.pendingAcquireTimeout(Duration.ofMillis(connectionPool.getBorrowTimeout()));
                         spec.maxIdleTime(Duration.ofMillis(connectionPool.getIdleTimeout()));
                         spec.maxLifeTime(Duration.ofMillis(connectionPool.getMaxLifeTime()));
-                        spec.evictInBackground(Duration.ofMillis(connectionPool.getIdleTimeout() * 2));
+                        spec.evictInBackground(Duration.ofMillis(connectionPool.getIdleTimeout() * 2L));
                         spec.metrics(true);
                         spec.lifo();
                     });

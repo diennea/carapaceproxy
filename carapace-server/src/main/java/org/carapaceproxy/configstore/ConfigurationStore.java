@@ -202,5 +202,4 @@ public interface ConfigurationStore extends AutoCloseable {
     String loadAcmeChallengeToken(String id);
 
     void deleteAcmeChallengeToken(String id);
-
 }

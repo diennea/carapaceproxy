@@ -143,4 +143,28 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
         properties.setProperty(prefix + "keepalive", String.valueOf(connectionPool.isKeepAlive()));
     }
 
+    public void deleteConnectionPool(final String id) {
+        final var max = findMaxIndexForPrefix("connectionpool");
+        for (int index = 0; index <= max; index++) {
+            String prefix = "connectionpool." + index + ".";
+            if (id.equals(properties.getProperty(prefix + "id"))) {
+                properties.remove(prefix + "id");
+                properties.remove(prefix + "domain");
+                properties.remove(prefix + "maxconnectionsperendpoint");
+                properties.remove(prefix + "borrowtimeout");
+                properties.remove(prefix + "connecttimeout");
+                properties.remove(prefix + "stuckrequesttimeout");
+                properties.remove(prefix + "idletimeout");
+                properties.remove(prefix + "maxlifetime");
+                properties.remove(prefix + "disposetimeout");
+                properties.remove(prefix + "keepaliveidle");
+                properties.remove(prefix + "keepaliveinterval");
+                properties.remove(prefix + "keepalivecount");
+                properties.remove(prefix + "enabled");
+                properties.remove(prefix + "keepalive");
+                // found
+                break;
+            }
+        }
+    }
 }
