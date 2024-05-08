@@ -118,15 +118,24 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
         acmeChallengeTokens.remove(id);
     }
 
-    public void saveConnectionPool(final ConnectionPoolConfiguration connectionPool) {
+    public void addConnectionPool(final ConnectionPoolConfiguration connectionPool) {
+        saveConnectionPool(connectionPool, findMaxIndexForPrefix("connectionpool") + 1);
+    }
+
+    public void updateConnectionPool(final ConnectionPoolConfiguration connectionPool) {
         final var max = findMaxIndexForPrefix("connectionpool");
-        String prefix = "connectionpool.0.";
-        for (int index = 0; index <= max; prefix = "connectionpool." + ++index + '.') {
-            if (getProperty(prefix, null) != null) {
-                // found
-                break;
+        for (int index = 0; index <= max; index++) {
+            final var prefix = "connectionpool." + index + ".";
+            final var id = properties.getProperty(prefix + "id", null);
+            if (connectionPool.getId().equals(id)) {
+                saveConnectionPool(connectionPool, index);
+                return;
             }
         }
+    }
+
+    private void saveConnectionPool(final ConnectionPoolConfiguration connectionPool, final int index) {
+        final var prefix = "connectionpool." + index + ".";
         properties.setProperty(prefix + "id", connectionPool.getId());
         properties.setProperty(prefix + "domain", connectionPool.getDomain());
         properties.setProperty(prefix + "maxconnectionsperendpoint", String.valueOf(connectionPool.getMaxConnectionsPerEndpoint()));
@@ -162,8 +171,7 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
                 properties.remove(prefix + "keepalivecount");
                 properties.remove(prefix + "enabled");
                 properties.remove(prefix + "keepalive");
-                // found
-                break;
+                return;
             }
         }
     }

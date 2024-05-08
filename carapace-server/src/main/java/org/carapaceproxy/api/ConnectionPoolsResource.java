@@ -42,7 +42,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.carapaceproxy.api.response.FormValidationResponse;
 import org.carapaceproxy.api.response.SimpleResponse;
-import org.carapaceproxy.configstore.ConfigurationConsumer;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
@@ -176,7 +175,16 @@ public class ConnectionPoolsResource {
         if (StringUtils.isBlank(connectionPool.getDomain())) {
             return FormValidationResponse.fieldRequired("domain");
         }
-        return applyOnConfiguration(server, it -> it.saveConnectionPool(connectionPool.asConfiguration()));
+        final var pools = server.getCurrentConfiguration().getConnectionPools();
+        if (pools.containsKey(connectionPool.getId())) {
+            return FormValidationResponse.fieldConflict("id");
+        }
+        try {
+            server.rewriteConfiguration(it -> it.addConnectionPool(connectionPool.asConfiguration()));
+            return SimpleResponse.created();
+        } catch (ConfigurationChangeInProgressException | InterruptedException | ConfigurationNotValidException e) {
+            return SimpleResponse.error(e);
+        }
     }
 
     @PUT
@@ -190,11 +198,19 @@ public class ConnectionPoolsResource {
         if (StringUtils.isBlank(connectionPool.getDomain())) {
             return FormValidationResponse.fieldRequired("domain");
         }
-        final var pools = server.getCurrentConfiguration().getConnectionPools();
-        if (pools.containsKey(poolId)) {
-            return applyOnConfiguration(server, it -> it.saveConnectionPool(connectionPool.asConfiguration()));
+        if (!poolId.equals(connectionPool.getId())) {
+            throw new WebApplicationException(Response.Status.BAD_REQUEST);
         }
-        throw new WebApplicationException(Response.Status.NOT_FOUND);
+        final var pools = server.getCurrentConfiguration().getConnectionPools();
+        if (!pools.containsKey(poolId)) {
+            throw new WebApplicationException(Response.Status.NOT_FOUND);
+        }
+        try {
+            server.rewriteConfiguration(it -> it.updateConnectionPool(connectionPool.asConfiguration()));
+            return SimpleResponse.ok();
+        } catch (ConfigurationChangeInProgressException | InterruptedException | ConfigurationNotValidException e) {
+            return SimpleResponse.error(e);
+        }
     }
 
     @DELETE
@@ -206,13 +222,9 @@ public class ConnectionPoolsResource {
         if (!connectionPools.containsKey(poolId)) {
             throw new WebApplicationException(Response.Status.NOT_FOUND);
         }
-        return applyOnConfiguration(server, it -> it.deleteConnectionPool(poolId));
-    }
-
-    private static Response applyOnConfiguration(final HttpProxyServer server, final ConfigurationConsumer function) {
         try {
-            server.rewriteConfiguration(function);
-            return SimpleResponse.created();
+            server.rewriteConfiguration(it -> it.deleteConnectionPool(poolId));
+            return SimpleResponse.ok();
         } catch (ConfigurationChangeInProgressException | InterruptedException | ConfigurationNotValidException e) {
             return SimpleResponse.error(e);
         }
