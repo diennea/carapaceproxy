@@ -24,8 +24,6 @@ import java.io.PrintWriter;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.Properties;
-import java.util.Set;
-import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.servlet.ServletContext;
@@ -37,7 +35,6 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Response;
 import org.carapaceproxy.api.response.SimpleResponse;
-import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
@@ -62,17 +59,7 @@ public class ConfigResource {
     public String dump() {
         LOG.info("Dumping current configuration from API");
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-        ConfigurationStore configStore = server.getDynamicConfigurationStore();
-        Set<String> props = new TreeSet();
-        configStore.forEach((k, v) -> {
-            props.add(k + "=" + v);
-        });
-        StringBuilder builder = new StringBuilder();
-        props.forEach(p -> {
-            builder.append(p);
-            builder.append("\n");
-        });
-        return builder.toString();
+        return server.getDynamicConfigurationStore().toStringConfiguration();
     }
 
     @Path("/validate")
@@ -103,8 +90,7 @@ public class ConfigResource {
         } catch (IOException err) {
             throw new ConfigurationNotValidException("Invalid properties file: " + err.getMessage());
         }
-        PropertiesConfigurationStore simpleStore = new PropertiesConfigurationStore(properties);
-        return simpleStore;
+        return new PropertiesConfigurationStore(properties);
     }
 
     @Path("/apply")
@@ -136,7 +122,7 @@ public class ConfigResource {
     public ConfigurationChangeResult setupMaintenanceMode(@QueryParam("enable") boolean value) {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         try {
-            server.UpdateMaintenanceMode(value);
+            server.updateMaintenanceMode(value);
             return ConfigurationChangeResult.response(server.getCurrentConfiguration().isMaintenanceModeEnabled(), "");
         } catch (ConfigurationChangeInProgressException err) {
             return ConfigurationChangeResult.error(err);
@@ -172,7 +158,7 @@ public class ConfigResource {
 
         public static final ConfigurationChangeResult OK = new ConfigurationChangeResult(true, "");
 
-        public static final ConfigurationChangeResult error(Throwable error) {
+        public static ConfigurationChangeResult error(Throwable error) {
             StringWriter w = new StringWriter();
             error.printStackTrace(new PrintWriter(w));
             return new ConfigurationChangeResult(false, w.toString());

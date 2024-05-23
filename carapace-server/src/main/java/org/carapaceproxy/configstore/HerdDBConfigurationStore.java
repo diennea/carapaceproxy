@@ -23,6 +23,7 @@ import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64Decode
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePublicKey;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeKey;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import herddb.client.ClientConfiguration;
@@ -39,7 +40,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -53,7 +53,6 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
-import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.utils.StringUtils;
 import org.shredzone.acme4j.toolbox.JSON;
 
@@ -137,7 +136,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     private final HerdDBEmbeddedDataSource datasource;
 
     public HerdDBConfigurationStore(ConfigurationStore staticConfiguration,
-                                    boolean cluster, String zkAddress, File baseDir, StatsLogger statsLogger) throws ConfigurationNotValidException {
+                                    boolean cluster, String zkAddress, File baseDir, StatsLogger statsLogger) {
         this.datasource = buildDatasource(staticConfiguration, cluster, zkAddress, baseDir, statsLogger);
         loadCurrentConfiguration();
     }
@@ -149,9 +148,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
 
     @Override
     public void forEach(BiConsumer<String, String> consumer) {
-        properties.forEach((k, v) -> {
-            consumer.accept(k, v);
-        });
+        properties.forEach(consumer);
     }
 
     @Override
@@ -220,7 +217,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
 
     private Set<String> loadCurrentConfiguration() {
         Set<String> loaded = new HashSet<>();
-        try (Connection con = datasource.getConnection();) {
+        try (Connection con = datasource.getConnection()) {
             List<String> tablesDDL = Arrays.asList(
                     CREATE_CONFIG_TABLE,
                     CREATE_KEYPAIR_TABLE,
@@ -228,7 +225,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                     CREATE_ACME_CHALLENGE_TOKENS_TABLE
             );
             tablesDDL.forEach((tableDDL) -> {
-                try (PreparedStatement ps = con.prepareStatement(tableDDL);) {
+                try (PreparedStatement ps = con.prepareStatement(tableDDL)) {
                     ps.executeUpdate();
                     LOG.log(Level.INFO, "Created table {0}", tableDDL);
                 } catch (SQLException err) {
@@ -262,7 +259,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     @Override
     public void commitConfiguration(ConfigurationStore newConfigurationStore) {
         Set<String> currentKeys = new HashSet<>(this.properties.keySet());
-        Map<String, String> newProperties = new HashMap();
+        Map<String, String> newProperties = new HashMap<>();
         try (Connection con = datasource.getConnection()) {
             con.setAutoCommit(false);
             try (PreparedStatement psUpdate = con.prepareStatement(UPDATE_CONFIG_TABLE);
@@ -297,9 +294,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             con.commit();
 
             // Local cached properties updating
-            currentKeys.forEach(k -> {
-                properties.remove(k);
-            });
+            currentKeys.forEach(properties::remove);
             properties.putAll(newProperties);
         } catch (SQLException err) {
             LOG.log(Level.SEVERE, "Error while saving configuration from Database", err);
@@ -400,7 +395,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             return null;
         }
         try (Connection con = datasource.getConnection()) {
-            try (PreparedStatement ps = con.prepareStatement(SELECT_FROM_DIGITAL_CERTIFICATES_TABLE);) {
+            try (PreparedStatement ps = con.prepareStatement(SELECT_FROM_DIGITAL_CERTIFICATES_TABLE)) {
                 ps.setString(1, domain);
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
@@ -435,8 +430,8 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         if (StringUtils.isBlank(challengesData)) {
             return null;
         }
-        return ((Map<String, String>) MAPPER.readValue(challengesData, Map.class)).entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> JSON.parse(e.getValue())));
+        final var map = MAPPER.readValue(challengesData, new TypeReference<Map<String, String>>() {});
+        return map.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> JSON.parse(e.getValue())));
     }
 
     @Override

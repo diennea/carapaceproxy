@@ -59,7 +59,7 @@ public class RuntimeServerConfiguration {
     private final List<NetworkListenerConfiguration> listeners = new ArrayList<>();
     private final Map<String, SSLCertificateConfiguration> certificates = new HashMap<>();
     private final List<RequestFilterConfiguration> requestFilters = new ArrayList<>();
-    private final List<ConnectionPoolConfiguration> connectionPools = new ArrayList<>();
+    private final Map<String, ConnectionPoolConfiguration> connectionPools = new HashMap<>();
     private ConnectionPoolConfiguration defaultConnectionPool;
 
     private int maxConnectionsPerEndpoint = 10;
@@ -381,7 +381,8 @@ public class RuntimeServerConfiguration {
             boolean keepAlive = properties.getBoolean(prefix + "keepalive", true);
 
             ConnectionPoolConfiguration connectionPool = new ConnectionPoolConfiguration(
-                    id, domain,
+                    id,
+                    domain,
                     maxconnectionsperendpoint,
                     borrowtimeout,
                     connecttimeout,
@@ -395,7 +396,7 @@ public class RuntimeServerConfiguration {
                     keepAlive,
                     enabled
             );
-            connectionPools.add(connectionPool);
+            connectionPools.put(id, connectionPool);
             LOG.log(Level.INFO, "Configured connectionpool." + i + ": {0}", connectionPool);
         }
 

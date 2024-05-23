@@ -123,29 +123,42 @@ public final class RawHttpClient implements AutoCloseable {
     }
 
     public HttpResponse get(String uri) throws IOException {
-        return executeRequest("GET " + uri + " HTTP/1.1"
-                + "\r\n" + HttpHeaderNames.HOST + ": " + host
-                + "\r\n" + HttpHeaderNames.CONNECTION + ": " + HttpHeaderValues.KEEP_ALIVE
-                + "\r\n\r\n");
+        return sendRequestWithoutBody("GET", uri);
     }
 
     public HttpResponse get(String uri, BasicAuthCredentials credentials) throws IOException {
-        return executeRequest("GET " + uri + " HTTP/1.1"
-                + "\r\n" + HttpHeaderNames.HOST + ": " + host
-                + "\r\n" + HttpHeaderNames.CONNECTION + ": " + HttpHeaderValues.KEEP_ALIVE
-                + "\r\nAuthorization: Basic " + credentials.toBase64()
-                + "\r\n\r\n");
+        return sendRequestWithoutBody("GET", uri, "Authorization: Basic " + credentials.toBase64());
     }
 
     public HttpResponse post(String uri, String params, Object data, BasicAuthCredentials credentials) throws Exception {
+        return sendRequestWithBody("POST", uri, params, data, credentials);
+    }
+
+    public HttpResponse put(String uri, String params, Object data, BasicAuthCredentials credentials) throws Exception {
+        return sendRequestWithBody("PUT", uri, params, data, credentials);
+    }
+
+    public HttpResponse delete(String uri, BasicAuthCredentials credentials) throws IOException {
+        return sendRequestWithoutBody("DELETE", uri, "Authorization: Basic " + credentials.toBase64());
+    }
+
+    private HttpResponse sendRequestWithoutBody(final String method, final String uri, final String... additionalLines) throws IOException {
+        return executeRequest(method + " " + uri + " HTTP/1.1"
+                              + "\r\n" + HttpHeaderNames.HOST + ": " + host
+                              + "\r\n" + HttpHeaderNames.CONNECTION + ": " + HttpHeaderValues.KEEP_ALIVE
+                              + "\r\n" + String.join("\r\n", additionalLines)
+                              + "\r\n\r\n");
+    }
+
+    private HttpResponse sendRequestWithBody(final String method, String uri, String params, Object data, BasicAuthCredentials credentials) throws Exception {
         ByteArrayOutputStream oo = new ByteArrayOutputStream();
         final var json = (data != null ? OBJECT_MAPPER.writeValueAsString(data) : "").getBytes(StandardCharsets.US_ASCII);
         params = (params == null || params.isEmpty()) ? "" : "?" + params;
-        oo.write(("POST " + uri + params + " HTTP/1.1\r\n"
-                + HttpHeaderNames.HOST + ": " + host + "\r\n"
-                + HttpHeaderNames.CONTENT_TYPE + ": " + HttpHeaderValues.APPLICATION_JSON + "\r\n"
-                + HttpHeaderNames.CONTENT_LENGTH + ": " + json.length+ "\r\n"
-                + HttpHeaderNames.AUTHORIZATION + ": Basic " + credentials.toBase64() + "\r\n\r\n"
+        oo.write((method + " " + uri + params + " HTTP/1.1\r\n"
+                  + HttpHeaderNames.HOST + ": " + host + "\r\n"
+                  + HttpHeaderNames.CONTENT_TYPE + ": " + HttpHeaderValues.APPLICATION_JSON + "\r\n"
+                  + HttpHeaderNames.CONTENT_LENGTH + ": " + json.length + "\r\n"
+                  + HttpHeaderNames.AUTHORIZATION + ": Basic " + credentials.toBase64() + "\r\n\r\n"
         ).getBytes(StandardCharsets.US_ASCII));
         oo.write(json);
         return executeRequest(new ByteArrayInputStream(oo.toByteArray()));
@@ -179,11 +192,7 @@ public final class RawHttpClient implements AutoCloseable {
 
         @Override
         public String toString() {
-            try {
-                return "BufferedStream{buffer=" + buffer.toString("utf-8") + '}';
-            } catch (UnsupportedEncodingException e) {
-                throw new RuntimeException(e);
-            }
+            return "BufferedStream{buffer=" + buffer.toString(StandardCharsets.UTF_8) + '}';
         }
 
     }
@@ -297,7 +306,7 @@ public final class RawHttpClient implements AutoCloseable {
 
         BufferedStream firstLine = new BufferedStream(result.rawResponse);
         consumeLFEndedLine(in, firstLine, true);
-        result.statusLine = firstLine.buffer.toString("utf-8");
+        result.statusLine = firstLine.buffer.toString(StandardCharsets.UTF_8);
         println("[STATUSLINE] " + result.statusLine);
 
         if (!result.statusLine.startsWith("HTTP/1.1 ")) {
@@ -312,7 +321,7 @@ public final class RawHttpClient implements AutoCloseable {
         while (true) {
             BufferedStream counter = new BufferedStream(result.rawResponse);
             consumeLFEndedLine(in, counter, false);
-            String line = counter.buffer.toString("utf-8");
+            String line = counter.buffer.toString(StandardCharsets.UTF_8);
             println("READ HEADER " + line.trim() + " size " + counter.buffer.size());
             if (counter.buffer.size() <= 2) {
                 println("END OF HEADER");
@@ -347,7 +356,7 @@ public final class RawHttpClient implements AutoCloseable {
             DataInputStream dataIn = new DataInputStream(in);
             while (true) {
                 String line = readASCIILine(dataIn, true);
-                result.rawResponse.write(line.getBytes("ASCII"));
+                result.rawResponse.write(line.getBytes(StandardCharsets.US_ASCII));
                 println("CHUNK SIZE " + line + "(hex)");
                 int size = Integer.parseInt(line.trim(), 16);
                 if (size == 0) {
@@ -356,7 +365,7 @@ public final class RawHttpClient implements AutoCloseable {
                     dataIn.readFully(eol);
                     result.rawResponse.write(eol);
                     if (eol[0] != '\r' || eol[1] != '\n') {
-                        throw new IOException("unexpected delimiter " + new String(eol, "ASCII"));
+                        throw new IOException("unexpected delimiter " + new String(eol, StandardCharsets.US_ASCII));
                     }
                     break;
                 }
@@ -365,13 +374,13 @@ public final class RawHttpClient implements AutoCloseable {
 
                 result.rawResponse.write(chunk);
                 result.body.write(chunk);
-                println("READ " + new String(chunk, "ASCII"));
+                println("READ " + new String(chunk, StandardCharsets.US_ASCII));
 
                 byte[] eol = new byte[2];
                 dataIn.readFully(eol);
                 result.rawResponse.write(eol);
                 if (eol[0] != '\r' || eol[1] != '\n') {
-                    throw new IOException("unexpected delimiter " + new String(eol, "ASCII"));
+                    throw new IOException("unexpected delimiter " + new String(eol, StandardCharsets.US_ASCII));
                 }
             }
         } else {
@@ -400,7 +409,7 @@ public final class RawHttpClient implements AutoCloseable {
     private static String readASCIILine(final InputStream in, boolean errorIfEmpty) throws IOException {
         ByteArrayOutputStream oo = new ByteArrayOutputStream();
         consumeLFEndedLine(in, oo, errorIfEmpty);
-        return oo.toString("ASCII");
+        return oo.toString(StandardCharsets.US_ASCII);
     }
 
     private static void consumeLFEndedLine(final InputStream in, OutputStream responseReceived, boolean errorIfEmpty) throws IOException {

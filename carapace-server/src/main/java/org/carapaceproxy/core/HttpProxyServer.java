@@ -65,7 +65,6 @@ import java.util.Properties;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.naming.ConfigurationException;
 import javax.servlet.DispatcherType;
 import lombok.Data;
 import lombok.Getter;
@@ -75,12 +74,14 @@ import org.apache.bookkeeper.stats.prometheus.PrometheusMetricsProvider;
 import org.apache.commons.configuration.PropertiesConfiguration;
 import org.carapaceproxy.api.ApplicationConfig;
 import org.carapaceproxy.api.AuthAPIRequestsFilter;
+import org.carapaceproxy.api.ConfigResource;
 import org.carapaceproxy.api.ForceHeadersAPIRequestsFilter;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
 import org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler;
 import org.carapaceproxy.configstore.CertificateData;
+import org.carapaceproxy.configstore.ConfigurationConsumer;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
@@ -180,17 +181,17 @@ public class HttpProxyServer implements AutoCloseable {
     private UserRealm realm;
 
     @Getter
-    private TrustStoreManager trustStoreManager;
+    private final TrustStoreManager trustStoreManager;
 
     @Getter
     private List<RequestFilter> filters;
     private volatile boolean started;
 
     @Getter
-    private ByteBufAllocator cachePoolAllocator;
-    private CacheByteBufMemoryUsageMetric cacheByteBufMemoryUsageMetric;
+    private final ByteBufAllocator cachePoolAllocator;
+    private final CacheByteBufMemoryUsageMetric cacheByteBufMemoryUsageMetric;
     @Getter
-    private EventLoopGroup eventLoopGroup;
+    private final EventLoopGroup eventLoopGroup;
 
     /**
      * Guards concurrent configuration changes
@@ -209,7 +210,7 @@ public class HttpProxyServer implements AutoCloseable {
     private String adminServerCertFile;
     private String adminServerCertFilePwd = "";
     @Getter
-    private boolean usePooledByteBufAllocator;
+    private final boolean usePooledByteBufAllocator;
     @Getter
     private String metricsUrl;
     private String userRealmClassname;
@@ -220,7 +221,7 @@ public class HttpProxyServer implements AutoCloseable {
     @Getter
     private int listenersOffsetPort = 0;
 
-    public static HttpProxyServer buildForTests(String host, int port, EndpointMapper mapper, File baseDir) throws ConfigurationNotValidException, Exception {
+    public static HttpProxyServer buildForTests(String host, int port, EndpointMapper mapper, File baseDir) throws ConfigurationNotValidException {
         HttpProxyServer res = new HttpProxyServer(mapper, baseDir.getAbsoluteFile());
         res.currentConfiguration.addListener(new NetworkListenerConfiguration(host, port));
         res.proxyRequestsManager.reloadConfiguration(res.currentConfiguration, mapper.getBackends().values());
@@ -228,7 +229,7 @@ public class HttpProxyServer implements AutoCloseable {
         return res;
     }
 
-    public HttpProxyServer(EndpointMapper mapper, File basePath) throws Exception {
+    public HttpProxyServer(EndpointMapper mapper, File basePath) {
         // metrics
         statsProvider = new PrometheusMetricsProvider();
         mainLogger = statsProvider.getStatsLogger("");
@@ -258,12 +259,19 @@ public class HttpProxyServer implements AutoCloseable {
         }
 
         this.usePooledByteBufAllocator = Boolean.getBoolean("cache.allocator.usepooledbytebufallocator");
-        this.cachePoolAllocator = usePooledByteBufAllocator ?
-                new PooledByteBufAllocator(true): new UnpooledByteBufAllocator(true);
+        this.cachePoolAllocator = usePooledByteBufAllocator
+                ? new PooledByteBufAllocator(true) : new UnpooledByteBufAllocator(true);
         this.cacheByteBufMemoryUsageMetric = new CacheByteBufMemoryUsageMetric(this);
         //Best practice is to reuse EventLoopGroup
         // http://normanmaurer.me/presentations/2014-facebook-eng-netty/slides.html#25.0
         this.eventLoopGroup = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
+    }
+
+    public void rewriteConfiguration(final ConfigurationConsumer function) throws ConfigurationNotValidException, InterruptedException, ConfigurationChangeInProgressException {
+        final String currentConfiguration = getDynamicConfigurationStore().toStringConfiguration();
+        final PropertiesConfigurationStore configurationStore = ConfigResource.buildStore(currentConfiguration);
+        function.accept(configurationStore);
+        applyDynamicConfigurationFromAPI(configurationStore);
     }
 
     public int getLocalPort() {
@@ -442,7 +450,7 @@ public class HttpProxyServer implements AutoCloseable {
         }
     }
 
-    public void startMetrics() throws ConfigurationException {
+    public void startMetrics() {
         statsProvider.start(statsProviderConfig);
         try {
             io.prometheus.client.hotspot.DefaultExports.initialize();
@@ -560,9 +568,7 @@ public class HttpProxyServer implements AutoCloseable {
             throw new IllegalStateException("server already started");
         }
         statsProviderConfig.setProperty(PrometheusMetricsProvider.PROMETHEUS_STATS_HTTP_ENABLE, false);
-        properties.forEach((String key, String value) -> {
-            statsProviderConfig.setProperty(key + "", value);
-        });
+        properties.forEach(statsProviderConfig::setProperty);
         adminServerEnabled = properties.getBoolean("http.admin.enabled", false);
         adminServerHttpPort = properties.getInt("http.admin.port", adminServerHttpPort);
         adminServerHost = properties.getString("http.admin.host", adminServerHost);
@@ -670,7 +676,7 @@ public class HttpProxyServer implements AutoCloseable {
         applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(props));
     }
 
-    public void UpdateMaintenanceMode(boolean value) throws ConfigurationChangeInProgressException, InterruptedException {
+    public void updateMaintenanceMode(boolean value) throws ConfigurationChangeInProgressException, InterruptedException {
         Properties props = dynamicConfigurationStore.asProperties(null);
         props.setProperty("carapace.maintenancemode.enabled", String.valueOf(value));
         applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(props));
@@ -791,9 +797,7 @@ public class HttpProxyServer implements AutoCloseable {
                 zkTimeout = staticConfiguration.getInt("zkTimeout", 40_000);
                 zkProperties = new Properties(staticConfiguration.asProperties("zookeeper."));
                 LOG.log(Level.INFO, "mode=cluster, zkAddress=''{0}'',zkTimeout={1}, peer.id=''{2}'', zkSecure: {3}", new Object[]{zkAddress, zkTimeout, peerId, zkSecure});
-                zkProperties.forEach((k, v) -> {
-                    LOG.log(Level.INFO, "additional zkclient property: {0}={1}", new Object[]{k, v});
-                });
+                zkProperties.forEach((k, v) -> LOG.log(Level.INFO, "additional zkclient property: {0}={1}", new Object[]{k, v}));
                 break;
             case "standalone":
                 cluster = false;
@@ -804,9 +808,9 @@ public class HttpProxyServer implements AutoCloseable {
         }
     }
 
-    private void initGroupMembership() throws ConfigurationNotValidException {
+    private void initGroupMembership() {
         if (cluster) {
-            Map<String, String> peerInfo = new HashMap();
+            Map<String, String> peerInfo = new HashMap<>();
             peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HOST, adminAdvertisedServerHost);
             peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_PORT, adminServerHttpPort + "");
             peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HTTPS_PORT, adminServerHttpsPort + "");
@@ -868,7 +872,7 @@ public class HttpProxyServer implements AutoCloseable {
                 return;
             }
             EndpointKey key = EndpointKey.make(metric.getTag(REMOTE_ADDRESS));
-            Map<String, ConnectionPoolStats> pools = res.computeIfAbsent(key, k -> new HashMap<String, ConnectionPoolStats>());
+            Map<String, ConnectionPoolStats> pools = res.computeIfAbsent(key, k -> new HashMap<>());
             String poolName = metric.getTag(NAME);
             ConnectionPoolStats stats = pools.computeIfAbsent(poolName, k -> new ConnectionPoolStats());
             double value = 0;

@@ -25,6 +25,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
@@ -37,6 +38,14 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
 public interface ConfigurationStore extends AutoCloseable {
 
     String PROPERTY_VALUES_SEPARATOR = ",";
+
+    default String toStringConfiguration() {
+        Set<String> props = new TreeSet<>();
+        forEach((k, v) -> props.add(k + "=" + v));
+        StringBuilder builder = new StringBuilder();
+        props.forEach(p -> builder.append(p).append("\n"));
+        return builder.toString();
+    }
 
     String getProperty(String key, String defaultValue);
 
@@ -138,7 +147,7 @@ public interface ConfigurationStore extends AutoCloseable {
                 if (split.length > 0) {
                     usedIndexes.add(Integer.parseInt(split[0]));
                 }
-            } catch (NumberFormatException e) {
+            } catch (NumberFormatException ignored) {
 
             }
         });
@@ -147,8 +156,9 @@ public interface ConfigurationStore extends AutoCloseable {
     }
 
     /**
+     * Check if any of the properties match a predicate.
      *
-     * @param predicate
+     * @param predicate the predicate to execute against all the properties
      * @return whether exist at least one property matching to passed predicate.
      */
     default boolean anyPropertyMatches(BiPredicate<String, String> predicate) {
@@ -168,7 +178,7 @@ public interface ConfigurationStore extends AutoCloseable {
     /**
      * Persist (if supported) the new configuration
      *
-     * @param newConfigurationStore
+     * @param newConfigurationStore the new configuration store to persist
      */
     default void commitConfiguration(ConfigurationStore newConfigurationStore) {
     }
@@ -192,5 +202,4 @@ public interface ConfigurationStore extends AutoCloseable {
     String loadAcmeChallengeToken(String id);
 
     void deleteAcmeChallengeToken(String id);
-
 }

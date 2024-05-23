@@ -23,6 +23,7 @@ import java.security.KeyPair;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
+import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 
 /**
  * Reads configuration from a Java properties file
@@ -48,9 +49,7 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
 
     @Override
     public void forEach(BiConsumer<String, String> consumer) {
-        properties.forEach((k, v) -> {
-            consumer.accept(k.toString(), v.toString());
-        });
+        properties.forEach((k, v) -> consumer.accept(k.toString(), v.toString()));
     }
 
     @Override
@@ -119,4 +118,61 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
         acmeChallengeTokens.remove(id);
     }
 
+    public void addConnectionPool(final ConnectionPoolConfiguration connectionPool) {
+        saveConnectionPool(connectionPool, findMaxIndexForPrefix("connectionpool") + 1);
+    }
+
+    public void updateConnectionPool(final ConnectionPoolConfiguration connectionPool) {
+        final var max = findMaxIndexForPrefix("connectionpool");
+        for (int index = 0; index <= max; index++) {
+            final var prefix = "connectionpool." + index + ".";
+            final var id = properties.getProperty(prefix + "id", null);
+            if (connectionPool.getId().equals(id)) {
+                saveConnectionPool(connectionPool, index);
+                return;
+            }
+        }
+    }
+
+    private void saveConnectionPool(final ConnectionPoolConfiguration connectionPool, final int index) {
+        final var prefix = "connectionpool." + index + ".";
+        properties.setProperty(prefix + "id", connectionPool.getId());
+        properties.setProperty(prefix + "domain", connectionPool.getDomain());
+        properties.setProperty(prefix + "maxconnectionsperendpoint", String.valueOf(connectionPool.getMaxConnectionsPerEndpoint()));
+        properties.setProperty(prefix + "borrowtimeout", String.valueOf(connectionPool.getBorrowTimeout()));
+        properties.setProperty(prefix + "connecttimeout", String.valueOf(connectionPool.getConnectTimeout()));
+        properties.setProperty(prefix + "stuckrequesttimeout", String.valueOf(connectionPool.getStuckRequestTimeout()));
+        properties.setProperty(prefix + "idletimeout", String.valueOf(connectionPool.getIdleTimeout()));
+        properties.setProperty(prefix + "maxlifetime", String.valueOf(connectionPool.getMaxLifeTime()));
+        properties.setProperty(prefix + "disposetimeout", String.valueOf(connectionPool.getDisposeTimeout()));
+        properties.setProperty(prefix + "keepaliveidle", String.valueOf(connectionPool.getKeepaliveIdle()));
+        properties.setProperty(prefix + "keepaliveinterval", String.valueOf(connectionPool.getKeepaliveInterval()));
+        properties.setProperty(prefix + "keepalivecount", String.valueOf(connectionPool.getKeepaliveCount()));
+        properties.setProperty(prefix + "enabled", String.valueOf(connectionPool.isEnabled()));
+        properties.setProperty(prefix + "keepalive", String.valueOf(connectionPool.isKeepAlive()));
+    }
+
+    public void deleteConnectionPool(final String id) {
+        final var max = findMaxIndexForPrefix("connectionpool");
+        for (int index = 0; index <= max; index++) {
+            String prefix = "connectionpool." + index + ".";
+            if (id.equals(properties.getProperty(prefix + "id"))) {
+                properties.remove(prefix + "id");
+                properties.remove(prefix + "domain");
+                properties.remove(prefix + "maxconnectionsperendpoint");
+                properties.remove(prefix + "borrowtimeout");
+                properties.remove(prefix + "connecttimeout");
+                properties.remove(prefix + "stuckrequesttimeout");
+                properties.remove(prefix + "idletimeout");
+                properties.remove(prefix + "maxlifetime");
+                properties.remove(prefix + "disposetimeout");
+                properties.remove(prefix + "keepaliveidle");
+                properties.remove(prefix + "keepaliveinterval");
+                properties.remove(prefix + "keepalivecount");
+                properties.remove(prefix + "enabled");
+                properties.remove(prefix + "keepalive");
+                return;
+            }
+        }
+    }
 }

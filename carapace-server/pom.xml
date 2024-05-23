@@ -5,7 +5,7 @@
         <groupId>org.carapaceproxy</groupId>
         <artifactId>carapace-parent</artifactId>
         <version>1.11.0-SNAPSHOT</version>
-        <relativePath>..</relativePath>
+        <relativePath>../pom.xml</relativePath>
     </parent>
     <name>Carapace :: Server</name>
     <artifactId>carapace-server</artifactId>
@@ -343,6 +343,17 @@
             <artifactId>curator-test</artifactId>
             <version>${libs.curator}</version>
             <scope>test</scope>
+            <exclusions>
+                <!--
+                    The presence of both JUnit Jupiter APIs (in particular version 5.6.2)
+                    and the old-fashioned JUnit (in particular a version which is strictly not 4.12 and 4.13)
+                     messes up with Intellij IDEA test run of whole project.
+                -->
+                <exclusion>
+                    <groupId>org.junit.jupiter</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.hamcrest</groupId>
@@ -356,7 +367,6 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>
-                <version>3.1.1</version>
                 <configuration>
                     <appendAssemblyId>false</appendAssemblyId>
                     <descriptors>
