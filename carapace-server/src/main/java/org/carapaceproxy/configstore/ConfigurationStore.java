@@ -195,6 +195,8 @@ public interface ConfigurationStore extends AutoCloseable {
 
     void saveCertificate(CertificateData cert);
 
+    void removeCertificate(String certId);
+
     void reload();
 
     void saveAcmeChallengeToken(String id, String data);

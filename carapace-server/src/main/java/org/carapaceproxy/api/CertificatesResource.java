@@ -48,6 +48,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
@@ -55,6 +56,8 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import lombok.AllArgsConstructor;
@@ -67,6 +70,8 @@ import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
+import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode;
 import org.carapaceproxy.utils.CertificatesUtils;
@@ -80,11 +85,10 @@ import org.carapaceproxy.utils.CertificatesUtils;
 @Produces(MediaType.APPLICATION_JSON)
 public class CertificatesResource {
 
-    public static final Set<DynamicCertificateState> AVAILABLE_CERTIFICATES_STATES_FOR_UPLOAD = Set.of(AVAILABLE, WAITING);
     private static final Logger LOG = Logger.getLogger(CertificatesResource.class.getName());
 
-    @javax.ws.rs.core.Context
-    ServletContext context;
+    @Context
+    private ServletContext context;
 
     @Data
     @AllArgsConstructor
@@ -93,7 +97,7 @@ public class CertificatesResource {
         private final Collection<CertificateBean> certificates;
         private final String localStorePath;
 
-        public CertificatesResponse(Collection<CertificateBean> certificates, HttpProxyServer server) {
+        public CertificatesResponse(final Collection<CertificateBean> certificates, final HttpProxyServer server) {
             this.certificates = certificates;
             this.localStorePath = server.getCurrentConfiguration().getLocalCertificatesStorePath();
         }
@@ -165,7 +169,11 @@ public class CertificatesResource {
         return new CertificatesResponse(res.values(), server);
     }
 
-    private static void fillCertificateBean(CertificateBean bean, SSLCertificateConfiguration certificate, DynamicCertificatesManager dCManager, HttpProxyServer server) {
+    private static void fillCertificateBean(
+            final CertificateBean bean,
+            final SSLCertificateConfiguration certificate,
+            final DynamicCertificatesManager dCManager,
+            final HttpProxyServer server) {
         try {
             DynamicCertificateState state = null;
             if (certificate.isDynamic()) {
@@ -208,7 +216,7 @@ public class CertificatesResource {
 
     @GET
     @Path("{certId}")
-    public CertificatesResponse getCertificateById(@PathParam("certId") String certId) {
+    public CertificatesResponse getCertificateById(@PathParam("certId") final String certId) {
         final var cert = findCertificateById(certId);
         return new CertificatesResponse(
                 cert != null ? List.of(cert) : Collections.emptyList(),
@@ -261,25 +269,40 @@ public class CertificatesResource {
         return FormValidationResponse.created();
     }
 
+    @DELETE
+    @Path("{certId}")
+    public Response deleteCertificate(@PathParam("certId") final String certId) {
+        final var server = (HttpProxyServer) context.getAttribute("server");
+        final var certificates = server.getCurrentConfiguration().getCertificates();
+        if (!certificates.containsKey(certId)) {
+            throw new WebApplicationException(Response.Status.NOT_FOUND);
+        }
+        try {
+            server.rewriteConfiguration(it -> it.removeCertificate(certId));
+            return SimpleResponse.ok();
+        } catch (ConfigurationChangeInProgressException | InterruptedException | ConfigurationNotValidException e) {
+            return SimpleResponse.error(e);
+        }
+    }
+
     @GET
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @Path("{certId}/download")
-    public Response downloadCertificateById(@PathParam("certId") String certId) throws GeneralSecurityException {
+    public Response downloadCertificateById(@PathParam("certId") final String certId) {
         CertificateBean cert = findCertificateById(certId);
-        byte[] data = new byte[0];
-        if (cert != null && cert.isDynamic()) {
-            HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-            DynamicCertificatesManager dynamicCertificateManager = server.getDynamicCertificatesManager();
-            data = dynamicCertificateManager.getCertificateForDomain(cert.getId());
+        if (cert == null || !cert.isDynamic()) {
+            return Response.status(Response.Status.NOT_FOUND).build();
         }
-
+        HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
+        DynamicCertificatesManager dynamicCertificateManager = server.getDynamicCertificatesManager();
+        final var data = dynamicCertificateManager.getCertificateForDomain(cert.getId());
         return Response
                 .ok(data, MediaType.APPLICATION_OCTET_STREAM)
                 .header("content-disposition", "attachment; filename = " + cert.getId() + ".p12")
                 .build();
     }
 
-    private CertificateBean findCertificateById(String certId) {
+    private CertificateBean findCertificateById(final String certId) {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         SSLCertificateConfiguration certificate = server.getCurrentConfiguration().getCertificates().get(certId);
         DynamicCertificatesManager dCManager = server.getDynamicCertificatesManager();
@@ -295,7 +318,6 @@ public class CertificatesResource {
             fillCertificateBean(certBean, certificate, dCManager, server);
             return certBean;
         }
-
         return null;
     }
 
@@ -303,11 +325,11 @@ public class CertificatesResource {
     @Path("{domain}/upload")
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     public Response uploadCertificate(
-            @PathParam("domain") String domain,
-            @QueryParam("subjectaltnames") List<String> subjectAltNames,
-            @QueryParam("type") @DefaultValue("manual") String type,
-            @QueryParam("daysbeforerenewal") Integer daysbeforerenewal,
-            InputStream uploadedInputStream) throws Exception {
+            @PathParam("domain") final String domain,
+            @QueryParam("subjectaltnames") final List<String> subjectAltNames,
+            @QueryParam("type") @DefaultValue("manual") final String type,
+            @QueryParam("daysbeforerenewal") final Integer daysbeforerenewal,
+            final InputStream uploadedInputStream) throws Exception {
 
         try (InputStream input = uploadedInputStream) {
             // Certificate type (manual | acme)
@@ -354,7 +376,7 @@ public class CertificatesResource {
 
     @POST
     @Path("{domain}/store")
-    public Response storeLocalCertificate(@PathParam("domain") String domain) throws Exception {
+    public Response storeLocalCertificate(@PathParam("domain") final String domain) {
         var server = ((HttpProxyServer) context.getAttribute("server"));
         server.getDynamicCertificatesManager().forceStoreLocalCertificates(domain);
         return SimpleResponse.ok();
@@ -362,7 +384,7 @@ public class CertificatesResource {
 
     @POST
     @Path("/storeall")
-    public Response storeAllCertificates() throws Exception {
+    public Response storeAllCertificates() {
         var server = ((HttpProxyServer) context.getAttribute("server"));
         server.getDynamicCertificatesManager().forceStoreLocalCertificates();
         return SimpleResponse.ok();
@@ -370,10 +392,9 @@ public class CertificatesResource {
 
     @POST
     @Path("{domain}/reset")
-    public Response resetCertificateState(@PathParam("domain") String domain) throws Exception {
+    public Response resetCertificateState(@PathParam("domain") final String domain) {
         var server = ((HttpProxyServer) context.getAttribute("server"));
         server.getDynamicCertificatesManager().setStateOfCertificate(domain, WAITING);
         return SimpleResponse.ok();
     }
-
 }

@@ -906,6 +906,9 @@ public class CertificatesTest extends UseAdminServer {
             result = resp.getData(FormValidationResponse.class);
             assertEquals("domain", result.getField());
             assertEquals(FormValidationResponse.ERROR_FIELD_DUPLICATED, result.getMessage());
+
+            resp = client.delete("/api/certificates/test.domain.tld", credentials);
+            assertTrue(resp.isOk());
         }
     }
 
@@ -917,5 +920,4 @@ public class CertificatesTest extends UseAdminServer {
                 .map(entry -> Integer.parseInt(entry.getKey().split("\\.")[0]))
                 .collect(Collectors.toUnmodifiableSet());
     }
-
 }
