@@ -6,6 +6,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_FORWARDED_STRATEGY;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 import static org.junit.Assert.assertTrue;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
@@ -56,7 +57,7 @@ public class XTlsProtocolFilterTest {
             server.addCertificate(new SSLCertificateConfiguration("*", null, certificate, "testproxy", STATIC));
             server.addRequestFilter(new RequestFilterConfiguration(XTlsProtocolRequestFilter.TYPE, Collections.emptyMap()));
             server.addListener(new NetworkListenerConfiguration("0.0.0.0", 0, true, null, "*", Set.of("TLSv1.2"),
-                    128, true, 300, 60, 8, 1000));
+                    128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of()));
             server.start();
             int port = server.getLocalPort();
 
@@ -70,7 +71,7 @@ public class XTlsProtocolFilterTest {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.addCertificate(new SSLCertificateConfiguration("*", null, certificate, "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("0.0.0.0", 0, true, null, "*", Set.of("TLSv1.2"),
-                    128, true, 300, 60, 8, 1000));
+                    128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of()));
             server.start();
             int port = server.getLocalPort();
 

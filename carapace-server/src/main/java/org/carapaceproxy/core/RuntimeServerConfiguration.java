@@ -21,6 +21,7 @@ package org.carapaceproxy.core;
 
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
+import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_FORWARDED_STRATEGY;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
 import java.io.File;
@@ -326,8 +327,9 @@ public class RuntimeServerConfiguration {
                         properties.getInt(prefix + "keepaliveidle", keepaliveIdle),
                         properties.getInt(prefix + "keepaliveinterval", keepaliveInterval),
                         properties.getInt(prefix + "keepalivecount", keepaliveCount),
-                        properties.getInt(prefix + "maxkeepaliverequests", maxKeepAliveRequests)
-
+                        properties.getInt(prefix + "maxkeepaliverequests", maxKeepAliveRequests),
+                        properties.getString(prefix + "forwarded", DEFAULT_FORWARDED_STRATEGY),
+                        properties.getValues(prefix + "trustedips", Set.of())
                 ));
             }
         }

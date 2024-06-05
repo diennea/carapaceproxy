@@ -23,6 +23,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_FORWARDED_STRATEGY;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 import static org.junit.Assert.assertEquals;
@@ -72,9 +73,7 @@ public class SSLSNITest {
         
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
-            server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost /*
-                     * default
-                     */, 128, true, 300, 60, 8, 1000));
+            server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost /* default */, DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of()));
             server.start();
             int port = server.getLocalPort();
 
@@ -166,7 +165,7 @@ public class SSLSNITest {
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
             server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost, Set.of("TLSv1.3"),
-                    128, true, 300, 60, 8, 1000));
+                    128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of()));
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
@@ -182,7 +181,7 @@ public class SSLSNITest {
             try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
                 server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
                 server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost, Set.of(proto),
-                        128, true, 300, 60, 8, 1000));
+                        128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of()));
                 server.start();
                 int port = server.getLocalPort();
                 try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
@@ -196,7 +195,8 @@ public class SSLSNITest {
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
             server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost,
-                    128, true, 300, 60, 8, 1000));
+                    DEFAULT_SSL_PROTOCOLS,
+                    128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of()));
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
@@ -212,7 +212,7 @@ public class SSLSNITest {
             try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
                 server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
                 server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost, Set.of("TLSvWRONG"),
-                        128, true, 300, 60, 8, 1000));
+                        128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of()));
             }
         });
     }
