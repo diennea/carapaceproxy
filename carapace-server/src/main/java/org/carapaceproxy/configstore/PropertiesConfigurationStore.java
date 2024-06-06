@@ -20,9 +20,14 @@
 package org.carapaceproxy.configstore;
 
 import java.security.KeyPair;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 
 /**
@@ -100,6 +105,50 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
     }
 
     @Override
+    public void removeCertificate(final String certId) {
+        this.certificates.remove(certId);
+        this.removePropertiesAtId("certificate", certId);
+    }
+
+    private void removePropertiesAtId(final String prefix, final String id) {
+        findPropertyPrefix(prefix, id).ifPresent(indexedPrefix -> {
+            final var iterator = properties.propertyNames().asIterator();
+            final var spliterator = Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED);
+            final var propertyNames = StreamSupport
+                    .stream(spliterator, false)
+                    .filter(String.class::isInstance)
+                    .map(String.class::cast)
+                    .filter(it -> it.startsWith(indexedPrefix))
+                    .collect(Collectors.toUnmodifiableSet());
+            for (final var propertyName : propertyNames) {
+                properties.remove(propertyName);
+            }
+        });
+    }
+
+    /**
+     * Search for a property with the format {@code <prefix>.<some-number>.id} that matches the provided ID.
+     * If found, it is returned to the caller; if not, an empty option will be the result.
+     * <br>
+     * Please note that if many IDs are present that would match, only <b>the first</b> will be returned,
+     * as there should have been only one anyway...
+     *
+     * @param prefix the prefix to look for
+     * @param id     the ID to look for inside the prefix
+     * @return the result of the search
+     */
+    private Optional<String> findPropertyPrefix(final String prefix, final String id) {
+        final var max = findMaxIndexForPrefix(prefix);
+        for (int index = 0; index <= max; index++) {
+            String indexedPrefix = prefix + "." + index + ".";
+            if (id.equals(properties.getProperty(indexedPrefix + "id"))) {
+                return Optional.of(indexedPrefix);
+            }
+        }
+        return Optional.empty();
+    }
+
+    @Override
     public void reload() {
     }
 
@@ -122,18 +171,6 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
         saveConnectionPool(connectionPool, findMaxIndexForPrefix("connectionpool") + 1);
     }
 
-    public void updateConnectionPool(final ConnectionPoolConfiguration connectionPool) {
-        final var max = findMaxIndexForPrefix("connectionpool");
-        for (int index = 0; index <= max; index++) {
-            final var prefix = "connectionpool." + index + ".";
-            final var id = properties.getProperty(prefix + "id", null);
-            if (connectionPool.getId().equals(id)) {
-                saveConnectionPool(connectionPool, index);
-                return;
-            }
-        }
-    }
-
     private void saveConnectionPool(final ConnectionPoolConfiguration connectionPool, final int index) {
         final var prefix = "connectionpool." + index + ".";
         properties.setProperty(prefix + "id", connectionPool.getId());
@@ -152,27 +189,19 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
         properties.setProperty(prefix + "keepalive", String.valueOf(connectionPool.isKeepAlive()));
     }
 
-    public void deleteConnectionPool(final String id) {
+    public void updateConnectionPool(final ConnectionPoolConfiguration connectionPool) {
         final var max = findMaxIndexForPrefix("connectionpool");
         for (int index = 0; index <= max; index++) {
-            String prefix = "connectionpool." + index + ".";
-            if (id.equals(properties.getProperty(prefix + "id"))) {
-                properties.remove(prefix + "id");
-                properties.remove(prefix + "domain");
-                properties.remove(prefix + "maxconnectionsperendpoint");
-                properties.remove(prefix + "borrowtimeout");
-                properties.remove(prefix + "connecttimeout");
-                properties.remove(prefix + "stuckrequesttimeout");
-                properties.remove(prefix + "idletimeout");
-                properties.remove(prefix + "maxlifetime");
-                properties.remove(prefix + "disposetimeout");
-                properties.remove(prefix + "keepaliveidle");
-                properties.remove(prefix + "keepaliveinterval");
-                properties.remove(prefix + "keepalivecount");
-                properties.remove(prefix + "enabled");
-                properties.remove(prefix + "keepalive");
+            final var prefix = "connectionpool." + index + ".";
+            final var id = properties.getProperty(prefix + "id", null);
+            if (connectionPool.getId().equals(id)) {
+                saveConnectionPool(connectionPool, index);
                 return;
             }
         }
+    }
+
+    public void deleteConnectionPool(final String id) {
+        this.removePropertiesAtId("connectionpool", id);
     }
 }
