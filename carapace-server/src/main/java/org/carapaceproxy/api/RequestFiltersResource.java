@@ -27,9 +27,14 @@ import javax.servlet.ServletContext;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.core.Context;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.RequestFilter;
-import org.carapaceproxy.server.filters.*;
+import org.carapaceproxy.server.filters.RegexpMapSessionIdFilter;
+import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;
+import org.carapaceproxy.server.filters.XForwardedForRequestFilter;
+import org.carapaceproxy.server.filters.XTlsCipherRequestFilter;
+import org.carapaceproxy.server.filters.XTlsProtocolRequestFilter;
 
 /**
  * Access to request filters
@@ -40,8 +45,8 @@ import org.carapaceproxy.server.filters.*;
 @Produces("application/json")
 public class RequestFiltersResource {
 
-    @javax.ws.rs.core.Context
-    ServletContext context;
+    @Context
+    private ServletContext context;
 
     public static final class RequestFilterBean {
 
@@ -68,6 +73,7 @@ public class RequestFiltersResource {
 
     @GET
     @Path("/")
+    @SuppressWarnings("deprecation")
     public List<RequestFilterBean> getAllRequestFilters() {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
 
@@ -77,20 +83,18 @@ public class RequestFiltersResource {
             if (f instanceof XForwardedForRequestFilter) {
                 filterBean.setType(XForwardedForRequestFilter.TYPE);
                 res.add(filterBean);
-            } else if(f instanceof XTlsCipherRequestFilter){
+            } else if (f instanceof XTlsCipherRequestFilter) {
                 filterBean.setType(XTlsCipherRequestFilter.TYPE);
                 res.add(filterBean);
-            } else if(f instanceof XTlsProtocolRequestFilter){
+            } else if (f instanceof XTlsProtocolRequestFilter) {
                 filterBean.setType(XTlsProtocolRequestFilter.TYPE);
                 res.add(filterBean);
-            } else if (f instanceof RegexpMapUserIdFilter) {
-                RegexpMapUserIdFilter filter = (RegexpMapUserIdFilter) f;
+            } else if (f instanceof final RegexpMapUserIdFilter filter) {
                 filterBean.setType(RegexpMapUserIdFilter.TYPE);
                 filterBean.addValue("parameterName", filter.getParameterName());
                 filterBean.addValue("compiledPattern", filter.getCompiledPattern());
                 res.add(filterBean);
-            } else if (f instanceof RegexpMapSessionIdFilter) {
-                RegexpMapSessionIdFilter filter = (RegexpMapSessionIdFilter) f;
+            } else if (f instanceof final RegexpMapSessionIdFilter filter) {
                 filterBean.setType(RegexpMapSessionIdFilter.TYPE);
                 filterBean.addValue("parameterName", filter.getParameterName());
                 filterBean.addValue("compiledPattern", filter.getCompiledPattern());

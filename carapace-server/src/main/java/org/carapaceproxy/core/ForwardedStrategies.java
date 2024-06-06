@@ -78,7 +78,7 @@ public final class ForwardedStrategies {
 
     record IfTrusted(Set<String> trustedIps) implements ForwardedStrategy {
 
-        static final String NAME = "if-trusted";
+        static final String NAME = "IF_TRUSTED";
 
         @Override
         public ConnectionInfo apply(final ConnectionInfo connectionInfo, final HttpRequest request) {
