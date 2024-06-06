@@ -63,6 +63,7 @@ public class DatabaseConfigurationTest {
 
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     @Ignore
     public void testChangeFiltersConfiguration() throws Exception {

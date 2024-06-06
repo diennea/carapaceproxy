@@ -19,12 +19,14 @@ package org.carapaceproxy.server.filters;
  under the License.
 
  */
+
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.absent;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.junit.Assert.assertTrue;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.util.Collections;
 import org.carapaceproxy.client.EndpointKey;
@@ -32,7 +34,6 @@ import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import static org.junit.Assert.assertTrue;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -60,7 +61,6 @@ public class XForwardedForFilterTest {
                         .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.addRequestFilter(new RequestFilterConfiguration(XForwardedForRequestFilter.TYPE, Collections.emptyMap()));
