@@ -522,6 +522,7 @@ public class StartAPIServerTest extends UseAdminServer {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testResourcesFilter() throws Exception {
         Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);

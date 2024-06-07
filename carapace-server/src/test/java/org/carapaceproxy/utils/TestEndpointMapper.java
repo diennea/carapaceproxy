@@ -39,10 +39,10 @@ public class TestEndpointMapper extends EndpointMapper {
     private final int port;
     private final boolean cacheAll;
     private final Map<String, BackendConfiguration> backends;
-    private final List<RouteConfiguration> routes = new ArrayList();
-    private final List<ActionConfiguration> actions = new ArrayList();
-    private final List<DirectorConfiguration> directors = new ArrayList();
-    private final List<CustomHeader> headers = new ArrayList();
+    private final List<RouteConfiguration> routes = new ArrayList<>();
+    private final List<ActionConfiguration> actions = new ArrayList<>();
+    private final List<DirectorConfiguration> directors = new ArrayList<>();
+    private final List<CustomHeader> headers = new ArrayList<>();
 
     public TestEndpointMapper(String host, int port) {
         this(host, port, false);

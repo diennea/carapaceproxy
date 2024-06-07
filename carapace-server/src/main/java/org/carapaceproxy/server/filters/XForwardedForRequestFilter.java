@@ -26,8 +26,10 @@ import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 /**
  * Add a X-Forwarded-For Header
  */
+@Deprecated
 public class XForwardedForRequestFilter extends BasicRequestFilter {
 
+    @Deprecated
     public static final String TYPE = "add-x-forwarded-for";
 
     public XForwardedForRequestFilter(RequestMatcher matcher) {

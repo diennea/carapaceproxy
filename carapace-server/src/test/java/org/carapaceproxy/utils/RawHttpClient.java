@@ -313,10 +313,6 @@ public final class RawHttpClient implements AutoCloseable {
             throw new IOException("bad response, does not start with HTTP/1.1. Received: " + result.statusLine);
         }
 
-        if (!result.statusLine.startsWith("HTTP/1.1 ")) {
-            throw new IOException("bad response, does not start with HTTP/1.1. Received: " + result.statusLine);
-        }
-
         // header
         while (true) {
             BufferedStream counter = new BufferedStream(result.rawResponse);

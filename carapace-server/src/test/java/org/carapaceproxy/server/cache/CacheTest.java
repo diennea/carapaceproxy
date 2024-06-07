@@ -24,6 +24,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.carapaceproxy.server.cache.ContentsCache.CACHE_CONTROL_CACHE_DISABLED_VALUES;
+import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_FORWARDED_STRATEGY;
+import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
@@ -36,6 +38,7 @@ import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
 import org.carapaceproxy.EndpointStats;
@@ -205,7 +208,8 @@ public class CacheTest {
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost",
-                    128, true, 300, 60, 8, 1000));
+                    DEFAULT_SSL_PROTOCOLS,
+                    128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of()));
             server.start();
         }
     }
@@ -229,7 +233,7 @@ public class CacheTest {
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost",
-                    128, true, 300, 60, 8, 1000));
+                    DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of()));
 
             RuntimeServerConfiguration currentConfiguration = server.getCurrentConfiguration();
             currentConfiguration.setCacheDisabledForSecureRequestsWithoutPublic(cacheDisabledForSecureRequestsWithoutPublic);
@@ -361,7 +365,7 @@ public class CacheTest {
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", httpsPort, true, null, "localhost",
-                    128, true, 300, 60, 8, 1000));
+                    DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of()));
             server.addListener(new NetworkListenerConfiguration("localhost", httpPort));
             server.start();
             server.getCache().getStats().resetCacheMetrics();

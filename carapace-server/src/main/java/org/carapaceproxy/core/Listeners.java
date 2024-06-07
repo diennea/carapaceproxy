@@ -29,8 +29,6 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollChannelOption;
-import io.netty.channel.epoll.EpollEventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioChannelOption;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.ssl.OpenSsl;
@@ -68,7 +66,6 @@ import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.net.ssl.KeyManagerFactory;
-
 import jdk.net.ExtendedSocketOptions;
 import lombok.Data;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
@@ -230,6 +227,7 @@ public class Listeners {
                 .port(hostPort.port())
                 //.protocol(HttpProtocol.H2) // HTTP/2.0 setup
                 .metrics(true, Function.identity())
+                .forwarded(ForwardedStrategy.of(config.getForwardedStrategy(), config.getTrustedIps()))
                 .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())
                 .childOption(ChannelOption.SO_KEEPALIVE, config.isKeepAlive())
                 .runOn(parent.getEventLoopGroup())
@@ -271,11 +269,10 @@ public class Listeners {
                     channel.pipeline().addAfter(NettyPipeline.HttpCodec, "uriEncoder", new ChannelInboundHandlerAdapter() {
                         @Override
                         public void channelRead(ChannelHandlerContext ctx, Object msg) {
-                            if (msg instanceof HttpRequest) {
-                                HttpRequest request = (HttpRequest) msg;
+                            if (msg instanceof final HttpRequest request) {
                                 request.setUri(request.uri()
                                         .replaceAll("\\[", "%5B")
-                                        .replaceAll("\\]", "%5D")
+                                        .replaceAll("]", "%5D")
                                 );
                             }
                             ctx.fireChannelRead(msg);
@@ -289,7 +286,7 @@ public class Listeners {
                 })
                 .httpRequestDecoder(option -> option.maxHeaderSize(currentConfiguration.getMaxHeaderSize()))
                 .handle((request, response) -> { // Custom request-response handling
-                    if(CarapaceLogger.isLoggingDebugEnabled()) {
+                    if (CarapaceLogger.isLoggingDebugEnabled()) {
                         CarapaceLogger.debug("Receive request " + request.uri()
                         + " From " + request.remoteAddress()
                         + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")));

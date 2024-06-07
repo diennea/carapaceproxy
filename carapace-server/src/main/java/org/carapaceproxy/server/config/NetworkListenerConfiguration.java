@@ -19,83 +19,85 @@
  */
 package org.carapaceproxy.server.config;
 
-import java.util.Collections;
-import java.util.Set;
-
 import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.util.concurrent.DefaultEventExecutor;
-import lombok.Data;
+import java.util.Set;
+import lombok.Getter;
+import org.carapaceproxy.core.ForwardedStrategies;
 
 /**
  * Listens for connections on the network
  */
-@Data
+@Getter
 public class NetworkListenerConfiguration {
 
     public static final Set<String> DEFAULT_SSL_PROTOCOLS = Set.of("TLSv1.2", "TLSv1.3");
+    public static final int DEFAULT_SO_BACKLOG = 128;
+    public static final int DEFAULT_KEEP_ALIVE_IDLE = 300;
+    public static final int DEFAULT_KEEP_ALIVE_INTERVAL = 60;
+    public static final int DEFAULT_KEEP_ALIVE_COUNT = 8;
+    public static final int DEFAULT_MAX_KEEP_ALIVE_REQUESTS = 1000;
+    public static final String DEFAULT_FORWARDED_STRATEGY = ForwardedStrategies.preserve().name();
 
     private final String host;
     private final int port;
     private final boolean ssl;
     private final String sslCiphers;
     private final String defaultCertificate;
-    private Set<String> sslProtocols = Collections.emptySet();
-    private int soBacklog;
-    private boolean keepAlive;
-    private int keepAliveIdle;
-    private int keepAliveInterval;
-    private int keepAliveCount;
-    private int maxKeepAliveRequests;
+    private final String forwardedStrategy;
+    private final Set<String> trustedIps;
+    private final Set<String> sslProtocols;
+    private final int soBacklog;
+    private final boolean keepAlive;
+    private final int keepAliveIdle;
+    private final int keepAliveInterval;
+    private final int keepAliveCount;
+    private final int maxKeepAliveRequests;
+    private final ChannelGroup group;
 
-    private ChannelGroup group;
-
-    public HostPort getKey() {
-        return new HostPort(host, port);
+    public NetworkListenerConfiguration(final String host, final int port) {
+        this(
+                host,
+                port,
+                false,
+                null,
+                null,
+                DEFAULT_SSL_PROTOCOLS,
+                DEFAULT_SO_BACKLOG,
+                true,
+                DEFAULT_KEEP_ALIVE_IDLE,
+                DEFAULT_KEEP_ALIVE_INTERVAL,
+                DEFAULT_KEEP_ALIVE_COUNT,
+                DEFAULT_MAX_KEEP_ALIVE_REQUESTS,
+                DEFAULT_FORWARDED_STRATEGY,
+                Set.of()
+        );
     }
 
-    public record HostPort(String host, int port) {}
-
-    public NetworkListenerConfiguration(String host, int port) {
-        this(host, port, false, null, null, Collections.emptySet(),
-                128,true, 300, 60, 8, 1000);
-    }
-
-    public NetworkListenerConfiguration(String host,
-                                        int port,
-                                        boolean ssl,
-                                        String sslCiphers,
-                                        String defaultCertificate,
-                                        int soBacklog,
-                                        boolean keepAlive,
-                                        int keepAliveIdle,
-                                        int keepAliveInterval,
-                                        int keepAliveCount,
-                                        int maxKeepAliveRequests) {
-        this(host, port, ssl, sslCiphers, defaultCertificate, DEFAULT_SSL_PROTOCOLS,
-                soBacklog, keepAlive, keepAliveIdle, keepAliveInterval, keepAliveCount, maxKeepAliveRequests);
-    }
-
-    public NetworkListenerConfiguration(String host,
-                                        int port,
-                                        boolean ssl,
-                                        String sslCiphers,
-                                        String defaultCertificate,
-                                        Set<String> sslProtocols,
-                                        int soBacklog,
-                                        boolean keepAlive,
-                                        int keepAliveIdle,
-                                        int keepAliveInterval,
-                                        int keepAliveCount,
-                                        int maxKeepAliveRequests) {
+    public NetworkListenerConfiguration(
+            final String host,
+            final int port,
+            final boolean ssl,
+            final String sslCiphers,
+            final String defaultCertificate,
+            final Set<String> sslProtocols,
+            final int soBacklog,
+            final boolean keepAlive,
+            final int keepAliveIdle,
+            final int keepAliveInterval,
+            final int keepAliveCount,
+            final int maxKeepAliveRequests,
+            final String forwardedStrategy,
+            final Set<String> trustedIps) {
         this.host = host;
         this.port = port;
         this.ssl = ssl;
         this.sslCiphers = sslCiphers;
         this.defaultCertificate = defaultCertificate;
-        if (ssl) {
-            this.sslProtocols = sslProtocols;
-        }
+        this.forwardedStrategy = forwardedStrategy;
+        this.trustedIps = trustedIps;
+        this.sslProtocols = ssl ? sslProtocols : Set.of();
         this.soBacklog = soBacklog;
         this.keepAlive = keepAlive;
         this.keepAliveIdle = keepAliveIdle;
@@ -103,6 +105,13 @@ public class NetworkListenerConfiguration {
         this.keepAliveCount = keepAliveCount;
         this.maxKeepAliveRequests = maxKeepAliveRequests;
         this.group = new DefaultChannelGroup(new DefaultEventExecutor());
+    }
+
+    public HostPort getKey() {
+        return new HostPort(host, port);
+    }
+
+    public record HostPort(String host, int port) {
     }
 
 }

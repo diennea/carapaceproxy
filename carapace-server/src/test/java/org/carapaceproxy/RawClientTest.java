@@ -29,6 +29,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlMatching;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
+import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_FORWARDED_STRATEGY;
+import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 import static org.carapaceproxy.utils.RawHttpClient.consumeHttpResponseInput;
 import static org.hamcrest.CoreMatchers.is;
@@ -73,6 +75,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -747,8 +750,7 @@ public class RawClientTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0, scheme.equals("https"), null, "localhost", 128,
-                    true, 300, 60, 8, 100));
+            server.addListener(new NetworkListenerConfiguration("localhost", 0, scheme.equals("https"), null, "localhost", DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 100, DEFAULT_FORWARDED_STRATEGY, Set.of()));
 
             server.start();
             int port = server.getLocalPort();

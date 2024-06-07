@@ -34,6 +34,7 @@ import org.carapaceproxy.server.mapper.requestmatcher.parser.RequestMatchParser;
  */
 public class RequestFilterFactory {
 
+    @SuppressWarnings("deprecation")
     public static RequestFilter buildRequestFilter(RequestFilterConfiguration config) throws ConfigurationNotValidException {
         String type = config.getType();
         Map<String, String> filterConfig = config.getFilterConfig();

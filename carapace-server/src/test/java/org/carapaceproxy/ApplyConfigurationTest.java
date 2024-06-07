@@ -331,6 +331,7 @@ public class ApplyConfigurationTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testChangeFiltersConfiguration() throws Exception {
 
