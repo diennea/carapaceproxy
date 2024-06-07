@@ -1,8 +1,8 @@
-name: Java CI - Test report
+name: PR Validation report
 on:
   workflow_run:
     workflows:
-      - 'Java CI - Code tests'
+      - 'PR Validation'
     types:
       - completed
 permissions:
