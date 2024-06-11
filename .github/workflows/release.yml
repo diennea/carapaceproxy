@@ -1,0 +1,106 @@
+name: Maven release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        required: true
+        description: Whether it should build a major release, minor release, or hotfix
+        type: choice
+        options:
+          - major
+          - minor
+          - hotfix
+        default: major
+
+permissions:
+  contents: write
+  discussions: write
+
+jobs:
+  release:
+    if: ${{ github.ref_name == github.event.repository.default_branch || (inputs.bump == 'hotfix' && startsWith(github.ref_name, 'release/')) }}
+    name: 'Perform ${{ inputs.bump }} release'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout ${{ github.ref_name }} branch'
+        uses: actions/checkout@v4
+      - name: 'Set up JDK 21'
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+      - id: compute_versions
+        name: 'Compute versions and branch name'
+        run: |
+          bump="${{ inputs.bump }}"
+          major="$(./mvnw build-helper:parse-version help:evaluate -Dexpression=parsedVersion.majorVersion -q -DforceStdout)"
+          minor="$(./mvnw build-helper:parse-version help:evaluate -Dexpression=parsedVersion.minorVersion -q -DforceStdout)"
+          patch="$(./mvnw build-helper:parse-version help:evaluate -Dexpression=parsedVersion.incrementalVersion -q -DforceStdout)"
+          qualifier="$(./mvnw build-helper:parse-version help:evaluate -Dexpression=parsedVersion.qualifier -q -DforceStdout)"
+          
+          case $bump in
+          hotfix)
+            branch_name="$(git branch --show-current)"
+            release_version="${major}.${minor}.${patch}"
+            release_development_version="${major}.${minor}.$((patch + 1))-${qualifier}"
+            ;;
+          major)
+            new_major=$((major + 1))
+            branch_name="release/${new_major}.0"
+            release_version="${new_major}.0.0"
+            release_development_version="${new_major}.0.1-${qualifier}"
+            ;;
+          minor)
+            new_minor=$((minor + 1))
+            branch_name="release/${major}.${new_minor}"
+            release_version="${major}.${new_minor}.0"
+            release_development_version="${major}.${new_minor}.1-${qualifier}"
+            ;;
+          esac
+          tag="v${release_version}"
+          {
+            echo "branch_name=${branch_name}"
+            echo "release_version=${release_version}"
+            echo "release_development_version=${release_development_version}"
+            echo "tag=${tag}"
+          } >> "$GITHUB_OUTPUT"
+      - if: ${{ inputs.bump == 'major' || inputs.bump == 'minor' }}
+        name: 'Release ${{ inputs.bump }} version ${{ steps.compute_versions.outputs.release_version }} on branch ${{ steps.compute_versions.outputs.branch_name }}'
+        run: |
+          ./mvnw release:clean release:branch \
+              -DbranchName=${{ steps.compute_versions.outputs.branch_name }} \
+              -DreleaseVersion=${{ steps.compute_versions.outputs.release_version }} \
+              -DdevelopmentVersion=${{ steps.compute_versions.outputs.release_development_version }}
+      - if: ${{ inputs.bump == 'hotfix' }}
+        name: 'Release ${{ inputs.bump }} version ${{ steps.compute_versions.outputs.release_version }} on branch ${{ steps.compute_versions.outputs.branch_name }}'
+        run: |
+          ./mvnw release:clean release:prepare \
+              -Dtag=${{ steps.compute_versions.outputs.tag }} \
+              -DreleaseVersion=${{ steps.compute_versions.outputs.release_version }} \
+              -DdevelopmentVersion=${{ steps.compute_versions.outputs.release_development_version }}
+      - name: 'Generate the artifacts'
+        run: ./mvnw clean install -Pproduction -DskipTests
+      - name: 'Create GitHub Release'
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.compute_versions.outputs.tag }}
+          name: Release ${{ steps.compute_versions.outputs.release_version }}
+          draft: false
+          prerelease: false
+      - name: 'Upload ZIP artifact'
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: carapace-server/target/carapace-server-*.zip
+          asset_name: carapace-server-${{ steps.compute_versions.outputs.release_version }}.zip
+          asset_content_type: application/zip
+      - name: 'Upload JAR artifact'
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: carapace-server/target/carapace-server-*.jar
+          asset_name: carapace-server-${{ steps.compute_versions.outputs.release_version }}.jar
+          asset_content_type: application/java-archive

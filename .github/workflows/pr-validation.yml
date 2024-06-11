@@ -13,7 +13,7 @@
 # CONDITIONS OF ANY KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations under the License.
 #
-name: Java CI - Code tests
+name: PR Validation
 on:
   pull_request:
 env:
@@ -43,7 +43,9 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
       - name: 'Build and test with Maven'
-        run: ./mvnw verify
+        run: ./mvnw -B package --file pom.xml
+      - name: 'Submit Dependency Snapshot'
+        uses: advanced-security/maven-dependency-submission-action@v3
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -1,15 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
+
     <parent>
         <groupId>org.carapaceproxy</groupId>
         <artifactId>carapace-parent</artifactId>
         <version>1.11.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
-    <name>Carapace :: Server</name>
+
     <artifactId>carapace-server</artifactId>
     <packaging>jar</packaging>
+
+    <name>Carapace :: Server</name>
+
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -228,8 +232,8 @@
         <dependency>
             <groupId>org.glassfish.jersey.media</groupId>
             <artifactId>jersey-media-json-jackson</artifactId>
-            <scope>runtime</scope>
             <version>${libs.jersey}</version>
+            <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -300,8 +304,8 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>carapace-ui</artifactId>
             <version>${project.version}</version>
-            <scope>runtime</scope>
             <type>war</type>
+            <scope>runtime</scope>
         </dependency>
 
         <!-- test dependecies -->
@@ -315,8 +319,8 @@
             <groupId>pl.pragmatists</groupId>
             <artifactId>JUnitParams</artifactId>
             <version>${libs.junitparams}</version>
-            <scope>test</scope>
             <type>jar</type>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>com.github.tomakehurst</groupId>
@@ -366,6 +370,7 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
     <build>
         <pluginManagement>
             <plugins>
