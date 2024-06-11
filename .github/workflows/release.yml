@@ -16,6 +16,7 @@ on:
 permissions:
   contents: write
   discussions: write
+  packages: write
 
 jobs:
   release:
@@ -31,6 +32,13 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
           cache: 'maven'
+      - name: 'Configure Git'
+        run: |
+          git config user.name "Diennea[bot]"
+          git config user.email "172403682+diennea-bot@users.noreply.github.com"
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
       - id: compute_versions
         name: 'Compute versions and branch name'
         run: |
@@ -68,20 +76,31 @@ jobs:
           } >> "$GITHUB_OUTPUT"
       - if: ${{ inputs.bump == 'major' || inputs.bump == 'minor' }}
         name: 'Release ${{ inputs.bump }} version ${{ steps.compute_versions.outputs.release_version }} on branch ${{ steps.compute_versions.outputs.branch_name }}'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ./mvnw release:clean release:branch \
               -DbranchName=${{ steps.compute_versions.outputs.branch_name }} \
               -DreleaseVersion=${{ steps.compute_versions.outputs.release_version }} \
-              -DdevelopmentVersion=${{ steps.compute_versions.outputs.release_development_version }}
-      - if: ${{ inputs.bump == 'hotfix' }}
-        name: 'Release ${{ inputs.bump }} version ${{ steps.compute_versions.outputs.release_version }} on branch ${{ steps.compute_versions.outputs.branch_name }}'
-        run: |
-          ./mvnw release:clean release:prepare \
+              -DdevelopmentVersion=${{ steps.compute_versions.outputs.release_development_version }} \
+              -Darguments='-DskipTests=true'
+          ./mvnw release:prepare release:perform \
+              -DupdateBranchVersions=false \
+              -DupdateWorkingCopyVersions=false \
               -Dtag=${{ steps.compute_versions.outputs.tag }} \
               -DreleaseVersion=${{ steps.compute_versions.outputs.release_version }} \
-              -DdevelopmentVersion=${{ steps.compute_versions.outputs.release_development_version }}
-      - name: 'Generate the artifacts'
-        run: ./mvnw clean install -Pproduction -DskipTests
+              -DdevelopmentVersion=${{ steps.compute_versions.outputs.release_development_version }} \
+              -Darguments='-DskipTests=true'
+      - if: ${{ inputs.bump == 'hotfix' }}
+        name: 'Release ${{ inputs.bump }} version ${{ steps.compute_versions.outputs.release_version }} on branch ${{ steps.compute_versions.outputs.branch_name }}'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./mvnw release:clean release:prepare release:perform \
+              -Dtag=${{ steps.compute_versions.outputs.tag }} \
+              -DreleaseVersion=${{ steps.compute_versions.outputs.release_version }} \
+              -DdevelopmentVersion=${{ steps.compute_versions.outputs.release_development_version }} \
+              -Darguments='-DskipTests=true'
       - name: 'Create GitHub Release'
         id: create_release
         uses: softprops/action-gh-release@v2
@@ -90,17 +109,4 @@ jobs:
           name: Release ${{ steps.compute_versions.outputs.release_version }}
           draft: false
           prerelease: false
-      - name: 'Upload ZIP artifact'
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: carapace-server/target/carapace-server-*.zip
-          asset_name: carapace-server-${{ steps.compute_versions.outputs.release_version }}.zip
-          asset_content_type: application/zip
-      - name: 'Upload JAR artifact'
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: carapace-server/target/carapace-server-*.jar
-          asset_name: carapace-server-${{ steps.compute_versions.outputs.release_version }}.jar
-          asset_content_type: application/java-archive
+          files: carapace-server/target/carapace-server-*

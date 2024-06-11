@@ -71,11 +71,19 @@
     </modules>
 
     <scm>
-        <url>https://github.com/diennea/carapaceproxy.git</url>
-        <connection>scm:git:https://github.com/diennea/carapaceproxy.git</connection>
-        <developerConnection>scm:git:https://github.com/diennea/carapaceproxy.git</developerConnection>
+        <url>git@github.com:diennea/carapaceproxy.git</url>
+        <connection>scm:git:${project.scm.url}</connection>
+        <developerConnection>scm:git:${project.scm.url}</developerConnection>
         <tag>release/1.11</tag>
     </scm>
+
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/diennea/carapaceproxy</url>
+        </repository>
+    </distributionManagement>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
