@@ -11,7 +11,7 @@ on:
           - major
           - minor
           - hotfix
-        default: major
+        default: minor
 
 permissions:
   contents: write
@@ -26,19 +26,26 @@ jobs:
     steps:
       - name: 'Checkout ${{ github.ref_name }} branch'
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
       - name: 'Set up JDK 21'
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
           cache: 'maven'
+
       - name: 'Configure Git'
         run: |
           git config user.name "Diennea[bot]"
           git config user.email "172403682+diennea-bot@users.noreply.github.com"
-      - uses: webfactory/ssh-agent@v0.9.0
+
+      - name: 'Inject machine user SSH key into SSH agent'
+        uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
       - id: compute_versions
         name: 'Compute versions and branch name'
         run: |
@@ -47,24 +54,27 @@ jobs:
           minor="$(./mvnw build-helper:parse-version help:evaluate -Dexpression=parsedVersion.minorVersion -q -DforceStdout)"
           patch="$(./mvnw build-helper:parse-version help:evaluate -Dexpression=parsedVersion.incrementalVersion -q -DforceStdout)"
           qualifier="$(./mvnw build-helper:parse-version help:evaluate -Dexpression=parsedVersion.qualifier -q -DforceStdout)"
-          
+
           case $bump in
           hotfix)
-            branch_name="$(git branch --show-current)"
+            branch_name="release/${major}.${minor}"
             release_version="${major}.${minor}.${patch}"
             release_development_version="${major}.${minor}.$((patch + 1))-${qualifier}"
+            # master_development_version cannot be computed here, nor it is needed as this will run on release branch
             ;;
           major)
             new_major=$((major + 1))
             branch_name="release/${new_major}.0"
             release_version="${new_major}.0.0"
             release_development_version="${new_major}.0.1-${qualifier}"
+            master_development_version="${new_major}.1.0-${qualifier}"
             ;;
           minor)
             new_minor=$((minor + 1))
-            branch_name="release/${major}.${new_minor}"
-            release_version="${major}.${new_minor}.0"
+            branch_name="release/${major}.${minor}"
+            release_version="${major}.${minor}.0"
             release_development_version="${major}.${new_minor}.1-${qualifier}"
+            master_development_version="${major}.${new_minor}.0-${qualifier}"
             ;;
           esac
           tag="v${release_version}"
@@ -72,35 +82,41 @@ jobs:
             echo "branch_name=${branch_name}"
             echo "release_version=${release_version}"
             echo "release_development_version=${release_development_version}"
+            echo "master_development_version=${master_development_version}"
             echo "tag=${tag}"
           } >> "$GITHUB_OUTPUT"
+
       - if: ${{ inputs.bump == 'major' || inputs.bump == 'minor' }}
-        name: 'Release ${{ inputs.bump }} version ${{ steps.compute_versions.outputs.release_version }} on branch ${{ steps.compute_versions.outputs.branch_name }}'
+        name: 'Create ${{ inputs.bump }} release branch ${{ steps.compute_versions.outputs.branch_name }}'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ./mvnw release:clean release:branch \
               -DbranchName=${{ steps.compute_versions.outputs.branch_name }} \
               -DreleaseVersion=${{ steps.compute_versions.outputs.release_version }} \
-              -DdevelopmentVersion=${{ steps.compute_versions.outputs.release_development_version }} \
-              -Darguments='-DskipTests=true'
-          ./mvnw release:prepare release:perform \
-              -DupdateBranchVersions=false \
-              -DupdateWorkingCopyVersions=false \
-              -Dtag=${{ steps.compute_versions.outputs.tag }} \
-              -DreleaseVersion=${{ steps.compute_versions.outputs.release_version }} \
-              -DdevelopmentVersion=${{ steps.compute_versions.outputs.release_development_version }} \
-              -Darguments='-DskipTests=true'
-      - if: ${{ inputs.bump == 'hotfix' }}
-        name: 'Release ${{ inputs.bump }} version ${{ steps.compute_versions.outputs.release_version }} on branch ${{ steps.compute_versions.outputs.branch_name }}'
+              -DdevelopmentVersion=${{ steps.compute_versions.outputs.master_development_version }}
+
+      - if: ${{ inputs.bump == 'major' || inputs.bump == 'minor' }}
+        name: 'Checkout ${{ inputs.bump }} release branch ${{ steps.compute_versions.outputs.branch_name }}'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.compute_versions.outputs.branch_name }}
+
+      - name: 'Prepare release ${{ inputs.bump }} version ${{ steps.compute_versions.outputs.release_version }} on branch ${{ steps.compute_versions.outputs.branch_name }}'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ./mvnw release:clean release:prepare release:perform \
-              -Dtag=${{ steps.compute_versions.outputs.tag }} \
+          ./mvnw release:clean release:prepare \
               -DreleaseVersion=${{ steps.compute_versions.outputs.release_version }} \
               -DdevelopmentVersion=${{ steps.compute_versions.outputs.release_development_version }} \
-              -Darguments='-DskipTests=true'
+              -Dtag=${{ steps.compute_versions.outputs.tag }}
+
+      - name: 'Perform release'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./mvnw release:perform
+
       - name: 'Create GitHub Release'
         id: create_release
         uses: softprops/action-gh-release@v2
