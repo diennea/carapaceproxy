@@ -131,7 +131,7 @@
         <libs.hamcrest>2.2</libs.hamcrest>
 
         <plugins.spotbugsmaven>4.5.3.0</plugins.spotbugsmaven>
-        <libs.asm>9.2</libs.asm>
+        <libs.asm>9.4</libs.asm>
     </properties>
 
     <repositories>
@@ -277,6 +277,22 @@
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>build-helper-maven-plugin</artifactId>
                 <version>3.6.0</version>
+                <executions>
+                    <execution>
+                        <id>parse-version</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>parse-version</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>released-version</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>released-version</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
