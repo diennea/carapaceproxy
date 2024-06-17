@@ -14,8 +14,10 @@
 # specific language governing permissions and limitations under the License.
 #
 name: PR Validation
+
 on:
   pull_request:
+
 env:
   MAVEN_OPTS: >-
     -Dmaven.artifact.threads=4 
@@ -28,9 +30,14 @@ env:
     -Dmaven.test.redirectTestOutputToFile=true 
     -Dsurefire.rerunFailingTestsCount=3
     --update-snapshots
+
 concurrency:
   group: "${{ github.workflow }}-${{ github.ref }}"
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
