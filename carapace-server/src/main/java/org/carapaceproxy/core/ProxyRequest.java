@@ -33,6 +33,7 @@ import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.ssl.SslHandler;
 import java.net.InetSocketAddress;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
 import lombok.Data;
 import org.carapaceproxy.server.config.HostPort;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
@@ -50,6 +51,9 @@ import reactor.netty.http.server.HttpServerResponse;
  */
 @Data
 public class ProxyRequest implements MatchingContext {
+
+    private static final Pattern NETTY_HTTP_1_VERSION_PATTERN =
+            Pattern.compile("(\\S+)/(\\d+)\\.(\\d+)");
 
     // All properties name have been converted to lowercase during parsing
     public static final String PROPERTY_URI = "request.uri";
@@ -83,7 +87,14 @@ public class ProxyRequest implements MatchingContext {
         this.request = request;
         this.response = response;
         this.listener = listener;
-        this.httpProtocol = HttpVersion.valueOf(request.protocol());
+        final var protocol = request.protocol();
+        if (NETTY_HTTP_1_VERSION_PATTERN.matcher(protocol).matches()) {
+            this.httpProtocol = HttpVersion.valueOf(protocol);
+        } else if (!protocol.contains(".")) {
+            this.httpProtocol = HttpVersion.valueOf(protocol + ".0");
+        } else {
+            throw new IllegalArgumentException("Unsupported request protocol: " + protocol);
+        }
         request.withConnection(conn -> {
             SslHandler handler = conn.channel().pipeline().get(SslHandler.class);
             if (handler != null) {
