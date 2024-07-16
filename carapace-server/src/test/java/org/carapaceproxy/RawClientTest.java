@@ -84,7 +84,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -750,7 +749,7 @@ public class RawClientTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0, scheme.equals("https"), null, "localhost", DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 100, DEFAULT_FORWARDED_STRATEGY, Set.of()));
+            server.addListener(new NetworkListenerConfiguration("localhost", 0, scheme.equals("https"), null, "localhost", DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 100, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of("http11")));
 
             server.start();
             int port = server.getLocalPort();
@@ -835,9 +834,9 @@ public class RawClientTest {
                 // cookies from server
                 List<String> headerSetCookie = resp.getHeaderLines().stream()
                         .filter(h -> h.toLowerCase().contains("set-cookie"))
-                        .collect(Collectors.toList());
+                        .toList();
                 assertThat(headerSetCookie.size(), is(1));
-                assertThat(headerSetCookie.get(0), is("Set-Cookie: responseCookie=responseValue; responseCookie2=responseValue2\r\n"));
+                assertThat(headerSetCookie.get(0), is("set-cookie: responseCookie=responseValue; responseCookie2=responseValue2\r\n"));
             }
         }
 

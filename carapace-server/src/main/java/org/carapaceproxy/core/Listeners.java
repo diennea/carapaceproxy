@@ -60,7 +60,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.logging.Level;
@@ -154,6 +153,12 @@ public class Listeners {
         reloadConfiguration(this.currentConfiguration);
     }
 
+    /**
+     * Apply the new configuration and refresh the listeners according to it.
+     *
+     * @param newConfiguration the configuration
+     * @throws InterruptedException if it is interrupted while starting or stopping a listener
+     */
     void reloadConfiguration(RuntimeServerConfiguration newConfiguration) throws InterruptedException {
         if (!started) {
             this.currentConfiguration = newConfiguration;
@@ -166,7 +171,7 @@ public class Listeners {
         List<HostPort> listenersToStop = new ArrayList<>();
         List<HostPort> listenersToStart = new ArrayList<>();
         List<HostPort> listenersToRestart = new ArrayList<>();
-        for (Entry<HostPort, ListeningChannel> channel : listeningChannels.entrySet()) {
+        for (Map.Entry<HostPort, ListeningChannel> channel : listeningChannels.entrySet()) {
             HostPort key = channel.getKey();
             NetworkListenerConfiguration actualListenerConfig = currentConfiguration.getListener(key);
             NetworkListenerConfiguration newConfigurationForListener = newConfiguration.getListener(key);
@@ -219,13 +224,14 @@ public class Listeners {
     private void bootListener(NetworkListenerConfiguration config) throws InterruptedException {
         HostPort hostPort = new HostPort(config.getHost(), config.getPort() + parent.getListenersOffsetPort());
         ListeningChannel listeningChannel = new ListeningChannel(hostPort, config);
-        LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{hostPort.host(), hostPort.port() + "", config.isSsl()});
+        LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{hostPort.host(), String.valueOf(hostPort.port()), config.isSsl()});
 
         // Listener setup
         HttpServer httpServer = HttpServer.create()
                 .host(hostPort.host())
                 .port(hostPort.port())
-                //.protocol(HttpProtocol.H2) // HTTP/2.0 setup
+                .protocol(config.getHttpProtocols())
+                // .secure() // todo see config.isSsl() & snimappings
                 .metrics(true, Function.identity())
                 .forwarded(ForwardedStrategy.of(config.getForwardedStrategy(), config.getTrustedIps()))
                 .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())
@@ -248,6 +254,7 @@ public class Listeners {
                             @Override
                             protected SslHandler newSslHandler(SslContext context, ByteBufAllocator allocator) {
                                 SslHandler handler = super.newSslHandler(context, allocator);
+                                // todo does it even work with HTTP 2.0?
                                 if (currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported()) {
                                     Certificate cert = (Certificate) context.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN)).get();
                                     if (cert != null) {
@@ -266,7 +273,7 @@ public class Listeners {
                         };
                         channel.pipeline().addFirst(sni);
                     }
-                    channel.pipeline().addAfter(NettyPipeline.HttpCodec, "uriEncoder", new ChannelInboundHandlerAdapter() {
+                    final var uriCleaner = new ChannelInboundHandlerAdapter() {
                         @Override
                         public void channelRead(ChannelHandlerContext ctx, Object msg) {
                             if (msg instanceof final HttpRequest request) {
@@ -277,7 +284,12 @@ public class Listeners {
                             }
                             ctx.fireChannelRead(msg);
                         }
-                    });
+                    };
+                    if (channel.pipeline().context(NettyPipeline.HttpCodec) != null) {
+                        channel.pipeline().addAfter(NettyPipeline.HttpCodec, "uriEncoder", uriCleaner);
+                    } else {
+                        channel.pipeline().addLast("uriEncoder", uriCleaner);
+                    }
                 })
                 .doOnConnection(conn -> {
                     CURRENT_CONNECTED_CLIENTS_GAUGE.inc();

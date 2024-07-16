@@ -174,7 +174,8 @@ public class ForwardedStrategyTest {
                 DEFAULT_KEEP_ALIVE_COUNT,
                 DEFAULT_MAX_KEEP_ALIVE_REQUESTS,
                 strategy.name(),
-                trustedIps
+                trustedIps,
+                Set.of("http11")
         );
     }
 
