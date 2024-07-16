@@ -34,7 +34,7 @@ import io.netty.handler.ssl.SslHandler;
 import java.net.InetSocketAddress;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.Data;
-import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
+import org.carapaceproxy.server.config.HostPort;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchingContext;

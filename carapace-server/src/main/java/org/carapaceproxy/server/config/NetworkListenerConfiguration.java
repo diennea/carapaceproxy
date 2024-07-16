@@ -168,7 +168,4 @@ public class NetworkListenerConfiguration {
         }
         return Set.of(HTTP11.name(), H2C.name());
     }
-
-    public record HostPort(String host, int port) {
-    }
 }
