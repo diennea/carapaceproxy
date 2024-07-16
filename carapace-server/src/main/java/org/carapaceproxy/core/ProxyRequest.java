@@ -28,11 +28,11 @@ import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpScheme;
+import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.ssl.SslHandler;
-
 import java.net.InetSocketAddress;
 import java.util.concurrent.atomic.AtomicLong;
-
 import lombok.Data;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
@@ -77,13 +77,13 @@ public class ProxyRequest implements MatchingContext {
     private String sslProtocol;
     private String cipherSuite;
     private boolean servedFromCache;
-    private String httpProtocol;
+    private HttpVersion httpProtocol;
 
     public ProxyRequest(HttpServerRequest request, HttpServerResponse response, HostPort listener) {
         this.request = request;
         this.response = response;
         this.listener = listener;
-        this.httpProtocol = request.protocol();
+        this.httpProtocol = HttpVersion.valueOf(request.protocol());
         request.withConnection(conn -> {
             SslHandler handler = conn.channel().pipeline().get(SslHandler.class);
             if (handler != null) {
@@ -96,18 +96,17 @@ public class ProxyRequest implements MatchingContext {
     @Override
     public String getProperty(String name) {
         if (name.startsWith(PROPERTY_HEADERS)) {
-            // In case of multiple headers with same name, the first one is returned.
+            // In case of multiple headers with the same name, the first one is returned.
             return request.requestHeaders().get(name.substring(HEADERS_SUBSTRING_INDEX), "");
-        } else {
-            return switch (name) {
-                case PROPERTY_URI -> request.uri();
-                case PROPERTY_METHOD -> request.method().name();
-                case PROPERTY_CONTENT_TYPE -> request.requestHeaders().get(HttpHeaderNames.CONTENT_TYPE, "");
-                case PROPERTY_LISTENER_IPADDRESS -> getLocalAddress().getAddress().getHostAddress();
-                case PROPERTY_LISTENER_HOST_PORT -> listener.host() + ":" + listener.port();
-                default -> throw new IllegalArgumentException("Property name " + name + " does not exists.");
-            };
         }
+        return switch (name) {
+            case PROPERTY_URI -> request.uri();
+            case PROPERTY_METHOD -> request.method().name();
+            case PROPERTY_CONTENT_TYPE -> request.requestHeaders().get(HttpHeaderNames.CONTENT_TYPE, "");
+            case PROPERTY_LISTENER_IPADDRESS -> getLocalAddress().getAddress().getHostAddress();
+            case PROPERTY_LISTENER_HOST_PORT -> listener.host() + ":" + listener.port();
+            default -> throw new IllegalArgumentException("Property name " + name + " does not exists.");
+        };
     }
 
     @Override
@@ -161,24 +160,43 @@ public class ProxyRequest implements MatchingContext {
         return request.scheme();
     }
 
+    /**
+     * Get the currently defined hostname, including port if provided.
+     * It leverages {@code :authority} pseudo-header over HTTP/2 and {@code HOST} header over HTTP/1.1 and older.
+     * <br>
+     * It doesn't use {@link HttpServerRequest#hostName()},
+     * nor it considers {@code X-Forwarded-Host}/{@code Forwarded} headers.
+     *
+     * @return the hostname and possibly the port of the request;
+     * it may be null over HTTP/1.1 if no {@code HOST} header is provided
+     */
     public String getRequestHostname() {
+        if (HttpVersion.valueOf(request.protocol().toUpperCase()).majorVersion() == 2) {
+            // RFC 3986 section 3.2 states that :authority may include port if provided, just like HTTP/1.1 HOST header
+            // authority = [ userinfo "@" ] host [ ":" port ]
+            return request.requestHeaders().get(Http2Headers.PseudoHeaderName.AUTHORITY.value());
+        }
+        // The Host request header specifies the host and port number of the server to which the request is being sent.
+        // If no port is included, the default port for the service requested is implied
+        // Host: <host>:<port>
         return request.requestHeaders().get(HttpHeaderNames.HOST);
     }
 
     public boolean isValidHostAndPort(String hostAndPort) {
         try {
+            if (hostAndPort == null) {
+                return false;
+            }
             HostAndPort parsed = HostAndPort.fromString(hostAndPort);
-            if (!parsed.hasPort()) {
-                return parsed.getHost() != null &&
-                        !parsed.getHost().isBlank() &&
-                        (InternetDomainName.isValid(parsed.getHost()) ||
-                                InetAddresses.isInetAddress(parsed.getHost()));
+            String host = parsed.getHost();
+            if (parsed.hasPort()) {
+                return !host.isBlank()
+                        && (InternetDomainName.isValid(host) || InetAddresses.isInetAddress(host))
+                        && parsed.getPort() >= 0
+                        && parsed.getPort() <= 65535;
             } else {
-                return parsed.getHost() != null &&
-                        !parsed.getHost().isBlank() &&
-                        (InternetDomainName.isValid(parsed.getHost()) ||
-                                InetAddresses.isInetAddress(parsed.getHost())) &&
-                        parsed.getPort() >= 0 && parsed.getPort() <= 65535;
+                return !host.isBlank()
+                        && (InternetDomainName.isValid(host) || InetAddresses.isInetAddress(host));
             }
         } catch (IllegalArgumentException e) {
             return false;

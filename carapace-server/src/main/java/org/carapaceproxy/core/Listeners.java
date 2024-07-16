@@ -22,7 +22,6 @@ package org.carapaceproxy.core;
 import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreData;
 import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
 import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -77,14 +76,17 @@ import org.carapaceproxy.utils.PrometheusUtils;
 import reactor.netty.DisposableServer;
 import reactor.netty.FutureMono;
 import reactor.netty.NettyPipeline;
+import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.server.HttpServer;
 
 /**
- * Listeners waiting for incoming clients requests
+ * Collection of listeners waiting for incoming clients requests on the configured HTTP ports.
+ * <br>
+ * While the {@link RuntimeServerConfiguration} is actually <i>mutable</i>, this class won't watch it for updates;
+ * the caller should request a {@link #reloadCurrentConfiguration() reload of the configuration} manually instead.
  *
  * @author enrico.olivelli
  */
-@SuppressFBWarnings(value = "OBL_UNSATISFIED_OBLIGATION", justification = "https://github.com/spotbugs/spotbugs/issues/432")
 public class Listeners {
 
     public static final String OCSP_CERTIFICATE_CHAIN = "ocsp-certificate";
@@ -149,15 +151,21 @@ public class Listeners {
         }
     }
 
+    /**
+     * Re-apply the current configuration; it should be invoked after editing it.
+     *
+     * @throws InterruptedException if it is interrupted while starting or stopping a listener
+     */
     public void reloadCurrentConfiguration() throws InterruptedException {
         reloadConfiguration(this.currentConfiguration);
     }
 
     /**
-     * Apply the new configuration and refresh the listeners according to it.
+     * Apply a new configuration and refresh the listeners according to it.
      *
      * @param newConfiguration the configuration
      * @throws InterruptedException if it is interrupted while starting or stopping a listener
+     * @see #reloadCurrentConfiguration()
      */
     void reloadConfiguration(RuntimeServerConfiguration newConfiguration) throws InterruptedException {
         if (!started) {
@@ -169,7 +177,6 @@ public class Listeners {
 
         // stop dropped listeners, start new one
         List<HostPort> listenersToStop = new ArrayList<>();
-        List<HostPort> listenersToStart = new ArrayList<>();
         List<HostPort> listenersToRestart = new ArrayList<>();
         for (Map.Entry<HostPort, ListeningChannel> channel : listeningChannels.entrySet()) {
             HostPort key = channel.getKey();
@@ -186,6 +193,7 @@ public class Listeners {
             }
             channel.getValue().clear();
         }
+        List<HostPort> listenersToStart = new ArrayList<>();
         for (NetworkListenerConfiguration config : newConfiguration.getListeners()) {
             HostPort key = config.getKey();
             if (!listeningChannels.containsKey(key)) {
@@ -230,7 +238,7 @@ public class Listeners {
         HttpServer httpServer = HttpServer.create()
                 .host(hostPort.host())
                 .port(hostPort.port())
-                .protocol(config.getHttpProtocols())
+                .protocol(config.getProtocols().toArray(HttpProtocol[]::new))
                 // .secure() // todo see config.isSsl() & snimappings
                 .metrics(true, Function.identity())
                 .forwarded(ForwardedStrategy.of(config.getForwardedStrategy(), config.getTrustedIps()))

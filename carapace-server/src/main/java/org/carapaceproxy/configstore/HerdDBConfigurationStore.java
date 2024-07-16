@@ -27,6 +27,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import herddb.client.ClientConfiguration;
+import herddb.jdbc.BasicHerdDBDataSource;
 import herddb.jdbc.HerdDBEmbeddedDataSource;
 import herddb.security.SimpleSingleUserManager;
 import herddb.server.ServerConfiguration;
@@ -57,7 +58,10 @@ import org.carapaceproxy.utils.StringUtils;
 import org.shredzone.acme4j.toolbox.JSON;
 
 /**
- * Reads/Write the configuration to a JDBC database. This configuration store is able to track versions of configuration properties
+ * Configuration storage implementation tha reads the configuration from a JDBC database,
+ * i.e., and {@link BasicHerdDBDataSource HerdDB instance}.
+ * <br>
+ * This configuration store is able to commit edits to the database and track versions of configuration properties.
  *
  * @author enrico.olivelli
  */

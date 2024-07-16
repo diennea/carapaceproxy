@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.server.cache;
 
+import static io.netty.handler.codec.http.HttpHeaderNames.IF_MODIFIED_SINCE;
 import com.google.common.annotations.VisibleForTesting;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
@@ -281,6 +282,11 @@ public class ContentsCache {
         long heapSize;
         long directSize;
         int hits;
+
+        public boolean modifiedSince(ProxyRequest request) {
+            final long ifModifiedSince = request.getRequestHeaders().getTimeMillis(IF_MODIFIED_SINCE, -1);
+            return ifModifiedSince == -1 || getLastModified() <= 0 || ifModifiedSince < getLastModified();
+        }
 
         private synchronized void addChunk(ByteBuf chunk, ByteBufAllocator allocator) {
             ByteBuf originalChunk = chunk.retainedDuplicate();

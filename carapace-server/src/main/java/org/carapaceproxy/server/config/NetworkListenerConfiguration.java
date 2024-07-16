@@ -19,10 +19,14 @@
  */
 package org.carapaceproxy.server.config;
 
+import static reactor.netty.http.HttpProtocol.H2;
+import static reactor.netty.http.HttpProtocol.H2C;
+import static reactor.netty.http.HttpProtocol.HTTP11;
 import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.util.concurrent.DefaultEventExecutor;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.Getter;
 import org.carapaceproxy.core.ForwardedStrategies;
 import reactor.netty.http.HttpProtocol;
@@ -34,8 +38,6 @@ import reactor.netty.http.HttpProtocol;
 public class NetworkListenerConfiguration {
 
     public static final Set<String> DEFAULT_SSL_PROTOCOLS = Set.of("TLSv1.2", "TLSv1.3");
-    public static final Set<String> DEFAULT_HTTP_PROTOCOLS = Set.of("http11", "h2c" /* todo "h2" */);
-
     public static final int DEFAULT_SO_BACKLOG = 128;
     public static final int DEFAULT_KEEP_ALIVE_IDLE = 300;
     public static final int DEFAULT_KEEP_ALIVE_INTERVAL = 60;
@@ -58,7 +60,7 @@ public class NetworkListenerConfiguration {
     private final int keepAliveCount;
     private final int maxKeepAliveRequests;
     private final ChannelGroup group;
-    private final Set<String> protocols;
+    private final Set<HttpProtocol> protocols;
 
     public NetworkListenerConfiguration(final String host, final int port) {
         this(
@@ -103,7 +105,7 @@ public class NetworkListenerConfiguration {
                 maxKeepAliveRequests,
                 DEFAULT_FORWARDED_STRATEGY,
                 Set.of(),
-                DEFAULT_HTTP_PROTOCOLS
+                getDefaultHttpProtocols(ssl)
         );
     }
 
@@ -122,7 +124,7 @@ public class NetworkListenerConfiguration {
             final int maxKeepAliveRequests,
             final String forwardedStrategy,
             final Set<String> trustedIps,
-            final Set<String> httpProtocols) {
+            final Set<String> protocols) {
         this.host = host;
         this.port = port;
         this.ssl = ssl;
@@ -138,24 +140,33 @@ public class NetworkListenerConfiguration {
         this.keepAliveCount = keepAliveCount;
         this.maxKeepAliveRequests = maxKeepAliveRequests;
         this.group = new DefaultChannelGroup(new DefaultEventExecutor());
-        if (httpProtocols == null) {
+        if (protocols == null || protocols.isEmpty()) {
             throw new IllegalArgumentException("At least one HTTP protocol is required!!!");
         }
-        if (!ssl && httpProtocols.stream().anyMatch("h2"::equalsIgnoreCase)) {
+        final var httpProtocols = protocols.stream()
+                .map(String::toUpperCase)
+                .map(HttpProtocol::valueOf)
+                .collect(Collectors.toUnmodifiableSet());
+        if (!ssl && httpProtocols.contains(H2)) {
             throw new IllegalArgumentException("H2 requires SSL support");
         }
-        this.protocols = Set.copyOf(httpProtocols);
+        this.protocols = httpProtocols;
     }
 
     public HostPort getKey() {
         return new HostPort(host, port);
     }
 
-    public HttpProtocol[] getHttpProtocols() {
-        return this.getProtocols().stream()
-                .map(String::toUpperCase)
-                .map(HttpProtocol::valueOf)
-                .toArray(HttpProtocol[]::new);
+    public Set<HttpProtocol> getProtocols() {
+        return protocols;
+    }
+
+    public static Set<String> getDefaultHttpProtocols(boolean ssl) {
+        // return Set.of(HTTP11.name(), (ssl ? H2 : H2C).name()); // todo
+        if (ssl) {
+            return Set.of(HTTP11.name());
+        }
+        return Set.of(HTTP11.name(), H2C.name());
     }
 
     public record HostPort(String host, int port) {
