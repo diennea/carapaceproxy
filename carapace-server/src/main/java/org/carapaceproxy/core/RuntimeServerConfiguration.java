@@ -324,7 +324,7 @@ public class RuntimeServerConfiguration {
             final var prefix = "listener." + i + ".";
             final var port = properties.getInt(prefix + "port", 0);
             if (port > 0) {
-                boolean ssl = properties.getBoolean(prefix + "ssl", false);
+                final var ssl = properties.getBoolean(prefix + "ssl", false);
                 this.addListener(new NetworkListenerConfiguration(
                         properties.getString(prefix + "host", "0.0.0.0"),
                         port,

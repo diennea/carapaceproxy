@@ -239,7 +239,9 @@ public class Listeners {
                 .host(hostPort.host())
                 .port(hostPort.port())
                 .protocol(config.getProtocols().toArray(HttpProtocol[]::new))
-                // .secure() // todo see config.isSsl() & snimappings
+                // .secure()
+                // todo: to enable H2, see config.isSsl() & snimappings
+                // see: https://projectreactor.io/docs/netty/release/reference/index.html#_server_name_indication_3
                 .metrics(true, Function.identity())
                 .forwarded(ForwardedStrategy.of(config.getForwardedStrategy(), config.getTrustedIps()))
                 .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())
@@ -262,7 +264,6 @@ public class Listeners {
                             @Override
                             protected SslHandler newSslHandler(SslContext context, ByteBufAllocator allocator) {
                                 SslHandler handler = super.newSslHandler(context, allocator);
-                                // todo does it even work with HTTP 2.0?
                                 if (currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported()) {
                                     Certificate cert = (Certificate) context.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN)).get();
                                     if (cert != null) {

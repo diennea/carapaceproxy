@@ -1,6 +1,7 @@
 package org.carapaceproxy.listeners;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import java.util.Map;
 import java.util.Properties;
@@ -38,7 +39,7 @@ public class ListenerConfigurationTest {
                 Map<HostPort, Listeners.ListeningChannel> listeners = server.getListeners().getListeningChannels();
 
                 //check default configuration
-                assertEquals(true, listeners.get(listenerKey).getConfig().isKeepAlive());
+                assertTrue(listeners.get(listenerKey).getConfig().isKeepAlive());
                 assertEquals(128, listeners.get(listenerKey).getConfig().getSoBacklog());
                 assertEquals(300, listeners.get(listenerKey).getConfig().getKeepAliveIdle());
                 assertEquals(60, listeners.get(listenerKey).getConfig().getKeepAliveInterval());
@@ -58,7 +59,7 @@ public class ListenerConfigurationTest {
                 Map<HostPort, Listeners.ListeningChannel> listeners = server.getListeners().getListeningChannels();
 
                 assertEquals(1, listeners.size());
-                assertEquals(false, listeners.get(listenerKey).getConfig().isKeepAlive());
+                assertFalse(listeners.get(listenerKey).getConfig().isKeepAlive());
             }
 
             //customize keepAlive options
@@ -78,7 +79,7 @@ public class ListenerConfigurationTest {
 
                 Map<HostPort, Listeners.ListeningChannel> listeners = server.getListeners().getListeningChannels();
 
-                assertEquals(true, listeners.get(listenerKey).getConfig().isKeepAlive());
+                assertTrue(listeners.get(listenerKey).getConfig().isKeepAlive());
                 assertEquals(10, listeners.get(listenerKey).getConfig().getSoBacklog());
                 assertEquals(10, listeners.get(listenerKey).getConfig().getKeepAliveIdle());
                 assertEquals(5, listeners.get(listenerKey).getConfig().getKeepAliveInterval());

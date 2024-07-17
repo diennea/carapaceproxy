@@ -74,7 +74,7 @@ public class SSLSNITest {
         
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
-            server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost /* default */, DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of("http11")));
+            server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost /* default */, DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11.name())));
             server.start();
             int port = server.getLocalPort();
 
@@ -196,7 +196,7 @@ public class SSLSNITest {
             server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost,
                     DEFAULT_SSL_PROTOCOLS,
-                    128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of("http11")));
+                    128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11.name())));
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {

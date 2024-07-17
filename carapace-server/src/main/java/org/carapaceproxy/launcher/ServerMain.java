@@ -47,7 +47,7 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
 public class ServerMain implements AutoCloseable {
 
     private static final Logger LOG = Logger.getLogger(ServerMain.class.getName());
-    private final static CountDownLatch running = new CountDownLatch(1);
+    private static final CountDownLatch running = new CountDownLatch(1);
 
     private final ConfigurationStore configuration;
     private final PidFileLocker pidFileLocker;
@@ -88,7 +88,7 @@ public class ServerMain implements AutoCloseable {
                 if (!arg.isEmpty()) {
                     File configFile = new File(arg).getAbsoluteFile();
                     LOG.log(Level.SEVERE, "Reading configuration from {0}", configFile);
-                    try ( InputStreamReader reader = new InputStreamReader(new FileInputStream(configFile), StandardCharsets.UTF_8)) {
+                    try (InputStreamReader reader = new InputStreamReader(new FileInputStream(configFile), StandardCharsets.UTF_8)) {
                         configuration.load(reader);
                     }
                     basePath = configFile.getParentFile().getParentFile();
@@ -99,7 +99,7 @@ public class ServerMain implements AutoCloseable {
                 File configFile = new File("conf/server.properties").getAbsoluteFile();
                 System.out.println("Reading configuration from " + configFile);
                 if (configFile.isFile()) {
-                    try ( InputStreamReader reader = new InputStreamReader(new FileInputStream(configFile), StandardCharsets.UTF_8)) {
+                    try (InputStreamReader reader = new InputStreamReader(new FileInputStream(configFile), StandardCharsets.UTF_8)) {
                         configuration.load(reader);
                     }
                     basePath = configFile.getParentFile().getParentFile();

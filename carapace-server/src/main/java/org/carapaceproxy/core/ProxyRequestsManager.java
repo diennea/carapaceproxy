@@ -73,7 +73,6 @@ import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.ByteBufFlux;
-import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.http.client.HttpClientResponse;
 import reactor.netty.resources.ConnectionProvider;
@@ -97,7 +96,7 @@ public class ProxyRequestsManager {
 
     private final HttpProxyServer parent;
     private final Map<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
-    private final Map<Map.Entry<String, HttpProtocol>, HttpClient> forwardersPool = new ConcurrentHashMap<>(); // endpoint_connectionpool -> forwarder to use
+    private final Map<ConnectionKey, HttpClient> forwardersPool = new ConcurrentHashMap<>(); // endpoint_connectionpool -> forwarder to use
     private final ConnectionsManager connectionsManager = new ConnectionsManager();
 
     public ProxyRequestsManager(HttpProxyServer parent) {
@@ -377,7 +376,7 @@ public class ProxyRequestsManager {
         }
 
         final var protocol = HttpUtils.toHttpProtocol(request.getHttpProtocol(), request.isSecure());
-        final var clientKey = Map.entry(key.getHostPort() + "_" + connectionConfig.getId(), protocol);
+        final var clientKey = new ConnectionKey(key, connectionConfig.getId(), protocol);
         HttpClient forwarder = forwardersPool.computeIfAbsent(clientKey, hostname -> HttpClient.create(connectionProvider)
                 .host(endpointHost)
                 .port(endpointPort)
@@ -440,7 +439,8 @@ public class ProxyRequestsManager {
                     // netty overrides the value, we need to force it
                     req.header(HttpHeaderNames.HOST, request.getRequestHeaders().get(HttpHeaderNames.HOST));
                     return out.send(request.getRequestData()); // client request body
-                }).response((resp, flux) -> { // endpoint response
+                })
+                .response((resp, flux) -> { // endpoint response
                     if (CarapaceLogger.isLoggingDebugEnabled()) {
                         CarapaceLogger.debug("Receive response from backend for " + request.getRemoteAddress()
                                 + " Using client id " + key.getHostPort() + "_" + connectionConfig.getId()

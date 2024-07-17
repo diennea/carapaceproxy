@@ -38,7 +38,12 @@ import java.util.logging.Logger;
 import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.core.ProxyRequest;
-import org.carapaceproxy.server.config.*;
+import org.carapaceproxy.server.config.ActionConfiguration;
+import org.carapaceproxy.server.config.BackendConfiguration;
+import org.carapaceproxy.server.config.BackendSelector;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.carapaceproxy.server.config.DirectorConfiguration;
+import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import org.carapaceproxy.server.mapper.CustomHeader.HeaderMode;
 import org.carapaceproxy.server.mapper.MapResult.Action;
@@ -46,13 +51,6 @@ import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.ParseException;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.RequestMatchParser;
-
-import java.util.*;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import static org.carapaceproxy.core.StaticContentsManager.*;
-import static org.carapaceproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
 
 /**
  * Standard Endpoint mapping

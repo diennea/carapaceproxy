@@ -29,10 +29,12 @@ import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAU
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
+import static reactor.netty.http.HttpProtocol.HTTP11;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Set;
 import org.apache.commons.io.IOUtils;
@@ -77,7 +79,7 @@ public class SimpleHTTPProxyTest {
 
             // not found
             try {
-                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html?not-found").toURI(), "utf-8");
+                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html?not-found").toURI(), StandardCharsets.UTF_8);
                 System.out.println("s:" + s);
                 fail();
             } catch (FileNotFoundException ok) {
@@ -85,7 +87,7 @@ public class SimpleHTTPProxyTest {
 
             // proxy
             {
-                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html?redir").toURI(), "utf-8");
+                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html?redir").toURI(), StandardCharsets.UTF_8);
                 System.out.println("s:" + s);
                 assertEquals("it <b>works</b> !!", s);
             }
@@ -111,13 +113,13 @@ public class SimpleHTTPProxyTest {
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, certificate, "changeit", STATIC));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost", DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of("http11")));
+            server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost", DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11.name())));
             server.start();
             int port = server.getLocalPort();
 
             // not found
             try {
-                String s = IOUtils.toString(new URL("https://localhost:" + port + "/index.html?not-found").toURI(), "utf-8");
+                String s = IOUtils.toString(new URL("https://localhost:" + port + "/index.html?not-found").toURI(), StandardCharsets.UTF_8);
                 System.out.println("s:" + s);
                 fail();
             } catch (FileNotFoundException ok) {
@@ -125,7 +127,7 @@ public class SimpleHTTPProxyTest {
 
             // proxy
             {
-                String s = IOUtils.toString(new URL("https://localhost:" + port + "/index.html?redir").toURI(), "utf-8");
+                String s = IOUtils.toString(new URL("https://localhost:" + port + "/index.html?redir").toURI(), StandardCharsets.UTF_8);
                 System.out.println("s:" + s);
                 assertEquals("it <b>works</b> !!", s);
             }
