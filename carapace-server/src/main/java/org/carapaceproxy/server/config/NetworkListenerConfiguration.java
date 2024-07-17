@@ -157,10 +157,6 @@ public class NetworkListenerConfiguration {
         return new HostPort(host, port);
     }
 
-    public Set<HttpProtocol> getProtocols() {
-        return protocols;
-    }
-
     public static Set<String> getDefaultHttpProtocols(final boolean ssl) {
         // return Set.of(HTTP11.name(), (ssl ? H2 : H2C).name());
         if (ssl) {

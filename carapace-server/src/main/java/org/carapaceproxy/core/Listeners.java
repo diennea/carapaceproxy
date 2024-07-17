@@ -22,14 +22,12 @@ package org.carapaceproxy.core;
 import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreData;
 import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
 import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
+import static reactor.netty.ConnectionObserver.State.CONNECTED;
 import io.netty.buffer.ByteBufAllocator;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.socket.nio.NioChannelOption;
-import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.OpenSslCachingX509KeyManagerFactory;
 import io.netty.handler.ssl.ReferenceCountedOpenSslEngine;
@@ -75,7 +73,6 @@ import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
 import reactor.netty.DisposableServer;
 import reactor.netty.FutureMono;
-import reactor.netty.NettyPipeline;
 import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.server.HttpServer;
 
@@ -239,9 +236,11 @@ public class Listeners {
                 .host(hostPort.host())
                 .port(hostPort.port())
                 .protocol(config.getProtocols().toArray(HttpProtocol[]::new))
-                // .secure()
-                // todo: to enable H2, see config.isSsl() & snimappings
-                // see: https://projectreactor.io/docs/netty/release/reference/index.html#_server_name_indication_3
+                /*
+                  // .secure()
+                  todo: to enable H2, see config.isSsl() & snimappings
+                  see https://projectreactor.io/docs/netty/release/reference/index.html#_server_name_indication_3
+                 */
                 .metrics(true, Function.identity())
                 .forwarded(ForwardedStrategy.of(config.getForwardedStrategy(), config.getTrustedIps()))
                 .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())
@@ -282,28 +281,16 @@ public class Listeners {
                         };
                         channel.pipeline().addFirst(sni);
                     }
-                    final var uriCleaner = new ChannelInboundHandlerAdapter() {
-                        @Override
-                        public void channelRead(ChannelHandlerContext ctx, Object msg) {
-                            if (msg instanceof final HttpRequest request) {
-                                request.setUri(request.uri()
-                                        .replaceAll("\\[", "%5B")
-                                        .replaceAll("]", "%5D")
-                                );
-                            }
-                            ctx.fireChannelRead(msg);
-                        }
-                    };
-                    if (channel.pipeline().context(NettyPipeline.HttpCodec) != null) {
-                        channel.pipeline().addAfter(NettyPipeline.HttpCodec, "uriEncoder", uriCleaner);
-                    } else {
-                        channel.pipeline().addLast("uriEncoder", uriCleaner);
-                    }
                 })
                 .doOnConnection(conn -> {
                     CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
                     conn.channel().closeFuture().addListener(e -> CURRENT_CONNECTED_CLIENTS_GAUGE.dec());
                     config.getGroup().add(conn.channel());
+                })
+                .childObserve((connection, state) -> {
+                    if (state == CONNECTED) {
+                        UriCleanerHandler.INSTANCE.addToPipeline(connection.channel());
+                    }
                 })
                 .httpRequestDecoder(option -> option.maxHeaderSize(currentConfiguration.getMaxHeaderSize()))
                 .handle((request, response) -> { // Custom request-response handling
