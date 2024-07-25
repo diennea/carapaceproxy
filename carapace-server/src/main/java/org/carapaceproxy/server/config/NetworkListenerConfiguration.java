@@ -39,6 +39,7 @@ public class NetworkListenerConfiguration {
 
     public static final Set<String> DEFAULT_SSL_PROTOCOLS = Set.of("TLSv1.2", "TLSv1.3");
     public static final int DEFAULT_SO_BACKLOG = 128;
+    public static final boolean DEFAULT_KEEP_ALIVE = true;
     public static final int DEFAULT_KEEP_ALIVE_IDLE = 300;
     public static final int DEFAULT_KEEP_ALIVE_INTERVAL = 60;
     public static final int DEFAULT_KEEP_ALIVE_COUNT = 8;
@@ -70,7 +71,7 @@ public class NetworkListenerConfiguration {
                 null,
                 null,
                 DEFAULT_SO_BACKLOG,
-                true,
+                DEFAULT_KEEP_ALIVE,
                 DEFAULT_KEEP_ALIVE_IDLE,
                 DEFAULT_KEEP_ALIVE_INTERVAL,
                 DEFAULT_KEEP_ALIVE_COUNT,
