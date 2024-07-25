@@ -156,6 +156,10 @@
                     <groupId>org.bouncycastle</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
+                <exclusion>
+                    <groupId>org.herddb</groupId>
+                    <artifactId>herddb-mock</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -318,8 +322,8 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>com.github.tomakehurst</groupId>
-            <artifactId>wiremock-jre8</artifactId>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
             <version>${libs.wiremock}</version>
             <scope>test</scope>
             <exclusions>
