@@ -24,14 +24,14 @@ import java.util.List;
 import java.util.Map;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.core.ProxyRequest;
-import org.carapaceproxy.server.mapper.EndpointMapper;
-import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.mapper.CustomHeader;
+import org.carapaceproxy.server.mapper.EndpointMapper;
+import org.carapaceproxy.server.mapper.MapResult;
 
 public class TestEndpointMapper extends EndpointMapper {
 

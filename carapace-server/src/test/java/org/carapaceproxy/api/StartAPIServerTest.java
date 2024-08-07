@@ -608,7 +608,7 @@ public class StartAPIServerTest extends UseAdminServer {
         }
 
         Assert.assertNotNull(exc);
-        Assert.assertThat(exc.getMessage(), containsString("bad response, does not start with HTTP/1.1"));
+        assertThat(exc.getMessage(), containsString("bad response, does not start with HTTP/1.1"));
     }
 
     @Test

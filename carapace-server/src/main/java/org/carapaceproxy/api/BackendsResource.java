@@ -79,10 +79,10 @@ public class BackendsResource {
         Map<String, BackendBean> res = new HashMap<>();
 
         server.getMapper().getBackends().values().forEach(backendConf -> {
-            String id = backendConf.getId();
+            String id = backendConf.id();
             String hostPort = backendConf.getHostPort();
-            BackendBean bean = new BackendBean(id, backendConf.getHost(), backendConf.getPort());
-            bean.lastProbePath = backendConf.getProbePath();
+            BackendBean bean = new BackendBean(id, backendConf.host(), backendConf.port());
+            bean.lastProbePath = backendConf.probePath();
             EndpointKey key = EndpointKey.make(hostPort);
             Map<String, ConnectionPoolStats> poolsStats = server.getConnectionPoolsStats().get(key);
             if (poolsStats != null) {

@@ -15,6 +15,7 @@ import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAU
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertTrue;
+import static reactor.netty.http.HttpProtocol.HTTP11;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.IOException;
 import java.util.Set;
@@ -174,7 +175,8 @@ public class ForwardedStrategyTest {
                 DEFAULT_KEEP_ALIVE_COUNT,
                 DEFAULT_MAX_KEEP_ALIVE_REQUESTS,
                 strategy.name(),
-                trustedIps
+                trustedIps,
+                Set.of(HTTP11.name())
         );
     }
 

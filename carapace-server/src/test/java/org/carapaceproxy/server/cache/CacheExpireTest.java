@@ -19,29 +19,38 @@
  */
 package org.carapaceproxy.server.cache;
 
-import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import org.carapaceproxy.core.HttpProxyServer;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import org.carapaceproxy.client.EndpointKey;
-import org.carapaceproxy.utils.RawHttpClient;
+import static org.hamcrest.CoreMatchers.allOf;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.startsWith;
+import static org.hamcrest.CoreMatchers.startsWithIgnoringCase;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import java.util.Date;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.HttpUtils;
+import org.carapaceproxy.utils.RawHttpClient;
+import org.carapaceproxy.utils.TestEndpointMapper;
+import org.carapaceproxy.utils.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 /**
- * NOTE: some of these test are heavily dependent from wiremock stub creation, that could take from 500ms to 1000ms or more, depending on various factors. Executing all tests in this class will hide
- * the issue because the first test to be executed (and probably warm up wiremock) is testHandleExpiresFromServer, that is not affected by a delay of 1000ms.
- *
- * In order to fix the issue test should be refactored to start wiremock (and by the way HttpProxyServer) in a @Before rule
+ * NOTE: some of these tests are heavily dependent from wiremock stub creation,
+ * that could take from 500ms to 1000ms or more, depending on various factors.
+ * Executing all tests in this class will hide
+ * the issue because the first test to be executed (and probably warm up wiremock) is testHandleExpiresFromServer,
+ * that is not affected by a delay of 1000ms.
+ * <p>
+ * In order to fix the issue test should be refactored to start wiremock
+ * (and by the way, HttpProxyServer) in a @Before rule
  */
 public class CacheExpireTest {
 
@@ -53,8 +62,7 @@ public class CacheExpireTest {
 
     @Test
     public void testHandleExpiresFromServer() throws Exception {
-
-        java.util.Date expire = new java.util.Date(System.currentTimeMillis() + 60000 * 2);
+        Date expire = new Date(System.currentTimeMillis() + 60000 * 2);
         String formatted = HttpUtils.formatDateHeader(expire); // ex Wed, 01 Dec 2021 08:11:39 GMT
 
         stubFor(get(urlEqualTo("/index-with-expire.html"))
@@ -67,7 +75,6 @@ public class CacheExpireTest {
         );
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
@@ -76,27 +83,35 @@ public class CacheExpireTest {
             server.getCurrentConfiguration().setRequestCompressionEnabled(false);
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                RawHttpClient.HttpResponse resp = client.executeRequest("""
+                        GET /index-with-expire.html HTTP/1.1\r
+                        Host: localhost\r
+                        \r
+                        """);
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertTrue(s.contains("it <b>works</b> !!"));
-                resp.getHeaderLines().forEach(h -> {
-                    System.out.println("HEADER LINE :" + h);
-                });
-                assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("X-Cached")));
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
+                resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
+                assertThat(resp.getHeaderLines(), allOf(
+                        not(hasItem(startsWithIgnoringCase("X-Cached"))),
+                        hasItem(startsWithIgnoringCase("Expires: " + formatted))
+                ));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                RawHttpClient.HttpResponse resp = client.executeRequest("""
+                        GET /index-with-expire.html HTTP/1.1\r
+                        Host: localhost\r
+                        \r
+                        """);
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertTrue(s.contains("it <b>works</b> !!"));
-                resp.getHeaderLines().forEach(h -> {
-                    System.out.println("HEADER LINE :" + h);
-                });
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("X-Cached")));
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("expires: " + formatted)));
+                resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
+                assertThat(resp.getHeaderLines(), allOf(
+                        hasItem(startsWithIgnoringCase("X-Cached")),
+                        hasItem(startsWithIgnoringCase("Expires: " + formatted))
+                ));
             }
 
             assertEquals(1, server.getCache().getCacheSize());
@@ -109,7 +124,6 @@ public class CacheExpireTest {
 
     @Test
     public void testHandleExpiresMissingFromServer() throws Exception {
-
         stubFor(get(urlEqualTo("/index-no-expire.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -119,36 +133,43 @@ public class CacheExpireTest {
         );
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();
             server.getCache().getStats().resetCacheMetrics();
 
-            String Expires;
+            final String expires;
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-no-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                RawHttpClient.HttpResponse resp = client.executeRequest("""
+                        GET /index-no-expire.html HTTP/1.1\r
+                        Host: localhost\r
+                        \r
+                        """);
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertTrue(s.contains("it <b>works</b> !!"));
-                resp.getHeaderLines().forEach(h -> {
-                    System.out.println("HEADER LINE :" + h);
-                });
-                assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("X-Cached")));
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("expires: ")));
-                Expires = resp.getHeaderLines().stream().filter(h -> h.startsWith("expires: ")).findFirst().get();
+                resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
+                assertThat(resp.getHeaderLines(), allOf(
+                        not(hasItem(startsWithIgnoringCase("X-Cached"))),
+                        hasItem(startsWithIgnoringCase("Expires: "))
+                ));
+                expires = resp.getHeaderLines().stream().filter(h -> h.startsWith("expires: ")).findFirst().orElseThrow();
             }
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-no-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                RawHttpClient.HttpResponse resp = client.executeRequest("""
+                        GET /index-no-expire.html HTTP/1.1\r
+                        Host: localhost\r
+                        \r
+                        """);
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertTrue(s.contains("it <b>works</b> !!"));
-                resp.getHeaderLines().forEach(h -> {
-                    System.out.println("HEADER LINE :" + h);
-                });
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("X-Cached")));
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith(Expires)));
+                resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
+                assertThat(resp.getHeaderLines(), allOf(
+                        hasItem(startsWithIgnoringCase("X-Cached")),
+                        hasItem(startsWith(expires))
+                ));
             }
 
             assertEquals(1, server.getCache().getCacheSize());
@@ -159,8 +180,7 @@ public class CacheExpireTest {
 
     @Test
     public void testDoNotCacheExpiredContent() throws Exception {
-
-        java.util.Date expire = new java.util.Date(System.currentTimeMillis() - 1000);
+        Date expire = new Date(System.currentTimeMillis() - 1000);
         String formatted = HttpUtils.formatDateHeader(expire);
 
         stubFor(get(urlEqualTo("/index-with-expire.html"))
@@ -173,7 +193,6 @@ public class CacheExpireTest {
         );
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
@@ -185,11 +204,11 @@ public class CacheExpireTest {
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertTrue(s.contains("it <b>works</b> !!"));
-                resp.getHeaderLines().forEach(h -> {
-                    System.out.println("HEADER LINE :" + h);
-                });
-                assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("X-Cached")));
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
+                resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
+                assertThat(resp.getHeaderLines(), allOf(
+                        not(hasItem(startsWithIgnoringCase("X-Cached"))),
+                        hasItem(startsWithIgnoringCase("Expires: " + formatted))
+                ));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -197,25 +216,22 @@ public class CacheExpireTest {
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertTrue(s.contains("it <b>works</b> !!"));
-                resp.getHeaderLines().forEach(h -> {
-                    System.out.println("HEADER LINE :" + h);
-                });
-                assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("X-Cached")));
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
+                resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
+                assertThat(resp.getHeaderLines(), allOf(
+                        not(hasItem(startsWithIgnoringCase("X-Cached"))),
+                        hasItem(startsWithIgnoringCase("Expires: " + formatted))
+                ));
             }
 
             assertEquals(0, server.getCache().getCacheSize());
             assertEquals(0, server.getCache().getStats().getHits());
             assertEquals(2, server.getCache().getStats().getMisses());
         }
-
     }
 
     @Test
     public void testExpireContentOnGet() throws Exception {
-
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
@@ -223,7 +239,7 @@ public class CacheExpireTest {
             server.getCache().getStats().resetCacheMetrics();
 
             long startts = System.currentTimeMillis();
-            java.util.Date expire = new java.util.Date(startts + 5_000);
+            Date expire = new Date(startts + 5_000);
             String formatted = HttpUtils.formatDateHeader(expire);
 
             stubFor(get(urlEqualTo("/index-with-expire.html"))
@@ -240,11 +256,11 @@ public class CacheExpireTest {
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertTrue(s.contains("it <b>works</b> !!"));
-                resp.getHeaderLines().forEach(h -> {
-                    System.out.println("HEADER LINE :" + h);
-                });
-                assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("X-Cached")));
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
+                resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
+                assertThat(resp.getHeaderLines(), allOf(
+                        not(hasItem(startsWithIgnoringCase("X-Cached"))),
+                        hasItem(startsWithIgnoringCase("Expires: " + formatted))
+                ));
             }
 
             assertEquals(1, server.getCache().getCacheSize());
@@ -259,25 +275,22 @@ public class CacheExpireTest {
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertTrue(s.contains("it <b>works</b> !!"));
-                resp.getHeaderLines().forEach(h -> {
-                    System.out.println("HEADER LINE :" + h);
-                });
-                assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("X-Cached")));
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
+                resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
+                assertThat(resp.getHeaderLines(), allOf(
+                        not(hasItem(startsWithIgnoringCase("X-Cached"))),
+                        hasItem(startsWithIgnoringCase("Expires: " + formatted))
+                ));
             }
 
             assertEquals(0, server.getCache().getCacheSize());
             assertEquals(0, server.getCache().getStats().getHits());
             assertEquals(2, server.getCache().getStats().getMisses());
         }
-
     }
 
     @Test
     public void testExpireContentWithoutGet() throws Exception {
-
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
@@ -286,7 +299,7 @@ public class CacheExpireTest {
             server.getCache().getInnerCache().setVerbose(true);
 
             long startts = System.currentTimeMillis();
-            java.util.Date expire = new java.util.Date(startts + 2000);
+            Date expire = new Date(startts + 2000);
             String formatted = HttpUtils.formatDateHeader(expire);
 
             stubFor(get(urlEqualTo("/index-with-expire.html"))
@@ -303,11 +316,11 @@ public class CacheExpireTest {
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertTrue(s.contains("it <b>works</b> !!"));
-                resp.getHeaderLines().forEach(h -> {
-                    System.out.println("HEADER LINE :" + h);
-                });
-                assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("X-Cached")));
-                assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.startsWith("Expires: " + formatted)));
+                resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
+                assertThat(resp.getHeaderLines(), allOf(
+                        not(hasItem(startsWithIgnoringCase("X-Cached"))),
+                        hasItem(startsWithIgnoringCase("Expires: " + formatted))
+                ));
             }
 
             assertEquals(1, server.getCache().getCacheSize());

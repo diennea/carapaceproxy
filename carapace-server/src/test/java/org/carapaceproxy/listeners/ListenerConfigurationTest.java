@@ -1,6 +1,7 @@
 package org.carapaceproxy.listeners;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import java.util.Map;
 import java.util.Properties;
@@ -8,7 +9,7 @@ import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.Listeners;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
-import org.carapaceproxy.server.config.NetworkListenerConfiguration;
+import org.carapaceproxy.server.config.HostPort;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -32,15 +33,13 @@ public class ListenerConfigurationTest {
             }
             server.start();
 
-            NetworkListenerConfiguration.HostPort listenerKey =
-                    new NetworkListenerConfiguration.HostPort("localhost", 8080);
+            HostPort listenerKey = new HostPort("localhost", 8080);
 
             {
-                Map<NetworkListenerConfiguration.HostPort, Listeners.ListeningChannel> listeners =
-                        server.getListeners().getListeningChannels();
+                Map<HostPort, Listeners.ListeningChannel> listeners = server.getListeners().getListeningChannels();
 
                 //check default configuration
-                assertEquals(true, listeners.get(listenerKey).getConfig().isKeepAlive());
+                assertTrue(listeners.get(listenerKey).getConfig().isKeepAlive());
                 assertEquals(128, listeners.get(listenerKey).getConfig().getSoBacklog());
                 assertEquals(300, listeners.get(listenerKey).getConfig().getKeepAliveIdle());
                 assertEquals(60, listeners.get(listenerKey).getConfig().getKeepAliveInterval());
@@ -57,11 +56,10 @@ public class ListenerConfigurationTest {
 
                 reloadConfiguration(configuration, server);
 
-                Map<NetworkListenerConfiguration.HostPort, Listeners.ListeningChannel> listeners =
-                        server.getListeners().getListeningChannels();
+                Map<HostPort, Listeners.ListeningChannel> listeners = server.getListeners().getListeningChannels();
 
                 assertEquals(1, listeners.size());
-                assertEquals(false, listeners.get(listenerKey).getConfig().isKeepAlive());
+                assertFalse(listeners.get(listenerKey).getConfig().isKeepAlive());
             }
 
             //customize keepAlive options
@@ -79,10 +77,9 @@ public class ListenerConfigurationTest {
                 configuration.put("listener.1.enabled", "true");
                 reloadConfiguration(configuration, server);
 
-                Map<NetworkListenerConfiguration.HostPort, Listeners.ListeningChannel> listeners =
-                        server.getListeners().getListeningChannels();
+                Map<HostPort, Listeners.ListeningChannel> listeners = server.getListeners().getListeningChannels();
 
-                assertEquals(true, listeners.get(listenerKey).getConfig().isKeepAlive());
+                assertTrue(listeners.get(listenerKey).getConfig().isKeepAlive());
                 assertEquals(10, listeners.get(listenerKey).getConfig().getSoBacklog());
                 assertEquals(10, listeners.get(listenerKey).getConfig().getKeepAliveIdle());
                 assertEquals(5, listeners.get(listenerKey).getConfig().getKeepAliveInterval());

@@ -31,7 +31,9 @@ import java.util.stream.StreamSupport;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 
 /**
- * Reads configuration from a Java properties file
+ * Configuration storage implementation tha reads the configuration from a Java {@link Properties} file.
+ * It resides in memory,
+ * and it does <b>not</b> support {@link #commitConfiguration(ConfigurationStore) commiting} changes.
  *
  * @author enrico.olivelli
  */

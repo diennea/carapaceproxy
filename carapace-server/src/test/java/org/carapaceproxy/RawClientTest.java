@@ -38,6 +38,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static reactor.netty.http.HttpProtocol.HTTP11;
 import com.github.tomakehurst.wiremock.http.HttpHeader;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import com.github.tomakehurst.wiremock.matching.UrlPattern;
@@ -84,8 +85,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
-import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -129,12 +128,12 @@ public class RawClientTest {
     public TestName testName = new TestName();
 
     @Before
-    public void dumpTestName() throws Exception {
+    public void dumpTestName() {
         LOG.log(Level.INFO, "Starting {0}", testName.getMethodName());
     }
 
     @After
-    public void dumpTestNameEnd() throws Exception {
+    public void dumpTestNameEnd() {
         LOG.log(Level.INFO, "End {0}", testName.getMethodName());
     }
 
@@ -213,7 +212,7 @@ public class RawClientTest {
     }
 
     @Test
-    public void endpointKeyTest() throws Exception {
+    public void endpointKeyTest() {
         {
             EndpointKey entryPoint = EndpointKey.make("localhost:8080");
             assertThat(entryPoint.getHost(), is("localhost"));
@@ -259,7 +258,7 @@ public class RawClientTest {
     @Test
     public void testKeepAliveTimeout() throws Exception {
         RawHttpServer httpServer = new RawHttpServer(new HttpServlet() {
-            public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+            public void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
                 response.setContentType("text/html");
                 PrintWriter out = response.getWriter();
                 out.println("it <b>works</b> !!");
@@ -291,7 +290,7 @@ public class RawClientTest {
     public void testEmptyDataFromServer() throws Exception {
 
         RawHttpServer httpServer = new RawHttpServer(new HttpServlet() {
-            public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+            public void doGet(HttpServletRequest request, HttpServletResponse response) {
             }
         });
         int httpServerPort = httpServer.start();
@@ -435,7 +434,7 @@ public class RawClientTest {
                     .channel(Epoll.isAvailable() ? EpollServerSocketChannel.class : NioServerSocketChannel.class)
                     .childHandler(new ChannelInitializer<SocketChannel>() {
                         @Override
-                        public void initChannel(SocketChannel channel) throws Exception {
+                        public void initChannel(SocketChannel channel) {
                             channel.pipeline().addLast(new HttpRequestDecoder());
                             channel.pipeline().addLast(new HttpResponseEncoder());
                             channel.pipeline().addLast(new SimpleChannelInboundHandler<Object>() {
@@ -491,7 +490,7 @@ public class RawClientTest {
                                 }
 
                                 @Override
-                                public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
+                                public void channelReadComplete(ChannelHandlerContext ctx) {
                                     ctx.flush();
                                 }
 
@@ -750,7 +749,7 @@ public class RawClientTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0, scheme.equals("https"), null, "localhost", DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 100, DEFAULT_FORWARDED_STRATEGY, Set.of()));
+            server.addListener(new NetworkListenerConfiguration("localhost", 0, scheme.equals("https"), null, "localhost", DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 100, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11.name())));
 
             server.start();
             int port = server.getLocalPort();
@@ -835,7 +834,7 @@ public class RawClientTest {
                 // cookies from server
                 List<String> headerSetCookie = resp.getHeaderLines().stream()
                         .filter(h -> h.toLowerCase().contains("set-cookie"))
-                        .collect(Collectors.toList());
+                        .toList();
                 assertThat(headerSetCookie.size(), is(1));
                 assertThat(headerSetCookie.get(0), is("Set-Cookie: responseCookie=responseValue; responseCookie2=responseValue2\r\n"));
             }

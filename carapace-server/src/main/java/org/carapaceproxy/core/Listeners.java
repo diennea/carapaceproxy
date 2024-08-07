@@ -22,15 +22,12 @@ package org.carapaceproxy.core;
 import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreData;
 import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
 import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import static reactor.netty.ConnectionObserver.State.CONNECTED;
 import io.netty.buffer.ByteBufAllocator;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.socket.nio.NioChannelOption;
-import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.OpenSslCachingX509KeyManagerFactory;
 import io.netty.handler.ssl.ReferenceCountedOpenSslEngine;
@@ -60,7 +57,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.logging.Level;
@@ -69,23 +65,25 @@ import javax.net.ssl.KeyManagerFactory;
 import jdk.net.ExtendedSocketOptions;
 import lombok.Data;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.carapaceproxy.server.config.HostPort;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
-import org.carapaceproxy.server.config.NetworkListenerConfiguration.HostPort;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
 import reactor.netty.DisposableServer;
 import reactor.netty.FutureMono;
-import reactor.netty.NettyPipeline;
+import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.server.HttpServer;
 
 /**
- * Listeners waiting for incoming clients requests
+ * Collection of listeners waiting for incoming clients requests on the configured HTTP ports.
+ * <br>
+ * While the {@link RuntimeServerConfiguration} is actually <i>mutable</i>, this class won't watch it for updates;
+ * the caller should request a {@link #reloadCurrentConfiguration() reload of the configuration} manually instead.
  *
  * @author enrico.olivelli
  */
-@SuppressFBWarnings(value = "OBL_UNSATISFIED_OBLIGATION", justification = "https://github.com/spotbugs/spotbugs/issues/432")
 public class Listeners {
 
     public static final String OCSP_CERTIFICATE_CHAIN = "ocsp-certificate";
@@ -150,10 +148,22 @@ public class Listeners {
         }
     }
 
+    /**
+     * Re-apply the current configuration; it should be invoked after editing it.
+     *
+     * @throws InterruptedException if it is interrupted while starting or stopping a listener
+     */
     public void reloadCurrentConfiguration() throws InterruptedException {
         reloadConfiguration(this.currentConfiguration);
     }
 
+    /**
+     * Apply a new configuration and refresh the listeners according to it.
+     *
+     * @param newConfiguration the configuration
+     * @throws InterruptedException if it is interrupted while starting or stopping a listener
+     * @see #reloadCurrentConfiguration()
+     */
     void reloadConfiguration(RuntimeServerConfiguration newConfiguration) throws InterruptedException {
         if (!started) {
             this.currentConfiguration = newConfiguration;
@@ -164,9 +174,8 @@ public class Listeners {
 
         // stop dropped listeners, start new one
         List<HostPort> listenersToStop = new ArrayList<>();
-        List<HostPort> listenersToStart = new ArrayList<>();
         List<HostPort> listenersToRestart = new ArrayList<>();
-        for (Entry<HostPort, ListeningChannel> channel : listeningChannels.entrySet()) {
+        for (Map.Entry<HostPort, ListeningChannel> channel : listeningChannels.entrySet()) {
             HostPort key = channel.getKey();
             NetworkListenerConfiguration actualListenerConfig = currentConfiguration.getListener(key);
             NetworkListenerConfiguration newConfigurationForListener = newConfiguration.getListener(key);
@@ -181,6 +190,7 @@ public class Listeners {
             }
             channel.getValue().clear();
         }
+        List<HostPort> listenersToStart = new ArrayList<>();
         for (NetworkListenerConfiguration config : newConfiguration.getListeners()) {
             HostPort key = config.getKey();
             if (!listeningChannels.containsKey(key)) {
@@ -219,13 +229,18 @@ public class Listeners {
     private void bootListener(NetworkListenerConfiguration config) throws InterruptedException {
         HostPort hostPort = new HostPort(config.getHost(), config.getPort() + parent.getListenersOffsetPort());
         ListeningChannel listeningChannel = new ListeningChannel(hostPort, config);
-        LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{hostPort.host(), hostPort.port() + "", config.isSsl()});
+        LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{hostPort.host(), String.valueOf(hostPort.port()), config.isSsl()});
 
         // Listener setup
         HttpServer httpServer = HttpServer.create()
                 .host(hostPort.host())
                 .port(hostPort.port())
-                //.protocol(HttpProtocol.H2) // HTTP/2.0 setup
+                .protocol(config.getProtocols().toArray(HttpProtocol[]::new))
+                /*
+                  // .secure()
+                  todo: to enable H2, see config.isSsl() & snimappings
+                  see https://projectreactor.io/docs/netty/release/reference/index.html#_server_name_indication_3
+                 */
                 .metrics(true, Function.identity())
                 .forwarded(ForwardedStrategy.of(config.getForwardedStrategy(), config.getTrustedIps()))
                 .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())
@@ -266,23 +281,16 @@ public class Listeners {
                         };
                         channel.pipeline().addFirst(sni);
                     }
-                    channel.pipeline().addAfter(NettyPipeline.HttpCodec, "uriEncoder", new ChannelInboundHandlerAdapter() {
-                        @Override
-                        public void channelRead(ChannelHandlerContext ctx, Object msg) {
-                            if (msg instanceof final HttpRequest request) {
-                                request.setUri(request.uri()
-                                        .replaceAll("\\[", "%5B")
-                                        .replaceAll("]", "%5D")
-                                );
-                            }
-                            ctx.fireChannelRead(msg);
-                        }
-                    });
                 })
                 .doOnConnection(conn -> {
                     CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
                     conn.channel().closeFuture().addListener(e -> CURRENT_CONNECTED_CLIENTS_GAUGE.dec());
                     config.getGroup().add(conn.channel());
+                })
+                .childObserve((connection, state) -> {
+                    if (state == CONNECTED) {
+                        UriCleanerHandler.INSTANCE.addToPipeline(connection.channel());
+                    }
                 })
                 .httpRequestDecoder(option -> option.maxHeaderSize(currentConfiguration.getMaxHeaderSize()))
                 .handle((request, response) -> { // Custom request-response handling

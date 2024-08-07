@@ -52,7 +52,7 @@ jobs:
       - name: 'Build and test with Maven'
         run: ./mvnw -B package --file pom.xml
       - name: 'Submit Dependency Snapshot'
-        uses: advanced-security/maven-dependency-submission-action@v3
+        uses: advanced-security/maven-dependency-submission-action@v4
       - uses: actions/upload-artifact@v4
         if: always()
         with:

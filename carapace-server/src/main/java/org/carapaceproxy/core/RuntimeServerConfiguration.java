@@ -23,6 +23,7 @@ import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.D
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_FORWARDED_STRATEGY;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
+import static org.carapaceproxy.server.config.NetworkListenerConfiguration.getDefaultHttpProtocols;
 import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
 import java.io.File;
 import java.security.NoSuchAlgorithmException;
@@ -40,6 +41,7 @@ import lombok.Data;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
+import org.carapaceproxy.server.config.HostPort;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
@@ -48,7 +50,14 @@ import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import org.carapaceproxy.utils.CarapaceLogger;
 
 /**
- * Configuration
+ * Implementation of a configuration for the whole server.
+ * Among other settings, it defines:
+ * <ul>
+ *     <li>{@link Listeners HTTP listeners} {@link NetworkListenerConfiguration mapping configuration};</li>
+ *     <li>{@link SSLCertificateConfiguration SSL certificates configuration};</li>
+ *     <li>{@link RequestFilter filters} {@link RequestFilterConfiguration configuration};</li>
+ *     <li>{@link ConnectionPoolConfiguration connection pool configuration}.</li>
+ * </ul>
  *
  * @author enrico.olivelli
  */
@@ -315,10 +324,11 @@ public class RuntimeServerConfiguration {
             final var prefix = "listener." + i + ".";
             final var port = properties.getInt(prefix + "port", 0);
             if (port > 0) {
+                final var ssl = properties.getBoolean(prefix + "ssl", false);
                 this.addListener(new NetworkListenerConfiguration(
                         properties.getString(prefix + "host", "0.0.0.0"),
                         port,
-                        properties.getBoolean(prefix + "ssl", false),
+                        ssl,
                         properties.getString(prefix + "sslciphers", ""),
                         properties.getString(prefix + "defaultcertificate", "*"),
                         properties.getValues(prefix + "sslprotocols", DEFAULT_SSL_PROTOCOLS),
@@ -329,7 +339,8 @@ public class RuntimeServerConfiguration {
                         properties.getInt(prefix + "keepalivecount", keepaliveCount),
                         properties.getInt(prefix + "maxkeepaliverequests", maxKeepAliveRequests),
                         properties.getString(prefix + "forwarded", DEFAULT_FORWARDED_STRATEGY),
-                        properties.getValues(prefix + "trustedips", Set.of())
+                        properties.getValues(prefix + "trustedips", Set.of()),
+                        properties.getValues(prefix + "protocol", getDefaultHttpProtocols(ssl))
                 ));
             }
         }
@@ -402,7 +413,7 @@ public class RuntimeServerConfiguration {
             LOG.log(Level.INFO, "Configured connectionpool." + i + ": {0}", connectionPool);
         }
 
-        // dafault connection pool
+        // default connection pool
         defaultConnectionPool = new ConnectionPoolConfiguration(
                 "*", "*",
                 getMaxConnectionsPerEndpoint(),
@@ -470,7 +481,7 @@ public class RuntimeServerConfiguration {
         return requestFilters;
     }
 
-    NetworkListenerConfiguration getListener(NetworkListenerConfiguration.HostPort hostPort) {
+    NetworkListenerConfiguration getListener(HostPort hostPort) {
         return listeners
                 .stream()
                 .filter(s -> s.getHost().equalsIgnoreCase(hostPort.host()) && s.getPort() == hostPort.port())

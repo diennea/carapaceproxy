@@ -21,17 +21,21 @@ package org.carapaceproxy.core;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.handler.codec.http.*;
-
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpVersion;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
+import org.apache.http.HttpStatus;
 
 /**
  * Handles error pages loading
@@ -58,19 +62,30 @@ public class StaticContentsManager {
         contents.clear();
     }
 
-    public DefaultFullHttpResponse buildResponse(int code, String resource) {
-        if (code <= 0) {
-            code = 500;
-        }
-        DefaultFullHttpResponse res;
-        ByteBuf content = resource == null ? null : contents.computeIfAbsent(resource, StaticContentsManager::loadResource);
+    /**
+     * Build an HTTP response for the provided code and resource.
+     *
+     * @param code        the HTTP code;
+     *                    it results to {@value HttpStatus#SC_INTERNAL_SERVER_ERROR} if no code is provided,
+     *                    or {@value HttpStatus#SC_NOT_FOUND} if no content is loadable for the resource
+     * @param resource    the resource that identify the content to serve
+     * @param httpVersion the HTTP version to use
+     * @return the built response
+     */
+    public DefaultFullHttpResponse buildResponse(final int code, final String resource, final HttpVersion httpVersion) {
+        final var content = resource != null
+                ? contents.computeIfAbsent(resource, StaticContentsManager::loadResource)
+                : null;
+        final DefaultFullHttpResponse res;
+        final HttpResponseStatus httpStatus;
         if (content != null) {
-            content = content.retainedDuplicate();
-            int contentLength = content.readableBytes();
-            res = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(code), content);
-            res.headers().set(HttpHeaderNames.CONTENT_LENGTH, contentLength);
+            final var retainedContent = content.retainedDuplicate();
+            httpStatus = HttpResponseStatus.valueOf(code <= 0 ? HttpStatus.SC_INTERNAL_SERVER_ERROR : code);
+            res = new DefaultFullHttpResponse(httpVersion, httpStatus, retainedContent);
+            res.headers().set(HttpHeaderNames.CONTENT_LENGTH, retainedContent.readableBytes());
         } else {
-            res = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(404));
+            httpStatus = HttpResponseStatus.valueOf(HttpStatus.SC_NOT_FOUND);
+            res = new DefaultFullHttpResponse(httpVersion, httpStatus);
         }
         res.headers().set(HttpHeaderNames.CACHE_CONTROL, "no-cache");
         return res;
@@ -91,7 +106,7 @@ public class StaticContentsManager {
                 return Unpooled.wrappedBuffer(FileUtils.readFileToByteArray(new File(resource)));
             } else if (resource.startsWith(IN_MEMORY_RESOURCE)) {
                 resource = resource.substring(IN_MEMORY_RESOURCE.length());
-                return Unpooled.wrappedBuffer(resource.getBytes("UTF-8"));
+                return Unpooled.wrappedBuffer(resource.getBytes(StandardCharsets.UTF_8));
             } else {
                 throw new IOException("cannot load resource " + resource + ", path must start with " + FILE_RESOURCE + " or " + CLASSPATH_RESOURCE);
             }
