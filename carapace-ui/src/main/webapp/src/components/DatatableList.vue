@@ -24,7 +24,6 @@
             @filtered="onFiltered"
             @row-clicked="rowClicked"
             :class="['tall', { 'row-clickable': rowClicked }]">
-            <!-- This allows to forward b-table columns-value customization out of the component -->
             <template
                 v-for="field of fields"
                 v-slot:[`cell(${field.key})`]="data">
@@ -48,11 +47,22 @@ import {compareTimestamp} from '../lib/formatter.js';
 
 export default {
     props: {
-        fields: Array,
-        items: Array,
-        sortBy: String,
+        fields: {
+            type: Array,
+            required: true,
+        },
+        items: {
+            type: Array,
+            required: true,
+        },
+        sortBy: {
+            type: String,
+            required: false,
+            default: undefined,
+        },
         rowClicked: {
             type: Function,
+            required: false,
             default: () => {},
         },
     },

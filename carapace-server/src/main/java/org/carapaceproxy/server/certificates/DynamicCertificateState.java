@@ -30,7 +30,7 @@ public enum DynamicCertificateState {
     /** Certificate domain reported as unreachable for issuing/renewing */
     DOMAIN_UNREACHABLE,
 
-    /** For dns-challenge, wait for dns propagation */
+    /** For DNS-01 challenge, wait for DNS propagation before checking CA. */
     DNS_CHALLENGE_WAIT,
 
     /** Challenge verification by LE pending */

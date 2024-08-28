@@ -44,79 +44,46 @@ public abstract class APIUtils {
     private APIUtils() {
     }
 
-    /*
-     * Utilities for CertificatesResource
-     */
     public static String certificateStateToString(DynamicCertificateState state) {
-        if (state == null) {
-            return "unknown";
-        }
-        switch (state) {
-            case WAITING:
-                return "waiting"; // certificate waiting for issuing/renews
-            case DOMAIN_UNREACHABLE:
-                return "domain unreachable"; // certificate domain reported as unreachable for issuing/renewing
-            case DNS_CHALLENGE_WAIT:
-                return "dns-challenge-wait"; // dns challenge waiting to be visible before CA checking
-            case VERIFYING:
-                return "verifying"; // challenge verification by LE pending
-            case VERIFIED:
-                return "verified"; // challenge succeded
-            case ORDERING:
-                return "ordering"; // certificate order pending
-            case REQUEST_FAILED:
-                return "request failed"; // challenge/order failed
-            case AVAILABLE:
-                return "available";// certificate available(saved) and not expired
-            case EXPIRED:     // certificate expired
-                return "expired";
-            default:
-                return "unknown";
-        }
+        return switch (state) {
+            case null -> "unknown";
+            case WAITING -> "waiting";
+            case DOMAIN_UNREACHABLE -> "domain unreachable";
+            case DNS_CHALLENGE_WAIT -> "dns-challenge-wait";
+            case VERIFYING -> "verifying";
+            case VERIFIED -> "verified";
+            case ORDERING -> "ordering";
+            case REQUEST_FAILED -> "request failed";
+            case AVAILABLE -> "available";
+            case EXPIRED -> "expired";
+        };
     }
 
     public static DynamicCertificateState stringToCertificateState(String state) {
         if (state == null) {
             return null;
         }
-        switch (state.toLowerCase()) {
-            case "waiting":
-                return WAITING;
-            case "domain unreachable":
-                return DOMAIN_UNREACHABLE;
-            case "dns-challenge-wait":
-                return DNS_CHALLENGE_WAIT;
-            case "verifying":
-                return VERIFYING;
-            case "verified":
-                return VERIFIED;
-            case "ordering":
-                return ORDERING;
-            case "request failed":
-                return REQUEST_FAILED;
-            case "available":
-                return AVAILABLE;
-            case "expired":
-                return EXPIRED;
-            default:
-                return null;
-        }
+        return switch (state.toLowerCase()) {
+            case "waiting" -> WAITING;
+            case "domain unreachable" -> DOMAIN_UNREACHABLE;
+            case "dns-challenge-wait" -> DNS_CHALLENGE_WAIT;
+            case "verifying" -> VERIFYING;
+            case "verified" -> VERIFIED;
+            case "ordering" -> ORDERING;
+            case "request failed" -> REQUEST_FAILED;
+            case "available" -> AVAILABLE;
+            case "expired" -> EXPIRED;
+            default -> null;
+        };
     }
 
     public static String certificateModeToString(SSLCertificateConfiguration.CertificateMode mode) {
-        if (mode == null) {
-            return "unknown";
-        }
-        switch (mode) {
-            case STATIC:
-                return "static";
-            case ACME:
-                return "acme";
-            case MANUAL:
-                return "manual";
-            default:
-                return "unknown";
-        }
+        return switch (mode) {
+            case STATIC -> "static";
+            case ACME -> "acme";
+            case MANUAL -> "manual";
+            case null -> "unknown";
+        };
     }
 
     public static SSLCertificateConfiguration.CertificateMode stringToCertificateMode(String mode) {
