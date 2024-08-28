@@ -31,7 +31,7 @@
             {{opMessage}}
         </b-alert>
         <status-box
-            v-if="expiredCertificates.length > 0"
+            v-if="expiredCount > 0"
             title="These certificates are expired"
             status="warning">
             <ul>
@@ -40,6 +40,11 @@
                 </li>
             </ul>
         </status-box>
+        <br>
+        <status-box
+            v-if="unreachableCount > 0"
+            :title="`There are also ${unreachableCount} unreachable certificates`"
+            status="warning" />
         <datatable-list
             :fields="fields"
             :items="filteredCertificates"
