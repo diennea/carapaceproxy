@@ -153,12 +153,12 @@ public class Listeners {
         List<HostPort> listenersToRestart = new ArrayList<>();
         for (Map.Entry<HostPort, DisposableChannel> channel : listeningChannels.entrySet()) {
             HostPort key = channel.getKey();
-            NetworkListenerConfiguration actualListenerConfig = currentConfiguration.getListener(key);
+            NetworkListenerConfiguration currentListenerConfig = currentConfiguration.getListener(key);
             NetworkListenerConfiguration newConfigurationForListener = newConfiguration.getListener(key);
             if (newConfigurationForListener == null) {
                 LOG.log(Level.INFO, "listener: {0} is to be shut down", key);
                 listenersToStop.add(key);
-            } else if (!newConfigurationForListener.equals(actualListenerConfig)
+            } else if (!newConfigurationForListener.equals(currentListenerConfig)
                     || newConfiguration.getResponseCompressionThreshold() != currentConfiguration.getResponseCompressionThreshold()
                     || newConfiguration.getMaxHeaderSize() != currentConfiguration.getMaxHeaderSize()) {
                 LOG.log(Level.INFO, "listener: {0} is to be restarted", key);
@@ -212,7 +212,7 @@ public class Listeners {
                 .host(hostPort.host())
                 .port(hostPort.port())
                 .protocol(config.getProtocols().toArray(HttpProtocol[]::new))
-                .secure(new ListenerSslProviderBuilder(parent, basePath, currentConfiguration, config, hostPort))
+                .secure(new ListenerSslProviderBuilder(parent, currentConfiguration, config, hostPort))
                 .metrics(true, Function.identity())
                 .forwarded(ForwardedStrategy.of(config.getForwardedStrategy(), config.getTrustedIps()))
                 .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())
@@ -228,32 +228,10 @@ public class Listeners {
                         ? EpollChannelOption.TCP_KEEPCNT
                         : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), config.getKeepAliveCount())
                 .maxKeepAliveRequests(config.getMaxKeepAliveRequests())
-                .doOnChannelInit((observer, channel, remoteAddress) -> {
-                    channel.pipeline().addFirst("idleStateHandler", new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds()));
-                    /* if (config.isSsl()) {
-                        SniHandler sni = new SniHandler(listeningChannel) {
-                            @Override
-                            protected SslHandler newSslHandler(SslContext context, ByteBufAllocator allocator) {
-                                SslHandler handler = super.newSslHandler(context, allocator);
-                                if (currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported()) {
-                                    Certificate cert = (Certificate) context.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN)).get();
-                                    if (cert != null) {
-                                        try {
-                                            ReferenceCountedOpenSslEngine engine = (ReferenceCountedOpenSslEngine) handler.engine();
-                                            engine.setOcspResponse(parent.getOcspStaplingManager().getOcspResponseForCertificate(cert)); // setting proper ocsp response
-                                        } catch (IOException ex) {
-                                            LOG.log(Level.SEVERE, "Error setting OCSP response.", ex);
-                                        }
-                                    } else {
-                                        LOG.log(Level.SEVERE, "Cannot set OCSP response without the certificate");
-                                    }
-                                }
-                                return handler;
-                            }
-                        };
-                        channel.pipeline().addFirst(sni);
-                    } */
-                })
+                .doOnChannelInit((observer, channel, remoteAddress) -> channel.pipeline().addFirst(
+                        "idleStateHandler",
+                        new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds())
+                ))
                 .doOnConnection(conn -> {
                     CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
                     conn.channel().closeFuture().addListener(e -> CURRENT_CONNECTED_CLIENTS_GAUGE.dec());
