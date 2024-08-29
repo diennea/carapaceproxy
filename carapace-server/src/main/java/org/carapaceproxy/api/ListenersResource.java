@@ -19,17 +19,17 @@
  */
 package org.carapaceproxy.api;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import javax.servlet.ServletContext;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import lombok.Data;
-import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.server.config.NetworkListenerConfiguration;
+import org.carapaceproxy.server.config.HostPort;
+import reactor.netty.DisposableChannel;
 
 /**
  * Access to listeners
@@ -60,9 +60,11 @@ public class ListenersResource {
     public Map<String, ListenerBean> getAllListeners() {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
 
-        return server.getListeners().getListeningChannels().entrySet().stream().map(listener -> {
-            NetworkListenerConfiguration config = listener.getValue().getConfig();
-            int port = listener.getKey().port();
+        Map<String, ListenerBean> map = new HashMap<>();
+        for (Map.Entry<HostPort, DisposableChannel> hostPortDisposableChannelEntry : server.getListeners().getListeningChannels().entrySet()) {
+            // todo
+            /* NetworkListenerConfiguration config = hostPortDisposableChannelEntry.getValue().getConfig();
+            int port = hostPortDisposableChannelEntry.getKey().port();
             ListenerBean bean = new ListenerBean(
                     config.getHost(),
                     port,
@@ -70,10 +72,14 @@ public class ListenersResource {
                     config.getSslCiphers(),
                     config.getSslProtocols(),
                     config.getDefaultCertificate(),
-                    (int) listener.getValue().getTotalRequests().get()
+                    (int) hostPortDisposableChannelEntry.getValue().getTotalRequests().get()
             );
-            return Map.entry(EndpointKey.make(config.getHost(), port).getHostPort(), bean);
-        }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+            Map.Entry<String, ListenerBean> apply = Map.entry(EndpointKey.make(config.getHost(), port).getHostPort(), bean);
+            if (map.put(apply.getKey(), apply.getValue()) != null) {
+                throw new IllegalStateException("Duplicate key");
+            } */
+        }
+        return map;
     }
 
 }
