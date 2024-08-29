@@ -47,6 +47,7 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
+import reactor.netty.DisposableChannel;
 import reactor.netty.DisposableServer;
 import reactor.netty.FutureMono;
 import reactor.netty.http.HttpProtocol;
@@ -70,7 +71,7 @@ public class Listeners {
 
     private final HttpProxyServer parent;
     private final Map<String, SslContext> sslContexts = new ConcurrentHashMap<>();
-    private final Map<HostPort, ListeningChannel> listeningChannels = new ConcurrentHashMap<>();
+    private final Map<HostPort, DisposableChannel> listeningChannels = new ConcurrentHashMap<>();
     private final File basePath;
     private boolean started;
 
@@ -198,7 +199,6 @@ public class Listeners {
 
     private void bootListener(NetworkListenerConfiguration config) throws InterruptedException {
         HostPort hostPort = new HostPort(config.getHost(), config.getPort() + parent.getListenersOffsetPort());
-        ListeningChannel listeningChannel = new ListeningChannel(basePath, currentConfiguration, parent, sslContexts, hostPort, config);
         LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{hostPort.host(), String.valueOf(hostPort.port()), config.isSsl()});
 
         // Listener setup
@@ -206,7 +206,7 @@ public class Listeners {
                 .host(hostPort.host())
                 .port(hostPort.port())
                 .protocol(config.getProtocols().toArray(HttpProtocol[]::new))
-                .secure(new ListenerSslProviderBuilder(basePath, currentConfiguration, parent, hostPort, config))
+                .secure(new ListenerSslProviderBuilder(parent, basePath, currentConfiguration, config, hostPort))
                 .metrics(true, Function.identity())
                 .forwarded(ForwardedStrategy.of(config.getForwardedStrategy(), config.getTrustedIps()))
                 .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())
@@ -289,8 +289,7 @@ public class Listeners {
 
         // Listener startup
         DisposableServer channel = httpServer.bindNow(); // blocking
-        listeningChannel.setChannel(channel);
-        listeningChannels.put(hostPort, listeningChannel);
+        listeningChannels.put(hostPort, channel);
         LOG.log(Level.INFO, "started listener at {0}: {1}", new Object[]{hostPort, channel});
     }
 
