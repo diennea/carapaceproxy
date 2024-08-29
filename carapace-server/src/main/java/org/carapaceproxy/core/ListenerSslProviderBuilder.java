@@ -7,147 +7,146 @@ import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.OpenSslCachingX509KeyManagerFactory;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.util.AsyncMapping;
 import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
-import io.netty.util.concurrent.ImmediateEventExecutor;
+import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.Promise;
 import java.io.File;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
-import java.security.cert.Certificate;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.CertificateException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.logging.Level;
-import java.util.logging.Logger;
+import javax.annotation.Nullable;
 import javax.net.ssl.KeyManagerFactory;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.HostPort;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import reactor.netty.tcp.SslProvider;
 
 record ListenerSslProviderBuilder(
-        File basePath,
-        RuntimeServerConfiguration currentConfiguration,
         HttpProxyServer parent,
-        HostPort hostPort,
-        NetworkListenerConfiguration config
-) implements Consumer<SslProvider.SslContextSpec> {
-    private static final Logger LOG = Logger.getLogger(ListenerSslProviderBuilder.class.getName());
+        File basePath,
+        RuntimeServerConfiguration runtimeConfiguration,
+        NetworkListenerConfiguration listenerConfiguration,
+        HostPort hostPort
+) implements Consumer<SslProvider.SslContextSpec>, AsyncMapping<String, SslProvider> {
+    private static final Logger LOG = LoggerFactory.getLogger(ListenerSslProviderBuilder.class);
 
     @Override
     public void accept(final SslProvider.SslContextSpec sslContextSpec) {
-        final int port = hostPort.port();
-        final String sslCiphers = config.getSslCiphers();
-        SslContext sslContext;
+        final var actualPort = listenerConfiguration.getPort() + parent.getListenersOffsetPort();
+        final var hostPort = new HostPort(listenerConfiguration.getHost(), actualPort);
+        final SslContext sslContext;
         try {
-            SSLCertificateConfiguration certificate = Listeners.chooseCertificate(currentConfiguration, null, config.getDefaultCertificate());
-            Objects.requireNonNull(certificate, "Cannot use default cert for listener as '" + config.getDefaultCertificate() + "', available " + currentConfiguration.getCertificates().keySet());
-            // Try to find certificate data on db
-            byte[] keystoreContent = parent.getDynamicCertificatesManager().getCertificateForDomain(certificate.getId());
-            KeyStore keystore;
-            if (keystoreContent != null) {
-                LOG.log(Level.FINE, "start SSL with dynamic certificate id {0}, on listener {1}:{2}", new Object[]{certificate.getId(), config.getHost(), port});
-                keystore = loadKeyStoreData(keystoreContent, certificate.getPassword());
-            } else {
-                if (certificate.isDynamic()) { // fallback to default certificate
-                    certificate = currentConfiguration.getCertificates().get(config.getDefaultCertificate());
-                    if (certificate == null) {
-                        throw new ConfigurationNotValidException("Unable to boot SSL context for listener " + config.getHost() + ": no default certificate setup.").unchecked();
-                    }
-                }
-                LOG.log(Level.FINE, "start SSL with certificate id {0}, on listener {1}:{2} file={3}",
-                        new Object[]{certificate.getId(), config.getHost(), port, certificate.getFile()}
-                );
-                keystore = loadKeyStoreFromFile(certificate.getFile(), certificate.getPassword(), basePath);
+            final var defaultSslConfiguration = getDefaultSslConfiguration();
+            if (defaultSslConfiguration == null) {
+                throw new ConfigurationNotValidException("Unable to boot SSL context for listener " + listenerConfiguration.getHost() + ": no default certificate setup.");
             }
-            KeyManagerFactory keyFactory = new OpenSslCachingX509KeyManagerFactory(KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()));
-            keyFactory.init(keystore, certificate.getPassword().toCharArray());
-
-            List<String> ciphers = null;
-            if (sslCiphers != null && !sslCiphers.isEmpty()) {
-                LOG.log(Level.FINE, "required sslCiphers {0}", sslCiphers);
-                ciphers = Arrays.asList(sslCiphers.split(","));
-            }
+            final var keyStore = getKeyStore(hostPort, defaultSslConfiguration);
+            final var enableOcsp = runtimeConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported();
             sslContext = SslContextBuilder
-                    .forServer(keyFactory)
-                    .enableOcsp(currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported())
+                    .forServer(getKeyFactory(keyStore, defaultSslConfiguration))
+                    .enableOcsp(enableOcsp)
                     .trustManager(parent.getTrustStoreManager().getTrustManagerFactory())
                     .sslProvider(io.netty.handler.ssl.SslProvider.OPENSSL)
-                    .protocols(config.getSslProtocols())
-                    .ciphers(ciphers).build();
-
-            Certificate[] chain = readChainFromKeystore(keystore);
-            if (currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported() && chain.length > 0) {
+                    .protocols(listenerConfiguration.getSslProtocols())
+                    .ciphers(getSslCiphers())
+                    .build();
+            final var chain = readChainFromKeystore(keyStore);
+            if (enableOcsp && chain.length > 0) {
                 parent.getOcspStaplingManager().addCertificateForStapling(chain);
                 Attribute<Object> attr = sslContext.attributes().attr(AttributeKey.valueOf(Listeners.OCSP_CERTIFICATE_CHAIN));
                 attr.set(chain[0]);
             }
-        } catch (IOException | GeneralSecurityException err) {
-            LOG.log(Level.SEVERE, "ERROR booting listener " + err, err);
-            throw new ConfigurationNotValidException(err).unchecked();
+        } catch (final ConfigurationNotValidException | IOException | GeneralSecurityException e) {
+            // todo
+            throw new RuntimeException(e);
         }
-        sslContextSpec.sslContext(sslContext).setSniAsyncMappings((String sniHostname) -> {
-            final var promise = ImmediateEventExecutor.INSTANCE.<SslProvider>newPromise();
-            return CompletableFuture.supplyAsync(() -> {
-                SSLCertificateConfiguration certificate = Listeners.chooseCertificate(currentConfiguration, null, config.getDefaultCertificate());
-                if (certificate == null) {
-                    return promise.setFailure(new ConfigurationNotValidException(
-                            "cannot find a certificate for snihostname " + sniHostname
-                            + ", with default cert for listener as '" + config.getDefaultCertificate()
-                            + "', available " + currentConfiguration.getCertificates().keySet()));
-                }
-                final SslContext mappedSslContext;
-                try {
-                    // Try to find certificate data on db
-                    byte[] keystoreContent = parent.getDynamicCertificatesManager().getCertificateForDomain(certificate.getId());
-                    KeyStore keystore;
-                    if (keystoreContent != null) {
-                        LOG.log(Level.FINE, "start SSL with dynamic certificate id {0}, on listener {1}:{2}", new Object[]{certificate.getId(), config.getHost(), port});
-                        keystore = loadKeyStoreData(keystoreContent, certificate.getPassword());
-                    } else {
-                        if (certificate.isDynamic()) { // fallback to default certificate
-                            certificate = currentConfiguration.getCertificates().get(config.getDefaultCertificate());
-                            if (certificate == null) {
-                                return promise.setFailure(new ConfigurationNotValidException("Unable to boot SSL context for listener " + config.getHost() + ": no default certificate setup."));
-                            }
-                        }
-                        LOG.log(Level.FINE, "start SSL with certificate id {0}, on listener {1}:{2} file={3}",
-                                new Object[]{certificate.getId(), config.getHost(), port, certificate.getFile()}
-                        );
-                        keystore = loadKeyStoreFromFile(certificate.getFile(), certificate.getPassword(), basePath);
-                    }
-                    KeyManagerFactory keyFactory = new OpenSslCachingX509KeyManagerFactory(KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()));
-                    keyFactory.init(keystore, certificate.getPassword().toCharArray());
+        sslContextSpec.sslContext(sslContext).setSniAsyncMappings(this);
+    }
 
-                    List<String> ciphers = null;
-                    if (sslCiphers != null && !sslCiphers.isEmpty()) {
-                        LOG.log(Level.FINE, "required sslCiphers {0}", sslCiphers);
-                        ciphers = Arrays.asList(sslCiphers.split(","));
-                    }
-                    mappedSslContext = SslContextBuilder
-                            .forServer(keyFactory)
-                            .enableOcsp(currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported())
-                            .trustManager(parent.getTrustStoreManager().getTrustManagerFactory())
-                            .sslProvider(io.netty.handler.ssl.SslProvider.OPENSSL)
-                            .protocols(config.getSslProtocols())
-                            .ciphers(ciphers).build();
+    @Nullable
+    private SSLCertificateConfiguration getDefaultSslConfiguration() {
+        return runtimeConfiguration.getCertificates().get(getDefaultCertificate());
+    }
 
-                    Certificate[] chain = readChainFromKeystore(keystore);
-                    if (currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported() && chain.length > 0) {
-                        parent.getOcspStaplingManager().addCertificateForStapling(chain);
-                        Attribute<Object> attr = mappedSslContext.attributes().attr(AttributeKey.valueOf(Listeners.OCSP_CERTIFICATE_CHAIN));
-                        attr.set(chain[0]);
-                    }
-                } catch (IOException | GeneralSecurityException err) {
-                    LOG.log(Level.SEVERE, "ERROR booting listener " + err, err);
-                    return promise.setFailure(new ConfigurationNotValidException(err));
+    private KeyStore getKeyStore(final HostPort hostPort, final SSLCertificateConfiguration sslConfiguration) throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException, ConfigurationNotValidException, UnrecoverableKeyException {
+        final var keyStoreContent = getCertificateForDomain(sslConfiguration);
+        final KeyStore keyStore;
+        if (keyStoreContent != null) {
+            LOG.debug("start SSL with dynamic certificate id {}, on listener {}", sslConfiguration.getId(), hostPort);
+            keyStore = loadKeyStoreData(keyStoreContent, sslConfiguration.getPassword());
+        } else {
+            LOG.debug("start SSL with certificate id {}, on listener {} file={}", sslConfiguration.getId(), hostPort, sslConfiguration.getFile());
+            keyStore = loadKeyStoreFromFile(sslConfiguration.getFile(), sslConfiguration.getPassword(), basePath);
+        }
+        return keyStore;
+    }
+
+    private static KeyManagerFactory getKeyFactory(final KeyStore keyStore, final SSLCertificateConfiguration defaultSslConfiguration) throws NoSuchAlgorithmException, KeyStoreException, UnrecoverableKeyException {
+        final var keyFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        final var keyFactoryInstance = new OpenSslCachingX509KeyManagerFactory(keyFactory);
+        keyFactoryInstance.init(keyStore, defaultSslConfiguration.getPassword().toCharArray());
+        return keyFactoryInstance;
+    }
+
+    private List<String> getSslCiphers() {
+        final var sslCiphers = listenerConfiguration.getSslCiphers();
+        if (sslCiphers != null && !sslCiphers.isEmpty()) {
+            LOG.debug("required sslCiphers {}", sslCiphers);
+            return Arrays.asList(sslCiphers.split(","));
+        }
+        return null;
+    }
+
+    private String getDefaultCertificate() {
+        return listenerConfiguration.getDefaultCertificate();
+    }
+
+    private byte[] getCertificateForDomain(final SSLCertificateConfiguration sslConfiguration) {
+        return parent.getDynamicCertificatesManager().getCertificateForDomain(sslConfiguration.getId());
+    }
+
+    @Override
+    public Future<SslProvider> map(final String sniHostname, final Promise<SslProvider> promise) {
+        try {
+            final var key = computeKey(sniHostname);
+            LOG.debug("resolve SNI mapping {}, key: {}", sniHostname, key);
+            try {
+                final var defaultCertificate = listenerConfiguration.getDefaultCertificate();
+                final var chosen = Listeners.chooseCertificate(runtimeConfiguration, sniHostname, defaultCertificate);
+                if (chosen == null) {
+                    throw new ConfigurationNotValidException("cannot find a certificate for snihostname " + sniHostname
+                                                             + ", with default cert for listener as '" + defaultCertificate
+                                                             + "', available " + runtimeConfiguration.getCertificates().keySet());
                 }
-                return promise.setSuccess(SslProvider.builder().sslContext(mappedSslContext).build());
-            });
-        });
+                SslContext sslContext = bootSslContext(listenerConfiguration, chosen);
+                // todo
+            } catch (RuntimeException err) {
+                if (err.getCause() instanceof ConfigurationNotValidException) {
+                    throw (ConfigurationNotValidException) err.getCause();
+                }
+                throw new ConfigurationNotValidException(err);
+            }
+        } catch (ConfigurationNotValidException err) {
+            LOG.log(Level.SEVERE, "Error booting certificate for SNI hostname {0}, on listener {1}", new Object[]{sniHostname, listenerConfiguration});
+            return promise.setFailure(err);
+        }
+    }
+
+    private String computeKey(final String sniHostname) {
+        // todo there is a problem: we are using hostPort here, but we are messing on the port somewhere else
+        return listenerConfiguration.getHost() + ":" + hostPort.port() + "+" + sniHostname;
     }
 }
