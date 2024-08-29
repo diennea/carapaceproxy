@@ -19,27 +19,51 @@
  */
 package org.carapaceproxy.core;
 
+import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreData;
+import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
+import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
 import static reactor.netty.ConnectionObserver.State.CONNECTED;
+import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.socket.nio.NioChannelOption;
+import io.netty.handler.ssl.OpenSsl;
+import io.netty.handler.ssl.OpenSslCachingX509KeyManagerFactory;
+import io.netty.handler.ssl.ReferenceCountedOpenSslEngine;
+import io.netty.handler.ssl.SniHandler;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslHandler;
+import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.timeout.IdleStateHandler;
+import io.netty.util.Attribute;
+import io.netty.util.AttributeKey;
+import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.Promise;
+import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import java.io.File;
+import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
+import java.security.cert.Certificate;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.net.ssl.KeyManagerFactory;
 import jdk.net.ExtendedSocketOptions;
+import lombok.Data;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.HostPort;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -47,8 +71,8 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
-import reactor.netty.DisposableChannel;
 import reactor.netty.DisposableServer;
+import reactor.netty.FutureMono;
 import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.server.HttpServer;
 
@@ -63,21 +87,22 @@ import reactor.netty.http.server.HttpServer;
 public class Listeners {
 
     public static final String OCSP_CERTIFICATE_CHAIN = "ocsp-certificate";
+
     private static final Logger LOG = Logger.getLogger(Listeners.class.getName());
+
     private static final Gauge CURRENT_CONNECTED_CLIENTS_GAUGE = PrometheusUtils.createGauge(
             "clients", "current_connected", "currently connected clients"
     ).register();
 
+    private static final Counter TOTAL_REQUESTS_PER_LISTENER_COUNTER = PrometheusUtils.createCounter(
+            "listeners", "requests_total", "total requests", "listener"
+    ).register();
+
     private final HttpProxyServer parent;
     private final Map<String, SslContext> sslContexts = new ConcurrentHashMap<>();
-    private final Map<HostPort, DisposableChannel> listeningChannels = new ConcurrentHashMap<>();
+    private final Map<HostPort, ListeningChannel> listeningChannels = new ConcurrentHashMap<>();
     private final File basePath;
     private boolean started;
-
-    public RuntimeServerConfiguration getCurrentConfiguration() {
-        // todo lock it up more
-        return currentConfiguration;
-    }
 
     private RuntimeServerConfiguration currentConfiguration;
 
@@ -88,14 +113,14 @@ public class Listeners {
     }
 
     public int getLocalPort() {
-        for (final var channel : listeningChannels.values()) {
-            InetSocketAddress addr = (InetSocketAddress) channel.address();
+        for (ListeningChannel c : listeningChannels.values()) {
+            InetSocketAddress addr = (InetSocketAddress) c.getChannel().address();
             return addr.getPort();
         }
         return -1;
     }
 
-    public Map<HostPort, DisposableChannel> getListeningChannels() {
+    public Map<HostPort, ListeningChannel> getListeningChannels() {
         return listeningChannels;
     }
 
@@ -116,11 +141,10 @@ public class Listeners {
     }
 
     private void stopListener(HostPort hostport) throws InterruptedException {
-        DisposableChannel channel = listeningChannels.remove(hostport);
+        ListeningChannel channel = listeningChannels.remove(hostport);
         if (channel != null) {
-            channel.disposeNow(Duration.ofSeconds(10));
-            // todo
-            // FutureMono.from(channel.getConfig().getGroup().close()).block(Duration.ofSeconds(10));
+            channel.channel.disposeNow(Duration.ofSeconds(10));
+            FutureMono.from(channel.getConfig().getGroup().close()).block(Duration.ofSeconds(10));
         }
     }
 
@@ -151,21 +175,20 @@ public class Listeners {
         // stop dropped listeners, start new one
         List<HostPort> listenersToStop = new ArrayList<>();
         List<HostPort> listenersToRestart = new ArrayList<>();
-        for (Map.Entry<HostPort, DisposableChannel> channel : listeningChannels.entrySet()) {
+        for (Map.Entry<HostPort, ListeningChannel> channel : listeningChannels.entrySet()) {
             HostPort key = channel.getKey();
-            NetworkListenerConfiguration currentListenerConfig = currentConfiguration.getListener(key);
+            NetworkListenerConfiguration actualListenerConfig = currentConfiguration.getListener(key);
             NetworkListenerConfiguration newConfigurationForListener = newConfiguration.getListener(key);
             if (newConfigurationForListener == null) {
                 LOG.log(Level.INFO, "listener: {0} is to be shut down", key);
                 listenersToStop.add(key);
-            } else if (!newConfigurationForListener.equals(currentListenerConfig)
+            } else if (!newConfigurationForListener.equals(actualListenerConfig)
                     || newConfiguration.getResponseCompressionThreshold() != currentConfiguration.getResponseCompressionThreshold()
                     || newConfiguration.getMaxHeaderSize() != currentConfiguration.getMaxHeaderSize()) {
                 LOG.log(Level.INFO, "listener: {0} is to be restarted", key);
                 listenersToRestart.add(key);
             }
-            // todo
-            // channel.getValue().clear();
+            channel.getValue().clear();
         }
         List<HostPort> listenersToStart = new ArrayList<>();
         for (NetworkListenerConfiguration config : newConfiguration.getListeners()) {
@@ -205,6 +228,7 @@ public class Listeners {
 
     private void bootListener(NetworkListenerConfiguration config) throws InterruptedException {
         HostPort hostPort = new HostPort(config.getHost(), config.getPort() + parent.getListenersOffsetPort());
+        ListeningChannel listeningChannel = new ListeningChannel(hostPort, config);
         LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{hostPort.host(), String.valueOf(hostPort.port()), config.isSsl()});
 
         // Listener setup
@@ -212,7 +236,11 @@ public class Listeners {
                 .host(hostPort.host())
                 .port(hostPort.port())
                 .protocol(config.getProtocols().toArray(HttpProtocol[]::new))
-                .secure(new ListenerSslProviderBuilder(parent, currentConfiguration, config, hostPort))
+                /*
+                  // .secure()
+                  todo: to enable H2, see config.isSsl() & snimappings
+                  see https://projectreactor.io/docs/netty/release/reference/index.html#_server_name_indication_3
+                 */
                 .metrics(true, Function.identity())
                 .forwarded(ForwardedStrategy.of(config.getForwardedStrategy(), config.getTrustedIps()))
                 .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())
@@ -228,10 +256,32 @@ public class Listeners {
                         ? EpollChannelOption.TCP_KEEPCNT
                         : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), config.getKeepAliveCount())
                 .maxKeepAliveRequests(config.getMaxKeepAliveRequests())
-                .doOnChannelInit((observer, channel, remoteAddress) -> channel.pipeline().addFirst(
-                        "idleStateHandler",
-                        new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds())
-                ))
+                .doOnChannelInit((observer, channel, remoteAddress) -> {
+                    channel.pipeline().addFirst("idleStateHandler", new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds()));
+                    if (config.isSsl()) {
+                        SniHandler sni = new SniHandler(listeningChannel) {
+                            @Override
+                            protected SslHandler newSslHandler(SslContext context, ByteBufAllocator allocator) {
+                                SslHandler handler = super.newSslHandler(context, allocator);
+                                if (currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported()) {
+                                    Certificate cert = (Certificate) context.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN)).get();
+                                    if (cert != null) {
+                                        try {
+                                            ReferenceCountedOpenSslEngine engine = (ReferenceCountedOpenSslEngine) handler.engine();
+                                            engine.setOcspResponse(parent.getOcspStaplingManager().getOcspResponseForCertificate(cert)); // setting proper ocsp response
+                                        } catch (IOException ex) {
+                                            LOG.log(Level.SEVERE, "Error setting OCSP response.", ex);
+                                        }
+                                    } else {
+                                        LOG.log(Level.SEVERE, "Cannot set OCSP response without the certificate");
+                                    }
+                                }
+                                return handler;
+                            }
+                        };
+                        channel.pipeline().addFirst(sni);
+                    }
+                })
                 .doOnConnection(conn -> {
                     CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
                     conn.channel().closeFuture().addListener(e -> CURRENT_CONNECTED_CLIENTS_GAUGE.dec());
@@ -250,11 +300,10 @@ public class Listeners {
                         + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")));
                     }
 
-                    // todo
-                    // ListeningChannel channel = listeningChannels.get(hostPort);
-                    // if (channel != null) {
-                    //     channel.incRequests();
-                    // }
+                    ListeningChannel channel = listeningChannels.get(hostPort);
+                    if (channel != null) {
+                        channel.incRequests();
+                    }
                     ProxyRequest proxyRequest = new ProxyRequest(request, response, hostPort);
                     return parent.getProxyRequestsManager().processRequest(proxyRequest);
                 });
@@ -274,8 +323,128 @@ public class Listeners {
 
         // Listener startup
         DisposableServer channel = httpServer.bindNow(); // blocking
-        listeningChannels.put(hostPort, channel);
+        listeningChannel.setChannel(channel);
+        listeningChannels.put(hostPort, listeningChannel);
         LOG.log(Level.INFO, "started listener at {0}: {1}", new Object[]{hostPort, channel});
+    }
+
+    @Data
+    public final class ListeningChannel implements io.netty.util.AsyncMapping<String, SslContext> {
+
+        private final HostPort hostPort;
+        private final NetworkListenerConfiguration config;
+        private final Counter.Child totalRequests;
+        private final Map<String, SslContext> listenerSslContexts = new HashMap<>();
+        DisposableServer channel;
+
+        public ListeningChannel(HostPort hostPort, NetworkListenerConfiguration config) {
+            this.hostPort = hostPort;
+            this.config = config;
+            totalRequests = TOTAL_REQUESTS_PER_LISTENER_COUNTER.labels(hostPort.host() + "_" + hostPort.port());
+        }
+
+        public void incRequests() {
+            totalRequests.inc();
+        }
+
+        public void clear() {
+            this.listenerSslContexts.clear();
+        }
+
+        @Override
+        public Future<SslContext> map(String sniHostname, Promise<SslContext> promise) {
+            try {
+                String key = config.getHost() + ":" + hostPort.port() + "+" + sniHostname;
+                if (LOG.isLoggable(Level.FINER)) {
+                    LOG.log(Level.FINER, "resolve SNI mapping {0}, key: {1}", new Object[]{sniHostname, key});
+                }
+                try {
+                    SslContext sslContext = listenerSslContexts.get(key);
+                    if (sslContext != null) {
+                        return promise.setSuccess(sslContext);
+                    }
+
+                    sslContext = sslContexts.computeIfAbsent(key, (k) -> {
+                        try {
+                            SSLCertificateConfiguration choosen = chooseCertificate(sniHostname, config.getDefaultCertificate());
+                            if (choosen == null) {
+                                throw new ConfigurationNotValidException("cannot find a certificate for snihostname " + sniHostname
+                                        + ", with default cert for listener as '" + config.getDefaultCertificate()
+                                        + "', available " + currentConfiguration.getCertificates().keySet());
+                            }
+                            return bootSslContext(config, choosen);
+                        } catch (ConfigurationNotValidException ex) {
+                            throw new RuntimeException(ex);
+                        }
+                    });
+                    listenerSslContexts.put(key, sslContext);
+
+                    return promise.setSuccess(sslContext);
+                } catch (RuntimeException err) {
+                    if (err.getCause() instanceof ConfigurationNotValidException) {
+                        throw (ConfigurationNotValidException) err.getCause();
+                    } else {
+                        throw new ConfigurationNotValidException(err);
+                    }
+                }
+            } catch (ConfigurationNotValidException err) {
+                LOG.log(Level.SEVERE, "Error booting certificate for SNI hostname {0}, on listener {1}", new Object[]{sniHostname, config});
+                return promise.setFailure(err);
+            }
+        }
+
+        private SslContext bootSslContext(NetworkListenerConfiguration listener, SSLCertificateConfiguration certificate) throws ConfigurationNotValidException {
+            int port = listener.getPort() + parent.getListenersOffsetPort();
+            String sslCiphers = listener.getSslCiphers();
+
+            try {
+                // Try to find certificate data on db
+                byte[] keystoreContent = parent.getDynamicCertificatesManager().getCertificateForDomain(certificate.getId());
+                KeyStore keystore;
+                if (keystoreContent != null) {
+                    LOG.log(Level.FINE, "start SSL with dynamic certificate id {0}, on listener {1}:{2}", new Object[]{certificate.getId(), listener.getHost(), port});
+                    keystore = loadKeyStoreData(keystoreContent, certificate.getPassword());
+                } else {
+                    if (certificate.isDynamic()) { // fallback to default certificate
+                        certificate = currentConfiguration.getCertificates().get(listener.getDefaultCertificate());
+                        if (certificate == null) {
+                            throw new ConfigurationNotValidException("Unable to boot SSL context for listener " + listener.getHost() + ": no default certificate setup.");
+                        }
+                    }
+                    LOG.log(Level.FINE, "start SSL with certificate id {0}, on listener {1}:{2} file={3}",
+                            new Object[]{certificate.getId(), listener.getHost(), port, certificate.getFile()}
+                    );
+                    keystore = loadKeyStoreFromFile(certificate.getFile(), certificate.getPassword(), basePath);
+                }
+                KeyManagerFactory keyFactory = new OpenSslCachingX509KeyManagerFactory(KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()));
+                keyFactory.init(keystore, certificate.getPassword().toCharArray());
+
+                List<String> ciphers = null;
+                if (sslCiphers != null && !sslCiphers.isEmpty()) {
+                    LOG.log(Level.FINE, "required sslCiphers {0}", sslCiphers);
+                    ciphers = Arrays.asList(sslCiphers.split(","));
+                }
+                SslContext sslContext = SslContextBuilder
+                        .forServer(keyFactory)
+                        .enableOcsp(currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported())
+                        .trustManager(parent.getTrustStoreManager().getTrustManagerFactory())
+                        .sslProvider(SslProvider.OPENSSL)
+                        .protocols(listener.getSslProtocols())
+                        .ciphers(ciphers).build();
+
+                Certificate[] chain = readChainFromKeystore(keystore);
+                if (currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported() && chain != null && chain.length > 0) {
+                    parent.getOcspStaplingManager().addCertificateForStapling(chain);
+                    Attribute<Object> attr = sslContext.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN));
+                    attr.set(chain[0]);
+                }
+
+                return sslContext;
+            } catch (IOException | GeneralSecurityException err) {
+                LOG.log(Level.SEVERE, "ERROR booting listener " + err, err);
+                throw new ConfigurationNotValidException(err);
+            }
+        }
     }
 
     public SSLCertificateConfiguration chooseCertificate(String sniHostname, String defaultCertificate) {
@@ -314,18 +483,21 @@ public class Listeners {
         if (c.getSubjectAltNames() == null || c.getSubjectAltNames().isEmpty()) {
             if (exact) {
                 return !c.isWildcard() && hostname.equals(c.getHostname());
+            } else {
+                return c.isWildcard() && hostname.endsWith(c.getHostname());
             }
-            return c.isWildcard() && hostname.endsWith(c.getHostname());
+        } else {
+            for (var name: c.getNames()) {
+                final var wildcard = CertificatesUtils.isWildcard(name);
+                if (exact && !wildcard && hostname.equals(name)) {
+                    return true;
+                }
+                if (!exact && wildcard && hostname.endsWith(CertificatesUtils.removeWildcard(name))) {
+                    return true;
+                }
+            }
+            return false;
         }
-        for (var name: c.getNames()) {
-            final var wildcard = CertificatesUtils.isWildcard(name);
-            if (exact && !wildcard && hostname.equals(name)) {
-                return true;
-            }
-            if (!exact && wildcard && hostname.endsWith(CertificatesUtils.removeWildcard(name))) {
-                return true;
-            }
-        }
-        return false;
     }
+
 }
