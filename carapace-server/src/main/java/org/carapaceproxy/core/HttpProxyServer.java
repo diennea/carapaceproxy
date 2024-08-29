@@ -63,8 +63,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.servlet.DispatcherType;
 import lombok.Data;
 import lombok.Getter;
@@ -101,10 +99,11 @@ import org.carapaceproxy.user.SimpleUserRealm;
 import org.carapaceproxy.user.UserRealm;
 import org.eclipse.jetty.security.ConstraintMapping;
 import org.eclipse.jetty.security.ConstraintSecurityHandler;
+import org.eclipse.jetty.server.CustomRequestLog;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.HttpConfiguration;
 import org.eclipse.jetty.server.HttpConnectionFactory;
-import org.eclipse.jetty.server.NCSARequestLog;
+import org.eclipse.jetty.server.RequestLogWriter;
 import org.eclipse.jetty.server.SecureRequestCustomizer;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
@@ -117,16 +116,21 @@ import org.eclipse.jetty.util.security.Constraint;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.webapp.WebAppContext;
 import org.glassfish.jersey.servlet.ServletContainer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The main server implementation of Carapace proxy.
+ * <br>
+ * The server configurations, e.g., the route-to-listener mapping, is implemented by {@link RuntimeServerConfiguration}
+ * <br>
+ * The strategy over incoming requests handling is implemented by the {@link Listeners} class.
  *
- * @see Listeners The logic handling incomping requests
- * @see RuntimeServerConfiguration The server confingurations, e.g., the route-to-listener mapping
+ * @see RuntimeServerConfiguration
+ * @see Listeners
  */
 public class HttpProxyServer implements AutoCloseable {
-
-    private static final Logger LOG = Logger.getLogger(HttpProxyServer.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(HttpProxyServer.class);
 
     @Getter
     private final Listeners listeners;
@@ -268,7 +272,7 @@ public class HttpProxyServer implements AutoCloseable {
         this.cachePoolAllocator = usePooledByteBufAllocator
                 ? new PooledByteBufAllocator(true) : new UnpooledByteBufAllocator(true);
         this.cacheByteBufMemoryUsageMetric = new CacheByteBufMemoryUsageMetric(this);
-        //Best practice is to reuse EventLoopGroup
+        // Best practice is to reuse EventLoopGroup
         // http://normanmaurer.me/presentations/2014-facebook-eng-netty/slides.html#25.0
         this.eventLoopGroup = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
     }
@@ -351,7 +355,7 @@ public class HttpProxyServer implements AutoCloseable {
             WebAppContext webApp = new WebAppContext(webUi.getAbsolutePath(), "/ui");
             contexts.addHandler(webApp);
         } else {
-            LOG.log(Level.SEVERE, "Cannot find {0} directory. Web UI will not be deployed", webUi.getAbsolutePath());
+            LOG.error("Cannot find {} directory. Web UI will not be deployed", webUi.getAbsolutePath());
         }
 
         ServletContextHandler context = new ServletContextHandler(ServletContextHandler.GZIP);
@@ -366,14 +370,13 @@ public class HttpProxyServer implements AutoCloseable {
         context.addServlet(new ServletHolder(new MetricsServlet()), "/metrics");
         context.addServlet(new ServletHolder(new MetricsServlet(prometheusRegistry.getPrometheusRegistry())), "/micrometrics");
 
-        NCSARequestLog requestLog = new NCSARequestLog();
-        requestLog.setFilename(adminAccessLogPath);
-        requestLog.setFilenameDateFormat("yyyy-MM-dd");
-        requestLog.setRetainDays(adminLogRetentionDays);
-        requestLog.setAppend(true);
-        requestLog.setExtended(true);
-        requestLog.setLogCookies(false);
-        requestLog.setLogTimeZone(adminAccessLogTimezone);
+        RequestLogWriter logWriter = new RequestLogWriter(adminAccessLogPath);
+        logWriter.setFilenameDateFormat("yyyy-MM-dd");
+        logWriter.setRetainDays(adminLogRetentionDays);
+        logWriter.setAppend(true);
+        logWriter.setTimeZone(adminAccessLogTimezone);
+
+        CustomRequestLog requestLog = new CustomRequestLog(logWriter, CustomRequestLog.EXTENDED_NCSA_FORMAT);
         RequestLogHandler requestLogHandler = new RequestLogHandler();
         requestLogHandler.setRequestLog(requestLog);
         requestLogHandler.setHandler(context);
@@ -392,12 +395,12 @@ public class HttpProxyServer implements AutoCloseable {
         }
 
         if (adminServerHttpPort > 0) {
-            LOG.log(Level.INFO, "Base HTTP Admin UI url: http://{0}:{1}/ui", new Object[]{adminAdvertisedServerHost, adminServerHttpPort});
-            LOG.log(Level.INFO, "Base HTTP Admin API url: http://{0}:{1}/api", new Object[]{adminAdvertisedServerHost, adminServerHttpPort});
+            LOG.info("Base HTTP Admin UI url: http://{}:{}/ui", adminAdvertisedServerHost, adminServerHttpPort);
+            LOG.info("Base HTTP Admin API url: http://{}:{}/api", adminAdvertisedServerHost, adminServerHttpPort);
         }
         if (adminServerHttpsPort > 0) {
-            LOG.log(Level.INFO, "Base HTTPS Admin UI url: https://{0}:{1}/ui", new Object[]{adminAdvertisedServerHost, adminServerHttpsPort});
-            LOG.log(Level.INFO, "Base HTTPS Admin API url: https://{0}:{1}/api", new Object[]{adminAdvertisedServerHost, adminServerHttpsPort});
+            LOG.info("Base HTTPS Admin UI url: https://{}:{}/ui", adminAdvertisedServerHost, adminServerHttpsPort);
+            LOG.info("Base HTTPS Admin API url: https://{}:{}/api", adminAdvertisedServerHost, adminServerHttpsPort);
         }
 
         if (adminServerHttpPort > 0) {
@@ -405,12 +408,11 @@ public class HttpProxyServer implements AutoCloseable {
         } else {
             metricsUrl = "https://" + adminAdvertisedServerHost + ":" + adminServerHttpsPort + "/metrics";
         }
-        LOG.log(Level.INFO, "Prometheus Metrics url: {0}", metricsUrl);
-
+        LOG.info("Prometheus Metrics url: {}", metricsUrl);
     }
 
     /**
-     * Add constrain to disable http TRACE method
+     * Add constraint to disable http TRACE method
      *
      * @param handler
      */
@@ -461,7 +463,7 @@ public class HttpProxyServer implements AutoCloseable {
         try {
             io.prometheus.client.hotspot.DefaultExports.initialize();
         } catch (IllegalArgumentException exc) {
-            //default metrics already initialized...ok
+            // default metrics already initialized... ok
         }
     }
 
@@ -477,7 +479,7 @@ public class HttpProxyServer implements AutoCloseable {
             try {
                 adminserver.stop();
             } catch (Exception err) {
-                LOG.log(Level.SEVERE, "Error while stopping admin server", err);
+                LOG.error("Error while stopping admin server", err);
             } finally {
                 adminserver = null;
             }
@@ -497,7 +499,7 @@ public class HttpProxyServer implements AutoCloseable {
         staticContentsManager.close();
 
         if (dynamicConfigurationStore != null) {
-            // this will also shutdown embedded database
+            // this will also shut down the embedded database
             dynamicConfigurationStore.close();
         }
     }
@@ -535,7 +537,8 @@ public class HttpProxyServer implements AutoCloseable {
             throw new IllegalStateException("server already started");
         }
 
-        readClusterConfiguration(bootConfigurationStore); // need to be always first thing to do (loads cluster setup)
+        // needs to be always the first thing to do (because it loads the cluster setup)
+        readClusterConfiguration(bootConfigurationStore);
         String dynamicConfigurationType = bootConfigurationStore.getString("config.type", cluster ? "database" : "file");
         switch (dynamicConfigurationType) {
             case "file":
@@ -556,13 +559,13 @@ public class HttpProxyServer implements AutoCloseable {
 
         // "static" configuration cannot change without a reboot
         applyStaticConfiguration(bootConfigurationStore);
-        // need to be done after static configuration loading in order to know peer info
+        // need to be done after static configuration loading to know peer info
         initGroupMembership();
 
         try {
             // apply configuration
             // this can cause database configuration to be overwritten with
-            // configuration from service configuration file
+            // configuration from the service configuration file
             applyDynamicConfiguration(null, true);
         } catch (ConfigurationChangeInProgressException impossible) {
             throw new IllegalStateException(impossible);
@@ -589,20 +592,20 @@ public class HttpProxyServer implements AutoCloseable {
         adminLogRetentionDays = properties.getInt("admin.accesslog.retention.days", adminLogRetentionDays);
         userRealmClassname = properties.getClassname("userrealm.class", SimpleUserRealm.class.getName());
 
-        LOG.log(Level.INFO, "http.admin.enabled={0}", adminServerEnabled);
-        LOG.log(Level.INFO, "http.admin.port={0}", adminServerHttpPort);
-        LOG.log(Level.INFO, "http.admin.host={0}", adminServerHost);
-        LOG.log(Level.INFO, "https.admin.port={0}", adminServerHttpsPort);
-        LOG.log(Level.INFO, "https.admin.sslcertfile={0}", adminServerCertFile);
-        LOG.log(Level.INFO, "admin.advertised.host={0}", adminAdvertisedServerHost);
-        LOG.log(Level.INFO, "listener.offset.port={0}", listenersOffsetPort);
-        LOG.log(Level.INFO, "userrealm.class={0}", userRealmClassname);
-        LOG.log(Level.INFO, "cache.allocator.usepooledbytebufallocator={0}", this.usePooledByteBufAllocator);
+        LOG.info("http.admin.enabled={}", adminServerEnabled);
+        LOG.info("http.admin.port={}", adminServerHttpPort);
+        LOG.info("http.admin.host={}", adminServerHost);
+        LOG.info("https.admin.port={}", adminServerHttpsPort);
+        LOG.info("https.admin.sslcertfile={}", adminServerCertFile);
+        LOG.info("admin.advertised.host={}", adminAdvertisedServerHost);
+        LOG.info("listener.offset.port={}", listenersOffsetPort);
+        LOG.info("userrealm.class={}", userRealmClassname);
+        LOG.info("cache.allocator.usepooledbytebufallocator={}", usePooledByteBufAllocator);
 
         String awsAccessKey = properties.getString("aws.accesskey", null);
-        LOG.log(Level.INFO, "aws.accesskey={0}", awsAccessKey);
+        LOG.info("aws.accesskey={}", awsAccessKey);
         String awsSecretKey = properties.getString("aws.secretkey", null);
-        LOG.log(Level.INFO, "aws.secretkey={0}", awsSecretKey);
+        // LOG.info("aws.secretkey={}", awsSecretKey);
         this.dynamicCertificatesManager.initAWSClient(awsAccessKey, awsSecretKey);
     }
 
@@ -802,12 +805,12 @@ public class HttpProxyServer implements AutoCloseable {
                 zkSecure = staticConfiguration.getBoolean("zkSecure", false);
                 zkTimeout = staticConfiguration.getInt("zkTimeout", 40_000);
                 zkProperties = new Properties(staticConfiguration.asProperties("zookeeper."));
-                LOG.log(Level.INFO, "mode=cluster, zkAddress=''{0}'',zkTimeout={1}, peer.id=''{2}'', zkSecure: {3}", new Object[]{zkAddress, zkTimeout, peerId, zkSecure});
-                zkProperties.forEach((k, v) -> LOG.log(Level.INFO, "additional zkclient property: {0}={1}", new Object[]{k, v}));
+                LOG.info("mode=cluster, zkAddress=''{}'',zkTimeout={}, peer.id=''{}'', zkSecure: {}", zkAddress, zkTimeout, peerId, zkSecure);
+                zkProperties.forEach((k, v) -> LOG.info("additional zkclient property: {}={}", k, v));
                 break;
             case "standalone":
                 cluster = false;
-                LOG.log(Level.INFO, "mode=standalone");
+                LOG.info("mode=standalone");
                 break;
             default:
                 throw new ConfigurationNotValidException("Invalid mode '" + mode + "', only 'cluster' or 'standalone'");
@@ -839,22 +842,22 @@ public class HttpProxyServer implements AutoCloseable {
 
         @Override
         public void eventFired(String eventId, Map<String, Object> data) {
-            LOG.log(Level.INFO, "Configuration changed");
+            LOG.info("Configuration changed");
             try {
                 dynamicConfigurationStore.reload();
                 applyDynamicConfiguration(null, true);
             } catch (Throwable err) {
-                LOG.log(Level.SEVERE, "Cannot apply new configuration", err);
+                LOG.error("Cannot apply new configuration", err);
             }
         }
 
         @Override
         public void reconnected() {
-            LOG.log(Level.INFO, "Configuration listener - reloading configuration after ZK reconnection");
+            LOG.info("Configuration listener - reloading configuration after ZK reconnection");
             try {
                 applyDynamicConfiguration(null, true);
             } catch (Throwable err) {
-                LOG.log(Level.SEVERE, "Cannot apply new configuration", err);
+                LOG.error("Cannot apply new configuration", err);
             }
         }
 
