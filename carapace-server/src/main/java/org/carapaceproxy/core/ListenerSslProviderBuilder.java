@@ -36,7 +36,6 @@ import reactor.netty.tcp.SslProvider;
 
 record ListenerSslProviderBuilder(
         HttpProxyServer parent,
-        File basePath,
         RuntimeServerConfiguration runtimeConfiguration,
         NetworkListenerConfiguration listenerConfiguration,
         HostPort hostPort
@@ -45,6 +44,10 @@ record ListenerSslProviderBuilder(
 
     @Override
     public void accept(final SslProvider.SslContextSpec sslContextSpec) {
+        if (!listenerConfiguration.isSsl()) {
+            // We do NOT want to alter the SslContextSpec if SSL is not enabled in our configurations
+            return;
+        }
         final var actualPort = listenerConfiguration.getPort() + parent.getListenersOffsetPort();
         final var hostPort = new HostPort(listenerConfiguration.getHost(), actualPort);
         final SslContext sslContext;
@@ -67,6 +70,8 @@ record ListenerSslProviderBuilder(
                 parent.getOcspStaplingManager().addCertificateForStapling(chain);
                 Attribute<Object> attr = sslContext.attributes().attr(AttributeKey.valueOf(Listeners.OCSP_CERTIFICATE_CHAIN));
                 attr.set(chain[0]);
+                // todo i'm not sure if `.enableOcsp(isEnableOcsp())` and this part are enough,
+                //  or if I should plug a `SniHandler` into the channel pipeline like we did in `Listeners`
             }
         } catch (final ConfigurationNotValidException | IOException | GeneralSecurityException e) {
             // todo
@@ -92,7 +97,7 @@ record ListenerSslProviderBuilder(
             keyStore = loadKeyStoreData(keyStoreContent, sslConfiguration.getPassword());
         } else {
             LOG.debug("start SSL with certificate id {}, on listener {} file={}", sslConfiguration.getId(), hostPort, sslConfiguration.getFile());
-            keyStore = loadKeyStoreFromFile(sslConfiguration.getFile(), sslConfiguration.getPassword(), basePath);
+            keyStore = loadKeyStoreFromFile(sslConfiguration.getFile(), sslConfiguration.getPassword(), basePath());
         }
         return keyStore;
     }
@@ -150,7 +155,7 @@ record ListenerSslProviderBuilder(
                             }
                         }
                         LOG.debug("start SSL with certificate id {}, on listener {}:{} file={}", chosen.getId(), listenerConfiguration.getHost(), port, chosen.getFile());
-                        keystore = loadKeyStoreFromFile(chosen.getFile(), chosen.getPassword(), basePath);
+                        keystore = loadKeyStoreFromFile(chosen.getFile(), chosen.getPassword(), basePath());
                     }
                     KeyManagerFactory keyFactory = new OpenSslCachingX509KeyManagerFactory(KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()));
                     keyFactory.init(keystore, chosen.getPassword().toCharArray());
@@ -186,6 +191,10 @@ record ListenerSslProviderBuilder(
             LOG.error("Error booting certificate for SNI hostname {}, on listener {}", sniHostname, listenerConfiguration);
             return promise.setFailure(err);
         }
+    }
+
+    private File basePath() {
+        return parent.getBasePath();
     }
 
     private String computeKey(final String sniHostname) {

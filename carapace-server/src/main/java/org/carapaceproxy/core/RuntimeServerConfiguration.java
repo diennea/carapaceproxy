@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.annotation.Nullable;
 import javax.net.ssl.SSLContext;
 import lombok.Data;
 import org.carapaceproxy.configstore.ConfigurationStore;
@@ -492,11 +493,8 @@ public class RuntimeServerConfiguration {
         return requestFilters;
     }
 
-    NetworkListenerConfiguration getListener(HostPort hostPort) {
-        return listeners
-                .stream()
-                .filter(s -> s.getHost().equalsIgnoreCase(hostPort.host()) && s.getPort() == hostPort.port())
-                .findFirst()
-                .orElse(null);
+    @Nullable
+    NetworkListenerConfiguration getListener(final HostPort hostPort) {
+        return listeners.stream().filter(s -> s.getKey().equals(hostPort)).findAny().orElse(null);
     }
 }
