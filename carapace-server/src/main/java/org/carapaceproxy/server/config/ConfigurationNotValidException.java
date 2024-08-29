@@ -32,15 +32,4 @@ public class ConfigurationNotValidException extends Exception {
         super(cause);
     }
 
-    public RuntimeException unchecked() {
-        return new ConfigurationNotValidRuntimeException();
-    }
-
-    private final class ConfigurationNotValidRuntimeException extends RuntimeException {
-
-        public ConfigurationNotValidRuntimeException() {
-            super(ConfigurationNotValidException.this.getMessage(), ConfigurationNotValidException.this.getCause());
-        }
-
-    }
 }
