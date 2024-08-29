@@ -49,7 +49,6 @@ import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
 import reactor.netty.DisposableChannel;
 import reactor.netty.DisposableServer;
-import reactor.netty.FutureMono;
 import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.server.HttpServer;
 
@@ -75,6 +74,11 @@ public class Listeners {
     private final File basePath;
     private boolean started;
 
+    public RuntimeServerConfiguration getCurrentConfiguration() {
+        // todo lock it up more
+        return currentConfiguration;
+    }
+
     private RuntimeServerConfiguration currentConfiguration;
 
     public Listeners(HttpProxyServer parent) {
@@ -84,14 +88,14 @@ public class Listeners {
     }
 
     public int getLocalPort() {
-        for (ListeningChannel c : listeningChannels.values()) {
-            InetSocketAddress addr = (InetSocketAddress) c.getChannel().address();
+        for (final var channel : listeningChannels.values()) {
+            InetSocketAddress addr = (InetSocketAddress) channel.address();
             return addr.getPort();
         }
         return -1;
     }
 
-    public Map<HostPort, ListeningChannel> getListeningChannels() {
+    public Map<HostPort, DisposableChannel> getListeningChannels() {
         return listeningChannels;
     }
 
@@ -112,10 +116,11 @@ public class Listeners {
     }
 
     private void stopListener(HostPort hostport) throws InterruptedException {
-        ListeningChannel channel = listeningChannels.remove(hostport);
+        DisposableChannel channel = listeningChannels.remove(hostport);
         if (channel != null) {
-            channel.channel.disposeNow(Duration.ofSeconds(10));
-            FutureMono.from(channel.getConfig().getGroup().close()).block(Duration.ofSeconds(10));
+            channel.disposeNow(Duration.ofSeconds(10));
+            // todo
+            // FutureMono.from(channel.getConfig().getGroup().close()).block(Duration.ofSeconds(10));
         }
     }
 
@@ -146,7 +151,7 @@ public class Listeners {
         // stop dropped listeners, start new one
         List<HostPort> listenersToStop = new ArrayList<>();
         List<HostPort> listenersToRestart = new ArrayList<>();
-        for (Map.Entry<HostPort, ListeningChannel> channel : listeningChannels.entrySet()) {
+        for (Map.Entry<HostPort, DisposableChannel> channel : listeningChannels.entrySet()) {
             HostPort key = channel.getKey();
             NetworkListenerConfiguration actualListenerConfig = currentConfiguration.getListener(key);
             NetworkListenerConfiguration newConfigurationForListener = newConfiguration.getListener(key);
@@ -159,7 +164,8 @@ public class Listeners {
                 LOG.log(Level.INFO, "listener: {0} is to be restarted", key);
                 listenersToRestart.add(key);
             }
-            channel.getValue().clear();
+            // todo
+            // channel.getValue().clear();
         }
         List<HostPort> listenersToStart = new ArrayList<>();
         for (NetworkListenerConfiguration config : newConfiguration.getListeners()) {
@@ -266,10 +272,11 @@ public class Listeners {
                         + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")));
                     }
 
-                    ListeningChannel channel = listeningChannels.get(hostPort);
-                    if (channel != null) {
-                        channel.incRequests();
-                    }
+                    // todo
+                    // ListeningChannel channel = listeningChannels.get(hostPort);
+                    // if (channel != null) {
+                    //     channel.incRequests();
+                    // }
                     ProxyRequest proxyRequest = new ProxyRequest(request, response, hostPort);
                     return parent.getProxyRequestsManager().processRequest(proxyRequest);
                 });
