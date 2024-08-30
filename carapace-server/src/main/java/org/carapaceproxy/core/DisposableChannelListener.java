@@ -229,10 +229,12 @@ public class DisposableChannelListener {
      * @return the actual port from the {@link DisposableChannel}
      */
     public int getActualPort() {
-        if (this.listeningChannel.address() instanceof InetSocketAddress address) {
-            return address.getPort();
+        if (this.listeningChannel != null) {
+            if (this.listeningChannel.address() instanceof InetSocketAddress address) {
+                return address.getPort();
+            }
+            LOG.warn("Unexpected listening channel address type {}", this.listeningChannel.address().getClass());
         }
-        LOG.warn("Unexpected listening channel address type {}", this.listeningChannel.address().getClass());
         return hostPort.port();
     }
 
