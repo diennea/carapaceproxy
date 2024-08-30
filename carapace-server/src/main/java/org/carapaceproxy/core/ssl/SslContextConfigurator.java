@@ -19,6 +19,7 @@ import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
 import javax.net.ssl.KeyManagerFactory;
@@ -40,17 +41,19 @@ public final class SslContextConfigurator implements Consumer<SslProvider.SslCon
     private final RuntimeServerConfiguration runtimeConfiguration;
     private final NetworkListenerConfiguration listenerConfiguration;
     private final HostPort hostPort;
+    private final ConcurrentMap<String, SslContext> sslContextsCache;
 
     public SslContextConfigurator(
-            HttpProxyServer parent,
-            RuntimeServerConfiguration runtimeConfiguration,
-            NetworkListenerConfiguration listenerConfiguration,
-            HostPort hostPort
+            final HttpProxyServer parent,
+            final NetworkListenerConfiguration listenerConfiguration,
+            final HostPort hostPort,
+            final ConcurrentMap<String, SslContext> sslContextsCache
     ) {
         this.parent = parent;
-        this.runtimeConfiguration = runtimeConfiguration;
+        this.runtimeConfiguration = parent.getCurrentConfiguration();
         this.listenerConfiguration = listenerConfiguration;
         this.hostPort = hostPort;
+        this.sslContextsCache = sslContextsCache;
     }
 
     @Override
@@ -59,8 +62,6 @@ public final class SslContextConfigurator implements Consumer<SslProvider.SslCon
             // We do NOT want to alter the SslContextSpec if SSL is not enabled in our configurations
             return;
         }
-        final var actualPort = listenerConfiguration.getPort() + parent.getListenersOffsetPort();
-        final var hostPort = new HostPort(listenerConfiguration.getHost(), actualPort);
         final SslContext sslContext;
         try {
             final var defaultSslConfiguration = getDefaultSslConfiguration();
@@ -68,6 +69,7 @@ public final class SslContextConfigurator implements Consumer<SslProvider.SslCon
                 throw new ConfigurationNotValidException("Unable to boot SSL context for listener " + listenerConfiguration.getHost() + ": no default certificate setup.");
             }
             final var keyStore = getKeyStore(hostPort, defaultSslConfiguration);
+            // todo compute key and store into cache
             sslContext = SslContextBuilder
                     .forServer(getKeyFactory(keyStore, defaultSslConfiguration))
                     .enableOcsp(isEnableOcsp())
@@ -85,7 +87,6 @@ public final class SslContextConfigurator implements Consumer<SslProvider.SslCon
                 //  or if I should plug a `SniHandler` into the channel pipeline like we did in `Listeners`
             }
         } catch (final ConfigurationNotValidException | IOException | GeneralSecurityException e) {
-            // todo
             throw new RuntimeException(e);
         }
         sslContextSpec.sslContext(sslContext).setSniAsyncMappings(new SniMapper(parent, runtimeConfiguration, listenerConfiguration, hostPort));
@@ -104,7 +105,7 @@ public final class SslContextConfigurator implements Consumer<SslProvider.SslCon
             keyStore = loadKeyStoreData(keyStoreContent, sslConfiguration.getPassword());
         } else {
             LOG.debug("start SSL with certificate id {}, on listener {} file={}", sslConfiguration.getId(), hostPort, sslConfiguration.getFile());
-            keyStore = loadKeyStoreFromFile(sslConfiguration.getFile(), sslConfiguration.getPassword(), basePath());
+            keyStore = loadKeyStoreFromFile(sslConfiguration.getFile(), sslConfiguration.getPassword(), getBasePath());
         }
         return keyStore;
     }
@@ -137,28 +138,7 @@ public final class SslContextConfigurator implements Consumer<SslProvider.SslCon
         return parent.getDynamicCertificatesManager().getCertificateForDomain(sslConfiguration.getId());
     }
 
-    private File basePath() {
+    private File getBasePath() {
         return parent.getBasePath();
     }
-
-    private String computeKey(final String sniHostname) {
-        return listenerConfiguration.getHost() + ":" + hostPort.port() + "+" + sniHostname;
-    }
-
-    public HttpProxyServer parent() {
-        return parent;
-    }
-
-    public RuntimeServerConfiguration runtimeConfiguration() {
-        return runtimeConfiguration;
-    }
-
-    public NetworkListenerConfiguration listenerConfiguration() {
-        return listenerConfiguration;
-    }
-
-    public HostPort hostPort() {
-        return hostPort;
-    }
-
 }

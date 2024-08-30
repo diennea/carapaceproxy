@@ -47,6 +47,7 @@ public class ListenersMap {
     private final ConcurrentMap<String, SslContext> sslContexts = new ConcurrentHashMap<>();
     private final ConcurrentMap<HostPort, DisposableChannelListener> listeningChannels = new ConcurrentHashMap<>();
     private boolean started;
+    private ConcurrentMap<String, SslContext> sslContextsCache;
 
     public ListenersMap(final HttpProxyServer parent) {
         this.parent = parent;
@@ -74,7 +75,7 @@ public class ListenersMap {
      * @throws InterruptedException if it is interrupted while starting or stopping a listener
      */
     public void reloadConfiguration() throws InterruptedException {
-        // todo handle SSLContexts?
+        sslContextsCache.clear();
 
         final var existingListeners = Set.copyOf(this.listeningChannels.values());
         this.listeningChannels.clear();
@@ -91,7 +92,7 @@ public class ListenersMap {
             final var hostPort = networkConfiguration.getKey();
             if (!this.listeningChannels.containsKey(hostPort)) {
                 LOG.info("listener: {} is to be started", hostPort);
-                final var listener = new DisposableChannelListener(hostPort, this.parent, PrometheusListenerStats.INSTANCE);
+                final var listener = new DisposableChannelListener(hostPort, this.parent, PrometheusListenerStats.INSTANCE, sslContextsCache);
                 this.listeningChannels.put(hostPort, listener);
                 if (started) {
                     listener.start();
