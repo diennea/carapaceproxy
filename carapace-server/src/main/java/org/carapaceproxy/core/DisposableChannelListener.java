@@ -173,6 +173,8 @@ public class DisposableChannelListener {
     public void stop() {
         if (this.isStarted()) {
             this.listeningChannel.disposeNow(Duration.ofSeconds(10));
+            // todo: to enable along with CURRENT_CONNECTED_CLIENTS_GAUGE
+            // FutureMono.from(this.configuration.getGroup().close()).block(Duration.ofSeconds(10));
         }
     }
 
