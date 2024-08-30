@@ -20,14 +20,12 @@
 package org.carapaceproxy.core;
 
 import io.netty.handler.ssl.SslContext;
-import io.prometheus.client.Counter;
-import io.prometheus.client.Gauge;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import org.carapaceproxy.core.stats.PrometheusListenerStats;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.HostPort;
-import org.carapaceproxy.core.stats.PrometheusUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,20 +37,11 @@ import org.slf4j.LoggerFactory;
  *
  * @author enrico.olivelli
  */
-public class ListenersMap /* extends AbstractMap<HostPort, DisposableChannelListener> */ {
-    // todo remember to replace `extends AbstractMap` with `implement` interface `ConcurrentMap`
+public class ListenersMap {
 
     public static final String OCSP_CERTIFICATE_CHAIN = "ocsp-certificate";
 
     private static final Logger LOG = LoggerFactory.getLogger(ListenersMap.class);
-
-    private static final Gauge CURRENT_CONNECTED_CLIENTS_GAUGE = PrometheusUtils.createGauge(
-            "clients", "current_connected", "currently connected clients"
-    ).register();
-
-    private static final Counter TOTAL_REQUESTS_PER_LISTENER_COUNTER = PrometheusUtils.createCounter(
-            "listeners", "requests_total", "total requests", "listener"
-    ).register();
 
     private final HttpProxyServer parent;
     private final ConcurrentMap<String, SslContext> sslContexts = new ConcurrentHashMap<>();
@@ -102,7 +91,7 @@ public class ListenersMap /* extends AbstractMap<HostPort, DisposableChannelList
             final var hostPort = networkConfiguration.getKey();
             if (!this.listeningChannels.containsKey(hostPort)) {
                 LOG.info("listener: {} is to be started", hostPort);
-                final var listener = new DisposableChannelListener(hostPort, this.parent);
+                final var listener = new DisposableChannelListener(hostPort, this.parent, PrometheusListenerStats.INSTANCE);
                 this.listeningChannels.put(hostPort, listener);
                 if (started) {
                     listener.start();
@@ -110,10 +99,5 @@ public class ListenersMap /* extends AbstractMap<HostPort, DisposableChannelList
             }
         }
     }
-
-    /* @Override
-    public Set<Entry<HostPort, DisposableChannelListener>> entrySet() {
-        throw new UnsupportedOperationException( *//* todo *//* );
-    } */
 
 }
