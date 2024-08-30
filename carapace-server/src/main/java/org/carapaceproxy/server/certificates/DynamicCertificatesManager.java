@@ -681,7 +681,7 @@ public class DynamicCertificatesManager implements Runnable {
             }
             var oldCertificates = this.certificates;
             this.certificates = newCertificates; // only certificates/domains specified in the config have to be managed.
-            server.getListeners().reloadCurrentConfiguration();
+            server.getListeners().reloadConfiguration();
             // storing certificates on local path
             storeLocalCertificates(newCertificates.values(), oldCertificates);
         } catch (GeneralSecurityException | MalformedURLException | InterruptedException e) {

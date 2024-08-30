@@ -64,7 +64,12 @@ public class ListenersMap {
 
     public void stop() {
         for (final var channel : listeningChannels.values()) {
-            channel.stop();
+            try {
+                channel.stop();
+            } catch (InterruptedException ex) {
+                LOG.error("Interrupted while stopping a listener", ex);
+                Thread.currentThread().interrupt();
+            }
         }
         listeningChannels.clear();
     }

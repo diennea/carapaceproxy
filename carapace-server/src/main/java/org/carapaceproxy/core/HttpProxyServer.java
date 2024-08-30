@@ -631,7 +631,7 @@ public class HttpProxyServer implements AutoCloseable {
         }
         currentConfiguration.addListener(configuration);
         try {
-            listeners.reloadConfiguration(currentConfiguration);
+            listeners.reloadConfiguration();
         } catch (InterruptedException ex) {
             throw new IllegalStateException(ex);
         }
@@ -644,7 +644,7 @@ public class HttpProxyServer implements AutoCloseable {
         }
         currentConfiguration.addCertificate(sslCertificateConfiguration);
         try {
-            listeners.reloadConfiguration(currentConfiguration);
+            listeners.reloadConfiguration();
         } catch (InterruptedException ex) {
             throw new IllegalStateException(ex);
         }
@@ -757,7 +757,7 @@ public class HttpProxyServer implements AutoCloseable {
             this.dynamicCertificatesManager.reloadConfiguration(newConfiguration);
             this.trustStoreManager.reloadConfiguration(newConfiguration);
             this.ocspStaplingManager.reloadConfiguration(newConfiguration);
-            this.listeners.reloadConfiguration(newConfiguration);
+            this.listeners.reloadConfiguration();
             this.cache.reloadConfiguration(newConfiguration);
             this.requestsLogger.reloadConfiguration(newConfiguration);
             this.realm = newRealm;
