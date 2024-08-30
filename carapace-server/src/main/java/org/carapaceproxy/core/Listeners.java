@@ -52,10 +52,10 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -63,6 +63,7 @@ import javax.net.ssl.KeyManagerFactory;
 import jdk.net.ExtendedSocketOptions;
 import lombok.Data;
 import org.carapaceproxy.core.ssl.CertificatesUtils;
+import org.carapaceproxy.core.ssl.SslContextConfigurator;
 import org.carapaceproxy.core.stats.ListenerStats;
 import org.carapaceproxy.core.stats.PrometheusListenerStats;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
@@ -90,8 +91,8 @@ public class Listeners {
     private static final Logger LOG = Logger.getLogger(Listeners.class.getName());
 
     private final HttpProxyServer parent;
-    private final Map<String, SslContext> sslContexts = new ConcurrentHashMap<>();
-    private final Map<HostPort, ListeningChannel> listeningChannels = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, SslContext> sslContexts = new ConcurrentHashMap<>();
+    private final ConcurrentMap<HostPort, ListeningChannel> listeningChannels = new ConcurrentHashMap<>();
     private final File basePath;
     private final ListenerStats stats;
     private boolean started;
@@ -181,7 +182,6 @@ public class Listeners {
                 LOG.log(Level.INFO, "listener: {0} is to be restarted", key);
                 listenersToRestart.add(key);
             }
-            channel.getValue().clear();
         }
         List<HostPort> listenersToStart = new ArrayList<>();
         for (NetworkListenerConfiguration config : newConfiguration.getListeners()) {
@@ -229,11 +229,7 @@ public class Listeners {
                 .host(hostPort.host())
                 .port(hostPort.port())
                 .protocol(config.getProtocols().toArray(HttpProtocol[]::new))
-                /*
-                  // .secure()
-                  todo: to enable H2, see config.isSsl() & snimappings
-                  see https://projectreactor.io/docs/netty/release/reference/index.html#_server_name_indication_3
-                 */
+                .secure(new SslContextConfigurator(parent, config, hostPort, sslContexts))
                 .metrics(true, Function.identity())
                 .forwarded(ForwardedStrategy.of(config.getForwardedStrategy(), config.getTrustedIps()))
                 .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())
@@ -251,6 +247,7 @@ public class Listeners {
                 .maxKeepAliveRequests(config.getMaxKeepAliveRequests())
                 .doOnChannelInit((observer, channel, remoteAddress) -> {
                     channel.pipeline().addFirst("idleStateHandler", new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds()));
+                    // todo check if it is necessary for OCSP stapling
                     if (config.isSsl()) {
                         SniHandler sni = new SniHandler(listeningChannel) {
                             @Override
@@ -327,7 +324,6 @@ public class Listeners {
         private final HostPort hostPort;
         private final NetworkListenerConfiguration config;
         private final ListenerStats.StatCounter totalRequests;
-        private final Map<String, SslContext> listenerSslContexts = new HashMap<>();
         private DisposableServer channel;
 
         public ListeningChannel(HostPort hostPort, NetworkListenerConfiguration config) {
@@ -340,10 +336,6 @@ public class Listeners {
             totalRequests.increment();
         }
 
-        public void clear() {
-            this.listenerSslContexts.clear();
-        }
-
         @Override
         public Future<SslContext> map(String sniHostname, Promise<SslContext> promise) {
             try {
@@ -352,16 +344,12 @@ public class Listeners {
                     LOG.log(Level.FINER, "resolve SNI mapping {0}, key: {1}", new Object[]{sniHostname, key});
                 }
                 try {
-                    SslContext sslContext = listenerSslContexts.get(key);
-                    if (sslContext != null) {
-                        return promise.setSuccess(sslContext);
-                    }
-
-                    sslContext = sslContexts.computeIfAbsent(key, (k) -> {
+                    return promise.setSuccess(sslContexts.computeIfAbsent(key, (k) -> {
                         try {
                             SSLCertificateConfiguration choosen = chooseCertificate(sniHostname, config.getDefaultCertificate());
                             if (choosen == null) {
-                                throw new ConfigurationNotValidException("cannot find a certificate for snihostname " + sniHostname
+                                throw new ConfigurationNotValidException(
+                                        "cannot find a certificate for snihostname " + sniHostname
                                         + ", with default cert for listener as '" + config.getDefaultCertificate()
                                         + "', available " + currentConfiguration.getCertificates().keySet());
                             }
@@ -369,10 +357,7 @@ public class Listeners {
                         } catch (ConfigurationNotValidException ex) {
                             throw new RuntimeException(ex);
                         }
-                    });
-                    listenerSslContexts.put(key, sslContext);
-
-                    return promise.setSuccess(sslContext);
+                    }));
                 } catch (RuntimeException err) {
                     if (err.getCause() instanceof ConfigurationNotValidException) {
                         throw (ConfigurationNotValidException) err.getCause();
@@ -426,7 +411,7 @@ public class Listeners {
                         .ciphers(ciphers).build();
 
                 Certificate[] chain = readChainFromKeystore(keystore);
-                if (currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported() && chain != null && chain.length > 0) {
+                if (currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported() && chain.length > 0) {
                     parent.getOcspStaplingManager().addCertificateForStapling(chain);
                     Attribute<Object> attr = sslContext.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN));
                     attr.set(chain[0]);

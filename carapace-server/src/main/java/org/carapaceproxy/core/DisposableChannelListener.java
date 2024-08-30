@@ -6,11 +6,13 @@ import io.netty.channel.ChannelOption;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.socket.nio.NioChannelOption;
+import io.netty.handler.ssl.SslContext;
 import io.netty.handler.timeout.IdleStateHandler;
 import java.io.File;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
 import jdk.net.ExtendedSocketOptions;
 import org.carapaceproxy.core.ssl.SslContextConfigurator;
@@ -43,14 +45,16 @@ public class DisposableChannelListener {
     private final HttpProxyServer parent;
     private final HostPort hostPort;
     private final NetworkListenerConfiguration configuration;
+    private final ListenerStats stats;
+    private final ConcurrentMap<String, SslContext> sslContextsCache;
     private DisposableChannel listeningChannel;
-    private ListenerStats stats;
 
-    public DisposableChannelListener(final HostPort hostPort, final HttpProxyServer parent, final ListenerStats stats) {
+    public DisposableChannelListener(final HostPort hostPort, final HttpProxyServer parent, final ListenerStats stats, final ConcurrentMap<String, SslContext> sslContextsCache) {
         this.parent = parent;
         this.hostPort = hostPort;
         this.configuration = getCurrentConfiguration().getListener(hostPort);
         requireNonNull(this.configuration, "Parent server configuration doesn't define any listener for " + hostPort);
+        this.sslContextsCache = sslContextsCache;
         this.listeningChannel = null;
         this.stats = stats;
     }
@@ -78,7 +82,7 @@ public class DisposableChannelListener {
                 .host(hostPort.host())
                 .port(hostPort.port())
                 .protocol(config.getProtocols().toArray(HttpProtocol[]::new))
-                .secure(new SslContextConfigurator(parent, getCurrentConfiguration(), config, hostPort))
+                .secure(new SslContextConfigurator(parent, config, hostPort, sslContextsCache))
                 .metrics(true, Function.identity())
                 .forwarded(ForwardedStrategy.of(config.getForwardedStrategy(), config.getTrustedIps()))
                 .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())
@@ -161,7 +165,7 @@ public class DisposableChannelListener {
             return null;
         }
         LOG.info("listener: {} is to be restarted", hostPort);
-        return new DisposableChannelListener(hostPort, parent, stats);
+        return new DisposableChannelListener(hostPort, parent, stats, sslContextsCache);
     }
 
     /**
