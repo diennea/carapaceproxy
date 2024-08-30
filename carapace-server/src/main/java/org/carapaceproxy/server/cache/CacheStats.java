@@ -22,7 +22,7 @@ package org.carapaceproxy.server.cache;
 import com.google.common.annotations.VisibleForTesting;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
-import org.carapaceproxy.core.stats.PrometheusUtils;
+import org.carapaceproxy.utils.PrometheusUtils;
 
 /**
  * Overall statistics about cache

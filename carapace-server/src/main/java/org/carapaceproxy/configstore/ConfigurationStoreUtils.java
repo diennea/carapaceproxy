@@ -28,8 +28,8 @@ import java.security.cert.Certificate;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
-import static org.carapaceproxy.core.ssl.CertificatesUtils.createKeystore;
-import static org.carapaceproxy.core.ssl.CertificatesUtils.readChainFromKeystore;
+import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
+import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
 
 public final class ConfigurationStoreUtils {
 

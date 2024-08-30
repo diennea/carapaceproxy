@@ -32,10 +32,10 @@ import java.security.cert.Certificate;
 import java.util.Arrays;
 import org.junit.Test;
 import org.shredzone.acme4j.util.KeyPairUtils;
-import static org.carapaceproxy.core.ssl.CertificatesUtils.compareChains;
+import static org.carapaceproxy.utils.CertificatesUtils.compareChains;
 import java.security.cert.X509Certificate;
 import java.util.Date;
-import org.carapaceproxy.core.ssl.CertificatesUtils;
+import org.carapaceproxy.utils.CertificatesUtils;
 
 /**
  *
