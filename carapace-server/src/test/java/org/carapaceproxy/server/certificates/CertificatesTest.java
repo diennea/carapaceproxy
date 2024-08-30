@@ -28,7 +28,7 @@ import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.D
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.carapaceproxy.utils.CertificatesTestUtils.uploadCertificate;
-import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
+import static org.carapaceproxy.core.ssl.CertificatesUtils.createKeystore;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
@@ -82,7 +82,7 @@ import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.certificates.ocsp.OcspStaplingManager;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
-import org.carapaceproxy.utils.CertificatesUtils;
+import org.carapaceproxy.core.ssl.CertificatesUtils;
 import org.carapaceproxy.utils.HttpTestUtils;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.RawHttpClient.HttpResponse;

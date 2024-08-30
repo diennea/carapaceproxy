@@ -28,7 +28,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.Data;
-import org.carapaceproxy.utils.CertificatesUtils;
+import org.carapaceproxy.core.ssl.CertificatesUtils;
 
 /**
  * Configuration for a TLS Certificate
@@ -38,7 +38,7 @@ import org.carapaceproxy.utils.CertificatesUtils;
 @Data
 public class SSLCertificateConfiguration {
 
-    public enum CertificateMode {
+    public static enum CertificateMode {
         STATIC, ACME, MANUAL
     }
 
