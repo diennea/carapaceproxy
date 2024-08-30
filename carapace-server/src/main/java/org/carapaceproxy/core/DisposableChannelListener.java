@@ -13,12 +13,14 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.function.Function;
 import jdk.net.ExtendedSocketOptions;
+import org.carapaceproxy.core.ssl.ListenerSslProviderBuilder;
 import org.carapaceproxy.server.config.HostPort;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.netty.DisposableChannel;
+import reactor.netty.FutureMono;
 import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.server.HttpServer;
 
@@ -90,12 +92,12 @@ public class DisposableChannelListener {
                         "idleStateHandler",
                         new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds())
                 ))
-                /* .doOnConnection(conn -> {
+                .doOnConnection(conn -> {
                     // todo
-                    CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
-                    conn.channel().closeFuture().addListener(e -> CURRENT_CONNECTED_CLIENTS_GAUGE.dec());
+                    // CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
+                    // conn.channel().closeFuture().addListener(e -> CURRENT_CONNECTED_CLIENTS_GAUGE.dec());
                     config.getGroup().add(conn.channel());
-                }) */
+                })
                 .childObserve((connection, state) -> {
                     if (state == CONNECTED) {
                         UriCleanerHandler.INSTANCE.addToPipeline(connection.channel());
@@ -173,8 +175,7 @@ public class DisposableChannelListener {
     public void stop() {
         if (this.isStarted()) {
             this.listeningChannel.disposeNow(Duration.ofSeconds(10));
-            // todo: to enable along with CURRENT_CONNECTED_CLIENTS_GAUGE
-            // FutureMono.from(this.configuration.getGroup().close()).block(Duration.ofSeconds(10));
+            FutureMono.from(this.configuration.getGroup().close()).block(Duration.ofSeconds(10));
         }
     }
 

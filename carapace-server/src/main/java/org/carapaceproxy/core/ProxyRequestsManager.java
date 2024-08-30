@@ -68,7 +68,7 @@ import org.carapaceproxy.server.mapper.CustomHeader;
 import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.HttpUtils;
-import org.carapaceproxy.utils.PrometheusUtils;
+import org.carapaceproxy.core.stats.PrometheusUtils;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
