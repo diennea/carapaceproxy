@@ -20,14 +20,16 @@
 package org.carapaceproxy.core;
 
 import io.netty.handler.ssl.SslContext;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.carapaceproxy.core.ssl.CertificatesUtils;
 import org.carapaceproxy.core.stats.PrometheusListenerStats;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.HostPort;
+import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,12 +48,14 @@ public class Listeners {
     private static final Logger LOG = LoggerFactory.getLogger(Listeners.class);
 
     private final HttpProxyServer parent;
+    private RuntimeServerConfiguration currentConfiguration;
     private final ConcurrentMap<String, SslContext> sslContexts = new ConcurrentHashMap<>();
     private final ConcurrentMap<HostPort, DisposableChannelListener> listeningChannels = new ConcurrentHashMap<>();
     private boolean started;
 
     public Listeners(HttpProxyServer parent) {
         this.parent = parent;
+        this.currentConfiguration = parent.getCurrentConfiguration();
     }
 
     public int getLocalPort() {
@@ -67,40 +71,95 @@ public class Listeners {
 
     public void start() throws InterruptedException, ConfigurationNotValidException {
         started = true;
-        reloadConfiguration();
+        reloadCurrentConfiguration();
+    }
+
+    /**
+     * Re-apply the current configuration; it should be invoked after editing it.
+     *
+     * @throws InterruptedException if it is interrupted while starting or stopping a listener
+     */
+    public void reloadCurrentConfiguration() throws InterruptedException {
+        reloadConfiguration(this.currentConfiguration);
     }
 
     /**
      * Apply a new configuration and refresh the listeners according to it.
      *
+     * @param newConfiguration the configuration
      * @throws InterruptedException if it is interrupted while starting or stopping a listener
+     * @see #reloadCurrentConfiguration()
      */
-    public void reloadConfiguration() throws InterruptedException {
+    void reloadConfiguration(final RuntimeServerConfiguration newConfiguration) throws InterruptedException {
+        if (!started) {
+            this.currentConfiguration = newConfiguration;
+            return;
+        }
+        // Clear cached ssl contexts
         sslContexts.clear();
 
-        final var existingListeners = Set.copyOf(this.listeningChannels.values());
-        this.listeningChannels.clear();
-        for (final var existingListener : existingListeners) {
-            // todo I'm afraid this messes up with current configuration refresh behavior...
-            final var newListener = existingListener.reloadOrNull();
-            if (newListener != null) {
-                this.listeningChannels.put(newListener.getHostPort(), newListener);
-                if (started) {
-                    newListener.start();
-                }
+        // stop dropped listeners, start new one
+        List<DisposableChannelListener> listenersToStop = new ArrayList<>();
+        List<DisposableChannelListener> listenersToRestart = new ArrayList<>();
+        for (Map.Entry<HostPort, DisposableChannelListener> channel : listeningChannels.entrySet()) {
+            final var hostPort = channel.getKey();
+            final var listener = channel.getValue();
+            final var actualListenerConfig = currentConfiguration.getListener(hostPort);
+            final var newConfigurationForListener = newConfiguration.getListener(hostPort);
+            if (newConfigurationForListener == null) {
+                LOG.info("listener: {} is to be shut down", hostPort);
+                listenersToStop.add(listener);
+            } else if (!newConfigurationForListener.equals(actualListenerConfig)
+                       || newConfiguration.getResponseCompressionThreshold() != currentConfiguration.getResponseCompressionThreshold()
+                       || newConfiguration.getMaxHeaderSize() != currentConfiguration.getMaxHeaderSize()) {
+                LOG.info("listener: {} is to be restarted", hostPort);
+                listenersToRestart.add(listener);
+            }
+            listener.clear();
+        }
+        List<HostPort> listenersToStart = new ArrayList<>();
+        for (NetworkListenerConfiguration config : newConfiguration.getListeners()) {
+            HostPort key = config.getKey();
+            if (!listeningChannels.containsKey(key)) {
+                LOG.info("listener: {} is to be started", key);
+                listenersToStart.add(key);
             }
         }
-        for (final var networkConfiguration : this.parent.getCurrentConfiguration().getListeners()) {
-            final var hostPort = networkConfiguration.getKey();
-            if (!this.listeningChannels.containsKey(hostPort)) {
-                LOG.info("listener: {} is to be started", hostPort);
-                final var listener = new DisposableChannelListener(hostPort, this.parent, PrometheusListenerStats.INSTANCE, sslContexts);
-                this.listeningChannels.put(hostPort, listener);
-                if (started) {
-                    listener.start();
-                }
+
+        // apply new configuration, this has to be done before rebooting listeners
+        currentConfiguration = newConfiguration;
+
+        try {
+            for (final var listener : listenersToStop) {
+                final var hostPort = listener.getHostPort();
+                LOG.info("Stopping {}", hostPort);
+                listener.stop();
+                listeningChannels.remove(hostPort);
             }
+
+            for (final var listener : listenersToRestart) {
+                final var hostPort = listener.getHostPort();
+                LOG.info("Restart {}", hostPort);
+                listener.stop();
+                bootListener(hostPort, currentConfiguration.getListener(hostPort));
+            }
+
+            for (HostPort hostPort : listenersToStart) {
+                LOG.info("Starting {}", hostPort);
+                bootListener(hostPort, currentConfiguration.getListener(hostPort));
+            }
+        } catch (InterruptedException stopMe) {
+            Thread.currentThread().interrupt();
+            throw stopMe;
         }
+    }
+
+    private void bootListener(final HostPort hostPort, final NetworkListenerConfiguration configuration) {
+        final var newListener = new DisposableChannelListener(
+                hostPort, this.parent, configuration, PrometheusListenerStats.INSTANCE, sslContexts
+        );
+        listeningChannels.put(hostPort, newListener);
+        newListener.start();
     }
 
     public void stop() {

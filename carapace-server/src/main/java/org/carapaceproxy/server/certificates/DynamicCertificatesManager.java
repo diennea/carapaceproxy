@@ -70,9 +70,9 @@ import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
+import org.carapaceproxy.core.ssl.CertificatesUtils;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
-import org.carapaceproxy.core.ssl.CertificatesUtils;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
 import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.Status;
@@ -681,7 +681,7 @@ public class DynamicCertificatesManager implements Runnable {
             }
             var oldCertificates = this.certificates;
             this.certificates = newCertificates; // only certificates/domains specified in the config have to be managed.
-            server.getListeners().reloadConfiguration();
+            server.getListeners().reloadCurrentConfiguration();
             // storing certificates on local path
             storeLocalCertificates(newCertificates.values(), oldCertificates);
         } catch (GeneralSecurityException | MalformedURLException | InterruptedException e) {
