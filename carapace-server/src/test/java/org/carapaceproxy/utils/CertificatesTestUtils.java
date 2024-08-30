@@ -20,7 +20,7 @@
 package org.carapaceproxy.utils;
 
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
-import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
+import static org.carapaceproxy.core.ssl.CertificatesUtils.createKeystore;
 import static org.shredzone.acme4j.util.KeyPairUtils.createKeyPair;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;

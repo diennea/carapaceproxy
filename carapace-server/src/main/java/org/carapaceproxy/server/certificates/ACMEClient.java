@@ -28,7 +28,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.carapaceproxy.utils.CertificatesUtils;
+import org.carapaceproxy.core.ssl.CertificatesUtils;
 import org.shredzone.acme4j.Account;
 import org.shredzone.acme4j.AccountBuilder;
 import org.shredzone.acme4j.Authorization;

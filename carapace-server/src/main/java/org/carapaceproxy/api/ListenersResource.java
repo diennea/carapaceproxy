@@ -70,7 +70,7 @@ public class ListenersResource {
                     config.getSslCiphers(),
                     config.getSslProtocols(),
                     config.getDefaultCertificate(),
-                    (int) listener.getValue().getTotalRequests().get()
+                    listener.getValue().getTotalRequests().get()
             );
             return Map.entry(EndpointKey.make(config.getHost(), port).getHostPort(), bean);
         }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
