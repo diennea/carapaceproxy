@@ -81,8 +81,11 @@ public class DisposableChannelListener {
         var httpServer = HttpServer.create()
                 .host(hostPort.host())
                 .port(hostPort.port())
-                .protocol(config.getProtocols().toArray(HttpProtocol[]::new))
-                .secure(new SslContextConfigurator(parent, config, hostPort, sslContextsCache))
+                .protocol(config.getProtocols().toArray(HttpProtocol[]::new));
+        if (config.isSsl()) {
+            httpServer = httpServer.secure(new SslContextConfigurator(parent, config, hostPort, sslContextsCache));
+        }
+        httpServer = httpServer
                 .metrics(true, Function.identity())
                 .forwarded(ForwardedStrategy.of(config.getForwardedStrategy(), config.getTrustedIps()))
                 .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())

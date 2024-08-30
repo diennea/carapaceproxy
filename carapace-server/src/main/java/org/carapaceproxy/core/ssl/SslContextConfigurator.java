@@ -58,12 +58,11 @@ public final class SslContextConfigurator implements Consumer<SslProvider.SslCon
 
     @Override
     public void accept(final SslProvider.SslContextSpec sslContextSpec) {
-        if (!listenerConfiguration.isSsl()) {
-            // We do NOT want to alter the SslContextSpec if SSL is not enabled in our configurations
-            return;
-        }
         final SslContext sslContext;
         try {
+            if (!listenerConfiguration.isSsl()) {
+                throw new ConfigurationNotValidException("SSL not enabled");
+            }
             final var defaultSslConfiguration = getDefaultSslConfiguration();
             if (defaultSslConfiguration == null) {
                 throw new ConfigurationNotValidException("Unable to boot SSL context for listener " + listenerConfiguration.getHost() + ": no default certificate setup.");
