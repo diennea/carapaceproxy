@@ -67,7 +67,7 @@
 
 <script>
     import { doGet } from "../serverapi";
-    import { formatTimestamp } from "./../lib/formatter";
+    import { formatTimestamp } from "../lib/formatter";
     export default {
         name: "CacheStatus",
         data() {

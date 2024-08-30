@@ -3,23 +3,29 @@
         <ul id="sidebar-elements" class="list-unstyled">
             <router-link
                 v-for="el in elements"
-                tag="li"
-                exact-active-class="active"
                 :key="el.label"
                 :id="el.label"
                 :to="el.href"
-            >
-                <font-awesome-icon :icon="el.icoName" fixed-width></font-awesome-icon>
-                <b-tooltip
-                    v-if="collapsed"
-                    :target="el.label"
-                    :title="el.label"
-                    placement="right"
-                    boundary="viewport"
-                ></b-tooltip>
-                <span v-else>{{el.label}}</span>
+                exact-active-class="active"
+                v-slot="{ navigate, isExactActive }"
+                custom>
+                <li
+                    :class="{ active: isExactActive }"
+                    @click="navigate"
+                    :id="el.label">
+                    <font-awesome-icon :icon="el.icoName" fixed-width></font-awesome-icon>
+                    <b-tooltip
+                        v-if="collapsed"
+                        :target="el.label"
+                        :title="el.label"
+                        placement="right"
+                        boundary="viewport">
+                    </b-tooltip>
+                    <span v-else>{{ el.label }}</span>
+                </li>
             </router-link>
         </ul>
+
         <div id="sidebar-toogle-button" @click="toggleSidebar()">
             <font-awesome-icon icon="angle-right" :rotation="collapsed ? 0 : 180"></font-awesome-icon>
             <font-awesome-icon icon="angle-right" :rotation="collapsed ? 0 : 180"></font-awesome-icon>
