@@ -81,6 +81,7 @@ public class Listeners {
         final var existingListeners = Set.copyOf(this.listeningChannels.values());
         this.listeningChannels.clear();
         for (final var existingListener : existingListeners) {
+            // todo I'm afraid this messes up with current configuration refresh behavior...
             final var newListener = existingListener.reloadOrNull();
             if (newListener != null) {
                 this.listeningChannels.put(newListener.getHostPort(), newListener);
