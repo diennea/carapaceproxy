@@ -9,6 +9,7 @@ import io.netty.channel.socket.nio.NioChannelOption;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.timeout.IdleStateHandler;
 import java.io.File;
+import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -47,8 +48,8 @@ public class DisposableChannelListener {
     private final NetworkListenerConfiguration configuration;
     private final ListenerStats stats;
     private final ConcurrentMap<String, SslContext> sslContextsCache;
+    private ListenerStats.StatCounter totalRequests;
     private DisposableChannel listeningChannel;
-
     public DisposableChannelListener(final HostPort hostPort, final HttpProxyServer parent, final ListenerStats stats, final ConcurrentMap<String, SslContext> sslContextsCache) {
         this.parent = parent;
         this.hostPort = hostPort;
@@ -57,10 +58,15 @@ public class DisposableChannelListener {
         this.sslContextsCache = sslContextsCache;
         this.listeningChannel = null;
         this.stats = stats;
+        this.totalRequests = null;
     }
 
     private RuntimeServerConfiguration getCurrentConfiguration() {
         return parent.getCurrentConfiguration();
+    }
+
+    public NetworkListenerConfiguration getConfig() {
+        return configuration;
     }
 
     public HostPort getHostPort() {
@@ -72,11 +78,11 @@ public class DisposableChannelListener {
     }
 
     public void start() {
-        final var hostPort = getRealHostPort();
+        final var hostPort = this.hostPort.offsetPort(parent.getListenersOffsetPort());
         final var config = this.configuration;
         final var currentConfiguration = getCurrentConfiguration();
-        final var requestCounter = stats.requests(hostPort);
-        final var clientsCounter = stats.clients();
+        final var clients = stats.clients();
+        totalRequests = stats.requests(hostPort);
         LOG.info("Starting listener at {} ssl:{}", hostPort, config.isSsl());
         var httpServer = HttpServer.create()
                 .host(hostPort.host())
@@ -100,13 +106,38 @@ public class DisposableChannelListener {
                 .childOption(Epoll.isAvailable()
                         ? EpollChannelOption.TCP_KEEPCNT
                         : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), config.getKeepAliveCount())
-                .maxKeepAliveRequests(config.getMaxKeepAliveRequests()).doOnChannelInit((observer, channel, remoteAddress) -> channel.pipeline().addFirst(
-                        "idleStateHandler",
-                        new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds())
-                ))
+                .maxKeepAliveRequests(config.getMaxKeepAliveRequests())
+                .doOnChannelInit((observer, channel, remoteAddress) -> {
+                    final var handler = new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds());
+                    channel.pipeline().addFirst("idleStateHandler", handler);
+                    /* // todo
+                    if (config.isSsl()) {
+                        SniHandler sni = new SniHandler(listeningChannel) {
+                            @Override
+                            protected SslHandler newSslHandler(SslContext context, ByteBufAllocator allocator) {
+                                SslHandler handler = super.newSslHandler(context, allocator);
+                                if (currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported()) {
+                                    Certificate cert = (Certificate) context.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN)).get();
+                                    if (cert != null) {
+                                        try {
+                                            ReferenceCountedOpenSslEngine engine = (ReferenceCountedOpenSslEngine) handler.engine();
+                                            engine.setOcspResponse(parent.getOcspStaplingManager().getOcspResponseForCertificate(cert)); // setting proper ocsp response
+                                        } catch (IOException ex) {
+                                            LOG.error("Error setting OCSP response.", ex);
+                                        }
+                                    } else {
+                                        LOG.error("Cannot set OCSP response without the certificate");
+                                    }
+                                }
+                                return handler;
+                            }
+                        };
+                        channel.pipeline().addFirst(sni);
+                    } */
+                })
                 .doOnConnection(conn -> {
-                    clientsCounter.increment();
-                    conn.channel().closeFuture().addListener(e -> clientsCounter.decrement());
+                    clients.increment();
+                    conn.channel().closeFuture().addListener(e -> clients.decrement());
                     config.getGroup().add(conn.channel());
                 })
                 .childObserve((connection, state) -> {
@@ -121,7 +152,7 @@ public class DisposableChannelListener {
                                              + " From " + request.remoteAddress()
                                              + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")));
                     }
-                    requestCounter.increment();
+                    totalRequests.increment();
                     ProxyRequest proxyRequest = new ProxyRequest(request, response, hostPort);
                     return parent.getProxyRequestsManager().processRequest(proxyRequest);
                 });
@@ -139,10 +170,6 @@ public class DisposableChannelListener {
         LOG.info("started listener at {}: {}", hostPort, this.listeningChannel);
     }
 
-    public HostPort getRealHostPort() {
-        return hostPort.offsetPort(parent.getListenersOffsetPort());
-    }
-
     /**
      * This class is meant to be immutable like {@link NetworkListenerConfiguration},
      * while {@link HttpProxyServer} and {@link RuntimeServerConfiguration} are not.
@@ -156,7 +183,7 @@ public class DisposableChannelListener {
      *
      * @return a valid listener for the current {@link #getHostPort() host and port}, or null if it was removed
      */
-    public DisposableChannelListener reloadOrNull() {
+    public DisposableChannelListener reloadOrNull() throws InterruptedException {
         final var newConfiguration = getCurrentConfiguration().getListener(hostPort);
         if (newConfiguration == this.configuration) {
             LOG.info("listener: {} if fine", hostPort);
@@ -178,7 +205,7 @@ public class DisposableChannelListener {
      *
      * @see DisposableChannel#disposeNow(Duration)
      */
-    public void stop() {
+    public void stop() throws InterruptedException {
         if (this.isStarted()) {
             this.listeningChannel.disposeNow(Duration.ofSeconds(10));
             FutureMono.from(this.configuration.getGroup().close()).block(Duration.ofSeconds(10));
@@ -192,5 +219,24 @@ public class DisposableChannelListener {
      */
     public boolean isStarted() {
         return this.listeningChannel != null && !this.listeningChannel.isDisposed();
+    }
+
+    /**
+     * The actual HTTP port used by the channel might seldom differ from {@link #getHostPort() the one declared}.
+     * <br>
+     * A common example is unit tests, but there might also be real-world cases.
+     *
+     * @return the actual port from the {@link DisposableChannel}
+     */
+    public int getActualPort() {
+        if (this.listeningChannel.address() instanceof InetSocketAddress address) {
+            return address.getPort();
+        }
+        LOG.warn("Unexpected listening channel address type {}", this.listeningChannel.address().getClass());
+        return hostPort.port();
+    }
+
+    public int getTotalRequests() {
+        return totalRequests.get();
     }
 }
