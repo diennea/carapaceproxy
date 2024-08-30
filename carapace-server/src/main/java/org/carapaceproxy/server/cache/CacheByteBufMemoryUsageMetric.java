@@ -4,7 +4,7 @@ import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.prometheus.client.Gauge;
 import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.core.stats.PrometheusUtils;
+import org.carapaceproxy.utils.PrometheusUtils;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
