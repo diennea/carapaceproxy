@@ -19,9 +19,9 @@
  */
 package org.carapaceproxy.core;
 
-import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreData;
-import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
-import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
+import static org.carapaceproxy.core.ssl.CertificatesUtils.loadKeyStoreData;
+import static org.carapaceproxy.core.ssl.CertificatesUtils.loadKeyStoreFromFile;
+import static org.carapaceproxy.core.ssl.CertificatesUtils.readChainFromKeystore;
 import static reactor.netty.ConnectionObserver.State.CONNECTED;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelOption;
@@ -41,8 +41,6 @@ import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.Promise;
-import io.prometheus.client.Counter;
-import io.prometheus.client.Gauge;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -64,13 +62,14 @@ import java.util.logging.Logger;
 import javax.net.ssl.KeyManagerFactory;
 import jdk.net.ExtendedSocketOptions;
 import lombok.Data;
+import org.carapaceproxy.core.ssl.CertificatesUtils;
+import org.carapaceproxy.core.stats.ListenerStats;
+import org.carapaceproxy.core.stats.PrometheusListenerStats;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.HostPort;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;
-import org.carapaceproxy.utils.CertificatesUtils;
-import org.carapaceproxy.utils.PrometheusUtils;
 import reactor.netty.DisposableServer;
 import reactor.netty.FutureMono;
 import reactor.netty.http.HttpProtocol;
@@ -90,18 +89,11 @@ public class Listeners {
 
     private static final Logger LOG = Logger.getLogger(Listeners.class.getName());
 
-    private static final Gauge CURRENT_CONNECTED_CLIENTS_GAUGE = PrometheusUtils.createGauge(
-            "clients", "current_connected", "currently connected clients"
-    ).register();
-
-    private static final Counter TOTAL_REQUESTS_PER_LISTENER_COUNTER = PrometheusUtils.createCounter(
-            "listeners", "requests_total", "total requests", "listener"
-    ).register();
-
     private final HttpProxyServer parent;
     private final Map<String, SslContext> sslContexts = new ConcurrentHashMap<>();
     private final Map<HostPort, ListeningChannel> listeningChannels = new ConcurrentHashMap<>();
     private final File basePath;
+    private final ListenerStats stats;
     private boolean started;
 
     private RuntimeServerConfiguration currentConfiguration;
@@ -110,6 +102,7 @@ public class Listeners {
         this.parent = parent;
         this.currentConfiguration = parent.getCurrentConfiguration();
         this.basePath = parent.getBasePath();
+        this.stats = PrometheusListenerStats.INSTANCE;
     }
 
     public int getLocalPort() {
@@ -283,8 +276,8 @@ public class Listeners {
                     }
                 })
                 .doOnConnection(conn -> {
-                    CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
-                    conn.channel().closeFuture().addListener(e -> CURRENT_CONNECTED_CLIENTS_GAUGE.dec());
+                    this.stats.clients().increment();
+                    conn.channel().closeFuture().addListener(e -> this.stats.clients().decrement());
                     config.getGroup().add(conn.channel());
                 })
                 .childObserve((connection, state) -> {
@@ -333,18 +326,18 @@ public class Listeners {
 
         private final HostPort hostPort;
         private final NetworkListenerConfiguration config;
-        private final Counter.Child totalRequests;
+        private final ListenerStats.StatCounter totalRequests;
         private final Map<String, SslContext> listenerSslContexts = new HashMap<>();
-        DisposableServer channel;
+        private DisposableServer channel;
 
         public ListeningChannel(HostPort hostPort, NetworkListenerConfiguration config) {
             this.hostPort = hostPort;
             this.config = config;
-            totalRequests = TOTAL_REQUESTS_PER_LISTENER_COUNTER.labels(hostPort.host() + "_" + hostPort.port());
+            totalRequests = stats.requests(hostPort);
         }
 
         public void incRequests() {
-            totalRequests.inc();
+            totalRequests.increment();
         }
 
         public void clear() {

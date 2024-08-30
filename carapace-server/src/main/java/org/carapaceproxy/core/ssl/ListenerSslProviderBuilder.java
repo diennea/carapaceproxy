@@ -1,8 +1,8 @@
-package org.carapaceproxy.core;
+package org.carapaceproxy.core.ssl;
 
-import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreData;
-import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
-import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
+import static org.carapaceproxy.core.ssl.CertificatesUtils.loadKeyStoreData;
+import static org.carapaceproxy.core.ssl.CertificatesUtils.loadKeyStoreFromFile;
+import static org.carapaceproxy.core.ssl.CertificatesUtils.readChainFromKeystore;
 import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.OpenSslCachingX509KeyManagerFactory;
 import io.netty.handler.ssl.SslContext;
@@ -26,6 +26,9 @@ import java.util.List;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
 import javax.net.ssl.KeyManagerFactory;
+import org.carapaceproxy.core.HttpProxyServer;
+import org.carapaceproxy.core.Listeners;
+import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.HostPort;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -34,7 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.netty.tcp.SslProvider;
 
-record ListenerSslProviderBuilder(
+public record ListenerSslProviderBuilder(
         HttpProxyServer parent,
         RuntimeServerConfiguration runtimeConfiguration,
         NetworkListenerConfiguration listenerConfiguration,
