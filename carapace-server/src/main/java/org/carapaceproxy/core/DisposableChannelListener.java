@@ -1,6 +1,5 @@
 package org.carapaceproxy.core;
 
-import static java.util.Objects.requireNonNull;
 import static reactor.netty.ConnectionObserver.State.CONNECTED;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.epoll.Epoll;
@@ -32,13 +31,6 @@ import reactor.netty.http.server.HttpServer;
  * This class models a single listener for a {@link HttpProxyServer}.
  * <br>
  * This is meant to be a one-use class: once built, it can only be started and stopped.
- * A sensible usage is:
- * <ol>
- *     <li>build it: it will snapshot a {@link NetworkListenerConfiguration}</li>
- *     <li>{@link #start()} it</li>
- *     <li>let it handle its own replacement through {@link #reloadOrNull()}</li>
- *     <li>store the reference to the <b>new</b> instance of this class, if any</li>
- * </ol>
  */
 public class DisposableChannelListener {
     private static final Logger LOG = LoggerFactory.getLogger(DisposableChannelListener.class);
@@ -50,11 +42,14 @@ public class DisposableChannelListener {
     private final ConcurrentMap<String, SslContext> sslContextsCache;
     private ListenerStats.StatCounter totalRequests;
     private DisposableChannel listeningChannel;
-    public DisposableChannelListener(final HostPort hostPort, final HttpProxyServer parent, final ListenerStats stats, final ConcurrentMap<String, SslContext> sslContextsCache) {
+
+    public DisposableChannelListener(final HostPort hostPort, final HttpProxyServer parent, final NetworkListenerConfiguration configuration, final ListenerStats stats, final ConcurrentMap<String, SslContext> sslContextsCache) {
         this.parent = parent;
         this.hostPort = hostPort;
-        this.configuration = getCurrentConfiguration().getListener(hostPort);
-        requireNonNull(this.configuration, "Parent server configuration doesn't define any listener for " + hostPort);
+        this.configuration = configuration;
+        // todo I think we need to address this at some point
+        // this.configuration = getCurrentConfiguration().getListener(hostPort);
+        // requireNonNull(this.configuration, "Parent server configuration doesn't define any listener for " + hostPort);
         this.sslContextsCache = sslContextsCache;
         this.listeningChannel = null;
         this.stats = stats;
@@ -171,37 +166,7 @@ public class DisposableChannelListener {
     }
 
     /**
-     * This class is meant to be immutable like {@link NetworkListenerConfiguration},
-     * while {@link HttpProxyServer} and {@link RuntimeServerConfiguration} are not.
-     * <br>
-     * This tests parent configuration for modifications:
-     * <ul>
-     *     <li>if the network configuration is still the same, it returns himself</li>
-     *     <li>if the network configuration changed, this {@link #stop() is stopped} and a new listener is returned</li>
-     *     <li>if the network configuration was removed, this {@link #stop() is stopped} and null is returned</li>
-     * </ul>
-     *
-     * @return a valid listener for the current {@link #getHostPort() host and port}, or null if it was removed
-     */
-    public DisposableChannelListener reloadOrNull() throws InterruptedException {
-        final var newConfiguration = getCurrentConfiguration().getListener(hostPort);
-        if (newConfiguration == this.configuration) {
-            LOG.info("listener: {} if fine", hostPort);
-            return this;
-        }
-        this.stop();
-        if (newConfiguration == null) {
-            LOG.info("listener: {} is to be shut down", hostPort);
-            return null;
-        }
-        LOG.info("listener: {} is to be restarted", hostPort);
-        return new DisposableChannelListener(hostPort, parent, stats, sslContextsCache);
-    }
-
-    /**
      * Stop the listener and free the port.
-     * <br>
-     * This is usually self-invoked through {@link #reloadOrNull()}.
      *
      * @see DisposableChannel#disposeNow(Duration)
      */
@@ -240,5 +205,9 @@ public class DisposableChannelListener {
 
     public int getTotalRequests() {
         return totalRequests.get();
+    }
+
+    public void clear() {
+        this.sslContextsCache.clear();
     }
 }
