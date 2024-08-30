@@ -16,14 +16,9 @@ import java.io.File;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.UnrecoverableKeyException;
 import java.security.cert.Certificate;
-import java.security.cert.CertificateException;
 import java.util.Arrays;
 import java.util.List;
-import javax.annotation.Nullable;
 import javax.net.ssl.KeyManagerFactory;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.Listeners;
@@ -31,7 +26,6 @@ import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.HostPort;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
-import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.netty.tcp.SslProvider;
@@ -44,10 +38,10 @@ public final class SniMapper implements AsyncMapping<String, SslProvider> {
     private final HostPort hostPort;
 
     public SniMapper(
-            HttpProxyServer parent,
-            RuntimeServerConfiguration runtimeConfiguration,
-            NetworkListenerConfiguration listenerConfiguration,
-            HostPort hostPort
+            final HttpProxyServer parent,
+            final RuntimeServerConfiguration runtimeConfiguration,
+            final NetworkListenerConfiguration listenerConfiguration,
+            final HostPort hostPort
     ) {
         this.parent = parent;
         this.runtimeConfiguration = runtimeConfiguration;
@@ -59,31 +53,6 @@ public final class SniMapper implements AsyncMapping<String, SslProvider> {
         return runtimeConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported();
     }
 
-    @Nullable
-    private SSLCertificateConfiguration getDefaultSslConfiguration() {
-        return runtimeConfiguration.getCertificates().get(getDefaultCertificate());
-    }
-
-    private KeyStore getKeyStore(final HostPort hostPort, final SSLCertificateConfiguration sslConfiguration) throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException, ConfigurationNotValidException, UnrecoverableKeyException {
-        final var keyStoreContent = getCertificateForDomain(sslConfiguration);
-        final KeyStore keyStore;
-        if (keyStoreContent != null) {
-            LOG.debug("start SSL with dynamic certificate id {}, on listener {}", sslConfiguration.getId(), hostPort);
-            keyStore = loadKeyStoreData(keyStoreContent, sslConfiguration.getPassword());
-        } else {
-            LOG.debug("start SSL with certificate id {}, on listener {} file={}", sslConfiguration.getId(), hostPort, sslConfiguration.getFile());
-            keyStore = loadKeyStoreFromFile(sslConfiguration.getFile(), sslConfiguration.getPassword(), basePath());
-        }
-        return keyStore;
-    }
-
-    private static KeyManagerFactory getKeyFactory(final KeyStore keyStore, final SSLCertificateConfiguration defaultSslConfiguration) throws NoSuchAlgorithmException, KeyStoreException, UnrecoverableKeyException {
-        final var keyFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-        final var keyFactoryInstance = new OpenSslCachingX509KeyManagerFactory(keyFactory);
-        keyFactoryInstance.init(keyStore, defaultSslConfiguration.getPassword().toCharArray());
-        return keyFactoryInstance;
-    }
-
     private List<String> getSslCiphers() {
         final var sslCiphers = listenerConfiguration.getSslCiphers();
         if (sslCiphers != null && !sslCiphers.isEmpty()) {
@@ -91,14 +60,6 @@ public final class SniMapper implements AsyncMapping<String, SslProvider> {
             return Arrays.asList(sslCiphers.split(","));
         }
         return null;
-    }
-
-    private String getDefaultCertificate() {
-        return listenerConfiguration.getDefaultCertificate();
-    }
-
-    private byte[] getCertificateForDomain(final SSLCertificateConfiguration sslConfiguration) {
-        return parent.getDynamicCertificatesManager().getCertificateForDomain(sslConfiguration.getId());
     }
 
     @Override
@@ -174,22 +135,6 @@ public final class SniMapper implements AsyncMapping<String, SslProvider> {
 
     private String computeKey(final String sniHostname) {
         return listenerConfiguration.getHost() + ":" + hostPort.port() + "+" + sniHostname;
-    }
-
-    public HttpProxyServer parent() {
-        return parent;
-    }
-
-    public RuntimeServerConfiguration runtimeConfiguration() {
-        return runtimeConfiguration;
-    }
-
-    public NetworkListenerConfiguration listenerConfiguration() {
-        return listenerConfiguration;
-    }
-
-    public HostPort hostPort() {
-        return hostPort;
     }
 
 }
