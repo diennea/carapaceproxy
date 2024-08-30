@@ -228,9 +228,11 @@ public class Listeners {
         HttpServer httpServer = HttpServer.create()
                 .host(hostPort.host())
                 .port(hostPort.port())
-                .protocol(config.getProtocols().toArray(HttpProtocol[]::new))
-                .secure(new SslContextConfigurator(parent, config, hostPort, sslContexts))
-                .metrics(true, Function.identity())
+                .protocol(config.getProtocols().toArray(HttpProtocol[]::new));
+        if (config.isSsl()) {
+            httpServer = httpServer.secure(new SslContextConfigurator(parent, config, hostPort, sslContexts));
+        }
+        httpServer = httpServer.metrics(true, Function.identity())
                 .forwarded(ForwardedStrategy.of(config.getForwardedStrategy(), config.getTrustedIps()))
                 .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())
                 .childOption(ChannelOption.SO_KEEPALIVE, config.isKeepAlive())
@@ -339,7 +341,7 @@ public class Listeners {
         @Override
         public Future<SslContext> map(String sniHostname, Promise<SslContext> promise) {
             try {
-                String key = config.getHost() + ":" + hostPort.port() + "+" + sniHostname;
+                String key = hostPort + "+" + sniHostname;
                 if (LOG.isLoggable(Level.FINER)) {
                     LOG.log(Level.FINER, "resolve SNI mapping {0}, key: {1}", new Object[]{sniHostname, key});
                 }
