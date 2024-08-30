@@ -42,7 +42,7 @@ import java.util.stream.Collectors;
 import lombok.Data;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
-import org.carapaceproxy.utils.PrometheusUtils;
+import org.carapaceproxy.core.stats.PrometheusUtils;
 import reactor.netty.http.client.HttpClientResponse;
 
 /**

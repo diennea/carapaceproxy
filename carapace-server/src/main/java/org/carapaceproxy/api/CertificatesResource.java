@@ -28,8 +28,8 @@ import static org.carapaceproxy.server.config.SSLCertificateConfiguration.Certif
 import static org.carapaceproxy.utils.APIUtils.certificateModeToString;
 import static org.carapaceproxy.utils.APIUtils.certificateStateToString;
 import static org.carapaceproxy.utils.APIUtils.stringToCertificateMode;
-import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
-import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
+import static org.carapaceproxy.core.ssl.CertificatesUtils.createKeystore;
+import static org.carapaceproxy.core.ssl.CertificatesUtils.loadKeyStoreFromFile;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
@@ -74,7 +74,7 @@ import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode;
-import org.carapaceproxy.utils.CertificatesUtils;
+import org.carapaceproxy.core.ssl.CertificatesUtils;
 
 /**
  * Access to certificates
