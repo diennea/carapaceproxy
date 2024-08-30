@@ -13,7 +13,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.function.Function;
 import jdk.net.ExtendedSocketOptions;
-import org.carapaceproxy.core.ssl.ListenerSslProviderBuilder;
+import org.carapaceproxy.core.ssl.SslContextConfigurator;
+import org.carapaceproxy.core.stats.ListenerStats;
 import org.carapaceproxy.server.config.HostPort;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;
@@ -43,13 +44,15 @@ public class DisposableChannelListener {
     private final HostPort hostPort;
     private final NetworkListenerConfiguration configuration;
     private DisposableChannel listeningChannel;
+    private ListenerStats stats;
 
-    public DisposableChannelListener(final HostPort hostPort, final HttpProxyServer parent) {
+    public DisposableChannelListener(final HostPort hostPort, final HttpProxyServer parent, final ListenerStats stats) {
         this.parent = parent;
         this.hostPort = hostPort;
         this.configuration = getCurrentConfiguration().getListener(hostPort);
         requireNonNull(this.configuration, "Parent server configuration doesn't define any listener for " + hostPort);
         this.listeningChannel = null;
+        this.stats = stats;
     }
 
     private RuntimeServerConfiguration getCurrentConfiguration() {
@@ -68,12 +71,14 @@ public class DisposableChannelListener {
         final var hostPort = getRealHostPort();
         final var config = this.configuration;
         final var currentConfiguration = getCurrentConfiguration();
+        final var requestCounter = stats.requests(hostPort);
+        final var clientsCounter = stats.clients();
         LOG.info("Starting listener at {} ssl:{}", hostPort, config.isSsl());
         var httpServer = HttpServer.create()
                 .host(hostPort.host())
                 .port(hostPort.port())
                 .protocol(config.getProtocols().toArray(HttpProtocol[]::new))
-                .secure(new ListenerSslProviderBuilder(parent, getCurrentConfiguration(), config, hostPort))
+                .secure(new SslContextConfigurator(parent, getCurrentConfiguration(), config, hostPort))
                 .metrics(true, Function.identity())
                 .forwarded(ForwardedStrategy.of(config.getForwardedStrategy(), config.getTrustedIps()))
                 .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())
@@ -93,9 +98,8 @@ public class DisposableChannelListener {
                         new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds())
                 ))
                 .doOnConnection(conn -> {
-                    // todo
-                    // CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
-                    // conn.channel().closeFuture().addListener(e -> CURRENT_CONNECTED_CLIENTS_GAUGE.dec());
+                    clientsCounter.increment();
+                    conn.channel().closeFuture().addListener(e -> clientsCounter.decrement());
                     config.getGroup().add(conn.channel());
                 })
                 .childObserve((connection, state) -> {
@@ -104,18 +108,13 @@ public class DisposableChannelListener {
                     }
                 })
                 .httpRequestDecoder(option -> option.maxHeaderSize(currentConfiguration.getMaxHeaderSize()))
-                .handle((request, response) -> { // Custom request-response handling
+                .handle((request, response) -> {
                     if (CarapaceLogger.isLoggingDebugEnabled()) {
                         CarapaceLogger.debug("Receive request " + request.uri()
                                              + " From " + request.remoteAddress()
                                              + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")));
                     }
-
-                    /* // todo
-                    ListeningChannel channel = listeningChannels.get(hostPort);
-                    if (channel != null) {
-                        channel.incRequests();
-                    } */
+                    requestCounter.increment();
                     ProxyRequest proxyRequest = new ProxyRequest(request, response, hostPort);
                     return parent.getProxyRequestsManager().processRequest(proxyRequest);
                 });
@@ -162,7 +161,7 @@ public class DisposableChannelListener {
             return null;
         }
         LOG.info("listener: {} is to be restarted", hostPort);
-        return new DisposableChannelListener(hostPort, parent);
+        return new DisposableChannelListener(hostPort, parent, stats);
     }
 
     /**
