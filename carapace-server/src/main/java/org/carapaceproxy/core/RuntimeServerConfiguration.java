@@ -42,6 +42,7 @@ import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -77,7 +78,7 @@ public class RuntimeServerConfiguration {
 
     private static final Logger LOG = Logger.getLogger(RuntimeServerConfiguration.class.getName());
 
-    private final List<NetworkListenerConfiguration> listeners = new ArrayList<>();
+    private final Map<HostPort, NetworkListenerConfiguration> listeners = new LinkedHashMap<>();
     private final Map<String, SSLCertificateConfiguration> certificates = new HashMap<>();
     private final List<RequestFilterConfiguration> requestFilters = new ArrayList<>();
     private final Map<String, ConnectionPoolConfiguration> connectionPools = new HashMap<>();
@@ -466,7 +467,7 @@ public class RuntimeServerConfiguration {
                 throw new ConfigurationNotValidException(ex);
             }
         }
-        listeners.add(listener);
+        listeners.put(listener.getKey(), listener);
     }
 
     public void addCertificate(SSLCertificateConfiguration certificate) throws ConfigurationNotValidException {
@@ -481,7 +482,7 @@ public class RuntimeServerConfiguration {
     }
 
     public List<NetworkListenerConfiguration> getListeners() {
-        return listeners;
+        return List.copyOf(listeners.values());
     }
 
     public Map<String, SSLCertificateConfiguration> getCertificates() {
@@ -493,10 +494,6 @@ public class RuntimeServerConfiguration {
     }
 
     NetworkListenerConfiguration getListener(HostPort hostPort) {
-        return listeners
-                .stream()
-                .filter(s -> s.getHost().equalsIgnoreCase(hostPort.host()) && s.getPort() == hostPort.port())
-                .findFirst()
-                .orElse(null);
+        return listeners.getOrDefault(hostPort, null);
     }
 }
