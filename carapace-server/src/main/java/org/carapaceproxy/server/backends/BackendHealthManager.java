@@ -36,7 +36,7 @@ import java.util.logging.Logger;
 import org.carapaceproxy.server.mapper.EndpointMapper;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
-import org.carapaceproxy.core.stats.PrometheusUtils;
+import org.carapaceproxy.utils.PrometheusUtils;
 
 /**
  * Keeps status about backends

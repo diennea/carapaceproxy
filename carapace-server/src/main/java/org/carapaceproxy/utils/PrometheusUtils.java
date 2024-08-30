@@ -17,7 +17,7 @@
  under the License.
 
  */
-package org.carapaceproxy.core.stats;
+package org.carapaceproxy.utils;
 
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;

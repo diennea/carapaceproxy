@@ -17,7 +17,7 @@
  * under the License.
  *
  */
-package org.carapaceproxy.core.ssl;
+package org.carapaceproxy.utils;
 
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
