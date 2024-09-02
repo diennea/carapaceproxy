@@ -1,21 +1,29 @@
 package org.carapaceproxy.core;
 
+import static org.carapaceproxy.core.Listeners.OCSP_CERTIFICATE_CHAIN;
 import static reactor.netty.ConnectionObserver.State.CONNECTED;
+import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.socket.nio.NioChannelOption;
+import io.netty.handler.ssl.OpenSsl;
+import io.netty.handler.ssl.ReferenceCountedOpenSslEngine;
+import io.netty.handler.ssl.SniHandler;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.timeout.IdleStateHandler;
-import java.io.File;
+import io.netty.util.AttributeKey;
+import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.security.cert.Certificate;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
 import jdk.net.ExtendedSocketOptions;
-import org.carapaceproxy.core.ssl.SslContextConfigurator;
+import org.carapaceproxy.core.ssl.SniMapper;
 import org.carapaceproxy.core.stats.ListenerStats;
 import org.carapaceproxy.server.config.HostPort;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -37,45 +45,35 @@ public class DisposableChannelListener {
 
     private final HttpProxyServer parent;
     private final HostPort hostPort;
-    private final NetworkListenerConfiguration configuration;
+    private final RuntimeServerConfiguration runtimeConfiguration;
+    private final NetworkListenerConfiguration listenerConfiguration;
     private final ListenerStats stats;
     private final ConcurrentMap<String, SslContext> sslContextsCache;
     private ListenerStats.StatCounter totalRequests;
     private DisposableChannel listeningChannel;
 
-    public DisposableChannelListener(final HostPort hostPort, final HttpProxyServer parent, final NetworkListenerConfiguration configuration, final ListenerStats stats, final ConcurrentMap<String, SslContext> sslContextsCache) {
+    public DisposableChannelListener(final HostPort hostPort, final HttpProxyServer parent, final RuntimeServerConfiguration runtimeConfiguration, final NetworkListenerConfiguration listenerConfiguration, final ListenerStats stats, final ConcurrentMap<String, SslContext> sslContextsCache) {
         this.parent = parent;
         this.hostPort = hostPort;
-        this.configuration = configuration;
-        // todo I think we need to address this at some point
-        // this.configuration = getCurrentConfiguration().getListener(hostPort);
-        // requireNonNull(this.configuration, "Parent server configuration doesn't define any listener for " + hostPort);
+        this.runtimeConfiguration = runtimeConfiguration;
+        this.listenerConfiguration = listenerConfiguration;
         this.sslContextsCache = sslContextsCache;
         this.listeningChannel = null;
         this.stats = stats;
         this.totalRequests = null;
     }
 
-    private RuntimeServerConfiguration getCurrentConfiguration() {
-        return parent.getCurrentConfiguration();
-    }
-
     public NetworkListenerConfiguration getConfig() {
-        return configuration;
+        return listenerConfiguration;
     }
 
     public HostPort getHostPort() {
         return hostPort;
     }
 
-    private File getBasePath() {
-        return parent.getBasePath();
-    }
-
     public void start() {
         final var hostPort = this.hostPort.offsetPort(parent.getListenersOffsetPort());
-        final var config = this.configuration;
-        final var currentConfiguration = getCurrentConfiguration();
+        final var config = this.listenerConfiguration;
         final var clients = stats.clients();
         totalRequests = stats.requests(hostPort);
         LOG.info("Starting listener at {} ssl:{}", hostPort, config.isSsl());
@@ -83,8 +81,14 @@ public class DisposableChannelListener {
                 .host(hostPort.host())
                 .port(hostPort.port())
                 .protocol(config.getProtocols().toArray(HttpProtocol[]::new));
+        final SniMapper sslProviderBuilder;
         if (config.isSsl()) {
-            httpServer = httpServer.secure(new SslContextConfigurator(parent, config, hostPort, sslContextsCache));
+            sslProviderBuilder = new SniMapper(
+                    parent, runtimeConfiguration, config, hostPort, sslContextsCache
+            );
+            httpServer = httpServer.secure(sslProviderBuilder.sslContextSpecConsumer());
+        } else {
+            sslProviderBuilder = null;
         }
         httpServer = httpServer
                 .metrics(true, Function.identity())
@@ -103,15 +107,15 @@ public class DisposableChannelListener {
                         : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), config.getKeepAliveCount())
                 .maxKeepAliveRequests(config.getMaxKeepAliveRequests())
                 .doOnChannelInit((observer, channel, remoteAddress) -> {
-                    final var handler = new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds());
+                    final var handler = new IdleStateHandler(0, 0, this.runtimeConfiguration.getClientsIdleTimeoutSeconds());
                     channel.pipeline().addFirst("idleStateHandler", handler);
-                    /* // todo
                     if (config.isSsl()) {
-                        SniHandler sni = new SniHandler(listeningChannel) {
+                        assert sslProviderBuilder != null;
+                        SniHandler sni = new SniHandler(sslProviderBuilder.sslContextAsyncMapping()) {
                             @Override
                             protected SslHandler newSslHandler(SslContext context, ByteBufAllocator allocator) {
                                 SslHandler handler = super.newSslHandler(context, allocator);
-                                if (currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported()) {
+                                if (runtimeConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported()) {
                                     Certificate cert = (Certificate) context.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN)).get();
                                     if (cert != null) {
                                         try {
@@ -128,7 +132,7 @@ public class DisposableChannelListener {
                             }
                         };
                         channel.pipeline().addFirst(sni);
-                    } */
+                    }
                 })
                 .doOnConnection(conn -> {
                     clients.increment();
@@ -140,7 +144,7 @@ public class DisposableChannelListener {
                         UriCleanerHandler.INSTANCE.addToPipeline(connection.channel());
                     }
                 })
-                .httpRequestDecoder(option -> option.maxHeaderSize(currentConfiguration.getMaxHeaderSize()))
+                .httpRequestDecoder(option -> option.maxHeaderSize(this.runtimeConfiguration.getMaxHeaderSize()))
                 .handle((request, response) -> {
                     if (CarapaceLogger.isLoggingDebugEnabled()) {
                         CarapaceLogger.debug("Receive request " + request.uri()
@@ -151,11 +155,11 @@ public class DisposableChannelListener {
                     ProxyRequest proxyRequest = new ProxyRequest(request, response, hostPort);
                     return parent.getProxyRequestsManager().processRequest(proxyRequest);
                 });
-        if (currentConfiguration.getResponseCompressionThreshold() >= 0) {
+        if (this.runtimeConfiguration.getResponseCompressionThreshold() >= 0) {
             CarapaceLogger.debug("Response compression enabled with min size = {0} bytes for listener {1}",
-                    currentConfiguration.getResponseCompressionThreshold(), hostPort
+                    this.runtimeConfiguration.getResponseCompressionThreshold(), hostPort
             );
-            httpServer = httpServer.compress(currentConfiguration.getResponseCompressionThreshold());
+            httpServer = httpServer.compress(this.runtimeConfiguration.getResponseCompressionThreshold());
         } else {
             CarapaceLogger.debug("Response compression disabled for listener {0}", hostPort);
         }
@@ -173,7 +177,7 @@ public class DisposableChannelListener {
     public void stop() throws InterruptedException {
         if (this.isStarted()) {
             this.listeningChannel.disposeNow(Duration.ofSeconds(10));
-            FutureMono.from(this.configuration.getGroup().close()).block(Duration.ofSeconds(10));
+            FutureMono.from(this.listenerConfiguration.getGroup().close()).block(Duration.ofSeconds(10));
         }
     }
 
