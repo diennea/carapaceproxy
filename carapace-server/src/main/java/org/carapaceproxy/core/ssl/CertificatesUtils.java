@@ -19,16 +19,31 @@
  */
 package org.carapaceproxy.core.ssl;
 
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.TrustManagerFactory;
-import javax.net.ssl.X509TrustManager;
-import java.io.*;
-import java.security.*;
+import io.netty.handler.ssl.SslContext;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Objects;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
+import org.carapaceproxy.server.config.HostPort;
 
 /**
  * Utilitis for Certificates storing as Keystores
@@ -47,7 +62,13 @@ public final class CertificatesUtils {
      * @param chain to store into a keystore
      * @param key   private key for the chain
      * @return keystore data
-     * @throws GeneralSecurityException
+     * @throws KeyStoreException        if no provider supports a {@code KeyStoreSpi} implementation for the specified type,
+     *                                  if the keystore has not been initialized,
+     *                                  the given key cannot be protected,
+     *                                  or this operation fails for some other reason
+     * @throws NoSuchAlgorithmException if the algorithm used to check the integrity of the keystore cannot be found
+     * @throws CertificateException     if any of the certificates in the keystore could not be loaded
+     * @throws GeneralSecurityException if something else goes wrong, i.e., because of a {@link IOException}
      */
     public static byte[] createKeystore(Certificate[] chain, PrivateKey key) throws GeneralSecurityException {
         try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
@@ -66,7 +87,11 @@ public final class CertificatesUtils {
      *
      * @param data keystore data.
      * @return certificate chain contained into the keystore.
-     * @throws GeneralSecurityException
+     * @throws KeyStoreException        if no provider supports a {@code KeyStoreSpi} implementation for the specified type,
+     *                                  or if the keystore has not been initialized
+     * @throws NoSuchAlgorithmException if the algorithm used to check the integrity of the keystore cannot be found
+     * @throws CertificateException     if any of the certificates in the keystore could not be loaded
+     * @throws GeneralSecurityException if something else goes wrong, i.e., because of a {@link IOException}
      */
     public static Certificate[] readChainFromKeystore(byte[] data) throws GeneralSecurityException {
         try (ByteArrayInputStream is = new ByteArrayInputStream(data)) {
@@ -84,7 +109,10 @@ public final class CertificatesUtils {
      *
      * @param keystore keystore.
      * @return certificate chain contained into the keystore.
-     * @throws GeneralSecurityException
+     * @throws KeyStoreException        if no provider supports a {@code KeyStoreSpi} implementation for the specified type,
+     *                                  or if the keystore has not been initialized
+     * @throws NoSuchAlgorithmException if the algorithm used to check the integrity of the keystore cannot be found
+     * @throws CertificateException     if any of the certificates in the keystore could not be loaded
      */
     public static Certificate[] readChainFromKeystore(KeyStore keystore) throws GeneralSecurityException {
         Iterator<String> iter = keystore.aliases().asIterator();
@@ -100,7 +128,11 @@ public final class CertificatesUtils {
 
     /**
      * @param data keystore data.
-     * @return whether a valid keystore can be retrived from data.
+     * @return whether a valid keystore can be retrieved from data.
+     * @throws KeyStoreException        if no provider supports a {@code KeyStoreSpi} implementation for the specified type,
+     *                                  or if the keystore has not been initialized
+     * @throws NoSuchAlgorithmException if the algorithm used to check the integrity of the keystore cannot be found
+     * @throws CertificateException     if any of the certificates in the keystore could not be loaded
      */
     public static boolean validateKeystore(byte[] data) throws GeneralSecurityException {
         try (ByteArrayInputStream is = new ByteArrayInputStream(data)) {
@@ -160,17 +192,20 @@ public final class CertificatesUtils {
 
     /**
      * Extract certificate private key
-     * @param data Certificate data.
+     *
+     * @param data     Certificate data.
      * @param password Private key password.
      * @return PrivateKey.
-     * @throws Exception
+     * @throws GeneralSecurityException if something goes wrong with the keystore
+     * @throws IOException              if there is an I/O or format problem with the keystore data,
+     *                                  if a password is required but not given,
+     *                                  or if the given password was incorrect.
      */
-    public static PrivateKey loadPrivateKey(byte[] data, String password) throws Exception {
+    public static PrivateKey loadPrivateKey(byte[] data, String password) throws GeneralSecurityException, IOException {
         KeyStore ks = KeyStore.getInstance(KEYSTORE_FORMAT);
         ks.load(new ByteArrayInputStream(data), password.trim().toCharArray());
         String alias = ks.aliases().nextElement();
-        PrivateKey key = (PrivateKey) ks.getKey(alias, password.trim().toCharArray());
-        return key;
+        return (PrivateKey) ks.getKey(alias, password.trim().toCharArray());
     }
 
     /**
@@ -183,6 +218,9 @@ public final class CertificatesUtils {
     public static boolean compareChains(Certificate[] c1, Certificate[] c2) {
         if (c1 == null && c2 != null || c2 == null && c1 != null) {
             return false;
+        }
+        if (c1 == null /* && c2 == null */) {
+            return true;
         }
         if (c1.length != c2.length) {
             return false;
@@ -211,4 +249,15 @@ public final class CertificatesUtils {
         return WILDCARD_PREFIX + Objects.requireNonNull(name);
     }
 
+    /**
+     * {@link SslContext}s are cached at listener level.
+     * This method computes the key from hostname, port, and SNI.
+     *
+     * @param hostPort
+     * @param sniHostname the Server Name Indication (SNI) indication
+     * @return the cache key
+     */
+    public static String computeKey(final HostPort hostPort, final String sniHostname) {
+        return hostPort.host() + ":" + hostPort.port() + "+" + sniHostname;
+    }
 }
