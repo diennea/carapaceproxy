@@ -156,7 +156,7 @@ public class Listeners {
 
     private void bootListener(final HostPort hostPort, final NetworkListenerConfiguration configuration) {
         final var newListener = new DisposableChannelListener(
-                hostPort, this.parent, configuration, PrometheusListenerStats.INSTANCE, sslContexts
+                hostPort, parent, currentConfiguration, configuration, PrometheusListenerStats.INSTANCE, sslContexts
         );
         listeningChannels.put(hostPort, newListener);
         newListener.start();
