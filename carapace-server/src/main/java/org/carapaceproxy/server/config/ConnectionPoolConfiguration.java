@@ -21,28 +21,39 @@ package org.carapaceproxy.server.config;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * Configuration of a single connection pool
  */
 @Data
+@NoArgsConstructor
 @AllArgsConstructor
 public class ConnectionPoolConfiguration {
+    public static final int DEFAULT_MAX_CONNECTIONS_PER_ENDPOINT = 10;
+    public static final int DEFAULT_IDLE_TIMEOUT = 60_000;
+    public static final int DEFAULT_BORROW_TIMEOUT = 60_000;
+    public static final int DEFAULT_MAX_LIFETIME = 100_000;
+    public static final int DEFAULT_STUCK_REQUEST_TIMEOUT = 120_000;
+    public static final int DEFAULT_CONNECT_TIMEOUT = 10_000;
+    public static final int DEFAULT_DISPOSE_TIMEOUT = 300_000;
+    public static final int DEFAULT_KEEPALIVE_IDLE = 300;
+    public static final int DEFAULT_KEEPALIVE_INTERVAL = 60;
+    public static final int DEFAULT_KEEPALIVE_COUNT = 8;
+    public static final boolean DEFAULT_KEEPALIVE = true;
 
     private String id;
     private String domain;
-    private int maxConnectionsPerEndpoint;
-    private int borrowTimeout;
-    private int connectTimeout;
-    private int stuckRequestTimeout;
-    private int idleTimeout;
-    private int maxLifeTime;
-    private int disposeTimeout;
-    private int keepaliveIdle;
-    private int keepaliveInterval;
-    private int keepaliveCount;
-    private boolean keepAlive;
-
+    private int maxConnectionsPerEndpoint = DEFAULT_MAX_CONNECTIONS_PER_ENDPOINT;
+    private int borrowTimeout = DEFAULT_BORROW_TIMEOUT;
+    private int connectTimeout = DEFAULT_CONNECT_TIMEOUT;
+    private int stuckRequestTimeout = DEFAULT_STUCK_REQUEST_TIMEOUT;
+    private int idleTimeout = DEFAULT_IDLE_TIMEOUT;
+    private int maxLifeTime = DEFAULT_MAX_LIFETIME;
+    private int disposeTimeout = DEFAULT_DISPOSE_TIMEOUT;
+    private int keepaliveIdle = DEFAULT_KEEPALIVE_IDLE;
+    private int keepaliveInterval = DEFAULT_KEEPALIVE_INTERVAL;
+    private int keepaliveCount = DEFAULT_KEEPALIVE_COUNT;
+    private boolean keepAlive = DEFAULT_KEEPALIVE;
     private boolean enabled;
-
 }
