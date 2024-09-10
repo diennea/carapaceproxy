@@ -17,6 +17,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertTrue;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.IOException;
+import java.util.List;
 import java.util.Set;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -26,13 +27,22 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
+@RunWith(Parameterized.class)
 public class ForwardedStrategyTest {
     public static final String REAL_IP_ADDRESS = "127.0.0.1";
     public static final String FORWARDED_IP_ADDRESS = "1.2.3.4";
     public static final String HEADER_PRESENT = "Header present!";
     public static final String HEADER_REWRITTEN = "Header rewritten!";
     public static final String NO_HEADER = "No header!";
+    public static final String SUBNET = "/24";
+
+    @Parameterized.Parameters(name = "Use actual CIDR? {0}")
+    public static Iterable<?> data() {
+        return List.of(true, false);
+    }
 
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
@@ -61,6 +71,9 @@ public class ForwardedStrategyTest {
                         .withHeader("Content-Type", "text/html")
                         .withBody(NO_HEADER)));
     }
+
+    @Parameterized.Parameter
+    public boolean useCidr;
 
     @Test
     public void testDropStrategy() throws IOException, ConfigurationNotValidException, InterruptedException {
@@ -123,7 +136,7 @@ public class ForwardedStrategyTest {
     public void testIfTrustedStrategy() throws IOException, ConfigurationNotValidException, InterruptedException {
         final var mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         try (final var server = new HttpProxyServer(mapper, tmpDir.newFolder())) {
-            final var trustedIps = Set.of(REAL_IP_ADDRESS + "/24");
+            final var trustedIps = Set.of(REAL_IP_ADDRESS + (useCidr ? SUBNET : ""));
             server.addListener(getConfiguration(ForwardedStrategies.ifTrusted(trustedIps), trustedIps));
             server.start();
             int port = server.getLocalPort();
@@ -143,7 +156,7 @@ public class ForwardedStrategyTest {
     public void testIfNotTrustedStrategy() throws IOException, ConfigurationNotValidException, InterruptedException {
         final var mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         try (final var server = new HttpProxyServer(mapper, tmpDir.newFolder())) {
-            final var trustedIps = Set.of(FORWARDED_IP_ADDRESS + "/24");
+            final var trustedIps = Set.of(FORWARDED_IP_ADDRESS + (useCidr ? SUBNET : ""));
             server.addListener(getConfiguration(ForwardedStrategies.ifTrusted(trustedIps), trustedIps));
             server.start();
             int port = server.getLocalPort();

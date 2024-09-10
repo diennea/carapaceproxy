@@ -79,6 +79,7 @@ public final class ForwardedStrategies {
     record IfTrusted(Set<String> trustedIps) implements ForwardedStrategy {
 
         static final String NAME = "IF_TRUSTED";
+        private static final String DEFAULT_SUBNET = "/32";
 
         @Override
         public ConnectionInfo apply(final ConnectionInfo connectionInfo, final HttpRequest request) {
@@ -96,8 +97,12 @@ public final class ForwardedStrategies {
             if (address == null) {
                 return false;
             }
-            for (final var cidr : trustedIps) {
-                final var subnetInfo = new SubnetUtils(cidr).getInfo();
+            for (final var trustedIp : trustedIps) {
+                final var cidr = trustedIp.contains("/") ? trustedIp : trustedIp + DEFAULT_SUBNET;
+                final var subnetUtils = new SubnetUtils(cidr);
+                // Include network and broadcast addresses in host count, necessary for /32 subnets
+                subnetUtils.setInclusiveHostCount(true);
+                final var subnetInfo = subnetUtils.getInfo();
                 if (subnetInfo.isInRange(address.getAddress().getHostAddress())) {
                     return true;
                 }
