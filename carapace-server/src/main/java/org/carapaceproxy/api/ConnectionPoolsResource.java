@@ -21,6 +21,17 @@ package org.carapaceproxy.api;
 
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.summingInt;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_BORROW_TIMEOUT;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_CONNECT_TIMEOUT;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_DISPOSE_TIMEOUT;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_IDLE_TIMEOUT;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_KEEPALIVE;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_KEEPALIVE_COUNT;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_KEEPALIVE_IDLE;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_KEEPALIVE_INTERVAL;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_MAX_CONNECTIONS_PER_ENDPOINT;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_MAX_LIFETIME;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_STUCK_REQUEST_TIMEOUT;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -67,17 +78,17 @@ public class ConnectionPoolsResource {
 
         private String id;
         private String domain;
-        private int maxConnectionsPerEndpoint;
-        private int borrowTimeout;
-        private int connectTimeout;
-        private int stuckRequestTimeout;
-        private int idleTimeout;
-        private int maxLifeTime;
-        private int disposeTimeout;
-        private int keepaliveIdle;
-        private int keepaliveInterval;
-        private int keepaliveCount;
-        private boolean keepAlive;
+        private int maxConnectionsPerEndpoint = DEFAULT_MAX_CONNECTIONS_PER_ENDPOINT;
+        private int borrowTimeout = DEFAULT_BORROW_TIMEOUT;
+        private int connectTimeout = DEFAULT_CONNECT_TIMEOUT;
+        private int stuckRequestTimeout = DEFAULT_STUCK_REQUEST_TIMEOUT;
+        private int idleTimeout = DEFAULT_IDLE_TIMEOUT;
+        private int maxLifeTime = DEFAULT_MAX_LIFETIME;
+        private int disposeTimeout = DEFAULT_DISPOSE_TIMEOUT;
+        private int keepaliveIdle = DEFAULT_KEEPALIVE_IDLE;
+        private int keepaliveInterval = DEFAULT_KEEPALIVE_INTERVAL;
+        private int keepaliveCount = DEFAULT_KEEPALIVE_COUNT;
+        private boolean keepAlive = DEFAULT_KEEPALIVE;
         private boolean enabled;
 
         private int totalConnections;
