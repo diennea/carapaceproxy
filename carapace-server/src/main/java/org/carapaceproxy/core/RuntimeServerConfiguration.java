@@ -21,6 +21,17 @@ package org.carapaceproxy.core;
 
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_BORROW_TIMEOUT;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_CONNECT_TIMEOUT;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_DISPOSE_TIMEOUT;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_IDLE_TIMEOUT;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_KEEPALIVE;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_KEEPALIVE_COUNT;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_KEEPALIVE_IDLE;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_KEEPALIVE_INTERVAL;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_MAX_CONNECTIONS_PER_ENDPOINT;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_MAX_LIFETIME;
+import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_STUCK_REQUEST_TIMEOUT;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_FORWARDED_STRATEGY;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.getDefaultHttpProtocols;
@@ -72,20 +83,20 @@ public class RuntimeServerConfiguration {
     private final Map<String, ConnectionPoolConfiguration> connectionPools = new HashMap<>();
     private ConnectionPoolConfiguration defaultConnectionPool;
 
-    private int maxConnectionsPerEndpoint = 10;
-    private int idleTimeout = 60_000;
-    private int maxLifeTime = 100_000;
-    private int stuckRequestTimeout = 120_000;
+    private int maxConnectionsPerEndpoint = DEFAULT_MAX_CONNECTIONS_PER_ENDPOINT;
+    private int idleTimeout = DEFAULT_IDLE_TIMEOUT;
+    private int maxLifeTime = DEFAULT_MAX_LIFETIME;
+    private int stuckRequestTimeout = DEFAULT_STUCK_REQUEST_TIMEOUT;
     private boolean backendsUnreachableOnStuckRequests = false;
-    private int connectTimeout = 10_000;
-    private int borrowTimeout = 60_000;
-    private int disposeTimeout = 300_000; // 5 min;
+    private int connectTimeout = DEFAULT_CONNECT_TIMEOUT;
+    private int borrowTimeout = DEFAULT_BORROW_TIMEOUT;
+    private int disposeTimeout = DEFAULT_DISPOSE_TIMEOUT; // 5 min
     private int soBacklog = 128;
-    private int keepaliveIdle = 300; // sec
-    private int keepaliveInterval = 60; // sec
-    private int keepaliveCount = 8;
-    private boolean clientKeepAlive = true;
-    private boolean serverKeepAlive = true;
+    private int keepaliveIdle = DEFAULT_KEEPALIVE_IDLE; // sec
+    private int keepaliveInterval = DEFAULT_KEEPALIVE_INTERVAL; // sec
+    private int keepaliveCount = DEFAULT_KEEPALIVE_COUNT;
+    private boolean clientKeepAlive = DEFAULT_KEEPALIVE;
+    private boolean serverKeepAlive = DEFAULT_KEEPALIVE;
     private int maxKeepAliveRequests = 1000;
     private long cacheMaxSize = 0;
     private long cacheMaxFileSize = 0;
@@ -99,7 +110,7 @@ public class RuntimeServerConfiguration {
             + "time t=<total_time>ms b=<backend_time>ms, protocol=<http_protocol_version>";
     private int accessLogMaxQueueCapacity = 2000;
     private int accessLogFlushInterval = 5000;
-    private int accessLogWaitBetweenFailures = 10000;
+    private int accessLogWaitBetweenFailures = DEFAULT_CONNECT_TIMEOUT;
     private long accessLogMaxSize = 524288000;
     private boolean accessLogAdvancedEnabled = false;
     private int accessLogAdvancedBodySize = 1_000; // bytes
@@ -122,7 +133,7 @@ public class RuntimeServerConfiguration {
     private boolean http10BackwardCompatibilityEnabled = false;
     private String localCertificatesStorePath;
     private Set<String> localCertificatesStorePeersIds;
-    private int maxAttempts = 10;
+    private int maxAttempts = DEFAULT_MAX_CONNECTIONS_PER_ENDPOINT;
     private Set<String> alwaysCachedExtensions = Set.of("png", "gif", "jpg", "jpeg", "js", "css", "woff2", "webp");
 
     public RuntimeServerConfiguration() {
