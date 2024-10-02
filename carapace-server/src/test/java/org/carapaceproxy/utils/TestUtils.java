@@ -19,21 +19,21 @@
  */
 package org.carapaceproxy.utils;
 
+import static org.junit.Assert.assertTrue;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.AccessController;
 import java.security.Key;
+import java.security.PrivilegedAction;
 import java.util.Arrays;
 import java.util.concurrent.Callable;
 import org.junit.Assert;
-import static org.junit.Assert.assertTrue;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
 import sun.misc.Unsafe;
 
 /**

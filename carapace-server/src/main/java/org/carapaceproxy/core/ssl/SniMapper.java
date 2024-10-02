@@ -49,8 +49,9 @@ public final class SniMapper {
     ) {
         this.parent = parent;
         /*
-         * todo I don't think we actually need to store these data that should already be in the `parent`...
-         *  sadly, this breaks reload of configuration after replacing the ConfigurationStore;
+         * todo:
+         *  I don't think we actually need to store these data that should already be in the `parent`...
+         *  sadly, this breaks the reload of the configuration after replacing the ConfigurationStore;
          *  one problem at a time though, this should be a different GitHub issue!
          */
         this.runtimeConfiguration = runtimeConfiguration;
@@ -82,9 +83,10 @@ public final class SniMapper {
                 final var defaultCertificate = listenerConfiguration.getDefaultCertificate();
                 var chosen = Listeners.chooseCertificate(runtimeConfiguration, sniHostname, defaultCertificate);
                 if (chosen == null) {
-                    throw new ConfigurationNotValidException("cannot find a certificate for snihostname " + sniHostname
-                                                             + ", with default cert for listener as '" + defaultCertificate
-                                                             + "', available " + runtimeConfiguration.getCertificates().keySet());
+                    throw new ConfigurationNotValidException(
+                            "cannot find a certificate for snihostname " + sniHostname
+                            + ", with default cert for listener as '" + defaultCertificate
+                            + "', available " + runtimeConfiguration.getCertificates().keySet());
                 }
                 int port = listenerConfiguration.getPort() + parent.getListenersOffsetPort();
                 try {
@@ -156,6 +158,7 @@ public final class SniMapper {
         }
         return null;
     }
+
     public Consumer<SslProvider.SslContextSpec> sslContextSpecConsumer() {
         return this::configureSpec;
     }
