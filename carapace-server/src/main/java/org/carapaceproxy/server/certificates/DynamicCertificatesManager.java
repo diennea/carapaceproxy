@@ -22,6 +22,8 @@ package org.carapaceproxy.server.certificates;
 import static java.util.function.Predicate.not;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
+import static org.carapaceproxy.core.ssl.CertificatesUtils.isCertificateExpired;
+import static org.carapaceproxy.core.ssl.CertificatesUtils.readChainFromKeystore;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.DNS_CHALLENGE_WAIT;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.DOMAIN_UNREACHABLE;
@@ -32,8 +34,6 @@ import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERI
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERIFYING;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.MANUAL;
-import static org.carapaceproxy.core.ssl.CertificatesUtils.isCertificateExpired;
-import static org.carapaceproxy.core.ssl.CertificatesUtils.readChainFromKeystore;
 import com.google.common.annotations.VisibleForTesting;
 import java.io.File;
 import java.io.FileOutputStream;

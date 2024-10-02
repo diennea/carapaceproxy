@@ -23,6 +23,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.carapaceproxy.utils.ApacheHttpUtils.createHttpClientWithDisabledSSLValidation;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.aMapWithSize;
 import static org.hamcrest.Matchers.allOf;
@@ -40,18 +42,10 @@ import static org.junit.Assert.fail;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.IOException;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.security.KeyManagementException;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
 import java.util.Map;
 import java.util.Properties;
-import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.HttpStatus;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.conn.ssl.NoopHostnameVerifier;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.ssl.SSLContextBuilder;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
@@ -84,21 +78,12 @@ public class ApplyConfigurationTest {
     public static void setupWireMock() {
         stubFor(get(urlEqualTo("/index.html?redir"))
                 .willReturn(aResponse()
-                        .withStatus(200)
+                        .withStatus(HttpStatus.SC_OK)
                         .withHeader("Content-Type", "text/html")
                         .withHeader("Pragma", "no-cache")
                         .withHeader("Connection", "close")
                         .withBody("it <b>works</b> !!")));
 
-    }
-
-    private static CloseableHttpClient createHttpClientWithDisabledSSLValidation() throws NoSuchAlgorithmException, KeyStoreException, KeyManagementException {
-        return HttpClients.custom()
-                .setSSLContext(SSLContextBuilder.create()
-                        .loadTrustMaterial((chain, authType) -> true) // Trust all certificates
-                        .build())
-                .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE) // Disable hostname verification
-                .build();
     }
 
     @Test
@@ -173,10 +158,9 @@ public class ApplyConfigurationTest {
                     "listener.2.sslprotocols", "TLSv1.2,TLSv1.3"
             )));
 
-            // Test HTTPS for listener 1
-            testIt(1423, true, true); // Expecting valid HTTPS connection
-            // Test HTTPS for listener 2
-            testIt(1426, true, true); // Expecting valid HTTPS connection
+            // Expecting valid HTTPS connection
+            testIt(1423, true, true);
+            testIt(1426, true, true);
 
             // listener with default tls version
             reloadConfiguration(server, propsWithMapperAndCertificate(defaultCertificate, Map.of(
@@ -184,8 +168,9 @@ public class ApplyConfigurationTest {
                     "listener.1.port", "1423",
                     "listener.1.ssl", "true"
             )));
-            // Test HTTPS for listener 1
-            testIt(1423, true, true); // Expecting valid HTTPS connection
+
+            // Expecting valid HTTPS connection
+            testIt(1423, true, true);
 
             // listener with wrong tls version
             final IllegalStateException e = assertThrows(IllegalStateException.class, () ->
@@ -369,21 +354,19 @@ public class ApplyConfigurationTest {
     }
 
     private void testIt(int port, final boolean https, boolean ok) throws Exception {
-        try (CloseableHttpClient client = createHttpClientWithDisabledSSLValidation()) {
-            final String protocol = https ? "https" : "http";
-            String url = protocol + "://localhost:" + port + "/index.html?redir";
+        try (final var client = createHttpClientWithDisabledSSLValidation()) {
+            final var protocol = https ? "https" : "http";
+            final var url = protocol + "://localhost:" + port + "/index.html?redir";
 
-            HttpGet request = new HttpGet(new URI(url));
-            try (CloseableHttpResponse response = client.execute(request)) {
-                int statusCode = response.getStatusLine().getStatusCode();
-                String responseBody = new String(response.getEntity().getContent().readAllBytes(), StandardCharsets.UTF_8);
+            final var request = new HttpGet(new URI(url));
+            try (final var response = client.execute(request)) {
+                final var statusCode = response.getStatusLine().getStatusCode();
+                final var responseBody = new String(response.getEntity().getContent().readAllBytes(), UTF_8);
 
                 System.out.println("RES FOR: " + url + " -> " + responseBody);
-
-                // Check that the response body matches what we expect
                 assertEquals("it <b>works</b> !!", responseBody);
 
-                if (!ok && statusCode == 200) {
+                if (!ok && statusCode == HttpStatus.SC_OK) {
                     fail("Expecting an error for port " + port);
                 }
             }
