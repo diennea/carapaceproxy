@@ -115,6 +115,9 @@ public final class CertificatesUtils {
      * @throws CertificateException     if any of the certificates in the keystore could not be loaded
      */
     public static Certificate[] readChainFromKeystore(KeyStore keystore) throws GeneralSecurityException {
+        if (keystore == null) {
+            return new Certificate[0];
+        }
         Iterator<String> iter = keystore.aliases().asIterator();
         while (iter.hasNext()) {
             Certificate[] chain = keystore.getCertificateChain(iter.next());
