@@ -398,7 +398,7 @@ public class Listeners {
             try {
                 // Try to find certificate data on db
                 byte[] keystoreContent = parent.getDynamicCertificatesManager().getCertificateForDomain(certificate.getId());
-                KeyStore keystore;
+                final KeyStore keystore;
                 if (keystoreContent != null) {
                     LOG.debug("start SSL with dynamic certificate id {}, on listener {}:{}", certificate.getId(), listener.getHost(), port);
                     keystore = loadKeyStoreData(keystoreContent, certificate.getPassword());
