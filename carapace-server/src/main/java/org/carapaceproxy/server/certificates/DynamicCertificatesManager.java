@@ -608,7 +608,7 @@ public class DynamicCertificatesManager implements Runnable {
      * @return PKCS12 Keystore content
      */
     public byte[] getCertificateForDomain(String domain) {
-        CertificateData cert = certificates.get(domain); // certs always retrived from cache
+        CertificateData cert = certificates.get(domain); // certs always retrieved from cache
         if (cert == null || cert.getKeystoreData() == null || cert.getKeystoreData().length == 0) {
             LOG.log(Level.SEVERE, "No dynamic certificate available for domain {0}", domain);
             return null;

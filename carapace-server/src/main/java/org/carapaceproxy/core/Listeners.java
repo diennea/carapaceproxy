@@ -400,11 +400,8 @@ public class Listeners {
             try {
                 // Try to find certificate data on db
                 byte[] keystoreContent = parent.getDynamicCertificatesManager().getCertificateForDomain(certificate.getId());
-                KeyStore keystore;
-                if (keystoreContent != null) {
-                    LOG.log(Level.FINE, "start SSL with dynamic certificate id {0}, on listener {1}:{2}", new Object[]{certificate.getId(), listener.getHost(), port});
-                    keystore = loadKeyStoreData(keystoreContent, certificate.getPassword());
-                } else {
+                final KeyStore keystore;
+                if (keystoreContent == null) {
                     if (certificate.isDynamic()) { // fallback to default certificate
                         certificate = currentConfiguration.getCertificates().get(listener.getDefaultCertificate());
                         if (certificate == null) {
@@ -415,6 +412,9 @@ public class Listeners {
                             new Object[]{certificate.getId(), listener.getHost(), port, certificate.getFile()}
                     );
                     keystore = loadKeyStoreFromFile(certificate.getFile(), certificate.getPassword(), basePath);
+                } else {
+                    LOG.log(Level.FINE, "start SSL with dynamic certificate id {0}, on listener {1}:{2}", new Object[]{certificate.getId(), listener.getHost(), port});
+                    keystore = loadKeyStoreData(keystoreContent, certificate.getPassword());
                 }
                 KeyManagerFactory keyFactory = new OpenSslCachingX509KeyManagerFactory(KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()));
                 keyFactory.init(keystore, certificate.getPassword().toCharArray());

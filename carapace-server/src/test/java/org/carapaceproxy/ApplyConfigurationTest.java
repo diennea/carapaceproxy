@@ -63,6 +63,7 @@ import org.carapaceproxy.user.SimpleUserRealm;
 import org.carapaceproxy.user.UserRealm;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUserRealm;
+import org.carapaceproxy.utils.TestUtils;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Rule;
@@ -160,9 +161,8 @@ public class ApplyConfigurationTest {
             testIt(1426, false);
 
             // listener with correct tls version
-            reloadConfiguration(server, propsWithMapper(Map.of(
-                    "certificate.1.hostname", "*",
-                    "certificate.1.mode", "manual",
+            String defaultCertificate = TestUtils.deployResource("ia.p12", tmpDir.getRoot());
+            reloadConfiguration(server, propsWithMapperAndCertificate(defaultCertificate, Map.of(
                     "listener.1.host", "localhost",
                     "listener.1.port", "1423",
                     "listener.1.ssl", "true",
@@ -179,9 +179,7 @@ public class ApplyConfigurationTest {
             testIt(1426, true, true); // Expecting valid HTTPS connection
 
             // listener with default tls version
-            reloadConfiguration(server, propsWithMapper(Map.of(
-                    "certificate.1.hostname", "*",
-                    "certificate.1.mode", "manual",
+            reloadConfiguration(server, propsWithMapperAndCertificate(defaultCertificate, Map.of(
                     "listener.1.host", "localhost",
                     "listener.1.port", "1423",
                     "listener.1.ssl", "true"
@@ -190,9 +188,8 @@ public class ApplyConfigurationTest {
             testIt(1423, true, true); // Expecting valid HTTPS connection
 
             // listener with wrong tls version
-            final IllegalStateException e = assertThrows(IllegalStateException.class, () -> reloadConfiguration(server, propsWithMapper(Map.of(
-                    "certificate.1.hostname", "*",
-                    "certificate.1.mode", "manual",
+            final IllegalStateException e = assertThrows(IllegalStateException.class, () ->
+                    reloadConfiguration(server, propsWithMapperAndCertificate(defaultCertificate, Map.of(
                     "listener.1.host", "localhost",
                     "listener.1.port", "1423",
                     "listener.1.ssl", "true",
@@ -404,14 +401,22 @@ public class ApplyConfigurationTest {
         return configuration;
     }
 
+    private Properties propsWithMapperAndCertificate(final String defaultCertificate, final Map<String, String> props) {
+        final var configuration = new Properties(props.size());
+        configuration.put("mapper.class", StaticEndpointMapper.class.getName());
+        configuration.put("certificate.1.hostname", "*");
+        configuration.put("certificate.1.file", defaultCertificate);
+        configuration.put("certificate.1.password", "changeit");
+        configuration.putAll(props);
+        return configuration;
+    }
+
     /**
      * Static mapper, so that it can be references by configuration
      */
     public static final class StaticEndpointMapper extends TestEndpointMapper {
-
         public StaticEndpointMapper() {
             super("localhost", wireMockRule.port());
         }
-
     }
 }
