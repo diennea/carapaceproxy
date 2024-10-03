@@ -90,19 +90,26 @@ public final class SniMapper {
                 }
                 int port = listenerConfiguration.getPort() + parent.getListenersOffsetPort();
                 try {
-                    // Try to find certificate data on db
-                    byte[] keystoreContent = parent.getDynamicCertificatesManager().getCertificateForDomain(chosen.getId());
-                    final KeyStore keystore;
-                    if (keystoreContent != null) {
-                        LOG.debug("start SSL with dynamic certificate id {}, on listener {}:{}", chosen.getId(), listenerConfiguration.getHost(), port);
-                        keystore = loadKeyStoreData(keystoreContent, chosen.getPassword());
-                    } else {
-                        if (chosen.isDynamic()) { // fallback to default certificate
+                    final byte[] keystoreContent;
+                    if (chosen.isDynamic()) {
+                        // Try to find certificate data on db
+                        keystoreContent = parent.getDynamicCertificatesManager().getCertificateForDomain(chosen.getId());
+                        if (keystoreContent == null) {
+                            // fallback to default certificate
                             chosen = runtimeConfiguration.getCertificates().get(listenerConfiguration.getDefaultCertificate());
                             if (chosen == null) {
                                 throw new ConfigurationNotValidException("Unable to boot SSL context for listener " + listenerConfiguration.getHost() + ": no default certificate setup.");
                             }
                         }
+                    } else {
+                        keystoreContent = null;
+                    }
+                    final KeyStore keystore;
+                    if (chosen.isDynamic()) {
+                        assert keystoreContent != null;
+                        LOG.debug("start SSL with dynamic certificate id {}, on listener {}:{}", chosen.getId(), listenerConfiguration.getHost(), port);
+                        keystore = loadKeyStoreData(keystoreContent, chosen.getPassword());
+                    } else {
                         LOG.debug("start SSL with certificate id {}, on listener {}:{} file={}", chosen.getId(), listenerConfiguration.getHost(), port, chosen.getFile());
                         keystore = loadKeyStoreFromFile(chosen.getFile(), chosen.getPassword(), basePath());
                     }

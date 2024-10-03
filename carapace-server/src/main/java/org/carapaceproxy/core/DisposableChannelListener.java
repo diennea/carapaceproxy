@@ -114,6 +114,7 @@ public class DisposableChannelListener {
                         SniHandler sni = new SniHandler(sslProviderBuilder.sslContextAsyncMapping()) {
                             @Override
                             protected SslHandler newSslHandler(SslContext context, ByteBufAllocator allocator) {
+                                LOG.info("ChatGPT: Creating new SslHandler for context: {}", context); // todo ChatGPT
                                 SslHandler handler = super.newSslHandler(context, allocator);
                                 if (runtimeConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported()) {
                                     Certificate cert = (Certificate) context.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN)).get();
@@ -132,6 +133,7 @@ public class DisposableChannelListener {
                             }
                         };
                         channel.pipeline().addFirst(sni);
+                        LOG.info("ChatGPT: Pipeline after adding SniHandler: {}", channel.pipeline()); // todo ChatGPT
                     }
                 })
                 .doOnConnection(conn -> {
