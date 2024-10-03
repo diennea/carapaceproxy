@@ -390,6 +390,7 @@ public class ApplyConfigurationTest {
         configuration.put("certificate.1.hostname", "*");
         configuration.put("certificate.1.file", defaultCertificate);
         configuration.put("certificate.1.password", "changeit");
+        configuration.put("certificate.1.mode", "static");
         configuration.putAll(props);
         return configuration;
     }

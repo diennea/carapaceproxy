@@ -38,7 +38,8 @@ import org.slf4j.LoggerFactory;
  * Collection of listeners waiting for incoming clients requests on the configured HTTP ports.
  * <br>
  * While the {@link RuntimeServerConfiguration} is actually <i>mutable</i>, this class won't watch it for updates;
- * the caller should request a {@link #reloadConfiguration() reload of the configuration} manually instead.
+ * the caller should instead
+ * request a {@link #reloadConfiguration(RuntimeServerConfiguration) reload of the configuration} manually.
  *
  * @author enrico.olivelli
  */
@@ -194,16 +195,23 @@ public class Listeners {
                 }
             }
         }
-        SSLCertificateConfiguration choosen = null;
+        SSLCertificateConfiguration chosen = null;
         if (certificateMatchExact != null) {
-            choosen = certificateMatchExact;
+            chosen = certificateMatchExact;
         } else if (certificateMatchNoExact != null) {
-            choosen = certificateMatchNoExact;
+            chosen = certificateMatchNoExact;
         }
-        if (choosen == null) {
-            choosen = certificates.get(defaultCertificate);
+        if (chosen == null) {
+            chosen = certificates.get(defaultCertificate);
         }
-        return choosen;
+        /* todo ChatGPT */
+        LOG.info("ChatGPT: Resolving SNI for hostname: {}", sniHostname);
+        if (chosen == null) {
+            LOG.error("ChatGPT: No certificate found for SNI hostname: {}", sniHostname);
+        } else {
+            LOG.info("ChatGPT: Using certificate: {}", chosen.getId());
+        }
+        return chosen;
     }
 
     private static boolean certificateMatches(String hostname, SSLCertificateConfiguration c, boolean exact) {
