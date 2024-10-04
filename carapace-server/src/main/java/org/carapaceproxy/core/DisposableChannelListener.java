@@ -90,19 +90,21 @@ public class DisposableChannelListener {
         } else {
             sslProviderBuilder = null;
         }
+        final var epollAvailable = Epoll.isAvailable();
+        LOG.info("Epoll is available? {}", epollAvailable);
         httpServer = httpServer
                 .metrics(true, Function.identity())
                 .forwarded(ForwardedStrategy.of(config.getForwardedStrategy(), config.getTrustedIps()))
                 .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())
                 .childOption(ChannelOption.SO_KEEPALIVE, config.isKeepAlive())
                 .runOn(parent.getEventLoopGroup())
-                .childOption(Epoll.isAvailable()
+                .childOption(epollAvailable
                         ? EpollChannelOption.TCP_KEEPIDLE
                         : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE), config.getKeepAliveIdle())
-                .childOption(Epoll.isAvailable()
+                .childOption(epollAvailable
                         ? EpollChannelOption.TCP_KEEPINTVL
                         : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL), config.getKeepAliveInterval())
-                .childOption(Epoll.isAvailable()
+                .childOption(epollAvailable
                         ? EpollChannelOption.TCP_KEEPCNT
                         : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), config.getKeepAliveCount())
                 .maxKeepAliveRequests(config.getMaxKeepAliveRequests())
@@ -132,8 +134,12 @@ public class DisposableChannelListener {
                                 return handler;
                             }
                         };
-                        channel.pipeline().addFirst(sni);
-                        LOG.info("ChatGPT: Pipeline after adding SniHandler: {}", channel.pipeline()); // todo ChatGPT
+//                        channel.pipeline().addFirst(sni);
+//                        channel.pipeline().addLast(sni);
+                        LOG.info("Pipeline: {}", channel.pipeline().names());
+                        // LOG.info("Pipeline: {}", channel.pipeline().toString());
+                        LOG.info("Pipeline contains SSLHandler? {}", channel.pipeline().get(io.netty.handler.ssl.SslHandler.class) != null);
+                        LOG.info("Pipeline['reactor.left.sslHandler']: {}", channel.pipeline().get("reactor.left.sslHandler"));
                     }
                 })
                 .doOnConnection(conn -> {
