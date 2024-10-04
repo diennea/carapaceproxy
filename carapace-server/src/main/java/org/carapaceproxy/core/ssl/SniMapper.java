@@ -3,6 +3,8 @@ package org.carapaceproxy.core.ssl;
 import static org.carapaceproxy.core.ssl.CertificatesUtils.loadKeyStoreData;
 import static org.carapaceproxy.core.ssl.CertificatesUtils.loadKeyStoreFromFile;
 import static org.carapaceproxy.core.ssl.CertificatesUtils.readChainFromKeystore;
+import io.netty.handler.ssl.ApplicationProtocolConfig;
+import io.netty.handler.ssl.ApplicationProtocolNames;
 import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.OpenSslCachingX509KeyManagerFactory;
 import io.netty.handler.ssl.SslContext;
@@ -122,6 +124,15 @@ public final class SniMapper {
                             .trustManager(parent.getTrustStoreManager().getTrustManagerFactory())
                             .sslProvider(io.netty.handler.ssl.SslProvider.OPENSSL)
                             .protocols(listenerConfiguration.getSslProtocols())
+                            .applicationProtocolConfig(new ApplicationProtocolConfig(
+                                    ApplicationProtocolConfig.Protocol.ALPN,
+                                    // NO_ADVERTISE means do not send the protocol name if it's unsupported
+                                    ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
+                                    // ACCEPT means select the first protocol if no match is found
+                                    ApplicationProtocolConfig.SelectedListenerFailureBehavior.ACCEPT,
+                                    ApplicationProtocolNames.HTTP_2,
+                                    ApplicationProtocolNames.HTTP_1_1
+                            ))
                             .ciphers(getSslCiphers())
                             .build();
 
