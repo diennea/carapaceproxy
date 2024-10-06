@@ -204,12 +204,11 @@ public class Listeners {
         if (chosen == null) {
             chosen = certificates.get(defaultCertificate);
         }
-        /* todo ChatGPT */
-        LOG.info("ChatGPT: Resolving SNI for hostname: {}", sniHostname);
+        LOG.info("Resolving SNI for hostname: {}", sniHostname);
         if (chosen == null) {
-            LOG.error("ChatGPT: No certificate found for SNI hostname: {}", sniHostname);
+            LOG.error("No certificate found for SNI hostname: {}", sniHostname);
         } else {
-            LOG.info("ChatGPT: Using certificate: {}", chosen.getId());
+            LOG.info("Using certificate: {}", chosen.getId());
         }
         return chosen;
     }
