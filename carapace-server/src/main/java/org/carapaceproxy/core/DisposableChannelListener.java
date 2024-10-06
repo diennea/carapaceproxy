@@ -1,29 +1,21 @@
 package org.carapaceproxy.core;
 
-import static org.carapaceproxy.core.Listeners.OCSP_CERTIFICATE_CHAIN;
 import static reactor.netty.ConnectionObserver.State.CONNECTED;
-import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.socket.nio.NioChannelOption;
-import io.netty.handler.ssl.OpenSsl;
-import io.netty.handler.ssl.ReferenceCountedOpenSslEngine;
-import io.netty.handler.ssl.SniHandler;
 import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslHandler;
+import io.netty.handler.ssl.util.SelfSignedCertificate;
 import io.netty.handler.timeout.IdleStateHandler;
-import io.netty.util.AttributeKey;
-import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.security.cert.Certificate;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
 import jdk.net.ExtendedSocketOptions;
-import org.carapaceproxy.core.ssl.SniMapper;
+import lombok.SneakyThrows;
 import org.carapaceproxy.core.stats.ListenerStats;
 import org.carapaceproxy.server.config.HostPort;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -32,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.netty.DisposableChannel;
 import reactor.netty.FutureMono;
+import reactor.netty.http.Http11SslContextSpec;
 import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.server.HttpServer;
 
@@ -71,6 +64,7 @@ public class DisposableChannelListener {
         return hostPort;
     }
 
+    @SneakyThrows
     public void start() {
         final var hostPort = this.hostPort.offsetPort(parent.getListenersOffsetPort());
         final var config = this.listenerConfiguration;
@@ -81,14 +75,27 @@ public class DisposableChannelListener {
                 .host(hostPort.host())
                 .port(hostPort.port())
                 .protocol(config.getProtocols().toArray(HttpProtocol[]::new));
-        final SniMapper sslProviderBuilder;
         if (config.isSsl()) {
-            sslProviderBuilder = new SniMapper(
-                    parent, runtimeConfiguration, config, hostPort, sslContextsCache
-            );
-            httpServer = httpServer.secure(sslProviderBuilder.sslContextSpecConsumer());
-        } else {
-            sslProviderBuilder = null;
+            // final var keyManager = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+            // final var sslContext = SslContextBuilder
+            //         .forServer(keyManager)
+            //         .sslProvider(io.netty.handler.ssl.SslProvider.OPENSSL)
+            //         .protocols(config.getSslProtocols())
+            //         .enableOcsp(true)
+            //         /* .applicationProtocolConfig(new ApplicationProtocolConfig(
+            //                 ApplicationProtocolConfig.Protocol.ALPN,
+            //                 // NO_ADVERTISE means do not send the protocol name if it's unsupported
+            //                 ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
+            //                 // ACCEPT means select the first protocol if no match is found
+            //                 ApplicationProtocolConfig.SelectedListenerFailureBehavior.ACCEPT,
+            //                 ApplicationProtocolNames.HTTP_2,
+            //                 ApplicationProtocolNames.HTTP_1_1
+            //         )) */
+            //         .build();
+            // httpServer = httpServer.secure(spec -> spec.sslContext(sslContext));
+            final var cert = new SelfSignedCertificate();
+            final var http11SslContextSpec = Http11SslContextSpec.forServer(cert.certificate(), cert.privateKey());
+            httpServer = httpServer.secure(sslContextSpec -> sslContextSpec.sslContext(http11SslContextSpec));
         }
         final var epollAvailable = Epoll.isAvailable();
         LOG.info("Epoll is available? {}", epollAvailable);
@@ -111,36 +118,6 @@ public class DisposableChannelListener {
                 .doOnChannelInit((observer, channel, remoteAddress) -> {
                     final var handler = new IdleStateHandler(0, 0, this.runtimeConfiguration.getClientsIdleTimeoutSeconds());
                     channel.pipeline().addFirst("idleStateHandler", handler);
-                    if (config.isSsl()) {
-                        assert sslProviderBuilder != null;
-                        SniHandler sni = new SniHandler(sslProviderBuilder.sslContextAsyncMapping()) {
-                            @Override
-                            protected SslHandler newSslHandler(SslContext context, ByteBufAllocator allocator) {
-                                LOG.info("ChatGPT: Creating new SslHandler for context: {}", context); // todo ChatGPT
-                                SslHandler handler = super.newSslHandler(context, allocator);
-                                if (runtimeConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported()) {
-                                    Certificate cert = (Certificate) context.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN)).get();
-                                    if (cert != null) {
-                                        try {
-                                            ReferenceCountedOpenSslEngine engine = (ReferenceCountedOpenSslEngine) handler.engine();
-                                            engine.setOcspResponse(parent.getOcspStaplingManager().getOcspResponseForCertificate(cert)); // setting proper ocsp response
-                                        } catch (IOException ex) {
-                                            LOG.error("Error setting OCSP response.", ex);
-                                        }
-                                    } else {
-                                        LOG.error("Cannot set OCSP response without the certificate");
-                                    }
-                                }
-                                return handler;
-                            }
-                        };
-//                        channel.pipeline().addFirst(sni);
-//                        channel.pipeline().addLast(sni);
-                        LOG.info("Pipeline: {}", channel.pipeline().names());
-                        // LOG.info("Pipeline: {}", channel.pipeline().toString());
-                        LOG.info("Pipeline contains SSLHandler? {}", channel.pipeline().get(io.netty.handler.ssl.SslHandler.class) != null);
-                        LOG.info("Pipeline['reactor.left.sslHandler']: {}", channel.pipeline().get("reactor.left.sslHandler"));
-                    }
                 })
                 .doOnConnection(conn -> {
                     clients.increment();
