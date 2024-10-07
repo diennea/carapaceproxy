@@ -66,10 +66,10 @@ public class ListenersResource {
                         channel -> new ListenerBean(
                                 channel.getHostPort().host(),
                                 channel.getHostPort().port(),
-                                channel.getConfig().isSsl(),
-                                channel.getConfig().getSslCiphers(),
-                                channel.getConfig().getSslProtocols(),
-                                channel.getConfig().getDefaultCertificate(),
+                                channel.getConfig().ssl(),
+                                channel.getConfig().sslCiphers(),
+                                channel.getConfig().sslProtocols(),
+                                channel.getConfig().defaultCertificate(),
                                 (int) channel.getTotalRequests().get()
                         )));
     }
