@@ -21,7 +21,6 @@ package org.carapaceproxy.server.certificates.ocsp;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.netty.handler.ssl.OpenSsl;
-
 import java.io.IOException;
 import java.math.BigInteger;
 import java.net.URI;
@@ -38,7 +37,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
-
 import org.bouncycastle.asn1.ocsp.OCSPResponseStatus;
 import org.bouncycastle.cert.ocsp.BasicOCSPResp;
 import org.bouncycastle.cert.ocsp.CertificateStatus;
