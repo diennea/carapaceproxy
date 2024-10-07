@@ -17,6 +17,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static reactor.netty.http.HttpProtocol.HTTP11;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import io.netty.channel.group.DefaultChannelGroup;
+import io.netty.util.concurrent.DefaultEventExecutor;
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
@@ -189,8 +191,8 @@ public class ForwardedStrategyTest {
                 DEFAULT_MAX_KEEP_ALIVE_REQUESTS,
                 strategy.name(),
                 trustedIps,
-                Set.of(HTTP11.name())
-        );
+                Set.of(HTTP11),
+                new DefaultChannelGroup(new DefaultEventExecutor()));
     }
 
     private static String requestWithHeader(final RawHttpClient client) throws IOException {
