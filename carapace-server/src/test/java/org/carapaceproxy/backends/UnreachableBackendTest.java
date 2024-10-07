@@ -138,7 +138,7 @@ public class UnreachableBackendTest {
             properties.put("healthmanager.tolerant", "true");
             // configure resets all listeners configurations
             server.configureAtBoot(new PropertiesConfigurationStore(properties));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0));
+            server.addListener(NetworkListenerConfiguration.withDefault("localhost", 0));
             server.start();
             int port = server.getLocalPort();
             assertTrue(port > 0);
@@ -223,7 +223,7 @@ public class UnreachableBackendTest {
             properties.put("route.100.action", properties.getProperty("action.1.id"));
             properties.put("healthmanager.tolerant", "true");
             server.configureAtBoot(new PropertiesConfigurationStore(properties));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0));
+            server.addListener(NetworkListenerConfiguration.withDefault("localhost", 0));
             server.start();
             int port = server.getLocalPort();
 
