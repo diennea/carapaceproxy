@@ -20,22 +20,14 @@
 package org.carapaceproxy.core;
 
 import static reactor.netty.ConnectionObserver.State.CONNECTED;
-import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.socket.nio.NioChannelOption;
-import io.netty.handler.ssl.OpenSsl;
-import io.netty.handler.ssl.ReferenceCountedOpenSslEngine;
-import io.netty.handler.ssl.SniHandler;
 import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.timeout.IdleStateHandler;
-import io.netty.util.AttributeKey;
 import io.prometheus.client.Gauge;
 import java.io.File;
-import java.io.IOException;
-import java.security.cert.Certificate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -213,28 +205,10 @@ public class Listeners {
                         : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), config.getKeepAliveCount())
                 .maxKeepAliveRequests(config.getMaxKeepAliveRequests())
                 .doOnChannelInit((observer, channel, remoteAddress) -> {
-                    channel.pipeline().addFirst("idleStateHandler", new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds()));
+                    final var idle = new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds());
+                    channel.pipeline().addFirst("idleStateHandler", idle);
                     if (config.isSsl()) {
-                        var sni = new SniHandler(listeningChannel) {
-                            @Override
-                            protected SslHandler newSslHandler(SslContext context, ByteBufAllocator allocator) {
-                                var handler = super.newSslHandler(context, allocator);
-                                if (currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported()) {
-                                    var cert = (Certificate) context.attributes().attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN)).get();
-                                    if (cert != null) {
-                                        try {
-                                            var engine = (ReferenceCountedOpenSslEngine) handler.engine();
-                                            engine.setOcspResponse(parent.getOcspStaplingManager().getOcspResponseForCertificate(cert)); // setting proper ocsp response
-                                        } catch (IOException ex) {
-                                            LOG.error("Error setting OCSP response.", ex);
-                                        }
-                                    } else {
-                                        LOG.error("Cannot set OCSP response without the certificate");
-                                    }
-                                }
-                                return handler;
-                            }
-                        };
+                        final var sni = new ListenersSniHandler(currentConfiguration, parent, listeningChannel);
                         channel.pipeline().addFirst(sni);
                     }
                 })
