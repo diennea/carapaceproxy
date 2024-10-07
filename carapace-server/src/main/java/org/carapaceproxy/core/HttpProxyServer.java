@@ -268,7 +268,7 @@ public class HttpProxyServer implements AutoCloseable {
         this.cachePoolAllocator = usePooledByteBufAllocator
                 ? new PooledByteBufAllocator(true) : new UnpooledByteBufAllocator(true);
         this.cacheByteBufMemoryUsageMetric = new CacheByteBufMemoryUsageMetric(this);
-        //Best practice is to reuse EventLoopGroup
+        // Best practice is to reuse EventLoopGroup
         // http://normanmaurer.me/presentations/2014-facebook-eng-netty/slides.html#25.0
         this.eventLoopGroup = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
     }

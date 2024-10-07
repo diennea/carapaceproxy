@@ -36,7 +36,7 @@ public class ListenerConfigurationTest {
             HostPort listenerKey = new HostPort("localhost", 8080);
 
             {
-                Map<HostPort, /*DisposableChannelListener*/ ListeningChannel> listeners = server.getListeners().getListeningChannels();
+                Map<HostPort, ListeningChannel> listeners = server.getListeners().getListeningChannels();
 
                 //check default configuration
                 assertTrue(listeners.get(listenerKey).getConfig().isKeepAlive());
@@ -56,7 +56,7 @@ public class ListenerConfigurationTest {
 
                 reloadConfiguration(configuration, server);
 
-                Map<HostPort, /*DisposableChannelListener*/ ListeningChannel> listeners = server.getListeners().getListeningChannels();
+                Map<HostPort, ListeningChannel> listeners = server.getListeners().getListeningChannels();
 
                 assertEquals(1, listeners.size());
                 assertFalse(listeners.get(listenerKey).getConfig().isKeepAlive());
@@ -77,7 +77,7 @@ public class ListenerConfigurationTest {
                 configuration.put("listener.1.enabled", "true");
                 reloadConfiguration(configuration, server);
 
-                Map<HostPort, /*DisposableChannelListener*/ ListeningChannel> listeners = server.getListeners().getListeningChannels();
+                Map<HostPort, ListeningChannel> listeners = server.getListeners().getListeningChannels();
 
                 assertTrue(listeners.get(listenerKey).getConfig().isKeepAlive());
                 assertEquals(10, listeners.get(listenerKey).getConfig().getSoBacklog());
