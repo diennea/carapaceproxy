@@ -85,7 +85,7 @@ public class Listeners {
 
     public int getLocalPort() {
         for (final ListeningChannel listeningChannel : listeningChannels.values()) {
-            return listeningChannel.getLocalPort();
+            return listeningChannel.getHostPort().port();
         }
         return -1;
     }
@@ -176,8 +176,8 @@ public class Listeners {
     }
 
     private void bootListener(final NetworkListenerConfiguration config) throws InterruptedException {
-        final EndpointKey hostPort = new EndpointKey(config.host(), config.port()).offsetPort(parent.getListenersOffsetPort());
-        final ListeningChannel listeningChannel = new ListeningChannel(basePath, currentConfiguration, parent, sslContexts, hostPort, config);
+        final ListeningChannel listeningChannel = new ListeningChannel(basePath, currentConfiguration, parent, sslContexts, config);
+        final EndpointKey hostPort = listeningChannel.getHostPort();
         LOG.info("Starting listener at {}:{} ssl:{}", hostPort.host(), hostPort.port(), config.ssl());
 
         // Listener setup
