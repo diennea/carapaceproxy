@@ -682,7 +682,7 @@ public class DynamicCertificatesManager implements Runnable {
             server.getListeners().reloadCurrentConfiguration();
             // storing certificates on local path
             storeLocalCertificates(newCertificates.values(), oldCertificates);
-        } catch (GeneralSecurityException | MalformedURLException | InterruptedException e) {
+        } catch (GeneralSecurityException | MalformedURLException | InterruptedException | ConfigurationNotValidException e) {
             throw new DynamicCertificatesManagerException("Unable to load dynamic certificates from db.", e);
         }
     }

@@ -442,13 +442,14 @@ public class CertificatesTest extends UseAdminServer {
             assertTrue(data.isManual());
             assertSame(data.getState(), DynamicCertificateState.AVAILABLE);
         }
+
         // check ocsp response
         try (RawHttpClient c = new RawHttpClient("localhost", port, true, "localhost")) {
             RawHttpClient.HttpResponse r = c.get("/index.html", credentials);
             assertEquals("it <b>works</b> !!", r.getBodyString());
             Certificate[] obtainedChain = c.getServerCertificate();
             assertNotNull(obtainedChain);
-            CertificatesUtils.compareChains(uploadedChain, obtainedChain);
+            assertTrue(CertificatesUtils.compareChains(uploadedChain, obtainedChain));
             ExtendedSSLSession session = (ExtendedSSLSession) c.getSSLSocket().getSession();
             List<byte[]> statusResponses = session.getStatusResponses();
             assertEquals(1, statusResponses.size());
