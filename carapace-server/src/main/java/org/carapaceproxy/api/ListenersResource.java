@@ -70,7 +70,7 @@ public class ListenersResource {
                                 channel.getConfig().sslCiphers(),
                                 channel.getConfig().sslProtocols(),
                                 channel.getConfig().defaultCertificate(),
-                                (int) channel.getTotalRequests().get()
+                                channel.getTotalRequests()
                         )));
     }
 
