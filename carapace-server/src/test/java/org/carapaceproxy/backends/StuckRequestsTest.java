@@ -104,7 +104,7 @@ public class StuckRequestsTest {
             properties.put("connectionsmanager.backendsunreachableonstuckrequests", backendsUnreachableOnStuckRequests + "");
             // configure resets all listeners configurations
             server.configureAtBoot(new PropertiesConfigurationStore(properties));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0));
+            server.addListener(NetworkListenerConfiguration.withDefault("localhost", 0));
             assertEquals(100, server.getCurrentConfiguration().getStuckRequestTimeout());
             assertEquals(backendsUnreachableOnStuckRequests, server.getCurrentConfiguration().isBackendsUnreachableOnStuckRequests());
             server.start();

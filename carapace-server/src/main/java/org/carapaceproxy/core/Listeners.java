@@ -176,39 +176,39 @@ public class Listeners {
     }
 
     private void bootListener(final NetworkListenerConfiguration config) throws InterruptedException {
-        final EndpointKey hostPort = new EndpointKey(config.getHost(), config.getPort()).offsetPort(parent.getListenersOffsetPort());
+        final EndpointKey hostPort = new EndpointKey(config.host(), config.port()).offsetPort(parent.getListenersOffsetPort());
         final ListeningChannel listeningChannel = new ListeningChannel(basePath, currentConfiguration, parent, sslContexts, hostPort, config);
-        LOG.info("Starting listener at {}:{} ssl:{}", hostPort.host(), hostPort.port(), config.isSsl());
+        LOG.info("Starting listener at {}:{} ssl:{}", hostPort.host(), hostPort.port(), config.ssl());
 
         // Listener setup
         HttpServer httpServer = HttpServer.create()
                 .host(hostPort.host())
                 .port(hostPort.port())
-                .protocol(config.getProtocols().toArray(HttpProtocol[]::new))
+                .protocol(config.protocols().toArray(HttpProtocol[]::new))
                 /*
                   // .secure()
                   todo: to enable H2, see config.isSsl() & snimappings
                   see https://projectreactor.io/docs/netty/release/reference/index.html#_server_name_indication_3
                  */
                 .metrics(true, Function.identity())
-                .forwarded(ForwardedStrategy.of(config.getForwardedStrategy(), config.getTrustedIps()))
-                .option(ChannelOption.SO_BACKLOG, config.getSoBacklog())
-                .childOption(ChannelOption.SO_KEEPALIVE, config.isKeepAlive())
+                .forwarded(ForwardedStrategy.of(config.forwardedStrategy(), config.trustedIps()))
+                .option(ChannelOption.SO_BACKLOG, config.soBacklog())
+                .childOption(ChannelOption.SO_KEEPALIVE, config.keepAlive())
                 .runOn(parent.getEventLoopGroup())
                 .childOption(Epoll.isAvailable()
                         ? EpollChannelOption.TCP_KEEPIDLE
-                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE), config.getKeepAliveIdle())
+                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE), config.keepAliveIdle())
                 .childOption(Epoll.isAvailable()
                         ? EpollChannelOption.TCP_KEEPINTVL
-                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL), config.getKeepAliveInterval())
+                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL), config.keepAliveInterval())
                 .childOption(Epoll.isAvailable()
                         ? EpollChannelOption.TCP_KEEPCNT
-                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), config.getKeepAliveCount())
-                .maxKeepAliveRequests(config.getMaxKeepAliveRequests())
+                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), config.keepAliveCount())
+                .maxKeepAliveRequests(config.maxKeepAliveRequests())
                 .doOnChannelInit((observer, channel, remoteAddress) -> {
                     final ChannelHandler idle = new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds());
                     channel.pipeline().addFirst("idleStateHandler", idle);
-                    if (config.isSsl()) {
+                    if (config.ssl()) {
                         final ChannelHandler sni = new ListenersSniHandler(currentConfiguration, parent, listeningChannel);
                         channel.pipeline().addFirst(sni);
                     }
@@ -216,7 +216,7 @@ public class Listeners {
                 .doOnConnection(conn -> {
                     CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
                     conn.channel().closeFuture().addListener(e -> CURRENT_CONNECTED_CLIENTS_GAUGE.dec());
-                    config.getGroup().add(conn.channel());
+                    config.group().add(conn.channel());
                 })
                 .childObserve((connection, state) -> {
                     if (state == CONNECTED) {

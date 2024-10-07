@@ -36,7 +36,9 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static reactor.netty.http.HttpProtocol.HTTP11;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.util.concurrent.DefaultEventExecutor;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -206,7 +208,7 @@ public class CacheTest {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost",
                     DEFAULT_SSL_PROTOCOLS,
-                    128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11.name())));
+                    128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11), new DefaultChannelGroup(new DefaultEventExecutor())));
             server.start();
         }
     }
@@ -229,7 +231,7 @@ public class CacheTest {
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost",
-                    DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11.name())));
+                    DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11), new DefaultChannelGroup(new DefaultEventExecutor())));
 
             RuntimeServerConfiguration currentConfiguration = server.getCurrentConfiguration();
             currentConfiguration.setCacheDisabledForSecureRequestsWithoutPublic(cacheDisabledForSecureRequestsWithoutPublic);
@@ -360,8 +362,8 @@ public class CacheTest {
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", httpsPort, true, null, "localhost",
-                    DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11.name())));
-            server.addListener(new NetworkListenerConfiguration("localhost", httpPort));
+                    DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11), new DefaultChannelGroup(new DefaultEventExecutor())));
+            server.addListener(NetworkListenerConfiguration.withDefault("localhost", httpPort));
             server.start();
             server.getCache().getStats().resetCacheMetrics();
 

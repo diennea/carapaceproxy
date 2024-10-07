@@ -70,7 +70,7 @@ public class ListeningChannel implements io.netty.util.AsyncMapping<String, SslC
 
     public void disposeChannel() {
         this.channel.disposeNow(Duration.ofSeconds(10));
-        FutureMono.from(this.config.getGroup().close()).block(Duration.ofSeconds(10));
+        FutureMono.from(this.config.group().close()).block(Duration.ofSeconds(10));
     }
 
     public void incRequests() {
@@ -84,7 +84,7 @@ public class ListeningChannel implements io.netty.util.AsyncMapping<String, SslC
     @Override
     public Future<SslContext> map(String sniHostname, Promise<SslContext> promise) {
         try {
-            var key = config.getHost() + ":" + hostPort.port() + "+" + sniHostname;
+            final var key = config.host() + ":" + hostPort.port() + "+" + sniHostname;
             if (LOG.isDebugEnabled()) {
                 LOG.debug("resolve SNI mapping {}, key: {}", sniHostname, key);
             }
@@ -99,7 +99,7 @@ public class ListeningChannel implements io.netty.util.AsyncMapping<String, SslC
                         var chosen = chooseCertificate(sniHostname);
                         if (chosen == null) {
                             throw new ConfigurationNotValidException("cannot find a certificate for snihostname " + sniHostname
-                                                                     + ", with default cert for listener as '" + config.getDefaultCertificate()
+                                                                     + ", with default cert for listener as '" + config.defaultCertificate()
                                                                      + "', available " + currentConfiguration.getCertificates().keySet());
                         }
                         return bootSslContext(config, chosen);
@@ -124,12 +124,12 @@ public class ListeningChannel implements io.netty.util.AsyncMapping<String, SslC
     }
 
     private SSLCertificateConfiguration chooseCertificate(final String sniHostname) {
-        return CertificatesUtils.chooseCertificate(currentConfiguration, sniHostname, config.getDefaultCertificate());
+        return CertificatesUtils.chooseCertificate(currentConfiguration, sniHostname, config.defaultCertificate());
     }
 
     private SslContext bootSslContext(NetworkListenerConfiguration listener, SSLCertificateConfiguration certificate) throws ConfigurationNotValidException {
-        var port = listener.getPort() + parent.getListenersOffsetPort();
-        var sslCiphers = listener.getSslCiphers();
+        final var hostPort = new EndpointKey(listener.host(), listener.port()).offsetPort(parent.getListenersOffsetPort());
+        var sslCiphers = listener.sslCiphers();
 
         try {
             // Try to find certificate data on db
@@ -137,15 +137,15 @@ public class ListeningChannel implements io.netty.util.AsyncMapping<String, SslC
             final KeyStore keystore;
             if (keystoreContent == null) {
                 if (certificate.isDynamic()) { // fallback to default certificate
-                    certificate = currentConfiguration.getCertificates().get(listener.getDefaultCertificate());
+                    certificate = currentConfiguration.getCertificates().get(listener.defaultCertificate());
                     if (certificate == null) {
-                        throw new ConfigurationNotValidException("Unable to boot SSL context for listener " + listener.getHost() + ": no default certificate setup.");
+                        throw new ConfigurationNotValidException("Unable to boot SSL context for listener " + hostPort.host() + ": no default certificate setup.");
                     }
                 }
-                LOG.debug("start SSL with certificate id {}, on listener {}:{} file={}", certificate.getId(), listener.getHost(), port, certificate.getFile());
+                LOG.debug("start SSL with certificate id {}, on listener {}:{} file={}", certificate.getId(), hostPort.host(), hostPort.port(), certificate.getFile());
                 keystore = loadKeyStoreFromFile(certificate.getFile(), certificate.getPassword(), basePath);
             } else {
-                LOG.debug("start SSL with dynamic certificate id {}, on listener {}:{}", certificate.getId(), listener.getHost(), port);
+                LOG.debug("start SSL with dynamic certificate id {}, on listener {}:{}", certificate.getId(), hostPort.host(), hostPort.port());
                 keystore = loadKeyStoreData(keystoreContent, certificate.getPassword());
             }
             KeyManagerFactory keyFactory = new OpenSslCachingX509KeyManagerFactory(KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()));
@@ -161,7 +161,7 @@ public class ListeningChannel implements io.netty.util.AsyncMapping<String, SslC
                     .enableOcsp(currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported())
                     .trustManager(parent.getTrustStoreManager().getTrustManagerFactory())
                     .sslProvider(SslProvider.OPENSSL)
-                    .protocols(listener.getSslProtocols())
+                    .protocols(listener.sslProtocols())
                     .ciphers(ciphers).build();
 
             var chain = readChainFromKeystore(keystore);
