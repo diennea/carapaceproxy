@@ -35,9 +35,7 @@ import io.netty.util.AttributeKey;
 import io.prometheus.client.Gauge;
 import java.io.File;
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.security.cert.Certificate;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -53,7 +51,6 @@ import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.PrometheusUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import reactor.netty.FutureMono;
 import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.server.HttpServer;
 
@@ -78,7 +75,7 @@ public class Listeners {
 
     private final HttpProxyServer parent;
     private final ConcurrentMap<String, SslContext> sslContexts = new ConcurrentHashMap<>();
-    private final ConcurrentMap<HostPort, /*DisposableChannelListener*/ ListeningChannel> listeningChannels = new ConcurrentHashMap<>();
+    private final ConcurrentMap<HostPort, ListeningChannel> listeningChannels = new ConcurrentHashMap<>();
     private final File basePath;
     private boolean started;
     private RuntimeServerConfiguration currentConfiguration;
@@ -94,10 +91,8 @@ public class Listeners {
     }
 
     public int getLocalPort() {
-        for (var listeningChannel : listeningChannels.values()) {
-            // org.carapaceproxy.core.DisposableChannelListener#getActualPort
-            var addr = (InetSocketAddress) listeningChannel.getChannel().address();
-            return addr.getPort();
+        for (final var listeningChannel : listeningChannels.values()) {
+            return listeningChannel.getLocalPort();
         }
         return -1;
     }
@@ -181,10 +176,9 @@ public class Listeners {
     }
 
     private void stopListener(HostPort hostPort) throws InterruptedException {
-        var channel = listeningChannels.remove(hostPort);
+        final var channel = listeningChannels.remove(hostPort);
         if (channel != null) {
-            channel.getChannel().disposeNow(Duration.ofSeconds(10));
-            FutureMono.from(channel.getConfig().getGroup().close()).block(Duration.ofSeconds(10));
+            channel.disposeChannel();
         }
     }
 
