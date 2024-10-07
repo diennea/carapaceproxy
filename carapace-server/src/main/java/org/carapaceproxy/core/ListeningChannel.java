@@ -14,7 +14,6 @@ import io.netty.util.concurrent.Promise;
 import io.prometheus.client.Counter;
 import java.io.File;
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.time.Duration;
@@ -24,7 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
 import javax.net.ssl.KeyManagerFactory;
-import lombok.Data;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
@@ -35,7 +33,6 @@ import org.slf4j.LoggerFactory;
 import reactor.netty.DisposableServer;
 import reactor.netty.FutureMono;
 
-@Data
 public class ListeningChannel implements io.netty.util.AsyncMapping<String, SslContext> {
 
     private static final Logger LOG = LoggerFactory.getLogger(ListeningChannel.class);
@@ -44,7 +41,7 @@ public class ListeningChannel implements io.netty.util.AsyncMapping<String, SslC
             "listeners", "requests_total", "total requests", "listener"
     ).register();
 
-    private final EndpointKey hostPort;
+    private final int localPort;
     private final NetworkListenerConfiguration config;
     private final Counter.Child totalRequests;
     private final Map<String, SslContext> listenerSslContexts = new HashMap<>();
@@ -54,18 +51,14 @@ public class ListeningChannel implements io.netty.util.AsyncMapping<String, SslC
     private final ConcurrentMap<String, SslContext> sslContexts;
     private DisposableServer channel;
 
-    public ListeningChannel(final File basePath, final RuntimeServerConfiguration currentConfiguration, final HttpProxyServer parent, final ConcurrentMap<String, SslContext> sslContexts, EndpointKey hostPort, NetworkListenerConfiguration config) {
-        this.hostPort = hostPort;
+    public ListeningChannel(final File basePath, final RuntimeServerConfiguration currentConfiguration, final HttpProxyServer parent, final ConcurrentMap<String, SslContext> sslContexts, NetworkListenerConfiguration config) {
+        this.localPort = config.port() + parent.getListenersOffsetPort();
         this.config = config;
-        this.totalRequests = TOTAL_REQUESTS_PER_LISTENER_COUNTER.labels(hostPort.host() + "_" + hostPort.port());
+        this.totalRequests = TOTAL_REQUESTS_PER_LISTENER_COUNTER.labels(config.host() + "_" + this.localPort);
         this.basePath = basePath;
         this.currentConfiguration = currentConfiguration;
         this.parent = parent;
         this.sslContexts = sslContexts;
-    }
-
-    public int getLocalPort() {
-        return ((InetSocketAddress) this.channel.address()).getPort();
     }
 
     public void disposeChannel() {
@@ -84,7 +77,7 @@ public class ListeningChannel implements io.netty.util.AsyncMapping<String, SslC
     @Override
     public Future<SslContext> map(String sniHostname, Promise<SslContext> promise) {
         try {
-            final var key = config.host() + ":" + hostPort.port() + "+" + sniHostname;
+            final var key = config.host() + ":" + this.localPort + "+" + sniHostname;
             if (LOG.isDebugEnabled()) {
                 LOG.debug("resolve SNI mapping {}, key: {}", sniHostname, key);
             }
@@ -121,6 +114,22 @@ public class ListeningChannel implements io.netty.util.AsyncMapping<String, SslC
             LOG.error("Error booting certificate for SNI hostname {}, on listener {}", sniHostname, config, err);
             return promise.setFailure(err);
         }
+    }
+
+    public NetworkListenerConfiguration getConfig() {
+        return this.config;
+    }
+
+    public int getTotalRequests() {
+        return (int) this.totalRequests.get();
+    }
+
+    public void setChannel(DisposableServer channel) {
+        this.channel = channel;
+    }
+
+    public EndpointKey getHostPort() {
+        return new EndpointKey(this.config.host(), this.localPort);
     }
 
     private SSLCertificateConfiguration chooseCertificate(final String sniHostname) {
