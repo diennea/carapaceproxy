@@ -6,7 +6,6 @@ import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.Options.DYNAMIC_PORT;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
-import static java.util.stream.Collectors.toUnmodifiableSet;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_FORWARDED_STRATEGY;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_KEEP_ALIVE;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_KEEP_ALIVE_COUNT;
@@ -18,7 +17,9 @@ import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAU
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.util.concurrent.DefaultEventExecutor;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
@@ -46,12 +47,12 @@ public class Http2Test {
     public TemporaryFolder tmpDir = new TemporaryFolder();
 
     private final HttpProtocol protocol;
-    private final Set<String> carapaceProtocols;
+    private final Set<HttpProtocol> carapaceProtocols;
     private final boolean withCache;
 
     public Http2Test(final HttpProtocol protocol, final Set<HttpProtocol> carapaceProtocols, final boolean withCache) {
         this.protocol = protocol;
-        this.carapaceProtocols = carapaceProtocols.stream().map(HttpProtocol::name).collect(toUnmodifiableSet());
+        this.carapaceProtocols = carapaceProtocols;
         this.withCache = withCache;
     }
 
@@ -93,8 +94,8 @@ public class Http2Test {
                     DEFAULT_MAX_KEEP_ALIVE_REQUESTS,
                     DEFAULT_FORWARDED_STRATEGY,
                     Set.of(),
-                    carapaceProtocols
-            ));
+                    carapaceProtocols,
+                    new DefaultChannelGroup(new DefaultEventExecutor())));
 
             server.start();
             final var port = server.getLocalPort();

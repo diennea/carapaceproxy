@@ -18,9 +18,11 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.util.concurrent.DefaultEventExecutor;
 import java.io.IOException;
 import java.util.Set;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
@@ -68,8 +70,9 @@ public class Http2HeadersTest {
                     DEFAULT_MAX_KEEP_ALIVE_REQUESTS,
                     DEFAULT_FORWARDED_STRATEGY,
                     Set.of(),
-                    Set.of(HttpProtocol.H2C.name(), HttpProtocol.HTTP11.name())
-            ));
+                    Set.of(HttpProtocol.H2C, HttpProtocol.HTTP11),
+                    new DefaultChannelGroup(new DefaultEventExecutor()))
+            );
 
             server.start();
             final var port = server.getLocalPort();
