@@ -19,7 +19,6 @@
  */
 package org.carapaceproxy.utils;
 
-import io.netty.handler.ssl.SslContext;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -43,7 +42,6 @@ import java.util.Objects;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
-import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 
@@ -251,18 +249,6 @@ public final class CertificatesUtils {
         return WILDCARD_PREFIX + Objects.requireNonNull(name);
     }
 
-    /**
-     * {@link SslContext}s are cached at listener level.
-     * This method computes the key from hostname, port, and SNI.
-     *
-     * @param hostPort the host and port tuple
-     * @param sniHostname the Server Name Indication (SNI) indication
-     * @return the cache key
-     */
-    public static String computeKey(final EndpointKey hostPort, final String sniHostname) {
-        return hostPort.host() + ":" + hostPort.port() + "+" + sniHostname;
-    }
-
     public static boolean certificateMatches(
             final String hostname, final SSLCertificateConfiguration certificate, final boolean exact) {
         if (certificate.getSubjectAltNames() == null || certificate.getSubjectAltNames().isEmpty()) {
@@ -308,12 +294,6 @@ public final class CertificatesUtils {
         if (chosen == null) {
             chosen = certificates.get(defaultCertificate);
         }
-        /* LOG.info("Resolving SNI for hostname: {}", sniHostname);
-        if (chosen == null) {
-            LOG.error("No certificate found for SNI hostname: {}", sniHostname);
-        } else {
-            LOG.info("Using certificate: {}", chosen.getId());
-        } */
         return chosen;
     }
 }

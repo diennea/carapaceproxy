@@ -14,6 +14,7 @@ import io.netty.util.concurrent.Promise;
 import io.prometheus.client.Counter;
 import java.io.File;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.time.Duration;
@@ -75,61 +76,41 @@ public class ListeningChannel implements io.netty.util.AsyncMapping<String, SslC
     }
 
     @Override
-    public Future<SslContext> map(String sniHostname, Promise<SslContext> promise) {
+    public Future<SslContext> map(final String sniHostname, final Promise<SslContext> promise) {
+        try {
+            return promise.setSuccess(map(sniHostname));
+        } catch (final Exception err) {
+            LOG.error(err.getMessage(), err);
+            return promise.setFailure(err);
+        }
+    }
+
+    public SslContext map(final String sniHostname) throws ConfigurationNotValidException {
         try {
             final var key = config.host() + ":" + this.localPort + "+" + sniHostname;
             if (LOG.isDebugEnabled()) {
                 LOG.debug("resolve SNI mapping {}, key: {}", sniHostname, key);
             }
-            try {
-                var sslContext = listenerSslContexts.get(key);
-                if (sslContext != null) {
-                    return promise.setSuccess(sslContext);
-                }
-
-                sslContext = sslContexts.computeIfAbsent(key, (k) -> {
-                    try {
-                        var chosen = chooseCertificate(sniHostname);
-                        if (chosen == null) {
-                            throw new ConfigurationNotValidException("cannot find a certificate for snihostname " + sniHostname
-                                                                     + ", with default cert for listener as '" + config.defaultCertificate()
-                                                                     + "', available " + currentConfiguration.getCertificates().keySet());
-                        }
-                        return bootSslContext(config, chosen);
-                    } catch (ConfigurationNotValidException ex) {
-                        throw new RuntimeException(ex);
-                    }
-                });
-                listenerSslContexts.put(key, sslContext);
-
-                return promise.setSuccess(sslContext);
-            } catch (RuntimeException err) {
-                if (err.getCause() instanceof ConfigurationNotValidException) {
-                    throw (ConfigurationNotValidException) err.getCause();
-                } else {
-                    throw new ConfigurationNotValidException(err);
-                }
+            if (listenerSslContexts.containsKey(key)) {
+                return listenerSslContexts.get(key);
             }
+            if (!sslContexts.containsKey(key)) {
+                var chosen = chooseCertificate(sniHostname);
+                if (chosen == null) {
+                    throw new ConfigurationNotValidException(
+                            "Cannot find a certificate for snihostname " + sniHostname
+                            + ", with default cert for listener as '" + config.defaultCertificate()
+                            + "', available " + currentConfiguration.getCertificates().keySet());
+                }
+                final var sslContext = bootSslContext(config, chosen);
+                sslContexts.put(key, sslContext);
+                listenerSslContexts.put(key, sslContext);
+            }
+            return sslContexts.get(key);
         } catch (ConfigurationNotValidException err) {
             LOG.error("Error booting certificate for SNI hostname {}, on listener {}", sniHostname, config, err);
-            return promise.setFailure(err);
+            throw err;
         }
-    }
-
-    public NetworkListenerConfiguration getConfig() {
-        return this.config;
-    }
-
-    public int getTotalRequests() {
-        return (int) this.totalRequests.get();
-    }
-
-    public void setChannel(DisposableServer channel) {
-        this.channel = channel;
-    }
-
-    public EndpointKey getHostPort() {
-        return new EndpointKey(this.config.host(), this.localPort);
     }
 
     private SSLCertificateConfiguration chooseCertificate(final String sniHostname) {
@@ -184,6 +165,54 @@ public class ListeningChannel implements io.netty.util.AsyncMapping<String, SslC
         } catch (IOException | GeneralSecurityException err) {
             LOG.error("ERROR booting listener", err);
             throw new ConfigurationNotValidException(err);
+        }
+    }
+
+    public NetworkListenerConfiguration getConfig() {
+        return this.config;
+    }
+
+    public int getTotalRequests() {
+        return (int) this.totalRequests.get();
+    }
+
+    public void setChannel(DisposableServer channel) {
+        this.channel = channel;
+    }
+
+    public EndpointKey getHostPort() {
+        return new EndpointKey(this.config.host(), this.localPort);
+    }
+
+    public int getChannelPort() {
+        if (this.channel != null) {
+            if (this.channel.address() instanceof InetSocketAddress address) {
+                return address.getPort();
+            }
+            LOG.warn("Unexpected channel address {}", this.channel.address());
+        }
+        return -1;
+    }
+
+    public SslContext defaultSslContext() {
+        try {
+            return map(config.defaultCertificate());
+        } catch (final ConfigurationNotValidException e) {
+            throw new RuntimeException("Failed to load default SSL context", e);
+        }
+    }
+
+    public void applySslContext(final String sniHostname, final reactor.netty.tcp.SslProvider.Builder sslContextBuilder) {
+        if (sniHostname.charAt(0) == '*' && (sniHostname.length() < 3 || sniHostname.charAt(1) != '.')) {
+            // skip, ReactorNetty won't accept it!
+            return;
+        }
+        try {
+            // #map should cache the certificate after the first search of the different SANs of the same certificate
+            final SslContext sslContext = map(sniHostname);
+            sslContextBuilder.addSniMapping(sniHostname, spec -> spec.sslContext(sslContext));
+        } catch (final ConfigurationNotValidException e) {
+            throw new RuntimeException(e);
         }
     }
 }
