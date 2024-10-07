@@ -229,7 +229,7 @@ public class HttpProxyServer implements AutoCloseable {
 
     public static HttpProxyServer buildForTests(String host, int port, EndpointMapper mapper, File baseDir) throws ConfigurationNotValidException {
         HttpProxyServer res = new HttpProxyServer(mapper, baseDir.getAbsoluteFile());
-        res.currentConfiguration.addListener(new NetworkListenerConfiguration(host, port));
+        res.currentConfiguration.addListener(NetworkListenerConfiguration.withDefault(host, port));
         res.proxyRequestsManager.reloadConfiguration(res.currentConfiguration, mapper.getBackends().values());
 
         return res;
