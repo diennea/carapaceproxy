@@ -20,22 +20,15 @@
 package org.carapaceproxy.core;
 
 import static reactor.netty.ConnectionObserver.State.CONNECTED;
-import io.netty.buffer.ByteBufAllocator;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.socket.nio.NioChannelOption;
-import io.netty.handler.ssl.OpenSsl;
-import io.netty.handler.ssl.ReferenceCountedOpenSslEngine;
-import io.netty.handler.ssl.SniHandler;
 import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.timeout.IdleStateHandler;
-import io.netty.util.AttributeKey;
 import io.prometheus.client.Gauge;
 import java.io.File;
-import java.io.IOException;
-import java.security.cert.Certificate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -45,7 +38,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
 import jdk.net.ExtendedSocketOptions;
-import org.carapaceproxy.server.certificates.ocsp.OcspStaplingManager;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.PrometheusUtils;
@@ -214,35 +206,10 @@ public class Listeners {
                         : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), config.getKeepAliveCount())
                 .maxKeepAliveRequests(config.getMaxKeepAliveRequests())
                 .doOnChannelInit((observer, channel, remoteAddress) -> {
-                    channel.pipeline().addFirst("idleStateHandler", new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds()));
+                    final ChannelHandler idle = new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds());
+                    channel.pipeline().addFirst("idleStateHandler", idle);
                     if (config.isSsl()) {
-                        SniHandler sni = new SniHandler(listeningChannel) {
-                            @Override
-                            protected SslHandler newSslHandler(SslContext context, ByteBufAllocator allocator) {
-                                SslHandler handler = super.newSslHandler(context, allocator);
-                                if (currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported()) {
-                                    final Certificate cert = (Certificate) context.attributes()
-                                            .attr(AttributeKey.valueOf(OCSP_CERTIFICATE_CHAIN))
-                                            .get();
-                                    if (cert == null) {
-                                        LOG.error("Cannot set OCSP response without the certificate");
-                                        return handler;
-                                    }
-                                    if (!(handler.engine() instanceof ReferenceCountedOpenSslEngine engine)) {
-                                        LOG.error("Unexpected OpenSSL Engine used; cannot set OCSP response.");
-                                        return handler;
-                                    }
-                                    try {
-                                        final OcspStaplingManager ocspStaplingManager = parent.getOcspStaplingManager();
-                                        final byte[] response = ocspStaplingManager.getOcspResponseForCertificate(cert);
-                                        engine.setOcspResponse(response);
-                                    } catch (final IOException ex) {
-                                        LOG.error("Error setting OCSP response.", ex);
-                                    }
-                                }
-                                return handler;
-                            }
-                        };
+                        final ChannelHandler sni = new ListenersSniHandler(currentConfiguration, parent, listeningChannel);
                         channel.pipeline().addFirst(sni);
                     }
                 })
