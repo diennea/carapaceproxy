@@ -14,8 +14,10 @@ import io.netty.util.concurrent.Promise;
 import io.prometheus.client.Counter;
 import java.io.File;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -32,6 +34,7 @@ import org.carapaceproxy.utils.PrometheusUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.netty.DisposableServer;
+import reactor.netty.FutureMono;
 
 @Data
 public class ListeningChannel implements io.netty.util.AsyncMapping<String, SslContext> {
@@ -62,8 +65,13 @@ public class ListeningChannel implements io.netty.util.AsyncMapping<String, SslC
         this.sslContexts = sslContexts;
     }
 
-    public DisposableServer getChannel() {
-        return channel;
+    public int getLocalPort() {
+        return ((InetSocketAddress) this.channel.address()).getPort();
+    }
+
+    public void disposeChannel() {
+        this.channel.disposeNow(Duration.ofSeconds(10));
+        FutureMono.from(this.config.getGroup().close()).block(Duration.ofSeconds(10));
     }
 
     public void incRequests() {
