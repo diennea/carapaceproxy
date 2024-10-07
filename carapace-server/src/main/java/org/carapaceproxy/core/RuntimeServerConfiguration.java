@@ -36,6 +36,8 @@ import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAU
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.getDefaultHttpProtocols;
 import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
+import io.netty.channel.group.DefaultChannelGroup;
+import io.netty.util.concurrent.DefaultEventExecutor;
 import java.io.File;
 import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
@@ -48,6 +50,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 import javax.net.ssl.SSLContext;
 import lombok.Data;
 import org.carapaceproxy.configstore.ConfigurationStore;
@@ -60,6 +63,7 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import org.carapaceproxy.utils.CarapaceLogger;
+import reactor.netty.http.HttpProtocol;
 
 /**
  * Implementation of a configuration for the whole server.
@@ -337,6 +341,7 @@ public class RuntimeServerConfiguration {
             final var port = properties.getInt(prefix + "port", 0);
             if (port > 0) {
                 final var ssl = properties.getBoolean(prefix + "ssl", false);
+                final var protocols = properties.getValues(prefix + "protocol", Set.of());
                 this.addListener(new NetworkListenerConfiguration(
                         properties.getString(prefix + "host", "0.0.0.0"),
                         port,
@@ -352,8 +357,11 @@ public class RuntimeServerConfiguration {
                         properties.getInt(prefix + "maxkeepaliverequests", maxKeepAliveRequests),
                         properties.getString(prefix + "forwarded", DEFAULT_FORWARDED_STRATEGY),
                         properties.getValues(prefix + "trustedips", Set.of()),
-                        properties.getValues(prefix + "protocol", getDefaultHttpProtocols(ssl))
-                ));
+                        protocols.isEmpty() ? getDefaultHttpProtocols(ssl) : protocols.stream()
+                                .map(String::toUpperCase)
+                                .map(HttpProtocol::valueOf)
+                                .collect(Collectors.toUnmodifiableSet()),
+                        new DefaultChannelGroup(new DefaultEventExecutor())));
             }
         }
     }
@@ -445,22 +453,21 @@ public class RuntimeServerConfiguration {
     }
 
     public void addListener(NetworkListenerConfiguration listener) throws ConfigurationNotValidException {
-        if (listener.isSsl() && !certificates.containsKey(listener.getDefaultCertificate())) {
+        if (listener.ssl() && !certificates.containsKey(listener.defaultCertificate())) {
             throw new ConfigurationNotValidException(
-                    "Listener " + listener.getHost() + ":" + listener.getPort() + ", "
-                    + "ssl=" + listener.isSsl() + ", "
-                    + "default certificate " + listener.getDefaultCertificate() + " not configured."
+                    "Listener " + listener.host() + ":" + listener.port() + ", ssl=true, "
+                    + "default certificate " + listener.defaultCertificate() + " not configured."
             );
         }
-        if (listener.isSsl()) {
+        if (listener.ssl()) {
             try {
                 if (supportedSSLProtocols == null) {
                     supportedSSLProtocols = Set.of(SSLContext.getDefault().getSupportedSSLParameters().getProtocols());
                 }
-                if (!supportedSSLProtocols.containsAll(listener.getSslProtocols())) {
+                if (!supportedSSLProtocols.containsAll(listener.sslProtocols())) {
                     throw new ConfigurationNotValidException(
-                            "Unsupported SSL Protocols " + listener.getSslProtocols()
-                            + " for listener " + listener.getHost() + ":" + listener.getPort()
+                            "Unsupported SSL Protocols " + listener.sslProtocols()
+                            + " for listener " + listener.host() + ":" + listener.port()
                     );
                 }
             } catch (NoSuchAlgorithmException ex) {
