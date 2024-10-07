@@ -1,19 +1,31 @@
 package org.carapaceproxy.core;
 
+import static org.carapaceproxy.core.ssl.CertificatesUtils.loadKeyStoreData;
+import static org.carapaceproxy.core.ssl.CertificatesUtils.loadKeyStoreFromFile;
+import static org.carapaceproxy.core.ssl.CertificatesUtils.readChainFromKeystore;
 import static reactor.netty.ConnectionObserver.State.CONNECTED;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollChannelOption;
 import io.netty.channel.socket.nio.NioChannelOption;
+import io.netty.handler.ssl.OpenSsl;
+import io.netty.handler.ssl.OpenSslCachingX509KeyManagerFactory;
 import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.util.SelfSignedCertificate;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.timeout.IdleStateHandler;
+import io.netty.util.AttributeKey;
+import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
+import javax.net.ssl.KeyManagerFactory;
 import jdk.net.ExtendedSocketOptions;
 import lombok.SneakyThrows;
 import org.carapaceproxy.core.stats.ListenerStats;
@@ -24,7 +36,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.netty.DisposableChannel;
 import reactor.netty.FutureMono;
-import reactor.netty.http.Http11SslContextSpec;
 import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.server.HttpServer;
 
@@ -76,26 +87,7 @@ public class DisposableChannelListener {
                 .port(hostPort.port())
                 .protocol(config.getProtocols().toArray(HttpProtocol[]::new));
         if (config.isSsl()) {
-            // final var keyManager = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-            // final var sslContext = SslContextBuilder
-            //         .forServer(keyManager)
-            //         .sslProvider(io.netty.handler.ssl.SslProvider.OPENSSL)
-            //         .protocols(config.getSslProtocols())
-            //         .enableOcsp(true)
-            //         /* .applicationProtocolConfig(new ApplicationProtocolConfig(
-            //                 ApplicationProtocolConfig.Protocol.ALPN,
-            //                 // NO_ADVERTISE means do not send the protocol name if it's unsupported
-            //                 ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
-            //                 // ACCEPT means select the first protocol if no match is found
-            //                 ApplicationProtocolConfig.SelectedListenerFailureBehavior.ACCEPT,
-            //                 ApplicationProtocolNames.HTTP_2,
-            //                 ApplicationProtocolNames.HTTP_1_1
-            //         )) */
-            //         .build();
-            // httpServer = httpServer.secure(spec -> spec.sslContext(sslContext));
-            final var cert = new SelfSignedCertificate();
-            final var http11SslContextSpec = Http11SslContextSpec.forServer(cert.certificate(), cert.privateKey());
-            httpServer = httpServer.secure(sslContextSpec -> sslContextSpec.sslContext(http11SslContextSpec));
+            httpServer = httpServer.secure(sslContextSpec -> sslContextSpec.sslContext(getDefaultSslContext(hostPort, runtimeConfiguration, listenerConfiguration)));
         }
         final var epollAvailable = Epoll.isAvailable();
         LOG.info("Epoll is available? {}", epollAvailable);
@@ -198,5 +190,57 @@ public class DisposableChannelListener {
 
     public void clear() {
         this.sslContextsCache.clear();
+    }
+
+    public SslContext getDefaultSslContext(final HostPort hostPort, final RuntimeServerConfiguration currentConfiguration, final NetworkListenerConfiguration listener) {
+        final var certificate = Listeners.chooseCertificate(currentConfiguration, "", listener.getDefaultCertificate());
+        final var port = hostPort.port();
+        try {
+            // Try to find certificate data on db
+            final var keystoreContent = parent.getDynamicCertificatesManager().getCertificateForDomain(certificate.getId());
+            final KeyStore keystore;
+            if (keystoreContent != null) {
+                LOG.trace("Start SSL with dynamic certificate id {}, on listener {}:{}", certificate.getId(), listener.getHost(), port);
+                keystore = loadKeyStoreData(keystoreContent, certificate.getPassword());
+            } else {
+                LOG.trace("Start SSL with certificate id {}, on listener {}:{} file={}", certificate.getId(), listener.getHost(), port, certificate.getFile());
+                keystore = loadKeyStoreFromFile(certificate.getFile(), certificate.getPassword(), this.parent.getBasePath());
+            }
+            final var keyFactory = new OpenSslCachingX509KeyManagerFactory(KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()));
+            keyFactory.init(keystore, certificate.getPassword().toCharArray());
+
+            var sslContextBuilder = SslContextBuilder
+                    .forServer(keyFactory)
+                    .enableOcsp(currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported())
+                    .trustManager(parent.getTrustStoreManager().getTrustManagerFactory())
+                    .sslProvider(SslProvider.OPENSSL)
+                    .protocols(listener.getSslProtocols())
+                     /* .applicationProtocolConfig(new ApplicationProtocolConfig(
+                             ApplicationProtocolConfig.Protocol.ALPN,
+                             // NO_ADVERTISE means do not send the protocol name if it's unsupported
+                             ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
+                             // ACCEPT means select the first protocol if no match is found
+                             ApplicationProtocolConfig.SelectedListenerFailureBehavior.ACCEPT,
+                             ApplicationProtocolNames.HTTP_2,
+                             ApplicationProtocolNames.HTTP_1_1
+                     )) */;
+
+            final var sslCiphers = listener.getSslCiphers();
+            if (sslCiphers != null && !sslCiphers.isEmpty()) {
+                LOG.trace("Required sslCiphers {}", sslCiphers);
+                sslContextBuilder = sslContextBuilder.ciphers(Arrays.asList(sslCiphers.split(",")));
+            }
+
+            final var sslContext = sslContextBuilder.build();
+            final var chain = readChainFromKeystore(keystore);
+            if (currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported() && chain.length > 0) {
+                parent.getOcspStaplingManager().addCertificateForStapling(chain);
+                sslContext.attributes().attr(AttributeKey.valueOf(Listeners.OCSP_CERTIFICATE_CHAIN)).set(chain[0]);
+            }
+            return sslContext;
+        } catch (IOException | GeneralSecurityException err) {
+            LOG.error("ERROR booting listener", err);
+            throw new RuntimeException(err);
+        }
     }
 }
