@@ -21,8 +21,6 @@ public class MaxHeaderSizeTest extends UseAdminServer {
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
 
-    private Properties config;
-
     @Test
     public void test() throws Exception {
 
@@ -33,11 +31,11 @@ public class MaxHeaderSizeTest extends UseAdminServer {
                         .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                         .withBody("it <b>works</b> !!")));
 
-        config = new Properties(HTTP_ADMIN_SERVER_CONFIG);
+        var config = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         startServer(config);
 
         // Default certificate
-        String defaultCertificate = TestUtils.deployResource("ia.p12", tmpDir.getRoot());
+        var defaultCertificate = TestUtils.deployResource("ia.p12", tmpDir.getRoot());
         config.put("certificate.1.hostname", "*");
         config.put("certificate.1.file", defaultCertificate);
         config.put("certificate.1.password", "changeit");
@@ -72,12 +70,7 @@ public class MaxHeaderSizeTest extends UseAdminServer {
 
         changeDynamicConfiguration(config);
 
-
-        HttpClient httpClient = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
-                .build();
-
-        HttpRequest request = HttpRequest.newBuilder()
+        final var request = HttpRequest.newBuilder()
                 .GET()
                 .uri(URI.create("http://localhost:" + 8086 + "/index.html"))
                 .setHeader("custom-header", "test")
@@ -87,19 +80,17 @@ public class MaxHeaderSizeTest extends UseAdminServer {
                 .setHeader("token3", "eyJhbGciOiJIUzI1NiJ9.eyJSb")
                 .build();
 
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-        assertEquals(200, response.statusCode());
+        try (final var httpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build()) {
+            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, response.statusCode());
+        }
 
         config.put("carapace.maxheadersize", "1");
         changeDynamicConfiguration(config);
 
-        HttpClient httpClient2 = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
-                .build();
-
-        HttpResponse<String> response2 = httpClient2.send(request, HttpResponse.BodyHandlers.ofString());
-
-        assertEquals(431, response2.statusCode());
+        try (final var httpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build()) {
+            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            assertEquals(431, response.statusCode());
+        }
     }
 }

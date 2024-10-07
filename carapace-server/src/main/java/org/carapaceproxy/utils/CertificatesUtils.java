@@ -17,7 +17,7 @@
  * under the License.
  *
  */
-package org.carapaceproxy.core.ssl;
+package org.carapaceproxy.utils;
 
 import io.netty.handler.ssl.SslContext;
 import java.io.ByteArrayInputStream;
@@ -44,9 +44,10 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
 import org.carapaceproxy.server.config.HostPort;
+import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 
 /**
- * Utilitis for Certificates storing as Keystores
+ * Utilities for Certificates storing as Keystores
  *
  * @author paolo
  */
@@ -253,11 +254,31 @@ public final class CertificatesUtils {
      * {@link SslContext}s are cached at listener level.
      * This method computes the key from hostname, port, and SNI.
      *
-     * @param hostPort
+     * @param hostPort the host and port tuple
      * @param sniHostname the Server Name Indication (SNI) indication
      * @return the cache key
      */
     public static String computeKey(final HostPort hostPort, final String sniHostname) {
         return hostPort.host() + ":" + hostPort.port() + "+" + sniHostname;
+    }
+
+    public static boolean certificateMatches(
+            final String hostname, final SSLCertificateConfiguration certificate, final boolean exact) {
+        if (certificate.getSubjectAltNames() == null || certificate.getSubjectAltNames().isEmpty()) {
+            if (exact) {
+                return !certificate.isWildcard() && hostname.equals(certificate.getHostname());
+            } else {
+                return certificate.isWildcard() && hostname.endsWith(certificate.getHostname());
+            }
+        }
+        for (final var name : certificate.getNames()) {
+            final var wildcard = isWildcard(name);
+            if (exact) {
+                return !wildcard && hostname.equals(name);
+            } else {
+                return wildcard && hostname.endsWith(removeWildcard(name));
+            }
+        }
+        return false;
     }
 }

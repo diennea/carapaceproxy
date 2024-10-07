@@ -1,6 +1,6 @@
 package org.carapaceproxy.core;
 
-import static org.carapaceproxy.core.ssl.CertificatesUtils.loadKeyStoreFromFile;
+import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
 import java.io.File;
 import java.io.IOException;
 import java.security.KeyStore;
@@ -14,7 +14,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.net.ssl.TrustManagerFactory;
 import lombok.Getter;
-import org.carapaceproxy.core.ssl.CertificatesUtils;
+import org.carapaceproxy.utils.CertificatesUtils;
 
 public class TrustStoreManager {
 

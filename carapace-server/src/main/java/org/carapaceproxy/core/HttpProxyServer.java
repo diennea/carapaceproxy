@@ -227,11 +227,11 @@ public class HttpProxyServer implements AutoCloseable {
     @Getter
     private int listenersOffsetPort = 0;
 
-    public static HttpProxyServer buildForTests(String host, int port, EndpointMapper mapper, File baseDir) throws ConfigurationNotValidException, InterruptedException {
+    public static HttpProxyServer buildForTests(String host, int port, EndpointMapper mapper, File baseDir) throws ConfigurationNotValidException {
         HttpProxyServer res = new HttpProxyServer(mapper, baseDir.getAbsoluteFile());
         res.currentConfiguration.addListener(new NetworkListenerConfiguration(host, port));
         res.proxyRequestsManager.reloadConfiguration(res.currentConfiguration, mapper.getBackends().values());
-        // res.getListeners().reloadConfiguration(res.currentConfiguration); // todo maybe not needed
+
         return res;
     }
 
