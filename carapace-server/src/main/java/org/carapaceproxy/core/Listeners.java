@@ -85,7 +85,10 @@ public class Listeners {
 
     public int getLocalPort() {
         for (final ListeningChannel listeningChannel : listeningChannels.values()) {
-            return listeningChannel.getHostPort().port();
+            final int port = listeningChannel.getChannelPort();
+            if (port > 0) {
+                return port;
+            }
         }
         return -1;
     }
@@ -184,12 +187,17 @@ public class Listeners {
         HttpServer httpServer = HttpServer.create()
                 .host(hostPort.host())
                 .port(hostPort.port())
-                .protocol(config.protocols().toArray(HttpProtocol[]::new))
-                /*
-                  // .secure()
-                  todo: to enable H2, see config.isSsl() & snimappings
-                  see https://projectreactor.io/docs/netty/release/reference/index.html#_server_name_indication_3
-                 */
+                .protocol(config.protocols().toArray(HttpProtocol[]::new));
+        if (config.ssl()) {
+            httpServer = httpServer.secure(sslContextSpec -> {
+                final var sslContextBuilder = sslContextSpec.sslContext(listeningChannel.defaultSslContext());
+                for (final var certificate : this.currentConfiguration.getCertificates().values()) {
+                    final var id = certificate.getId();
+                    listeningChannel.applySslContext(id, sslContextBuilder);
+                }
+            });
+        }
+        httpServer = httpServer
                 .metrics(true, Function.identity())
                 .forwarded(ForwardedStrategy.of(config.forwardedStrategy(), config.trustedIps()))
                 .option(ChannelOption.SO_BACKLOG, config.soBacklog())
@@ -208,10 +216,11 @@ public class Listeners {
                 .doOnChannelInit((observer, channel, remoteAddress) -> {
                     final ChannelHandler idle = new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds());
                     channel.pipeline().addFirst("idleStateHandler", idle);
-                    if (config.ssl()) {
+                    // todo re-enable OCSP
+                    /* if (config.ssl()) {
                         final ChannelHandler sni = new ListenersSniHandler(currentConfiguration, parent, listeningChannel);
                         channel.pipeline().addFirst(sni);
-                    }
+                    } */
                 })
                 .doOnConnection(conn -> {
                     CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
