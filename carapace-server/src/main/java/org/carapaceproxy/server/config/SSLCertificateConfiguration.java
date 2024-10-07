@@ -28,7 +28,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.Data;
-import org.carapaceproxy.core.ssl.CertificatesUtils;
+import org.carapaceproxy.utils.CertificatesUtils;
 
 /**
  * Configuration for a TLS Certificate
