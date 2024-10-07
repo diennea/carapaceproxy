@@ -46,6 +46,7 @@ import org.slf4j.LoggerFactory;
 import reactor.netty.DisposableServer;
 import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.server.HttpServer;
+import reactor.netty.tcp.SslProvider;
 
 /**
  * Collection of listeners waiting for incoming clients requests on the configured HTTP ports.
@@ -85,7 +86,10 @@ public class Listeners {
 
     public int getLocalPort() {
         for (final ListeningChannel listeningChannel : listeningChannels.values()) {
-            return listeningChannel.getHostPort().port();
+            final int port = listeningChannel.getChannelPort();
+            if (port > 0) {
+                return port;
+            }
         }
         return -1;
     }
@@ -106,13 +110,14 @@ public class Listeners {
      * @throws InterruptedException if it is interrupted while starting or stopping a listener
      * @see #reloadCurrentConfiguration()
      */
-    void reloadConfiguration(final RuntimeServerConfiguration newConfiguration) throws InterruptedException {
+    void reloadConfiguration(final RuntimeServerConfiguration newConfiguration) throws InterruptedException, ConfigurationNotValidException {
         if (!started) {
             this.currentConfiguration = newConfiguration;
             return;
         }
         // Clear cached ssl contexts
         sslContexts.clear();
+        final boolean certificatesChanged = newConfiguration.getCertificates().equals(currentConfiguration.getCertificates());
 
         // stop dropped listeners, start new one
         final List<EndpointKey> listenersToStop = new ArrayList<>();
@@ -124,9 +129,10 @@ public class Listeners {
             if (newConfigurationForListener == null) {
                 LOG.info("listener: {} is to be shut down", hostPort);
                 listenersToStop.add(hostPort);
-            } else if (!newConfigurationForListener.equals(actualListenerConfig)
-                       || newConfiguration.getResponseCompressionThreshold() != currentConfiguration.getResponseCompressionThreshold()
-                       || newConfiguration.getMaxHeaderSize() != currentConfiguration.getMaxHeaderSize()) {
+            } else if (certificatesChanged
+                    || !newConfigurationForListener.equals(actualListenerConfig)
+                    || newConfiguration.getResponseCompressionThreshold() != currentConfiguration.getResponseCompressionThreshold()
+                    || newConfiguration.getMaxHeaderSize() != currentConfiguration.getMaxHeaderSize()) {
                 LOG.info("listener: {} is to be restarted", hostPort);
                 listenersToRestart.add(hostPort);
             }
@@ -175,7 +181,7 @@ public class Listeners {
         }
     }
 
-    private void bootListener(final NetworkListenerConfiguration config) throws InterruptedException {
+    private void bootListener(final NetworkListenerConfiguration config) throws InterruptedException, ConfigurationNotValidException {
         final ListeningChannel listeningChannel = new ListeningChannel(basePath, currentConfiguration, parent, sslContexts, config);
         final EndpointKey hostPort = listeningChannel.getHostPort();
         LOG.info("Starting listener at {}:{} ssl:{}", hostPort.host(), hostPort.port(), config.ssl());
@@ -184,12 +190,18 @@ public class Listeners {
         HttpServer httpServer = HttpServer.create()
                 .host(hostPort.host())
                 .port(hostPort.port())
-                .protocol(config.protocols().toArray(HttpProtocol[]::new))
-                /*
-                  // .secure()
-                  todo: to enable H2, see config.isSsl() & snimappings
-                  see https://projectreactor.io/docs/netty/release/reference/index.html#_server_name_indication_3
-                 */
+                .protocol(config.protocols().toArray(HttpProtocol[]::new));
+        if (config.ssl()) {
+            httpServer = httpServer.secure(sslContextSpec -> {
+                final SslContext defaultSslContext = listeningChannel.getDefaultSslContext();
+                final SslProvider.Builder builder = sslContextSpec.sslContext(defaultSslContext);
+                if (listeningChannel.isOcspEnabled()) {
+                    builder.handlerConfigurator(new OcspSslHandler(defaultSslContext, parent.getOcspStaplingManager()));
+                }
+                listeningChannel.apply(builder);
+            });
+        }
+        httpServer = httpServer
                 .metrics(true, Function.identity())
                 .forwarded(ForwardedStrategy.of(config.forwardedStrategy(), config.trustedIps()))
                 .option(ChannelOption.SO_BACKLOG, config.soBacklog())
@@ -208,10 +220,6 @@ public class Listeners {
                 .doOnChannelInit((observer, channel, remoteAddress) -> {
                     final ChannelHandler idle = new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds());
                     channel.pipeline().addFirst("idleStateHandler", idle);
-                    if (config.ssl()) {
-                        final ChannelHandler sni = new ListenersSniHandler(currentConfiguration, parent, listeningChannel);
-                        channel.pipeline().addFirst(sni);
-                    }
                 })
                 .doOnConnection(conn -> {
                     CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
@@ -277,7 +285,7 @@ public class Listeners {
      *
      * @throws InterruptedException if it is interrupted while starting or stopping a listener
      */
-    public void reloadCurrentConfiguration() throws InterruptedException {
+    public void reloadCurrentConfiguration() throws InterruptedException, ConfigurationNotValidException {
         reloadConfiguration(this.currentConfiguration);
     }
 
