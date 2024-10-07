@@ -43,6 +43,7 @@ import java.util.Objects;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
+import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.HostPort;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 
@@ -280,5 +281,39 @@ public final class CertificatesUtils {
             }
         }
         return false;
+    }
+
+    public static SSLCertificateConfiguration chooseCertificate(final RuntimeServerConfiguration currentConfiguration, String sniHostname, final String defaultCertificate) {
+        if (sniHostname == null) {
+            sniHostname = "";
+        }
+        final var certificates = currentConfiguration.getCertificates();
+        SSLCertificateConfiguration certificateMatchExact = null;
+        SSLCertificateConfiguration certificateMatchNoExact = null;
+        for (final var c : certificates.values()) {
+            if (certificateMatches(sniHostname, c, true)) {
+                certificateMatchExact = c;
+            } else if (certificateMatches(sniHostname, c, false)) {
+                if (certificateMatchNoExact == null || c.isMoreSpecific(certificateMatchNoExact)) {
+                    certificateMatchNoExact = c;
+                }
+            }
+        }
+        SSLCertificateConfiguration chosen = null;
+        if (certificateMatchExact != null) {
+            chosen = certificateMatchExact;
+        } else if (certificateMatchNoExact != null) {
+            chosen = certificateMatchNoExact;
+        }
+        if (chosen == null) {
+            chosen = certificates.get(defaultCertificate);
+        }
+        /* LOG.info("Resolving SNI for hostname: {}", sniHostname);
+        if (chosen == null) {
+            LOG.error("No certificate found for SNI hostname: {}", sniHostname);
+        } else {
+            LOG.info("Using certificate: {}", chosen.getId());
+        } */
+        return chosen;
     }
 }
