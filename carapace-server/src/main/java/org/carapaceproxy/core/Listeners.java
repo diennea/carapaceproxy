@@ -84,7 +84,10 @@ public class Listeners {
 
     public int getLocalPort() {
         for (final var listeningChannel : listeningChannels.values()) {
-            return listeningChannel.getHostPort().port();
+            final var port = listeningChannel.getChannelPort();
+            if (port > 0) {
+                return port;
+            }
         }
         return -1;
     }
