@@ -14,6 +14,7 @@ import io.netty.util.concurrent.Promise;
 import io.prometheus.client.Counter;
 import java.io.File;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.time.Duration;
@@ -113,44 +114,6 @@ public class ListeningChannel implements io.netty.util.AsyncMapping<String, SslC
         }
     }
 
-    public NetworkListenerConfiguration getConfig() {
-        return this.config;
-    }
-
-    public int getTotalRequests() {
-        return (int) this.totalRequests.get();
-    }
-
-    public void setChannel(DisposableServer channel) {
-        this.channel = channel;
-    }
-
-    public HostPort getHostPort() {
-        return new HostPort(this.config.host(), this.localPort);
-    }
-
-    public SslContext defaultSslContext() {
-        try {
-            return map(config.defaultCertificate());
-        } catch (final ConfigurationNotValidException e) {
-            throw new RuntimeException("Failed to load default SSL context", e);
-        }
-    }
-
-    public void applySslContext(final String sniHostname, final reactor.netty.tcp.SslProvider.Builder sslContextBuilder) {
-        if (sniHostname.charAt(0) == '*' && (sniHostname.length() < 3 || sniHostname.charAt(1) != '.')) {
-            // skip, ReactorNetty won't accept it!
-            return;
-        }
-        try {
-            // #map should cache the certificate after the first search of the different SANs of the same certificate
-            final SslContext sslContext = map(sniHostname);
-            sslContextBuilder.addSniMapping(sniHostname, spec -> spec.sslContext(sslContext));
-        } catch (final ConfigurationNotValidException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     private SSLCertificateConfiguration chooseCertificate(final String sniHostname) {
         return CertificatesUtils.chooseCertificate(currentConfiguration, sniHostname, config.defaultCertificate());
     }
@@ -203,6 +166,54 @@ public class ListeningChannel implements io.netty.util.AsyncMapping<String, SslC
         } catch (IOException | GeneralSecurityException err) {
             LOG.error("ERROR booting listener", err);
             throw new ConfigurationNotValidException(err);
+        }
+    }
+
+    public NetworkListenerConfiguration getConfig() {
+        return this.config;
+    }
+
+    public int getTotalRequests() {
+        return (int) this.totalRequests.get();
+    }
+
+    public void setChannel(DisposableServer channel) {
+        this.channel = channel;
+    }
+
+    public HostPort getHostPort() {
+        return new HostPort(this.config.host(), this.localPort);
+    }
+
+    public int getChannelPort() {
+        if (this.channel != null) {
+            if (this.channel.address() instanceof InetSocketAddress address) {
+                return address.getPort();
+            }
+            LOG.warn("Unexpected channel address {}", this.channel.address());
+        }
+        return -1;
+    }
+
+    public SslContext defaultSslContext() {
+        try {
+            return map(config.defaultCertificate());
+        } catch (final ConfigurationNotValidException e) {
+            throw new RuntimeException("Failed to load default SSL context", e);
+        }
+    }
+
+    public void applySslContext(final String sniHostname, final reactor.netty.tcp.SslProvider.Builder sslContextBuilder) {
+        if (sniHostname.charAt(0) == '*' && (sniHostname.length() < 3 || sniHostname.charAt(1) != '.')) {
+            // skip, ReactorNetty won't accept it!
+            return;
+        }
+        try {
+            // #map should cache the certificate after the first search of the different SANs of the same certificate
+            final SslContext sslContext = map(sniHostname);
+            sslContextBuilder.addSniMapping(sniHostname, spec -> spec.sslContext(sslContext));
+        } catch (final ConfigurationNotValidException e) {
+            throw new RuntimeException(e);
         }
     }
 }
