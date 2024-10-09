@@ -210,9 +210,17 @@ public class ListeningChannel implements io.netty.util.AsyncMapping<String, SslC
         try {
             // #map should cache the certificate after the first search of the different SANs of the same certificate
             final SslContext sslContext = map(sniHostname);
+            if (isOcspEnabled()) {
+                sslContextBuilder.handlerConfigurator(new OcspSslHandler(sslContext, parent.getOcspStaplingManager()));
+            }
             sslContextBuilder.addSniMapping(sniHostname, spec -> spec.sslContext(sslContext));
         } catch (final ConfigurationNotValidException e) {
             throw new RuntimeException(e);
         }
     }
+
+    public boolean isOcspEnabled() {
+        return currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported();
+    }
+
 }

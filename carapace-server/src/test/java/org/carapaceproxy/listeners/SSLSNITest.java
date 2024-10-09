@@ -27,6 +27,7 @@ import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAU
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static reactor.netty.http.HttpProtocol.HTTP11;
@@ -102,38 +103,38 @@ public class SSLSNITest {
 
 
             // client requests bad SNI, bad default in listener
-            assertNull(CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), "no", "no-default"));
+            assertNull(chooseCert(server, "no", "no-default"));
 
-            assertEquals("*.qatest.pexample.it", CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), "test2.qatest.pexample.it", "no-default").getId());
+            assertEquals("*.qatest.pexample.it", chooseCertId(server, "test2.qatest.pexample.it", "no-default"));
             // client requests SNI, bad default in listener
-            assertEquals("other", CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), "other", "no-default").getId());
+            assertEquals("other", chooseCertId(server, "other", "no-default"));
 
-            assertEquals("www.example.com", CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), "unkn-other", "www.example.com").getId());
+            assertEquals("www.example.com", chooseCertId(server, "unkn-other", "www.example.com"));
             // client without SNI
-            assertEquals("www.example.com", CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), null, "www.example.com").getId());
+            assertEquals("www.example.com", chooseCertId(server, null, "www.example.com"));
             // exact match
-            assertEquals("www.example.com", CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), "www.example.com", "no-default").getId());
+            assertEquals("www.example.com", chooseCertId(server, "www.example.com", "no-default"));
             // wildcard
-            assertEquals("*.example.com", CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), "test.example.com", "no-default").getId());
+            assertEquals("*.example.com", chooseCertId(server, "test.example.com", "no-default"));
             // san
-            assertEquals("*.example.com", CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), "example.com", "no-default").getId());
-            assertEquals("*.example.com", CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), "test.example2.com", "no-default").getId());
+            assertEquals("*.example.com", chooseCertId(server, "example.com", "no-default"));
+            assertEquals("*.example.com", chooseCertId(server, "test.example2.com", "no-default"));
 
             // full wildcard
             server.addCertificate(new SSLCertificateConfiguration("*", null, "cert", "pwd", STATIC));
             // full wildcard has not to hide more specific wildcard one
-            assertEquals("*.example.com", CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), "test.example.com", "no-default").getId());
+            assertEquals("*.example.com", chooseCertId(server, "test.example.com", "no-default"));
             // san
-            assertEquals("*.example.com", CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), "example.com", "no-default").getId());
-            assertEquals("*.example.com", CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), "test.example2.com", "no-default").getId());
+            assertEquals("*.example.com", chooseCertId(server, "example.com", "no-default"));
+            assertEquals("*.example.com", chooseCertId(server, "test.example2.com", "no-default"));
 
             // more specific wildcard
             server.addCertificate(new SSLCertificateConfiguration("*.test.example.com", null, "cert", "pwd", STATIC));
             // more specific wildcard has to hide less specific one (*.example.com)
-            assertEquals("*.test.example.com", CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), "pippo.test.example.com", "no-default").getId());
+            assertEquals("*.test.example.com", chooseCertId(server, "pippo.test.example.com", "no-default"));
             // san
-            assertEquals("*.example.com", CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), "example.com", "no-default").getId());
-            assertEquals("*.example.com", CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), "test.example2.com", "no-default").getId());
+            assertEquals("*.example.com", chooseCertId(server, "example.com", "no-default"));
+            assertEquals("*.example.com", chooseCertId(server, "test.example2.com", "no-default"));
         }
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
@@ -141,12 +142,22 @@ public class SSLSNITest {
             // full wildcard
             server.addCertificate(new SSLCertificateConfiguration("*", null, "cert", "pwd", STATIC));
 
-            assertEquals("*", CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), null, "www.example.com").getId());
-            assertEquals("*", CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), "www.example.com", null).getId());
-            assertEquals("*", CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), null, null).getId());
-            assertEquals("*", CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), "", null).getId());
-            assertEquals("*", CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), null, "").getId());
+            assertEquals("*", chooseCertId(server, null, "www.example.com"));
+            assertEquals("*", chooseCertId(server, "www.example.com", null));
+            assertEquals("*", chooseCertId(server, null, null));
+            assertEquals("*", chooseCertId(server, "", null));
+            assertEquals("*", chooseCertId(server, null, ""));
         }
+    }
+
+    private static SSLCertificateConfiguration chooseCert(final HttpProxyServer server, final String sniHostname, final String defaultCertificate) {
+        return CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), sniHostname, defaultCertificate);
+    }
+
+    private static String chooseCertId(final HttpProxyServer server, final String sniHostname, final String defaultCertificate) {
+        final var certificate = chooseCert(server, sniHostname, defaultCertificate);
+        assertNotNull(certificate);
+        return certificate.getId();
     }
 
     @Test
