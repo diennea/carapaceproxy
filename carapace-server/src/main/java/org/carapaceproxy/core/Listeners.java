@@ -190,7 +190,11 @@ public class Listeners {
                 .protocol(config.protocols().toArray(HttpProtocol[]::new));
         if (config.ssl()) {
             httpServer = httpServer.secure(sslContextSpec -> {
-                final var sslContextBuilder = sslContextSpec.sslContext(listeningChannel.defaultSslContext());
+                final var sslCtx = listeningChannel.defaultSslContext();
+                final var sslContextBuilder = sslContextSpec.sslContext(sslCtx);
+                if (listeningChannel.isOcspEnabled()) {
+                    sslContextBuilder.handlerConfigurator(new OcspSslHandler(sslCtx, parent.getOcspStaplingManager()));
+                }
                 for (final var certificate : this.currentConfiguration.getCertificates().values()) {
                     final var id = certificate.getId();
                     listeningChannel.applySslContext(id, sslContextBuilder);
@@ -216,11 +220,6 @@ public class Listeners {
                 .doOnChannelInit((observer, channel, remoteAddress) -> {
                     final ChannelHandler idle = new IdleStateHandler(0, 0, currentConfiguration.getClientsIdleTimeoutSeconds());
                     channel.pipeline().addFirst("idleStateHandler", idle);
-                    // todo re-enable OCSP
-                    /* if (config.ssl()) {
-                        final ChannelHandler sni = new ListenersSniHandler(currentConfiguration, parent, listeningChannel);
-                        channel.pipeline().addFirst(sni);
-                    } */
                 })
                 .doOnConnection(conn -> {
                     CURRENT_CONNECTED_CLIENTS_GAUGE.inc();
