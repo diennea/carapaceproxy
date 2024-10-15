@@ -158,8 +158,8 @@
                 <groupId>io.projectreactor</groupId>
                 <artifactId>reactor-bom</artifactId>
                 <version>${libs.projectreactor}</version>
-                <type>pom</type>
                 <scope>import</scope>
+                <type>pom</type>
             </dependency>
             <dependency>
                 <groupId>io.netty</groupId>
@@ -172,8 +172,8 @@
                 <groupId>org.eclipse.jetty</groupId>
                 <artifactId>jetty-bom</artifactId>
                 <version>${libs.jetty}</version>
-                <type>pom</type>
                 <scope>import</scope>
+                <type>pom</type>
             </dependency>
             <dependency>
                 <groupId>com.fasterxml.jackson</groupId>
@@ -336,6 +336,41 @@
                     <updateWorkingCopyVersions>true</updateWorkingCopyVersions>
                     <autoVersionSubmodules>true</autoVersionSubmodules>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>enforce-dependency-convergence</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <banDependencyManagementScope/>
+                                <banDynamicVersions>
+                                    <ignores>
+                                        <ignore>${project.groupId}</ignore>
+                                    </ignores>
+                                </banDynamicVersions>
+                                <banDuplicatePomDependencyVersions/>
+                                <bannedDependencies>
+                                    <excludes>
+                                        <exclude>com.google.errorprone</exclude>
+                                        <exclude>com.google.code.findbugs</exclude>
+                                        <exclude>org.bouncycastle:*</exclude>
+                                        <exclude>org.checkerframework</exclude>
+                                    </excludes>
+                                    <includes>
+                                        <include>org.bouncycastle:*-jdk15on</include>
+                                    </includes>
+                                </bannedDependencies>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
