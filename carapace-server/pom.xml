@@ -51,6 +51,7 @@
             <artifactId>caffeine</artifactId>
             <version>${libs.caffeine}</version>
             <exclusions>
+                <!-- Excluding unnecessary annotations that are bundled in multiple versions by libraries -->
                 <exclusion>
                     <groupId>org.checkerframework</groupId>
                     <artifactId>checker-qual</artifactId>
@@ -65,7 +66,6 @@
             <groupId>org.antlr</groupId>
             <artifactId>ST4</artifactId>
             <version>${libs.antlr}</version>
-            <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.curator</groupId>
@@ -102,10 +102,7 @@
             <artifactId>herddb-jdbc</artifactId>
             <version>${libs.herddb}</version>
             <exclusions>
-                <exclusion>
-                    <groupId>org.bouncycastle</groupId>
-                    <artifactId>bc-fips</artifactId>
-                </exclusion>
+                <!-- Excluding unnecessary annotations that are bundled in multiple versions by libraries -->
                 <exclusion>
                     <groupId>org.checkerframework</groupId>
                     <artifactId>checker-qual</artifactId>
@@ -113,6 +110,11 @@
                 <exclusion>
                     <groupId>com.google.errorprone</groupId>
                     <artifactId>error_prone_annotations</artifactId>
+                </exclusion>
+                <!-- BouncyCastle FIPS clashes with other BouncyCastle modules -->
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bc-fips</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -150,27 +152,22 @@
         <dependency>
             <groupId>org.glassfish.jersey.core</groupId>
             <artifactId>jersey-server</artifactId>
-            <version>${libs.jersey}</version>
         </dependency>
         <dependency>
             <groupId>org.glassfish.jersey.inject</groupId>
             <artifactId>jersey-hk2</artifactId>
-            <version>${libs.jersey}</version>
         </dependency>
         <dependency>
             <groupId>org.glassfish.jersey.containers</groupId>
             <artifactId>jersey-container-servlet</artifactId>
-            <version>${libs.jersey}</version>
         </dependency>
         <dependency>
             <groupId>org.glassfish.jersey.containers</groupId>
             <artifactId>jersey-container-jetty-http</artifactId>
-            <version>${libs.jersey}</version>
         </dependency>
         <dependency>
             <groupId>org.glassfish.jersey.media</groupId>
             <artifactId>jersey-media-json-jackson</artifactId>
-            <version>${libs.jersey}</version>
             <scope>runtime</scope>
         </dependency>
         <dependency>
@@ -199,6 +196,7 @@
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
             <exclusions>
+                <!-- Excluding unnecessary annotations that are bundled in multiple versions by libraries -->
                 <exclusion>
                     <groupId>org.checkerframework</groupId>
                     <artifactId>checker-qual</artifactId>
@@ -247,6 +245,7 @@
             <version>${libs.junit}</version>
             <scope>test</scope>
             <exclusions>
+                <!-- Clashes with org.hamcrest:hamcrest -->
                 <exclusion>
                     <groupId>org.hamcrest</groupId>
                     <artifactId>hamcrest-core</artifactId>
@@ -265,6 +264,7 @@
             <version>${libs.wiremock}</version>
             <scope>test</scope>
             <exclusions>
+                <!-- Clashes with org.hamcrest:hamcrest -->
                 <exclusion>
                     <groupId>org.hamcrest</groupId>
                     <artifactId>hamcrest-core</artifactId>
@@ -277,6 +277,7 @@
             <version>${libs.powermock}</version>
             <scope>test</scope>
             <exclusions>
+                <!-- Clashes with org.hamcrest:hamcrest -->
                 <exclusion>
                     <groupId>org.hamcrest</groupId>
                     <artifactId>hamcrest-core</artifactId>
