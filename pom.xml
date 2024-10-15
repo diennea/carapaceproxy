@@ -111,18 +111,18 @@
         <libs.commons-io>2.11.0</libs.commons-io>
         <libs.commons-net>3.11.0</libs.commons-net>
 
-        <libs.jetty>9.4.56.v20240826</libs.jetty>
+        <libs.jetty>9.4.44.v20210927</libs.jetty>
         <libs.jersey>2.35</libs.jersey>
-        <libs.jackson>2.18.0</libs.jackson>
+        <libs.jackson>2.13.1</libs.jackson>
         <libs.jaxws.jaxb-api>2.3.1</libs.jaxws.jaxb-api>
         <libs.jaxws.jaxb-impl>3.0.2</libs.jaxws.jaxb-impl>
-        <libs.javaxactivation-api>1.2.0</libs.javaxactivation-api>
+        <libs.jakarta.activation>1.2.2</libs.jakarta.activation>
         <libs.slf4j>1.7.33</libs.slf4j>
         <libs.guava>31.1-jre</libs.guava>
         <libs.lombok>1.18.32</libs.lombok>
         <libs.spotbugsannotations>4.5.3</libs.spotbugsannotations>
-        <libs.checker>3.48.1</libs.checker>
-        <libs.protobuf>3.17.3</libs.protobuf>
+        <libs.checker>3.12.0</libs.checker>
+        <libs.protobuf>3.17.1</libs.protobuf>
 
         <!-- test dependecies -->
         <libs.junit>4.13.2</libs.junit>
@@ -197,6 +197,11 @@
                 <version>${libs.guava}</version>
                 <scope>import</scope>
                 <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.activation</groupId>
+                <artifactId>jakarta.activation-api</artifactId>
+                <version>${libs.jakarta.activation}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
