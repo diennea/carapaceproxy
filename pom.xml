@@ -372,6 +372,36 @@
                     <artifactId>maven-assembly-plugin</artifactId>
                     <version>3.6.0</version>
                 </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>3.2.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>3.1.1</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-site-plugin</artifactId>
+                    <version>3.12.1</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <version>3.1.1</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.3.1</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.3.0</version>
+                </plugin>
             </plugins>
         </pluginManagement>
         <plugins>
@@ -408,8 +438,26 @@
                         </goals>
                         <configuration>
                             <rules>
-                                <dependencyConvergence/>
+                                <banDependencyManagementScope/>
+                                <banDynamicVersions>
+                                    <ignores>
+                                        <ignore>${project.groupId}</ignore>
+                                    </ignores>
+                                </banDynamicVersions>
                                 <banDuplicatePomDependencyVersions/>
+                                <bannedDependencies>
+                                    <excludes>
+                                        <exclude>com.google.errorprone</exclude>
+                                        <exclude>com.google.code.findbugs</exclude>
+                                        <exclude>org.bouncycastle:*</exclude>
+                                        <exclude>org.checkerframework</exclude>
+                                    </excludes>
+                                    <includes>
+                                        <include>org.bouncycastle:*-jdk15on</include>
+                                    </includes>
+                                </bannedDependencies>
+                                <dependencyConvergence/>
+                                <requirePluginVersions/>
                             </rules>
                         </configuration>
                     </execution>
