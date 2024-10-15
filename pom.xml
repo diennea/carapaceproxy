@@ -101,10 +101,10 @@
         <libs.caffeine>3.0.5</libs.caffeine>
         <libs.antlr>4.3.1</libs.antlr>
 
+        <libs.bookkeeper>4.14.4</libs.bookkeeper>
         <libs.zookkeeper>3.8.0</libs.zookkeeper>
         <libs.curator>5.6.0</libs.curator>
-        <libs.prometheus>0.14.1</libs.prometheus>
-        <libs.prometheus.metrics>4.14.4</libs.prometheus.metrics>
+        <libs.prometheus>0.16.0</libs.prometheus>
         <libs.micrometer>1.11.0</libs.micrometer>
         <libs.herddb>0.26.1</libs.herddb>
 
@@ -256,6 +256,18 @@
                 <groupId>commons-net</groupId>
                 <artifactId>commons-net</artifactId>
                 <version>${libs.commons.net}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.bookkeeper.stats</groupId>
+                <artifactId>bookkeeper-stats-api</artifactId>
+                <version>${libs.bookkeeper}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.prometheus</groupId>
+                <artifactId>simpleclient_bom</artifactId>
+                <version>${libs.prometheus}</version>
+                <scope>import</scope>
+                <type>pom</type>
             </dependency>
         </dependencies>
     </dependencyManagement>

@@ -51,6 +51,7 @@
             <artifactId>caffeine</artifactId>
             <version>${libs.caffeine}</version>
             <exclusions>
+                <!-- Excluding unnecessary annotations that are bundled in multiple versions by libraries -->
                 <exclusion>
                     <groupId>org.checkerframework</groupId>
                     <artifactId>checker-qual</artifactId>
@@ -71,16 +72,6 @@
         <dependency>
             <groupId>org.apache.zookeeper</groupId>
             <artifactId>zookeeper</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>commons-cli</groupId>
-                    <artifactId>commons-cli</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.yetus</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.curator</groupId>
@@ -90,22 +81,19 @@
         <dependency>
             <groupId>io.prometheus</groupId>
             <artifactId>simpleclient</artifactId>
-            <version>${libs.prometheus}</version>
         </dependency>
         <dependency>
             <groupId>io.prometheus</groupId>
             <artifactId>simpleclient_hotspot</artifactId>
-            <version>${libs.prometheus}</version>
         </dependency>
         <dependency>
             <groupId>io.prometheus</groupId>
             <artifactId>simpleclient_servlet</artifactId>
-            <version>${libs.prometheus}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.bookkeeper.stats</groupId>
             <artifactId>prometheus-metrics-provider</artifactId>
-            <version>${libs.prometheus.metrics}</version>
+            <version>${libs.bookkeeper}</version>
         </dependency>
         <dependency>
             <groupId>io.micrometer</groupId>
@@ -117,17 +105,19 @@
             <artifactId>herddb-jdbc</artifactId>
             <version>${libs.herddb}</version>
             <exclusions>
+                <!-- Excluding unnecessary annotations that are bundled in multiple versions by libraries -->
                 <exclusion>
                     <groupId>org.checkerframework</groupId>
                     <artifactId>checker-qual</artifactId>
                 </exclusion>
                 <exclusion>
-                    <groupId>org.bouncycastle</groupId>
-                    <artifactId>bc-fips</artifactId>
-                </exclusion>
-                <exclusion>
                     <groupId>com.google.errorprone</groupId>
                     <artifactId>error_prone_annotations</artifactId>
+                </exclusion>
+                <!-- BouncyCastle FIPS clashes with other BouncyCastle modules -->
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bc-fips</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -208,6 +198,7 @@
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
             <exclusions>
+                <!-- Excluding unnecessary annotations that are bundled in multiple versions by libraries -->
                 <exclusion>
                     <groupId>org.checkerframework</groupId>
                     <artifactId>checker-qual</artifactId>
@@ -252,6 +243,7 @@
             <version>${libs.junit}</version>
             <scope>test</scope>
             <exclusions>
+                <!-- Clashes with org.hamcrest:hamcrest -->
                 <exclusion>
                     <groupId>org.hamcrest</groupId>
                     <artifactId>hamcrest-core</artifactId>
@@ -270,6 +262,7 @@
             <version>${libs.wiremock}</version>
             <scope>test</scope>
             <exclusions>
+                <!-- Clashes with org.hamcrest:hamcrest -->
                 <exclusion>
                     <groupId>org.hamcrest</groupId>
                     <artifactId>hamcrest-core</artifactId>
@@ -282,6 +275,7 @@
             <version>${libs.powermock}</version>
             <scope>test</scope>
             <exclusions>
+                <!-- Clashes with org.hamcrest:hamcrest -->
                 <exclusion>
                     <groupId>org.hamcrest</groupId>
                     <artifactId>hamcrest-core</artifactId>
