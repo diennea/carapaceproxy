@@ -75,22 +75,19 @@
         <dependency>
             <groupId>io.prometheus</groupId>
             <artifactId>simpleclient</artifactId>
-            <version>${libs.prometheus}</version>
         </dependency>
         <dependency>
             <groupId>io.prometheus</groupId>
             <artifactId>simpleclient_hotspot</artifactId>
-            <version>${libs.prometheus}</version>
         </dependency>
         <dependency>
             <groupId>io.prometheus</groupId>
             <artifactId>simpleclient_servlet</artifactId>
-            <version>${libs.prometheus}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.bookkeeper.stats</groupId>
             <artifactId>prometheus-metrics-provider</artifactId>
-            <version>${libs.prometheus.metrics}</version>
+            <version>${libs.bookkeeper}</version>
         </dependency>
         <dependency>
             <groupId>io.micrometer</groupId>
