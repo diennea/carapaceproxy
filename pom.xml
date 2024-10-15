@@ -99,8 +99,8 @@
         <libs.caffeine>3.0.5</libs.caffeine>
         <libs.antlr>4.3.1</libs.antlr>
 
-        <libs.zookkeeper>3.7.0</libs.zookkeeper>
-        <libs.curator>5.2.0</libs.curator>
+        <libs.zookkeeper>3.8.0</libs.zookkeeper>
+        <libs.curator>5.6.0</libs.curator>
         <libs.prometheus>0.14.1</libs.prometheus>
         <libs.prometheus.metrics>4.14.4</libs.prometheus.metrics>
         <libs.micrometer>1.11.0</libs.micrometer>
@@ -123,6 +123,7 @@
         <libs.spotbugsannotations>4.5.3</libs.spotbugsannotations>
         <libs.checker>3.12.0</libs.checker>
         <libs.protobuf>3.17.1</libs.protobuf>
+        <libs.errorprone>2.11.0</libs.errorprone>
 
         <!-- test dependecies -->
         <libs.junit>4.13.2</libs.junit>
@@ -202,6 +203,21 @@
                 <groupId>jakarta.activation</groupId>
                 <artifactId>jakarta.activation-api</artifactId>
                 <version>${libs.jakarta.activation}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.zookeeper</groupId>
+                <artifactId>zookeeper</artifactId>
+                <version>${libs.zookkeeper}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>${libs.slf4j}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.errorprone</groupId>
+                <artifactId>error_prone_annotations</artifactId>
+                <version>${libs.errorprone}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
