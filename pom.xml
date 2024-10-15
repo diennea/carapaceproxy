@@ -91,7 +91,7 @@
         <maven.compiler.release>${toolchain.java.version}</maven.compiler.release>
         <javacc-maven-plugin.version>2.4</javacc-maven-plugin.version>
 
-        <libs.projectreactor>2022.0.7</libs.projectreactor>
+        <libs.projectreactor>2023.0.10</libs.projectreactor>
         <libs.netty.ssl>2.0.61.Final</libs.netty.ssl>
         <libs.acme4j>2.12</libs.acme4j>
         <libs.bouncycastle>1.70</libs.bouncycastle>
