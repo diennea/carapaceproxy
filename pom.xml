@@ -123,7 +123,6 @@
         <libs.spotbugsannotations>4.5.3</libs.spotbugsannotations>
         <libs.checker>3.12.0</libs.checker>
         <libs.protobuf>3.17.1</libs.protobuf>
-        <libs.errorprone>2.11.0</libs.errorprone>
 
         <!-- test dependecies -->
         <libs.junit>4.13.2</libs.junit>
@@ -213,11 +212,6 @@
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-api</artifactId>
                 <version>${libs.slf4j}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.google.errorprone</groupId>
-                <artifactId>error_prone_annotations</artifactId>
-                <version>${libs.errorprone}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
