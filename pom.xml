@@ -122,7 +122,6 @@
         <libs.guava>31.1-jre</libs.guava>
         <libs.lombok>1.18.32</libs.lombok>
         <libs.spotbugsannotations>4.5.3</libs.spotbugsannotations>
-        <libs.checker>3.12.0</libs.checker>
         <libs.protobuf>3.17.1</libs.protobuf>
 
         <!-- test dependecies -->
@@ -193,11 +192,6 @@
                 <groupId>org.hamcrest</groupId>
                 <artifactId>hamcrest</artifactId>
                 <version>${libs.hamcrest}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.checkerframework</groupId>
-                <artifactId>checker-qual</artifactId>
-                <version>${libs.checker}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.protobuf</groupId>

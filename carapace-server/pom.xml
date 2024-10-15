@@ -66,6 +66,10 @@
             <version>${libs.caffeine}</version>
             <exclusions>
                 <exclusion>
+                    <groupId>org.checkerframework</groupId>
+                    <artifactId>checker-qual</artifactId>
+                </exclusion>
+                <exclusion>
                     <groupId>com.google.errorprone</groupId>
                     <artifactId>error_prone_annotations</artifactId>
                 </exclusion>
@@ -127,6 +131,10 @@
             <artifactId>herddb-jdbc</artifactId>
             <version>${libs.herddb}</version>
             <exclusions>
+                <exclusion>
+                    <groupId>org.checkerframework</groupId>
+                    <artifactId>checker-qual</artifactId>
+                </exclusion>
                 <exclusion>
                     <groupId>org.bouncycastle</groupId>
                     <artifactId>*</artifactId>
@@ -226,6 +234,10 @@
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
             <exclusions>
+                <exclusion>
+                    <groupId>org.checkerframework</groupId>
+                    <artifactId>checker-qual</artifactId>
+                </exclusion>
                 <exclusion>
                     <groupId>com.google.errorprone</groupId>
                     <artifactId>error_prone_annotations</artifactId>
