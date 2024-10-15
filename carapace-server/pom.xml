@@ -31,29 +31,15 @@
             <groupId>org.shredzone.acme4j</groupId>
             <artifactId>acme4j-client</artifactId>
             <version>${libs.acme4j}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.bouncycastle</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.shredzone.acme4j</groupId>
             <artifactId>acme4j-utils</artifactId>
             <version>${libs.acme4j}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.bouncycastle</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcpkix-jdk15on</artifactId>
-            <version>${libs.bouncycastle}</version>
-            <type>jar</type>
         </dependency>
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
@@ -118,7 +104,7 @@
             <exclusions>
                 <exclusion>
                     <groupId>org.bouncycastle</groupId>
-                    <artifactId>*</artifactId>
+                    <artifactId>bc-fips</artifactId>
                 </exclusion>
                 <exclusion>
                     <groupId>org.checkerframework</groupId>
@@ -287,7 +273,6 @@
             <groupId>pl.pragmatists</groupId>
             <artifactId>JUnitParams</artifactId>
             <version>${libs.junitparams}</version>
-            <type>jar</type>
             <scope>test</scope>
         </dependency>
         <dependency>

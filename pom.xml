@@ -203,6 +203,16 @@
                 <artifactId>zookeeper-jute</artifactId>
                 <version>${libs.zookkeeper}</version>
             </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcpkix-jdk15on</artifactId>
+                <version>${libs.bouncycastle}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk15on</artifactId>
+                <version>${libs.bouncycastle}</version>
+            </dependency>
             <!-- Individual test dependencies -->
             <dependency>
                 <groupId>org.hamcrest</groupId>
