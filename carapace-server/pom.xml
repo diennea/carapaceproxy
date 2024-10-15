@@ -238,15 +238,7 @@
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
-            <version>${libs.junit}</version>
             <scope>test</scope>
-            <exclusions>
-                <!-- Clashes with org.hamcrest:hamcrest -->
-                <exclusion>
-                    <groupId>org.hamcrest</groupId>
-                    <artifactId>hamcrest-core</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>pl.pragmatists</groupId>
@@ -287,12 +279,6 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-core</artifactId>
-            <version>${libs.mockito}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>org.apache.curator</groupId>
             <artifactId>curator-test</artifactId>
             <version>${libs.curator}</version>
@@ -304,11 +290,12 @@
                      messes up with Intellij IDEA test run of whole project.
                 -->
                 <exclusion>
-                    <groupId>ch.qos.logback</groupId>
+                    <groupId>org.junit.jupiter</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
+                <!-- We want a single SLF4J backend in our classpath! -->
                 <exclusion>
-                    <groupId>org.junit.jupiter</groupId>
+                    <groupId>ch.qos.logback</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
             </exclusions>

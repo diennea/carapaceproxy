@@ -116,6 +116,7 @@
         <libs.jetty>9.4.44.v20210927</libs.jetty>
         <libs.jersey>2.35</libs.jersey>
         <libs.jackson>2.14.1</libs.jackson>
+        <libs.javassist>3.27.0-GA</libs.javassist>
         <libs.slf4j>1.7.35</libs.slf4j>
         <libs.guava>31.1-jre</libs.guava>
         <libs.lombok>1.18.32</libs.lombok>
@@ -127,7 +128,7 @@
         <libs.junitparams>1.1.1</libs.junitparams>
         <libs.wiremock>2.35.0</libs.wiremock>
         <libs.powermock>2.0.9</libs.powermock>
-        <libs.mockito>3.12.4</libs.mockito>
+        <libs.objenesis>3.0.1</libs.objenesis>
         <libs.hamcrest>2.2</libs.hamcrest>
 
         <libs.asm>9.2</libs.asm>
@@ -268,6 +269,28 @@
                 <groupId>org.hamcrest</groupId>
                 <artifactId>hamcrest</artifactId>
                 <version>${libs.hamcrest}</version>
+            </dependency>
+            <dependency>
+                <groupId>junit</groupId>
+                <artifactId>junit</artifactId>
+                <version>${libs.junit}</version>
+                <exclusions>
+                    <!-- Clashes with org.hamcrest:hamcrest -->
+                    <exclusion>
+                        <groupId>org.hamcrest</groupId>
+                        <artifactId>hamcrest-core</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>org.objenesis</groupId>
+                <artifactId>objenesis</artifactId>
+                <version>${libs.objenesis}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.javassist</groupId>
+                <artifactId>javassist</artifactId>
+                <version>${libs.javassist}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -442,6 +465,7 @@
                                         <exclude>com.google.code.findbugs</exclude>
                                         <exclude>org.bouncycastle:*</exclude>
                                         <exclude>org.checkerframework</exclude>
+                                        <exclusion>org.hamcrest:hamcrest-core</exclusion>
                                     </excludes>
                                     <includes>
                                         <include>org.bouncycastle:*-jdk15on</include>
