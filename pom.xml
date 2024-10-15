@@ -120,6 +120,7 @@
         <libs.jaxws.jaxb-api>2.3.1</libs.jaxws.jaxb-api>
         <libs.jaxws.jaxb-impl>3.0.2</libs.jaxws.jaxb-impl>
         <libs.jakarta.activation>1.2.2</libs.jakarta.activation>
+        <libs.javassist>3.27.0-GA</libs.javassist>
         <libs.slf4j>1.7.33</libs.slf4j>
         <libs.guava>31.1-jre</libs.guava>
         <libs.lombok>1.18.32</libs.lombok>
@@ -131,7 +132,7 @@
         <libs.junitparams>1.1.1</libs.junitparams>
         <libs.wiremock>2.35.0</libs.wiremock>
         <libs.powermock>2.0.9</libs.powermock>
-        <libs.mockito>3.12.4</libs.mockito>
+        <libs.objenesis>3.0.1</libs.objenesis>
         <libs.hamcrest>2.2</libs.hamcrest>
 
         <libs.asm>9.2</libs.asm>
@@ -276,6 +277,28 @@
                 <groupId>org.apache.bookkeeper.stats</groupId>
                 <artifactId>bookkeeper-stats-api</artifactId>
                 <version>${libs.bookkeeper}</version>
+            </dependency>
+            <dependency>
+                <groupId>junit</groupId>
+                <artifactId>junit</artifactId>
+                <version>${libs.junit}</version>
+                <exclusions>
+                    <!-- Clashes with org.hamcrest:hamcrest -->
+                    <exclusion>
+                        <groupId>org.hamcrest</groupId>
+                        <artifactId>hamcrest-core</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>org.objenesis</groupId>
+                <artifactId>objenesis</artifactId>
+                <version>${libs.objenesis}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.javassist</groupId>
+                <artifactId>javassist</artifactId>
+                <version>${libs.javassist}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
