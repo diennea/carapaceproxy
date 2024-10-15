@@ -111,7 +111,7 @@
         <libs.commons-io>2.11.0</libs.commons-io>
         <libs.commons-net>3.11.0</libs.commons-net>
 
-        <libs.jetty>9.4.44.v20210927</libs.jetty>
+        <libs.jetty>9.4.56.v20240826</libs.jetty>
         <libs.jersey>2.35</libs.jersey>
         <libs.jackson>2.13.1</libs.jackson>
         <libs.jaxws.jaxb-api>2.3.1</libs.jaxws.jaxb-api>
@@ -157,6 +157,13 @@
                 <groupId>io.projectreactor</groupId>
                 <artifactId>reactor-bom</artifactId>
                 <version>${libs.projectreactor}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-bom</artifactId>
+                <version>${libs.jetty}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
