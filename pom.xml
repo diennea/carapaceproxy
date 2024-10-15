@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.carapaceproxy</groupId>
@@ -106,10 +107,11 @@
         <libs.micrometer>1.11.0</libs.micrometer>
         <libs.herddb>0.26.1</libs.herddb>
 
+        <libs.commons.codec>1.15</libs.commons.codec>
         <libs.commons.lang3>3.12.0</libs.commons.lang3>
-        <libs.commons-pool2>2.11.1</libs.commons-pool2>
-        <libs.commons-io>2.11.0</libs.commons-io>
-        <libs.commons-net>3.11.0</libs.commons-net>
+        <libs.commons.logging>1.2</libs.commons.logging>
+        <libs.commons.io>2.11.0</libs.commons.io>
+        <libs.commons.net>3.11.0</libs.commons.net>
 
         <libs.jetty>9.4.44.v20210927</libs.jetty>
         <libs.jersey>2.35</libs.jersey>
@@ -208,9 +210,29 @@
                 <version>${libs.slf4j}</version>
             </dependency>
             <dependency>
+                <groupId>commons-codec</groupId>
+                <artifactId>commons-codec</artifactId>
+                <version>${libs.commons.codec}</version>
+            </dependency>
+            <dependency>
                 <groupId>commons-io</groupId>
                 <artifactId>commons-io</artifactId>
-                <version>${libs.commons-io}</version>
+                <version>${libs.commons.io}</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-logging</groupId>
+                <artifactId>commons-logging</artifactId>
+                <version>${libs.commons.logging}</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-net</groupId>
+                <artifactId>commons-net</artifactId>
+                <version>${libs.commons.net}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-lang3</artifactId>
+                <version>${libs.commons.lang3}</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.zookeeper</groupId>
