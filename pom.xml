@@ -113,7 +113,7 @@
 
         <libs.jetty>9.4.44.v20210927</libs.jetty>
         <libs.jersey>2.35</libs.jersey>
-        <libs.jackson>2.13.1</libs.jackson>
+        <libs.jackson>2.14.1</libs.jackson>
         <libs.jaxws.jaxb-api>2.3.1</libs.jaxws.jaxb-api>
         <libs.jaxws.jaxb-impl>3.0.2</libs.jaxws.jaxb-impl>
         <libs.javaxactivation-api>1.2.0</libs.javaxactivation-api>
@@ -159,6 +159,13 @@
                 <version>${libs.projectreactor}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${libs.jackson}</version>
+                <scope>import</scope>
+                <type>pom</type>
             </dependency>
             <dependency>
                 <groupId>org.hamcrest</groupId>
