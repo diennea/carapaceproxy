@@ -92,7 +92,8 @@
         <javacc-maven-plugin.version>2.4</javacc-maven-plugin.version>
 
         <libs.projectreactor>2023.0.10</libs.projectreactor>
-        <libs.netty.ssl>2.0.61.Final</libs.netty.ssl>
+        <libs.netty>4.1.112.Final</libs.netty>
+        <libs.netty.ssl>2.0.65.Final</libs.netty.ssl>
         <libs.acme4j>2.12</libs.acme4j>
         <libs.bouncycastle>1.70</libs.bouncycastle>
         <libs.awssdk>2.17.113</libs.awssdk>
@@ -161,6 +162,18 @@
                 <version>${libs.projectreactor}</version>
                 <scope>import</scope>
                 <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <version>${libs.netty}</version>
+                <scope>import</scope>
+                <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-tcnative-boringssl-static</artifactId>
+                <version>${libs.netty.ssl}</version>
             </dependency>
             <dependency>
                 <groupId>org.eclipse.jetty</groupId>
