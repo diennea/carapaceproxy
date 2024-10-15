@@ -157,6 +157,7 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- BOMs -->
             <dependency>
                 <groupId>io.projectreactor</groupId>
                 <artifactId>reactor-bom</artifactId>
@@ -184,6 +185,13 @@
                 <type>pom</type>
             </dependency>
             <dependency>
+                <groupId>org.glassfish.jersey</groupId>
+                <artifactId>jersey-bom</artifactId>
+                <version>${libs.jersey}</version>
+                <scope>import</scope>
+                <type>pom</type>
+            </dependency>
+            <dependency>
                 <groupId>com.fasterxml.jackson</groupId>
                 <artifactId>jackson-bom</artifactId>
                 <version>${libs.jackson}</version>
@@ -197,6 +205,14 @@
                 <scope>import</scope>
                 <type>pom</type>
             </dependency>
+            <dependency>
+                <groupId>io.prometheus</groupId>
+                <artifactId>simpleclient_bom</artifactId>
+                <version>${libs.prometheus}</version>
+                <scope>import</scope>
+                <type>pom</type>
+            </dependency>
+            <!-- Individual dependencies -->
             <dependency>
                 <groupId>org.bouncycastle</groupId>
                 <artifactId>bcpkix-jdk15on</artifactId>
@@ -261,13 +277,6 @@
                 <groupId>org.apache.bookkeeper.stats</groupId>
                 <artifactId>bookkeeper-stats-api</artifactId>
                 <version>${libs.bookkeeper}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.prometheus</groupId>
-                <artifactId>simpleclient_bom</artifactId>
-                <version>${libs.prometheus}</version>
-                <scope>import</scope>
-                <type>pom</type>
             </dependency>
         </dependencies>
     </dependencyManagement>
