@@ -92,7 +92,7 @@
         <javacc-maven-plugin.version>2.4</javacc-maven-plugin.version>
 
         <libs.projectreactor>2022.0.7</libs.projectreactor>
-        <libs.netty.ssl>2.0.61.Final</libs.netty.ssl>
+        <libs.netty>4.1.92.Final</libs.netty>
         <libs.acme4j>2.12</libs.acme4j>
         <libs.bouncycastle>1.70</libs.bouncycastle>
         <libs.awssdk>2.17.113</libs.awssdk>
@@ -160,6 +160,13 @@
                 <version>${libs.projectreactor}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <version>${libs.netty}</version>
+                <scope>import</scope>
+                <type>pom</type>
             </dependency>
             <dependency>
                 <groupId>org.eclipse.jetty</groupId>

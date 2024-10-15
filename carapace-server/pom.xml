@@ -26,7 +26,6 @@
         <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-tcnative-boringssl-static</artifactId>
-            <version>${libs.netty.ssl}</version>
         </dependency>
         <dependency>
             <groupId>org.shredzone.acme4j</groupId>
@@ -60,12 +59,6 @@
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>route53</artifactId>
             <version>${libs.awssdk}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
@@ -112,13 +105,6 @@
             <groupId>org.apache.bookkeeper.stats</groupId>
             <artifactId>prometheus-metrics-provider</artifactId>
             <version>${libs.prometheus.metrics}</version>
-            <type>jar</type>
-            <exclusions>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.micrometer</groupId>
@@ -130,10 +116,6 @@
             <artifactId>herddb-jdbc</artifactId>
             <version>${libs.herddb}</version>
             <exclusions>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
                 <exclusion>
                     <groupId>org.bouncycastle</groupId>
                     <artifactId>*</artifactId>
