@@ -94,7 +94,7 @@
 
         <libs.projectreactor>2023.0.11</libs.projectreactor>
         <libs.netty>4.1.114.Final</libs.netty>
-        <libs.acme4j>2.12</libs.acme4j>
+        <libs.acme4j>3.4.0</libs.acme4j>
         <libs.bouncycastle>1.78.1</libs.bouncycastle>
         <libs.awssdk>2.17.113</libs.awssdk>
         <libs.caffeine>3.0.5</libs.caffeine>
