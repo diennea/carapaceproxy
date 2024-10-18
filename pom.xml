@@ -100,7 +100,7 @@
         <libs.caffeine>3.0.5</libs.caffeine>
         <libs.antlr>4.3.1</libs.antlr>
 
-        <libs.bookkeeper>4.14.4</libs.bookkeeper>
+        <libs.bookkeeper>4.14.8</libs.bookkeeper>
         <libs.zookkeeper>3.8.4</libs.zookkeeper>
         <libs.curator>5.2.0</libs.curator>
         <libs.prometheus>0.16.0</libs.prometheus>
@@ -110,12 +110,12 @@
         <libs.commons.codec>1.15</libs.commons.codec>
         <libs.commons.lang3>3.12.0</libs.commons.lang3>
         <libs.commons.logging>1.2</libs.commons.logging>
-        <libs.commons.io>2.11.0</libs.commons.io>
+        <libs.commons.io>2.14.0</libs.commons.io>
         <libs.commons.net>3.11.0</libs.commons.net>
 
-        <libs.jetty>9.4.44.v20210927</libs.jetty>
+        <libs.jetty>9.4.52.v20230823</libs.jetty>
         <libs.jersey>2.35</libs.jersey>
-        <libs.jackson>2.14.1</libs.jackson>
+        <libs.jackson>2.14.3</libs.jackson>
         <libs.javassist>3.27.0-GA</libs.javassist>
         <libs.slf4j>1.7.35</libs.slf4j>
         <libs.guava>33.3.1-jre</libs.guava>
@@ -126,7 +126,7 @@
         <!-- test dependecies -->
         <libs.junit>4.13.2</libs.junit>
         <libs.junitparams>1.1.1</libs.junitparams>
-        <libs.wiremock>2.35.0</libs.wiremock>
+        <libs.wiremock>2.35.2</libs.wiremock>
         <libs.powermock>2.0.9</libs.powermock>
         <libs.objenesis>3.0.1</libs.objenesis>
         <libs.hamcrest>2.2</libs.hamcrest>
