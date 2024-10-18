@@ -183,6 +183,13 @@
                 <scope>import</scope>
                 <type>pom</type>
             </dependency>
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava-bom</artifactId>
+                <version>${libs.guava}</version>
+                <scope>import</scope>
+                <type>pom</type>
+            </dependency>
             <!-- Individual dependencies -->
             <dependency>
                 <groupId>org.slf4j</groupId>
