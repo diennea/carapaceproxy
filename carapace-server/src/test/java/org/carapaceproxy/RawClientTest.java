@@ -762,7 +762,7 @@ public class RawClientTest {
                                 .withHeader("Content-Type", "text/html")
                                 .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                                 .withBody("it <b>works</b> !!")));
-                String s = client.executeRequest("GET " + scheme + "://yahoo.com/index.html?p1=v1&p2=https://localhost/index.html?p=1 HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                String s = client.executeRequest("GET " + scheme + "://yahoo.com/index.html?p1=v1&p2=https://localhost/index.html?p=1 HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
                 s = client.get("/index.html?p1=v1&p2=https://localhost/index.html?p=1").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
@@ -773,7 +773,7 @@ public class RawClientTest {
                                 .withHeader("Content-Type", "text/html")
                                 .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                                 .withBody("it <b>works</b> !!")));
-                s = client.executeRequest("GET " + scheme + "://yahoo.com/index.html HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                s = client.executeRequest("GET " + scheme + "://yahoo.com/index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
                 s = client.get("/index.html").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
@@ -785,11 +785,11 @@ public class RawClientTest {
                                 .withHeader("Content-Type", "text/html")
                                 .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                                 .withBody("it <b>works</b> !!")));
-                s = client.executeRequest("GET " + scheme + "://yahoo.com/?p1=v1&p2=https://localhost/index.html?p=1 HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                s = client.executeRequest("GET " + scheme + "://yahoo.com/?p1=v1&p2=https://localhost/index.html?p=1 HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
                 s = client.get("/?p1=v1&p2=https://localhost/index.html?p=1").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
-                s = client.executeRequest("GET " + scheme + "://yahoo.com?p1=v1&p2=https://localhost/index.html?p=1 HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                s = client.executeRequest("GET " + scheme + "://yahoo.com?p1=v1&p2=https://localhost/index.html?p=1 HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
                 s = client.get("?p1=v1&p2=https://localhost/index.html?p=1").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
@@ -800,11 +800,11 @@ public class RawClientTest {
                                 .withHeader("Content-Type", "text/html")
                                 .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                                 .withBody("it <b>works</b> !!")));
-                s = client.executeRequest("GET " + scheme + "://yahoo.com/ HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                s = client.executeRequest("GET " + scheme + "://yahoo.com/ HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
                 s = client.get("/").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
-                s = client.executeRequest("GET " + scheme + "://yahoo.com HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                s = client.executeRequest("GET " + scheme + "://yahoo.com HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
             }
         }
