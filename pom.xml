@@ -118,7 +118,7 @@
         <libs.jackson>2.14.1</libs.jackson>
         <libs.javassist>3.27.0-GA</libs.javassist>
         <libs.slf4j>1.7.35</libs.slf4j>
-        <libs.guava>31.1-jre</libs.guava>
+        <libs.guava>33.3.1-jre</libs.guava>
         <libs.lombok>1.18.32</libs.lombok>
         <libs.spotbugsannotations>4.5.3</libs.spotbugsannotations>
         <libs.protobuf>3.17.1</libs.protobuf>
