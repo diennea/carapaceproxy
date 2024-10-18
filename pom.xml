@@ -95,7 +95,7 @@
         <libs.projectreactor>2023.0.11</libs.projectreactor>
         <libs.netty>4.1.114.Final</libs.netty>
         <libs.acme4j>2.12</libs.acme4j>
-        <libs.bouncycastle>1.70</libs.bouncycastle>
+        <libs.bouncycastle>1.78.1</libs.bouncycastle>
         <libs.awssdk>2.17.113</libs.awssdk>
         <libs.caffeine>3.0.5</libs.caffeine>
         <libs.antlr>4.3.1</libs.antlr>
@@ -246,12 +246,12 @@
             </dependency>
             <dependency>
                 <groupId>org.bouncycastle</groupId>
-                <artifactId>bcpkix-jdk15on</artifactId>
+                <artifactId>bcpkix-jdk18on</artifactId>
                 <version>${libs.bouncycastle}</version>
             </dependency>
             <dependency>
                 <groupId>org.bouncycastle</groupId>
-                <artifactId>bcprov-jdk15on</artifactId>
+                <artifactId>bcprov-jdk18on</artifactId>
                 <version>${libs.bouncycastle}</version>
             </dependency>
             <dependency>
@@ -468,7 +468,7 @@
                                         <exclusion>org.hamcrest:hamcrest-core</exclusion>
                                     </excludes>
                                     <includes>
-                                        <include>org.bouncycastle:*-jdk15on</include>
+                                        <include>org.bouncycastle:*-jdk18on</include>
                                     </includes>
                                 </bannedDependencies>
                                 <dependencyConvergence/>
