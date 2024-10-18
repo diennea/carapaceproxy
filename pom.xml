@@ -99,7 +99,7 @@
         <libs.caffeine>3.0.5</libs.caffeine>
         <libs.antlr>4.3.1</libs.antlr>
 
-        <libs.zookkeeper>3.7.0</libs.zookkeeper>
+        <libs.zookkeeper>3.7.2</libs.zookkeeper>
         <libs.curator>5.2.0</libs.curator>
         <libs.prometheus>0.14.1</libs.prometheus>
         <libs.prometheus.metrics>4.14.4</libs.prometheus.metrics>
@@ -117,7 +117,7 @@
         <libs.jaxws.jaxb-api>2.3.1</libs.jaxws.jaxb-api>
         <libs.jaxws.jaxb-impl>3.0.2</libs.jaxws.jaxb-impl>
         <libs.javaxactivation-api>1.2.0</libs.javaxactivation-api>
-        <libs.slf4j>1.7.33</libs.slf4j>
+        <libs.slf4j>1.7.35</libs.slf4j>
         <libs.guava>31.1-jre</libs.guava>
         <libs.lombok>1.18.32</libs.lombok>
         <libs.spotbugsannotations>4.5.3</libs.spotbugsannotations>
@@ -153,6 +153,7 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- BOMs -->
             <dependency>
                 <groupId>io.projectreactor</groupId>
                 <artifactId>reactor-bom</artifactId>
@@ -167,6 +168,13 @@
                 <scope>import</scope>
                 <type>pom</type>
             </dependency>
+            <!-- Individual dependencies -->
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>${libs.slf4j}</version>
+            </dependency>
+            <!-- Individual test dependencies -->
             <dependency>
                 <groupId>org.hamcrest</groupId>
                 <artifactId>hamcrest</artifactId>
