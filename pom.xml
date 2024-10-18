@@ -121,6 +121,7 @@
         <libs.guava>31.1-jre</libs.guava>
         <libs.lombok>1.18.32</libs.lombok>
         <libs.spotbugsannotations>4.5.3</libs.spotbugsannotations>
+        <libs.protobuf>3.17.1</libs.protobuf>
 
         <!-- test dependecies -->
         <libs.junit>4.13.2</libs.junit>
@@ -212,6 +213,11 @@
                 <groupId>org.bouncycastle</groupId>
                 <artifactId>bcprov-jdk15on</artifactId>
                 <version>${libs.bouncycastle}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java</artifactId>
+                <version>${libs.protobuf}</version>
             </dependency>
             <!-- Individual test dependencies -->
             <dependency>
