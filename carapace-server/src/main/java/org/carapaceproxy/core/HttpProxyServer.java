@@ -229,7 +229,7 @@ public class HttpProxyServer implements AutoCloseable {
 
     public static HttpProxyServer buildForTests(String host, int port, EndpointMapper mapper, File baseDir) throws ConfigurationNotValidException {
         HttpProxyServer res = new HttpProxyServer(mapper, baseDir.getAbsoluteFile());
-        res.currentConfiguration.addListener(new NetworkListenerConfiguration(host, port));
+        res.currentConfiguration.addListener(NetworkListenerConfiguration.withDefault(host, port));
         res.proxyRequestsManager.reloadConfiguration(res.currentConfiguration, mapper.getBackends().values());
 
         return res;
@@ -268,7 +268,7 @@ public class HttpProxyServer implements AutoCloseable {
         this.cachePoolAllocator = usePooledByteBufAllocator
                 ? new PooledByteBufAllocator(true) : new UnpooledByteBufAllocator(true);
         this.cacheByteBufMemoryUsageMetric = new CacheByteBufMemoryUsageMetric(this);
-        //Best practice is to reuse EventLoopGroup
+        // Best practice is to reuse EventLoopGroup
         // http://normanmaurer.me/presentations/2014-facebook-eng-netty/slides.html#25.0
         this.eventLoopGroup = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
     }

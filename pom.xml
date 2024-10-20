@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.carapaceproxy</groupId>
@@ -91,46 +92,45 @@
         <maven.compiler.release>${toolchain.java.version}</maven.compiler.release>
         <javacc-maven-plugin.version>2.4</javacc-maven-plugin.version>
 
-        <libs.projectreactor>2022.0.7</libs.projectreactor>
-        <libs.netty.ssl>2.0.61.Final</libs.netty.ssl>
-        <libs.acme4j>2.12</libs.acme4j>
-        <libs.bouncycastle>1.70</libs.bouncycastle>
+        <libs.projectreactor>2023.0.11</libs.projectreactor>
+        <libs.netty>4.1.114.Final</libs.netty>
+        <libs.acme4j>3.4.0</libs.acme4j>
+        <libs.bouncycastle>1.78.1</libs.bouncycastle>
         <libs.awssdk>2.17.113</libs.awssdk>
         <libs.caffeine>3.0.5</libs.caffeine>
         <libs.antlr>4.3.1</libs.antlr>
 
-        <libs.zookkeeper>3.7.0</libs.zookkeeper>
+        <libs.bookkeeper>4.14.8</libs.bookkeeper>
+        <libs.zookkeeper>3.8.4</libs.zookkeeper>
         <libs.curator>5.2.0</libs.curator>
-        <libs.prometheus>0.14.1</libs.prometheus>
-        <libs.prometheus.metrics>4.14.4</libs.prometheus.metrics>
+        <libs.prometheus>0.16.0</libs.prometheus>
         <libs.micrometer>1.11.0</libs.micrometer>
         <libs.herddb>0.26.1</libs.herddb>
 
+        <libs.commons.codec>1.15</libs.commons.codec>
         <libs.commons.lang3>3.12.0</libs.commons.lang3>
-        <libs.commons-pool2>2.11.1</libs.commons-pool2>
-        <libs.commons-io>2.11.0</libs.commons-io>
-        <libs.commons-net>3.11.0</libs.commons-net>
+        <libs.commons.logging>1.2</libs.commons.logging>
+        <libs.commons.io>2.14.0</libs.commons.io>
+        <libs.commons.net>3.11.0</libs.commons.net>
 
-        <libs.jetty>9.4.44.v20210927</libs.jetty>
+        <libs.jetty>9.4.52.v20230823</libs.jetty>
         <libs.jersey>2.35</libs.jersey>
-        <libs.jackson>2.13.1</libs.jackson>
-        <libs.jaxws.jaxb-api>2.3.1</libs.jaxws.jaxb-api>
-        <libs.jaxws.jaxb-impl>3.0.2</libs.jaxws.jaxb-impl>
-        <libs.javaxactivation-api>1.2.0</libs.javaxactivation-api>
-        <libs.slf4j>1.7.33</libs.slf4j>
-        <libs.guava>31.1-jre</libs.guava>
+        <libs.jackson>2.14.3</libs.jackson>
+        <libs.javassist>3.27.0-GA</libs.javassist>
+        <libs.slf4j>1.7.35</libs.slf4j>
+        <libs.guava>33.3.1-jre</libs.guava>
         <libs.lombok>1.18.32</libs.lombok>
         <libs.spotbugsannotations>4.5.3</libs.spotbugsannotations>
+        <libs.protobuf>3.17.1</libs.protobuf>
 
         <!-- test dependecies -->
         <libs.junit>4.13.2</libs.junit>
         <libs.junitparams>1.1.1</libs.junitparams>
-        <libs.wiremock>2.35.0</libs.wiremock>
+        <libs.wiremock>2.35.2</libs.wiremock>
         <libs.powermock>2.0.9</libs.powermock>
-        <libs.mockito>3.12.4</libs.mockito>
+        <libs.objenesis>3.0.1</libs.objenesis>
         <libs.hamcrest>2.2</libs.hamcrest>
 
-        <plugins.spotbugsmaven>4.5.3.0</plugins.spotbugsmaven>
         <libs.asm>9.2</libs.asm>
     </properties>
 
@@ -153,17 +153,144 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- BOMs -->
             <dependency>
                 <groupId>io.projectreactor</groupId>
                 <artifactId>reactor-bom</artifactId>
                 <version>${libs.projectreactor}</version>
-                <type>pom</type>
                 <scope>import</scope>
+                <type>pom</type>
             </dependency>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <version>${libs.netty}</version>
+                <scope>import</scope>
+                <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-bom</artifactId>
+                <version>${libs.jetty}</version>
+                <scope>import</scope>
+                <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>org.glassfish.jersey</groupId>
+                <artifactId>jersey-bom</artifactId>
+                <version>${libs.jersey}</version>
+                <scope>import</scope>
+                <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${libs.jackson}</version>
+                <scope>import</scope>
+                <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava-bom</artifactId>
+                <version>${libs.guava}</version>
+                <scope>import</scope>
+                <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>io.prometheus</groupId>
+                <artifactId>simpleclient_bom</artifactId>
+                <version>${libs.prometheus}</version>
+                <scope>import</scope>
+                <type>pom</type>
+            </dependency>
+            <!-- Individual dependencies -->
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>${libs.slf4j}</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-codec</groupId>
+                <artifactId>commons-codec</artifactId>
+                <version>${libs.commons.codec}</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-io</groupId>
+                <artifactId>commons-io</artifactId>
+                <version>${libs.commons.io}</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-logging</groupId>
+                <artifactId>commons-logging</artifactId>
+                <version>${libs.commons.logging}</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-net</groupId>
+                <artifactId>commons-net</artifactId>
+                <version>${libs.commons.net}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-lang3</artifactId>
+                <version>${libs.commons.lang3}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.zookeeper</groupId>
+                <artifactId>zookeeper</artifactId>
+                <version>${libs.zookkeeper}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.zookeeper</groupId>
+                <artifactId>zookeeper-jute</artifactId>
+                <version>${libs.zookkeeper}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcpkix-jdk18on</artifactId>
+                <version>${libs.bouncycastle}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${libs.bouncycastle}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java</artifactId>
+                <version>${libs.protobuf}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.bookkeeper.stats</groupId>
+                <artifactId>bookkeeper-stats-api</artifactId>
+                <version>${libs.bookkeeper}</version>
+            </dependency>
+            <!-- Individual test dependencies -->
             <dependency>
                 <groupId>org.hamcrest</groupId>
                 <artifactId>hamcrest</artifactId>
                 <version>${libs.hamcrest}</version>
+            </dependency>
+            <dependency>
+                <groupId>junit</groupId>
+                <artifactId>junit</artifactId>
+                <version>${libs.junit}</version>
+                <exclusions>
+                    <!-- Clashes with org.hamcrest:hamcrest -->
+                    <exclusion>
+                        <groupId>org.hamcrest</groupId>
+                        <artifactId>hamcrest-core</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>org.objenesis</groupId>
+                <artifactId>objenesis</artifactId>
+                <version>${libs.objenesis}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.javassist</groupId>
+                <artifactId>javassist</artifactId>
+                <version>${libs.javassist}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -194,7 +321,7 @@
                 <plugin>
                     <groupId>com.github.spotbugs</groupId>
                     <artifactId>spotbugs-maven-plugin</artifactId>
-                    <version>${plugins.spotbugsmaven}</version>
+                    <version>4.8.6.4</version>
                     <configuration>
                         <effort>Max</effort>
                         <maxHeap>4096</maxHeap>
@@ -211,7 +338,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
-                    <version>3.2.5</version>
+                    <version>3.5.1</version>
                     <configuration>
                         <reuseForks>false</reuseForks>
                         <trimStackTrace>false</trimStackTrace>
@@ -247,7 +374,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-dependency-plugin</artifactId>
-                    <version>3.6.1</version>
+                    <version>3.8.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
@@ -257,7 +384,37 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-assembly-plugin</artifactId>
-                    <version>3.6.0</version>
+                    <version>3.7.1</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>3.4.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>3.1.3</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-site-plugin</artifactId>
+                    <version>3.20.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <version>3.1.3</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.3.1</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.4.2</version>
                 </plugin>
             </plugins>
         </pluginManagement>
@@ -270,7 +427,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-release-plugin</artifactId>
-                <version>3.0.1</version>
+                <version>3.1.1</version>
                 <configuration>
                     <preparationProfiles>production</preparationProfiles>
                     <releaseProfiles>production</releaseProfiles>
@@ -282,6 +439,47 @@
                     <updateWorkingCopyVersions>true</updateWorkingCopyVersions>
                     <autoVersionSubmodules>true</autoVersionSubmodules>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>enforce-dependency-convergence</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <banDependencyManagementScope/>
+                                <banDuplicatePomDependencyVersions/>
+                                <banDynamicVersions>
+                                    <ignores>
+                                        <ignore>${project.groupId}</ignore>
+                                    </ignores>
+                                </banDynamicVersions>
+                                <bannedDependencies>
+                                    <excludes>
+                                        <exclude>com.google.errorprone</exclude>
+                                        <exclude>com.google.code.findbugs</exclude>
+                                        <exclude>org.bouncycastle:*</exclude>
+                                        <exclude>org.checkerframework</exclude>
+                                        <exclusion>org.hamcrest:hamcrest-core</exclusion>
+                                    </excludes>
+                                    <includes>
+                                        <include>org.bouncycastle:*-jdk18on</include>
+                                    </includes>
+                                </bannedDependencies>
+                                <dependencyConvergence/>
+                                <requireMavenVersion>
+                                    <version>3.9</version>
+                                </requireMavenVersion>
+                                <requirePluginVersions/>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

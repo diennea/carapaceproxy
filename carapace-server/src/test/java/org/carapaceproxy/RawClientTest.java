@@ -54,6 +54,7 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollEventLoopGroup;
 import io.netty.channel.epoll.EpollServerSocketChannel;
+import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
@@ -67,6 +68,7 @@ import io.netty.handler.codec.http.HttpResponseEncoder;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.LastHttpContent;
+import io.netty.util.concurrent.DefaultEventExecutor;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
@@ -749,7 +751,7 @@ public class RawClientTest {
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
-            server.addListener(new NetworkListenerConfiguration("localhost", 0, scheme.equals("https"), null, "localhost", DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 100, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11.name())));
+            server.addListener(new NetworkListenerConfiguration("localhost", 0, scheme.equals("https"), null, "localhost", DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 100, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11), new DefaultChannelGroup(new DefaultEventExecutor())));
 
             server.start();
             int port = server.getLocalPort();
@@ -762,7 +764,7 @@ public class RawClientTest {
                                 .withHeader("Content-Type", "text/html")
                                 .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                                 .withBody("it <b>works</b> !!")));
-                String s = client.executeRequest("GET " + scheme + "://yahoo.com/index.html?p1=v1&p2=https://localhost/index.html?p=1 HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                String s = client.executeRequest("GET " + scheme + "://yahoo.com/index.html?p1=v1&p2=https://localhost/index.html?p=1 HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
                 s = client.get("/index.html?p1=v1&p2=https://localhost/index.html?p=1").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
@@ -773,7 +775,7 @@ public class RawClientTest {
                                 .withHeader("Content-Type", "text/html")
                                 .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                                 .withBody("it <b>works</b> !!")));
-                s = client.executeRequest("GET " + scheme + "://yahoo.com/index.html HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                s = client.executeRequest("GET " + scheme + "://yahoo.com/index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
                 s = client.get("/index.html").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
@@ -785,11 +787,11 @@ public class RawClientTest {
                                 .withHeader("Content-Type", "text/html")
                                 .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                                 .withBody("it <b>works</b> !!")));
-                s = client.executeRequest("GET " + scheme + "://yahoo.com/?p1=v1&p2=https://localhost/index.html?p=1 HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                s = client.executeRequest("GET " + scheme + "://yahoo.com/?p1=v1&p2=https://localhost/index.html?p=1 HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
                 s = client.get("/?p1=v1&p2=https://localhost/index.html?p=1").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
-                s = client.executeRequest("GET " + scheme + "://yahoo.com?p1=v1&p2=https://localhost/index.html?p=1 HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                s = client.executeRequest("GET " + scheme + "://yahoo.com?p1=v1&p2=https://localhost/index.html?p=1 HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
                 s = client.get("?p1=v1&p2=https://localhost/index.html?p=1").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
@@ -800,11 +802,11 @@ public class RawClientTest {
                                 .withHeader("Content-Type", "text/html")
                                 .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                                 .withBody("it <b>works</b> !!")));
-                s = client.executeRequest("GET " + scheme + "://yahoo.com/ HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                s = client.executeRequest("GET " + scheme + "://yahoo.com/ HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
                 s = client.get("/").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
-                s = client.executeRequest("GET " + scheme + "://yahoo.com HTTP/1.1 \r\nHost: localhost\r\n\r\n").getBodyString();
+                s = client.executeRequest("GET " + scheme + "://yahoo.com HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
                 assertEquals("it <b>works</b> !!", s);
             }
         }
