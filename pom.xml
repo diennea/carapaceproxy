@@ -121,7 +121,7 @@
         <libs.guava>33.3.1-jre</libs.guava>
         <libs.lombok>1.18.32</libs.lombok>
         <libs.spotbugsannotations>4.5.3</libs.spotbugsannotations>
-        <libs.protobuf>3.17.1</libs.protobuf>
+        <libs.protobuf>3.25.5</libs.protobuf>
 
         <!-- test dependecies -->
         <libs.junit>4.13.2</libs.junit>
