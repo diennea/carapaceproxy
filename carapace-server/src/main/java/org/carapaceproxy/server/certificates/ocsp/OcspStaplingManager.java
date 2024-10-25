@@ -174,7 +174,7 @@ public class OcspStaplingManager implements Runnable {
         LOG.info("OCSP Responder URI: {}", uri);
 
         if (uri == null) {
-            LOG.info("The CA/certificate doesn''t have an OCSP responder, skipping OCSP stapling for {}", dn);
+            LOG.info("The CA/certificate doesn't have an OCSP responder, skipping OCSP stapling for {}", dn);
             return false;
         }
 

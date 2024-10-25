@@ -95,7 +95,7 @@ public class StandardEndpointMapper extends EndpointMapper {
         public List<String> selectBackends(String userId, String sessionId, String director) {
             DirectorConfiguration directorConfig = directors.get(director);
             if (directorConfig == null) {
-                LOG.error("Director ''{}'' not configured, while handling request  + userId={} sessionId={}", director, userId, sessionId);
+                LOG.error("Director \"{}\" not configured, while handling request  + userId={} sessionId={}", director, userId, sessionId);
                 return Collections.emptyList();
             }
             if (directorConfig.getBackends().contains(ALL_BACKENDS)) {
@@ -149,7 +149,7 @@ public class StandardEndpointMapper extends EndpointMapper {
 
                 ActionConfiguration action = actions.get(route.getAction());
                 if (action == null) {
-                    LOG.info("no action ''{}'' -> not-found for {}, valid {}", route.getAction(), request.getUri(), actions.keySet());
+                    LOG.info("no action \"{}\" -> not-found for {}, valid {}", route.getAction(), request.getUri(), actions.keySet());
                     return MapResult.internalError(route.getId());
                 }
                 if (ActionConfiguration.TYPE_REDIRECT.equals(action.getType())) {

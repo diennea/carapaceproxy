@@ -12,7 +12,7 @@
 // names of its contributors may be used to endorse or promote products
 // derived from this software without specific prior written permission.
 //
-// THIS SOFTWARE IS PROVIDED BY RICHARD KENNARD ''AS IS'' AND ANY
+// THIS SOFTWARE IS PROVIDED BY RICHARD KENNARD "AS IS" AND ANY
 // EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
 // WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
 // DISCLAIMED. IN NO EVENT SHALL RICHARD KENNARD BE LIABLE FOR ANY
@@ -91,7 +91,7 @@ import java.util.StringTokenizer;
  * string:
  * <p>
  * <code>
- * 		URI uri = new URI("http://java.sun.com?forum=2");<br/>
+ * URI uri = new URI("http://java.sun.com?forum=2");<br/>
  * UrlEncodedQueryString queryString = UrlEncodedQueryString.parse(uri);<br/>
  * System.out.println(queryString.get("forum"));<br/>
  * </code>
@@ -99,7 +99,7 @@ import java.util.StringTokenizer;
  * append or remove parameters from a query string:
  * <p>
  * <code>
- *     	URI uri = new URI("/forum/article.jsp?id=2&amp;para=4");<br/>
+ * URI uri = new URI("/forum/article.jsp?id=2&amp;para=4");<br/>
  * UrlEncodedQueryString queryString = UrlEncodedQueryString.parse(uri);<br/>
  * queryString.set("id", 3);<br/>
  * queryString.remove("para");<br/>
@@ -113,7 +113,7 @@ import java.util.StringTokenizer;
  * modified query string back to a URI, creating a new URI:
  * <p>
  * <code>
- *     	URI uri = new URI("/forum/article.jsp?id=2");<br/>
+ * URI uri = new URI("/forum/article.jsp?id=2");<br/>
  * UrlEncodedQueryString queryString = UrlEncodedQueryString.parse(uri);<br/>
  * queryString.set("id", 3);<br/>
  * uri = queryString.apply(uri);<br/>
@@ -151,7 +151,7 @@ public class UrlEncodedQueryString {
      * <em>One</em> separator may be passed to <code>toString</code> and
      * <code>apply</code> when outputting query strings.
      */
-    public static enum Separator {
+    public enum Separator {
         /**
          * An ampersand <code>&amp;</code> - the separator recommended by <a
          * href="http://www.w3.org/TR/REC-html40/interact/forms.html#h-17.13.4.1">HTML
@@ -423,7 +423,7 @@ public class UrlEncodedQueryString {
      * for auto-boxing. For example:
      * <p>
      * <code>
-     * 	queryString.set( "id", 3 );<br/>
+     * queryString.set( "id", 3 );<br/>
      * </code>
      *
      * @param name name of the query parameter
@@ -497,7 +497,7 @@ public class UrlEncodedQueryString {
      * suitable for auto-boxing. For example:
      * <p>
      * <code>
-     * 	queryString.append( "id", 3 );<br/>
+     * queryString.append( "id", 3 );<br/>
      * </code>
      *
      * @param name name of the query parameter
@@ -805,8 +805,7 @@ public class UrlEncodedQueryString {
                 listValues.add(value);
                 return;
             }
-        } // ...otherwise, if we're setting and the value is null...
-        else if (value == null) {
+        } else if (value == null) { // ...otherwise, if we're setting and the value is null...
             // ...remove it
 
             this.queryMap.remove(name);
@@ -823,7 +822,7 @@ public class UrlEncodedQueryString {
     /**
      * Helper method for append and set
      *
-     * @param query <code>www-form-urlencoded</code> string
+     * @param parameters <code>www-form-urlencoded</code> string
      * @param append whether to append (or set)
      */
     private void appendOrSet(final CharSequence parameters, final boolean append) {
