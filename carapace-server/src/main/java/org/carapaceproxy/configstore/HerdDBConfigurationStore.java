@@ -290,7 +290,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                     PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_CONFIG_TABLE)) {
                 newConfigurationStore.forEach((k, v) -> {
                     try {
-                        LOG.info("Saving ''{}''=''{}''", k, v);
+                        LOG.info("Saving \"{}\"=\"{}\"", k, v);
                         currentKeys.remove(k);
                         newProperties.put(k, v);
                         psUpdate.setString(1, v);
@@ -306,7 +306,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 });
                 currentKeys.forEach(k -> {
                     try {
-                        LOG.info("Deleting ''{}''", k);
+                        LOG.info("Deleting \"{}\"", k);
                         psDelete.setString(1, k);
                         psDelete.executeUpdate();
                     } catch (SQLException err) {
@@ -554,7 +554,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     public void deleteAcmeChallengeToken(String id) {
         try (Connection con = datasource.getConnection();
                 PreparedStatement psDelete = con.prepareStatement(DELETE_FROM_ACME_CHALLENGE_TOKENS_TABLE)) {
-            LOG.info("Deleting ACME challenge token with id''{}''", id);
+            LOG.info("Deleting ACME challenge token with id \"{}\"", id);
             psDelete.setString(1, id);
             psDelete.executeUpdate();
         } catch (SQLException err) {
