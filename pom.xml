@@ -128,6 +128,8 @@
         <libs.junitparams>1.1.1</libs.junitparams>
         <libs.wiremock>2.35.2</libs.wiremock>
         <libs.powermock>2.0.9</libs.powermock>
+        <libs.mockito>3.3.3</libs.mockito>
+        <libs.bytebuddy>1.10.14</libs.bytebuddy>
         <libs.objenesis>3.0.1</libs.objenesis>
         <libs.hamcrest>2.2</libs.hamcrest>
 
@@ -291,6 +293,16 @@
                 <groupId>org.javassist</groupId>
                 <artifactId>javassist</artifactId>
                 <version>${libs.javassist}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.bytebuddy</groupId>
+                <artifactId>byte-buddy</artifactId>
+                <version>${libs.bytebuddy}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.bytebuddy</groupId>
+                <artifactId>byte-buddy-agent</artifactId>
+                <version>${libs.bytebuddy}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
