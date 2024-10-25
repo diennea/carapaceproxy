@@ -19,17 +19,7 @@
  */
 package org.carapaceproxy.core;
 
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import org.carapaceproxy.server.mapper.EndpointMapper;
-import org.carapaceproxy.configstore.ConfigurationStore;
-import org.carapaceproxy.server.backends.BackendHealthManager;
-import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
-import static org.junit.Assert.*;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -37,10 +27,15 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import org.carapaceproxy.configstore.ConfigurationStore;
+import org.carapaceproxy.server.backends.BackendHealthManager;
+import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.carapaceproxy.server.mapper.EndpointMapper;
+import org.junit.Test;
 
 /**
  *
@@ -50,19 +45,14 @@ import org.powermock.modules.junit4.PowerMockRunner;
  * manager never start and when reconfigured with period > 0 it still won't run (#33).
  *
  */
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({BackendHealthManager.class, DynamicCertificatesManager.class})
 public class ManagersExecutionTest {
 
     @Test
     public void testBackendHealthManagerExecution() {
-        RuntimeServerConfiguration config = new RuntimeServerConfiguration();
-        BackendHealthManager man = new BackendHealthManager(config, mock(EndpointMapper.class));
-
         ScheduledExecutorService timer = mock(ScheduledExecutorService.class);
         when(timer.scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(mock(ScheduledFuture.class));
-        PowerMockito.mockStatic(Executors.class);
-        when(Executors.newSingleThreadScheduledExecutor()).thenReturn(timer);
+        RuntimeServerConfiguration config = new RuntimeServerConfiguration();
+        BackendHealthManager man = new BackendHealthManager(config, mock(EndpointMapper.class), () -> timer);
 
         // With 0 period the manager never start
         man.setPeriod(0);
@@ -95,15 +85,13 @@ public class ManagersExecutionTest {
 
     @Test
     public void testDynamicCertificatesManagerExecution() throws ConfigurationNotValidException {
-        RuntimeServerConfiguration config = new RuntimeServerConfiguration();
-        DynamicCertificatesManager man = new DynamicCertificatesManager(null);
-
-        man.setConfigurationStore(mock(ConfigurationStore.class));
-
         ScheduledExecutorService scheduler = mock(ScheduledExecutorService.class);
         when(scheduler.scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(mock(ScheduledFuture.class));
-        PowerMockito.mockStatic(Executors.class);
-        when(Executors.newSingleThreadScheduledExecutor(any())).thenReturn(scheduler);
+
+        RuntimeServerConfiguration config = new RuntimeServerConfiguration();
+        DynamicCertificatesManager man = new DynamicCertificatesManager(null, () -> scheduler);
+
+        man.setConfigurationStore(mock(ConfigurationStore.class));
 
         // With 0 period the manager never start
         man.setPeriod(0);
@@ -133,5 +121,4 @@ public class ManagersExecutionTest {
         man.start();
         verify(scheduler, times(2)).scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)); // once
     }
-
 }

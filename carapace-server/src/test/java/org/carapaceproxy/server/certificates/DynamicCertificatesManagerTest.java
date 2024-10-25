@@ -63,7 +63,6 @@ import org.carapaceproxy.core.Listeners;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.powermock.reflect.Whitebox;
 import org.shredzone.acme4j.Certificate;
 import org.shredzone.acme4j.Login;
 import org.shredzone.acme4j.Order;
@@ -142,7 +141,7 @@ public class DynamicCertificatesManagerTest {
         when(parent.getListeners()).thenReturn(mock(Listeners.class));
         DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
-        Whitebox.setInternalState(man, ac);
+        man.setAcmeClient(ac);
 
         // Store mocking
         ConfigurationStore store = mock(ConfigurationStore.class);
@@ -333,7 +332,7 @@ public class DynamicCertificatesManagerTest {
         when(parent.getListeners()).thenReturn(mock(Listeners.class));
         DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
-        Whitebox.setInternalState(man, ac);
+        man.setAcmeClient(ac);
 
         // Route53Cliente mocking
         man.initAWSClient("access", "secret");
@@ -342,7 +341,7 @@ public class DynamicCertificatesManagerTest {
         when(r53Client.isDnsChallengeForDomainAvailable(any(), any())).thenReturn(
                 !(runCase.equals("challenge_creation_failed_n_reboot") || runCase.equals("challenge_check_limit_expired"))
         );
-        Whitebox.setInternalState(man, r53Client);
+        man.setR53Client(r53Client);
 
         // Store mocking
         ConfigurationStore store = mock(ConfigurationStore.class);
@@ -470,7 +469,7 @@ public class DynamicCertificatesManagerTest {
         when(parent.getListeners()).thenReturn(mock(Listeners.class));
         DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
-        Whitebox.setInternalState(man, ac);
+        man.setAcmeClient(ac);
 
         // Route53Cliente mocking
         man.initAWSClient("access", "secret");
@@ -479,7 +478,7 @@ public class DynamicCertificatesManagerTest {
         when(r53Client.isDnsChallengeForDomainAvailable(any(), any())).thenReturn(
                 !(runCase.equals("challenge_creation_failed_n_reboot") || runCase.equals("challenge_check_limit_expired"))
         );
-        Whitebox.setInternalState(man, r53Client);
+        man.setR53Client(r53Client);
 
         // Store mocking
         ConfigurationStore store = mock(ConfigurationStore.class);
@@ -587,7 +586,7 @@ public class DynamicCertificatesManagerTest {
         when(parent.getListeners()).thenReturn(mock(Listeners.class));
         DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
-        Whitebox.setInternalState(man, ac);
+        man.setAcmeClient(ac);
 
         // Store mocking
         ConfigurationStore store = mock(ConfigurationStore.class);

@@ -90,7 +90,6 @@ import org.carapaceproxy.utils.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.powermock.reflect.Whitebox;
 import org.shredzone.acme4j.Login;
 import org.shredzone.acme4j.util.KeyPairUtils;
 
@@ -526,7 +525,7 @@ public class CertificatesTest extends UseAdminServer {
         List<X509Certificate> renewed = Arrays.asList((X509Certificate[]) generateSampleChain(keyPair, false));
         when(_cert.getCertificateChain()).thenReturn(renewed);
         when(ac.fetchCertificateForOrder(any())).thenReturn(_cert);
-        Whitebox.setInternalState(dcMan, ac);
+        dcMan.setAcmeClient(ac);
 
         // Renew
         dcMan.run();
@@ -628,7 +627,7 @@ public class CertificatesTest extends UseAdminServer {
         List<X509Certificate> renewed = Arrays.asList((X509Certificate[]) generateSampleChain(keyPair, false));
         when(_cert.getCertificateChain()).thenReturn(renewed);
         when(ac.fetchCertificateForOrder(any())).thenReturn(_cert);
-        Whitebox.setInternalState(dcMan, ac);
+        dcMan.setAcmeClient(ac);
 
         // Renew
         File certsDir = tmpDir.newFolder("certs");

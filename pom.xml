@@ -127,10 +127,7 @@
         <libs.junit>4.13.2</libs.junit>
         <libs.junitparams>1.1.1</libs.junitparams>
         <libs.wiremock>2.35.2</libs.wiremock>
-        <libs.powermock>2.0.9</libs.powermock>
-        <libs.mockito>3.3.3</libs.mockito>
-        <libs.bytebuddy>1.10.14</libs.bytebuddy>
-        <libs.objenesis>3.0.1</libs.objenesis>
+        <libs.mockito>3.4.6</libs.mockito>
         <libs.hamcrest>2.2</libs.hamcrest>
 
         <libs.asm>9.2</libs.asm>
@@ -283,26 +280,6 @@
                         <artifactId>hamcrest-core</artifactId>
                     </exclusion>
                 </exclusions>
-            </dependency>
-            <dependency>
-                <groupId>org.objenesis</groupId>
-                <artifactId>objenesis</artifactId>
-                <version>${libs.objenesis}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.javassist</groupId>
-                <artifactId>javassist</artifactId>
-                <version>${libs.javassist}</version>
-            </dependency>
-            <dependency>
-                <groupId>net.bytebuddy</groupId>
-                <artifactId>byte-buddy</artifactId>
-                <version>${libs.bytebuddy}</version>
-            </dependency>
-            <dependency>
-                <groupId>net.bytebuddy</groupId>
-                <artifactId>byte-buddy-agent</artifactId>
-                <version>${libs.bytebuddy}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
