@@ -38,13 +38,11 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-
-import org.junit.After;
-
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.netty.buffer.Unpooled;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * @author francesco.caliumi
@@ -74,7 +72,7 @@ public class CaffeineCacheImplTest {
         }
     };
 
-    @After
+    @AfterEach
     public void afterEach() {
         stats.resetCacheMetrics();
     }
@@ -176,9 +174,7 @@ public class CaffeineCacheImplTest {
         }
 
         if (expectedEvictions > 0) {
-            TestUtils.waitForCondition(() -> {
-                return evictedResources.size() >= expectedEvictions;
-            }, () -> {
+            TestUtils.waitForCondition(() -> evictedResources.size() >= expectedEvictions, () -> {
                 cache.evict();
                 return null;
             }, 10);

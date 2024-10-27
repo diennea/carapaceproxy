@@ -33,14 +33,14 @@ import org.apache.curator.test.InstanceSpec;
 import org.apache.curator.test.TestingServer;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.AfterClass;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  *
@@ -48,11 +48,11 @@ import org.junit.rules.TemporaryFolder;
  */
 public class ZookKeeperACLTest {
 
-    @ClassRule
-    public static TemporaryFolder folder = new TemporaryFolder();
+    @TempDir
+    public static File folder;
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
     String peerId1 = "p1";
     String peerId2 = "p2";
     String peerId3 = "p3";
@@ -60,7 +60,7 @@ public class ZookKeeperACLTest {
     /**
      *
      */
-    @BeforeClass
+    @BeforeAll
     public static void setUpEnvironment() {
         File file = new File("src/test/resources/jaas/test_jaas.conf");
         System.setProperty("java.security.auth.login.config", file.getAbsolutePath());
@@ -73,7 +73,7 @@ public class ZookKeeperACLTest {
      * @throws InterruptedException
      * @throws IOException
      */
-    @AfterClass
+    @AfterAll
     public static void cleanUpEnvironment() throws InterruptedException, IOException {
         System.clearProperty("java.security.auth.login.config");
         Configuration.getConfiguration().refresh();
@@ -84,7 +84,7 @@ public class ZookKeeperACLTest {
         Map<String, Object> customProperties = new HashMap<>();
         customProperties.put("authProvider.1", "org.apache.zookeeper.server.auth.SASLAuthenticationProvider");
         InstanceSpec def = InstanceSpec.newInstanceSpec();
-        InstanceSpec ss = new InstanceSpec(folder.newFolder(), def.getPort(), def.getElectionPort(),
+        InstanceSpec ss = new InstanceSpec(newFolder(folder, "junit"), def.getPort(), def.getElectionPort(),
                 def.getQuorumPort(), false /*deleteDataDirectoryOnClose*/, def.getServerId(),
                 def.getTickTime(), def.getMaxClientCnxns(), customProperties, def.getHostname());
 
@@ -118,17 +118,13 @@ public class ZookKeeperACLTest {
                 });
 
                 peer1.fireEvent("foo", null);
-                TestUtils.waitForCondition(() -> {
-                    return eventFired2.get() >= 1;
-                }, 100);
+                TestUtils.waitForCondition(() -> eventFired2.get() >= 1, 100);
                 assertTrue(eventFired2.get() >= 1);
                 assertTrue(dataRes2.isEmpty());
                 eventFired2.set(0);
 
                 peer1.fireEvent("foo", Map.of("data", "mydata"));
-                TestUtils.waitForCondition(() -> {
-                    return eventFired2.get() >= 1;
-                }, 100);
+                TestUtils.waitForCondition(() -> eventFired2.get() >= 1, 100);
                 assertTrue(eventFired2.get() >= 1);
                 assertTrue(dataRes2.get("data").equals("mydata"));
                 eventFired2.set(0);
@@ -154,10 +150,8 @@ public class ZookKeeperACLTest {
                     });
 
                     peer1.fireEvent("foo", null);
-                    TestUtils.waitForCondition(() -> {
-                        return (eventFired2.get() >= 1
-                                && eventFired3.get() >= 1);
-                    }, 100);
+                    TestUtils.waitForCondition(() -> (eventFired2.get() >= 1
+                                && eventFired3.get() >= 1), 100);
                     assertTrue(eventFired2.get() >= 1);
                     assertTrue(dataRes2.isEmpty());
                     eventFired2.set(0);
@@ -166,10 +160,8 @@ public class ZookKeeperACLTest {
                     eventFired3.set(0);
 
                     peer1.fireEvent("foo", Map.of("data", "mydata"));
-                    TestUtils.waitForCondition(() -> {
-                        return (eventFired2.get() >= 1
-                                && eventFired3.get() >= 1);
-                    }, 100);
+                    TestUtils.waitForCondition(() -> (eventFired2.get() >= 1
+                                && eventFired3.get() >= 1), 100);
                     assertTrue(eventFired2.get() >= 1);
                     assertTrue(dataRes2.get("data").equals("mydata"));
                     eventFired2.set(0);
@@ -196,5 +188,14 @@ public class ZookKeeperACLTest {
 
             }
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs);
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

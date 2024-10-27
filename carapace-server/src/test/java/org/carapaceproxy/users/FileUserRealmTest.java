@@ -21,6 +21,7 @@ package org.carapaceproxy.users;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Collection;
 import java.util.HashMap;
@@ -33,13 +34,14 @@ import static org.carapaceproxy.core.HttpProxyServer.buildForTests;
 import org.carapaceproxy.user.FileUserRealm;
 import org.carapaceproxy.user.UserRealm;
 import org.carapaceproxy.utils.TestEndpointMapper;
+import org.junit.jupiter.api.Test;
+
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  *
@@ -47,14 +49,14 @@ import org.junit.rules.TemporaryFolder;
  */
 public class FileUserRealmTest {
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     private File createUserFile(Map<String, String> users) throws Exception {
         Properties properties = new Properties();
         users.forEach((username, password) -> properties.put(FileUserRealm.USER_PREFIX + username, password));
 
-        File outFile = tmpDir.newFile("user" + System.currentTimeMillis() + " .properties");
+        File outFile = File.createTempFile("user" + System.currentTimeMillis() + " .properties", null, tmpDir);
         try (OutputStream out = new FileOutputStream(outFile);) {
             properties.store(out, "test_users_file");
         }
@@ -64,12 +66,12 @@ public class FileUserRealmTest {
 
     @Test
     public void testFileUserRealm() throws Exception {
-        try (HttpProxyServer server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), tmpDir.newFolder())) {
+        try (HttpProxyServer server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), newFolder(tmpDir, "junit"))) {
             Properties prop = new Properties();
             prop.setProperty("http.admin.enabled", "true");
             prop.setProperty("http.admin.port", "8761");
             prop.setProperty("http.admin.host", "localhost");
-            prop.setProperty("admin.accesslog.path", tmpDir.newFile().getAbsolutePath());
+            prop.setProperty("admin.accesslog.path", File.createTempFile("junit", null, tmpDir).getAbsolutePath());
 
             Map<String, String> users = new HashMap<>();
             users.put("test1", "pass1");
@@ -104,7 +106,7 @@ public class FileUserRealmTest {
 
     @Test
     public void testFileUserRealmRefresh() throws Exception {
-        try (HttpProxyServer server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), tmpDir.newFolder())) {
+        try (HttpProxyServer server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), newFolder(tmpDir, "junit"))) {
             Map<String, String> users = new HashMap<>();
             users.put("test1", "pass1");
 
@@ -112,7 +114,7 @@ public class FileUserRealmTest {
             prop.setProperty("http.admin.enabled", "true");
             prop.setProperty("http.admin.port", "8761");
             prop.setProperty("http.admin.host", "localhost");
-            prop.setProperty("admin.accesslog.path", tmpDir.newFile().getAbsolutePath());
+            prop.setProperty("admin.accesslog.path", File.createTempFile("junit", null, tmpDir).getAbsolutePath());
 
             File usersFile = createUserFile(users);
             prop.setProperty("userrealm.class", "org.carapaceproxy.user.FileUserRealm");
@@ -149,12 +151,12 @@ public class FileUserRealmTest {
 
     @Test
     public void testFileRelativePath() throws Exception {
-        try (HttpProxyServer server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), tmpDir.newFolder())) {
+        try (HttpProxyServer server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), newFolder(tmpDir, "junit"))) {
             Properties prop = new Properties();
             prop.setProperty("http.admin.enabled", "true");
             prop.setProperty("http.admin.port", "8761");
             prop.setProperty("http.admin.host", "localhost");
-            prop.setProperty("admin.accesslog.path", tmpDir.newFile().getAbsolutePath());
+            prop.setProperty("admin.accesslog.path", File.createTempFile("junit", null, tmpDir).getAbsolutePath());
 
             // create new file in the server and access it with relative path
             File userPropertiesFile = new File("target/testuser" + System.currentTimeMillis() + ".properties");
@@ -184,6 +186,15 @@ public class FileUserRealmTest {
 
             userPropertiesFile.delete();
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs);
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 
 }

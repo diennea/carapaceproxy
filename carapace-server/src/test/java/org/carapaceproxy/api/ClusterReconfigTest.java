@@ -19,18 +19,21 @@
  */
 package org.carapaceproxy.api;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.File;
+import java.io.IOException;
 import java.util.Properties;
 import org.apache.curator.test.TestingServer;
 import org.carapaceproxy.utils.RawHttpClient;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class ClusterReconfigTest extends UseAdminServer {
 
     @Test
     public void testReconfigInClusterMode() throws Exception {
-        try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder());) {
+        try (TestingServer testingServer = new TestingServer(2229, newFolder(tmpDir, "junit"));) {
             testingServer.start();
             Properties configuration = new Properties(HTTP_ADMIN_SERVER_CONFIG);
 
@@ -81,5 +84,14 @@ public class ClusterReconfigTest extends UseAdminServer {
             assertEquals(9000, server.getCurrentConfiguration().getConnectTimeout());
             assertEquals(30, server.getBackendHealthManager().getPeriod());
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs);
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

@@ -261,14 +261,14 @@
 
         <!-- test dependecies -->
         <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>pl.pragmatists</groupId>
-            <artifactId>JUnitParams</artifactId>
-            <version>${libs.junitparams}</version>
+            <groupId>org.junit.platform</groupId>
+            <!-- Only needed to run tests in a version of IntelliJ IDEA that bundles older versions -->
+            <artifactId>junit-platform-launcher</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

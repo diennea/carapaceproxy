@@ -21,7 +21,6 @@ package org.carapaceproxy;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
-import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.aMapWithSize;
@@ -32,12 +31,13 @@ import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.fail;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -64,25 +64,23 @@ import org.carapaceproxy.user.UserRealm;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUserRealm;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * @author enrico.olivelli
  */
 public class ApplyConfigurationTest {
 
-    @ClassRule
-    public static WireMockRule wireMockRule = new WireMockRule(0);
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @RegisterExtension
+    public static WireMockExtension wireMockRule = WireMockExtension.newInstance().build();
 
-    @BeforeClass
-    public static void setupWireMock() {
-        stubFor(get(urlEqualTo("/index.html?redir"))
+    @BeforeEach
+    public void setupWireMock() {
+        wireMockRule
+                .stubFor(get(urlEqualTo("/index.html?redir"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "text/html")
@@ -91,6 +89,9 @@ public class ApplyConfigurationTest {
                         .withBody("it <b>works</b> !!")));
 
     }
+
+    @TempDir
+    File tmpDir;
 
     private static CloseableHttpClient createHttpClientWithDisabledSSLValidation() throws NoSuchAlgorithmException, KeyStoreException, KeyManagementException {
         return HttpClients.custom()
@@ -103,7 +104,8 @@ public class ApplyConfigurationTest {
 
     @Test
     public void testChangeListenersConfig() throws Exception {
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+        assertEquals(wireMockRule.getRuntimeInfo().getHttpPort(), new StaticEndpointMapper().getBackends().get("localhost").port());
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir)) {
             server.configureAtBoot(new PropertiesConfigurationStore(propsWithMapper(Map.of(
                     "aws.accesskey", "accesskey",
                     "aws.secretkey", "secretkey"
@@ -161,7 +163,7 @@ public class ApplyConfigurationTest {
             testIt(1426, false);
 
             // listener with correct tls version
-            String defaultCertificate = TestUtils.deployResource("ia.p12", tmpDir.getRoot());
+            String defaultCertificate = TestUtils.deployResource("ia.p12", tmpDir);
             reloadConfiguration(server, propsWithMapperAndCertificate(defaultCertificate, Map.of(
                     "listener.1.host", "localhost",
                     "listener.1.port", "1423",
@@ -203,7 +205,7 @@ public class ApplyConfigurationTest {
 
     @Test
     public void testReloadMapper() throws Exception {
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir)) {
             server.configureAtBoot(new PropertiesConfigurationStore(new Properties()));
             server.start();
 
@@ -273,7 +275,7 @@ public class ApplyConfigurationTest {
     public void testUserRealm() throws Exception {
 
         // Default UserRealm
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir)) {
             server.configureAtBoot(new PropertiesConfigurationStore(new Properties()));
             server.start();
 
@@ -290,7 +292,7 @@ public class ApplyConfigurationTest {
         }
 
         // TestUserRealm
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir)) {
             server.configureAtBoot(new PropertiesConfigurationStore(props(Map.of(
                     "userrealm.class", "org.carapaceproxy.utils.TestUserRealm",
                     "user.test1", "pass1",
@@ -324,11 +326,11 @@ public class ApplyConfigurationTest {
     @SuppressWarnings("deprecation")
     @Test
     public void testChangeFiltersConfiguration() throws Exception {
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir)) {
             server.configureAtBoot(new PropertiesConfigurationStore(props("filter.1.type", "add-x-forwarded-for")));
             server.start();
             assertThat(server.getFilters(), hasSize(1));
-            assertThat(server.getFilters().get(0), instanceOf(XForwardedForRequestFilter.class));
+            assertThat(server.getFilters().getFirst(), instanceOf(XForwardedForRequestFilter.class));
 
             // add a filter
             reloadConfiguration(server, props(Map.of(
@@ -343,7 +345,7 @@ public class ApplyConfigurationTest {
             // remove a filter
             reloadConfiguration(server, props("filter.2.type", "match-user-regexp"));
             assertThat(server.getFilters(), hasSize(1));
-            assertThat(server.getFilters().get(0), is(instanceOf(RegexpMapUserIdFilter.class)));
+            assertThat(server.getFilters().getFirst(), is(instanceOf(RegexpMapUserIdFilter.class)));
         }
     }
 
@@ -353,7 +355,7 @@ public class ApplyConfigurationTest {
 
     @Test
     public void testChangeBackendHealthManagerConfiguration() throws Exception {
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir)) {
             server.configureAtBoot(new PropertiesConfigurationStore(props("healthmanager.connecttimeout", "9479")));
             server.start();
             assertEquals(9479, server.getBackendHealthManager().getConnectTimeout());
@@ -415,8 +417,9 @@ public class ApplyConfigurationTest {
      * Static mapper, so that it can be references by configuration
      */
     public static final class StaticEndpointMapper extends TestEndpointMapper {
+
         public StaticEndpointMapper() {
-            super("localhost", wireMockRule.port());
+            super("localhost", wireMockRule.getRuntimeInfo().getHttpPort());
         }
     }
 }

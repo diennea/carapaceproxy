@@ -1,8 +1,9 @@
 package org.carapaceproxy.listeners;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.io.File;
+import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
@@ -10,18 +11,17 @@ import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.Listeners;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.HostPort;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 public class ListenerConfigurationTest {
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     @Test
     public void testListenerKeepAliveConfiguration() throws Exception {
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(null, newFolder(tmpDir, "junit"));) {
 
             {
                 Properties configuration = new Properties();
@@ -129,5 +129,14 @@ public class ListenerConfigurationTest {
             ConfigurationChangeInProgressException, InterruptedException {
         PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
         server.applyDynamicConfigurationFromAPI(config);
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs);
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

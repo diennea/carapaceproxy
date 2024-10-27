@@ -24,14 +24,15 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_LENGTH;
 import static io.netty.handler.codec.http.HttpHeaderNames.TRANSFER_ENCODING;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import java.io.File;
+import java.io.IOException;
 import java.util.Objects;
-import junitparams.JUnitParamsRunner;
-import junitparams.Parameters;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpVersion;
 import org.apache.http.client.methods.HttpGet;
@@ -42,22 +43,22 @@ import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * @author enrico.olivelli
  */
-@RunWith(JUnitParamsRunner.class)
 public class ChunkedEncodingResponseTest {
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
+    @RegisterExtension
+    public static WireMockExtension wireMockRule = WireMockExtension.newInstance().options(WireMockConfiguration.options().port(0)).build();
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    File tmpDir;
 
     @Test
     public void testSimpleChunkedResponseNoCache() throws Exception {
@@ -68,10 +69,10 @@ public class ChunkedEncodingResponseTest {
                                 .withHeader("Content-Type", "text/html")
                                 .withBody("it <b>works</b> !!"))
         );
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
 
         CarapaceLogger.setLoggingDebugEnabled(true);
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
             server.start();
             int port = server.getLocalPort();
 
@@ -121,9 +122,9 @@ public class ChunkedEncodingResponseTest {
                                 .withHeader("Content-Type", "text/html")
                                 .withBody("it <b>works</b> !!"))
         );
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
             server.start();
             int port = server.getLocalPort();
             resetCache(server);
@@ -171,8 +172,8 @@ public class ChunkedEncodingResponseTest {
     }
 
 
-    @Test
-    @Parameters(method = "parametersForChunkedHttp10Test")
+    @ParameterizedTest
+    @MethodSource("parametersForChunkedHttp10Test")
     public void testChunkedHttp(final HttpVersion httpVersion, final boolean inCache) throws Exception {
         wireMockRule.stubFor(
                 get(urlEqualTo("/index.html")).
@@ -181,9 +182,9 @@ public class ChunkedEncodingResponseTest {
                                 .withHeader("Content-Type", "text/html")
                                 .withBody("it <b>works</b> !!"))
         );
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
             server.start();
             int port = server.getLocalPort();
             server.getCurrentConfiguration().setHttp10BackwardCompatibilityEnabled(true);
@@ -236,6 +237,15 @@ public class ChunkedEncodingResponseTest {
                 new Object[] { HttpVersion.HTTP_1_1, false },
                 new Object[] { HttpVersion.HTTP_1_1, true },
         };
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs);
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 
 }

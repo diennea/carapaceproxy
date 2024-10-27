@@ -19,7 +19,7 @@
  */
 package org.carapaceproxy.core;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -35,7 +35,7 @@ import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.mapper.EndpointMapper;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 /**
  *

@@ -24,6 +24,8 @@ import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.Certificate;
 import java.util.Arrays;
+import org.junit.jupiter.api.Test;
+
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePrivateKey;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePublicKey;
@@ -32,10 +34,8 @@ import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64Encode
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.carapaceproxy.utils.TestUtils.assertEqualsKey;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import org.junit.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
 import org.shredzone.acme4j.util.KeyPairUtils;
 
 /**

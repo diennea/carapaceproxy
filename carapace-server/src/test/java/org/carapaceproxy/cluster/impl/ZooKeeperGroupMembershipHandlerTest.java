@@ -19,6 +19,8 @@
  */
 package org.carapaceproxy.cluster.impl;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -28,28 +30,27 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.curator.test.TestingServer;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.utils.TestUtils;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.*;
+
 import java.util.HashMap;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.io.TempDir;
 
 public class ZooKeeperGroupMembershipHandlerTest {
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
     String peerId1 = "p1";
     String peerId2 = "p2";
     String peerId3 = "p3";
 
     @Test
     public void testPeerDiscovery() throws Exception {
-        try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder())) {
+        try (TestingServer testingServer = new TestingServer(2229, newFolder(tmpDir, "junit"))) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
                     6000, false /*acl */, peerId1, Collections.EMPTY_MAP, new Properties());
@@ -91,11 +92,20 @@ public class ZooKeeperGroupMembershipHandlerTest {
         private int number;
         private String string;
 
+        private static File newFolder(File root, String... subDirs) throws IOException {
+            String subFolder = String.join("/", subDirs);
+            File result = new File(root, subFolder);
+            if (!result.mkdirs()) {
+                throw new IOException("Couldn't create folders " + root);
+            }
+            return result;
+        }
+
     }
 
     @Test
     public void testWatchEvent() throws Exception {
-        try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder());) {
+        try (TestingServer testingServer = new TestingServer(2229, newFolder(tmpDir, "junit"));) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
                     6000, false /*acl */, peerId1, Collections.EMPTY_MAP, new Properties());
@@ -124,9 +134,7 @@ public class ZooKeeperGroupMembershipHandlerTest {
                 });
 
                 peer1.fireEvent("foo", null);
-                TestUtils.waitForCondition(() -> {
-                    return eventFired2.get() >= 1;
-                }, 100);
+                TestUtils.waitForCondition(() -> eventFired2.get() >= 1, 100);
                 assertTrue(eventFired2.get() >= 1);
                 assertTrue(dataRes2.isEmpty());
                 eventFired2.set(0);
@@ -137,9 +145,7 @@ public class ZooKeeperGroupMembershipHandlerTest {
                         "list", List.of(1, 2),
                         "obj", new DummyObject(1, "s")
                 ));
-                TestUtils.waitForCondition(() -> {
-                    return eventFired2.get() >= 1;
-                }, 100);
+                TestUtils.waitForCondition(() -> eventFired2.get() >= 1, 100);
                 assertTrue(eventFired2.get() >= 1);
                 assertTrue(((int) dataRes2.get("number")) == 1);
                 assertTrue(dataRes2.get("string").equals("mystring"));
@@ -171,10 +177,8 @@ public class ZooKeeperGroupMembershipHandlerTest {
                     });
 
                     peer1.fireEvent("foo", null);
-                    TestUtils.waitForCondition(() -> {
-                        return (eventFired2.get() >= 1
-                                && eventFired3.get() >= 1);
-                    }, 100);
+                    TestUtils.waitForCondition(() -> (eventFired2.get() >= 1
+                                && eventFired3.get() >= 1), 100);
                     assertTrue(eventFired2.get() >= 1);
                     assertTrue(dataRes2.isEmpty());
                     eventFired2.set(0);
@@ -188,10 +192,8 @@ public class ZooKeeperGroupMembershipHandlerTest {
                             "list", List.of("1", "2"),
                             "obj", new DummyObject(1, "s")
                     ));
-                    TestUtils.waitForCondition(() -> {
-                        return (eventFired2.get() >= 1
-                                && eventFired3.get() >= 1);
-                    }, 100);
+                    TestUtils.waitForCondition(() -> (eventFired2.get() >= 1
+                                && eventFired3.get() >= 1), 100);
                     assertTrue(eventFired2.get() >= 1);
                     assertTrue(((int) dataRes2.get("number")) == 1);
                     assertTrue(dataRes2.get("string").equals("mystring"));
@@ -239,7 +241,7 @@ public class ZooKeeperGroupMembershipHandlerTest {
 
     @Test
     public void testPeerInfo() throws Exception {
-        try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder());) {
+        try (TestingServer testingServer = new TestingServer(2229, newFolder(tmpDir, "junit"));) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
                     6000, false /*acl */, peerId1, Map.of("name", "peer1"), new Properties());
@@ -282,5 +284,14 @@ public class ZooKeeperGroupMembershipHandlerTest {
                 }
             }
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs);
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

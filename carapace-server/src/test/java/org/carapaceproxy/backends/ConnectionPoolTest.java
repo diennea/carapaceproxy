@@ -29,18 +29,16 @@ import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import io.netty.handler.codec.http.HttpHeaderNames;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
+import java.io.*;
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.util.HashMap;
@@ -56,8 +54,8 @@ import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.utils.HttpTestUtils;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import reactor.netty.http.server.HttpServerRequest;
 import reactor.netty.resources.ConnectionProvider;
 
@@ -65,8 +63,8 @@ public class ConnectionPoolTest extends UseAdminServer {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
+    @RegisterExtension
+    public static WireMockExtension wireMockRule = WireMockExtension.newInstance().options(WireMockConfiguration.options().port(0)).build();
 
     private void configureAndStartServer() throws Exception {
 
@@ -82,13 +80,13 @@ public class ConnectionPoolTest extends UseAdminServer {
         final Properties config = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         config.put("config.type", "database");
         config.put("db.jdbc.url", "jdbc:herddb:localhost");
-        config.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
+        config.put("db.server.base.dir", newFolder(tmpDir, "junit").getAbsolutePath());
         config.put("aws.accesskey", "accesskey");
         config.put("aws.secretkey", "secretkey");
         startServer(config);
 
         // Default certificate
-        String defaultCertificate = TestUtils.deployResource("ia.p12", tmpDir.getRoot());
+        String defaultCertificate = TestUtils.deployResource("ia.p12", tmpDir);
         config.put("certificate.1.hostname", "*");
         config.put("certificate.1.file", defaultCertificate);
         config.put("certificate.1.password", "changeit");
@@ -103,12 +101,12 @@ public class ConnectionPoolTest extends UseAdminServer {
         config.put("backend.1.id", "localhost");
         config.put("backend.1.enabled", "true");
         config.put("backend.1.host", "localhost");
-        config.put("backend.1.port", String.valueOf(wireMockRule.port()));
+        config.put("backend.1.port", String.valueOf(wireMockRule.getPort()));
 
         config.put("backend.2.id", "localhost2");
         config.put("backend.2.enabled", "true");
         config.put("backend.2.host", "localhost2");
-        config.put("backend.2.port", String.valueOf(wireMockRule.port()));
+        config.put("backend.2.port", String.valueOf(wireMockRule.getPort()));
 
         // Default director
         config.put("director.1.id", "*");
@@ -320,7 +318,7 @@ public class ConnectionPoolTest extends UseAdminServer {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\n" + HttpHeaderNames.HOST + ": localhostx" + "\r\n\r\n");
                 assertEquals("it <b>works</b> !!", resp.getBodyString());
             }
-            Map<String, HttpProxyServer.ConnectionPoolStats> stats = server.getConnectionPoolsStats().get(EndpointKey.make("localhost", wireMockRule.port()));
+            Map<String, HttpProxyServer.ConnectionPoolStats> stats = server.getConnectionPoolsStats().get(EndpointKey.make("localhost", wireMockRule.getPort()));
             assertThat(stats.get("*").getTotalConnections(), is(1));
             assertThat(stats.get("localhost"), is(nullValue()));
             assertThat(stats.get("localhosts"), is(nullValue()));
@@ -345,7 +343,7 @@ public class ConnectionPoolTest extends UseAdminServer {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\n" + HttpHeaderNames.HOST + ": localhost" + "\r\n\r\n");
                 assertEquals("it <b>works</b> !!", resp.getBodyString());
             }
-            Map<String, HttpProxyServer.ConnectionPoolStats> stats = server.getConnectionPoolsStats().get(EndpointKey.make("localhost", wireMockRule.port()));
+            Map<String, HttpProxyServer.ConnectionPoolStats> stats = server.getConnectionPoolsStats().get(EndpointKey.make("localhost", wireMockRule.getPort()));
             assertThat(stats.get("*").getTotalConnections(), is(1));
             assertThat(stats.get("localhost").getTotalConnections(), is(1));
             assertThat(stats.get("localhosts"), is(nullValue()));
@@ -370,7 +368,7 @@ public class ConnectionPoolTest extends UseAdminServer {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\n" + HttpHeaderNames.HOST + ": localhost3" + "\r\n\r\n");
                 assertEquals("it <b>works</b> !!", resp.getBodyString());
             }
-            Map<String, HttpProxyServer.ConnectionPoolStats> stats = server.getConnectionPoolsStats().get(EndpointKey.make("localhost", wireMockRule.port()));
+            Map<String, HttpProxyServer.ConnectionPoolStats> stats = server.getConnectionPoolsStats().get(EndpointKey.make("localhost", wireMockRule.getPort()));
             assertThat(stats.get("*").getTotalConnections(), is(1));
             assertThat(stats.get("localhost").getTotalConnections(), is(1));
             assertThat(stats.get("localhosts").getTotalConnections(), is(1));
@@ -414,5 +412,14 @@ public class ConnectionPoolTest extends UseAdminServer {
                     "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, 100_000, 25_000, 250, 25, 2, true, true, 0
             )));
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs);
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

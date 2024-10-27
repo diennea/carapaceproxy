@@ -1,11 +1,12 @@
 package org.carapaceproxy.core;
 
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import org.carapaceproxy.api.UseAdminServer;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -13,12 +14,12 @@ import java.net.http.HttpResponse;
 import java.util.Properties;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MaxHeaderSizeTest extends UseAdminServer {
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
+    @RegisterExtension
+    public static WireMockExtension wireMockRule = WireMockExtension.newInstance().options(WireMockConfiguration.options().port(0)).build();
 
     private Properties config;
 
@@ -36,7 +37,7 @@ public class MaxHeaderSizeTest extends UseAdminServer {
         startServer(config);
 
         // Default certificate
-        String defaultCertificate = TestUtils.deployResource("ia.p12", tmpDir.getRoot());
+        String defaultCertificate = TestUtils.deployResource("ia.p12", tmpDir);
         config.put("certificate.1.hostname", "*");
         config.put("certificate.1.file", defaultCertificate);
         config.put("certificate.1.password", "changeit");
@@ -51,12 +52,12 @@ public class MaxHeaderSizeTest extends UseAdminServer {
         config.put("backend.1.id", "localhost");
         config.put("backend.1.enabled", "true");
         config.put("backend.1.host", "localhost");
-        config.put("backend.1.port", wireMockRule.port() + "");
+        config.put("backend.1.port", wireMockRule.getPort() + "");
 
         config.put("backend.2.id", "localhost2");
         config.put("backend.2.enabled", "true");
         config.put("backend.2.host", "localhost2");
-        config.put("backend.2.port", wireMockRule.port() + "");
+        config.put("backend.2.port", wireMockRule.getPort() + "");
 
         // Default director
         config.put("director.1.id", "*");

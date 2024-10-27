@@ -23,11 +23,19 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.google.common.io.Files;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpVersion;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -37,22 +45,14 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.List;
-
-import io.netty.handler.codec.http.HttpVersion;
-import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
 import reactor.netty.http.server.HttpServerRequest;
 
 /**
@@ -65,15 +65,15 @@ public class RequestsLoggerTest {
 
     private String accessLogFilePath;
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
+    @RegisterExtension
+    public static WireMockExtension wireMockRule = WireMockExtension.newInstance().options(WireMockConfiguration.options().port(0)).build();
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    File tmpDir;
 
-    @Before
+    @BeforeEach
     public void before() {
-        accessLogFilePath = tmpDir.getRoot().getAbsolutePath() + "/access.log";
+        accessLogFilePath = tmpDir.getAbsolutePath() + "/access.log";
     }
 
     private RuntimeServerConfiguration genConf() {
@@ -104,6 +104,15 @@ public class RequestsLoggerTest {
         String userid;
         String sessionid;
         HttpVersion reqProtocolVersion;
+
+        private static File newFolder(File root, String... subDirs) throws IOException {
+            String subFolder = String.join("/", subDirs);
+            File result = new File(root, subFolder);
+            if (!result.mkdirs()) {
+                throw new IOException("Couldn't create folders " + root);
+            }
+            return result;
+        }
     }
 
     private static ProxyRequest createMockRequestHandler(MockProxyRequest r) throws Exception {
@@ -521,11 +530,11 @@ public class RequestsLoggerTest {
                         .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.getPort());
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
-            server.getCurrentConfiguration().setAccessLogPath(tmpDir.getRoot().getAbsolutePath() + "/access.log");
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
+            server.getCurrentConfiguration().setAccessLogPath(tmpDir.getAbsolutePath() + "/access.log");
             server.start();
             int port = server.getLocalPort();
 
@@ -565,11 +574,11 @@ public class RequestsLoggerTest {
                         .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.getPort());
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
-            server.getCurrentConfiguration().setAccessLogPath(tmpDir.getRoot().getAbsolutePath() + "/access.log");
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
+            server.getCurrentConfiguration().setAccessLogPath(tmpDir.getAbsolutePath() + "/access.log");
             server.getCurrentConfiguration().setAccessLogMaxSize(1024);
             Path currentAccessLogPath = Paths.get(server.getCurrentConfiguration().getAccessLogPath());
             server.start();
@@ -600,7 +609,7 @@ public class RequestsLoggerTest {
             }
             Thread.sleep(3000);
             //check if gzip file exist
-            File[] f = new File(tmpDir.getRoot().getAbsolutePath()).listFiles((dir, name) -> name.startsWith("access") && name.contains(".gzip"));
+            File[] f = new File(tmpDir.getAbsolutePath()).listFiles((dir, name) -> name.startsWith("access") && name.contains(".gzip"));
             assertTrue(f.length == 1);
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
@@ -609,6 +618,15 @@ public class RequestsLoggerTest {
             }
             assertTrue(logFileChannel.size() > 0);
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs);
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 
 }

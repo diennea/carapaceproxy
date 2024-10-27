@@ -31,9 +31,9 @@ import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERI
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -52,8 +52,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import junitparams.JUnitParamsRunner;
-import junitparams.Parameters;
 import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
@@ -61,8 +59,8 @@ import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.Listeners;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.shredzone.acme4j.Certificate;
 import org.shredzone.acme4j.Login;
 import org.shredzone.acme4j.Order;
@@ -80,13 +78,13 @@ import org.shredzone.acme4j.util.KeyPairUtils;
  *
  * @author paolo.venturi
  */
-@RunWith(JUnitParamsRunner.class)
 public class DynamicCertificatesManagerTest {
 
     protected static final int MAX_ATTEMPTS = 7;
 
-    @Test
-    @Parameters({
+    @ParameterizedTest
+    // JunitParamsRunnerToParameterized conversion not supported
+    @CsvSource({
         "challenge_null,true",
         "challenge_null,false",
         "challenge_status_invalid,true",
@@ -280,13 +278,14 @@ public class DynamicCertificatesManagerTest {
         assertEquals(expectedCycleCount, dCMan.getCertificateDataForDomain(domain).getAttemptsCount());
     }
 
-    @Test
+    @ParameterizedTest
     // A) record not created -> request failed
     // B) record created but not ready -> request failed after LIMIT attempts
     // C) record created and ready -> VERIFYING
     // D) challenge verified -> record deleted
     // E) challenge failed -> record deleted
-    @Parameters({
+    // JunitParamsRunnerToParameterized conversion not supported
+    @CsvSource({
         "challenge_creation_failed",
         "challenge_check_limit_expired",
         "challenge_failed",
@@ -405,13 +404,14 @@ public class DynamicCertificatesManagerTest {
         }
     }
 
-    @Test
+    @ParameterizedTest
     // A) record not created -> request failed
     // B) record created but not ready -> request failed after LIMIT attempts
     // C) record created and ready -> VERIFYING
     // D) challenge verified -> record deleted
     // E) challenge failed -> record deleted
-    @Parameters({
+    // JunitParamsRunnerToParameterized conversion not supported
+    @CsvSource({
             "challenge_creation_failed",
             "challenge_check_limit_expired",
             "challenge_failed",
@@ -547,8 +547,8 @@ public class DynamicCertificatesManagerTest {
         }
     }
 
-    @Test
-    @Parameters({
+    @ParameterizedTest
+    @CsvSource({
         "localhost-no-ip-check", "localhost-ip-check-partial", "localhost-ip-check-full"
     })
     public void testDomainReachabilityCheck(String domainCase) throws Exception {

@@ -27,7 +27,9 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
+import com.github.tomakehurst.wiremock.junit5.WireMockTest;
+import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
@@ -36,27 +38,24 @@ import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.backends.BackendHealthStatus;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  *
  * @author francesco.caliumi
  */
+@WireMockTest
 public class HealthCheckTest {
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
-
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    File tmpDir;
 
     @Test
-    public void test() throws Exception {
+    public void test(final WireMockRuntimeInfo wmRuntimeInfo) throws Exception {
 
         Map<String, BackendConfiguration> backends = new HashMap<>();
-        BackendConfiguration b1conf = new BackendConfiguration("myid", "localhost", wireMockRule.port(), "/status.html");
+        BackendConfiguration b1conf = new BackendConfiguration("myid", "localhost", wmRuntimeInfo.getHttpPort(), "/status.html");
         backends.put(b1conf.getHostPort(), b1conf);
 
         EndpointMapper mapper = new TestEndpointMapper(null, 0, false, backends);
@@ -82,7 +81,7 @@ public class HealthCheckTest {
             BackendConfiguration bconf = mapper.getBackends().get(b1conf.getHostPort());
             assertThat(bconf.id(), is("myid"));
             assertThat(bconf.host(), is("localhost"));
-            assertThat(bconf.port(), is(wireMockRule.port()));
+            assertThat(bconf.port(), is(wmRuntimeInfo.getHttpPort()));
             assertThat(bconf.probePath(), is("/status.html"));
 
             BackendHealthStatus _status = status.get(b1conf.getHostPort());
@@ -120,7 +119,7 @@ public class HealthCheckTest {
             BackendConfiguration bconf = mapper.getBackends().get(b1conf.getHostPort());
             assertThat(bconf.id(), is("myid"));
             assertThat(bconf.host(), is("localhost"));
-            assertThat(bconf.port(), is(wireMockRule.port()));
+            assertThat(bconf.port(), is(wmRuntimeInfo.getHttpPort()));
             assertThat(bconf.probePath(), is("/status.html"));
 
             BackendHealthStatus _status = status.get(b1conf.getHostPort());
@@ -161,7 +160,7 @@ public class HealthCheckTest {
             BackendConfiguration bconf = mapper.getBackends().get(b1conf.getHostPort());
             assertThat(bconf.id(), is("myid"));
             assertThat(bconf.host(), is("localhost"));
-            assertThat(bconf.port(), is(wireMockRule.port()));
+            assertThat(bconf.port(), is(wmRuntimeInfo.getHttpPort()));
             assertThat(bconf.probePath(), is("/status.html"));
 
             BackendHealthStatus _status = status.get(b1conf.getHostPort());
@@ -200,7 +199,7 @@ public class HealthCheckTest {
             BackendConfiguration bconf = mapper.getBackends().get(b1conf.getHostPort());
             assertThat(bconf.id(), is("myid"));
             assertThat(bconf.host(), is("localhost"));
-            assertThat(bconf.port(), is(wireMockRule.port()));
+            assertThat(bconf.port(), is(wmRuntimeInfo.getHttpPort()));
             assertThat(bconf.probePath(), is("/status.html"));
 
             BackendHealthStatus _status = status.get(b1conf.getHostPort());
