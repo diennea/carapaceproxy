@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.Properties;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.core.Listeners;
+import org.carapaceproxy.core.ListeningChannel;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.HostPort;
 import org.junit.Rule;
@@ -36,15 +36,15 @@ public class ListenerConfigurationTest {
             HostPort listenerKey = new HostPort("localhost", 8080);
 
             {
-                Map<HostPort, Listeners.ListeningChannel> listeners = server.getListeners().getListeningChannels();
+                Map<HostPort, ListeningChannel> listeners = server.getListeners().getListeningChannels();
 
                 //check default configuration
-                assertTrue(listeners.get(listenerKey).getConfig().isKeepAlive());
-                assertEquals(128, listeners.get(listenerKey).getConfig().getSoBacklog());
-                assertEquals(300, listeners.get(listenerKey).getConfig().getKeepAliveIdle());
-                assertEquals(60, listeners.get(listenerKey).getConfig().getKeepAliveInterval());
-                assertEquals(8, listeners.get(listenerKey).getConfig().getKeepAliveCount());
-                assertEquals(1000, listeners.get(listenerKey).getConfig().getMaxKeepAliveRequests());
+                assertTrue(listeners.get(listenerKey).getConfig().keepAlive());
+                assertEquals(128, listeners.get(listenerKey).getConfig().soBacklog());
+                assertEquals(300, listeners.get(listenerKey).getConfig().keepAliveIdle());
+                assertEquals(60, listeners.get(listenerKey).getConfig().keepAliveInterval());
+                assertEquals(8, listeners.get(listenerKey).getConfig().keepAliveCount());
+                assertEquals(1000, listeners.get(listenerKey).getConfig().maxKeepAliveRequests());
             }
             //disable keepAlive
             {
@@ -56,10 +56,10 @@ public class ListenerConfigurationTest {
 
                 reloadConfiguration(configuration, server);
 
-                Map<HostPort, Listeners.ListeningChannel> listeners = server.getListeners().getListeningChannels();
+                Map<HostPort, ListeningChannel> listeners = server.getListeners().getListeningChannels();
 
                 assertEquals(1, listeners.size());
-                assertFalse(listeners.get(listenerKey).getConfig().isKeepAlive());
+                assertFalse(listeners.get(listenerKey).getConfig().keepAlive());
             }
 
             //customize keepAlive options
@@ -77,14 +77,14 @@ public class ListenerConfigurationTest {
                 configuration.put("listener.1.enabled", "true");
                 reloadConfiguration(configuration, server);
 
-                Map<HostPort, Listeners.ListeningChannel> listeners = server.getListeners().getListeningChannels();
+                Map<HostPort, ListeningChannel> listeners = server.getListeners().getListeningChannels();
 
-                assertTrue(listeners.get(listenerKey).getConfig().isKeepAlive());
-                assertEquals(10, listeners.get(listenerKey).getConfig().getSoBacklog());
-                assertEquals(10, listeners.get(listenerKey).getConfig().getKeepAliveIdle());
-                assertEquals(5, listeners.get(listenerKey).getConfig().getKeepAliveInterval());
-                assertEquals(2, listeners.get(listenerKey).getConfig().getKeepAliveCount());
-                assertEquals(2, listeners.get(listenerKey).getConfig().getMaxKeepAliveRequests());
+                assertTrue(listeners.get(listenerKey).getConfig().keepAlive());
+                assertEquals(10, listeners.get(listenerKey).getConfig().soBacklog());
+                assertEquals(10, listeners.get(listenerKey).getConfig().keepAliveIdle());
+                assertEquals(5, listeners.get(listenerKey).getConfig().keepAliveInterval());
+                assertEquals(2, listeners.get(listenerKey).getConfig().keepAliveCount());
+                assertEquals(2, listeners.get(listenerKey).getConfig().maxKeepAliveRequests());
             }
 
             //negative maxkeepAliverequests
