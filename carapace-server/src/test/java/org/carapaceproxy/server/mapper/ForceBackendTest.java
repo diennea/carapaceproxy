@@ -25,8 +25,11 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.carapaceproxy.core.ProxyRequest.PROPERTY_URI;
-import static org.junit.Assert.assertEquals;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import java.io.File;
+import java.io.IOException;
 import java.net.URL;
 import java.util.Properties;
 import org.apache.commons.io.IOUtils;
@@ -37,9 +40,9 @@ import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  *
@@ -47,11 +50,11 @@ import org.junit.rules.TemporaryFolder;
  */
 public class ForceBackendTest {
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    File tmpDir;
 
-    @Rule
-    public WireMockRule backend1 = new WireMockRule(0);
+    @RegisterExtension
+    public static WireMockExtension backend1 = WireMockExtension.newInstance().options(WireMockConfiguration.options().port(0)).build();
 
     @Test
     public void test() throws Exception {
@@ -67,7 +70,7 @@ public class ForceBackendTest {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        int backendPort = backend1.port();
+        int backendPort = backend1.getPort();
         StandardEndpointMapper mapper = new StandardEndpointMapper();
         Properties properties = new Properties();
         properties.put("mapper.forcedirector.parameter", "thedirector");
@@ -85,7 +88,7 @@ public class ForceBackendTest {
 
         mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index.html.*")));
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
             server.start();
             int port = server.getLocalPort();
             {
@@ -100,5 +103,14 @@ public class ForceBackendTest {
             }
 
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs);
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

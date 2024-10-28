@@ -8,9 +8,11 @@ import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_FORWARDED_STRATEGY;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static reactor.netty.http.HttpProtocol.HTTP11;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
+import com.github.tomakehurst.wiremock.junit5.WireMockTest;
+import java.io.File;
 import java.util.Collections;
 import java.util.Set;
 import org.carapaceproxy.client.EndpointKey;
@@ -21,21 +23,18 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+@WireMockTest
 public class XTlsProtocolFilterTest {
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
-
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    File tmpDir;
 
     @Test
-    public void TestXTlsProtocol() throws Exception {
-        String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+    public void TestXTlsProtocol(final WireMockRuntimeInfo wmRuntimeInfo) throws Exception {
+        String certificate = TestUtils.deployResource("localhost.p12", tmpDir);
 
         stubFor(get(urlEqualTo("/index.html"))
                 .withHeader("X-Tls-Protocol", equalTo("TLSv1.2"))
@@ -51,10 +50,10 @@ public class XTlsProtocolFilterTest {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>absent</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wmRuntimeInfo.getHttpPort());
+        EndpointKey key = new EndpointKey("localhost", wmRuntimeInfo.getHttpPort());
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir)) {
             server.addCertificate(new SSLCertificateConfiguration("*", null, certificate, "testproxy", STATIC));
             server.addRequestFilter(new RequestFilterConfiguration(XTlsProtocolRequestFilter.TYPE, Collections.emptyMap()));
             server.addListener(new NetworkListenerConfiguration("0.0.0.0", 0, true, null, "*", Set.of("TLSv1.2"),
@@ -69,7 +68,7 @@ public class XTlsProtocolFilterTest {
             }
         }
         //SSL request but filter is not set
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir)) {
             server.addCertificate(new SSLCertificateConfiguration("*", null, certificate, "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("0.0.0.0", 0, true, null, "*", Set.of("TLSv1.2"),
                     128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11.name())));
@@ -83,7 +82,7 @@ public class XTlsProtocolFilterTest {
             }
         }
         //Http request without set filter
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir)) {
             server.start();
             int port = server.getLocalPort();
 
@@ -95,7 +94,7 @@ public class XTlsProtocolFilterTest {
         }
 
         //Http request with set filter
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir)) {
             server.addRequestFilter(new RequestFilterConfiguration(XTlsProtocolRequestFilter.TYPE, Collections.emptyMap()));
             server.start();
             int port = server.getLocalPort();

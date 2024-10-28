@@ -27,20 +27,23 @@ import static org.hamcrest.CoreMatchers.allOf;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.startsWith;
-import static org.hamcrest.CoreMatchers.startsWithIgnoringCase;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import static org.hamcrest.Matchers.startsWithIgnoringCase;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import java.io.File;
+import java.io.IOException;
 import java.util.Date;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.HttpUtils;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * NOTE: some of these tests are heavily dependent from wiremock stub creation,
@@ -54,11 +57,11 @@ import org.junit.rules.TemporaryFolder;
  */
 public class CacheExpireTest {
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
+    @RegisterExtension
+    public static WireMockExtension wireMockRule = WireMockExtension.newInstance().options(WireMockConfiguration.options().port(0)).build();
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     @Test
     public void testHandleExpiresFromServer() throws Exception {
@@ -74,9 +77,9 @@ public class CacheExpireTest {
                         .withBody("it <b>works</b> !!"))
         );
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
             server.start();
             int port = server.getLocalPort();
             server.getCache().getStats().resetCacheMetrics();
@@ -132,9 +135,9 @@ public class CacheExpireTest {
                         .withBody("it <b>works</b> !!"))
         );
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
             server.start();
             int port = server.getLocalPort();
             server.getCache().getStats().resetCacheMetrics();
@@ -192,9 +195,9 @@ public class CacheExpireTest {
                         .withBody("it <b>works</b> !!"))
         );
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
             server.start();
             int port = server.getLocalPort();
             server.getCache().getStats().resetCacheMetrics();
@@ -231,9 +234,9 @@ public class CacheExpireTest {
 
     @Test
     public void testExpireContentOnGet() throws Exception {
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
             server.start();
             int port = server.getLocalPort();
             server.getCache().getStats().resetCacheMetrics();
@@ -290,9 +293,9 @@ public class CacheExpireTest {
 
     @Test
     public void testExpireContentWithoutGet() throws Exception {
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
             server.start();
             int port = server.getLocalPort();
             server.getCache().getStats().resetCacheMetrics();
@@ -331,5 +334,14 @@ public class CacheExpireTest {
                 return server.getCache().getCacheSize() == 0;
             }, 10);
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs);
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

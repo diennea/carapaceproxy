@@ -70,6 +70,7 @@ import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
+import org.carapaceproxy.server.backends.SchedulerProvider;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.CertificatesUtils;
@@ -103,8 +104,20 @@ public class DynamicCertificatesManager implements Runnable {
     private static final Logger LOG = Logger.getLogger(DynamicCertificatesManager.class.getName());
     private static final String EVENT_CERTIFICATES_STATE_CHANGED = "certificates_state_changed";
     private static final String EVENT_CERTIFICATES_REQUEST_STORE = "certificates_request_store";
+    private final SchedulerProvider schedulerProvider;
 
     private Map<String, CertificateData> certificates = new ConcurrentHashMap<>();
+
+    @VisibleForTesting
+    void setAcmeClient(final ACMEClient acmeClient) {
+        this.acmeClient = acmeClient;
+    }
+
+    @VisibleForTesting
+    void setR53Client(final Route53Client r53Client) {
+        this.r53Client = r53Client;
+    }
+
     private ACMEClient acmeClient; // Let's Encrypt client
     private Route53Client r53Client;
     private String awsAccessKey;
@@ -124,7 +137,12 @@ public class DynamicCertificatesManager implements Runnable {
     private final HttpProxyServer server;
 
     public DynamicCertificatesManager(HttpProxyServer server) {
+        this(server, () -> Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat(THREAD_NAME).build()));
+    }
+
+    public DynamicCertificatesManager(HttpProxyServer server, final SchedulerProvider schedulerProvider) {
         this.server = server;
+        this.schedulerProvider = schedulerProvider;
     }
 
     public void setConfigurationStore(ConfigurationStore configStore) {
@@ -249,7 +267,7 @@ public class DynamicCertificatesManager implements Runnable {
             return;
         }
         if (scheduler == null) {
-            scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat(THREAD_NAME).build());
+            scheduler = this.schedulerProvider.get();
         }
         LOG.log(Level.INFO, "Starting DynamicCertificatesManager, period: {0} seconds{1}", new Object[]{period, TESTING_MODE ? " (TESTING_MODE)" : ""});
         scheduledFuture = scheduler.scheduleWithFixedDelay(this, 0, period, TimeUnit.SECONDS);
@@ -608,7 +626,7 @@ public class DynamicCertificatesManager implements Runnable {
      * @return PKCS12 Keystore content
      */
     public byte[] getCertificateForDomain(String domain) {
-        CertificateData cert = certificates.get(domain); // certs always retrived from cache
+        CertificateData cert = certificates.get(domain); // certs always retrieved from cache
         if (cert == null || cert.getKeystoreData() == null || cert.getKeystoreData().length == 0) {
             LOG.log(Level.SEVERE, "No dynamic certificate available for domain {0}", domain);
             return null;

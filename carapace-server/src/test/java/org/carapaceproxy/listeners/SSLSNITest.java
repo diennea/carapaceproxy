@@ -26,11 +26,13 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_FORWARDED_STRATEGY;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static reactor.netty.http.HttpProtocol.HTTP11;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import java.io.File;
 import java.net.InetAddress;
 import java.security.cert.X509Certificate;
 import java.util.Set;
@@ -43,24 +45,24 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
 
 public class SSLSNITest {
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
+    @RegisterExtension
+    public static WireMockExtension wireMockRule = WireMockExtension.newInstance().options(WireMockConfiguration.options().port(0)).build();
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    File tmpDir;
 
     @Test
     public void testSelectCertWithoutSNI() throws Exception {
 
         String nonLocalhost = InetAddress.getLocalHost().getCanonicalHostName();
 
-        String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+        String certificate = TestUtils.deployResource("localhost.p12", tmpDir);
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -69,10 +71,10 @@ public class SSLSNITest {
                         .withHeader("Content-Length", String.valueOf("it <b>works</b> !!".length()))
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-        
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.getPort());
+
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir);) {
             server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost /* default */, DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11.name())));
             server.start();
@@ -89,9 +91,9 @@ public class SSLSNITest {
 
     @Test
     public void testChooseCertificate() throws Exception {
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true);
 
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir);) {
 
             server.addCertificate(new SSLCertificateConfiguration("other", null, "cert", "pwd", STATIC));
             server.addCertificate(new SSLCertificateConfiguration("*.example.com", Set.of("example.com", "*.example2.com"), "cert", "pwd", STATIC));
@@ -135,7 +137,7 @@ public class SSLSNITest {
             assertEquals("*.example.com", server.getListeners().chooseCertificate("test.example2.com", "no-default").getId());
         }
 
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir);) {
 
             // full wildcard
             server.addCertificate(new SSLCertificateConfiguration("*", null, "cert", "pwd", STATIC));
@@ -151,7 +153,7 @@ public class SSLSNITest {
     @Test
     public void testTLSVersion() throws Exception {
         String nonLocalhost = InetAddress.getLocalHost().getCanonicalHostName();
-        String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+        String certificate = TestUtils.deployResource("localhost.p12", tmpDir);
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -159,10 +161,10 @@ public class SSLSNITest {
                         .withHeader("Content-Length", String.valueOf("it <b>works</b> !!".length()))
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true);
 
         // TLS 1.3 support checking
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir)) {
             server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost, Set.of("TLSv1.3"),
                     128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11.name())));
@@ -178,7 +180,7 @@ public class SSLSNITest {
 
         // default ssl protocol version support checking
         for (String proto : DEFAULT_SSL_PROTOCOLS) {
-            try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
+            try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir)) {
                 server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
                 server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost, Set.of(proto),
                         128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11.name())));
@@ -192,7 +194,7 @@ public class SSLSNITest {
                 }
             }
         }
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir)) {
             server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost,
                     DEFAULT_SSL_PROTOCOLS,
@@ -209,7 +211,7 @@ public class SSLSNITest {
 
         // wrong ssl protocol version checking
         TestUtils.assertThrows(ConfigurationNotValidException.class, () -> {
-            try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
+            try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir)) {
                 server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
                 server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost, Set.of("TLSvWRONG"),
                         128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11.name())));

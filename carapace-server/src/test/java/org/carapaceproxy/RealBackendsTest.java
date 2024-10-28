@@ -19,7 +19,9 @@
  */
 package org.carapaceproxy;
 
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,10 +36,9 @@ import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.junit.Ignore;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  *
@@ -77,11 +78,11 @@ public class RealBackendsTest {
 
     }
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     @Test
-    @Ignore
+    @Disabled
     public void testRequestsRealBackend() throws Exception {
         CarapaceLogger.setLoggingDebugEnabled(true);
 
@@ -98,7 +99,7 @@ public class RealBackendsTest {
         int port = 443;
         boolean isLocal = carapaceHost.equals("localhost");
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
             RuntimeServerConfiguration config = new RuntimeServerConfiguration();
             config.setMaxConnectionsPerEndpoint(1);
             server.getProxyRequestsManager().reloadConfiguration(config, mapper.getBackends().values());
@@ -160,6 +161,15 @@ public class RealBackendsTest {
         }
         System.out.println("RESULTS: OK " + countOk.get() + ", ERR " + countError.get());
         assertFalse(countError.get() > 0);
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs);
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 
 }

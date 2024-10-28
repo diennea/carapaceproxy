@@ -52,6 +52,7 @@ public class BackendHealthManager implements Runnable {
             "backend status", "host").register();
 
     private EndpointMapper mapper;
+    private final SchedulerProvider schedulerProvider;
 
     private ScheduledExecutorService timer;
     private ScheduledFuture<?> scheduledFuture;
@@ -65,8 +66,13 @@ public class BackendHealthManager implements Runnable {
     private final ConcurrentHashMap<String, BackendHealthStatus> backends = new ConcurrentHashMap<>();
 
     public BackendHealthManager(RuntimeServerConfiguration conf, EndpointMapper mapper) {
+        this(conf, mapper, Executors::newSingleThreadScheduledExecutor);
+    }
+
+    public BackendHealthManager(RuntimeServerConfiguration conf, EndpointMapper mapper, SchedulerProvider schedulerProvider) {
 
         this.mapper = mapper; // may be null
+        this.schedulerProvider = schedulerProvider;
 
         // will be overridden before start
         this.period = DEFAULT_PERIOD;
@@ -88,7 +94,7 @@ public class BackendHealthManager implements Runnable {
             return;
         }
         if (timer == null) {
-            timer = Executors.newSingleThreadScheduledExecutor();
+            timer = this.schedulerProvider.get();
         }
         LOG.info("Starting BackendHealthManager, period: " + period + " seconds");
         scheduledFuture = timer.scheduleAtFixedRate(this, period, period, TimeUnit.SECONDS);

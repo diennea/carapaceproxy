@@ -20,6 +20,7 @@ package org.carapaceproxy;
 
  */
 import java.io.File;
+import java.io.IOException;
 import org.carapaceproxy.core.HttpProxyServer;
 import java.util.Properties;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
@@ -28,12 +29,12 @@ import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;
 import org.carapaceproxy.server.filters.XForwardedForRequestFilter;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import org.junit.Ignore;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  *
@@ -41,19 +42,19 @@ import org.junit.rules.TemporaryFolder;
  */
 public class DatabaseConfigurationTest {
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     @Test
     public void testBootWithDatabaseStore() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(null, newFolder(tmpDir, "junit"));) {
 
             Properties configuration = new Properties();
 
             configuration.put("config.type", "database");
             configuration.put("db.jdbc.url", "jdbc:herddb:localhost");
-            configuration.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
+            configuration.put("db.server.base.dir", newFolder(tmpDir, "junit").getAbsolutePath());
             server.configureAtBoot(new PropertiesConfigurationStore(configuration));
 
             server.start();
@@ -65,15 +66,15 @@ public class DatabaseConfigurationTest {
 
     @SuppressWarnings("deprecation")
     @Test
-    @Ignore
+    @Disabled
     public void testChangeFiltersConfiguration() throws Exception {
 
-        File databaseFolder = tmpDir.newFolder();
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        File databaseFolder = newFolder(tmpDir, "junit");
+        try (HttpProxyServer server = new HttpProxyServer(null, newFolder(tmpDir, "junit"));) {
 
             Properties configurationAtBoot = new Properties();
             configurationAtBoot.put("db.jdbc.url", "jdbc:herddb:localhost");
-            configurationAtBoot.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
+            configurationAtBoot.put("db.server.base.dir", newFolder(tmpDir, "junit").getAbsolutePath());
 
             server.configureAtBoot(new PropertiesConfigurationStore(configurationAtBoot));
             server.start();
@@ -99,10 +100,10 @@ public class DatabaseConfigurationTest {
         }
 
         // reboot, new configuration MUST be kept
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(null, newFolder(tmpDir, "junit"));) {
             Properties configurationAtBoot = new Properties();
             configurationAtBoot.put("db.jdbc.url", "jdbc:herddb:localhost");
-            configurationAtBoot.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
+            configurationAtBoot.put("db.server.base.dir", newFolder(tmpDir, "junit").getAbsolutePath());
             server.configureAtBoot(new PropertiesConfigurationStore(configurationAtBoot));
 
             assertEquals(2, server.getFilters().size());
@@ -118,15 +119,24 @@ public class DatabaseConfigurationTest {
 
         }
         // reboot, new configuration MUST be kept
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(null, newFolder(tmpDir, "junit"));) {
             Properties configurationAtBoot = new Properties();
             configurationAtBoot.put("db.jdbc.url", "jdbc:herddb:localhost");
-            configurationAtBoot.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
+            configurationAtBoot.put("db.server.base.dir", newFolder(tmpDir, "junit").getAbsolutePath());
             server.configureAtBoot(new PropertiesConfigurationStore(configurationAtBoot));
 
             assertEquals(1, server.getFilters().size());
             assertTrue(server.getFilters().get(0) instanceof RegexpMapUserIdFilter);
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs);
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 
 }

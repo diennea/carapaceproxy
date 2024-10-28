@@ -19,20 +19,24 @@ package org.carapaceproxy.listeners;
  under the License.
 
  */
+
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import java.io.File;
+import java.io.IOException;
 import java.net.URL;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import static org.junit.Assert.assertEquals;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  *
@@ -40,11 +44,11 @@ import org.junit.rules.TemporaryFolder;
  */
 public class MultiListeningEndpointTest {
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
+    @RegisterExtension
+    public static WireMockExtension wireMockRule = WireMockExtension.newInstance().options(WireMockConfiguration.options().port(0)).build();
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    File tmpDir;
 
     @Test
     public void test() throws Exception {
@@ -57,9 +61,9 @@ public class MultiListeningEndpointTest {
 
         int port = 1234;
         int port2 = 1235;
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", port, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", port, mapper, newFolder(tmpDir, "junit"));) {
             server.addListener(new NetworkListenerConfiguration("localhost", port2));
             server.start();
 
@@ -78,5 +82,14 @@ public class MultiListeningEndpointTest {
 
         }
 
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs);
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

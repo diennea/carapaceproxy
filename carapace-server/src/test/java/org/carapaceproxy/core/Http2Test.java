@@ -17,45 +17,41 @@ import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAU
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import io.netty.handler.codec.http.HttpResponseStatus;
+import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.client.HttpClient;
 
-@RunWith(Parameterized.class)
 public class Http2Test {
 
     public static final String RESPONSE = "it <b>works</b> !!";
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(options().dynamicPort());
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @RegisterExtension
+    public static WireMockExtension wireMockRule = WireMockExtension.newInstance().options(options().dynamicPort()).build();
 
-    private final HttpProtocol protocol;
-    private final Set<String> carapaceProtocols;
-    private final boolean withCache;
+    @TempDir
+    File tmpDir;
 
-    public Http2Test(final HttpProtocol protocol, final Set<HttpProtocol> carapaceProtocols, final boolean withCache) {
+    private HttpProtocol protocol;
+
+    public void initHttp2Test(final HttpProtocol protocol, final Set<HttpProtocol> carapaceProtocols, final boolean withCache) {
         this.protocol = protocol;
-        this.carapaceProtocols = carapaceProtocols.stream().map(HttpProtocol::name).collect(toUnmodifiableSet());
-        this.withCache = withCache;
+        carapaceProtocols.stream().map(HttpProtocol::name).collect(toUnmodifiableSet());
     }
 
-    @Parameters(name = "Client: {0}, Carapace conf: {1}, using cache: {2}")
     public static Collection<Object[]> data() {
         return List.of(
                 new Object[]{HttpProtocol.HTTP11, Set.of(HttpProtocol.HTTP11), false},
@@ -67,8 +63,10 @@ public class Http2Test {
         );
     }
 
-    @Test
-    public void test() throws IOException, ConfigurationNotValidException, InterruptedException {
+    @MethodSource("data")
+    @ParameterizedTest(name = "Client: {0}, Carapace conf: {1}, using cache: {2}")
+    public void test(final HttpProtocol protocol, final Set<HttpProtocol> carapaceProtocols, final boolean withCache) throws IOException, ConfigurationNotValidException, InterruptedException {
+        initHttp2Test(protocol, carapaceProtocols, withCache);
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(HttpResponseStatus.OK.code())
@@ -76,8 +74,8 @@ public class Http2Test {
                         .withHeader("Content-Length", String.valueOf(RESPONSE.length()))
                         .withBody(RESPONSE))
         );
-        final var mapper = new TestEndpointMapper("localhost", wireMockRule.port(), withCache);
-        try (final var server = new HttpProxyServer(mapper, tmpDir.newFolder())) {
+        final var mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), withCache);
+        try (final var server = new HttpProxyServer(mapper, newFolder(tmpDir, "junit"))) {
             server.addListener(new NetworkListenerConfiguration(
                     "localhost",
                     DYNAMIC_PORT,
@@ -93,7 +91,7 @@ public class Http2Test {
                     DEFAULT_MAX_KEEP_ALIVE_REQUESTS,
                     DEFAULT_FORWARDED_STRATEGY,
                     Set.of(),
-                    carapaceProtocols
+                    carapaceProtocols.stream().map(HttpProtocol::toString).collect(Collectors.toUnmodifiableSet())
             ));
 
             server.start();
@@ -114,5 +112,14 @@ public class Http2Test {
                 .asString()
                 .doOnNext(System.out::println)
                 .blockFirst();
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs);
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

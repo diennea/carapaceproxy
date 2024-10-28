@@ -19,34 +19,32 @@ package org.carapaceproxy.server.cache;
  under the License.
 
  */
-import org.carapaceproxy.utils.HttpUtils;
-import org.carapaceproxy.utils.TestEndpointMapper;
+
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import org.carapaceproxy.core.HttpProxyServer;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import org.carapaceproxy.client.EndpointKey;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
+import com.github.tomakehurst.wiremock.junit5.WireMockTest;
+import java.io.File;
+import org.carapaceproxy.core.HttpProxyServer;
+import org.carapaceproxy.utils.HttpUtils;
 import org.carapaceproxy.utils.RawHttpClient;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.carapaceproxy.utils.TestEndpointMapper;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+@WireMockTest
 public class NotModifiedTest {
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
-
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    File tmpDir;
 
     @Test
-    public void testServeFromCacheAnswer304() throws Exception {
-
+    public void testServeFromCacheAnswer304(final WireMockRuntimeInfo wmRuntimeInfo) throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -56,10 +54,9 @@ public class NotModifiedTest {
                         .withBody("it <b>works</b> !!")
                 ));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wmRuntimeInfo.getHttpPort(), true);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir)) {
             server.start();
             int port = server.getLocalPort();
 
@@ -68,9 +65,8 @@ public class NotModifiedTest {
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertTrue(s.contains("it <b>works</b> !!"));
-                resp.getHeaderLines().forEach(h -> {
-                    System.out.println("HEADER LINE :" + h);
-                });
+                resp.getHeaderLines().forEach(h ->
+                    System.out.println("HEADER LINE :" + h));
                 assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
             }
 
@@ -80,10 +76,9 @@ public class NotModifiedTest {
                             + "Host: localhost\r\n"
                             + "If-Modified-Since: " + HttpUtils.formatDateHeader(new java.util.Date(System.currentTimeMillis())) + "\r\n"
                             + "\r\n");
-                    assertTrue(resp.getStatusLine().trim().equals("HTTP/1.1 304 Not Modified"));
-                    resp.getHeaderLines().forEach(h -> {
-                        System.out.println("HEADER LINE :" + h);
-                    });
+                    assertEquals("HTTP/1.1 304 Not Modified", resp.getStatusLine().trim());
+                    resp.getHeaderLines().forEach(h ->
+                        System.out.println("HEADER LINE :" + h));
                     assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
                     assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("expires")));
                     assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("last-modified")));
@@ -96,5 +91,4 @@ public class NotModifiedTest {
             assertEquals(1, server.getCache().getStats().getMisses());
         }
     }
-
 }

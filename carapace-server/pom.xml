@@ -31,6 +31,22 @@
         <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-tcnative-boringssl-static</artifactId>
+            <!-- https://netty.io/wiki/forked-tomcat-native.html#how-to-download-netty-tcnative-boringssl-uber-jar -->
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-resolver-dns-native-macos</artifactId>
+            <!-- Reactor Netty brings in this x86 version of the native DNS bindings for macOS... -->
+            <classifier>osx-x86_64</classifier>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-resolver-dns-native-macos</artifactId>
+            <!-- ...but we also need the ARM version to fully support running on Apple devices -->
+            <classifier>osx-aarch_64</classifier>
+            <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>org.shredzone.acme4j</groupId>
@@ -245,14 +261,14 @@
 
         <!-- test dependecies -->
         <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>pl.pragmatists</groupId>
-            <artifactId>JUnitParams</artifactId>
-            <version>${libs.junitparams}</version>
+            <groupId>org.junit.platform</groupId>
+            <!-- Only needed to run tests in a version of IntelliJ IDEA that bundles older versions -->
+            <artifactId>junit-platform-launcher</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -269,22 +285,9 @@
             </exclusions>
         </dependency>
         <dependency>
-            <groupId>org.powermock</groupId>
-            <artifactId>powermock-module-junit4</artifactId>
-            <version>${libs.powermock}</version>
-            <scope>test</scope>
-            <exclusions>
-                <!-- Clashes with org.hamcrest:hamcrest -->
-                <exclusion>
-                    <groupId>org.hamcrest</groupId>
-                    <artifactId>hamcrest-core</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>org.powermock</groupId>
-            <artifactId>powermock-api-mockito2</artifactId>
-            <version>${libs.powermock}</version>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>${libs.mockito}</version>
             <scope>test</scope>
         </dependency>
         <dependency>

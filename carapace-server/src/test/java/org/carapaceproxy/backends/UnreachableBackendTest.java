@@ -19,38 +19,37 @@
  */
 package org.carapaceproxy.backends;
 
-import org.carapaceproxy.utils.TestEndpointMapper;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.http.Fault;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Properties;
 import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
+import org.carapaceproxy.core.ProxyRequestsManager;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.RawHttpClient;
-import static org.junit.Assert.assertTrue;
-import java.util.Properties;
-import org.carapaceproxy.configstore.PropertiesConfigurationStore;
-import org.carapaceproxy.core.ProxyRequestsManager;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
+import org.carapaceproxy.utils.TestEndpointMapper;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
-@RunWith(Parameterized.class)
 public class UnreachableBackendTest {
 
-    @Parameters
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][]{
             {true /*
@@ -61,20 +60,23 @@ public class UnreachableBackendTest {
         });
     }
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
+    @RegisterExtension
+    public static WireMockExtension wireMockRule = WireMockExtension.newInstance().options(WireMockConfiguration.options().port(0)).build();
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    File tmpDir;
 
     private boolean useCache = false;
 
-    public UnreachableBackendTest(boolean useCache) {
+    public void initUnreachableBackendTest(boolean useCache) {
         this.useCache = useCache;
     }
 
-    @Test
-    public void testWithUnreachableBackend() throws Exception {
+    @MethodSource("data")
+    @ParameterizedTest
+    public void testWithUnreachableBackend(boolean useCache) throws Exception {
+
+        initUnreachableBackendTest(useCache);
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -83,13 +85,13 @@ public class UnreachableBackendTest {
                         .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                         .withBody("it <b>works</b> !!")));
 
-        int dummyport = wireMockRule.port();
-        wireMockRule.stop();
+        int dummyport = wireMockRule.getPort();
+        // wireMockRule.stop();
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
-            server.start();
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
+            // server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
@@ -107,18 +109,21 @@ public class UnreachableBackendTest {
         }
     }
 
-    @Test
-    public void testEmptyResponse() throws Exception {
+    @MethodSource("data")
+    @ParameterizedTest
+    public void testEmptyResponse(boolean useCache) throws Exception {
+
+        initUnreachableBackendTest(useCache);
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withFault(Fault.EMPTY_RESPONSE)));
 
-        int dummyport = wireMockRule.port();
+        int dummyport = wireMockRule.getPort();
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, newFolder(tmpDir, "junit"));) {
             Properties properties = new Properties();
             // configure resets all listeners configurations
             server.configureAtBoot(new PropertiesConfigurationStore(properties));
@@ -143,18 +148,21 @@ public class UnreachableBackendTest {
         }
     }
 
-    @Test
-    public void testConnectionResetByPeer() throws Exception {
+    @MethodSource("data")
+    @ParameterizedTest
+    public void testConnectionResetByPeer(boolean useCache) throws Exception {
+
+        initUnreachableBackendTest(useCache);
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withFault(Fault.CONNECTION_RESET_BY_PEER)));
 
-        int dummyport = wireMockRule.port();
+        int dummyport = wireMockRule.getPort();
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -173,17 +181,19 @@ public class UnreachableBackendTest {
         }
     }
 
-    @Test
-    public void testNonHttpResponseThenClose() throws Exception {
+    @MethodSource("data")
+    @ParameterizedTest
+    public void testNonHttpResponseThenClose(boolean useCache) throws Exception {
+        initUnreachableBackendTest(useCache);
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withFault(Fault.RANDOM_DATA_THEN_CLOSE)));
 
-        int dummyport = wireMockRule.port();
+        int dummyport = wireMockRule.getPort();
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, newFolder(tmpDir, "junit"));) {
             Properties properties = new Properties();
             server.configureAtBoot(new PropertiesConfigurationStore(properties));
             server.addListener(new NetworkListenerConfiguration("localhost", 0));
@@ -205,5 +215,14 @@ public class UnreachableBackendTest {
             assertTrue(server.getBackendHealthManager().isAvailable(key.getHostPort()));
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs);
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

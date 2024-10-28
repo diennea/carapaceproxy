@@ -23,20 +23,22 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import java.io.File;
 import java.io.IOException;
 import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  *
@@ -44,11 +46,11 @@ import org.junit.rules.TemporaryFolder;
  */
 public class CacheContentLengthLimitTest {
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
+    @RegisterExtension
+    public static WireMockExtension wireMockRule = WireMockExtension.newInstance().options(WireMockConfiguration.options().port(0)).build();
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    File tmpDir;
 
     @Test
     public void testWithContentLengthHeader() throws Exception {
@@ -81,12 +83,12 @@ public class CacheContentLengthLimitTest {
 
     private void testFileSizeCache(String body, boolean chunked) throws Exception {
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.getPort());
 
         // No size checking
         {
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(0);
                 server.getCurrentConfiguration().setRequestCompressionEnabled(false);
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
@@ -102,7 +104,7 @@ public class CacheContentLengthLimitTest {
 
         // Max size set to current content size
         {
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(body.length());
                 server.getCurrentConfiguration().setRequestCompressionEnabled(false);
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
@@ -118,7 +120,7 @@ public class CacheContentLengthLimitTest {
 
         // Max size set to drop current content
         {
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(body.length() - 1);
                 server.getCurrentConfiguration().setRequestCompressionEnabled(false);
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
@@ -155,6 +157,15 @@ public class CacheContentLengthLimitTest {
             assertNotNull(stats);
             assertThat(server.getCache().getCacheSize(), is(cacheSize));
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs);
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 
 }

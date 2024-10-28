@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -37,11 +38,12 @@ import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * The clients sends a big upload, and the server is very slow at draining the contents
@@ -52,12 +54,21 @@ public class BigUploadTest {
 
     private static final Logger LOG = Logger.getLogger(BigUploadTest.class.getName());
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     public interface ClientHandler {
 
         public void handle(Socket client) throws Exception;
+
+        private static File newFolder(File root, String... subDirs) throws IOException {
+            String subFolder = String.join("/", subDirs);
+            File result = new File(root, subFolder);
+            if (!result.mkdirs()) {
+                throw new IOException("Couldn't create folders " + root);
+            }
+            return result;
+        }
     }
 
     public static class ConnectionResetByPeerHandler implements ClientHandler {
@@ -81,6 +92,15 @@ public class BigUploadTest {
                 LOG.log(Level.SEVERE, "error", ii);
             }
         }
+
+        private static File newFolder(File root, String... subDirs) throws IOException {
+            String subFolder = String.join("/", subDirs);
+            File result = new File(root, subFolder);
+            if (!result.mkdirs()) {
+                throw new IOException("Couldn't create folders " + root);
+            }
+            return result;
+        }
     }
 
     public static class StaticResponseHandler implements ClientHandler {
@@ -100,6 +120,15 @@ public class BigUploadTest {
             } catch (IOException ii) {
                 LOG.log(Level.SEVERE, "error", ii);
             }
+        }
+
+        private static File newFolder(File root, String... subDirs) throws IOException {
+            String subFolder = String.join("/", subDirs);
+            File result = new File(root, subFolder);
+            if (!result.mkdirs()) {
+                throw new IOException("Couldn't create folders " + root);
+            }
+            return result;
         }
     }
 
@@ -160,6 +189,15 @@ public class BigUploadTest {
                 socket.close();
             }
         }
+
+        private static File newFolder(File root, String... subDirs) throws IOException {
+            String subFolder = String.join("/", subDirs);
+            File result = new File(root, subFolder);
+            if (!result.mkdirs()) {
+                throw new IOException("Couldn't create folders " + root);
+            }
+            return result;
+        }
     }
 
     @Test
@@ -175,7 +213,7 @@ public class BigUploadTest {
 
             int size = 20_000_000;
 
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
                 server.start();
                 int port = server.getLocalPort();
                 URL url = new URL("http://localhost:" + port + "/index.html");
@@ -204,16 +242,14 @@ public class BigUploadTest {
     public void testBlockingServerWorks() throws Exception {
 
         try (SimpleBlockingTcpServer mockServer =
-                new SimpleBlockingTcpServer(() -> {
-                    return new StaticResponseHandler("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nit works!\r\n".getBytes(StandardCharsets.US_ASCII));
-                })) {
+                new SimpleBlockingTcpServer(() -> new StaticResponseHandler("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nit works!\r\n".getBytes(StandardCharsets.US_ASCII)))) {
 
             mockServer.start();
 
             TestEndpointMapper mapper = new TestEndpointMapper("localhost", mockServer.getPort());
             EndpointKey key = new EndpointKey("localhost", mockServer.getPort());
 
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
                 server.start();
                 int port = server.getLocalPort();
                 URL url = new URL("http://localhost:" + port + "/index.html");
@@ -227,6 +263,15 @@ public class BigUploadTest {
                 con.disconnect();
             }
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs);
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 
 }

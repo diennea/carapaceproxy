@@ -9,7 +9,10 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import java.io.File;
+import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -17,8 +20,8 @@ import javax.ws.rs.core.Response;
 import org.carapaceproxy.utils.HttpTestUtils;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 public class ConnectionPoolsResourceTest extends UseAdminServer {
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -38,8 +41,8 @@ public class ConnectionPoolsResourceTest extends UseAdminServer {
     private static final int KEEPALIVE_INTERVAL = 50;
     private static final int KEEPALIVE_COUNT = 5;
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
+    @RegisterExtension
+    public static WireMockExtension wireMockRule = WireMockExtension.newInstance().options(WireMockConfiguration.options().port(0)).build();
 
     private void configureAndStartServer() throws Exception {
 
@@ -55,13 +58,13 @@ public class ConnectionPoolsResourceTest extends UseAdminServer {
         final Properties config = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         config.put("config.type", "database");
         config.put("db.jdbc.url", "jdbc:herddb:localhost");
-        config.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
+        config.put("db.server.base.dir", newFolder(tmpDir, "junit").getAbsolutePath());
         config.put("aws.accesskey", "accesskey");
         config.put("aws.secretkey", "secretkey");
         startServer(config);
 
         // Default certificate
-        String defaultCertificate = TestUtils.deployResource("ia.p12", tmpDir.getRoot());
+        String defaultCertificate = TestUtils.deployResource("ia.p12", tmpDir);
         config.put("certificate.1.hostname", "*");
         config.put("certificate.1.file", defaultCertificate);
         config.put("certificate.1.password", "changeit");
@@ -76,12 +79,12 @@ public class ConnectionPoolsResourceTest extends UseAdminServer {
         config.put("backend.1.id", "localhost");
         config.put("backend.1.enabled", "true");
         config.put("backend.1.host", "localhost");
-        config.put("backend.1.port", String.valueOf(wireMockRule.port()));
+        config.put("backend.1.port", String.valueOf(wireMockRule.getPort()));
 
         config.put("backend.2.id", "localhost2");
         config.put("backend.2.enabled", "true");
         config.put("backend.2.host", "localhost2");
-        config.put("backend.2.port", String.valueOf(wireMockRule.port()));
+        config.put("backend.2.port", String.valueOf(wireMockRule.getPort()));
 
         // Default director
         config.put("director.1.id", "*");
@@ -220,6 +223,14 @@ public class ConnectionPoolsResourceTest extends UseAdminServer {
         return pool;
     }
 
-    private static class MapTypeReference extends TypeReference<Map<String, ConnectionPoolsResource.ConnectionPoolBean>> {
+    private static class MapTypeReference extends TypeReference<Map<String, ConnectionPoolsResource.ConnectionPoolBean>> {}
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs);
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

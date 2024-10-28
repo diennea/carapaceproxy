@@ -23,14 +23,12 @@ import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64Decode
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
+
 import java.security.KeyPair;
 import java.security.cert.Certificate;
 import java.util.Arrays;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.shredzone.acme4j.util.KeyPairUtils;
 import static org.carapaceproxy.utils.CertificatesUtils.compareChains;
 import java.security.cert.X509Certificate;
