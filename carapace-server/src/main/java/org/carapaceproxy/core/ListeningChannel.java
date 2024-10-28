@@ -109,7 +109,7 @@ public class ListeningChannel implements io.netty.util.AsyncMapping<String, SslC
             }
             return sslContexts.get(key);
         } catch (ConfigurationNotValidException err) {
-            LOG.error("Error booting certificate for SNI hostname {}, on listener {}", sniHostname, config);
+            LOG.error("Error booting certificate for SNI hostname {}, on listener {}", sniHostname, config, err);
             throw err;
         }
     }
