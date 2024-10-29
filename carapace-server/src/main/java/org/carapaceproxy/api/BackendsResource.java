@@ -75,7 +75,7 @@ public class BackendsResource {
     @GET
     public Map<String, BackendBean> getAll() {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-        Map<String, BackendHealthStatus> backendsSnapshot = server.getBackendHealthManager().getBackendsSnapshot();
+        Map<EndpointKey, BackendHealthStatus> backendsSnapshot = server.getBackendHealthManager().getBackendsSnapshot();
         Map<String, BackendBean> res = new HashMap<>();
 
         server.getMapper().getBackends().values().forEach(backendConf -> {
@@ -94,7 +94,7 @@ public class BackendsResource {
                 bean.totalRequests = epstats.getTotalRequests().longValue();
                 bean.lastActivityTs = epstats.getLastActivity().longValue();
             }
-            BackendHealthStatus bhs = backendsSnapshot.get(key.toString());
+            BackendHealthStatus bhs = backendsSnapshot.get(key);
             if (bhs != null) {
                 bean.available = bhs.isAvailable();
                 bean.reportedAsUnreachable = bhs.isReportedAsUnreachable();

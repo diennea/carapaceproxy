@@ -493,7 +493,7 @@ public class ProxyRequestsManager {
                 }).onErrorResume(err -> { // custom endpoint request/response error handling
                     PENDING_REQUESTS_GAUGE.dec();
 
-                    String endpoint = request.getAction().host + ":" + request.getAction().port;
+                    EndpointKey endpoint = EndpointKey.make(request.getAction().host, request.getAction().port);
                     if (err instanceof io.netty.handler.timeout.ReadTimeoutException) {
                         STUCK_REQUESTS_COUNTER.inc();
                         LOGGER.log(Level.SEVERE, "Read timeout error occurred for endpoint {0}; request: {1}", new Object[]{endpoint, request});

@@ -23,7 +23,6 @@ import com.google.common.annotations.VisibleForTesting;
 import io.prometheus.client.Gauge;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -33,6 +32,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.mapper.EndpointMapper;
@@ -62,7 +62,7 @@ public class BackendHealthManager implements Runnable {
     private volatile int connectTimeout;
     private volatile boolean started; // keep track of start() calling
 
-    private final ConcurrentHashMap<String, BackendHealthStatus> backends = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<EndpointKey, BackendHealthStatus> backends = new ConcurrentHashMap<>();
 
     public BackendHealthManager(RuntimeServerConfiguration conf, EndpointMapper mapper) {
 
@@ -141,8 +141,7 @@ public class BackendHealthManager implements Runnable {
         }
         Collection<BackendConfiguration> backendConfigurations = mapper.getBackends().values();
         for (BackendConfiguration bconf : backendConfigurations) {
-            String hostPort = bconf.hostPort().toString();
-            BackendHealthStatus status = backends.computeIfAbsent(hostPort, BackendHealthStatus::new);
+            BackendHealthStatus status = backends.computeIfAbsent(bconf.hostPort(), BackendHealthStatus::new);
 
             BackendHealthCheck checkResult = BackendHealthCheck.check(
                     bconf.host(), bconf.port(), bconf.probePath(), connectTimeout);
@@ -172,11 +171,11 @@ public class BackendHealthManager implements Runnable {
                 BACKEND_UPSTATUS_GAUGE.labels(bconf.host() + "_" + bconf.port()).set(1);
             }
         }
-        List<String> toRemove = new ArrayList<>();
-        for (String key : backends.keySet()) {
+        List<EndpointKey> toRemove = new ArrayList<>();
+        for (EndpointKey key : backends.keySet()) {
             boolean found = false;
             for (BackendConfiguration bconf : backendConfigurations) {
-                if (bconf.hostPort().toString().equals(key)) {
+                if (bconf.hostPort().equals(key)) {
                     found = true;
                     break;
                 }
@@ -191,12 +190,12 @@ public class BackendHealthManager implements Runnable {
         }
     }
 
-    public void reportBackendUnreachable(String hostPort, long timestamp, String cause) {
+    public void reportBackendUnreachable(EndpointKey hostPort, long timestamp, String cause) {
         BackendHealthStatus backend = getBackendStatus(hostPort);
         backend.reportAsUnreachable(timestamp);
     }
 
-    private BackendHealthStatus getBackendStatus(String hostPort) {
+    private BackendHealthStatus getBackendStatus(EndpointKey hostPort) {
         BackendHealthStatus status = backends.computeIfAbsent(hostPort, BackendHealthStatus::new);
         if (status == null) {
             throw new RuntimeException("Unknown backend " + hostPort);
@@ -204,16 +203,16 @@ public class BackendHealthManager implements Runnable {
         return status;
     }
 
-    public void reportBackendReachable(String hostPort) {
+    public void reportBackendReachable(EndpointKey hostPort) {
         BackendHealthStatus backend = getBackendStatus(hostPort);
         backend.reportAsReachable();
     }
 
-    public Map<String, BackendHealthStatus> getBackendsSnapshot() {
-        return new HashMap<>(backends);
+    public Map<EndpointKey, BackendHealthStatus> getBackendsSnapshot() {
+        return Map.copyOf(backends);
     }
 
-    public boolean isAvailable(String hostPort) {
+    public boolean isAvailable(EndpointKey hostPort) {
         BackendHealthStatus backend = getBackendStatus(hostPort);
         return backend != null && backend.isAvailable();
     }
