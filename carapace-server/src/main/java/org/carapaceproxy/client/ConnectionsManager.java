@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.client;
 
+import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 
 /**

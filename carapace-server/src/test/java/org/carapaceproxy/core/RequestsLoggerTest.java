@@ -40,7 +40,6 @@ import java.util.List;
 
 import io.netty.handler.codec.http.HttpVersion;
 import org.carapaceproxy.server.mapper.MapResult;
-import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import static org.hamcrest.CoreMatchers.is;

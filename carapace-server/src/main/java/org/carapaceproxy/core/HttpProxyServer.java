@@ -76,7 +76,6 @@ import org.carapaceproxy.api.ApplicationConfig;
 import org.carapaceproxy.api.AuthAPIRequestsFilter;
 import org.carapaceproxy.api.ConfigResource;
 import org.carapaceproxy.api.ForceHeadersAPIRequestsFilter;
-import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
 import org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler;

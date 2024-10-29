@@ -52,7 +52,6 @@ import lombok.Data;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
-import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
