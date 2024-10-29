@@ -21,8 +21,6 @@ package org.carapaceproxy;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import lombok.Getter;
-import lombok.ToString;
 import org.carapaceproxy.core.EndpointKey;
 
 /**
@@ -30,17 +28,25 @@ import org.carapaceproxy.core.EndpointKey;
  *
  * @author enrico.olivelli
  */
-@ToString
 public class EndpointStats {
 
     private final EndpointKey key;
-    @Getter
     private final AtomicInteger totalRequests = new AtomicInteger();
-    @Getter
     private final AtomicLong lastActivity = new AtomicLong();
 
-    public EndpointStats(EndpointKey key) {
+    public EndpointStats(final EndpointKey key) {
         this.key = key;
     }
 
+    public String toString() {
+        return "EndpointStats(key=" + this.key + ", totalRequests=" + this.totalRequests + ", lastActivity=" + this.lastActivity + ")";
+    }
+
+    public AtomicInteger getTotalRequests() {
+        return this.totalRequests;
+    }
+
+    public AtomicLong getLastActivity() {
+        return this.lastActivity;
+    }
 }

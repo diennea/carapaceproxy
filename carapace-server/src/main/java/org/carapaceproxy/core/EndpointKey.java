@@ -19,12 +19,32 @@
  */
 package org.carapaceproxy.core;
 
+import org.carapaceproxy.utils.StringUtils;
+
 /**
  * Identifier of an endpoint
  *
  * @author enrico.olivelli
  */
 public record EndpointKey(String host, int port) {
+
+    /**
+     * The minimum port value according to <a href="https://tools.ietf.org/html/rfc6335">RFC 6335</a>.
+     */
+    public static final int MIN_PORT = 0;
+    /**
+     * The maximum port value according to <a href="https://tools.ietf.org/html/rfc6335">RFC 6335</a>.
+     */
+    public static final int MAX_PORT = 0xffff;
+
+    public EndpointKey {
+        if (StringUtils.isBlank(host)) {
+            throw new IllegalArgumentException("Hostname cannot be blank");
+        }
+        if (port > MAX_PORT || port < MIN_PORT) {
+            throw new IllegalArgumentException("Invalid port: " + port);
+        }
+    }
 
     public static EndpointKey make(String host, int port) {
         return new EndpointKey(host, port);
@@ -33,7 +53,7 @@ public record EndpointKey(String host, int port) {
     public static EndpointKey make(String hostAndPort) {
         int pos = hostAndPort.indexOf(':');
         if (pos <= 0) {
-            return new EndpointKey(hostAndPort, 0);
+            return new EndpointKey(hostAndPort, MIN_PORT);
         }
         String host = hostAndPort.substring(0, pos);
         int port = Integer.parseInt(hostAndPort.substring(pos + 1));
