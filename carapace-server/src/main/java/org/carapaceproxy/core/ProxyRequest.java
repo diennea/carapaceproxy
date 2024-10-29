@@ -35,7 +35,7 @@ import java.net.InetSocketAddress;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 import lombok.Data;
-import org.carapaceproxy.server.config.HostPort;
+import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchingContext;
@@ -69,7 +69,7 @@ public class ProxyRequest implements MatchingContext {
     private final long id = REQUESTS_ID_GENERATOR.incrementAndGet();
     private final HttpServerRequest request;
     private final HttpServerResponse response;
-    private final HostPort listener;
+    private final EndpointKey listener;
     private MapResult action;
     private String userId;
     private String sessionId;
@@ -83,7 +83,7 @@ public class ProxyRequest implements MatchingContext {
     private boolean servedFromCache;
     private HttpVersion httpProtocol;
 
-    public ProxyRequest(HttpServerRequest request, HttpServerResponse response, HostPort listener) {
+    public ProxyRequest(HttpServerRequest request, HttpServerResponse response, EndpointKey listener) {
         this.request = request;
         this.response = response;
         this.listener = listener;

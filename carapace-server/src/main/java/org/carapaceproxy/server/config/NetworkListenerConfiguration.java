@@ -28,6 +28,7 @@ import io.netty.util.concurrent.DefaultEventExecutor;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.Getter;
+import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.ForwardedStrategies;
 import reactor.netty.http.HttpProtocol;
 
@@ -154,8 +155,8 @@ public class NetworkListenerConfiguration {
         this.protocols = httpProtocols;
     }
 
-    public HostPort getKey() {
-        return new HostPort(host, port);
+    public EndpointKey getKey() {
+        return new EndpointKey(host, port);
     }
 
     public static Set<String> getDefaultHttpProtocols(final boolean ssl) {
