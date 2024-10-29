@@ -72,7 +72,8 @@ public class ListenersResource {
                     config.getDefaultCertificate(),
                     (int) listener.getValue().getTotalRequests().get()
             );
-            return Map.entry(EndpointKey.make(config.getHost(), port).getHostPort(), bean);
+            EndpointKey endpointKey = EndpointKey.make(config.getHost(), port);
+            return Map.entry(endpointKey.toString(), bean);
         }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 

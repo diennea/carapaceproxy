@@ -401,7 +401,7 @@ public class ProxyRequestsManager {
                 .doOnRequest((req, conn) -> {
                     if (CarapaceLogger.isLoggingDebugEnabled()) {
                         CarapaceLogger.debug("Start sending request for "
-                                + " Using client id " + key.getHostPort() + "_" + connectionConfig.getId()
+                                + " Using client id " + key.toString() + "_" + connectionConfig.getId()
                                 + " Uri " + req.resourceUrl()
                                 + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
                                 + " Backend " + endpointHost + ":" + endpointPort);
@@ -411,7 +411,7 @@ public class ProxyRequestsManager {
                 }).doAfterRequest((req, conn) -> {
                     if (CarapaceLogger.isLoggingDebugEnabled()) {
                         CarapaceLogger.debug("Finished sending request for "
-                                + " Using client id " + key.getHostPort() + "_" + connectionConfig.getId()
+                                + " Using client id " + key.toString() + "_" + connectionConfig.getId()
                                 + " Uri " + request.getUri()
                                 + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
                                 + " Backend " + endpointHost + ":" + endpointPort);
@@ -443,7 +443,7 @@ public class ProxyRequestsManager {
                 .response((resp, flux) -> { // endpoint response
                     if (CarapaceLogger.isLoggingDebugEnabled()) {
                         CarapaceLogger.debug("Receive response from backend for " + request.getRemoteAddress()
-                                + " Using client id " + key.getHostPort() + "_" + connectionConfig.getId()
+                                + " Using client id " + key.toString() + "_" + connectionConfig.getId()
                                 + " uri" + request.getUri()
                                 + " timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
                                 + " Backend: " + request.getAction().host);
@@ -482,7 +482,7 @@ public class ProxyRequestsManager {
                     }).doOnComplete(() -> {
                         if (CarapaceLogger.isLoggingDebugEnabled()) {
                             CarapaceLogger.debug("Send all response to client " + request.getRemoteAddress()
-                                    + " Using client id " + key.getHostPort() + "_" + connectionConfig.getId()
+                                    + " Using client id " + key.toString() + "_" + connectionConfig.getId()
                                     + " for uri " + request.getUri()
                                     + " timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
                                     + " Backend: " + request.getAction().host);
