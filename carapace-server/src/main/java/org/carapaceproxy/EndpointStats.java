@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.Getter;
 import lombok.ToString;
-import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.core.EndpointKey;
 
 /**
  * Stats about an endpoint

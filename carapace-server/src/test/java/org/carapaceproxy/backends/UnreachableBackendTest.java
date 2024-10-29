@@ -32,7 +32,7 @@ import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.util.Arrays;
 import java.util.Collection;
-import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.RawHttpClient;

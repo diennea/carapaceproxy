@@ -43,7 +43,7 @@ import java.util.Set;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
 import org.carapaceproxy.EndpointStats;
-import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;

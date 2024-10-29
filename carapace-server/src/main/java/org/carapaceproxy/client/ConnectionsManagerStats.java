@@ -21,6 +21,7 @@ package org.carapaceproxy.client;
 
 import java.util.Map;
 import org.carapaceproxy.EndpointStats;
+import org.carapaceproxy.core.EndpointKey;
 
 /**
  * Stats

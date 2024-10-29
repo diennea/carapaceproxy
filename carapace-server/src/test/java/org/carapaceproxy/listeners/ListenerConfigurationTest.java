@@ -9,7 +9,7 @@ import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.Listeners;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
-import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.core.EndpointKey;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;

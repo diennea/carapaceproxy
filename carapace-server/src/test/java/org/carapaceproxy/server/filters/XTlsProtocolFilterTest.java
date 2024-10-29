@@ -13,7 +13,7 @@ import static reactor.netty.http.HttpProtocol.HTTP11;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.util.Collections;
 import java.util.Set;
-import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;

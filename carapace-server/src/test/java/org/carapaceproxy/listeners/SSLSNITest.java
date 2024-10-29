@@ -35,7 +35,7 @@ import java.net.InetAddress;
 import java.security.cert.X509Certificate;
 import java.util.Set;
 import javax.net.ssl.SSLSession;
-import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;

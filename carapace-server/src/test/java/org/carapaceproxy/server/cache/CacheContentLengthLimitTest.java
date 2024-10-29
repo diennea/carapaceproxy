@@ -26,7 +26,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.IOException;
 import org.carapaceproxy.EndpointStats;
-import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;

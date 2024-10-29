@@ -35,7 +35,6 @@ import java.net.InetSocketAddress;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 import lombok.Data;
-import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchingContext;

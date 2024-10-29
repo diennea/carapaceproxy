@@ -90,7 +90,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
-import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;

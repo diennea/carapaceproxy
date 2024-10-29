@@ -48,7 +48,7 @@ import java.util.Map;
 import java.util.Properties;
 import org.carapaceproxy.api.ConnectionPoolsResource;
 import org.carapaceproxy.api.UseAdminServer;
-import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.core.ProxyRequestsManager;

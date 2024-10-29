@@ -65,7 +65,6 @@ import javax.net.ssl.KeyManagerFactory;
 import jdk.net.ExtendedSocketOptions;
 import lombok.Data;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
-import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;

@@ -1,6 +1,5 @@
 package org.carapaceproxy.core;
 
-import org.carapaceproxy.client.EndpointKey;
 import reactor.netty.http.HttpProtocol;
 
 /**

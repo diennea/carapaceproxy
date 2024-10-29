@@ -27,7 +27,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import lombok.Data;
 import org.carapaceproxy.EndpointStats;
-import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.HttpProxyServer.ConnectionPoolStats;
 import org.carapaceproxy.server.backends.BackendHealthCheck;

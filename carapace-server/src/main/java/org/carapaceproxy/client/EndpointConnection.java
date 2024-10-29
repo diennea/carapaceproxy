@@ -22,6 +22,7 @@ package org.carapaceproxy.client;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
+import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.ProxyRequestsManager;
 
 /**

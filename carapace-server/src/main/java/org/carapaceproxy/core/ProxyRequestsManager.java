@@ -59,7 +59,6 @@ import jdk.net.ExtendedSocketOptions;
 import org.apache.http.HttpStatus;
 import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.SimpleHTTPResponse;
-import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;

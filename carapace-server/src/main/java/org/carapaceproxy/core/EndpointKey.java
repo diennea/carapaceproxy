@@ -17,7 +17,7 @@
  under the License.
 
  */
-package org.carapaceproxy.client;
+package org.carapaceproxy.core;
 
 /**
  * Identifier of an endpoint

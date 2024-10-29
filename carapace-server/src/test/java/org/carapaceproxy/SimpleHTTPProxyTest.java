@@ -38,7 +38,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Set;
 import org.apache.commons.io.IOUtils;
-import org.carapaceproxy.client.EndpointKey;
+import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
