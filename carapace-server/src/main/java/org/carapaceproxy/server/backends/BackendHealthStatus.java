@@ -21,6 +21,7 @@ package org.carapaceproxy.server.backends;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.carapaceproxy.core.EndpointKey;
 
 /**
  * Health of a backend
@@ -31,18 +32,18 @@ public class BackendHealthStatus {
 
     private static final Logger LOG = Logger.getLogger(BackendHealthStatus.class.getName());
 
-    private final String hostPort;
+    private final EndpointKey hostPort;
 
     private volatile boolean reportedAsUnreachable;
     private long reportedAsUnreachableTs;
 
     private BackendHealthCheck lastProbe;
 
-    public BackendHealthStatus(String hostPort) {
+    public BackendHealthStatus(EndpointKey hostPort) {
         this.hostPort = hostPort;
     }
 
-    public String getHostPort() {
+    public EndpointKey getHostPort() {
         return hostPort;
     }
 

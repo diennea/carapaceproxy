@@ -30,6 +30,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.util.HashMap;
 import java.util.Map;
+import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.backends.BackendHealthCheck;
 import org.carapaceproxy.server.backends.BackendHealthManager;
@@ -75,7 +76,7 @@ public class HealthCheckTest {
             hman.run();
             long endTs = System.currentTimeMillis();
 
-            Map<String, BackendHealthStatus> status = hman.getBackendsSnapshot();
+            Map<EndpointKey, BackendHealthStatus> status = hman.getBackendsSnapshot();
             System.out.println("status=" + status);
             assertThat(status.size(), is(1));
 
@@ -85,7 +86,7 @@ public class HealthCheckTest {
             assertThat(bconf.port(), is(wireMockRule.port()));
             assertThat(bconf.probePath(), is("/status.html"));
 
-            BackendHealthStatus _status = status.get(b1conf.hostPort().toString());
+            BackendHealthStatus _status = status.get(b1conf.hostPort());
             assertThat(_status, is(not(nullValue())));
             assertThat(_status.getHostPort(), is(b1conf.hostPort().toString()));
             assertThat(_status.isAvailable(), is(true));
@@ -113,7 +114,7 @@ public class HealthCheckTest {
             hman.run();
             long endTs = System.currentTimeMillis();
 
-            Map<String, BackendHealthStatus> status = hman.getBackendsSnapshot();
+            Map<EndpointKey, BackendHealthStatus> status = hman.getBackendsSnapshot();
             System.out.println("status=" + status);
             assertThat(status.size(), is(1));
 
@@ -123,7 +124,7 @@ public class HealthCheckTest {
             assertThat(bconf.port(), is(wireMockRule.port()));
             assertThat(bconf.probePath(), is("/status.html"));
 
-            BackendHealthStatus _status = status.get(b1conf.hostPort().toString());
+            BackendHealthStatus _status = status.get(b1conf.hostPort());
             assertThat(_status, is(not(nullValue())));
             assertThat(_status.getHostPort(), is(b1conf.hostPort().toString()));
             assertThat(_status.isAvailable(), is(false));
@@ -154,7 +155,7 @@ public class HealthCheckTest {
             hman.run();
             long endTs = System.currentTimeMillis();
 
-            Map<String, BackendHealthStatus> status = hman.getBackendsSnapshot();
+            Map<EndpointKey, BackendHealthStatus> status = hman.getBackendsSnapshot();
             System.out.println("status=" + status);
             assertThat(status.size(), is(1));
 
@@ -164,7 +165,7 @@ public class HealthCheckTest {
             assertThat(bconf.port(), is(wireMockRule.port()));
             assertThat(bconf.probePath(), is("/status.html"));
 
-            BackendHealthStatus _status = status.get(b1conf.hostPort().toString());
+            BackendHealthStatus _status = status.get(b1conf.hostPort());
             assertThat(_status, is(not(nullValue())));
             assertThat(_status.getHostPort(), is(b1conf.hostPort().toString()));
             assertThat(_status.isAvailable(), is(false));
@@ -193,7 +194,7 @@ public class HealthCheckTest {
             hman.run();
             long endTs = System.currentTimeMillis();
 
-            Map<String, BackendHealthStatus> status = hman.getBackendsSnapshot();
+            Map<EndpointKey, BackendHealthStatus> status = hman.getBackendsSnapshot();
             System.out.println("status=" + status);
             assertThat(status.size(), is(1));
 
@@ -203,7 +204,7 @@ public class HealthCheckTest {
             assertThat(bconf.port(), is(wireMockRule.port()));
             assertThat(bconf.probePath(), is("/status.html"));
 
-            BackendHealthStatus _status = status.get(b1conf.hostPort().toString());
+            BackendHealthStatus _status = status.get(b1conf.hostPort());
             assertThat(_status, is(not(nullValue())));
             assertThat(_status.getHostPort(), is(b1conf.hostPort().toString()));
             assertThat(_status.isAvailable(), is(true));
