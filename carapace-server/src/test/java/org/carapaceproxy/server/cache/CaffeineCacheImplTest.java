@@ -19,8 +19,13 @@
  */
 package org.carapaceproxy.server.cache;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertTrue;
 import com.github.benmanes.caffeine.cache.RemovalCause;
-
+import io.netty.buffer.Unpooled;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,21 +34,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import org.carapaceproxy.server.cache.ContentsCache.ContentKey;
 import org.carapaceproxy.server.cache.ContentsCache.CachedContent;
+import org.carapaceproxy.server.cache.ContentsCache.ContentKey;
 import org.carapaceproxy.utils.TestUtils;
-
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-
 import org.junit.After;
-
-import static org.junit.Assert.assertTrue;
-
-import io.netty.buffer.Unpooled;
 import org.junit.Test;
 
 /**
@@ -104,9 +98,8 @@ public class CaffeineCacheImplTest {
                 this.payload = payload;
             } else {
                 this.key = key;
-                this.payload = new CachedContent();
+                this.payload = new CachedContent(payload.creationTs);
                 this.payload.chunks.addAll(payload.chunks);
-                TestUtils.setFinalField(this.payload, "creationTs", payload.creationTs);
                 this.payload.directSize = payload.directSize;
                 this.payload.expiresTs = payload.expiresTs;
                 this.payload.heapSize = payload.heapSize;

@@ -45,6 +45,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
+import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.StaticContentsManager;
 import org.carapaceproxy.server.backends.BackendHealthManager;
@@ -254,8 +255,8 @@ public class BasicStandardEndpointMapperTest {
             PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
 
             BackendHealthManager bhMan = mock(BackendHealthManager.class);
-            when(bhMan.isAvailable(eq("localhost:" + backend1.port()))).thenReturn(true);
-            when(bhMan.isAvailable(eq("localhost-down:" + backend1.port()))).thenReturn(false); // simulate unreachable backend -> expected 500 error
+            when(bhMan.isAvailable(eq(EndpointKey.make("localhost:" + backend1.port())))).thenReturn(true);
+            when(bhMan.isAvailable(eq(EndpointKey.make("localhost-down:" + backend1.port())))).thenReturn(false); // simulate unreachable backend -> expected 500 error
             server.setBackendHealthManager(bhMan);
             server.configureAtBoot(config);
             server.start();
@@ -320,8 +321,8 @@ public class BasicStandardEndpointMapperTest {
         mapper.addRoute(new RouteConfiguration("route-default", "cache", true, new RegexpRequestMatcher(PROPERTY_URI, ".*html")));
 
         BackendHealthManager bhMan = mock(BackendHealthManager.class);
-        when(bhMan.isAvailable(eq("localhost:" + backendPort))).thenReturn(true);
-        when(bhMan.isAvailable(eq("localhost-down:" + backendPort))).thenReturn(false); // simulate unreachable backend -> expected 500 error
+        when(bhMan.isAvailable(eq(EndpointKey.make("localhost:" + backendPort)))).thenReturn(true);
+        when(bhMan.isAvailable(eq(EndpointKey.make("localhost-down:" + backendPort)))).thenReturn(false); // simulate unreachable backend -> expected 500 error
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.setBackendHealthManager(bhMan);
