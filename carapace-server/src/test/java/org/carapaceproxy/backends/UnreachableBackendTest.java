@@ -19,7 +19,6 @@
  */
 package org.carapaceproxy.backends;
 
-import org.carapaceproxy.utils.TestEndpointMapper;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
@@ -28,18 +27,19 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.util.Arrays;
 import java.util.Collection;
-import org.carapaceproxy.core.EndpointKey;
-import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.server.config.NetworkListenerConfiguration;
-import org.carapaceproxy.utils.RawHttpClient;
-import static org.junit.Assert.assertTrue;
 import java.util.Properties;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
+import org.carapaceproxy.core.EndpointKey;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.ProxyRequestsManager;
+import org.carapaceproxy.server.config.NetworkListenerConfiguration;
+import org.carapaceproxy.utils.RawHttpClient;
+import org.carapaceproxy.utils.TestEndpointMapper;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -96,13 +96,15 @@ public class UnreachableBackendTest {
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertEquals("HTTP/1.1 503 Service Unavailable\r\n", resp.getStatusLine());
-                assertEquals("<html>\n"
-                        + "    <body>\n"
-                        + "        Service Unavailable\n"
-                        + "    </body>\n"
-                        + "</html>\n", resp.getBodyString());
+                assertEquals("""
+                        <html>
+                            <body>
+                                Service Unavailable
+                            </body>
+                        </html>
+                        """, resp.getBodyString());
             }
-            assertFalse(server.getBackendHealthManager().isAvailable(key.toString()));
+            assertFalse(server.getBackendHealthManager().isAvailable(key));
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
@@ -132,13 +134,15 @@ public class UnreachableBackendTest {
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertEquals("HTTP/1.1 503 Service Unavailable\r\n", resp.getStatusLine());
-                assertEquals("<html>\n"
-                        + "    <body>\n"
-                        + "        Service Unavailable\n"
-                        + "    </body>\n"
-                        + "</html>\n", resp.getBodyString());
+                assertEquals("""
+                        <html>
+                            <body>
+                                Service Unavailable
+                            </body>
+                        </html>
+                        """, resp.getBodyString());
             }
-            assertTrue(server.getBackendHealthManager().isAvailable(key.toString())); // no troubles for new connections
+            assertTrue(server.getBackendHealthManager().isAvailable(key)); // no troubles for new connections
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
@@ -162,13 +166,15 @@ public class UnreachableBackendTest {
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertEquals("HTTP/1.1 503 Service Unavailable\r\n", resp.getStatusLine());
-                assertEquals("<html>\n"
-                        + "    <body>\n"
-                        + "        Service Unavailable\n"
-                        + "    </body>\n"
-                        + "</html>\n", resp.getBodyString());
+                assertEquals("""
+                        <html>
+                            <body>
+                                Service Unavailable
+                            </body>
+                        </html>
+                        """, resp.getBodyString());
             }
-            assertTrue(server.getBackendHealthManager().isAvailable(key.toString())); // no troubles for new connections
+            assertTrue(server.getBackendHealthManager().isAvailable(key)); // no troubles for new connections
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
@@ -196,13 +202,15 @@ public class UnreachableBackendTest {
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertEquals("HTTP/1.1 503 Service Unavailable\r\n", resp.getStatusLine());
-                assertEquals("<html>\n"
-                        + "    <body>\n"
-                        + "        Service Unavailable\n"
-                        + "    </body>\n"
-                        + "</html>\n", resp.getBodyString());
+                assertEquals("""
+                        <html>
+                            <body>
+                                Service Unavailable
+                            </body>
+                        </html>
+                        """, resp.getBodyString());
             }
-            assertTrue(server.getBackendHealthManager().isAvailable(key.toString()));
+            assertTrue(server.getBackendHealthManager().isAvailable(key));
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }

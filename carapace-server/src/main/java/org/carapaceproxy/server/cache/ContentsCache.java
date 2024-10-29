@@ -275,13 +275,23 @@ public class ContentsCache {
     public static class CachedContent {
 
         HttpClientResponse response;
-        final List<ByteBuf> chunks = new ArrayList<>();
-        final long creationTs = System.currentTimeMillis();
+        final List<ByteBuf> chunks;
+        final long creationTs;
         long lastModified;
-        long expiresTs = -1;
+        long expiresTs;
         long heapSize;
         long directSize;
         int hits;
+
+        public CachedContent(final long creationTs) {
+            this.creationTs = creationTs;
+            this.chunks = new ArrayList<>();
+            this.expiresTs = -1;
+        }
+
+        public CachedContent() {
+            this(System.currentTimeMillis());
+        }
 
         public boolean modifiedSince(ProxyRequest request) {
             final long ifModifiedSince = request.getRequestHeaders().getTimeMillis(IF_MODIFIED_SINCE, -1);

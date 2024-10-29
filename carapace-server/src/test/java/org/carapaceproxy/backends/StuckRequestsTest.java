@@ -106,17 +106,19 @@ public class StuckRequestsTest {
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
-                assertEquals("<html>\n"
-                        + "    <body>\n"
-                        + "        An internal error occurred\n"
-                        + "    </body>        \n"
-                        + "</html>\n", resp.getBodyString());
+                assertEquals("""
+                        <html>
+                            <body>
+                                An internal error occurred
+                            </body>       \s
+                        </html>
+                        """, resp.getBodyString());
             }
 
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
             assertThat((int) ProxyRequestsManager.STUCK_REQUESTS_COUNTER.get() > 0, is(true));
 
-            assertEquals(backendsUnreachableOnStuckRequests, !server.getBackendHealthManager().isAvailable(key.toString()));
+            assertEquals(backendsUnreachableOnStuckRequests, !server.getBackendHealthManager().isAvailable(key));
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /good-index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
@@ -124,11 +126,13 @@ public class StuckRequestsTest {
                 System.out.println("s:" + s);
                 if (backendsUnreachableOnStuckRequests) {
                     assertEquals("HTTP/1.1 503 Service Unavailable\r\n", resp.getStatusLine());
-                    assertEquals("<html>\n"
-                            + "    <body>\n"
-                            + "        Service Unavailable\n"
-                            + "    </body>\n"
-                            + "</html>\n", resp.getBodyString());
+                    assertEquals("""
+                            <html>
+                                <body>
+                                    Service Unavailable
+                                </body>
+                            </html>
+                            """, resp.getBodyString());
                 } else {
                     assertEquals("HTTP/1.1 200 OK\r\n", resp.getStatusLine());
                     assertEquals("it <b>works</b> !!", resp.getBodyString());

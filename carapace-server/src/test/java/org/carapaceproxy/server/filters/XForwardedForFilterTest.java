@@ -42,6 +42,7 @@ import org.junit.rules.TemporaryFolder;
  *
  * @author enrico.olivelli
  */
+@SuppressWarnings("deprecation")
 public class XForwardedForFilterTest {
 
     @Rule
