@@ -19,18 +19,12 @@
  */
 package org.carapaceproxy.client;
 
-import lombok.Data;
-
 /**
  * Identifier of an endpoint
  *
  * @author enrico.olivelli
  */
-@Data
-public final class EndpointKey {
-
-    private final String host;
-    private final int port;
+public record EndpointKey(String host, int port) {
 
     public static EndpointKey make(String host, int port) {
         return new EndpointKey(host, port);
@@ -46,13 +40,12 @@ public final class EndpointKey {
         return new EndpointKey(host, port);
     }
 
-    public EndpointKey(String host, int port) {
-        this.host = host;
-        this.port = port;
-    }
-
     public String getHostPort() {
         return host + ":" + port;
     }
 
+    @Override
+    public String toString() {
+        return getHostPort();
+    }
 }
