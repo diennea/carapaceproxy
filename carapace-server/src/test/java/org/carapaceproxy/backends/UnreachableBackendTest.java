@@ -102,7 +102,7 @@ public class UnreachableBackendTest {
                         + "    </body>\n"
                         + "</html>\n", resp.getBodyString());
             }
-            assertFalse(server.getBackendHealthManager().isAvailable(key.getHostPort()));
+            assertFalse(server.getBackendHealthManager().isAvailable(key.toString()));
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
@@ -138,7 +138,7 @@ public class UnreachableBackendTest {
                         + "    </body>\n"
                         + "</html>\n", resp.getBodyString());
             }
-            assertTrue(server.getBackendHealthManager().isAvailable(key.getHostPort())); // no troubles for new connections
+            assertTrue(server.getBackendHealthManager().isAvailable(key.toString())); // no troubles for new connections
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
@@ -168,7 +168,7 @@ public class UnreachableBackendTest {
                         + "    </body>\n"
                         + "</html>\n", resp.getBodyString());
             }
-            assertTrue(server.getBackendHealthManager().isAvailable(key.getHostPort())); // no troubles for new connections
+            assertTrue(server.getBackendHealthManager().isAvailable(key.toString())); // no troubles for new connections
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
@@ -202,7 +202,7 @@ public class UnreachableBackendTest {
                         + "    </body>\n"
                         + "</html>\n", resp.getBodyString());
             }
-            assertTrue(server.getBackendHealthManager().isAvailable(key.getHostPort()));
+            assertTrue(server.getBackendHealthManager().isAvailable(key.toString()));
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }

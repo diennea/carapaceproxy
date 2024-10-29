@@ -40,12 +40,8 @@ public record EndpointKey(String host, int port) {
         return new EndpointKey(host, port);
     }
 
-    public String getHostPort() {
-        return host + ":" + port;
-    }
-
     @Override
     public String toString() {
-        return getHostPort();
+        return host + ":" + port;
     }
 }

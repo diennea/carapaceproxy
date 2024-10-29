@@ -116,7 +116,7 @@ public class StuckRequestsTest {
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
             assertThat((int) ProxyRequestsManager.STUCK_REQUESTS_COUNTER.get() > 0, is(true));
 
-            assertEquals(backendsUnreachableOnStuckRequests, !server.getBackendHealthManager().isAvailable(key.getHostPort()));
+            assertEquals(backendsUnreachableOnStuckRequests, !server.getBackendHealthManager().isAvailable(key.toString()));
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /good-index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
