@@ -65,7 +65,7 @@ import javax.net.ssl.KeyManagerFactory;
 import jdk.net.ExtendedSocketOptions;
 import lombok.Data;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
-import org.carapaceproxy.server.config.HostPort;
+import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;
@@ -100,7 +100,7 @@ public class Listeners {
 
     private final HttpProxyServer parent;
     private final Map<String, SslContext> sslContexts = new ConcurrentHashMap<>();
-    private final Map<HostPort, ListeningChannel> listeningChannels = new ConcurrentHashMap<>();
+    private final Map<EndpointKey, ListeningChannel> listeningChannels = new ConcurrentHashMap<>();
     private final File basePath;
     private boolean started;
 
@@ -120,7 +120,7 @@ public class Listeners {
         return -1;
     }
 
-    public Map<HostPort, ListeningChannel> getListeningChannels() {
+    public Map<EndpointKey, ListeningChannel> getListeningChannels() {
         return listeningChannels;
     }
 
@@ -130,7 +130,7 @@ public class Listeners {
     }
 
     public void stop() {
-        for (HostPort key : listeningChannels.keySet()) {
+        for (EndpointKey key : listeningChannels.keySet()) {
             try {
                 stopListener(key);
             } catch (InterruptedException ex) {
@@ -140,7 +140,7 @@ public class Listeners {
         }
     }
 
-    private void stopListener(HostPort hostport) throws InterruptedException {
+    private void stopListener(EndpointKey hostport) throws InterruptedException {
         ListeningChannel channel = listeningChannels.remove(hostport);
         if (channel != null) {
             channel.channel.disposeNow(Duration.ofSeconds(10));
@@ -173,10 +173,10 @@ public class Listeners {
         sslContexts.clear();
 
         // stop dropped listeners, start new one
-        List<HostPort> listenersToStop = new ArrayList<>();
-        List<HostPort> listenersToRestart = new ArrayList<>();
-        for (Map.Entry<HostPort, ListeningChannel> channel : listeningChannels.entrySet()) {
-            HostPort key = channel.getKey();
+        List<EndpointKey> listenersToStop = new ArrayList<>();
+        List<EndpointKey> listenersToRestart = new ArrayList<>();
+        for (Map.Entry<EndpointKey, ListeningChannel> channel : listeningChannels.entrySet()) {
+            EndpointKey key = channel.getKey();
             NetworkListenerConfiguration actualListenerConfig = currentConfiguration.getListener(key);
             NetworkListenerConfiguration newConfigurationForListener = newConfiguration.getListener(key);
             if (newConfigurationForListener == null) {
@@ -190,9 +190,9 @@ public class Listeners {
             }
             channel.getValue().clear();
         }
-        List<HostPort> listenersToStart = new ArrayList<>();
+        List<EndpointKey> listenersToStart = new ArrayList<>();
         for (NetworkListenerConfiguration config : newConfiguration.getListeners()) {
-            HostPort key = config.getKey();
+            EndpointKey key = config.getKey();
             if (!listeningChannels.containsKey(key)) {
                 LOG.log(Level.INFO, "listener: {0} is to be started", key);
                 listenersToStart.add(key);
@@ -203,19 +203,19 @@ public class Listeners {
         currentConfiguration = newConfiguration;
 
         try {
-            for (HostPort hostport : listenersToStop) {
+            for (EndpointKey hostport : listenersToStop) {
                 LOG.log(Level.INFO, "Stopping {0}", hostport);
                 stopListener(hostport);
             }
 
-            for (HostPort hostport : listenersToRestart) {
+            for (EndpointKey hostport : listenersToRestart) {
                 LOG.log(Level.INFO, "Restart {0}", hostport);
                 stopListener(hostport);
                 NetworkListenerConfiguration newConfigurationForListener = currentConfiguration.getListener(hostport);
                 bootListener(newConfigurationForListener);
             }
 
-            for (HostPort hostport : listenersToStart) {
+            for (EndpointKey hostport : listenersToStart) {
                 LOG.log(Level.INFO, "Starting {0}", hostport);
                 NetworkListenerConfiguration newConfigurationForListener = currentConfiguration.getListener(hostport);
                 bootListener(newConfigurationForListener);
@@ -227,7 +227,7 @@ public class Listeners {
     }
 
     private void bootListener(NetworkListenerConfiguration config) throws InterruptedException {
-        HostPort hostPort = new HostPort(config.getHost(), config.getPort() + parent.getListenersOffsetPort());
+        EndpointKey hostPort = new EndpointKey(config.getHost(), config.getPort() + parent.getListenersOffsetPort());
         ListeningChannel listeningChannel = new ListeningChannel(hostPort, config);
         LOG.log(Level.INFO, "Starting listener at {0}:{1} ssl:{2}", new Object[]{hostPort.host(), String.valueOf(hostPort.port()), config.isSsl()});
 
@@ -331,13 +331,13 @@ public class Listeners {
     @Data
     public final class ListeningChannel implements io.netty.util.AsyncMapping<String, SslContext> {
 
-        private final HostPort hostPort;
+        private final EndpointKey hostPort;
         private final NetworkListenerConfiguration config;
         private final Counter.Child totalRequests;
         private final Map<String, SslContext> listenerSslContexts = new HashMap<>();
         DisposableServer channel;
 
-        public ListeningChannel(HostPort hostPort, NetworkListenerConfiguration config) {
+        public ListeningChannel(EndpointKey hostPort, NetworkListenerConfiguration config) {
             this.hostPort = hostPort;
             this.config = config;
             totalRequests = TOTAL_REQUESTS_PER_LISTENER_COUNTER.labels(hostPort.host() + "_" + hostPort.port());

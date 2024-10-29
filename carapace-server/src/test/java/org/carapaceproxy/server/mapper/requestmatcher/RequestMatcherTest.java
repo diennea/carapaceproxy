@@ -31,7 +31,7 @@ import java.net.InetSocketAddress;
 import javax.ws.rs.core.HttpHeaders;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
-import org.carapaceproxy.server.config.HostPort;
+import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.ParseException;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.RequestMatchParser;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.TokenMgrError;
@@ -232,7 +232,7 @@ public class RequestMatcherTest {
         when(serverRequest.requestHeaders()).thenReturn(headers);
         when(serverRequest.protocol()).thenReturn("HTTP/2");
 
-        ProxyRequest request = new ProxyRequest(serverRequest, null, new HostPort("localhost", 8080));
+        ProxyRequest request = new ProxyRequest(serverRequest, null, new EndpointKey("localhost", 8080));
 
         // Test headers
         {

@@ -52,7 +52,7 @@ import lombok.Data;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
-import org.carapaceproxy.server.config.HostPort;
+import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
@@ -492,7 +492,7 @@ public class RuntimeServerConfiguration {
         return requestFilters;
     }
 
-    NetworkListenerConfiguration getListener(HostPort hostPort) {
+    NetworkListenerConfiguration getListener(EndpointKey hostPort) {
         return listeners
                 .stream()
                 .filter(s -> s.getHost().equalsIgnoreCase(hostPort.host()) && s.getPort() == hostPort.port())
