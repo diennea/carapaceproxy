@@ -57,7 +57,7 @@ public class HealthCheckTest {
 
         Map<String, BackendConfiguration> backends = new HashMap<>();
         BackendConfiguration b1conf = new BackendConfiguration("myid", "localhost", wireMockRule.port(), "/status.html");
-        backends.put(b1conf.getHostPort(), b1conf);
+        backends.put(b1conf.hostPort().toString(), b1conf);
 
         EndpointMapper mapper = new TestEndpointMapper(null, 0, false, backends);
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
@@ -79,15 +79,15 @@ public class HealthCheckTest {
             System.out.println("status=" + status);
             assertThat(status.size(), is(1));
 
-            BackendConfiguration bconf = mapper.getBackends().get(b1conf.getHostPort());
+            BackendConfiguration bconf = mapper.getBackends().get(b1conf.hostPort().toString());
             assertThat(bconf.id(), is("myid"));
             assertThat(bconf.host(), is("localhost"));
             assertThat(bconf.port(), is(wireMockRule.port()));
             assertThat(bconf.probePath(), is("/status.html"));
 
-            BackendHealthStatus _status = status.get(b1conf.getHostPort());
+            BackendHealthStatus _status = status.get(b1conf.hostPort().toString());
             assertThat(_status, is(not(nullValue())));
-            assertThat(_status.getHostPort(), is(b1conf.getHostPort()));
+            assertThat(_status.getHostPort(), is(b1conf.hostPort().toString()));
             assertThat(_status.isAvailable(), is(true));
             assertThat(_status.isReportedAsUnreachable(), is(false));
             assertThat(_status.getReportedAsUnreachableTs(), is(0L));
@@ -117,15 +117,15 @@ public class HealthCheckTest {
             System.out.println("status=" + status);
             assertThat(status.size(), is(1));
 
-            BackendConfiguration bconf = mapper.getBackends().get(b1conf.getHostPort());
+            BackendConfiguration bconf = mapper.getBackends().get(b1conf.hostPort().toString());
             assertThat(bconf.id(), is("myid"));
             assertThat(bconf.host(), is("localhost"));
             assertThat(bconf.port(), is(wireMockRule.port()));
             assertThat(bconf.probePath(), is("/status.html"));
 
-            BackendHealthStatus _status = status.get(b1conf.getHostPort());
+            BackendHealthStatus _status = status.get(b1conf.hostPort().toString());
             assertThat(_status, is(not(nullValue())));
-            assertThat(_status.getHostPort(), is(b1conf.getHostPort()));
+            assertThat(_status.getHostPort(), is(b1conf.hostPort().toString()));
             assertThat(_status.isAvailable(), is(false));
             assertThat(_status.isReportedAsUnreachable(), is(true));
             assertThat(_status.getReportedAsUnreachableTs() >= startTs, is(true));
@@ -158,15 +158,15 @@ public class HealthCheckTest {
             System.out.println("status=" + status);
             assertThat(status.size(), is(1));
 
-            BackendConfiguration bconf = mapper.getBackends().get(b1conf.getHostPort());
+            BackendConfiguration bconf = mapper.getBackends().get(b1conf.hostPort().toString());
             assertThat(bconf.id(), is("myid"));
             assertThat(bconf.host(), is("localhost"));
             assertThat(bconf.port(), is(wireMockRule.port()));
             assertThat(bconf.probePath(), is("/status.html"));
 
-            BackendHealthStatus _status = status.get(b1conf.getHostPort());
+            BackendHealthStatus _status = status.get(b1conf.hostPort().toString());
             assertThat(_status, is(not(nullValue())));
-            assertThat(_status.getHostPort(), is(b1conf.getHostPort()));
+            assertThat(_status.getHostPort(), is(b1conf.hostPort().toString()));
             assertThat(_status.isAvailable(), is(false));
             assertThat(_status.isReportedAsUnreachable(), is(true));
             assertThat(_status.getReportedAsUnreachableTs(), is(reportedAsUnreachableTs));
@@ -197,15 +197,15 @@ public class HealthCheckTest {
             System.out.println("status=" + status);
             assertThat(status.size(), is(1));
 
-            BackendConfiguration bconf = mapper.getBackends().get(b1conf.getHostPort());
+            BackendConfiguration bconf = mapper.getBackends().get(b1conf.hostPort().toString());
             assertThat(bconf.id(), is("myid"));
             assertThat(bconf.host(), is("localhost"));
             assertThat(bconf.port(), is(wireMockRule.port()));
             assertThat(bconf.probePath(), is("/status.html"));
 
-            BackendHealthStatus _status = status.get(b1conf.getHostPort());
+            BackendHealthStatus _status = status.get(b1conf.hostPort().toString());
             assertThat(_status, is(not(nullValue())));
-            assertThat(_status.getHostPort(), is(b1conf.getHostPort()));
+            assertThat(_status.getHostPort(), is(b1conf.hostPort().toString()));
             assertThat(_status.isAvailable(), is(true));
             assertThat(_status.isReportedAsUnreachable(), is(false));
             assertThat(_status.getReportedAsUnreachableTs(), is(0L));
