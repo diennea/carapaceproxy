@@ -40,7 +40,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URI;
-import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
@@ -118,45 +117,45 @@ public class BasicStandardEndpointMapperTest {
             int port = server.getLocalPort();
             {
                 // proxy on director 1
-                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), StandardCharsets.UTF_8);
+                String s = IOUtils.toString(URI.create("http://localhost:" + port + "/index.html"), StandardCharsets.UTF_8);
                 assertEquals("it <b>works</b> !!", s);
             }
 
             {
                 // cache on director 2
-                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index2.html").toURI(), StandardCharsets.UTF_8);
+                String s = IOUtils.toString(URI.create("http://localhost:" + port + "/index2.html"), StandardCharsets.UTF_8);
                 assertEquals("it <b>works</b> !!", s);
             }
 
             {
                 // director "all"
-                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index3.html").toURI(), StandardCharsets.UTF_8);
+                String s = IOUtils.toString(URI.create("http://localhost:" + port + "/index3.html"), StandardCharsets.UTF_8);
                 assertEquals("it <b>works</b> !!", s);
             }
 
             try {
-                IOUtils.toString(new URL("http://localhost:" + port + "/notfound.html").toURI(), StandardCharsets.UTF_8);
+                IOUtils.toString(URI.create("http://localhost:" + port + "/notfound.html"), StandardCharsets.UTF_8);
                 fail("expected 404");
             } catch (FileNotFoundException ok) {
             }
 
             {
-                String staticContent = IOUtils.toString(new URL("http://localhost:" + port + "/static.html").toURI(), StandardCharsets.UTF_8);
+                String staticContent = IOUtils.toString(URI.create("http://localhost:" + port + "/static.html"), StandardCharsets.UTF_8);
                 assertEquals("Test static page", staticContent);
             }
             {
-                String staticContent = IOUtils.toString(new URL("http://localhost:" + port + "/static.html").toURI(), StandardCharsets.UTF_8);
+                String staticContent = IOUtils.toString(URI.create("http://localhost:" + port + "/static.html"), StandardCharsets.UTF_8);
                 assertEquals("Test static page", staticContent);
             }
 
             try {
-                IOUtils.toString(new URL("http://localhost:" + port + "/error.html").toURI(), StandardCharsets.UTF_8);
+                IOUtils.toString(URI.create("http://localhost:" + port + "/error.html"), StandardCharsets.UTF_8);
                 fail("expected 500");
             } catch (IOException ok) {
             }
 
             try {
-                IOUtils.toString(new URL("http://localhost:" + port + "/notmapped.html").toURI(), StandardCharsets.UTF_8);
+                IOUtils.toString(URI.create("http://localhost:" + port + "/notmapped.html"), StandardCharsets.UTF_8);
                 fail("expected 404");
             } catch (FileNotFoundException ok) {
             }
@@ -265,7 +264,7 @@ public class BasicStandardEndpointMapperTest {
 
             // route-custom error (Internal Errror)
             {
-                HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + server.getLocalPort() + "/custom-error.html").openConnection();
+                HttpURLConnection conn = (HttpURLConnection) URI.create("http://localhost:" + server.getLocalPort() + "/custom-error.html").toURL().openConnection();
                 System.out.println("response core " +  conn.getResponseCode());
                 assertEquals("h-custom-error-value; h-custom-error-value2;h-custom-error-value3", conn.getHeaderField("h-custom-error"));
                 assertEquals(555, conn.getResponseCode());
@@ -273,14 +272,14 @@ public class BasicStandardEndpointMapperTest {
 
             // working one
             {
-                HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + server.getLocalPort() + "/index.html").openConnection();
+                HttpURLConnection conn = (HttpURLConnection) URI.create("http://localhost:" + server.getLocalPort() + "/index.html").toURL().openConnection();
                 assertEquals("h-working-one-value; h-working-one-value2;h-working-one-value3", conn.getHeaderField("h-working-one"));
                 assertEquals(200, conn.getResponseCode());
             }
 
             // global-custom error (Not Found)
             {
-                HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + server.getLocalPort() + "/index2.html").openConnection();
+                HttpURLConnection conn = (HttpURLConnection) URI.create("http://localhost:" + server.getLocalPort() + "/index2.html").toURL().openConnection();
                 assertEquals("h-custom-global-error-value; h-custom-global-error-value2;h-custom-global-error-value3", conn.getHeaderField("h-custom-global-error"));
                 assertEquals(444, conn.getResponseCode());
             }
@@ -330,17 +329,17 @@ public class BasicStandardEndpointMapperTest {
             int port = server.getLocalPort();
             // index.html matches with route
             {
-                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html").toURI(), StandardCharsets.UTF_8);
+                String s = IOUtils.toString(URI.create("http://localhost:" + port + "/index.html"), StandardCharsets.UTF_8);
                 assertEquals("it <b>works</b> !!", s);
             }
             // notmapped.html matches with route-default
             {
-                String s = IOUtils.toString(new URL("http://localhost:" + port + "/notmapped.html").toURI(), StandardCharsets.UTF_8);
+                String s = IOUtils.toString(URI.create("http://localhost:" + port + "/notmapped.html"), StandardCharsets.UTF_8);
                 assertEquals("it <b>works</b> !!", s);
             }
             // down.html (request to unreachable backend) has NOT to match to route-deafult BUT get internal-error
             try {
-                IOUtils.toString(new URL("http://localhost:" + port + "/down.html").toURI(), StandardCharsets.UTF_8);
+                IOUtils.toString(URI.create("http://localhost:" + port + "/down.html"), StandardCharsets.UTF_8);
                 fail("expected 500");
             } catch (IOException ok) {
             }
@@ -597,7 +596,7 @@ public class BasicStandardEndpointMapperTest {
 
             int port = server.getLocalPort();
             {
-                URLConnection conn = new URL("http://localhost:" + port + "/index.html").openConnection();
+                URLConnection conn = URI.create("http://localhost:" + port + "/index.html").toURL().openConnection();
                 assertEquals("header-1-value; header-1-value2;header-1-value3", conn.getHeaderField("custom-header-1"));
                 assertEquals("header-2-value", conn.getHeaderField("custom-header-2"));
                 // header mode-set
@@ -610,7 +609,7 @@ public class BasicStandardEndpointMapperTest {
                 assertEquals("r1;addHeaders;d1;b1", conn.getHeaderField("DebugHeaderCustomName"));
             }
             {
-                URLConnection conn = new URL("http://localhost:" + port + "/index2.html").openConnection();
+                URLConnection conn = URI.create("http://localhost:" + port + "/index2.html").toURL().openConnection();
                 assertNull(conn.getHeaderField("custom-header-1"));
                 assertEquals("header-2-value", conn.getHeaderField("custom-header-2"));
                 // in this action is text/html as normal
@@ -625,7 +624,7 @@ public class BasicStandardEndpointMapperTest {
                 assertEquals("r2;addHeader2;d2;b2", conn.getHeaderField("DebugHeaderCustomName"));
             }
             {
-                URLConnection conn = new URL("http://localhost:" + port + "/index3.html").openConnection();
+                URLConnection conn = URI.create("http://localhost:" + port + "/index3.html").toURL().openConnection();
                 assertEquals("header-1-value; header-1-value2;header-1-value3", conn.getHeaderField("custom-header-1"));
             }
         }
@@ -695,28 +694,28 @@ public class BasicStandardEndpointMapperTest {
 
             {
                 // redirect to same host/uri but with https (default port)
-                HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + port + "/index.html").openConnection();
+                HttpURLConnection conn = (HttpURLConnection) URI.create("http://localhost:" + port + "/index.html").toURL().openConnection();
                 conn.setInstanceFollowRedirects(false);
                 assertEquals("https://localhost/index.html", conn.getHeaderField("Location"));
                 assertTrue(conn.getHeaderFields().toString().contains("301 Moved Permanently"));
             }
             {
                 // redirect to absolute host:port/uri
-                HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + port + "/index2.html").openConnection();
+                HttpURLConnection conn = (HttpURLConnection) URI.create("http://localhost:" + port + "/index2.html").toURL().openConnection();
                 conn.setInstanceFollowRedirects(false);
                 assertEquals("http://foo/index0.html", conn.getHeaderField("Location"));
                 assertTrue(conn.getHeaderFields().toString().contains("302 Found"));
             }
             {
                 // relative redirect (same host:port, different uri)
-                HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + port + "/index3.html").openConnection();
+                HttpURLConnection conn = (HttpURLConnection) URI.create("http://localhost:" + port + "/index3.html").toURL().openConnection();
                 conn.setInstanceFollowRedirects(false);
                 assertEquals("http://localhost:" + port + "/index0.html", conn.getHeaderField("Location"));
                 assertTrue(conn.getHeaderFields().toString().contains("303 See Other"));
             }
             {
                 // redirect custom
-                HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:" + port + "/index4.html").openConnection();
+                HttpURLConnection conn = (HttpURLConnection) URI.create("http://localhost:" + port + "/index4.html").toURL().openConnection();
                 conn.setInstanceFollowRedirects(false);
                 assertEquals("https://192.0.0.1:1234/indexX.html", conn.getHeaderField("Location"));
                 assertTrue(conn.getHeaderFields().toString().contains("307 Temporary Redirect"));

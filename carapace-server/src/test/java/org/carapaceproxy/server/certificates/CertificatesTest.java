@@ -45,7 +45,7 @@ import static org.shredzone.acme4j.Status.VALID;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.File;
 import java.io.StringWriter;
-import java.net.URL;
+import java.net.URI;
 import java.nio.file.Files;
 import java.security.KeyPair;
 import java.security.cert.Certificate;
@@ -514,7 +514,7 @@ public class CertificatesTest extends UseAdminServer {
         store.saveKeyPairForDomain(keyPair, "localhost", false);
         CertificateData cert = dcMan.getCertificateDataForDomain("localhost");
         cert.setState(DynamicCertificateState.ORDERING);
-        cert.setPendingOrderLocation(new URL("https://localhost/orderlocation"));
+        cert.setPendingOrderLocation(URI.create("https://localhost/orderlocation").toURL());
         store.saveCertificate(cert);
         assertEquals(DynamicCertificateState.ORDERING, dcMan.getStateOfCertificate("localhost"));
 
@@ -616,7 +616,7 @@ public class CertificatesTest extends UseAdminServer {
         store.saveKeyPairForDomain(keyPair, "localhost", false);
         CertificateData cert = dcMan.getCertificateDataForDomain("localhost");
         cert.setState(DynamicCertificateState.ORDERING);
-        cert.setPendingOrderLocation(new URL("https://localhost/orderlocation"));
+        cert.setPendingOrderLocation(URI.create("https://localhost/orderlocation").toURL());
         store.saveCertificate(cert);
         assertEquals(DynamicCertificateState.ORDERING, dcMan.getStateOfCertificate("localhost"));
 
@@ -656,7 +656,7 @@ public class CertificatesTest extends UseAdminServer {
 
         cert = dcMan.getCertificateDataForDomain("localhost");
         cert.setState(DynamicCertificateState.ORDERING);
-        cert.setPendingOrderLocation(new URL("https://localhost/orderlocation"));
+        cert.setPendingOrderLocation(URI.create("https://localhost/orderlocation").toURL());
         store.saveCertificate(cert);
         assertEquals(DynamicCertificateState.ORDERING, dcMan.getStateOfCertificate("localhost"));
         server.getCurrentConfiguration().setLocalCertificatesStorePeersIds(Set.of(server.getPeerId()));
@@ -703,7 +703,7 @@ public class CertificatesTest extends UseAdminServer {
         store.saveKeyPairForDomain(keyPair, "localhost", true);
         cert = dcMan.getCertificateDataForDomain("localhost");
         cert.setState(DynamicCertificateState.ORDERING);
-        cert.setPendingOrderLocation(new URL("https://localhost/orderlocation"));
+        cert.setPendingOrderLocation(URI.create("https://localhost/orderlocation").toURL());
         store.saveCertificate(cert);
         assertEquals(DynamicCertificateState.ORDERING, dcMan.getStateOfCertificate("localhost"));
         renewed = Arrays.asList((X509Certificate[]) generateSampleChain(keyPair, false));
@@ -780,7 +780,7 @@ public class CertificatesTest extends UseAdminServer {
         store.saveKeyPairForDomain(keyPair, "localhost2", false);
         cert = dcMan.getCertificateDataForDomain("localhost2");
         cert.setState(DynamicCertificateState.ORDERING);
-        cert.setPendingOrderLocation(new URL("https://localhost/orderlocation"));
+        cert.setPendingOrderLocation(URI.create("https://localhost/orderlocation").toURL());
         store.saveCertificate(cert);
         assertEquals(DynamicCertificateState.ORDERING, dcMan.getStateOfCertificate("localhost2"));
 

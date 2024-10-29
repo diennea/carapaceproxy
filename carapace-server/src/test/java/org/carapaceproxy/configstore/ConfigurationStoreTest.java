@@ -26,7 +26,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
-import java.net.URL;
+import java.net.URI;
 import java.security.KeyPair;
 import java.util.Collections;
 import java.util.Map;
@@ -263,7 +263,7 @@ public class ConfigurationStoreTest {
                 Collections.emptySet(),
                 "encodedChain1",
                 DynamicCertificateState.AVAILABLE,
-                new URL("http://locallhost/order"),
+                URI.create("http://locallhost/order").toURL(),
                 Map.of(d1, JSON.parse("{\"challenge\": \"data\"}"))
         );
         store.saveCertificate(cert1);
@@ -279,7 +279,7 @@ public class ConfigurationStoreTest {
 
         // Cert Updating
         cert1.setState(DynamicCertificateState.WAITING);
-        cert1.setPendingOrderLocation(new URL("http://locallhost/updatedorder"));
+        cert1.setPendingOrderLocation(URI.create("http://locallhost/updatedorder").toURL());
         cert1.setPendingChallengesData(Map.of(cert1.getDomain(), JSON.parse("{\"challenge\": \"updateddata\"}")));
         store.saveCertificate(cert1);
         assertEquals(cert1, store.loadCertificateForDomain(d1));

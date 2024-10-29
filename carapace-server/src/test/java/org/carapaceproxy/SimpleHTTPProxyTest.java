@@ -33,7 +33,7 @@ import static reactor.netty.http.HttpProtocol.HTTP11;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
-import java.net.URL;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Set;
@@ -79,7 +79,7 @@ public class SimpleHTTPProxyTest {
 
             // not found
             try {
-                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html?not-found").toURI(), StandardCharsets.UTF_8);
+                String s = IOUtils.toString(URI.create("http://localhost:" + port + "/index.html?not-found"), StandardCharsets.UTF_8);
                 System.out.println("s:" + s);
                 fail();
             } catch (FileNotFoundException ok) {
@@ -87,7 +87,7 @@ public class SimpleHTTPProxyTest {
 
             // proxy
             {
-                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html?redir").toURI(), StandardCharsets.UTF_8);
+                String s = IOUtils.toString(URI.create("http://localhost:" + port + "/index.html?redir"), StandardCharsets.UTF_8);
                 System.out.println("s:" + s);
                 assertEquals("it <b>works</b> !!", s);
             }
@@ -119,7 +119,7 @@ public class SimpleHTTPProxyTest {
 
             // not found
             try {
-                String s = IOUtils.toString(new URL("https://localhost:" + port + "/index.html?not-found").toURI(), StandardCharsets.UTF_8);
+                String s = IOUtils.toString(URI.create("https://localhost:" + port + "/index.html?not-found"), StandardCharsets.UTF_8);
                 System.out.println("s:" + s);
                 fail();
             } catch (FileNotFoundException ok) {
@@ -127,7 +127,7 @@ public class SimpleHTTPProxyTest {
 
             // proxy
             {
-                String s = IOUtils.toString(new URL("https://localhost:" + port + "/index.html?redir").toURI(), StandardCharsets.UTF_8);
+                String s = IOUtils.toString(URI.create("https://localhost:" + port + "/index.html?redir"), StandardCharsets.UTF_8);
                 System.out.println("s:" + s);
                 assertEquals("it <b>works</b> !!", s);
             }
@@ -146,7 +146,7 @@ public class SimpleHTTPProxyTest {
             server.start();
             int port = server.getLocalPort();
 
-            HttpTestUtils.ResourceInfos result = HttpTestUtils.downloadFromUrl(new URL("http://localhost:" + port + "/index.html"),
+            HttpTestUtils.ResourceInfos result = HttpTestUtils.downloadFromUrl(URI.create("http://localhost:" + port + "/index.html").toURL(),
                     new ByteArrayOutputStream(), Collections.singletonMap("return_errors", "true"));
             assertEquals(503, result.responseCode);
         }

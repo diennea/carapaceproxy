@@ -26,18 +26,18 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.ServerSocket;
-import java.net.URL;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.core.HttpProxyServer;
+import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import static org.junit.Assert.assertEquals;
-import org.carapaceproxy.utils.CarapaceLogger;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -91,7 +91,7 @@ public class RestartEndpointTest {
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 wireMockRule.start();
                 // ensure that wiremock started again
-                IOUtils.toByteArray(new URL("http://localhost:" + wireMockRule.port() + "/index.html"));
+                IOUtils.toByteArray(URI.create("http://localhost:" + wireMockRule.port() + "/index.html").toURL());
                 System.out.println("Server at " + "http://localhost:" + wireMockRule.port() + "/index.html" + " is UP an running !");
 
                 assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
@@ -131,7 +131,7 @@ public class RestartEndpointTest {
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 wireMockRule.start();
                 // ensure that wiremock started again
-                IOUtils.toByteArray(new URL("http://localhost:" + wireMockRule.port() + "/index.html"));
+                IOUtils.toByteArray(URI.create("http://localhost:" + wireMockRule.port() + "/index.html").toURL());
                 System.out.println("Server at " + "http://localhost:" + wireMockRule.port() + "/index.html" + " is UP an running !");
 
                 assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
@@ -163,7 +163,7 @@ public class RestartEndpointTest {
                 wireMockRule.start();
                 System.out.println("*********************************************************");
                 // ensure that wiremock started again
-                IOUtils.toByteArray(new URL("http://localhost:" + wireMockRule.port() + "/index.html"));
+                IOUtils.toByteArray(URI.create("http://localhost:" + wireMockRule.port() + "/index.html").toURL());
                 assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
             }
         }

@@ -19,6 +19,8 @@
  */
 package org.carapaceproxy;
 
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -26,6 +28,7 @@ import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
@@ -37,8 +40,6 @@ import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.client.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -178,7 +179,7 @@ public class BigUploadTest {
             try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.start();
                 int port = server.getLocalPort();
-                URL url = new URL("http://localhost:" + port + "/index.html");
+                URL url = URI.create("http://localhost:" + port + "/index.html").toURL();
                 HttpURLConnection con = (HttpURLConnection) url.openConnection();
                 con.setDoOutput(true);
 
@@ -216,7 +217,7 @@ public class BigUploadTest {
             try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.start();
                 int port = server.getLocalPort();
-                URL url = new URL("http://localhost:" + port + "/index.html");
+                URL url = URI.create("http://localhost:" + port + "/index.html").toURL();
                 HttpURLConnection con = (HttpURLConnection) url.openConnection();
 
                 try (InputStream in = con.getInputStream()) {
