@@ -219,7 +219,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                     }
 
                     BackendConfiguration backend = this.backends.get(backendId);
-                    if (backend != null && parent.getBackendHealthManager().isAvailable(backend.getHostPort())) {
+                    if (backend != null && parent.getBackendHealthManager().isAvailable(backend.hostPort().toString())) {
                         List<CustomHeader> customHeaders = action.getCustomHeaders();
                         if (this.debuggingHeaderEnabled) {
                             customHeaders = new ArrayList<>(customHeaders);

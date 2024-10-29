@@ -19,11 +19,22 @@
  */
 package org.carapaceproxy.server.config;
 
+import org.carapaceproxy.core.EndpointKey;
+
 /**
  * Configuration of a single backend server
  */
-public record BackendConfiguration(String id, String host, int port, String probePath) {
-    public String getHostPort() {
-        return host + ":" + port;
+public record BackendConfiguration(String id, EndpointKey hostPort, String probePath) {
+
+    public BackendConfiguration(String id, String host, int port, String probePath) {
+        this(id, new EndpointKey(host, port), probePath);
+    }
+
+    public String host() {
+        return hostPort.host();
+    }
+
+    public int port() {
+        return hostPort.port();
     }
 }

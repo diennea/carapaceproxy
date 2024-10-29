@@ -33,9 +33,9 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.carapaceproxy.server.mapper.EndpointMapper;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
+import org.carapaceproxy.server.mapper.EndpointMapper;
 import org.carapaceproxy.utils.PrometheusUtils;
 
 /**
@@ -141,8 +141,8 @@ public class BackendHealthManager implements Runnable {
         }
         Collection<BackendConfiguration> backendConfigurations = mapper.getBackends().values();
         for (BackendConfiguration bconf : backendConfigurations) {
-            String hostPort = bconf.getHostPort();
-            BackendHealthStatus status = backends.computeIfAbsent(hostPort, (_hostPort) -> new BackendHealthStatus(_hostPort));
+            String hostPort = bconf.hostPort().toString();
+            BackendHealthStatus status = backends.computeIfAbsent(hostPort, BackendHealthStatus::new);
 
             BackendHealthCheck checkResult = BackendHealthCheck.check(
                     bconf.host(), bconf.port(), bconf.probePath(), connectTimeout);
@@ -176,7 +176,7 @@ public class BackendHealthManager implements Runnable {
         for (String key : backends.keySet()) {
             boolean found = false;
             for (BackendConfiguration bconf : backendConfigurations) {
-                if (bconf.getHostPort().equals(key)) {
+                if (bconf.hostPort().toString().equals(key)) {
                     found = true;
                     break;
                 }
@@ -197,7 +197,7 @@ public class BackendHealthManager implements Runnable {
     }
 
     private BackendHealthStatus getBackendStatus(String hostPort) {
-        BackendHealthStatus status = backends.computeIfAbsent(hostPort, (_hostPort) -> new BackendHealthStatus(_hostPort));
+        BackendHealthStatus status = backends.computeIfAbsent(hostPort, BackendHealthStatus::new);
         if (status == null) {
             throw new RuntimeException("Unknown backend " + hostPort);
         }

@@ -80,10 +80,9 @@ public class BackendsResource {
 
         server.getMapper().getBackends().values().forEach(backendConf -> {
             String id = backendConf.id();
-            String hostPort = backendConf.getHostPort();
             BackendBean bean = new BackendBean(id, backendConf.host(), backendConf.port());
             bean.lastProbePath = backendConf.probePath();
-            EndpointKey key = EndpointKey.make(hostPort);
+            EndpointKey key = backendConf.hostPort();
             Map<String, ConnectionPoolStats> poolsStats = server.getConnectionPoolsStats().get(key);
             if (poolsStats != null) {
                 bean.openConnections = poolsStats.values().stream()
@@ -95,7 +94,7 @@ public class BackendsResource {
                 bean.totalRequests = epstats.getTotalRequests().longValue();
                 bean.lastActivityTs = epstats.getLastActivity().longValue();
             }
-            BackendHealthStatus bhs = backendsSnapshot.get(hostPort);
+            BackendHealthStatus bhs = backendsSnapshot.get(key.toString());
             if (bhs != null) {
                 bean.available = bhs.isAvailable();
                 bean.reportedAsUnreachable = bhs.isReportedAsUnreachable();
