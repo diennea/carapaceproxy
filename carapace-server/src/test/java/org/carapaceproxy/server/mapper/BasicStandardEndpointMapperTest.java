@@ -39,6 +39,7 @@ import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
@@ -406,19 +407,19 @@ public class BasicStandardEndpointMapperTest {
 
             {
                 String url = "http://localhost:" + server.getLocalPort() + "/index.html";
-                String s = IOUtils.toString(new URL(url).toURI(), StandardCharsets.UTF_8);
+                String s = IOUtils.toString(URI.create(url), StandardCharsets.UTF_8);
                 assertEquals("Test static page", s);
             }
             {
 
                 String url = "http://localhost:" + server.getLocalPort() + "/seconda.html";
-                String s = IOUtils.toString(new URL(url).toURI(), StandardCharsets.UTF_8);
+                String s = IOUtils.toString(URI.create(url), StandardCharsets.UTF_8);
                 assertEquals("it <b>works</b> !!", s);
             }
             // resource not esists > Not Found
             try {
                 String url = "http://localhost:" + server.getLocalPort() + "/not-exists.html";
-                String s = IOUtils.toString(new URL(url).toURI(), StandardCharsets.UTF_8);
+                String s = IOUtils.toString(URI.create(url), StandardCharsets.UTF_8);
                 fail("Expected Not Found, received " + s + " instead");
             } catch (Exception ex) {
                 assertTrue(ex instanceof FileNotFoundException);
@@ -473,13 +474,13 @@ public class BasicStandardEndpointMapperTest {
 
             // Test existent token
             String url = "http://localhost:" + server.getLocalPort() + "/.well-known/acme-challenge/" + tokenName;
-            String s = IOUtils.toString(new URL(url).toURI(), StandardCharsets.UTF_8);
+            String s = IOUtils.toString(URI.create(url), StandardCharsets.UTF_8);
             assertEquals(tokenData, s);
 
             // Test not existent token
             try {
                 url = "http://localhost:" + server.getLocalPort() + "/.well-known/acme-challenge/not-existent-token";
-                IOUtils.toString(new URL(url).toURI(), StandardCharsets.UTF_8);
+                IOUtils.toString(URI.create(url), StandardCharsets.UTF_8);
                 fail();
             } catch (Throwable t) {
                 assertTrue(t instanceof FileNotFoundException);

@@ -23,10 +23,15 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.IOException;
+import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import org.apache.commons.io.IOUtils;
@@ -41,11 +46,6 @@ import org.carapaceproxy.user.SimpleUserRealm;
 import org.carapaceproxy.user.UserRealm;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUserRealm;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Rule;
@@ -405,7 +405,7 @@ public class ApplyConfigurationTest {
     private void testIt(int port, boolean ok) throws URISyntaxException, IOException {
         try {
             String url = "http://localhost:" + port + "/index.html?redir";
-            String s = IOUtils.toString(new URL(url).toURI(), StandardCharsets.UTF_8);
+            String s = IOUtils.toString(URI.create(url), StandardCharsets.UTF_8);
             System.out.println("RES FOR: " + url + " -> " + s);
             assertEquals("it <b>works</b> !!", s);
             if (!ok) {
