@@ -19,17 +19,19 @@ package org.carapaceproxy.listeners;
  under the License.
 
  */
+
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.junit.Assert.assertEquals;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import java.net.URL;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import static org.junit.Assert.assertEquals;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -65,13 +67,13 @@ public class MultiListeningEndpointTest {
 
             // proxy
             {
-                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html?redir").toURI(), "utf-8");
+                String s = IOUtils.toString(URI.create("http://localhost:" + port + "/index.html?redir"), StandardCharsets.UTF_8);
                 System.out.println("s:" + s);
                 assertEquals("it <b>works</b> !!", s);
             }
 
             {
-                String s = IOUtils.toString(new URL("http://localhost:" + port2 + "/index.html?redir").toURI(), "utf-8");
+                String s = IOUtils.toString(URI.create("http://localhost:" + port2 + "/index.html?redir"), StandardCharsets.UTF_8);
                 System.out.println("s:" + s);
                 assertEquals("it <b>works</b> !!", s);
             }

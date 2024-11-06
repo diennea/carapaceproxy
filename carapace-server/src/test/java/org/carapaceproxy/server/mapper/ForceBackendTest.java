@@ -27,7 +27,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.carapaceproxy.core.ProxyRequest.PROPERTY_URI;
 import static org.junit.Assert.assertEquals;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import java.net.URL;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
@@ -90,12 +91,12 @@ public class ForceBackendTest {
             int port = server.getLocalPort();
             {
                 // proxy on director 2
-                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html?thedirector=director-2").toURI(), "utf-8");
+                String s = IOUtils.toString(URI.create("http://localhost:" + port + "/index.html?thedirector=director-2"), StandardCharsets.UTF_8);
                 assertEquals("it <b>works</b> !!", s);
             }
             {
                 // proxy on backend 2
-                String s = IOUtils.toString(new URL("http://localhost:" + port + "/index.html?thebackend=backend-b").toURI(), "utf-8");
+                String s = IOUtils.toString(URI.create("http://localhost:" + port + "/index.html?thebackend=backend-b"), StandardCharsets.UTF_8);
                 assertEquals("it <b>works</b> !!", s);
             }
 

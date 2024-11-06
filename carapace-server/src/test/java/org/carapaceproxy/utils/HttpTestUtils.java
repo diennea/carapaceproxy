@@ -19,6 +19,7 @@ package org.carapaceproxy.utils;
  under the License.
 
  */
+
 import java.io.BufferedInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -29,6 +30,7 @@ import java.io.Reader;
 import java.io.StringWriter;
 import java.net.HttpURLConnection;
 import java.net.Proxy;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
@@ -235,7 +237,7 @@ public class HttpTestUtils {
                     responseMessage = httpCon.getResponseMessage();
                     location = httpCon.getHeaderField("Location");
                     if (instance_follow_redirects && httpCode >= 300 && httpCode < 400 && location != null && !location.isEmpty()) {
-                        redirectTo = new URL(url, location);
+                        redirectTo = url.toURI().resolve(location).toURL();
                     }
                     String errorHeader = httpCon.getHeaderField("x-mn-error");
                     if (errorHeader != null && errorHeader.equals("notfound")) {
@@ -274,6 +276,8 @@ public class HttpTestUtils {
                 } else {
                     throw ex;
                 }
+            } catch (URISyntaxException e) {
+                throw new RuntimeException(e);
             }
         } catch (IOException | RuntimeException ex) {
             Exception finalError = ex;

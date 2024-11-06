@@ -23,6 +23,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
@@ -35,9 +37,9 @@ import org.carapaceproxy.utils.IOUtils;
  */
 public class BackendHealthCheck {
 
-    public final static int RESULT_SUCCESS = 1;
-    public final static int RESULT_FAILURE_CONNECTION = 2;
-    public final static int RESULT_FAILURE_STATUS = 3;
+    public static final int RESULT_SUCCESS = 1;
+    public static final int RESULT_FAILURE_CONNECTION = 2;
+    public static final int RESULT_FAILURE_STATUS = 3;
 
     private final String path;
     private final long startTs;
@@ -102,7 +104,7 @@ public class BackendHealthCheck {
             URL url;
             HttpURLConnection httpConn = null;
             try {
-                url = new URL("http", host, port, path);
+                url = new URI("http", null, host, port, path, null, null).toURL();
                 URLConnection conn = url.openConnection();
                 conn.setConnectTimeout(timeoutMillis);
                 conn.setReadTimeout(timeoutMillis);
@@ -129,7 +131,7 @@ public class BackendHealthCheck {
                     );
                 }
 
-            } catch (MalformedURLException ex) {
+            } catch (MalformedURLException | URISyntaxException ex) {
                 throw new RuntimeException(ex);
 
             } catch (IOException | RuntimeException ex) {

@@ -32,7 +32,7 @@ import herddb.jdbc.HerdDBEmbeddedDataSource;
 import herddb.security.SimpleSingleUserManager;
 import herddb.server.ServerConfiguration;
 import java.io.File;
-import java.net.URL;
+import java.net.URI;
 import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.PublicKey;
@@ -434,7 +434,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                                 subjectAltNames != null && !subjectAltNames.isBlank() ? Set.of(subjectAltNames.split(",")) : Set.of(),
                                 chain,
                                 state,
-                                pendingOrder != null ? new URL(pendingOrder) : null,
+                                pendingOrder != null ? URI.create(pendingOrder).toURL() : null,
                                 pendingChallenges,
                                 attemptCount,
                                 message

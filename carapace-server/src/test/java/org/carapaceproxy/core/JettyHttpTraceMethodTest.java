@@ -1,14 +1,13 @@
 package org.carapaceproxy.core;
 
+import static org.junit.Assert.assertEquals;
 import io.netty.handler.codec.http.HttpMethod;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URL;
+import javax.servlet.http.HttpServletResponse;
 import org.carapaceproxy.api.UseAdminServer;
 import org.junit.Test;
-
-import javax.servlet.http.HttpServletResponse;
-import java.net.HttpURLConnection;
-import java.net.URL;
-
-import static org.junit.Assert.assertEquals;
 
 public class JettyHttpTraceMethodTest extends UseAdminServer {
 
@@ -16,7 +15,7 @@ public class JettyHttpTraceMethodTest extends UseAdminServer {
     public void httpTraceMethodTest() throws Exception {
         startAdmin();
         String URL = "http://localhost:8761";
-        URL url = new URL(URL);
+        URL url = URI.create(URL).toURL();
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod(String.valueOf(HttpMethod.TRACE));
         int code = conn.getResponseCode();

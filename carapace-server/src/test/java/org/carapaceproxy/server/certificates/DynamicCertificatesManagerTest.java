@@ -45,7 +45,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.shredzone.acme4j.Status.INVALID;
 import static org.shredzone.acme4j.Status.VALID;
-import java.net.URL;
+import java.net.URI;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
 import java.util.Collections;
@@ -107,7 +107,7 @@ public class DynamicCertificatesManagerTest {
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
         Order o = mock(Order.class);
-        when(o.getLocation()).thenReturn(new URL("https://localhost/index"));
+        when(o.getLocation()).thenReturn(URI.create("https://localhost/index").toURL());
         if (runCase.equals("order_already_valid")) {
             when(o.getStatus()).thenReturn(Status.VALID);
         }
@@ -300,7 +300,7 @@ public class DynamicCertificatesManagerTest {
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
         Order o = mock(Order.class);
-        when(o.getLocation()).thenReturn(new URL("https://localhost/index"));
+        when(o.getLocation()).thenReturn(URI.create("https://localhost/index").toURL());
         Login login = mock(Login.class);
         when(login.bindOrder(any())).thenReturn(o);
         when(ac.getLogin()).thenReturn(login);
@@ -427,7 +427,7 @@ public class DynamicCertificatesManagerTest {
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
         Order o = mock(Order.class);
-        when(o.getLocation()).thenReturn(new URL("https://localhost/index"));
+        when(o.getLocation()).thenReturn(URI.create("https://localhost/index").toURL());
         Login login = mock(Login.class);
         when(login.bindOrder(any())).thenReturn(o);
         when(ac.getLogin()).thenReturn(login);
@@ -558,7 +558,7 @@ public class DynamicCertificatesManagerTest {
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
         Order o = mock(Order.class);
-        when(o.getLocation()).thenReturn(new URL("https://localhost/index"));
+        when(o.getLocation()).thenReturn(URI.create("https://localhost/index").toURL());
         Login login = mock(Login.class);
         when(login.bindOrder(any())).thenReturn(o);
         when(ac.getLogin()).thenReturn(login);
