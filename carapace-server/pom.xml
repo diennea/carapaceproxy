@@ -71,6 +71,13 @@
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>route53</artifactId>
             <version>${libs.awssdk}</version>
+            <exclusions>
+                <!-- Using jcl-over-slf4j instead -->
+                <exclusion>
+                    <artifactId>commons-logging</artifactId>
+                    <groupId>commons-logging</groupId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
@@ -114,6 +121,13 @@
             <groupId>org.apache.bookkeeper.stats</groupId>
             <artifactId>prometheus-metrics-provider</artifactId>
             <version>${libs.bookkeeper}</version>
+            <exclusions>
+                <!-- Using jcl-over-slf4j instead -->
+                <exclusion>
+                    <artifactId>commons-logging</artifactId>
+                    <groupId>commons-logging</groupId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.micrometer</groupId>
@@ -138,6 +152,11 @@
                 <exclusion>
                     <groupId>org.bouncycastle</groupId>
                     <artifactId>bc-fips</artifactId>
+                </exclusion>
+                <!-- Using jcl-over-slf4j instead -->
+                <exclusion>
+                    <artifactId>commons-logging</artifactId>
+                    <groupId>commons-logging</groupId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -209,8 +228,13 @@
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-jdk14</artifactId>
+            <artifactId>jcl-over-slf4j</artifactId>
             <version>${libs.slf4j}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
             <scope>runtime</scope>
         </dependency>
         <dependency>
@@ -316,11 +340,6 @@
                 -->
                 <exclusion>
                     <groupId>org.junit.jupiter</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-                <!-- We want a single SLF4J backend in our classpath! -->
-                <exclusion>
-                    <groupId>ch.qos.logback</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
             </exclusions>

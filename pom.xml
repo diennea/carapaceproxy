@@ -117,7 +117,8 @@
         <libs.jersey>2.35</libs.jersey>
         <libs.jackson>2.14.3</libs.jackson>
         <libs.javassist>3.27.0-GA</libs.javassist>
-        <libs.slf4j>1.7.35</libs.slf4j>
+        <libs.slf4j>2.0.16</libs.slf4j>
+        <libs.logback>1.5.12</libs.logback>
         <libs.guava>33.3.1-jre</libs.guava>
         <libs.lombok>1.18.32</libs.lombok>
         <libs.spotbugsannotations>4.5.3</libs.spotbugsannotations>
@@ -210,6 +211,16 @@
                 <version>${libs.slf4j}</version>
             </dependency>
             <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-core</artifactId>
+                <version>${libs.logback}</version>
+            </dependency>
+            <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-classic</artifactId>
+                <version>${libs.logback}</version>
+            </dependency>
+            <dependency>
                 <groupId>commons-codec</groupId>
                 <artifactId>commons-codec</artifactId>
                 <version>${libs.commons.codec}</version>
@@ -218,11 +229,6 @@
                 <groupId>commons-io</groupId>
                 <artifactId>commons-io</artifactId>
                 <version>${libs.commons.io}</version>
-            </dependency>
-            <dependency>
-                <groupId>commons-logging</groupId>
-                <artifactId>commons-logging</artifactId>
-                <version>${libs.commons.logging}</version>
             </dependency>
             <dependency>
                 <groupId>commons-net</groupId>
@@ -466,6 +472,11 @@
                                         <exclude>org.bouncycastle:*</exclude>
                                         <exclude>org.checkerframework</exclude>
                                         <exclusion>org.hamcrest:hamcrest-core</exclusion>
+                                        <!-- We want only SLF4J as logging APIs and Logback as logging backend -->
+                                        <exclusion>commons-logging:commons-logging</exclusion>
+                                        <exclusion>org.apache.logging.log4j:*</exclusion>
+                                        <exclusion>log4j:*</exclusion>
+                                        <exclusion>ch.qos.reload4j:*</exclusion>
                                     </excludes>
                                     <includes>
                                         <include>org.bouncycastle:*-jdk18on</include>
