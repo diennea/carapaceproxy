@@ -46,12 +46,7 @@ public class BackendHealthStatus {
 
     public BackendHealthStatus(final EndpointKey hostPort, final long warmupPeriod) {
         this.hostPort = hostPort;
-        // todo cannot start with a DOWN backend (+ current time) as it would break:
-        //  - BasicStandardEndpointMapperTest,
-        //  - UnreachableBackendTest,
-        //  - StuckRequestsTest,
-        //  - HealthCheckTest
-        // we assume that the backend is reachable when status is created
+        // we assume that the backend just become reachable when the status is created
         this.status = Status.COLD;
         this.unreachableSince = 0L;
         final long created = System.currentTimeMillis();
