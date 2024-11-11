@@ -73,9 +73,6 @@ public class StandardEndpointMapper extends EndpointMapper {
     public static final String DEBUGGING_HEADER_ID = "mapper-debug";
     private static final int DEFAULT_CAPACITY = 10; // number of connections
 
-    // todo replace this with a configurable property of some kind
-    private static final int THRESHOLD = 100;
-
     // The map is wiped out whenever a new configuration is applied
     private final SequencedMap<String, BackendConfiguration> backends = new LinkedHashMap<>();
     private final Map<String, DirectorConfiguration> directors = new HashMap<>();
