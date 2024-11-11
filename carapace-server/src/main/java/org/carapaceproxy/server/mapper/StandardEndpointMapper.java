@@ -352,7 +352,7 @@ public class StandardEndpointMapper extends EndpointMapper {
         this.forceBackendParameter = properties.getString("mapper.forcebackend.parameter", forceBackendParameter);
         LOG.info("configured mapper.forcebackend.parameter={}", forceBackendParameter);
 
-        // To add custom debugging header for request choosen mapping-path
+        // To add custom debugging header for request chosen mapping-path
         this.debuggingHeaderEnabled = properties.getBoolean("mapper.debug", false);
         LOG.info("configured mapper.debug={}", debuggingHeaderEnabled);
 

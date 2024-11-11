@@ -360,13 +360,13 @@ public class Listeners {
 
                     sslContext = sslContexts.computeIfAbsent(key, (k) -> {
                         try {
-                            SSLCertificateConfiguration choosen = chooseCertificate(sniHostname, config.getDefaultCertificate());
-                            if (choosen == null) {
+                            SSLCertificateConfiguration chosen = chooseCertificate(sniHostname, config.getDefaultCertificate());
+                            if (chosen == null) {
                                 throw new ConfigurationNotValidException("cannot find a certificate for snihostname " + sniHostname
                                         + ", with default cert for listener as '" + config.getDefaultCertificate()
                                         + "', available " + currentConfiguration.getCertificates().keySet());
                             }
-                            return bootSslContext(config, choosen);
+                            return bootSslContext(config, chosen);
                         } catch (ConfigurationNotValidException ex) {
                             throw new RuntimeException(ex);
                         }
@@ -455,16 +455,16 @@ public class Listeners {
                 }
             }
         }
-        SSLCertificateConfiguration choosen = null;
+        SSLCertificateConfiguration chosen = null;
         if (certificateMatchExact != null) {
-            choosen = certificateMatchExact;
+            chosen = certificateMatchExact;
         } else if (certificateMatchNoExact != null) {
-            choosen = certificateMatchNoExact;
+            chosen = certificateMatchNoExact;
         }
-        if (choosen == null) {
-            choosen = certificates.get(defaultCertificate);
+        if (chosen == null) {
+            chosen = certificates.get(defaultCertificate);
         }
-        return choosen;
+        return chosen;
     }
 
     private static boolean certificateMatches(String hostname, SSLCertificateConfiguration c, boolean exact) {
