@@ -88,7 +88,7 @@ public class HealthCheckTest {
 
             BackendHealthStatus _status = status.get(b1conf.hostPort());
             assertThat(_status, is(not(nullValue())));
-            assertThat(_status.getHostPort(), is(b1conf.hostPort().toString()));
+            assertThat(_status.getHostPort(), is(b1conf.hostPort()));
             assertThat(_status.isAvailable(), is(true));
             assertThat(_status.isReportedAsUnreachable(), is(false));
             assertThat(_status.getReportedAsUnreachableTs(), is(0L));
@@ -126,7 +126,7 @@ public class HealthCheckTest {
 
             BackendHealthStatus _status = status.get(b1conf.hostPort());
             assertThat(_status, is(not(nullValue())));
-            assertThat(_status.getHostPort(), is(b1conf.hostPort().toString()));
+            assertThat(_status.getHostPort(), is(b1conf.hostPort()));
             assertThat(_status.isAvailable(), is(false));
             assertThat(_status.isReportedAsUnreachable(), is(true));
             assertThat(_status.getReportedAsUnreachableTs() >= startTs, is(true));
@@ -167,7 +167,7 @@ public class HealthCheckTest {
 
             BackendHealthStatus _status = status.get(b1conf.hostPort());
             assertThat(_status, is(not(nullValue())));
-            assertThat(_status.getHostPort(), is(b1conf.hostPort().toString()));
+            assertThat(_status.getHostPort(), is(b1conf.hostPort()));
             assertThat(_status.isAvailable(), is(false));
             assertThat(_status.isReportedAsUnreachable(), is(true));
             assertThat(_status.getReportedAsUnreachableTs(), is(reportedAsUnreachableTs));
@@ -206,7 +206,7 @@ public class HealthCheckTest {
 
             BackendHealthStatus _status = status.get(b1conf.hostPort());
             assertThat(_status, is(not(nullValue())));
-            assertThat(_status.getHostPort(), is(b1conf.hostPort().toString()));
+            assertThat(_status.getHostPort(), is(b1conf.hostPort()));
             assertThat(_status.isAvailable(), is(true));
             assertThat(_status.isReportedAsUnreachable(), is(false));
             assertThat(_status.getReportedAsUnreachableTs(), is(0L));
