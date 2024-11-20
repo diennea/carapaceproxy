@@ -20,9 +20,9 @@
 package org.carapaceproxy.utils;
 
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 
 /**
- *
  * @author paolo.venturi
  */
 public final class CarapaceLogger {
@@ -31,7 +31,8 @@ public final class CarapaceLogger {
 
     private static boolean loggingDebugEnabled = false;
 
-    private CarapaceLogger()  {}
+    private CarapaceLogger() {
+    }
 
     public static boolean isLoggingDebugEnabled() {
         return loggingDebugEnabled;
@@ -41,11 +42,15 @@ public final class CarapaceLogger {
         CarapaceLogger.loggingDebugEnabled = loggingDebugEnabled;
     }
 
-    public static void debug(String s, Object ... o) {
-        if (loggingDebugEnabled) {
-            LOG.debug(s, o);
-        } else {
-            LOG.info(s, o);
-        }
+    /**
+     * This method assumes that {@link Level#DEBUG debug log level} is disabled.
+     * If {@link #setLoggingDebugEnabled(boolean) Carapace log level was enabled},
+     * forwards the log event to the {@link Level#INFO info log level} instead of using the debug level.
+     *
+     * @param s the format string
+     * @param o a list of arguments
+     */
+    public static void debug(String s, Object... o) {
+        (loggingDebugEnabled ? LOG.atInfo() : LOG.atDebug()).log(s, o);
     }
 }
