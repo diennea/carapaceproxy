@@ -114,12 +114,12 @@ public class UnreachableBackendTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.newFolder())) {
             Properties properties = new Properties();
+            properties.put("healthmanager.tolerant", "true");
             // configure resets all listeners configurations
             server.configureAtBoot(new PropertiesConfigurationStore(properties));
             server.addListener(new NetworkListenerConfiguration("localhost", 0));
-            server.setMapper(mapper);
             server.start();
             int port = server.getLocalPort();
             assertTrue(port > 0);
@@ -183,11 +183,11 @@ public class UnreachableBackendTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.newFolder())) {
             Properties properties = new Properties();
+            properties.put("healthmanager.tolerant", "true");
             server.configureAtBoot(new PropertiesConfigurationStore(properties));
             server.addListener(new NetworkListenerConfiguration("localhost", 0));
-            server.setMapper(mapper);
             server.start();
             int port = server.getLocalPort();
 

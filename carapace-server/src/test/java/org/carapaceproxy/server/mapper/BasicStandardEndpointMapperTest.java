@@ -94,28 +94,32 @@ public class BasicStandardEndpointMapperTest {
                         .withBody("it <b>works</b> !!")));
 
         int backendPort = backend.port();
-        StandardEndpointMapper mapper = new StandardEndpointMapper(SafeBackendSelector::forMapper);
+        final EndpointMapper.Factory mapperFactory = parent -> {
+            StandardEndpointMapper mapper = new StandardEndpointMapper(parent, SafeBackendSelector::new);
 
-        mapper.addBackend(new BackendConfiguration("backend-a", "localhost", backendPort, "/", -1));
-        mapper.addBackend(new BackendConfiguration("backend-b", "localhost", backendPort, "/", -1));
-        mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
-        mapper.addDirector(new DirectorConfiguration("director-2").addBackend("backend-b"));
-        mapper.addDirector(new DirectorConfiguration("director-all").addBackend("*")); // all the known backends
-        mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1));
-        mapper.addAction(new ActionConfiguration("cache-1", ActionConfiguration.TYPE_CACHE, "director-2", null, -1));
-        mapper.addAction(new ActionConfiguration("all-1", ActionConfiguration.TYPE_CACHE, "director-all", null, -1));
+            mapper.addBackend(new BackendConfiguration("backend-a", "localhost", backendPort, "/", -1));
+            mapper.addBackend(new BackendConfiguration("backend-b", "localhost", backendPort, "/", -1));
+            mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
+            mapper.addDirector(new DirectorConfiguration("director-2").addBackend("backend-b"));
+            mapper.addDirector(new DirectorConfiguration("director-all").addBackend("*")); // all the known backends
+            mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1));
+            mapper.addAction(new ActionConfiguration("cache-1", ActionConfiguration.TYPE_CACHE, "director-2", null, -1));
+            mapper.addAction(new ActionConfiguration("all-1", ActionConfiguration.TYPE_CACHE, "director-all", null, -1));
 
-        mapper.addAction(new ActionConfiguration("not-found-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_NOT_FOUND, 404));
-        mapper.addAction(new ActionConfiguration("error-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR, 500));
-        mapper.addAction(new ActionConfiguration("static-custom", ActionConfiguration.TYPE_STATIC, null, CLASSPATH_RESOURCE + "/test-static-page.html", 200));
+            mapper.addAction(new ActionConfiguration("not-found-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_NOT_FOUND, 404));
+            mapper.addAction(new ActionConfiguration("error-custom", ActionConfiguration.TYPE_STATIC, null, StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR, 500));
+            mapper.addAction(new ActionConfiguration("static-custom", ActionConfiguration.TYPE_STATIC, null, CLASSPATH_RESOURCE + "/test-static-page.html", 200));
 
-        mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index.html.*")));
-        mapper.addRoute(new RouteConfiguration("route-1b", "cache-1", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index2.html.*")));
-        mapper.addRoute(new RouteConfiguration("route-1c", "all-1", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index3.html.*")));
-        mapper.addRoute(new RouteConfiguration("route-2-not-found", "not-found-custom", true, new RegexpRequestMatcher(PROPERTY_URI, ".*notfound.html.*")));
-        mapper.addRoute(new RouteConfiguration("route-3-error", "error-custom", true, new RegexpRequestMatcher(PROPERTY_URI, ".*error.html.*")));
-        mapper.addRoute(new RouteConfiguration("route-4-static", "static-custom", true, new RegexpRequestMatcher(PROPERTY_URI, ".*static.html.*")));
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+            mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index.html.*")));
+            mapper.addRoute(new RouteConfiguration("route-1b", "cache-1", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index2.html.*")));
+            mapper.addRoute(new RouteConfiguration("route-1c", "all-1", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index3.html.*")));
+            mapper.addRoute(new RouteConfiguration("route-2-not-found", "not-found-custom", true, new RegexpRequestMatcher(PROPERTY_URI, ".*notfound.html.*")));
+            mapper.addRoute(new RouteConfiguration("route-3-error", "error-custom", true, new RegexpRequestMatcher(PROPERTY_URI, ".*error.html.*")));
+            mapper.addRoute(new RouteConfiguration("route-4-static", "static-custom", true, new RegexpRequestMatcher(PROPERTY_URI, ".*static.html.*")));
+
+            return mapper;
+        };
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapperFactory, tmpDir.newFolder())) {
             server.start();
             int port = server.getLocalPort();
             {
@@ -173,7 +177,7 @@ public class BasicStandardEndpointMapperTest {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
 
             Properties configuration = new Properties();
             configuration.put("listener.1.host", "0.0.0.0");
@@ -317,17 +321,19 @@ public class BasicStandardEndpointMapperTest {
 
         int backendPort = backend.port();
 
-        StandardEndpointMapper mapper = new StandardEndpointMapper(SafeBackendSelector::forMapper);
-        mapper.addBackend(new BackendConfiguration("backend", "localhost", backendPort, "/", -1));
-        mapper.addBackend(new BackendConfiguration("backend-down", "localhost-down", backendPort, "/", -1));
-        mapper.addDirector(new DirectorConfiguration("director").addBackend("backend"));
-        mapper.addDirector(new DirectorConfiguration("director-down").addBackend("backend-down"));
-        mapper.addAction(new ActionConfiguration("cache", ActionConfiguration.TYPE_CACHE, "director", null, -1));
-        mapper.addAction(new ActionConfiguration("cache-down", ActionConfiguration.TYPE_CACHE, "director-down", null, -1));
-        mapper.addRoute(new RouteConfiguration("route", "cache", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index.html.*")));
-        mapper.addRoute(new RouteConfiguration("route-down", "cache-down", true, new RegexpRequestMatcher(PROPERTY_URI, ".*down.html.*")));
-        mapper.addRoute(new RouteConfiguration("route-default", "cache", true, new RegexpRequestMatcher(PROPERTY_URI, ".*html")));
-
+        final EndpointMapper.Factory mapperFactory = parent -> {
+            StandardEndpointMapper mapper = new StandardEndpointMapper(parent, SafeBackendSelector::new);
+            mapper.addBackend(new BackendConfiguration("backend", "localhost", backendPort, "/", -1));
+            mapper.addBackend(new BackendConfiguration("backend-down", "localhost-down", backendPort, "/", -1));
+            mapper.addDirector(new DirectorConfiguration("director").addBackend("backend"));
+            mapper.addDirector(new DirectorConfiguration("director-down").addBackend("backend-down"));
+            mapper.addAction(new ActionConfiguration("cache", ActionConfiguration.TYPE_CACHE, "director", null, -1));
+            mapper.addAction(new ActionConfiguration("cache-down", ActionConfiguration.TYPE_CACHE, "director-down", null, -1));
+            mapper.addRoute(new RouteConfiguration("route", "cache", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index.html.*")));
+            mapper.addRoute(new RouteConfiguration("route-down", "cache-down", true, new RegexpRequestMatcher(PROPERTY_URI, ".*down.html.*")));
+            mapper.addRoute(new RouteConfiguration("route-default", "cache", true, new RegexpRequestMatcher(PROPERTY_URI, ".*html")));
+            return mapper;
+        };
         BackendHealthManager bhMan = mock(BackendHealthManager.class);
         final EndpointKey alive = EndpointKey.make("localhost:" + backendPort);
         final BackendHealthStatus mockAliveStatus = mock(BackendHealthStatus.class);
@@ -338,7 +344,7 @@ public class BasicStandardEndpointMapperTest {
         when(mockDownStatus.getStatus()).thenReturn(BackendHealthStatus.Status.DOWN);
         when(bhMan.getBackendStatus(eq(down))).thenReturn(mockDownStatus); // simulate unreachable backend -> expected 500 error
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapperFactory, tmpDir.newFolder())) {
             server.setBackendHealthManager(bhMan);
             server.start();
             int port = server.getLocalPort();
@@ -370,10 +376,11 @@ public class BasicStandardEndpointMapperTest {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
 
             {
                 Properties configuration = new Properties();
+                configuration.put("healthmanager.tolerant", "true");
                 configuration.put("backend.1.id", "foo");
                 configuration.put("backend.1.host", "localhost");
                 configuration.put("backend.1.port", String.valueOf(backend.port()));
@@ -443,7 +450,7 @@ public class BasicStandardEndpointMapperTest {
 
     @Test
     public void testServeACMEChallengeToken() throws Exception {
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
             final String tokenName = "test-token";
             final String tokenData = "test-token-data-content";
             DynamicCertificatesManager dynamicCertificateManager = mock(DynamicCertificatesManager.class);
@@ -523,8 +530,9 @@ public class BasicStandardEndpointMapperTest {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
             Properties configuration = new Properties();
+            configuration.put("healthmanager.tolerant", "true");
             configuration.put("backend.1.id", "b1");
             configuration.put("backend.1.host", "localhost");
             configuration.put("backend.1.port", String.valueOf(backend.port()));
@@ -648,7 +656,7 @@ public class BasicStandardEndpointMapperTest {
     @Test
     public void testActionRedirect() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
             Properties configuration = new Properties();
             configuration.put("listener.1.host", "0.0.0.0");
             configuration.put("listener.1.port", "1425");

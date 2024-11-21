@@ -20,7 +20,6 @@
 package org.carapaceproxy.server.config;
 
 import java.util.List;
-import java.util.function.Function;
 import org.carapaceproxy.server.mapper.EndpointMapper;
 
 /**
@@ -32,13 +31,10 @@ public interface BackendSelector {
 
     /**
      * Functional interface that models a factory for selectors given the mapper they should be applied to.
-     *
-     * @see SafeBackendSelector#forMapper(EndpointMapper)
      */
     @FunctionalInterface
-    interface SelectorFactory extends Function<EndpointMapper, BackendSelector> {
+    interface SelectorFactory {
 
-        @Override
-        BackendSelector apply(EndpointMapper endpointMapper);
+        BackendSelector build(EndpointMapper endpointMapper);
     }
 }

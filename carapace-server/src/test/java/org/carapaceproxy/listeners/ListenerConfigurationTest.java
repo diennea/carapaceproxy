@@ -10,6 +10,7 @@ import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.Listeners;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
+import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -21,7 +22,7 @@ public class ListenerConfigurationTest {
 
     @Test
     public void testListenerKeepAliveConfiguration() throws Exception {
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
 
             {
                 Properties configuration = new Properties();
