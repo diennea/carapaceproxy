@@ -94,12 +94,8 @@ public class StandardEndpointMapper extends EndpointMapper {
     private String debuggingHeaderName = DEBUGGING_HEADER_DEFAULT_NAME;
     private boolean debuggingHeaderEnabled = false;
 
-    public StandardEndpointMapper(final BackendSelector backendSelector) {
-        this.backendSelector = backendSelector;
-    }
-
-    public StandardEndpointMapper() {
-        this.backendSelector = new RandomBackendSelector(allBackendIds, directors);
+    public StandardEndpointMapper(final BackendSelector.SelectorFactory backendSelector) {
+        this.backendSelector = backendSelector.apply(this);
     }
 
     @Override
@@ -219,10 +215,15 @@ public class StandardEndpointMapper extends EndpointMapper {
                         case DOWN:
                             continue;
                         case COLD:
-                            final int capacity = backend.coldCapacity();
-                            if (capacity > 0 && backendStatus.getConnections() > capacity) {
-                                // can't use this
-                                continue;
+                            final int capacity = backend.safeCapacity();
+                            if (backendHealthManager.exceedsCapacity(backendId)) {
+                                /*
+                                 * backends are returned by the mapper sorted
+                                 * from the most desirable to the less desirable;
+                                 * if the execution reaches this point,
+                                 * we should use a cold backend even if over the recommended capacity anyway...
+                                 */
+                                LOG.warn("Backend {} exceeds cold capacity of {}, but will use it anyway", backendId, capacity);
                             }
                             // falls through
                         case STABLE: {
@@ -467,10 +468,10 @@ public class StandardEndpointMapper extends EndpointMapper {
                 final String host = properties.getString(prefix + "host", "localhost");
                 final int port = properties.getInt(prefix + "port", 8086);
                 final String probePath = properties.getString(prefix + "probePath", "");
-                final int coldCapacity = properties.getInt(prefix + "coldCapacity", DEFAULT_CAPACITY);
-                LOG.info("configured backend {} {}:{} enabled={} capacity={}", id, host, port, enabled, coldCapacity);
+                final int safeCapacity = properties.getInt(prefix + "safeCapacity", DEFAULT_CAPACITY);
+                LOG.info("configured backend {} {}:{} enabled={} capacity={}", id, host, port, enabled, safeCapacity);
                 if (enabled) {
-                    addBackend(new BackendConfiguration(id, host, port, probePath, coldCapacity));
+                    addBackend(new BackendConfiguration(id, host, port, probePath, safeCapacity));
                 }
             }
         }

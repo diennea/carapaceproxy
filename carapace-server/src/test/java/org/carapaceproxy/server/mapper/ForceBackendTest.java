@@ -37,6 +37,7 @@ import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
+import org.carapaceproxy.server.config.SafeBackendSelector;
 import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
 import org.junit.Rule;
 import org.junit.Test;
@@ -69,7 +70,7 @@ public class ForceBackendTest {
                         .withBody("it <b>works</b> !!")));
 
         int backendPort = backend1.port();
-        StandardEndpointMapper mapper = new StandardEndpointMapper();
+        StandardEndpointMapper mapper = new StandardEndpointMapper(SafeBackendSelector::forMapper);
         Properties properties = new Properties();
         properties.put("mapper.forcedirector.parameter", "thedirector");
         properties.put("mapper.forcebackend.parameter", "thebackend");

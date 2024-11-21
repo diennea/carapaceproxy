@@ -125,7 +125,7 @@ public abstract class EndpointMapper {
         return parent.getDynamicCertificatesManager();
     }
 
-    protected final BackendHealthManager getBackendHealthManager() {
+    public final BackendHealthManager getBackendHealthManager() {
         Objects.requireNonNull(parent);
         return parent.getBackendHealthManager();
     }

@@ -55,6 +55,7 @@ import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
+import org.carapaceproxy.server.config.SafeBackendSelector;
 import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
 import org.junit.Rule;
 import org.junit.Test;
@@ -93,7 +94,7 @@ public class BasicStandardEndpointMapperTest {
                         .withBody("it <b>works</b> !!")));
 
         int backendPort = backend.port();
-        StandardEndpointMapper mapper = new StandardEndpointMapper();
+        StandardEndpointMapper mapper = new StandardEndpointMapper(SafeBackendSelector::forMapper);
 
         mapper.addBackend(new BackendConfiguration("backend-a", "localhost", backendPort, "/", -1));
         mapper.addBackend(new BackendConfiguration("backend-b", "localhost", backendPort, "/", -1));
@@ -316,7 +317,7 @@ public class BasicStandardEndpointMapperTest {
 
         int backendPort = backend.port();
 
-        StandardEndpointMapper mapper = new StandardEndpointMapper();
+        StandardEndpointMapper mapper = new StandardEndpointMapper(SafeBackendSelector::forMapper);
         mapper.addBackend(new BackendConfiguration("backend", "localhost", backendPort, "/", -1));
         mapper.addBackend(new BackendConfiguration("backend-down", "localhost-down", backendPort, "/", -1));
         mapper.addDirector(new DirectorConfiguration("director").addBackend("backend"));
