@@ -21,6 +21,7 @@ package org.carapaceproxy.server.backends;
 
 import java.sql.Timestamp;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.carapaceproxy.core.EndpointKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,22 +33,46 @@ import org.slf4j.LoggerFactory;
  */
 public class BackendHealthStatus {
 
-    // todo replace this with a property of some kind
+    // todo replace this with a configurable property of some kind
     public static final long WARMUP_MILLIS = Duration.ofMinutes(1).toMillis();
 
     private static final Logger LOG = LoggerFactory.getLogger(BackendHealthStatus.class);
 
     private final EndpointKey hostPort;
+    private final AtomicInteger connections;
+
     private volatile Status status;
-    private volatile long lastUnreachableTs;
-    private volatile long lastReachableTs;
+    private volatile long unreachableSince;
+    private volatile long lastUnreachable;
+    private volatile long lastReachable;
     private volatile BackendHealthCheck lastProbe;
 
     public BackendHealthStatus(final EndpointKey hostPort) {
         this.hostPort = hostPort;
-        // todo using DOWN would break BasicStandardEndpointMapperTest, UnreachableBackendTest, and StuckRequestsTest
+        // todo cannot start with a DOWN backend (+ current time) as it would break:
+        //  - BasicStandardEndpointMapperTest,
+        //  - UnreachableBackendTest,
+        //  - StuckRequestsTest,
+        //  - HealthCheckTest
+        // we assume that the backend is reachable when status is created
         this.status = Status.COLD;
-        this.lastUnreachableTs = System.currentTimeMillis();
+        this.unreachableSince = 0L;
+        final long created = System.currentTimeMillis();
+        this.lastUnreachable = created;
+        this.lastReachable = created;
+        this.connections = new AtomicInteger();
+    }
+
+    public long getUnreachableSince() {
+        return unreachableSince;
+    }
+
+    public long getLastUnreachable() {
+        return lastUnreachable;
+    }
+
+    public long getLastReachable() {
+        return lastReachable;
     }
 
     public EndpointKey getHostPort() {
@@ -66,22 +91,33 @@ public class BackendHealthStatus {
         return status;
     }
 
-    public long getLastUnreachableTs() {
-        return lastUnreachableTs;
-    }
-
     public void reportAsUnreachable(final long timestamp, final String cause) {
         LOG.info("{}: reportAsUnreachable {}, cause {}", hostPort, new Timestamp(timestamp), cause);
-        this.lastUnreachableTs = timestamp;
-        this.status = Status.DOWN;
+        if (this.status != Status.DOWN) {
+            this.status = Status.DOWN;
+            this.unreachableSince = timestamp;
+        }
+        this.lastUnreachable = timestamp;
+        this.connections.set(0);
     }
 
     public void reportAsReachable(final long timestamp) {
-        this.lastReachableTs = timestamp;
-        if (this.lastReachableTs - this.lastUnreachableTs >= WARMUP_MILLIS) {
-            this.status = Status.STABLE;
-        } else {
-            this.status = Status.COLD;
+        LOG.info("{}: reportAsUnreachable {}", hostPort, new Timestamp(timestamp));
+        switch (this.status) {
+            case DOWN:
+                this.status = Status.COLD;
+                this.unreachableSince = 0;
+                this.lastReachable = timestamp;
+                break;
+            case COLD:
+                this.lastReachable = timestamp;
+                if (this.lastReachable - this.lastUnreachable > WARMUP_MILLIS) {
+                    this.status = Status.STABLE;
+                }
+                break;
+            case STABLE:
+                this.lastReachable = timestamp;
+                break;
         }
     }
 
@@ -89,11 +125,27 @@ public class BackendHealthStatus {
     public String toString() {
         return "BackendHealthStatus{"
                 + " hostPort=" + this.hostPort
+                + ", connections=" + this.connections
                 + ", status=" + this.status
-                + ", lastUnreachableTs=" + this.lastUnreachableTs
-                + ", lastReachableTs=" + this.lastReachableTs
+                + ", unreachableSince=" + this.unreachableSince
+                + ", unreachableUntil=" + this.lastUnreachable
+                + ", lastReachable=" + this.lastReachable
                 + ", lastProbe=" + this.lastProbe
                 + '}';
+    }
+
+    public int getConnections() {
+        return this.connections.get();
+    }
+
+    public void incrementConnections() {
+        this.connections.incrementAndGet();
+    }
+
+    public void decrementConnections() {
+        if (this.connections.getAcquire() > 0) {
+            this.connections.decrementAndGet();
+        }
     }
 
     /**

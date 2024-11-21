@@ -98,7 +98,7 @@ public class BackendsResource {
             if (bhs != null) {
                 bean.available = bhs.getStatus() != BackendHealthStatus.Status.DOWN;
                 bean.reportedAsUnreachable = bhs.getStatus() == BackendHealthStatus.Status.DOWN;
-                bean.reportedAsUnreachableTs = bhs.getLastUnreachableTs();
+                bean.reportedAsUnreachableTs = bhs.getUnreachableSince();
                 BackendHealthCheck lastProbe = bhs.getLastProbe();
                 if (lastProbe != null) {
                     bean.lastProbeTs = lastProbe.endTs();

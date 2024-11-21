@@ -213,8 +213,8 @@ public class ProxyRequest implements MatchingContext {
             if (hostAndPort == null) {
                 return false;
             }
-            HostAndPort parsed = HostAndPort.fromString(hostAndPort);
-            String host = parsed.getHost();
+            final HostAndPort parsed = HostAndPort.fromString(hostAndPort);
+            final String host = parsed.getHost();
             if (parsed.hasPort()) {
                 return !host.isBlank()
                         && (InternetDomainName.isValid(host) || InetAddresses.isInetAddress(host))

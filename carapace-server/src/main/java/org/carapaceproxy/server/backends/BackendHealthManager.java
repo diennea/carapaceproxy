@@ -136,7 +136,7 @@ public class BackendHealthManager implements Runnable {
         }
         for (final BackendConfiguration backend : mapper.getBackends().values()) {
             final EndpointKey endpoint = backend.hostPort();
-            final BackendHealthStatus status = findStatus(endpoint);
+            final BackendHealthStatus status = getBackendStatus(endpoint);
             final BackendHealthCheck checkResult = BackendHealthCheck.check(backend, connectTimeout);
 
             if (checkResult.ok()) {
@@ -173,23 +173,19 @@ public class BackendHealthManager implements Runnable {
     }
 
     public void reportBackendReachable(final EndpointKey hostPort, final long timestamp) {
-        findStatus(hostPort).reportAsReachable(timestamp);
+        getBackendStatus(hostPort).reportAsReachable(timestamp);
     }
 
     public void reportBackendUnreachable(final EndpointKey hostPort, final long timestamp, final String cause) {
-        findStatus(hostPort).reportAsUnreachable(timestamp, cause);
-    }
-
-    private BackendHealthStatus findStatus(final EndpointKey hostPort) {
-        return backends.computeIfAbsent(hostPort, BackendHealthStatus::new);
+        getBackendStatus(hostPort).reportAsUnreachable(timestamp, cause);
     }
 
     public Map<EndpointKey, BackendHealthStatus> getBackendsSnapshot() {
         return Map.copyOf(backends);
     }
 
-    public BackendHealthStatus.Status getBackendStatus(final EndpointKey hostPort) {
-        return findStatus(hostPort).getStatus();
+    public BackendHealthStatus getBackendStatus(final EndpointKey hostPort) {
+        return backends.computeIfAbsent(hostPort, BackendHealthStatus::new);
     }
 
     @VisibleForTesting

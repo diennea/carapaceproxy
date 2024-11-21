@@ -72,6 +72,9 @@ public class StandardEndpointMapper extends EndpointMapper {
     public static final String DEBUGGING_HEADER_DEFAULT_NAME = "X-Proxy-Path";
     public static final String DEBUGGING_HEADER_ID = "mapper-debug";
 
+    // todo replace this with a configurable property of some kind
+    private static final int THRESHOLD = 100;
+
     // The map is wiped out whenever a new configuration is applied
     private final SequencedMap<String, BackendConfiguration> backends = new LinkedHashMap<>();
     private final Map<String, DirectorConfiguration> directors = new HashMap<>();
@@ -111,13 +114,13 @@ public class StandardEndpointMapper extends EndpointMapper {
             }
             return MapResult.badRequest();
         }
-        if (!request.isValidHostAndPort(request.getRequestHostname())) { //Invalid header host
+        // Invalid header host
+        if (!request.isValidHostAndPort(request.getRequestHostname())) {
             if (LOG.isTraceEnabled()) {
                 LOG.trace("Invalid header host {} for request {}", request.getRequestHostname(), request.getUri());
             }
             return MapResult.badRequest();
         }
-
         for (final RouteConfiguration route : routes) {
             if (!route.isEnabled()) {
                 continue;
@@ -142,6 +145,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                 LOG.info("no action \"{}\" -> not-found for {}, valid {}", route.getAction(), request.getUri(), actions.keySet());
                 return MapResult.internalError(route.getId());
             }
+
             switch (action.getType()) {
                 case ActionConfiguration.TYPE_REDIRECT -> {
                     return MapResult.builder()
@@ -199,36 +203,48 @@ public class StandardEndpointMapper extends EndpointMapper {
                 LOG.trace("selected {} backends for {}, director is {}", selectedBackends, request.getUri(), director);
             }
 
-            for (final String backendId : selectedBackends) {
-                final Action selectedAction;
-                switch (action.getType()) {
-                    case ActionConfiguration.TYPE_PROXY -> selectedAction = Action.PROXY;
-                    case ActionConfiguration.TYPE_CACHE -> selectedAction = Action.CACHE;
-                    default -> {
-                        return MapResult.internalError(route.getId());
-                    }
+            final Action selectedAction;
+            switch (action.getType()) {
+                case ActionConfiguration.TYPE_PROXY -> selectedAction = Action.PROXY;
+                case ActionConfiguration.TYPE_CACHE -> selectedAction = Action.CACHE;
+                default -> {
+                    return MapResult.internalError(route.getId());
                 }
+            }
 
+            for (final String backendId : selectedBackends) {
                 final BackendConfiguration backend = this.backends.get(backendId);
                 if (backend != null) {
-                    BackendHealthManager backendHealthManager = getBackendHealthManager();
-                    if (backendHealthManager.getBackendStatus(backend.hostPort()) != BackendHealthStatus.Status.DOWN) {
-                        List<CustomHeader> customHeaders = action.getCustomHeaders();
-                        if (this.debuggingHeaderEnabled) {
-                            customHeaders = new ArrayList<>(customHeaders);
-                            String routingPath = route.getId() + ";"
-                                    + action.getId() + ";"
-                                    + action.getDirector() + ";"
-                                    + backendId;
-                            customHeaders.add(new CustomHeader(DEBUGGING_HEADER_ID, debuggingHeaderName, routingPath, HeaderMode.ADD));
+                    final BackendHealthManager backendHealthManager = getBackendHealthManager();
+                    final BackendHealthStatus backendStatus = backendHealthManager.getBackendStatus(backend.hostPort());
+                    switch (backendStatus.getStatus()) {
+                        case DOWN:
+                            continue;
+                        case COLD:
+                            if (backendStatus.getConnections() > THRESHOLD) {
+                                // can't use this
+                                continue;
+                            }
+                            // falls through
+                        case STABLE: {
+                            List<CustomHeader> customHeaders = action.getCustomHeaders();
+                            if (this.debuggingHeaderEnabled) {
+                                customHeaders = new ArrayList<>(customHeaders);
+                                final String routingPath = route.getId() + ";"
+                                        + action.getId() + ";"
+                                        + action.getDirector() + ";"
+                                        + backendId;
+                                customHeaders.add(new CustomHeader(DEBUGGING_HEADER_ID, debuggingHeaderName, routingPath, HeaderMode.ADD));
+                            }
+                            return MapResult.builder()
+                                    .host(backend.host())
+                                    .port(backend.port())
+                                    .action(selectedAction)
+                                    .routeId(route.getId())
+                                    .customHeaders(customHeaders)
+                                    .healthStatus(backendStatus)
+                                    .build();
                         }
-                        return MapResult.builder()
-                                .host(backend.host())
-                                .port(backend.port())
-                                .action(selectedAction)
-                                .routeId(route.getId())
-                                .customHeaders(customHeaders)
-                                .build();
                     }
                 }
             }
