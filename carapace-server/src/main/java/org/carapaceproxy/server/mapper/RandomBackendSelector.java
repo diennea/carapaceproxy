@@ -6,7 +6,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.SequencedCollection;
+import java.util.function.Function;
 import java.util.random.RandomGenerator;
+import java.util.stream.Collectors;
 import org.carapaceproxy.server.config.BackendSelector;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.slf4j.Logger;
@@ -19,14 +22,21 @@ import org.slf4j.LoggerFactory;
  * @see Collections#shuffle(List, RandomGenerator)
  * @see SecureRandom
  */
-class RandomBackendSelector implements BackendSelector {
+public class RandomBackendSelector implements BackendSelector {
     private static final Logger LOG = LoggerFactory.getLogger(RandomBackendSelector.class);
     private static final RandomGenerator RANDOM = new SecureRandom();
 
-    private final List<String> allBackendIds;
+    private final SequencedCollection<String> allBackendIds;
     private final Map<String, DirectorConfiguration> directors;
 
-    public RandomBackendSelector(final List<String> allBackendIds, final Map<String, DirectorConfiguration> directors) {
+    public static BackendSelector forMapper(final EndpointMapper mapper) {
+        final var directors = mapper.getDirectors()
+                .stream()
+                .collect(Collectors.toUnmodifiableMap(DirectorConfiguration::getId, Function.identity()));
+        return new RandomBackendSelector(mapper.getBackends().sequencedKeySet(), directors);
+    }
+
+    private RandomBackendSelector(final SequencedCollection<String> allBackendIds, final Map<String, DirectorConfiguration> directors) {
         this.allBackendIds = allBackendIds;
         this.directors = directors;
     }
@@ -44,7 +54,7 @@ class RandomBackendSelector implements BackendSelector {
         return shuffleCopy(directorConfig.getBackends());
     }
 
-    public List<String> shuffleCopy(final List<String> ids) {
+    public List<String> shuffleCopy(final SequencedCollection<String> ids) {
         if (ids.isEmpty()) {
             return List.of();
         }

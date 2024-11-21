@@ -213,11 +213,11 @@ public class BackendHealthManager implements Runnable {
     public boolean exceedsCapacity(final String backendId) {
         final BackendConfiguration backendConfiguration = this.mapper.getBackends().get(backendId);
         Objects.requireNonNull(backendConfiguration);
-        if (backendConfiguration.coldCapacity() <= 0) {
+        if (backendConfiguration.safeCapacity() <= 0) {
             return false;
         }
         final BackendHealthStatus backendStatus = getBackendStatus(backendConfiguration.hostPort());
-        return backendConfiguration.coldCapacity() > backendStatus.getConnections() && !this.tolerant;
+        return backendConfiguration.safeCapacity() > backendStatus.getConnections() && !this.tolerant;
     }
 
     @VisibleForTesting
