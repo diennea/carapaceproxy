@@ -71,6 +71,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     public static final String ACME_CHALLENGE_ROUTE_ACTION_ID = "acme-challenge";
     public static final String DEBUGGING_HEADER_DEFAULT_NAME = "X-Proxy-Path";
     public static final String DEBUGGING_HEADER_ID = "mapper-debug";
+    private static final int DEFAULT_CAPACITY = 10; // number of connections
 
     // todo replace this with a configurable property of some kind
     private static final int THRESHOLD = 100;
@@ -221,7 +222,8 @@ public class StandardEndpointMapper extends EndpointMapper {
                         case DOWN:
                             continue;
                         case COLD:
-                            if (backendStatus.getConnections() > THRESHOLD) {
+                            final int capacity = backend.coldCapacity();
+                            if (capacity > 0 && backendStatus.getConnections() > capacity) {
                                 // can't use this
                                 continue;
                             }
@@ -464,14 +466,14 @@ public class StandardEndpointMapper extends EndpointMapper {
             String prefix = "backend." + i + ".";
             String id = properties.getString(prefix + "id", "");
             if (!id.isEmpty()) {
-                boolean enabled = properties.getBoolean(prefix + "enabled", false);
-                String host = properties.getString(prefix + "host", "localhost");
-                int port = properties.getInt(prefix + "port", 8086);
-                String probePath = properties.getString(prefix + "probePath", "");
-                LOG.info("configured backend {} {}:{} enabled:{}", id, host, port, enabled);
+                final boolean enabled = properties.getBoolean(prefix + "enabled", false);
+                final String host = properties.getString(prefix + "host", "localhost");
+                final int port = properties.getInt(prefix + "port", 8086);
+                final String probePath = properties.getString(prefix + "probePath", "");
+                final int coldCapacity = properties.getInt(prefix + "coldCapacity", DEFAULT_CAPACITY);
+                LOG.info("configured backend {} {}:{} enabled={} capacity={}", id, host, port, enabled, coldCapacity);
                 if (enabled) {
-                    BackendConfiguration config = new BackendConfiguration(id, host, port, probePath);
-                    addBackend(config);
+                    addBackend(new BackendConfiguration(id, host, port, probePath, coldCapacity));
                 }
             }
         }

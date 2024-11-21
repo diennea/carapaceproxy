@@ -20,7 +20,6 @@
 package org.carapaceproxy.server.backends;
 
 import java.sql.Timestamp;
-import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.carapaceproxy.core.EndpointKey;
 import org.slf4j.Logger;
@@ -33,9 +32,6 @@ import org.slf4j.LoggerFactory;
  */
 public class BackendHealthStatus {
 
-    // todo replace this with a configurable property of some kind
-    public static final long WARMUP_MILLIS = Duration.ofMinutes(1).toMillis();
-
     private static final Logger LOG = LoggerFactory.getLogger(BackendHealthStatus.class);
 
     private final EndpointKey hostPort;
@@ -46,8 +42,9 @@ public class BackendHealthStatus {
     private volatile long lastUnreachable;
     private volatile long lastReachable;
     private volatile BackendHealthCheck lastProbe;
+    private volatile long warmupPeriod;
 
-    public BackendHealthStatus(final EndpointKey hostPort) {
+    public BackendHealthStatus(final EndpointKey hostPort, final long warmupPeriod) {
         this.hostPort = hostPort;
         // todo cannot start with a DOWN backend (+ current time) as it would break:
         //  - BasicStandardEndpointMapperTest,
@@ -61,6 +58,7 @@ public class BackendHealthStatus {
         this.lastUnreachable = created;
         this.lastReachable = created;
         this.connections = new AtomicInteger();
+        this.warmupPeriod = warmupPeriod;
     }
 
     public long getUnreachableSince() {
@@ -111,7 +109,7 @@ public class BackendHealthStatus {
                 break;
             case COLD:
                 this.lastReachable = timestamp;
-                if (this.lastReachable - this.lastUnreachable > WARMUP_MILLIS) {
+                if (this.lastReachable - this.lastUnreachable > this.warmupPeriod) {
                     this.status = Status.STABLE;
                 }
                 break;
@@ -146,6 +144,10 @@ public class BackendHealthStatus {
         if (this.connections.getAcquire() > 0) {
             this.connections.decrementAndGet();
         }
+    }
+
+    public void setWarmupPeriod(final long warmupPeriod) {
+        this.warmupPeriod = warmupPeriod;
     }
 
     /**

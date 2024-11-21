@@ -24,10 +24,10 @@ import org.carapaceproxy.core.EndpointKey;
 /**
  * Configuration of a single backend server
  */
-public record BackendConfiguration(String id, EndpointKey hostPort, String probePath) {
+public record BackendConfiguration(String id, EndpointKey hostPort, String probePath, int coldCapacity) {
 
-    public BackendConfiguration(final String id, final String host, final int port, final String probePath) {
-        this(id, new EndpointKey(host, port), probePath);
+    public BackendConfiguration(final String id, final String host, final int port, final String probePath, final int coldCapacity) {
+        this(id, new EndpointKey(host, port), probePath, coldCapacity);
     }
 
     public String host() {

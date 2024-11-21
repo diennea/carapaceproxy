@@ -77,8 +77,8 @@ public class ForceBackendTest {
         assertEquals("thedirector", mapper.getForceDirectorParameter());
         assertEquals("thebackend", mapper.getForceBackendParameter());
 
-        mapper.addBackend(new BackendConfiguration("backend-a", "localhost", backendPort, "/"));
-        mapper.addBackend(new BackendConfiguration("backend-b", "localhost", backendPort, "/"));
+        mapper.addBackend(new BackendConfiguration("backend-a", "localhost", backendPort, "/", -1));
+        mapper.addBackend(new BackendConfiguration("backend-b", "localhost", backendPort, "/", -1));
         mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
         mapper.addDirector(new DirectorConfiguration("director-2").addBackend("backend-b"));
 
