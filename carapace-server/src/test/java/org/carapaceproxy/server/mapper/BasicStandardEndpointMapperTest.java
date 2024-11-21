@@ -259,11 +259,11 @@ public class BasicStandardEndpointMapperTest {
             final EndpointKey alive = EndpointKey.make("localhost:" + backend.port());
             final BackendHealthStatus mockAliveStatus = mock(BackendHealthStatus.class);
             when(mockAliveStatus.getStatus()).thenReturn(BackendHealthStatus.Status.STABLE);
-            when(bhMan.getBackendStatus(eq(alive))).thenReturn(mockAliveStatus.getStatus());
+            when(bhMan.getBackendStatus(eq(alive))).thenReturn(mockAliveStatus);
             final EndpointKey down = EndpointKey.make("localhost-down:" + backend.port());
             final BackendHealthStatus mockDownStatus = mock(BackendHealthStatus.class);
             when(mockDownStatus.getStatus()).thenReturn(BackendHealthStatus.Status.DOWN);
-            when(bhMan.getBackendStatus(eq(down))).thenReturn(mockDownStatus.getStatus()); // simulate unreachable backend -> expected 500 error
+            when(bhMan.getBackendStatus(eq(down))).thenReturn(mockDownStatus); // simulate unreachable backend -> expected 500 error
             server.setBackendHealthManager(bhMan);
             server.configureAtBoot(config);
             server.start();
@@ -331,11 +331,11 @@ public class BasicStandardEndpointMapperTest {
         final EndpointKey alive = EndpointKey.make("localhost:" + backendPort);
         final BackendHealthStatus mockAliveStatus = mock(BackendHealthStatus.class);
         when(mockAliveStatus.getStatus()).thenReturn(BackendHealthStatus.Status.STABLE);
-        when(bhMan.getBackendStatus(eq(alive))).thenReturn(mockAliveStatus.getStatus());
+        when(bhMan.getBackendStatus(eq(alive))).thenReturn(mockAliveStatus);
         final EndpointKey down = EndpointKey.make("localhost-down:" + backendPort);
         final BackendHealthStatus mockDownStatus = mock(BackendHealthStatus.class);
         when(mockDownStatus.getStatus()).thenReturn(BackendHealthStatus.Status.DOWN);
-        when(bhMan.getBackendStatus(eq(down))).thenReturn(mockDownStatus.getStatus()); // simulate unreachable backend -> expected 500 error
+        when(bhMan.getBackendStatus(eq(down))).thenReturn(mockDownStatus); // simulate unreachable backend -> expected 500 error
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.setBackendHealthManager(bhMan);

@@ -123,7 +123,7 @@ public class StuckRequestsTest {
             final BackendHealthStatus.Status expected = backendsUnreachableOnStuckRequests
                     ? BackendHealthStatus.Status.DOWN
                     : BackendHealthStatus.Status.COLD;
-            assertSame(expected, server.getBackendHealthManager().getBackendStatus(key));
+            assertSame(expected, server.getBackendHealthManager().getBackendStatus(key).getStatus());
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /good-index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");

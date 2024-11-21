@@ -33,10 +33,25 @@ import org.carapaceproxy.server.mapper.CustomHeader;
 @Data
 public class ActionConfiguration {
 
+    /**
+     * @see org.carapaceproxy.server.mapper.MapResult.Action#PROXY
+     */
     public static final String TYPE_PROXY = "proxy";
+    /**
+     * @see org.carapaceproxy.server.mapper.MapResult.Action#CACHE
+     */
     public static final String TYPE_CACHE = "cache";
+    /**
+     * @see org.carapaceproxy.server.mapper.MapResult.Action#STATIC
+     */
     public static final String TYPE_STATIC = "static";
+    /**
+     * @see org.carapaceproxy.server.mapper.MapResult.Action#ACME_CHALLENGE
+     */
     public static final String TYPE_ACME_CHALLENGE = "acme-challenge";
+    /**
+     * @see org.carapaceproxy.server.mapper.MapResult.Action#REDIRECT
+     */
     public static final String TYPE_REDIRECT = "redirect";
 
     private final String id;
@@ -61,7 +76,7 @@ public class ActionConfiguration {
     }
 
     public ActionConfiguration setCustomHeaders(List<CustomHeader> customHeaders) {
-        this.customHeaders = Collections.unmodifiableList(customHeaders == null ? new ArrayList() : customHeaders);
+        this.customHeaders = Collections.unmodifiableList(customHeaders == null ? new ArrayList<>() : customHeaders);
         return this;
     }
 

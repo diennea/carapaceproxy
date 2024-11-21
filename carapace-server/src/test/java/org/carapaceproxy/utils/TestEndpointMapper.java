@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.SequencedMap;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.core.ProxyRequest;
+import org.carapaceproxy.server.backends.BackendHealthStatus;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.DirectorConfiguration;
@@ -44,6 +45,7 @@ public class TestEndpointMapper extends EndpointMapper {
     private final List<ActionConfiguration> actions = new ArrayList<>();
     private final List<DirectorConfiguration> directors = new ArrayList<>();
     private final List<CustomHeader> headers = new ArrayList<>();
+    private BackendHealthStatus healthStatus;
 
     public TestEndpointMapper(String host, int port) {
         this(host, port, false);
@@ -60,6 +62,10 @@ public class TestEndpointMapper extends EndpointMapper {
         this.backends = new LinkedHashMap<>(backends);
     }
 
+    public BackendHealthStatus getHealthStatus() {
+        return healthStatus;
+    }
+
     @Override
     public MapResult map(ProxyRequest request) {
         String uri = request.getUri();
@@ -70,20 +76,25 @@ public class TestEndpointMapper extends EndpointMapper {
                     .action(MapResult.Action.SYSTEM)
                     .routeId(MapResult.NO_ROUTE)
                     .build();
-        } else if (cacheAll) {
-            return MapResult.builder()
-                    .host(host)
-                    .port(port)
-                    .action(MapResult.Action.CACHE)
-                    .routeId(MapResult.NO_ROUTE)
-                    .build();
         } else {
-            return MapResult.builder()
-                    .host(host)
-                    .port(port)
-                    .action(MapResult.Action.PROXY)
-                    .routeId(MapResult.NO_ROUTE)
-                    .build();
+            healthStatus = new BackendHealthStatus(request.getListener());
+            if (cacheAll) {
+                return MapResult.builder()
+                        .host(host)
+                        .port(port)
+                        .action(MapResult.Action.CACHE)
+                        .routeId(MapResult.NO_ROUTE)
+                        .healthStatus(healthStatus)
+                        .build();
+            } else {
+                return MapResult.builder()
+                        .host(host)
+                        .port(port)
+                        .action(MapResult.Action.PROXY)
+                        .routeId(MapResult.NO_ROUTE)
+                        .healthStatus(healthStatus)
+                        .build();
+            }
         }
     }
 
