@@ -23,15 +23,15 @@ import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_INTERNAL_SERV
 import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_MAINTENANCE_MODE_ERROR;
 import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_NOT_FOUND;
 import static org.carapaceproxy.core.StaticContentsManager.IN_MEMORY_RESOURCE;
-import static org.carapaceproxy.server.config.DirectorConfiguration.ALL_BACKENDS;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.SequencedMap;
 import java.util.Set;
 import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.configstore.ConfigurationStore;
@@ -58,20 +58,28 @@ import org.slf4j.LoggerFactory;
 public class StandardEndpointMapper extends EndpointMapper {
 
     public static final String ACME_CHALLENGE_ROUTE_ACTION_ID = "acme-challenge";
-    private final Map<String, BackendConfiguration> backends = new HashMap<>(); // wiped out whenever a new configuration is applied
+    private static final String DEFAULT_NOT_FOUND_ACTION = "not-found";
+    private static final String DEFAULT_INTERNAL_ERROR_ACTION = "internal-error";
+    private static final String DEFAULT_MAINTENANCE_ACTION = "maintenance";
+    private static final String DEFAULT_BAD_REQUEST_ACTION = "bad-request";
+    private static final String DEFAULT_SERVICE_UNAVAILABLE_ACTION = "service-unavailable";
+    // The map is wiped out whenever a new configuration is applied
+    private final SequencedMap<String, BackendConfiguration> backends = new LinkedHashMap<>();
     private final Map<String, DirectorConfiguration> directors = new HashMap<>();
     private final List<String> allbackendids = new ArrayList<>();
     private final List<RouteConfiguration> routes = new ArrayList<>();
     private final Map<String, ActionConfiguration> actions = new HashMap<>();
     public final Map<String, CustomHeader> headers = new HashMap<>();
     private final BackendSelector backendSelector;
-    private String defaultNotFoundAction = "not-found";
-    private String defaultInternalErrorAction = "internal-error";
+
+    private String defaultNotFoundAction = DEFAULT_NOT_FOUND_ACTION;
+    private String defaultInternalErrorAction = DEFAULT_INTERNAL_ERROR_ACTION;
+    private String defaultMaintenanceAction = DEFAULT_MAINTENANCE_ACTION;
+    private String defaultBadRequestAction = DEFAULT_BAD_REQUEST_ACTION;
+    private String defaultServiceUnavailable = DEFAULT_SERVICE_UNAVAILABLE_ACTION;
+
     private String forceDirectorParameter = "x-director";
     private String forceBackendParameter = "x-backend";
-    private String defaultMaintenanceAction = "maintenance";
-    private String defaultBadRequestAction = "bad-request";
-    private String defaultServiceUnavailable = "service-unavailable";
 
     private static final Logger LOG = LoggerFactory.getLogger(StandardEndpointMapper.class);
     private static final String ACME_CHALLENGE_URI_PATTERN = "/\\.well-known/acme-challenge/";
@@ -86,31 +94,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     }
 
     public StandardEndpointMapper() {
-        this.backendSelector = new RandomBackendSelector();
-    }
-
-    private final class RandomBackendSelector implements BackendSelector {
-
-        @Override
-        public List<String> selectBackends(String userId, String sessionId, String director) {
-            DirectorConfiguration directorConfig = directors.get(director);
-            if (directorConfig == null) {
-                LOG.error("Director \"{}\" not configured, while handling request  + userId={} sessionId={}", director, userId, sessionId);
-                return Collections.emptyList();
-            }
-            if (directorConfig.getBackends().contains(ALL_BACKENDS)) {
-                ArrayList<String> result = new ArrayList<>(allbackendids);
-                Collections.shuffle(result);
-                return result;
-            } else if (directorConfig.getBackends().size() == 1) {
-                return directorConfig.getBackends();
-            } else {
-                ArrayList<String> result = new ArrayList<>(directorConfig.getBackends());
-                Collections.shuffle(result);
-                return result;
-            }
-        }
-
+        this.backendSelector = new RandomBackendSelector(allbackendids, directors);
     }
 
     @Override
@@ -122,41 +106,44 @@ public class StandardEndpointMapper extends EndpointMapper {
                 LOG.trace("Request {} header host is null or empty", request.getUri());
             }
             return MapResult.badRequest();
-        } else if (!request.isValidHostAndPort(request.getRequestHostname())) {  //Invalid header host
+        }
+        if (!request.isValidHostAndPort(request.getRequestHostname())) {  //Invalid header host
             if (LOG.isTraceEnabled()) {
                 LOG.trace("Invalid header host {} for request {}", request.getRequestHostname(), request.getUri());
             }
             return MapResult.badRequest();
         }
 
-        for (RouteConfiguration route : routes) {
+        for (final RouteConfiguration route : routes) {
             if (!route.isEnabled()) {
                 continue;
             }
-
-            boolean matchResult = route.matches(request);
+            final boolean matchResult = route.matches(request);
             if (LOG.isTraceEnabled()) {
                 LOG.trace("route {}, map {} -> {}", route.getId(), request.getUri(), matchResult);
             }
+            if (!matchResult) {
+                continue;
+            }
 
-            if (matchResult) {
-                if (parent.getCurrentConfiguration().isMaintenanceModeEnabled()) {
-                    if (LOG.isTraceEnabled()) {
-                        LOG.trace("Maintenance mode is enable: request uri: {}", request.getUri());
-                    }
-                    return MapResult.maintenanceMode(route.getId());
+            if (getCurrentConfiguration().isMaintenanceModeEnabled()) {
+                if (LOG.isTraceEnabled()) {
+                    LOG.trace("Maintenance mode is enable: request uri: {}", request.getUri());
                 }
+                return MapResult.maintenanceMode(route.getId());
+            }
 
-                ActionConfiguration action = actions.get(route.getAction());
-                if (action == null) {
-                    LOG.info("no action \"{}\" -> not-found for {}, valid {}", route.getAction(), request.getUri(), actions.keySet());
-                    return MapResult.internalError(route.getId());
-                }
-                if (ActionConfiguration.TYPE_REDIRECT.equals(action.getType())) {
+            final ActionConfiguration action = actions.get(route.getAction());
+            if (action == null) {
+                LOG.info("no action \"{}\" -> not-found for {}, valid {}", route.getAction(), request.getUri(), actions.keySet());
+                return MapResult.internalError(route.getId());
+            }
+            switch (action.getType()) {
+                case ActionConfiguration.TYPE_REDIRECT -> {
                     return MapResult.builder()
                             .host(action.getRedirectHost())
                             .port(action.getRedirectPort())
-                            .action(MapResult.Action.REDIRECT)
+                            .action(Action.REDIRECT)
                             .routeId(route.getId())
                             .redirectLocation(action.getRedirectLocation())
                             .redirectProto(action.getRedirectProto())
@@ -165,109 +152,102 @@ public class StandardEndpointMapper extends EndpointMapper {
                             .customHeaders(action.getCustomHeaders())
                             .build();
                 }
-                if (ActionConfiguration.TYPE_STATIC.equals(action.getType())) {
+                case ActionConfiguration.TYPE_STATIC -> {
                     return MapResult.builder()
-                            .action(MapResult.Action.STATIC)
+                            .action(Action.STATIC)
                             .routeId(route.getId())
                             .resource(action.getFile())
                             .errorCode(action.getErrorCode())
                             .customHeaders(action.getCustomHeaders())
                             .build();
                 }
-                if (ActionConfiguration.TYPE_ACME_CHALLENGE.equals(action.getType())) {
+                case ActionConfiguration.TYPE_ACME_CHALLENGE -> {
                     String tokenName = request.getUri().replaceFirst(".*" + ACME_CHALLENGE_URI_PATTERN, "");
-                    String tokenData = parent.getDynamicCertificatesManager().getChallengeToken(tokenName);
+                    String tokenData = getDynamicCertificatesManager().getChallengeToken(tokenName);
                     if (tokenData == null) {
                         return MapResult.notFound(route.getId());
                     }
                     return MapResult.builder()
-                            .action(MapResult.Action.ACME_CHALLENGE)
+                            .action(Action.ACME_CHALLENGE)
                             .routeId(route.getId())
                             .resource(IN_MEMORY_RESOURCE + tokenData)
                             .errorCode(action.getErrorCode())
                             .build();
                 }
-                UrlEncodedQueryString queryString = request.getQueryString();
-                String director = action.getDirector();
-                String forceBackendParameterValue = queryString.get(forceBackendParameter);
+            }
+            final UrlEncodedQueryString queryString = request.getQueryString();
 
-                final List<String> selectedBackends;
-                if (forceBackendParameterValue != null) {
-                    LOG.info("forcing backend = {} for {}", forceBackendParameterValue, request.getUri());
-                    selectedBackends = Collections.singletonList(forceBackendParameterValue);
+            final List<String> selectedBackends;
+            if (queryString.contains(forceBackendParameter)) {
+                final String forceBackendParameterValue = queryString.get(forceBackendParameter);
+                LOG.info("forcing backend = {} for {}", forceBackendParameterValue, request.getUri());
+                selectedBackends = List.of(forceBackendParameterValue);
+                LOG.debug("selected {} backends for {}", selectedBackends, request.getUri());
+            } else {
+                final String director;
+                if (queryString.contains(forceDirectorParameter)) {
+                    director = queryString.get(forceDirectorParameter);
+                    LOG.info("forcing director = {} for {}", director, request.getUri());
                 } else {
-                    String forceDirectorParameterValue = queryString.get(forceDirectorParameter);
-                    if (forceDirectorParameterValue != null) {
-                        director = forceDirectorParameterValue;
-                        LOG.info("forcing director = {} for {}", director, request.getUri());
+                    director = action.getDirector();
+                }
+                selectedBackends = backendSelector.selectBackends(request.getUserId(), request.getSessionId(), director);
+                LOG.debug("selected {} backends for {}, director is {}", selectedBackends, request.getUri(), director);
+            }
+
+            for (final String backendId : selectedBackends) {
+                final Action selectedAction;
+                switch (action.getType()) {
+                    case ActionConfiguration.TYPE_PROXY -> selectedAction = Action.PROXY;
+                    case ActionConfiguration.TYPE_CACHE -> selectedAction = Action.CACHE;
+                    default -> {
+                        return MapResult.internalError(route.getId());
                     }
-                    selectedBackends = backendSelector.selectBackends(request.getUserId(), request.getSessionId(), director);
                 }
 
-                LOG.trace("selected {} backends for {}, director is {}", selectedBackends, request.getUri(), director);
-                for (String backendId : selectedBackends) {
-                    Action selectedAction;
-                    switch (action.getType()) {
-                        case ActionConfiguration.TYPE_PROXY:
-                            selectedAction = MapResult.Action.PROXY;
-                            break;
-                        case ActionConfiguration.TYPE_CACHE:
-                            selectedAction = MapResult.Action.CACHE;
-                            break;
-                        default:
-                            return MapResult.internalError(route.getId());
+                final BackendConfiguration backend = this.backends.get(backendId);
+                if (backend != null && getBackendHealthManager().isAvailable(backend.hostPort())) {
+                    List<CustomHeader> customHeaders = action.getCustomHeaders();
+                    if (this.debuggingHeaderEnabled) {
+                        customHeaders = new ArrayList<>(customHeaders);
+                        String routingPath = route.getId() + ";"
+                                + action.getId() + ";"
+                                + action.getDirector() + ";"
+                                + backendId;
+                        customHeaders.add(new CustomHeader(DEBUGGING_HEADER_ID, debuggingHeaderName, routingPath, HeaderMode.ADD));
                     }
-
-                    BackendConfiguration backend = this.backends.get(backendId);
-                    if (backend != null && parent.getBackendHealthManager().isAvailable(backend.hostPort())) {
-                        List<CustomHeader> customHeaders = action.getCustomHeaders();
-                        if (this.debuggingHeaderEnabled) {
-                            customHeaders = new ArrayList<>(customHeaders);
-                            String routingPath = route.getId() + ";"
-                                    + action.getId() + ";"
-                                    + action.getDirector() + ";"
-                                    + backendId;
-                            customHeaders.add(new CustomHeader(DEBUGGING_HEADER_ID, debuggingHeaderName, routingPath, HeaderMode.ADD));
-                        }
-                        return MapResult.builder()
-                                .host(backend.host())
-                                .port(backend.port())
-                                .action(selectedAction)
-                                .routeId(route.getId())
-                                .customHeaders(customHeaders)
-                                .build();
-                    }
+                    return MapResult.builder()
+                            .host(backend.host())
+                            .port(backend.port())
+                            .action(selectedAction)
+                            .routeId(route.getId())
+                            .customHeaders(customHeaders)
+                            .build();
                 }
-                // none of selected backends available
-                // return service unavailable if all backend is unavailable
-                if (!selectedBackends.isEmpty()) {
-                    return MapResult.serviceUnavailable(route.getId());
-                }
+            }
+            // none of selected backends available
+            // return service unavailable if all backend is unavailable
+            if (!selectedBackends.isEmpty()) {
+                return MapResult.serviceUnavailable(route.getId());
             }
         }
         // no one route matched
         return MapResult.notFound(MapResult.NO_ROUTE);
     }
 
-    private ActionConfiguration getErrorActionConfiguration(String routeId, String defaultAction) {
+    private ActionConfiguration getErrorActionConfiguration(final String routeId, final String defaultAction) {
         // Attempt to find a route-specific configuration first
-        Optional<RouteConfiguration> config = routes.stream()
+        return routes.stream()
                 .filter(r -> r.getId().equalsIgnoreCase(routeId))
-                .findFirst();
-        if (config.isPresent()) {
-            String action = config.get().getErrorAction();
-            if (action != null && actions.containsKey(action)) {
-                return actions.get(action);
-            }
-        }
-        // If no route-specific configuration or action is found, fallback to the global default
-        if (defaultAction != null && actions.containsKey(defaultAction)) {
-            return actions.get(defaultAction);
-        }
-        // Return null if no appropriate action configuration is found
-        return null;
+                .findFirst()
+                .map(RouteConfiguration::getErrorAction)
+                .filter(actions::containsKey)
+                // If no route-specific configuration or action is found, fallback to the global default
+                .or(() -> Optional.of(defaultAction))
+                .map(actions::get)
+                // Return null if no appropriate action configuration is found
+                .orElse(null);
     }
-
 
     @Override
     public SimpleHTTPResponse mapInternalError(String routeid) {
@@ -301,7 +281,7 @@ public class StandardEndpointMapper extends EndpointMapper {
             }
         }
         // custom global
-        if (maintenanceAction == null && defaultMaintenanceAction != null) {
+        if (maintenanceAction == null) {
             maintenanceAction = actions.get(defaultMaintenanceAction);
         }
         if (maintenanceAction != null) {
@@ -314,11 +294,9 @@ public class StandardEndpointMapper extends EndpointMapper {
     @Override
     public SimpleHTTPResponse mapBadRequest() {
         // custom global
-        if (defaultBadRequestAction != null) {
-            ActionConfiguration errorAction = actions.get(defaultBadRequestAction);
-            if (errorAction != null) {
-                return new SimpleHTTPResponse(errorAction.getErrorCode(), errorAction.getFile(), errorAction.getCustomHeaders());
-            }
+        ActionConfiguration errorAction = actions.get(defaultBadRequestAction);
+        if (errorAction != null) {
+            return new SimpleHTTPResponse(errorAction.getErrorCode(), errorAction.getFile(), errorAction.getCustomHeaders());
         }
         // fallback
         return super.mapBadRequest();
@@ -327,11 +305,9 @@ public class StandardEndpointMapper extends EndpointMapper {
     @Override
     public SimpleHTTPResponse mapPageNotFound(String routeId) {
         // custom global
-        if (defaultNotFoundAction != null) {
-            ActionConfiguration errorAction = actions.get(defaultNotFoundAction);
-            if (errorAction != null) {
-                return new SimpleHTTPResponse(errorAction.getErrorCode(), errorAction.getFile(), errorAction.getCustomHeaders());
-            }
+        ActionConfiguration errorAction = actions.get(defaultNotFoundAction);
+        if (errorAction != null) {
+            return new SimpleHTTPResponse(errorAction.getErrorCode(), errorAction.getFile(), errorAction.getCustomHeaders());
         }
         // fallback
         return super.mapPageNotFound(routeId);
@@ -339,12 +315,11 @@ public class StandardEndpointMapper extends EndpointMapper {
 
     @Override
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
-
         addAction(new ActionConfiguration("proxy-all", ActionConfiguration.TYPE_PROXY, DirectorConfiguration.DEFAULT, null, -1));
         addAction(new ActionConfiguration("cache-if-possible", ActionConfiguration.TYPE_CACHE, DirectorConfiguration.DEFAULT, null, -1));
-        addAction(new ActionConfiguration("not-found", ActionConfiguration.TYPE_STATIC, null, DEFAULT_NOT_FOUND, 404));
-        addAction(new ActionConfiguration("internal-error", ActionConfiguration.TYPE_STATIC, null, DEFAULT_INTERNAL_SERVER_ERROR, 500));
-        addAction(new ActionConfiguration("maintenance", ActionConfiguration.TYPE_STATIC, null, DEFAULT_MAINTENANCE_MODE_ERROR, 500));
+        addAction(new ActionConfiguration(DEFAULT_NOT_FOUND_ACTION, ActionConfiguration.TYPE_STATIC, null, DEFAULT_NOT_FOUND, 404));
+        addAction(new ActionConfiguration(DEFAULT_INTERNAL_ERROR_ACTION, ActionConfiguration.TYPE_STATIC, null, DEFAULT_INTERNAL_SERVER_ERROR, 500));
+        addAction(new ActionConfiguration(DEFAULT_MAINTENANCE_ACTION, ActionConfiguration.TYPE_STATIC, null, DEFAULT_MAINTENANCE_MODE_ERROR, 500));
 
         // Route+Action configuration for Let's Encrypt ACME challenging
         addAction(new ActionConfiguration(
@@ -356,23 +331,31 @@ public class StandardEndpointMapper extends EndpointMapper {
                 new RegexpRequestMatcher(ProxyRequest.PROPERTY_URI, ".*" + ACME_CHALLENGE_URI_PATTERN + ".*")
         ));
 
-        this.defaultNotFoundAction = properties.getString("default.action.notfound", "not-found");
+        this.defaultNotFoundAction = properties.getString("default.action.notfound", DEFAULT_NOT_FOUND_ACTION);
         LOG.info("configured default.action.notfound={}", defaultNotFoundAction);
-        this.defaultInternalErrorAction = properties.getString("default.action.internalerror", "internal-error");
+
+        this.defaultInternalErrorAction = properties.getString("default.action.internalerror", DEFAULT_INTERNAL_ERROR_ACTION);
         LOG.info("configured default.action.internalerror={}", defaultInternalErrorAction);
-        this.defaultMaintenanceAction = properties.getString("default.action.maintenance", "maintenance");
+
+        this.defaultMaintenanceAction = properties.getString("default.action.maintenance", DEFAULT_MAINTENANCE_ACTION);
         LOG.info("configured default.action.maintenance={}", defaultMaintenanceAction);
-        this.defaultBadRequestAction = properties.getString("default.action.badrequest", "bad-request");
+
+        this.defaultBadRequestAction = properties.getString("default.action.badrequest", DEFAULT_BAD_REQUEST_ACTION);
         LOG.info("configured default.action.badrequest={}", defaultBadRequestAction);
-        this.defaultServiceUnavailable = properties.getString("default.action.serviceunavailable", "service-unavailable");
+
+        this.defaultServiceUnavailable = properties.getString("default.action.serviceunavailable", DEFAULT_SERVICE_UNAVAILABLE_ACTION);
         LOG.info("configured default.action.serviceunavailable={}", defaultServiceUnavailable);
+
         this.forceDirectorParameter = properties.getString("mapper.forcedirector.parameter", forceDirectorParameter);
         LOG.info("configured mapper.forcedirector.parameter={}", forceDirectorParameter);
+
         this.forceBackendParameter = properties.getString("mapper.forcebackend.parameter", forceBackendParameter);
         LOG.info("configured mapper.forcebackend.parameter={}", forceBackendParameter);
+
         // To add custom debugging header for request choosen mapping-path
         this.debuggingHeaderEnabled = properties.getBoolean("mapper.debug", false);
         LOG.info("configured mapper.debug={}", debuggingHeaderEnabled);
+
         this.debuggingHeaderName = properties.getString("mapper.debug.name", DEBUGGING_HEADER_DEFAULT_NAME);
         LOG.info("configured mapper.debug.name={}", debuggingHeaderName);
 
@@ -401,14 +384,14 @@ public class StandardEndpointMapper extends EndpointMapper {
             String id = properties.getString(prefix + "id", "");
             boolean enabled = properties.getBoolean(prefix + "enabled", false);
             if (!id.isEmpty() && enabled) {
-                String action = properties.getString(prefix + "type", ActionConfiguration.TYPE_PROXY);
+                String actionType = properties.getString(prefix + "type", ActionConfiguration.TYPE_PROXY);
                 String file = properties.getString(prefix + "file", "");
                 String director = properties.getString(prefix + "director", DirectorConfiguration.DEFAULT);
                 int code = properties.getInt(prefix + "code", -1);
                 // Headers
                 List<CustomHeader> customHeaders = new ArrayList<>();
                 Set<String> usedIds = new HashSet<>();
-                final var headersIds = properties.getValues(prefix + "headers");
+                final Set<String> headersIds = properties.getValues(prefix + "headers");
                 for (String headerId : headersIds) {
                     if (usedIds.contains(headerId)) {
                         throw new ConfigurationNotValidException("while configuring action '" + id + "': header '" + headerId + "' duplicated");
@@ -423,26 +406,30 @@ public class StandardEndpointMapper extends EndpointMapper {
                     }
                 }
 
-                ActionConfiguration _action = new ActionConfiguration(id, action, director, file, code).setCustomHeaders(customHeaders);
+                ActionConfiguration action = new ActionConfiguration(id, actionType, director, file, code).setCustomHeaders(customHeaders);
 
                 // Action of type REDIRECT
                 String redirectLocation = properties.getString(prefix + "redirect.location", "");
-                _action.setRedirectLocation(redirectLocation);
+                action.setRedirectLocation(redirectLocation);
                 if (redirectLocation.isEmpty()) {
-                    _action.setRedirectProto(properties.getString(prefix + "redirect.proto", ""));
-                    _action.setRedirectHost(properties.getString(prefix + "redirect.host", ""));
-                    _action.setRedirectPort(properties.getInt(prefix + "redirect.port", -1));
-                    _action.setRedirectPath(properties.getString(prefix + "redirect.path", ""));
-                    if (action.equals(ActionConfiguration.TYPE_REDIRECT) && _action.getRedirectProto().isEmpty() && _action.getRedirectHost().isEmpty()
-                            && _action.getRedirectPort() == -1 && _action.getRedirectPath().isEmpty()) {
+                    action.setRedirectProto(properties.getString(prefix + "redirect.proto", ""));
+                    action.setRedirectHost(properties.getString(prefix + "redirect.host", ""));
+                    action.setRedirectPort(properties.getInt(prefix + "redirect.port", -1));
+                    action.setRedirectPath(properties.getString(prefix + "redirect.path", ""));
+                    if (actionType.equals(ActionConfiguration.TYPE_REDIRECT)
+                            && action.getRedirectProto().isEmpty()
+                            && action.getRedirectHost().isEmpty()
+                            && action.getRedirectPort() == -1
+                            && action.getRedirectPath().isEmpty()) {
                         throw new ConfigurationNotValidException("while configuring action '" + id
                                 + "': at least redirect.location or redirect.proto|.host|.port|.path have to be defined"
                         );
                     }
                 }
 
-                addAction(_action);
-                LOG.info("configured action {} type={} enabled:{} headers:{} redirect location:{} redirect proto:{} redirect host:{} redirect port:{} redirect path:{}", id, action, enabled, headersIds, redirectLocation, _action.getRedirectProto(), _action.getRedirectHost(), _action.getRedirectPort(), _action.getRedirectPath());
+                addAction(action);
+                LOG.info("configured action {} type={} enabled:{} headers:{} redirect location:{} redirect proto:{} redirect host:{} redirect port:{} redirect path:{}",
+                        id, actionType, enabled, headersIds, redirectLocation, action.getRedirectProto(), action.getRedirectHost(), action.getRedirectPort(), action.getRedirectPath());
             }
         }
 
@@ -516,7 +503,8 @@ public class StandardEndpointMapper extends EndpointMapper {
                     }
                 }
                 config.setErrorAction(errorAction);
-                //Maintenance action
+
+                // Maintenance action
                 String maintenanceAction = properties.getString(prefix + "maintenanceaction", "");
                 if (!maintenanceAction.isEmpty()) {
                     ActionConfiguration defined = actions.get(maintenanceAction);
@@ -535,14 +523,13 @@ public class StandardEndpointMapper extends EndpointMapper {
     }
 
     private void addHeader(String id, String name, String value, String mode) throws ConfigurationNotValidException {
-        final HeaderMode _mode = switch (mode) {
+        final HeaderMode headerMode = switch (mode) {
             case "set" -> HeaderMode.SET;
             case "add" -> HeaderMode.ADD;
             case "remove" -> HeaderMode.REMOVE;
             default -> throw new ConfigurationNotValidException("invalid value of mode " + mode + " for header " + id);
         };
-
-        if (headers.put(id, new CustomHeader(id, name, value, _mode)) != null) {
+        if (headers.put(id, new CustomHeader(id, name, value, headerMode)) != null) {
             throw new ConfigurationNotValidException("header " + id + " is already configured");
         }
     }
@@ -574,7 +561,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     }
 
     @Override
-    public Map<String, BackendConfiguration> getBackends() {
+    public SequencedMap<String, BackendConfiguration> getBackends() {
         return backends;
     }
 

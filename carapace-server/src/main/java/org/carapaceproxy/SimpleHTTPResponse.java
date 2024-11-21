@@ -19,7 +19,7 @@
  */
 package org.carapaceproxy;
 
-import java.util.Collections;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import java.util.List;
 import org.carapaceproxy.server.mapper.CustomHeader;
 
@@ -28,53 +28,29 @@ import org.carapaceproxy.server.mapper.CustomHeader;
  *
  * @author paolo.venturi
  */
-public class SimpleHTTPResponse {
+public record SimpleHTTPResponse(int errorCode, String resource, List<CustomHeader> customHeaders) {
 
-    private final int errorcode;
-    private final String resource;
-    private final List<CustomHeader> customHeaders;
-
-    public SimpleHTTPResponse(int errorcode, String resource, List<CustomHeader> customHeaders) {
-        this.errorcode = errorcode;
-        this.resource = resource;
-        this.customHeaders = customHeaders == null ? Collections.emptyList() : Collections.unmodifiableList(customHeaders);
+    public SimpleHTTPResponse {
+        customHeaders = List.copyOf(customHeaders);
     }
 
-    public int getErrorcode() {
-        return errorcode;
+    public SimpleHTTPResponse(final int errorCode, final String resource) {
+        this(errorCode, resource, List.of());
     }
 
-    public String getResource() {
-        return resource;
+    public static SimpleHTTPResponse notFound(final String resource) {
+        return new SimpleHTTPResponse(HttpResponseStatus.NOT_FOUND.code(), resource);
     }
 
-    public List<CustomHeader> getCustomHeaders() {
-        return customHeaders;
+    public static SimpleHTTPResponse internalError(final String resource) {
+        return new SimpleHTTPResponse(HttpResponseStatus.INTERNAL_SERVER_ERROR.code(), resource);
     }
 
-    public static final SimpleHTTPResponse NOT_FOUND(String res) {
-        return new SimpleHTTPResponse(404, res, null);
+    public static SimpleHTTPResponse badRequest(final String resource) {
+        return new SimpleHTTPResponse(HttpResponseStatus.BAD_REQUEST.code(), resource);
     }
 
-    public static final SimpleHTTPResponse INTERNAL_ERROR(String res) {
-        return new SimpleHTTPResponse(500, res, null);
+    public static SimpleHTTPResponse serviceUnavailable(final String resource) {
+        return new SimpleHTTPResponse(HttpResponseStatus.SERVICE_UNAVAILABLE.code(), resource);
     }
-
-    public static final SimpleHTTPResponse MAINTENANCE_MODE(String res) {
-        return new SimpleHTTPResponse(500, res, null);
-    }
-
-    public static final SimpleHTTPResponse BAD_REQUEST(String res) {
-        return new SimpleHTTPResponse(400, res, null);
-    }
-
-    public static final SimpleHTTPResponse SERVICE_UNAVAILABLE(String res) {
-        return new SimpleHTTPResponse(503, res, null);
-    }
-
-    @Override
-    public String toString() {
-        return "SimpleHTTPResponse{" + "errorcode=" + errorcode + ", resource=" + resource + ", customHeaders=" + customHeaders + '}';
-    }
-
 }
