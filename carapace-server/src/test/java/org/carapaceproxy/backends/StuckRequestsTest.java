@@ -27,6 +27,7 @@ import static org.carapaceproxy.core.ProxyRequest.PROPERTY_URI;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.util.Properties;
@@ -36,6 +37,7 @@ import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.ProxyRequestsManager;
+import org.carapaceproxy.server.backends.BackendHealthStatus;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.DirectorConfiguration;
@@ -118,7 +120,10 @@ public class StuckRequestsTest {
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
             assertThat((int) ProxyRequestsManager.STUCK_REQUESTS_COUNTER.get() > 0, is(true));
 
-            assertEquals(backendsUnreachableOnStuckRequests, !server.getBackendHealthManager().isAvailable(key));
+            final BackendHealthStatus.Status expected = backendsUnreachableOnStuckRequests
+                    ? BackendHealthStatus.Status.DOWN
+                    : BackendHealthStatus.Status.COLD;
+            assertSame(expected, server.getBackendHealthManager().getBackendStatus(key));
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /good-index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");

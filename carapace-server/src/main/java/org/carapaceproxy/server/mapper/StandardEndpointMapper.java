@@ -37,6 +37,8 @@ import java.util.Set;
 import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.core.ProxyRequest;
+import org.carapaceproxy.server.backends.BackendHealthManager;
+import org.carapaceproxy.server.backends.BackendHealthStatus;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.BackendSelector;
@@ -50,24 +52,30 @@ import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.ParseException;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.RequestMatchParser;
+import org.carapaceproxy.utils.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Standard Endpoint mapping
+ * Reference implementation of an {@link EndpointMapper}.
  */
 public class StandardEndpointMapper extends EndpointMapper {
 
-    public static final String ACME_CHALLENGE_ROUTE_ACTION_ID = "acme-challenge";
+    private static final Logger LOG = LoggerFactory.getLogger(StandardEndpointMapper.class);
     private static final String DEFAULT_NOT_FOUND_ACTION = "not-found";
     private static final String DEFAULT_INTERNAL_ERROR_ACTION = "internal-error";
     private static final String DEFAULT_MAINTENANCE_ACTION = "maintenance";
     private static final String DEFAULT_BAD_REQUEST_ACTION = "bad-request";
     private static final String DEFAULT_SERVICE_UNAVAILABLE_ACTION = "service-unavailable";
+    private static final String ACME_CHALLENGE_URI_PATTERN = "/\\.well-known/acme-challenge/";
+    public static final String ACME_CHALLENGE_ROUTE_ACTION_ID = "acme-challenge";
+    public static final String DEBUGGING_HEADER_DEFAULT_NAME = "X-Proxy-Path";
+    public static final String DEBUGGING_HEADER_ID = "mapper-debug";
+
     // The map is wiped out whenever a new configuration is applied
     private final SequencedMap<String, BackendConfiguration> backends = new LinkedHashMap<>();
     private final Map<String, DirectorConfiguration> directors = new HashMap<>();
-    private final List<String> allbackendids = new ArrayList<>();
+    private final List<String> allBackendIds = new ArrayList<>();
     private final List<RouteConfiguration> routes = new ArrayList<>();
     private final Map<String, ActionConfiguration> actions = new HashMap<>();
     public final Map<String, CustomHeader> headers = new HashMap<>();
@@ -82,33 +90,28 @@ public class StandardEndpointMapper extends EndpointMapper {
     private String forceDirectorParameter = "x-director";
     private String forceBackendParameter = "x-backend";
 
-    private static final Logger LOG = LoggerFactory.getLogger(StandardEndpointMapper.class);
-    private static final String ACME_CHALLENGE_URI_PATTERN = "/\\.well-known/acme-challenge/";
-
-    public static final String DEBUGGING_HEADER_DEFAULT_NAME = "X-Proxy-Path";
-    public static final String DEBUGGING_HEADER_ID = "mapper-debug";
     private String debuggingHeaderName = DEBUGGING_HEADER_DEFAULT_NAME;
     private boolean debuggingHeaderEnabled = false;
 
-    public StandardEndpointMapper(BackendSelector backendSelector) {
+    public StandardEndpointMapper(final BackendSelector backendSelector) {
         this.backendSelector = backendSelector;
     }
 
     public StandardEndpointMapper() {
-        this.backendSelector = new RandomBackendSelector(allbackendids, directors);
+        this.backendSelector = new RandomBackendSelector(allBackendIds, directors);
     }
 
     @Override
-    public MapResult map(ProxyRequest request) {
+    public MapResult map(final ProxyRequest request) {
         // If the HOST header is null (when on HTTP/1.1 or less), then return bad request
         // https://www.rfc-editor.org/rfc/rfc2616#page-38
-        if (request.getRequestHostname() == null || request.getRequestHostname().isBlank()) {
+        if (StringUtils.isBlank(request.getRequestHostname())) {
             if (LOG.isTraceEnabled()) {
                 LOG.trace("Request {} header host is null or empty", request.getUri());
             }
             return MapResult.badRequest();
         }
-        if (!request.isValidHostAndPort(request.getRequestHostname())) {  //Invalid header host
+        if (!request.isValidHostAndPort(request.getRequestHostname())) { //Invalid header host
             if (LOG.isTraceEnabled()) {
                 LOG.trace("Invalid header host {} for request {}", request.getRequestHostname(), request.getUri());
             }
@@ -207,23 +210,26 @@ public class StandardEndpointMapper extends EndpointMapper {
                 }
 
                 final BackendConfiguration backend = this.backends.get(backendId);
-                if (backend != null && getBackendHealthManager().isAvailable(backend.hostPort())) {
-                    List<CustomHeader> customHeaders = action.getCustomHeaders();
-                    if (this.debuggingHeaderEnabled) {
-                        customHeaders = new ArrayList<>(customHeaders);
-                        String routingPath = route.getId() + ";"
-                                + action.getId() + ";"
-                                + action.getDirector() + ";"
-                                + backendId;
-                        customHeaders.add(new CustomHeader(DEBUGGING_HEADER_ID, debuggingHeaderName, routingPath, HeaderMode.ADD));
+                if (backend != null) {
+                    BackendHealthManager backendHealthManager = getBackendHealthManager();
+                    if (backendHealthManager.getBackendStatus(backend.hostPort()) != BackendHealthStatus.Status.DOWN) {
+                        List<CustomHeader> customHeaders = action.getCustomHeaders();
+                        if (this.debuggingHeaderEnabled) {
+                            customHeaders = new ArrayList<>(customHeaders);
+                            String routingPath = route.getId() + ";"
+                                    + action.getId() + ";"
+                                    + action.getDirector() + ";"
+                                    + backendId;
+                            customHeaders.add(new CustomHeader(DEBUGGING_HEADER_ID, debuggingHeaderName, routingPath, HeaderMode.ADD));
+                        }
+                        return MapResult.builder()
+                                .host(backend.host())
+                                .port(backend.port())
+                                .action(selectedAction)
+                                .routeId(route.getId())
+                                .customHeaders(customHeaders)
+                                .build();
                     }
-                    return MapResult.builder()
-                            .host(backend.host())
-                            .port(backend.port())
-                            .action(selectedAction)
-                            .routeId(route.getId())
-                            .customHeaders(customHeaders)
-                            .build();
                 }
             }
             // none of selected backends available
@@ -545,7 +551,7 @@ public class StandardEndpointMapper extends EndpointMapper {
         if (backends.put(backend.id(), backend) != null) {
             throw new ConfigurationNotValidException("backend " + backend.id() + " is already configured");
         }
-        allbackendids.add(backend.id());
+        allBackendIds.add(backend.id());
     }
 
     public void addAction(ActionConfiguration action) throws ConfigurationNotValidException {
