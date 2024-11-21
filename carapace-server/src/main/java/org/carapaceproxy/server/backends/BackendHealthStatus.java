@@ -19,8 +19,8 @@
  */
 package org.carapaceproxy.server.backends;
 
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.carapaceproxy.core.EndpointKey;
 
 /**
@@ -30,7 +30,7 @@ import org.carapaceproxy.core.EndpointKey;
  */
 public class BackendHealthStatus {
 
-    private static final Logger LOG = Logger.getLogger(BackendHealthStatus.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(BackendHealthStatus.class);
 
     private final EndpointKey hostPort;
 
@@ -72,7 +72,7 @@ public class BackendHealthStatus {
     }
 
     void reportAsUnreachable(long timestamp) {
-        LOG.log(Level.INFO, "{0}: reportAsUnreachable {1}", new Object[]{hostPort, new java.sql.Timestamp(timestamp)});
+        LOG.info("{}: reportAsUnreachable {}", hostPort, new java.sql.Timestamp(timestamp));
         reportedAsUnreachableTs = timestamp;
         reportedAsUnreachable = true;
     }

@@ -35,7 +35,6 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.junit.Rule;
@@ -150,7 +149,6 @@ public class RestartEndpointTest {
                 ));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        CarapaceLogger.setLoggingDebugEnabled(true);
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
             int port = server.getLocalPort();

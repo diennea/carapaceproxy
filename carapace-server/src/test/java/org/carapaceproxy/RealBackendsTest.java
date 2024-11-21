@@ -31,7 +31,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
-import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.junit.Ignore;
@@ -83,8 +82,6 @@ public class RealBackendsTest {
     @Test
     @Ignore
     public void testRequestsRealBackend() throws Exception {
-        CarapaceLogger.setLoggingDebugEnabled(true);
-
         String host = "";
         int threads = 15;
         final int requestsPerClient = 1000;

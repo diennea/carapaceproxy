@@ -25,10 +25,9 @@ import com.github.benmanes.caffeine.cache.Expiry;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.github.benmanes.caffeine.cache.RemovalListener;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import org.carapaceproxy.server.cache.ContentsCache.ContentKey;
 import org.carapaceproxy.server.cache.ContentsCache.CachedContent;
+import org.carapaceproxy.server.cache.ContentsCache.ContentKey;
+import org.slf4j.Logger;
 
 /**
  *
@@ -81,22 +80,22 @@ class CaffeineCacheImpl implements CacheImpl {
                         throw new IllegalStateException("cant be collected");
                     case EXPIRED:
                         if (verbose) {
-                            logger.log(Level.FINE, "content {0}: expired at {1}", new Object[]{key.uri, new java.util.Date(payload.expiresTs)});
+                            logger.debug("content {}: expired at {}", key.uri, new java.util.Date(payload.expiresTs));
                         }
                         break;
                     case EXPLICIT:
                         if (verbose) {
-                            logger.log(Level.FINE, "content {0}: explicitly removed", new Object[]{key.uri});
+                            logger.debug("content {}: explicitly removed", key.uri);
                         }
                         break;
                     case REPLACED:
                         if (verbose) {
-                            logger.log(Level.FINE, "content {0}: replaced", new Object[]{key.uri});
+                            logger.debug("content {}: replaced", key.uri);
                         }
                         break;
                     case SIZE:
                         if (verbose) {
-                            logger.log(Level.FINE, "content {0}: removed due to max size exceeded", new Object[]{key.uri});
+                            logger.debug("content {}: removed due to max size exceeded", key.uri);
                         }
                         break;
                 }
@@ -135,14 +134,14 @@ class CaffeineCacheImpl implements CacheImpl {
         entries.addAndGet(1);
         memSize.addAndGet(key.getMemUsage() + payload.getMemUsage());
 
-        logger.log(Level.FINE, "adding content {0}", key.uri);
+        logger.debug("adding content {}", key.uri);
     }
 
     @Override
     public CachedContent get(ContentKey key) {
         CachedContent cached = cache.getIfPresent(key);
         if (cached != null && cached.expiresTs < System.currentTimeMillis()) {
-            logger.log(Level.FINE, "expiring content {0}, expired at {1}", new Object[]{key.uri, new java.util.Date(cached.expiresTs)});
+            logger.debug("expiring content {}, expired at {}", key.uri, new java.util.Date(cached.expiresTs));
             cache.invalidate(key);
             cached = null;
         }
@@ -154,8 +153,8 @@ class CaffeineCacheImpl implements CacheImpl {
     }
 
     private void release(ContentKey key, CachedContent payload) {
-        if (logger.isLoggable(Level.FINE)) {
-            logger.log(Level.FINE, "Releasing cache content {0}", new Object[]{key.uri});
+        if (logger.isDebugEnabled()) {
+            logger.debug("Releasing cache content {}", key.uri);
         }
 
         stats.released(payload.heapSize, payload.directSize, key.getMemUsage() + payload.getMemUsage());

@@ -26,19 +26,18 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertTrue;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import io.netty.buffer.Unpooled;
-import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.carapaceproxy.server.cache.ContentsCache.CachedContent;
 import org.carapaceproxy.server.cache.ContentsCache.ContentKey;
 import org.carapaceproxy.utils.TestUtils;
 import org.junit.After;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author francesco.caliumi
@@ -50,23 +49,7 @@ public class CaffeineCacheImplTest {
 
     private final List<CacheEntry> evictedResources = new CopyOnWriteArrayList<>();
 
-    private final Logger logger = new Logger("Cache", null) {
-        @Override
-        public void log(Level level, String msg, Object[] params) {
-            System.out.println((new MessageFormat(getName() + ": " + level + " " + msg)).format(params));
-        }
-
-        @Override
-        public void log(Level level, String msg, Object param1) {
-            Object[] params = {param1};
-            System.out.println((new MessageFormat(getName() + ": " + level + " " + msg)).format(params));
-        }
-
-        @Override
-        public void log(Level level, String msg) {
-            System.out.println(String.format(getName() + ": " + level + " " + msg));
-        }
-    };
+    private final Logger logger = LoggerFactory.getLogger(CaffeineCacheImplTest.class);
 
     @After
     public void afterEach() {

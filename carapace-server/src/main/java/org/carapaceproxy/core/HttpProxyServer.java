@@ -63,8 +63,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.servlet.DispatcherType;
 import lombok.Data;
 import lombok.Getter;
@@ -116,6 +114,8 @@ import org.eclipse.jetty.util.security.Constraint;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.webapp.WebAppContext;
 import org.glassfish.jersey.servlet.ServletContainer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The main server implementation of Carapace proxy.
@@ -125,7 +125,7 @@ import org.glassfish.jersey.servlet.ServletContainer;
  */
 public class HttpProxyServer implements AutoCloseable {
 
-    private static final Logger LOG = Logger.getLogger(HttpProxyServer.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(HttpProxyServer.class);
 
     @Getter
     private final Listeners listeners;
@@ -350,7 +350,7 @@ public class HttpProxyServer implements AutoCloseable {
             WebAppContext webApp = new WebAppContext(webUi.getAbsolutePath(), "/ui");
             contexts.addHandler(webApp);
         } else {
-            LOG.log(Level.SEVERE, "Cannot find {0} directory. Web UI will not be deployed", webUi.getAbsolutePath());
+            LOG.error("Cannot find {} directory. Web UI will not be deployed", webUi.getAbsolutePath());
         }
 
         ServletContextHandler context = new ServletContextHandler(ServletContextHandler.GZIP);
@@ -391,12 +391,12 @@ public class HttpProxyServer implements AutoCloseable {
         }
 
         if (adminServerHttpPort > 0) {
-            LOG.log(Level.INFO, "Base HTTP Admin UI url: http://{0}:{1}/ui", new Object[]{adminAdvertisedServerHost, adminServerHttpPort});
-            LOG.log(Level.INFO, "Base HTTP Admin API url: http://{0}:{1}/api", new Object[]{adminAdvertisedServerHost, adminServerHttpPort});
+            LOG.info("Base HTTP Admin UI url: http://{}:{}/ui", adminAdvertisedServerHost, adminServerHttpPort);
+            LOG.info("Base HTTP Admin API url: http://{}:{}/api", adminAdvertisedServerHost, adminServerHttpPort);
         }
         if (adminServerHttpsPort > 0) {
-            LOG.log(Level.INFO, "Base HTTPS Admin UI url: https://{0}:{1}/ui", new Object[]{adminAdvertisedServerHost, adminServerHttpsPort});
-            LOG.log(Level.INFO, "Base HTTPS Admin API url: https://{0}:{1}/api", new Object[]{adminAdvertisedServerHost, adminServerHttpsPort});
+            LOG.info("Base HTTPS Admin UI url: https://{}:{}/ui", adminAdvertisedServerHost, adminServerHttpsPort);
+            LOG.info("Base HTTPS Admin API url: https://{}:{}/api", adminAdvertisedServerHost, adminServerHttpsPort);
         }
 
         if (adminServerHttpPort > 0) {
@@ -404,7 +404,7 @@ public class HttpProxyServer implements AutoCloseable {
         } else {
             metricsUrl = "https://" + adminAdvertisedServerHost + ":" + adminServerHttpsPort + "/metrics";
         }
-        LOG.log(Level.INFO, "Prometheus Metrics url: {0}", metricsUrl);
+        LOG.info("Prometheus Metrics url: {}", metricsUrl);
 
     }
 
@@ -476,7 +476,7 @@ public class HttpProxyServer implements AutoCloseable {
             try {
                 adminserver.stop();
             } catch (Exception err) {
-                LOG.log(Level.SEVERE, "Error while stopping admin server", err);
+                LOG.error("Error while stopping admin server", err);
             } finally {
                 adminserver = null;
             }
@@ -588,20 +588,20 @@ public class HttpProxyServer implements AutoCloseable {
         adminLogRetentionDays = properties.getInt("admin.accesslog.retention.days", adminLogRetentionDays);
         userRealmClassname = properties.getClassname("userrealm.class", SimpleUserRealm.class.getName());
 
-        LOG.log(Level.INFO, "http.admin.enabled={0}", adminServerEnabled);
-        LOG.log(Level.INFO, "http.admin.port={0}", adminServerHttpPort);
-        LOG.log(Level.INFO, "http.admin.host={0}", adminServerHost);
-        LOG.log(Level.INFO, "https.admin.port={0}", adminServerHttpsPort);
-        LOG.log(Level.INFO, "https.admin.sslcertfile={0}", adminServerCertFile);
-        LOG.log(Level.INFO, "admin.advertised.host={0}", adminAdvertisedServerHost);
-        LOG.log(Level.INFO, "listener.offset.port={0}", listenersOffsetPort);
-        LOG.log(Level.INFO, "userrealm.class={0}", userRealmClassname);
-        LOG.log(Level.INFO, "cache.allocator.usepooledbytebufallocator={0}", this.usePooledByteBufAllocator);
+        LOG.info("http.admin.enabled={}", adminServerEnabled);
+        LOG.info("http.admin.port={}", adminServerHttpPort);
+        LOG.info("http.admin.host={}", adminServerHost);
+        LOG.info("https.admin.port={}", adminServerHttpsPort);
+        LOG.info("https.admin.sslcertfile={}", adminServerCertFile);
+        LOG.info("admin.advertised.host={}", adminAdvertisedServerHost);
+        LOG.info("listener.offset.port={}", listenersOffsetPort);
+        LOG.info("userrealm.class={}", userRealmClassname);
+        LOG.info("cache.allocator.usepooledbytebufallocator={}", this.usePooledByteBufAllocator);
 
         String awsAccessKey = properties.getString("aws.accesskey", null);
-        LOG.log(Level.INFO, "aws.accesskey={0}", awsAccessKey);
+        LOG.info("aws.accesskey={}", awsAccessKey);
         String awsSecretKey = properties.getString("aws.secretkey", null);
-        LOG.log(Level.INFO, "aws.secretkey={0}", awsSecretKey);
+        LOG.info("aws.secretkey={}", awsSecretKey);
         this.dynamicCertificatesManager.initAWSClient(awsAccessKey, awsSecretKey);
     }
 
@@ -801,12 +801,12 @@ public class HttpProxyServer implements AutoCloseable {
                 zkSecure = staticConfiguration.getBoolean("zkSecure", false);
                 zkTimeout = staticConfiguration.getInt("zkTimeout", 40_000);
                 zkProperties = new Properties(staticConfiguration.asProperties("zookeeper."));
-                LOG.log(Level.INFO, "mode=cluster, zkAddress=''{0}'',zkTimeout={1}, peer.id=''{2}'', zkSecure: {3}", new Object[]{zkAddress, zkTimeout, peerId, zkSecure});
-                zkProperties.forEach((k, v) -> LOG.log(Level.INFO, "additional zkclient property: {0}={1}", new Object[]{k, v}));
+                LOG.info("mode=cluster, zkAddress=\"{}\", zkTimeout={}, peer.id=\"{}\", zkSecure: {}", zkAddress, zkTimeout, peerId, zkSecure);
+                zkProperties.forEach((k, v) -> LOG.info("additional zkclient property: {}={}", k, v));
                 break;
             case "standalone":
                 cluster = false;
-                LOG.log(Level.INFO, "mode=standalone");
+                LOG.info("mode=standalone");
                 break;
             default:
                 throw new ConfigurationNotValidException("Invalid mode '" + mode + "', only 'cluster' or 'standalone'");
@@ -838,22 +838,22 @@ public class HttpProxyServer implements AutoCloseable {
 
         @Override
         public void eventFired(String eventId, Map<String, Object> data) {
-            LOG.log(Level.INFO, "Configuration changed");
+            LOG.info("Configuration changed");
             try {
                 dynamicConfigurationStore.reload();
                 applyDynamicConfiguration(null, true);
             } catch (Throwable err) {
-                LOG.log(Level.SEVERE, "Cannot apply new configuration", err);
+                LOG.error("Cannot apply new configuration", err);
             }
         }
 
         @Override
         public void reconnected() {
-            LOG.log(Level.INFO, "Configuration listener - reloading configuration after ZK reconnection");
+            LOG.info("Configuration listener - reloading configuration after ZK reconnection");
             try {
                 applyDynamicConfiguration(null, true);
             } catch (Throwable err) {
-                LOG.log(Level.SEVERE, "Cannot apply new configuration", err);
+                LOG.error("Cannot apply new configuration", err);
             }
         }
 

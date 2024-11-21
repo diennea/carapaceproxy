@@ -45,8 +45,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.net.ssl.SSLContext;
 import lombok.Data;
 import org.carapaceproxy.configstore.ConfigurationStore;
@@ -57,7 +55,8 @@ import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
-import org.carapaceproxy.utils.CarapaceLogger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Implementation of a configuration for the whole server.
@@ -74,7 +73,7 @@ import org.carapaceproxy.utils.CarapaceLogger;
 @Data
 public class RuntimeServerConfiguration {
 
-    private static final Logger LOG = Logger.getLogger(RuntimeServerConfiguration.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(RuntimeServerConfiguration.class);
 
     private final List<NetworkListenerConfiguration> listeners = new ArrayList<>();
     private final Map<String, SSLCertificateConfiguration> certificates = new HashMap<>();
@@ -154,7 +153,7 @@ public class RuntimeServerConfiguration {
     }
 
     public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
-        LOG.log(Level.INFO, "configuring from {0}", properties);
+        LOG.info("configuring from {}", properties);
         this.maxConnectionsPerEndpoint = properties.getInt("connectionsmanager.maxconnectionsperendpoint", maxConnectionsPerEndpoint);
         this.idleTimeout = properties.getInt("connectionsmanager.idletimeout", idleTimeout);
         if (this.idleTimeout <= 0) {
@@ -172,26 +171,26 @@ public class RuntimeServerConfiguration {
         this.keepaliveIdle = properties.getInt("connectionsmanager.keepaliveidle", keepaliveIdle);
         this.keepaliveInterval = properties.getInt("connectionsmanager.keepaliveinterval", keepaliveInterval);
         this.keepaliveCount = properties.getInt("connectionsmanager.keepalivecount", keepaliveCount);
-        LOG.log(Level.INFO, "connectionsmanager.maxconnectionsperendpoint={0}", maxConnectionsPerEndpoint);
-        LOG.log(Level.INFO, "connectionsmanager.idletimeout={0}", idleTimeout);
-        LOG.log(Level.INFO, "connectionsmanager.maxlifetime={0}", maxLifeTime);
-        LOG.log(Level.INFO, "connectionsmanager.stuckrequesttimeout={0}", stuckRequestTimeout);
-        LOG.log(Level.INFO, "connectionsmanager.backendsunreachableonstuckrequests={0}", backendsUnreachableOnStuckRequests);
-        LOG.log(Level.INFO, "connectionsmanager.connecttimeout={0}", connectTimeout);
-        LOG.log(Level.INFO, "connectionsmanager.borrowtimeout={0}", borrowTimeout);
-        LOG.log(Level.INFO, "connectionsmanager.keepaliveidle={0}", keepaliveIdle);
-        LOG.log(Level.INFO, "connectionsmanager.keepaliveinterval={0}", keepaliveInterval);
-        LOG.log(Level.INFO, "connectionsmanager.keepalivecount={0}", keepaliveCount);
+        LOG.info("connectionsmanager.maxconnectionsperendpoint={}", maxConnectionsPerEndpoint);
+        LOG.info("connectionsmanager.idletimeout={}", idleTimeout);
+        LOG.info("connectionsmanager.maxlifetime={}", maxLifeTime);
+        LOG.info("connectionsmanager.stuckrequesttimeout={}", stuckRequestTimeout);
+        LOG.info("connectionsmanager.backendsunreachableonstuckrequests={}", backendsUnreachableOnStuckRequests);
+        LOG.info("connectionsmanager.connecttimeout={}", connectTimeout);
+        LOG.info("connectionsmanager.borrowtimeout={}", borrowTimeout);
+        LOG.info("connectionsmanager.keepaliveidle={}", keepaliveIdle);
+        LOG.info("connectionsmanager.keepaliveinterval={}", keepaliveInterval);
+        LOG.info("connectionsmanager.keepalivecount={}", keepaliveCount);
 
         this.mapperClassname = properties.getClassname("mapper.class", StandardEndpointMapper.class.getName());
-        LOG.log(Level.INFO, "mapper.class={0}", this.mapperClassname);
+        LOG.info("mapper.class={}", this.mapperClassname);
 
         this.cacheMaxSize = properties.getLong("cache.maxsize", cacheMaxSize);
         this.cacheMaxFileSize = properties.getLong("cache.maxfilesize", cacheMaxFileSize);
         this.cacheDisabledForSecureRequestsWithoutPublic = properties.getBoolean("cache.requests.secure.disablewithoutpublic", cacheDisabledForSecureRequestsWithoutPublic);
-        LOG.log(Level.INFO, "cache.maxsize={0}", cacheMaxSize);
-        LOG.log(Level.INFO, "cache.maxfilesize={0}", cacheMaxFileSize);
-        LOG.log(Level.INFO, "cache.requests.secure.disablewithoutpublic={0}", cacheDisabledForSecureRequestsWithoutPublic);
+        LOG.info("cache.maxsize={}", cacheMaxSize);
+        LOG.info("cache.maxfilesize={}", cacheMaxFileSize);
+        LOG.info("cache.requests.secure.disablewithoutpublic={}", cacheDisabledForSecureRequestsWithoutPublic);
 
         this.accessLogPath = properties.getString("accesslog.path", accessLogPath);
         this.accessLogTimestampFormat = properties.getString("accesslog.format.timestamp", accessLogTimestampFormat);
@@ -207,18 +206,18 @@ public class RuntimeServerConfiguration {
         } catch (Exception err) {
             throw new ConfigurationNotValidException("Invalid accesslog.format.timestamp='" + accessLogTimestampFormat + ": " + err);
         }
-        LOG.log(Level.INFO, "accesslog.path={0}", accessLogPath);
-        LOG.log(Level.INFO, "accesslog.format.timestamp={0} (example: {1})", new Object[]{accessLogTimestampFormat, tsFormatExample});
-        LOG.log(Level.INFO, "accesslog.format={0}", accessLogFormat);
-        LOG.log(Level.INFO, "accesslog.queue.maxcapacity={0}", accessLogMaxQueueCapacity);
-        LOG.log(Level.INFO, "accesslog.flush.interval={0}", accessLogFlushInterval);
-        LOG.log(Level.INFO, "accesslog.failure.wait={0}", accessLogWaitBetweenFailures);
-        LOG.log(Level.INFO, "accesslog.maxsize={0}", accessLogMaxSize);
+        LOG.info("accesslog.path={}", accessLogPath);
+        LOG.info("accesslog.format.timestamp={} (example: {})", accessLogTimestampFormat, tsFormatExample);
+        LOG.info("accesslog.format={}", accessLogFormat);
+        LOG.info("accesslog.queue.maxcapacity={}", accessLogMaxQueueCapacity);
+        LOG.info("accesslog.flush.interval={}", accessLogFlushInterval);
+        LOG.info("accesslog.failure.wait={}", accessLogWaitBetweenFailures);
+        LOG.info("accesslog.maxsize={}", accessLogMaxSize);
 
         accessLogAdvancedEnabled = properties.getBoolean("accesslog.advanced.enabled", accessLogAdvancedEnabled);
         accessLogAdvancedBodySize = properties.getInt("accesslog.advanced.body.size", accessLogAdvancedBodySize);
-        LOG.log(Level.INFO, "accesslog.advanced.enabled={0}", accessLogAdvancedEnabled);
-        LOG.log(Level.INFO, "accesslog.advanced.body.size={0}", accessLogAdvancedBodySize);
+        LOG.info("accesslog.advanced.enabled={}", accessLogAdvancedEnabled);
+        LOG.info("accesslog.advanced.body.size={}", accessLogAdvancedBodySize);
 
         configureCertificates(properties);
         configureListeners(properties);
@@ -226,63 +225,59 @@ public class RuntimeServerConfiguration {
         configureConnectionPools(properties);
 
         healthProbePeriod = properties.getInt("healthmanager.period", 0);
-        LOG.log(Level.INFO, "healthmanager.period={0}", healthProbePeriod);
+        LOG.info("healthmanager.period={}", healthProbePeriod);
         if (healthProbePeriod <= 0) {
-            LOG.warning("BACKEND-HEALTH-MANAGER DISABLED");
+            LOG.warn("BACKEND-HEALTH-MANAGER DISABLED");
         }
 
         healthConnectTimeout = properties.getInt("healthmanager.connecttimeout", healthConnectTimeout);
-        LOG.log(Level.INFO, "healthmanager.connecttimeout={0}", healthConnectTimeout);
+        LOG.info("healthmanager.connecttimeout={}", healthConnectTimeout);
         if (healthConnectTimeout < 0) {
             throw new ConfigurationNotValidException("Invalid value '" + this.healthConnectTimeout + "' for healthmanager.connecttimeout. ConnectTimeout cannot be negative");
         }
 
         dynamicCertificatesManagerPeriod = properties.getInt("dynamiccertificatesmanager.period", 0);
-        LOG.log(Level.INFO, "dynamiccertificatesmanager.period={0}", dynamicCertificatesManagerPeriod);
+        LOG.info("dynamiccertificatesmanager.period={}", dynamicCertificatesManagerPeriod);
         keyPairsSize = properties.getInt("dynamiccertificatesmanager.keypairssize", DEFAULT_KEYPAIRS_SIZE);
-        LOG.log(Level.INFO, "dynamiccertificatesmanager.keypairssize={0}", keyPairsSize);
+        LOG.info("dynamiccertificatesmanager.keypairssize={}", keyPairsSize);
 
         domainsCheckerIPAddresses = properties.getValues("dynamiccertificatesmanager.domainschecker.ipaddresses");
-        LOG.log(Level.INFO, "dynamiccertificatesmanager.domainschecker.ipaddresses={0}", domainsCheckerIPAddresses);
+        LOG.info("dynamiccertificatesmanager.domainschecker.ipaddresses={}", domainsCheckerIPAddresses);
 
         ocspStaplingManagerPeriod = properties.getInt("ocspstaplingmanager.period", 0);
-        LOG.log(Level.INFO, "ocspstaplingmanager.period={0}", ocspStaplingManagerPeriod);
-
-        boolean loggingDebugEnabled = properties.getBoolean("logging.debug.enabled", false);
-        CarapaceLogger.setLoggingDebugEnabled(loggingDebugEnabled);
-        LOG.log(Level.INFO, "logging.debug.enabled={0}", loggingDebugEnabled);
+        LOG.info("ocspstaplingmanager.period={}", ocspStaplingManagerPeriod);
 
         clientsIdleTimeoutSeconds = properties.getInt("clients.idle.timeout", clientsIdleTimeoutSeconds);
-        LOG.log(Level.INFO, "clients.idle.timeout={0}", clientsIdleTimeoutSeconds);
+        LOG.info("clients.idle.timeout={}", clientsIdleTimeoutSeconds);
 
         responseCompressionThreshold = properties.getInt("response.compression.threshold", responseCompressionThreshold);
-        LOG.log(Level.INFO, "response.compression.threshold={0}", responseCompressionThreshold);
+        LOG.info("response.compression.threshold={}", responseCompressionThreshold);
         requestCompressionEnabled = properties.getBoolean("request.compression.enabled", requestCompressionEnabled);
-        LOG.log(Level.INFO, "request.compression.enabled={0}", requestCompressionEnabled);
+        LOG.info("request.compression.enabled={}", requestCompressionEnabled);
 
         sslTrustStoreFile = properties.getString("truststore.ssltruststorefile", sslTrustStoreFile);
-        LOG.log(Level.INFO, "truststore.ssltruststorefile={0}", sslTrustStoreFile);
+        LOG.info("truststore.ssltruststorefile={}", sslTrustStoreFile);
 
         sslTrustStorePassword = properties.getString("truststore.ssltruststorepassword", sslTrustStorePassword);
-        LOG.log(Level.INFO, "truststore.ssltruststorepassword={0}", sslTrustStorePassword);
+        LOG.info("truststore.ssltruststorepassword={}", sslTrustStorePassword);
 
         ocspEnabled = properties.getBoolean("ocsp.enabled", ocspEnabled);
-        LOG.log(Level.INFO, "ocsp.enabled={0}", ocspEnabled);
+        LOG.info("ocsp.enabled={}", ocspEnabled);
 
         maxHeaderSize = properties.getInt("carapace.maxheadersize", maxHeaderSize);
         if (this.maxHeaderSize <= 0) {
             throw new ConfigurationNotValidException("Invalid value '" + this.maxHeaderSize + "' for carapace.maxheadersize");
         }
-        LOG.log(Level.INFO, "carapace.maxheadersize={0}", maxHeaderSize);
+        LOG.info("carapace.maxheadersize={}", maxHeaderSize);
 
         maintenanceModeEnabled = properties.getBoolean("carapace.maintenancemode.enabled", maintenanceModeEnabled);
-        LOG.log(Level.INFO, "carapace.maintenancemode.enabled={0}", maintenanceModeEnabled);
+        LOG.info("carapace.maintenancemode.enabled={}", maintenanceModeEnabled);
 
         http10BackwardCompatibilityEnabled = properties.getBoolean("carapace.http10backwardcompatibility.enabled", http10BackwardCompatibilityEnabled);
-        LOG.log(Level.INFO, "carapace.http10backwardcompatibility.enabled={0}", http10BackwardCompatibilityEnabled);
+        LOG.info("carapace.http10backwardcompatibility.enabled={}", http10BackwardCompatibilityEnabled);
 
         localCertificatesStorePath = properties.getString("dynamiccertificatesmanager.localcertificates.store.path", localCertificatesStorePath);
-        LOG.log(Level.INFO, "dynamiccertificatesmanager.localcertificates.store.path={0}", localCertificatesStorePath);
+        LOG.info("dynamiccertificatesmanager.localcertificates.store.path={}", localCertificatesStorePath);
         if (localCertificatesStorePath != null) {
             var root = new File(localCertificatesStorePath);
             if (!root.canWrite()) {
@@ -292,13 +287,13 @@ public class RuntimeServerConfiguration {
 
         // storing enabled for all peers by default
         localCertificatesStorePeersIds = properties.getValues("dynamiccertificatesmanager.localcertificates.peers.ids");
-        LOG.log(Level.INFO, "dynamiccertificatesmanager.localcertificates.peers.ids={0}", localCertificatesStorePeersIds);
+        LOG.info("dynamiccertificatesmanager.localcertificates.peers.ids={}", localCertificatesStorePeersIds);
 
         maxAttempts = properties.getInt("dynamiccertificatesmanager.errors.maxattempts", maxAttempts);
-        LOG.log(Level.INFO, "dynamiccertificatesmanager.errors.maxattempts={0}", maxAttempts);
+        LOG.info("dynamiccertificatesmanager.errors.maxattempts={}", maxAttempts);
 
         alwaysCachedExtensions = properties.getValues("cache.cachealways", alwaysCachedExtensions);
-        LOG.log(Level.INFO, "cache.cachealways={0}", alwaysCachedExtensions);
+        LOG.info("cache.cachealways={}", alwaysCachedExtensions);
     }
 
     private void configureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
@@ -317,7 +312,7 @@ public class RuntimeServerConfiguration {
                     if (config.isAcme()) {
                         config.setDaysBeforeRenewal(daysBeforeRenewal);
                     }
-                    LOG.log(Level.INFO, "Configuring SSL certificate {0}: {1}", new Object[]{prefix, config});
+                    LOG.info("Configuring SSL certificate {}: {}", prefix, config);
                     this.addCertificate(config);
                 } catch (IllegalArgumentException e) {
                     throw new ConfigurationNotValidException(
@@ -364,9 +359,9 @@ public class RuntimeServerConfiguration {
             if (!type.isEmpty()) {
                 Map<String, String> filterConfig = new HashMap<>();
                 RequestFilterConfiguration config = new RequestFilterConfiguration(type, filterConfig);
-                LOG.log(Level.INFO, "configure filter " + prefix + "type={0}", type);
+                LOG.info("configure filter {} type={}", prefix, type);
                 properties.forEach(prefix, (k, v) -> {
-                    LOG.log(Level.INFO, "{0}={1}", new Object[]{k, v});
+                    LOG.info("{}={}", k, v);
                     filterConfig.put(k, v);
                 });
                 // try to build the filter for validation
@@ -420,7 +415,7 @@ public class RuntimeServerConfiguration {
                     enabled
             );
             connectionPools.put(id, connectionPool);
-            LOG.log(Level.INFO, "Configured connectionpool." + i + ": {0}", connectionPool);
+            LOG.info("Configured connectionpool.{}: {}", i, connectionPool);
         }
 
         // default connection pool
@@ -439,14 +434,14 @@ public class RuntimeServerConfiguration {
                 isClientKeepAlive(),
                 true
         );
-        LOG.log(Level.INFO, "Configured default connectionpool: {0}", defaultConnectionPool);
+        LOG.info("Configured default connectionpool: {}", defaultConnectionPool);
     }
 
     public void addListener(NetworkListenerConfiguration listener) throws ConfigurationNotValidException {
         if (listener.isSsl() && !certificates.containsKey(listener.getDefaultCertificate())) {
             throw new ConfigurationNotValidException(
                     "Listener " + listener.getHost() + ":" + listener.getPort() + ", "
-                    + "ssl=" + listener.isSsl() + ", "
+                    + "ssl=true, "
                     + "default certificate " + listener.getDefaultCertificate() + " not configured."
             );
         }

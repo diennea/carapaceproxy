@@ -45,10 +45,9 @@ import java.util.Locale;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.zip.GZIPOutputStream;
-import org.carapaceproxy.server.cache.ContentsCache;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.stringtemplate.v4.NoIndentWriter;
 import org.stringtemplate.v4.ST;
 import org.stringtemplate.v4.STWriter;
@@ -59,7 +58,7 @@ import org.stringtemplate.v4.STWriter;
  */
 public class RequestsLogger implements Runnable, Closeable {
 
-    private static final Logger LOG = Logger.getLogger(ContentsCache.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(ContentsCache.class);
 
     private final BlockingQueue<Entry> queue;
 
@@ -103,7 +102,7 @@ public class RequestsLogger implements Runnable, Closeable {
         }
 
         if (verbose) {
-            LOG.log(Level.INFO, "Opening file: {0}", currentConfiguration.getAccessLogPath());
+            LOG.info("Opening file: {}", currentConfiguration.getAccessLogPath());
         }
         os = new FileOutputStream(currentConfiguration.getAccessLogPath(), true);
         osw = new OutputStreamWriter(os, StandardCharsets.UTF_8);
@@ -114,7 +113,7 @@ public class RequestsLogger implements Runnable, Closeable {
     @VisibleForTesting
     void flushAccessLogFile() throws IOException {
         if (verbose) {
-            LOG.log(Level.INFO, "Flushed");
+            LOG.info("Flushed");
         }
         if (bw != null) {
             bw.flush();
@@ -130,7 +129,7 @@ public class RequestsLogger implements Runnable, Closeable {
 
     private void closeAccessLogFile() throws IOException {
         if (verbose) {
-            LOG.log(Level.INFO, "Closing file");
+            LOG.info("Closing file");
         }
         if (stw != null) {
             stw = null;
@@ -162,7 +161,7 @@ public class RequestsLogger implements Runnable, Closeable {
         try (FileChannel logFileChannel = FileChannel.open(currentAccessLogPath)) {
             long currentSize = logFileChannel.size();
             if (currentSize >= maxSize && maxSize > 0) {
-                LOG.log(Level.INFO, "Maximum access log size reached. file: {0} , Size: {1} , maxSize: {2}", new Object[]{accesslogPath, currentSize, maxSize});
+                LOG.info("Maximum access log size reached. file: {} , Size: {} , maxSize: {}", accesslogPath, currentSize, maxSize);
                 Files.move(currentAccessLogPath, newAccessLogPath, StandardCopyOption.ATOMIC_MOVE);
                 closeAccessLogFile();
                 // File opening will be retried at next cycle start
@@ -171,7 +170,7 @@ public class RequestsLogger implements Runnable, Closeable {
                 gzipFile(newAccessLogName, newAccessLogName + ".gzip", true);
             }
         } catch (IOException e) {
-            LOG.log(Level.SEVERE, "Error: Unable to rename file {0} in {1}: " + e, new Object[]{accesslogPath, newAccessLogName});
+            LOG.error("Error: Unable to rename file {} in {}: ", accesslogPath, newAccessLogName, e);
         }
     }
 
@@ -198,10 +197,10 @@ public class RequestsLogger implements Runnable, Closeable {
                 }
             }
             if (verbose) {
-                LOG.log(Level.INFO, "{0} was compressed successfully", source_filepath);
+                LOG.info("{} was compressed successfully", source_filepath);
             }
         } catch (IOException ex) {
-            LOG.log(Level.SEVERE, "{0} Compression failed:  {1}", new Object[]{source_filepath, ex});
+            LOG.error("{} Compression failed", source_filepath, ex);
         }
     }
 
@@ -215,11 +214,11 @@ public class RequestsLogger implements Runnable, Closeable {
         }
 
         if (verbose) {
-            LOG.log(Level.INFO, "Reloading conf");
+            LOG.info("Reloading conf");
         }
         String oldAccessLogPath = this.currentConfiguration.getAccessLogPath();
         if (newConfiguration.getAccessLogMaxQueueCapacity() != currentConfiguration.getAccessLogMaxQueueCapacity()) {
-            LOG.log(Level.SEVERE, "accesslog.queue.maxcapacity hot reload is not currently supported");
+            LOG.error("accesslog.queue.maxcapacity hot reload is not currently supported");
         }
         this.currentConfiguration = newConfiguration;
         if (!oldAccessLogPath.equals(newConfiguration.getAccessLogPath())) {
@@ -234,7 +233,7 @@ public class RequestsLogger implements Runnable, Closeable {
         Entry entry = new Entry(request, currentConfiguration.getAccessLogFormat(), accessLogTimestampFormatter);
 
         if (closeRequested) {
-            LOG.log(Level.SEVERE, "Request {0} not logged to access log because RequestsLogger is closed", entry.render());
+            LOG.error("Request {} not logged to access log because RequestsLogger is closed", entry.render());
             return;
         }
 
@@ -242,7 +241,7 @@ public class RequestsLogger implements Runnable, Closeable {
         boolean ret = queue.offer(entry);
 
         if (!ret) {
-            LOG.log(Level.SEVERE, "Request {0} not logged to access log because queue is full", entry.render());
+            LOG.error("Request {} not logged to access log because queue is full", entry.render());
         }
     }
 
@@ -274,7 +273,7 @@ public class RequestsLogger implements Runnable, Closeable {
         try {
             thread.join(60_000);
         } catch (InterruptedException ex) {
-            LOG.log(Level.SEVERE, "Interrupted while stopping");
+            LOG.error("Interrupted while stopping");
         }
     }
 
@@ -292,8 +291,8 @@ public class RequestsLogger implements Runnable, Closeable {
                 try {
                     ensureAccessLogFileOpened();
                 } catch (IOException ex) {
-                    LOG.log(Level.SEVERE, "Exception while trying to open access log file");
-                    LOG.log(Level.SEVERE, null, ex);
+                    LOG.error("Exception while trying to open access log file");
+                    LOG.error(null, ex);
                     Thread.sleep(currentConfiguration.getAccessLogWaitBetweenFailures());
                     lastFlush = System.currentTimeMillis();
                     if (breakRunForTests) {
@@ -313,7 +312,7 @@ public class RequestsLogger implements Runnable, Closeable {
 
                 if (currentEntry != null) {
                     if (verbose) {
-                        LOG.log(Level.INFO, "writing entry: {0}", currentEntry.render());
+                        LOG.info("writing entry: {}", currentEntry.render());
                     }
                     currentEntry.write(stw, bw);
                     currentEntry = null;
@@ -331,22 +330,22 @@ public class RequestsLogger implements Runnable, Closeable {
                 rotateAccessLogFile();
 
             } catch (InterruptedException ex) {
-                LOG.log(Level.SEVERE, "Interrupt received");
+                LOG.error("Interrupt received");
                 try {
                     closeAccessLogFile();
                 } catch (IOException ex1) {
-                    LOG.log(Level.SEVERE, null, ex1);
+                    LOG.error(null, ex1);
                 }
                 closed = true;
 
             } catch (IOException ex) {
-                LOG.log(Level.SEVERE, "Exception while writing on access log file");
-                LOG.log(Level.SEVERE, null, ex);
+                LOG.error("Exception while writing on access log file");
+                LOG.error(null, ex);
                 try {
                     closeAccessLogFile();
                 } catch (IOException ex1) {
-                    LOG.log(Level.SEVERE, "Exception while trying to close access log file");
-                    LOG.log(Level.SEVERE, null, ex1);
+                    LOG.error("Exception while trying to close access log file");
+                    LOG.error(null, ex1);
                 }
                 // File opening will be retried at next cycle start
 

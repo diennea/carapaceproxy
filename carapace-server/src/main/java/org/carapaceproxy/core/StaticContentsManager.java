@@ -31,11 +31,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.http.HttpStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Handles error pages loading
@@ -53,7 +53,7 @@ public class StaticContentsManager {
     public static final String DEFAULT_BAD_REQUEST =  CLASSPATH_RESOURCE + "/default-error-pages/400_badrequest.html";
     public static final String DEFAULT_SERVICE_UNAVAILABLE_ERROR =  CLASSPATH_RESOURCE + "/default-error-pages/503_serviceunavailable.html";
 
-    private static final Logger LOG = Logger.getLogger(StaticContentsManager.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(StaticContentsManager.class);
 
     private final ConcurrentHashMap<String, ByteBuf> contents = new ConcurrentHashMap<>();
 
@@ -111,7 +111,7 @@ public class StaticContentsManager {
                 throw new IOException("cannot load resource " + resource + ", path must start with " + FILE_RESOURCE + " or " + CLASSPATH_RESOURCE);
             }
         } catch (IOException | NullPointerException err) {
-            LOG.log(Level.SEVERE, "Cannot load resource {0}: {1}", new Object[]{resource, err});
+            LOG.error("Cannot load resource {}", resource, err);
             return null;
         }
     }

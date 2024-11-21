@@ -49,13 +49,13 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.carapaceproxy.utils.StringUtils;
 import org.shredzone.acme4j.toolbox.JSON;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Configuration storage implementation tha reads the configuration from a JDBC database,
@@ -151,7 +151,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             DELETE from %s WHERE id=?
             """.formatted(ACME_CHALLENGE_TOKENS_TABLE_NAME);
 
-    private static final Logger LOG = Logger.getLogger(HerdDBConfigurationStore.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(HerdDBConfigurationStore.class);
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -207,7 +207,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         // config file can override all of the configuration properties
         props.putAll(staticConfiguration.asProperties("db"));
 
-        LOG.log(Level.INFO, "HerdDB datasource configuration: {0}", props);
+        LOG.info("HerdDB datasource configuration: {}", props);
         HerdDBEmbeddedDataSource ds = new HerdDBEmbeddedDataSource(props);
         ds.setStatsLogger(statsLogger);
         if (cluster) {
@@ -227,7 +227,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
 
     @Override
     public void reload() {
-        LOG.log(Level.INFO, "reloading configuration from Database");
+        LOG.info("reloading configuration from Database");
         Set<String> currentKeys = new HashSet<>(this.properties.keySet());
 
         Set<String> loaded = loadCurrentConfiguration();
@@ -250,9 +250,9 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             tablesDDL.forEach((tableDDL) -> {
                 try (PreparedStatement ps = con.prepareStatement(tableDDL)) {
                     ps.executeUpdate();
-                    LOG.log(Level.INFO, "Created table {0}", tableDDL);
+                    LOG.info("Created table {}", tableDDL);
                 } catch (SQLException err) {
-                    LOG.log(Level.FINE, "Could not create table " + tableDDL, err);
+                    LOG.debug("Could not create table {}", tableDDL, err);
                 }
             });
 
@@ -266,7 +266,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             }
             return loaded;
         } catch (SQLException err) {
-            LOG.log(Level.SEVERE, "Error while loading configuration from Database", err);
+            LOG.error("Error while loading configuration from Database", err);
             throw new ConfigurationStoreException(err);
         }
 
@@ -290,7 +290,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                     PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_CONFIG_TABLE)) {
                 newConfigurationStore.forEach((k, v) -> {
                     try {
-                        LOG.log(Level.INFO, "Saving ''{0}''=''{1}''", new Object[]{k, v});
+                        LOG.info("Saving \"{}\"=\"{}\"", k, v);
                         currentKeys.remove(k);
                         newProperties.put(k, v);
                         psUpdate.setString(1, v);
@@ -306,7 +306,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 });
                 currentKeys.forEach(k -> {
                     try {
-                        LOG.log(Level.INFO, "Deleting ''{0}''", k);
+                        LOG.info("Deleting \"{}\"", k);
                         psDelete.setString(1, k);
                         psDelete.executeUpdate();
                     } catch (SQLException err) {
@@ -320,10 +320,10 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             currentKeys.forEach(properties::remove);
             properties.putAll(newProperties);
         } catch (SQLException err) {
-            LOG.log(Level.SEVERE, "Error while saving configuration from Database", err);
+            LOG.error("Error while saving configuration from Database", err);
             throw new ConfigurationStoreException(err);
         } catch (ConfigurationStoreException err) {
-            LOG.log(Level.SEVERE, "Error while saving configuration from Database", err);
+            LOG.error("Error while saving configuration from Database", err);
             throw err;
         }
     }
@@ -333,7 +333,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         try {
             return loadKeyPair(ACME_USER_KEY);
         } catch (Exception err) {
-            LOG.log(Level.SEVERE, "Error while performing KeyPair loading for ACME user.", err);
+            LOG.error("Error while performing KeyPair loading for ACME user.", err);
             throw new ConfigurationStoreException(err);
         }
     }
@@ -343,7 +343,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         try {
             return saveKeyPair(pair, ACME_USER_KEY, false);
         } catch (Exception err) {
-            LOG.log(Level.SEVERE, "Error while performing KeyPar saving for ACME user.", err);
+            LOG.error("Error while performing KeyPar saving for ACME user.", err);
             throw new ConfigurationStoreException(err);
         }
     }
@@ -356,7 +356,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             }
             return loadKeyPair(domain);
         } catch (Exception err) {
-            LOG.log(Level.SEVERE, "Error while performing KeyPair loading for domain " + domain + ".", err);
+            LOG.error("Error while performing KeyPair loading for domain {}.", domain, err);
             throw new ConfigurationStoreException(err);
         }
     }
@@ -368,7 +368,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 return saveKeyPair(pair, domain, update);
             }
         } catch (Exception err) {
-            LOG.log(Level.SEVERE, "Error while performing KeyPar saving for domain " + domain + ".", err);
+            LOG.error("Error while performing KeyPar saving for domain {}.", domain, err);
             throw new ConfigurationStoreException(err);
         }
         return false;
@@ -444,7 +444,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 return null;
             }
         } catch (Exception err) {
-            LOG.log(Level.SEVERE, "Error while performing Certificate loading for domain " + domain + ".", err);
+            LOG.error("Error while performing Certificate loading for domain {}.", domain, err);
             throw new ConfigurationStoreException(err);
         }
     }
@@ -493,7 +493,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             }
 
         } catch (Exception err) {
-            LOG.log(Level.SEVERE, "Error while performing Certificate saving for domain " + cert.getDomain() + ".", err);
+            LOG.error("Error while performing Certificate saving for domain {}.", cert.getDomain(), err);
             throw new ConfigurationStoreException(err);
         }
     }
@@ -505,7 +505,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             preparedStatement.setString(1, certId);
             preparedStatement.executeUpdate();
         } catch (final SQLException err) {
-            LOG.log(Level.SEVERE, "Error while performing Certificate drop for domain " + certId + ".", err);
+            LOG.error("Error while performing Certificate drop for domain {}.", certId, err);
             throw new ConfigurationStoreException(err);
         }
     }
@@ -527,7 +527,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             psInsert.setString(2, data);
             psInsert.executeUpdate();
         } catch (Exception err) {
-            LOG.log(Level.SEVERE, "Error while performing saving of ACME challenge token with id: " + id + " data: " + data, err);
+            LOG.error("Error while performing saving of ACME challenge token with id: {} data: {}", id, data, err);
             throw new ConfigurationStoreException(err);
         }
     }
@@ -545,7 +545,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 return null;
             }
         } catch (Exception err) {
-            LOG.log(Level.SEVERE, "Error while performing loading of ACME challenge token with id: " + id, err);
+            LOG.error("Error while performing loading of ACME challenge token with id: {}", id, err);
             throw new ConfigurationStoreException(err);
         }
     }
@@ -554,11 +554,11 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     public void deleteAcmeChallengeToken(String id) {
         try (Connection con = datasource.getConnection();
                 PreparedStatement psDelete = con.prepareStatement(DELETE_FROM_ACME_CHALLENGE_TOKENS_TABLE)) {
-            LOG.log(Level.INFO, "Deleting ACME challenge token with id''{0}''", id);
+            LOG.info("Deleting ACME challenge token with id \"{}\"", id);
             psDelete.setString(1, id);
             psDelete.executeUpdate();
         } catch (SQLException err) {
-            LOG.log(Level.SEVERE, "Error while performing deleting of ACME challenge token with id: " + id, err);
+            LOG.error("Error while performing deleting of ACME challenge token with id: {}", id, err);
             throw new ConfigurationStoreException(err);
         }
     }

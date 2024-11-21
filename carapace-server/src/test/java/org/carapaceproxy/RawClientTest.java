@@ -83,8 +83,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -95,7 +93,6 @@ import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
-import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.RawHttpClient.HttpResponse;
 import org.carapaceproxy.utils.RawHttpServer;
@@ -108,6 +105,8 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  *
@@ -116,7 +115,7 @@ import org.junit.runner.RunWith;
 @RunWith(JUnitParamsRunner.class)
 public class RawClientTest {
 
-    private static final Logger LOG = Logger.getLogger(RawClientTest.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(RawClientTest.class);
 
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
@@ -129,12 +128,12 @@ public class RawClientTest {
 
     @Before
     public void dumpTestName() {
-        LOG.log(Level.INFO, "Starting {0}", testName.getMethodName());
+        LOG.info("Starting {}", testName.getMethodName());
     }
 
     @After
     public void dumpTestNameEnd() {
-        LOG.log(Level.INFO, "End {0}", testName.getMethodName());
+        LOG.info("End {}", testName.getMethodName());
     }
 
     @Test
@@ -322,8 +321,6 @@ public class RawClientTest {
 
             ExecutorService ex = Executors.newFixedThreadPool(2);
             List<Future> futures = new ArrayList<>();
-
-            CarapaceLogger.setLoggingDebugEnabled(true);
 
             try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
                 ConnectionPoolConfiguration defaultConnectionPool = proxy.getCurrentConfiguration().getDefaultConnectionPool();
@@ -539,8 +536,6 @@ public class RawClientTest {
         ExecutorService ex = Executors.newFixedThreadPool(2);
         List<Future> futures = new ArrayList<>();
 
-        CarapaceLogger.setLoggingDebugEnabled(true);
-
         try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             ConnectionPoolConfiguration defaultConnectionPool = proxy.getCurrentConfiguration().getDefaultConnectionPool();
             defaultConnectionPool.setMaxConnectionsPerEndpoint(1);
@@ -619,7 +614,6 @@ public class RawClientTest {
 
     @Test
     public void testMaxConnectionsAndBorrowTimeout() throws Exception {
-        CarapaceLogger.setLoggingDebugEnabled(true);
         ExecutorService ex = Executors.newFixedThreadPool(2);
         List<Future> futures = new ArrayList<>();
         AtomicBoolean responseEnabled = new AtomicBoolean();

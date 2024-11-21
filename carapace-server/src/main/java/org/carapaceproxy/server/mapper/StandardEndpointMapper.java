@@ -33,8 +33,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.core.ProxyRequest;
@@ -51,6 +49,8 @@ import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.ParseException;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.RequestMatchParser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Standard Endpoint mapping
@@ -73,7 +73,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     private String defaultBadRequestAction = "bad-request";
     private String defaultServiceUnavailable = "service-unavailable";
 
-    private static final Logger LOG = Logger.getLogger(StandardEndpointMapper.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(StandardEndpointMapper.class);
     private static final String ACME_CHALLENGE_URI_PATTERN = "/\\.well-known/acme-challenge/";
 
     public static final String DEBUGGING_HEADER_DEFAULT_NAME = "X-Proxy-Path";
@@ -95,7 +95,7 @@ public class StandardEndpointMapper extends EndpointMapper {
         public List<String> selectBackends(String userId, String sessionId, String director) {
             DirectorConfiguration directorConfig = directors.get(director);
             if (directorConfig == null) {
-                LOG.log(Level.SEVERE, "Director ''{0}'' not configured, while handling request  + userId={1} sessionId={2}", new Object[]{director, userId, sessionId});
+                LOG.error("Director \"{}\" not configured, while handling request  + userId={} sessionId={}", director, userId, sessionId);
                 return Collections.emptyList();
             }
             if (directorConfig.getBackends().contains(ALL_BACKENDS)) {
@@ -118,13 +118,13 @@ public class StandardEndpointMapper extends EndpointMapper {
         // If the HOST header is null (when on HTTP/1.1 or less), then return bad request
         // https://www.rfc-editor.org/rfc/rfc2616#page-38
         if (request.getRequestHostname() == null || request.getRequestHostname().isBlank()) {
-            if (LOG.isLoggable(Level.FINER)) {
-                LOG.log(Level.FINER, "Request " + request.getUri() + " header host is null or empty");
+            if (LOG.isTraceEnabled()) {
+                LOG.trace("Request {} header host is null or empty", request.getUri());
             }
             return MapResult.badRequest();
         } else if (!request.isValidHostAndPort(request.getRequestHostname())) {  //Invalid header host
-            if (LOG.isLoggable(Level.FINER)) {
-                LOG.log(Level.FINER, "Invalid header host {0} for request {1}", new Object[]{request.getRequestHostname(), request.getUri()});
+            if (LOG.isTraceEnabled()) {
+                LOG.trace("Invalid header host {} for request {}", request.getRequestHostname(), request.getUri());
             }
             return MapResult.badRequest();
         }
@@ -135,21 +135,21 @@ public class StandardEndpointMapper extends EndpointMapper {
             }
 
             boolean matchResult = route.matches(request);
-            if (LOG.isLoggable(Level.FINER)) {
-                LOG.log(Level.FINER, "route {0}, map {1} -> {2}", new Object[]{route.getId(), request.getUri(), matchResult});
+            if (LOG.isTraceEnabled()) {
+                LOG.trace("route {}, map {} -> {}", route.getId(), request.getUri(), matchResult);
             }
 
             if (matchResult) {
                 if (parent.getCurrentConfiguration().isMaintenanceModeEnabled()) {
-                    if (LOG.isLoggable(Level.FINER)) {
-                        LOG.log(Level.FINER, "Maintenance mode is enable: request uri: {0}", request.getUri());
+                    if (LOG.isTraceEnabled()) {
+                        LOG.trace("Maintenance mode is enable: request uri: {}", request.getUri());
                     }
                     return MapResult.maintenanceMode(route.getId());
                 }
 
                 ActionConfiguration action = actions.get(route.getAction());
                 if (action == null) {
-                    LOG.log(Level.INFO, "no action ''{0}'' -> not-found for {1}, valid {2}", new Object[]{route.getAction(), request.getUri(), actions.keySet()});
+                    LOG.info("no action \"{}\" -> not-found for {}, valid {}", route.getAction(), request.getUri(), actions.keySet());
                     return MapResult.internalError(route.getId());
                 }
                 if (ActionConfiguration.TYPE_REDIRECT.equals(action.getType())) {
@@ -193,18 +193,18 @@ public class StandardEndpointMapper extends EndpointMapper {
 
                 final List<String> selectedBackends;
                 if (forceBackendParameterValue != null) {
-                    LOG.log(Level.INFO, "forcing backend = {0} for {1}", new Object[]{forceBackendParameterValue, request.getUri()});
+                    LOG.info("forcing backend = {} for {}", forceBackendParameterValue, request.getUri());
                     selectedBackends = Collections.singletonList(forceBackendParameterValue);
                 } else {
                     String forceDirectorParameterValue = queryString.get(forceDirectorParameter);
                     if (forceDirectorParameterValue != null) {
                         director = forceDirectorParameterValue;
-                        LOG.log(Level.INFO, "forcing director = {0} for {1}", new Object[]{director, request.getUri()});
+                        LOG.info("forcing director = {} for {}", director, request.getUri());
                     }
                     selectedBackends = backendSelector.selectBackends(request.getUserId(), request.getSessionId(), director);
                 }
 
-                LOG.log(Level.FINEST, "selected {0} backends for {1}, director is {2}", new Object[]{selectedBackends, request.getUri(), director});
+                LOG.trace("selected {} backends for {}, director is {}", selectedBackends, request.getUri(), director);
                 for (String backendId : selectedBackends) {
                     Action selectedAction;
                     switch (action.getType()) {
@@ -357,24 +357,24 @@ public class StandardEndpointMapper extends EndpointMapper {
         ));
 
         this.defaultNotFoundAction = properties.getString("default.action.notfound", "not-found");
-        LOG.log(Level.INFO, "configured default.action.notfound={0}", defaultNotFoundAction);
+        LOG.info("configured default.action.notfound={}", defaultNotFoundAction);
         this.defaultInternalErrorAction = properties.getString("default.action.internalerror", "internal-error");
-        LOG.log(Level.INFO, "configured default.action.internalerror={0}", defaultInternalErrorAction);
+        LOG.info("configured default.action.internalerror={}", defaultInternalErrorAction);
         this.defaultMaintenanceAction = properties.getString("default.action.maintenance", "maintenance");
-        LOG.log(Level.INFO, "configured default.action.maintenance={0}", defaultMaintenanceAction);
+        LOG.info("configured default.action.maintenance={}", defaultMaintenanceAction);
         this.defaultBadRequestAction = properties.getString("default.action.badrequest", "bad-request");
-        LOG.log(Level.INFO, "configured default.action.badrequest={0}", defaultBadRequestAction);
+        LOG.info("configured default.action.badrequest={}", defaultBadRequestAction);
         this.defaultServiceUnavailable = properties.getString("default.action.serviceunavailable", "service-unavailable");
-        LOG.log(Level.INFO, "configured default.action.serviceunavailable={0}", defaultServiceUnavailable);
+        LOG.info("configured default.action.serviceunavailable={}", defaultServiceUnavailable);
         this.forceDirectorParameter = properties.getString("mapper.forcedirector.parameter", forceDirectorParameter);
-        LOG.log(Level.INFO, "configured mapper.forcedirector.parameter={0}", forceDirectorParameter);
+        LOG.info("configured mapper.forcedirector.parameter={}", forceDirectorParameter);
         this.forceBackendParameter = properties.getString("mapper.forcebackend.parameter", forceBackendParameter);
-        LOG.log(Level.INFO, "configured mapper.forcebackend.parameter={0}", forceBackendParameter);
+        LOG.info("configured mapper.forcebackend.parameter={}", forceBackendParameter);
         // To add custom debugging header for request choosen mapping-path
         this.debuggingHeaderEnabled = properties.getBoolean("mapper.debug", false);
-        LOG.log(Level.INFO, "configured mapper.debug={0}", debuggingHeaderEnabled);
+        LOG.info("configured mapper.debug={}", debuggingHeaderEnabled);
         this.debuggingHeaderName = properties.getString("mapper.debug.name", DEBUGGING_HEADER_DEFAULT_NAME);
-        LOG.log(Level.INFO, "configured mapper.debug.name={0}", debuggingHeaderName);
+        LOG.info("configured mapper.debug.name={}", debuggingHeaderName);
 
         /*
          * HEADERS
@@ -388,7 +388,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                 String value = properties.getString(prefix + "value", "");
                 String mode = properties.getString(prefix + "mode", "add").toLowerCase().trim();
                 addHeader(id, name, value, mode);
-                LOG.log(Level.INFO, "configured header {0} name:{1}, value:{2}", new Object[]{id, name, value});
+                LOG.info("configured header {} name:{}, value:{}", id, name, value);
             }
         }
 
@@ -442,8 +442,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                 }
 
                 addAction(_action);
-                LOG.log(Level.INFO, "configured action {0} type={1} enabled:{2} headers:{3} redirect location:{4} redirect proto:{5} redirect host:{6} redirect port:{7} redirect path:{8}",
-                        new Object[]{id, action, enabled, headersIds, redirectLocation, _action.getRedirectProto(), _action.getRedirectHost(), _action.getRedirectPort(), _action.getRedirectPath()});
+                LOG.info("configured action {} type={} enabled:{} headers:{} redirect location:{} redirect proto:{} redirect host:{} redirect port:{} redirect path:{}", id, action, enabled, headersIds, redirectLocation, _action.getRedirectProto(), _action.getRedirectHost(), _action.getRedirectPort(), _action.getRedirectPath());
             }
         }
 
@@ -459,7 +458,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                 String host = properties.getString(prefix + "host", "localhost");
                 int port = properties.getInt(prefix + "port", 8086);
                 String probePath = properties.getString(prefix + "probePath", "");
-                LOG.log(Level.INFO, "configured backend {0} {1}:{2} enabled:{3}", new Object[]{id, host, port, enabled});
+                LOG.info("configured backend {} {}:{} enabled:{}", id, host, port, enabled);
                 if (enabled) {
                     BackendConfiguration config = new BackendConfiguration(id, host, port, probePath);
                     addBackend(config);
@@ -476,7 +475,7 @@ public class StandardEndpointMapper extends EndpointMapper {
             String id = properties.getString(prefix + "id", "");
             if (!id.isEmpty()) {
                 boolean enabled = properties.getBoolean(prefix + "enabled", false);
-                LOG.log(Level.INFO, "configured director {0} backends:{1}, enabled:{2}", new Object[]{id, backends, enabled});
+                LOG.info("configured director {} backends:{}, enabled:{}", id, backends, enabled);
                 if (enabled) {
                     DirectorConfiguration config = new DirectorConfiguration(id);
                     for (String backendId : properties.getValues(prefix + "backends")) {
@@ -506,7 +505,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                 boolean enabled = properties.getBoolean(prefix + "enabled", false);
                 matchingCondition = properties.getString(prefix + "match", "all");
                 RequestMatcher matcher = new RequestMatchParser(matchingCondition).parse();
-                LOG.log(Level.INFO, "configured route {0} action: {1} enabled: {2} matcher: {3}", new Object[]{id, action, enabled, matcher});
+                LOG.info("configured route {} action: {} enabled: {} matcher: {}", id, action, enabled, matcher);
                 RouteConfiguration config = new RouteConfiguration(id, action, enabled, matcher);
                 // Error action
                 String errorAction = properties.getString(prefix + "erroraction", "");
