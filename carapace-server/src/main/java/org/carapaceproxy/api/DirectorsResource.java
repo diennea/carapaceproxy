@@ -59,11 +59,10 @@ public class DirectorsResource {
 
     @GET
     public List<DirectorBean> getAll() {
-        final List<DirectorBean> directors = new ArrayList();
+        final List<DirectorBean> directors = new ArrayList<>();
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-        server.getMapper().getDirectors().forEach(director -> {
-            directors.add(new DirectorBean(director.getId(), director.getBackends()));
-        });
+        server.getMapper().getDirectors()
+                .forEach((directorId, director) -> directors.add(new DirectorBean(directorId, director.getBackends())));
 
         return directors;
     }

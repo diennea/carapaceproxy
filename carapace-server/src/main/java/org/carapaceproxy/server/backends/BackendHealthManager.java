@@ -74,6 +74,10 @@ public class BackendHealthManager implements Runnable {
         this.period = DEFAULT_PERIOD;
     }
 
+    public boolean isTolerant() {
+        return tolerant;
+    }
+
     public int getPeriod() {
         return period;
     }
@@ -217,7 +221,7 @@ public class BackendHealthManager implements Runnable {
             return false;
         }
         final BackendHealthStatus backendStatus = getBackendStatus(backendConfiguration.hostPort());
-        return backendConfiguration.safeCapacity() > backendStatus.getConnections() && !this.tolerant;
+        return backendConfiguration.safeCapacity() > backendStatus.getConnections();
     }
 
     @VisibleForTesting
