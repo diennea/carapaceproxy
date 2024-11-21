@@ -70,24 +70,28 @@ public class ForceBackendTest {
                         .withBody("it <b>works</b> !!")));
 
         int backendPort = backend1.port();
-        StandardEndpointMapper mapper = new StandardEndpointMapper(SafeBackendSelector::forMapper);
-        Properties properties = new Properties();
-        properties.put("mapper.forcedirector.parameter", "thedirector");
-        properties.put("mapper.forcebackend.parameter", "thebackend");
-        mapper.configure(new PropertiesConfigurationStore(properties));
-        assertEquals("thedirector", mapper.getForceDirectorParameter());
-        assertEquals("thebackend", mapper.getForceBackendParameter());
 
-        mapper.addBackend(new BackendConfiguration("backend-a", "localhost", backendPort, "/", -1));
-        mapper.addBackend(new BackendConfiguration("backend-b", "localhost", backendPort, "/", -1));
-        mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
-        mapper.addDirector(new DirectorConfiguration("director-2").addBackend("backend-b"));
+        final EndpointMapper.Factory mapperFactory = parent -> {
+            StandardEndpointMapper mapper = new StandardEndpointMapper(parent, SafeBackendSelector::new);
+            Properties properties = new Properties();
+            properties.put("mapper.forcedirector.parameter", "thedirector");
+            properties.put("mapper.forcebackend.parameter", "thebackend");
+            mapper.configure(new PropertiesConfigurationStore(properties));
+            assertEquals("thedirector", mapper.getForceDirectorParameter());
+            assertEquals("thebackend", mapper.getForceBackendParameter());
 
-        mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1));
+            mapper.addBackend(new BackendConfiguration("backend-a", "localhost", backendPort, "/", -1));
+            mapper.addBackend(new BackendConfiguration("backend-b", "localhost", backendPort, "/", -1));
+            mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
+            mapper.addDirector(new DirectorConfiguration("director-2").addBackend("backend-b"));
 
-        mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index.html.*")));
+            mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1));
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+            mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index.html.*")));
+            return mapper;
+        };
+
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapperFactory, tmpDir.newFolder())) {
             server.start();
             int port = server.getLocalPort();
             {

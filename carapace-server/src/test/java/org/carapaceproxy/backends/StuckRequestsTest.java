@@ -44,6 +44,7 @@ import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.config.SafeBackendSelector;
+import org.carapaceproxy.server.mapper.EndpointMapper;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
 import org.carapaceproxy.utils.RawHttpClient;
@@ -63,6 +64,7 @@ public class StuckRequestsTest {
 
     @Test
     @Parameters({"true", "false"})
+    @junitparams.naming.TestCaseName("test(backend unreachable on stuck request: {0})")
     public void testBackendUnreachableOnStuckRequest(boolean backendsUnreachableOnStuckRequests) throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
@@ -84,20 +86,39 @@ public class StuckRequestsTest {
         final int theport = wireMockRule.port();
         EndpointKey key = new EndpointKey("localhost", theport);
 
-        StandardEndpointMapper mapper = new StandardEndpointMapper(SafeBackendSelector::forMapper);
-        mapper.addBackend(new BackendConfiguration("backend-a", "localhost", theport, "/", -1));
-        mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
-        mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1));
-        mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index.html.*")));
-
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.newFolder());) {
+        final EndpointMapper.Factory mapperFactory = parent -> {
+            StandardEndpointMapper mapper = new StandardEndpointMapper(parent, SafeBackendSelector::new);
+            mapper.addBackend(new BackendConfiguration("backend-a", "localhost", theport, "/", -1));
+            mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
+            mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1));
+            mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index.html.*")));
+            return mapper;
+        };
+        try (HttpProxyServer server = new HttpProxyServer(mapperFactory, tmpDir.newFolder())) {
             Properties properties = new Properties();
+            properties.put("healthmanager.tolerant", "true");
+            properties.put("backend.1.id", "backend-a");
+            properties.put("backend.1.enabled", "true");
+            properties.put("backend.1.host", "localhost");
+            properties.put("backend.1.port", theport);
+            properties.put("backend.1.probePath", "/");
+            properties.put("director.1.id", "director-1");
+            properties.put("director.1.backends", properties.getProperty("backend.1.id"));
+            properties.put("director.1.enabled", "true");
+            properties.put("action.1.id", "proxy-1");
+            properties.put("action.1.enabled", "true");
+            properties.put("action.1.type", ActionConfiguration.TYPE_PROXY);
+            properties.put("action.1.director", properties.getProperty("director.1.id"));
+            properties.put("route.100.id", "route-1");
+            properties.put("route.100.enabled", "true");
+            properties.put("route.100.match", "request.uri ~ \".*index.html.*\"");
+            properties.put("route.100.action", properties.getProperty("action.1.id"));
+
             properties.put("connectionsmanager.stuckrequesttimeout", "100"); // ms
             properties.put("connectionsmanager.backendsunreachableonstuckrequests", backendsUnreachableOnStuckRequests + "");
             // configure resets all listeners configurations
             server.configureAtBoot(new PropertiesConfigurationStore(properties));
             server.addListener(new NetworkListenerConfiguration("localhost", 0));
-            server.setMapper(mapper);
             assertEquals(100, server.getCurrentConfiguration().getStuckRequestTimeout());
             assertEquals(backendsUnreachableOnStuckRequests, server.getCurrentConfiguration().isBackendsUnreachableOnStuckRequests());
             server.start();

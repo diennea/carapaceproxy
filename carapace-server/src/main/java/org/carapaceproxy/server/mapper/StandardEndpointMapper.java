@@ -36,6 +36,7 @@ import java.util.SequencedMap;
 import java.util.Set;
 import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.configstore.ConfigurationStore;
+import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.backends.BackendHealthStatus;
@@ -45,6 +46,7 @@ import org.carapaceproxy.server.config.BackendSelector;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
+import org.carapaceproxy.server.config.SafeBackendSelector;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import org.carapaceproxy.server.mapper.CustomHeader.HeaderMode;
 import org.carapaceproxy.server.mapper.MapResult.Action;
@@ -75,8 +77,7 @@ public class StandardEndpointMapper extends EndpointMapper {
 
     // The map is wiped out whenever a new configuration is applied
     private final SequencedMap<String, BackendConfiguration> backends = new LinkedHashMap<>();
-    private final Map<String, DirectorConfiguration> directors = new HashMap<>();
-    private final List<String> allBackendIds = new ArrayList<>();
+    private final SequencedMap<String, DirectorConfiguration> directors = new LinkedHashMap<>();
     private final List<RouteConfiguration> routes = new ArrayList<>();
     private final Map<String, ActionConfiguration> actions = new HashMap<>();
     public final Map<String, CustomHeader> headers = new HashMap<>();
@@ -94,8 +95,13 @@ public class StandardEndpointMapper extends EndpointMapper {
     private String debuggingHeaderName = DEBUGGING_HEADER_DEFAULT_NAME;
     private boolean debuggingHeaderEnabled = false;
 
-    public StandardEndpointMapper(final BackendSelector.SelectorFactory backendSelector) {
-        this.backendSelector = backendSelector.apply(this);
+    public StandardEndpointMapper(final HttpProxyServer parent) {
+        this(parent, SafeBackendSelector::new);
+    }
+
+    public StandardEndpointMapper(final HttpProxyServer parent, final BackendSelector.SelectorFactory backendSelector) {
+        super(parent);
+        this.backendSelector = backendSelector.build(this);
     }
 
     @Override
@@ -213,17 +219,23 @@ public class StandardEndpointMapper extends EndpointMapper {
                     final BackendHealthStatus backendStatus = backendHealthManager.getBackendStatus(backend.hostPort());
                     switch (backendStatus.getStatus()) {
                         case DOWN:
+                            LOG.info("Backend {} is down, skipping...", backendId);
                             continue;
                         case COLD:
-                            final int capacity = backend.safeCapacity();
                             if (backendHealthManager.exceedsCapacity(backendId)) {
+                                final int capacity = backend.safeCapacity();
+                                if (!backendHealthManager.isTolerant()) {
+                                    // default behavior, exceeding safe capacity is not tolerated...
+                                    LOG.info("Backend {} is cold and exceeds safe capacity of {} connections, skipping...", backendId, capacity);
+                                    continue;
+                                }
                                 /*
                                  * backends are returned by the mapper sorted
                                  * from the most desirable to the less desirable;
                                  * if the execution reaches this point,
-                                 * we should use a cold backend even if over the recommended capacity anyway...
+                                 * we may use the cold backend even if over the recommended capacity anyway...
                                  */
-                                LOG.warn("Backend {} exceeds cold capacity of {}, but will use it anyway", backendId, capacity);
+                                LOG.warn("Cold backend {} exceeds safe capacity of {} connections, but will use it anyway", backendId, capacity);
                             }
                             // falls through
                         case STABLE: {
@@ -567,7 +579,6 @@ public class StandardEndpointMapper extends EndpointMapper {
         if (backends.put(backend.id(), backend) != null) {
             throw new ConfigurationNotValidException("backend " + backend.id() + " is already configured");
         }
-        allBackendIds.add(backend.id());
     }
 
     public void addAction(ActionConfiguration action) throws ConfigurationNotValidException {
@@ -599,8 +610,8 @@ public class StandardEndpointMapper extends EndpointMapper {
     }
 
     @Override
-    public List<DirectorConfiguration> getDirectors() {
-        return new ArrayList<>(directors.values());
+    public SequencedMap<String, DirectorConfiguration> getDirectors() {
+        return Collections.unmodifiableSequencedMap(directors);
     }
 
     @Override

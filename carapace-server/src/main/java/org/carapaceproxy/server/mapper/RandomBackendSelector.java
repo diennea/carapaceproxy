@@ -7,9 +7,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.SequencedCollection;
-import java.util.function.Function;
 import java.util.random.RandomGenerator;
-import java.util.stream.Collectors;
 import org.carapaceproxy.server.config.BackendSelector;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.slf4j.Logger;
@@ -28,13 +26,6 @@ public class RandomBackendSelector implements BackendSelector {
 
     private final SequencedCollection<String> allBackendIds;
     private final Map<String, DirectorConfiguration> directors;
-
-    public static BackendSelector forMapper(final EndpointMapper mapper) {
-        final var directors = mapper.getDirectors()
-                .stream()
-                .collect(Collectors.toUnmodifiableMap(DirectorConfiguration::getId, Function.identity()));
-        return new RandomBackendSelector(mapper.getBackends().sequencedKeySet(), directors);
-    }
 
     private RandomBackendSelector(final SequencedCollection<String> allBackendIds, final Map<String, DirectorConfiguration> directors) {
         this.allBackendIds = allBackendIds;
