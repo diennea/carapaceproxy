@@ -95,8 +95,8 @@ public class BasicStandardEndpointMapperTest {
         int backendPort = backend.port();
         StandardEndpointMapper mapper = new StandardEndpointMapper();
 
-        mapper.addBackend(new BackendConfiguration("backend-a", "localhost", backendPort, "/"));
-        mapper.addBackend(new BackendConfiguration("backend-b", "localhost", backendPort, "/"));
+        mapper.addBackend(new BackendConfiguration("backend-a", "localhost", backendPort, "/", -1));
+        mapper.addBackend(new BackendConfiguration("backend-b", "localhost", backendPort, "/", -1));
         mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
         mapper.addDirector(new DirectorConfiguration("director-2").addBackend("backend-b"));
         mapper.addDirector(new DirectorConfiguration("director-all").addBackend("*")); // all the known backends
@@ -317,8 +317,8 @@ public class BasicStandardEndpointMapperTest {
         int backendPort = backend.port();
 
         StandardEndpointMapper mapper = new StandardEndpointMapper();
-        mapper.addBackend(new BackendConfiguration("backend", "localhost", backendPort, "/"));
-        mapper.addBackend(new BackendConfiguration("backend-down", "localhost-down", backendPort, "/"));
+        mapper.addBackend(new BackendConfiguration("backend", "localhost", backendPort, "/", -1));
+        mapper.addBackend(new BackendConfiguration("backend-down", "localhost-down", backendPort, "/", -1));
         mapper.addDirector(new DirectorConfiguration("director").addBackend("backend"));
         mapper.addDirector(new DirectorConfiguration("director-down").addBackend("backend-down"));
         mapper.addAction(new ActionConfiguration("cache", ActionConfiguration.TYPE_CACHE, "director", null, -1));

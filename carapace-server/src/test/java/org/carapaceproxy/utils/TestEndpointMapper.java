@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.utils;
 
+import static org.carapaceproxy.core.RuntimeServerConfiguration.DEFAULT_WARMUP_PERIOD;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -52,7 +53,7 @@ public class TestEndpointMapper extends EndpointMapper {
     }
 
     public TestEndpointMapper(String host, int port, boolean cacheAll) {
-        this(host, port, cacheAll, Map.of(host, new BackendConfiguration(host, host, port, "/index.html")));
+        this(host, port, cacheAll, Map.of(host, new BackendConfiguration(host, host, port, "/index.html", -1)));
     }
 
     public TestEndpointMapper(String host, int port, boolean cacheAll, Map<String, BackendConfiguration> backends) {
@@ -77,7 +78,7 @@ public class TestEndpointMapper extends EndpointMapper {
                     .routeId(MapResult.NO_ROUTE)
                     .build();
         } else {
-            healthStatus = new BackendHealthStatus(request.getListener());
+            healthStatus = new BackendHealthStatus(request.getListener(), DEFAULT_WARMUP_PERIOD);
             if (cacheAll) {
                 return MapResult.builder()
                         .host(host)

@@ -22,6 +22,7 @@ package org.carapaceproxy.server.backends;
 import com.google.common.annotations.VisibleForTesting;
 import io.prometheus.client.Gauge;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -60,13 +61,17 @@ public class BackendHealthManager implements Runnable {
     private volatile int connectTimeout;
     // keep track of start() calling
     private volatile boolean started;
+    private volatile long warmupPeriod;
+    private volatile boolean tolerant;
 
     public BackendHealthManager(final RuntimeServerConfiguration conf, final EndpointMapper mapper) {
         this.mapper = mapper;
+        this.connectTimeout = conf.getHealthConnectTimeout();
+        this.warmupPeriod = conf.getWarmupPeriod();
+        this.tolerant = conf.isTolerant();
 
         // will be overridden before start
         this.period = DEFAULT_PERIOD;
-        this.connectTimeout = conf.getHealthConnectTimeout();
     }
 
     public int getPeriod() {
@@ -120,6 +125,17 @@ public class BackendHealthManager implements Runnable {
         if (this.connectTimeout != newConfiguration.getHealthConnectTimeout()) {
             this.connectTimeout = newConfiguration.getHealthConnectTimeout();
             LOG.info("Applying new connect timeout {} ms", this.connectTimeout);
+        }
+
+        if (this.warmupPeriod != newConfiguration.getWarmupPeriod()) {
+            this.warmupPeriod = newConfiguration.getWarmupPeriod();
+            this.backends.values().forEach(it -> it.setWarmupPeriod(warmupPeriod));
+            LOG.info("Applying new warmup period of {} ms", this.warmupPeriod);
+        }
+
+        if (this.tolerant != newConfiguration.isTolerant()) {
+            this.tolerant = newConfiguration.isTolerant();
+            LOG.info("Applying new health tolerance configuration {}; cold backends now {} exceed safe capacity", this.tolerant, this.tolerant ? "may" : "may not");
         }
 
         this.mapper = mapper;
@@ -185,7 +201,23 @@ public class BackendHealthManager implements Runnable {
     }
 
     public BackendHealthStatus getBackendStatus(final EndpointKey hostPort) {
-        return backends.computeIfAbsent(hostPort, BackendHealthStatus::new);
+        return backends.computeIfAbsent(hostPort, key -> new BackendHealthStatus(key, warmupPeriod));
+    }
+
+    public BackendHealthStatus getBackendStatus(final String backendId) {
+        final BackendConfiguration backendConfiguration = this.mapper.getBackends().get(backendId);
+        Objects.requireNonNull(backendConfiguration);
+        return getBackendStatus(backendConfiguration.hostPort());
+    }
+
+    public boolean exceedsCapacity(final String backendId) {
+        final BackendConfiguration backendConfiguration = this.mapper.getBackends().get(backendId);
+        Objects.requireNonNull(backendConfiguration);
+        if (backendConfiguration.coldCapacity() <= 0) {
+            return false;
+        }
+        final BackendHealthStatus backendStatus = getBackendStatus(backendConfiguration.hostPort());
+        return backendConfiguration.coldCapacity() > backendStatus.getConnections() && !this.tolerant;
     }
 
     @VisibleForTesting

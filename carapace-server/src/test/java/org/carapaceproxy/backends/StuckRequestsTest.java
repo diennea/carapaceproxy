@@ -84,7 +84,7 @@ public class StuckRequestsTest {
         EndpointKey key = new EndpointKey("localhost", theport);
 
         StandardEndpointMapper mapper = new StandardEndpointMapper();
-        mapper.addBackend(new BackendConfiguration("backend-a", "localhost", theport, "/"));
+        mapper.addBackend(new BackendConfiguration("backend-a", "localhost", theport, "/", -1));
         mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
         mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1));
         mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index.html.*")));
