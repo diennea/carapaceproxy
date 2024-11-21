@@ -40,6 +40,7 @@ import java.io.File;
 import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -75,6 +76,7 @@ public class RuntimeServerConfiguration {
 
     private static final Logger LOG = LoggerFactory.getLogger(RuntimeServerConfiguration.class);
     private static final int DEFAULT_PROBE_PERIOD = 0;
+    public static final long DEFAULT_WARMUP_PERIOD = Duration.ofSeconds(30).toMillis();
 
     private final List<NetworkListenerConfiguration> listeners = new ArrayList<>();
     private final Map<String, SSLCertificateConfiguration> certificates = new HashMap<>();
@@ -116,6 +118,8 @@ public class RuntimeServerConfiguration {
     private String userRealmClassname;
     private int healthProbePeriod = DEFAULT_PROBE_PERIOD;
     private int healthConnectTimeout = 5_000;
+    private long warmupPeriod = DEFAULT_WARMUP_PERIOD;
+    private boolean tolerant = false;
     private int dynamicCertificatesManagerPeriod = 0;
     private int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
     private Set<String> domainsCheckerIPAddresses;
@@ -230,6 +234,12 @@ public class RuntimeServerConfiguration {
         if (healthProbePeriod <= DEFAULT_PROBE_PERIOD) {
             LOG.warn("BACKEND-HEALTH-MANAGER DISABLED");
         }
+
+        warmupPeriod = properties.getLong("healthmanager.warmupperiod", DEFAULT_WARMUP_PERIOD);
+        LOG.info("healthmanager.warmupperiod={}", warmupPeriod);
+
+        tolerant = properties.getBoolean("healthmanager.tolerant", false);
+        LOG.info("healthmanager.tolerant={}", tolerant);
 
         healthConnectTimeout = properties.getInt("healthmanager.connecttimeout", healthConnectTimeout);
         LOG.info("healthmanager.connecttimeout={}", healthConnectTimeout);

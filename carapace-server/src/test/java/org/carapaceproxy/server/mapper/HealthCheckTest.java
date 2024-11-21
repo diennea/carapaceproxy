@@ -60,7 +60,7 @@ public class HealthCheckTest {
     @Test
     public void test() throws Exception {
         final Map<String, BackendConfiguration> backends = new HashMap<>();
-        final BackendConfiguration b1conf = new BackendConfiguration("myid", "localhost", wireMockRule.port(), "/status.html");
+        final BackendConfiguration b1conf = new BackendConfiguration("myid", "localhost", wireMockRule.port(), "/status.html", -1);
         backends.put(b1conf.hostPort().toString(), b1conf);
         final EndpointMapper mapper = new TestEndpointMapper(null, 0, false, backends);
         final RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
