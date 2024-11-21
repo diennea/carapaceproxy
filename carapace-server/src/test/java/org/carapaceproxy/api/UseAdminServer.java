@@ -19,18 +19,17 @@
  */
 package org.carapaceproxy.api;
 
+import static org.carapaceproxy.core.HttpProxyServer.buildForTests;
+import static org.junit.Assert.assertNull;
 import java.io.File;
 import java.io.IOException;
 import java.util.Properties;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
-import static org.carapaceproxy.core.HttpProxyServer.buildForTests;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
-import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.junit.After;
-import static org.junit.Assert.assertNull;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.TemporaryFolder;
@@ -67,7 +66,7 @@ public class UseAdminServer {
     }
 
     @After
-    public void stopServer() throws Exception {
+    public void stopServer() {
         if (server != null) {
             server.close();
             server = null;
@@ -94,7 +93,7 @@ public class UseAdminServer {
         startServer(new Properties(HTTP_ADMIN_SERVER_CONFIG));
     }
 
-    public void changeDynamicConfiguration(Properties configuration) throws ConfigurationNotValidException, ConfigurationChangeInProgressException, InterruptedException, IOException {
+    public void changeDynamicConfiguration(Properties configuration) throws ConfigurationChangeInProgressException, InterruptedException, IOException {
         if (server != null) {
             fixAccessLogFileConfiguration(configuration);
             PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);

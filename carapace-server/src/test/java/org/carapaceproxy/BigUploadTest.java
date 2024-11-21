@@ -19,6 +19,8 @@
  */
 package org.carapaceproxy;
 
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -33,11 +35,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 import org.apache.commons.io.IOUtils;
-import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -172,7 +171,6 @@ public class BigUploadTest {
             mockServer.start();
 
             TestEndpointMapper mapper = new TestEndpointMapper("localhost", mockServer.getPort());
-            EndpointKey key = new EndpointKey("localhost", mockServer.getPort());
 
             int size = 20_000_000;
 
@@ -203,16 +201,16 @@ public class BigUploadTest {
 
     @Test
     public void testBlockingServerWorks() throws Exception {
-
-        try (SimpleBlockingTcpServer mockServer =
-                new SimpleBlockingTcpServer(() -> {
-                    return new StaticResponseHandler("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nit works!\r\n".getBytes(StandardCharsets.US_ASCII));
-                })) {
-
+        SimpleBlockingTcpServer mockServer = new SimpleBlockingTcpServer(() -> new StaticResponseHandler("""
+                HTTP/1.1 200 OK\r
+                Content-Type: text/plain\r
+                \r
+                it works!\r
+                """.getBytes(StandardCharsets.US_ASCII)));
+        try (mockServer) {
             mockServer.start();
 
             TestEndpointMapper mapper = new TestEndpointMapper("localhost", mockServer.getPort());
-            EndpointKey key = new EndpointKey("localhost", mockServer.getPort());
 
             try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
                 server.start();

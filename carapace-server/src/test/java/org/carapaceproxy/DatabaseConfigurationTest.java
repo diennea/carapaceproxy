@@ -19,17 +19,19 @@ package org.carapaceproxy;
  under the License.
 
  */
-import java.io.File;
-import org.carapaceproxy.core.HttpProxyServer;
-import java.util.Properties;
-import org.carapaceproxy.configstore.HerdDBConfigurationStore;
-import org.carapaceproxy.configstore.PropertiesConfigurationStore;
-import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;
-import org.carapaceproxy.server.filters.XForwardedForRequestFilter;
+
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import java.io.File;
+import java.util.Properties;
+import org.carapaceproxy.configstore.HerdDBConfigurationStore;
+import org.carapaceproxy.configstore.PropertiesConfigurationStore;
+import org.carapaceproxy.core.HttpProxyServer;
+import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;
+import org.carapaceproxy.server.filters.XForwardedForRequestFilter;
+import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
@@ -47,7 +49,7 @@ public class DatabaseConfigurationTest {
     @Test
     public void testBootWithDatabaseStore() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
 
             Properties configuration = new Properties();
 
@@ -69,7 +71,7 @@ public class DatabaseConfigurationTest {
     public void testChangeFiltersConfiguration() throws Exception {
 
         File databaseFolder = tmpDir.newFolder();
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
 
             Properties configurationAtBoot = new Properties();
             configurationAtBoot.put("db.jdbc.url", "jdbc:herddb:localhost");
@@ -99,7 +101,7 @@ public class DatabaseConfigurationTest {
         }
 
         // reboot, new configuration MUST be kept
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
             Properties configurationAtBoot = new Properties();
             configurationAtBoot.put("db.jdbc.url", "jdbc:herddb:localhost");
             configurationAtBoot.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
@@ -118,7 +120,7 @@ public class DatabaseConfigurationTest {
 
         }
         // reboot, new configuration MUST be kept
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
             Properties configurationAtBoot = new Properties();
             configurationAtBoot.put("db.jdbc.url", "jdbc:herddb:localhost");
             configurationAtBoot.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());

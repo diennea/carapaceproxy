@@ -81,16 +81,19 @@ public class ApplyConfigurationTest {
      */
     public static final class StaticEndpointMapper extends TestEndpointMapper {
 
+        public StaticEndpointMapper(final HttpProxyServer ignoredServer) {
+            this(); // required for reflective construction
+        }
+
         public StaticEndpointMapper() {
             super("localhost", wireMockRule.port());
         }
-
     }
 
     @Test
     public void testChangeListenersConfig() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder());) {
 
             {
                 Properties configuration = new Properties();
@@ -217,7 +220,7 @@ public class ApplyConfigurationTest {
     @Test
     public void testReloadMapper() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder());) {
 
             {
                 Properties configuration = new Properties();
@@ -289,7 +292,7 @@ public class ApplyConfigurationTest {
     public void testUserRealm() throws Exception {
 
         // Default UserRealm
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
             Properties configuration = new Properties();
             server.configureAtBoot(new PropertiesConfigurationStore(configuration));
             server.start();
@@ -307,7 +310,7 @@ public class ApplyConfigurationTest {
         }
 
         // TestUserRealm
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
             Properties configuration = new Properties();
             configuration.put("userrealm.class", "org.carapaceproxy.utils.TestUserRealm");
             configuration.put("user.test1", "pass1");
@@ -336,7 +339,7 @@ public class ApplyConfigurationTest {
     @Test
     public void testChangeFiltersConfiguration() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder());) {
 
             {
                 Properties configuration = new Properties();
@@ -375,7 +378,7 @@ public class ApplyConfigurationTest {
     @Test
     public void testChangeBackendHealthManagerConfiguration() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder());) {
 
             {
                 Properties configuration = new Properties();
