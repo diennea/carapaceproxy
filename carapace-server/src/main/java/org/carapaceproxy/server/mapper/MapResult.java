@@ -78,16 +78,17 @@ public class MapResult {
     public static final String REDIRECT_PROTO_HTTPS = "https";
     public static final String REDIRECT_PROTO_HTTP = "http";
 
-    public String host;
-    public int port;
-    public Action action;
-    public String routeId;
-    public int errorCode;
-    public String resource;
-    public List<CustomHeader> customHeaders;
-    public String redirectLocation;
-    public String redirectProto;
-    public String redirectPath;
+    // todo we don't actually want to have these nullable: probably we should have different classes for each case
+    private String host;
+    private int port;
+    private Action action;
+    private String routeId;
+    private int errorCode;
+    private String resource;
+    private List<CustomHeader> customHeaders;
+    private String redirectLocation;
+    private String redirectProto;
+    private String redirectPath;
 
     public static MapResult notFound(String routeId) {
         return MapResult.builder()
@@ -122,6 +123,4 @@ public class MapResult {
                 .action(Action.BAD_REQUEST)
                 .build();
     }
-
-
 }

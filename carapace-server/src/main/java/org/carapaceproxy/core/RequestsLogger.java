@@ -58,7 +58,7 @@ import org.stringtemplate.v4.STWriter;
  */
 public class RequestsLogger implements Runnable, Closeable {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ContentsCache.class);
+    private static final Logger LOG = LoggerFactory.getLogger(RequestsLogger.class);
 
     private final BlockingQueue<Entry> queue;
 
@@ -208,7 +208,7 @@ public class RequestsLogger implements Runnable, Closeable {
         this.newConfiguration = newConfiguration;
     }
 
-    private void _reloadConfiguration() throws IOException {
+    private void reloadConfiguration() throws IOException {
         if (newConfiguration == null) {
             return;
         }
@@ -286,7 +286,7 @@ public class RequestsLogger implements Runnable, Closeable {
         Entry currentEntry = null;
         while (!closed) {
             try {
-                _reloadConfiguration();
+                reloadConfiguration();
 
                 try {
                     ensureAccessLogFileOpened();
@@ -389,8 +389,8 @@ public class RequestsLogger implements Runnable, Closeable {
             this.format.add("uri", request.getUri());
             this.format.add("timestamp", tsFormatter.format(Instant.ofEpochMilli(request.getStartTs())));
             this.format.add("total_time", request.getLastActivity() - request.getStartTs());
-            this.format.add("action_id", request.getAction().action);
-            this.format.add("route_id", request.getAction().routeId);
+            this.format.add("action_id", request.getAction().getAction());
+            this.format.add("route_id", request.getAction().getRouteId());
             this.format.add("user_id", request.getUserId());
             this.format.add("session_id", request.getSessionId());
             this.format.add("http_protocol_version", request.getRequest().version());
@@ -398,7 +398,7 @@ public class RequestsLogger implements Runnable, Closeable {
                 this.format.add("backend_id", "CACHED");
                 this.format.add("backend_time", "0");
             } else {
-                this.format.add("backend_id", String.format("%s:%s", request.getAction().host, request.getAction().port));
+                this.format.add("backend_id", String.format("%s:%s", request.getAction().getHost(), request.getAction().getPort()));
                 this.format.add("backend_time", request.getBackendStartTs() - request.getStartTs());
             }
             formatSSLProperties(request);
