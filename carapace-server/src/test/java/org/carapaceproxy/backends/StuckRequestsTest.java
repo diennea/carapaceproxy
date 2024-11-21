@@ -33,8 +33,8 @@ import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.util.Properties;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
-import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
+import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.ProxyRequestsManager;
 import org.carapaceproxy.server.backends.BackendHealthStatus;
@@ -43,6 +43,7 @@ import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
+import org.carapaceproxy.server.config.SafeBackendSelector;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
 import org.carapaceproxy.utils.RawHttpClient;
@@ -83,7 +84,7 @@ public class StuckRequestsTest {
         final int theport = wireMockRule.port();
         EndpointKey key = new EndpointKey("localhost", theport);
 
-        StandardEndpointMapper mapper = new StandardEndpointMapper();
+        StandardEndpointMapper mapper = new StandardEndpointMapper(SafeBackendSelector::forMapper);
         mapper.addBackend(new BackendConfiguration("backend-a", "localhost", theport, "/", -1));
         mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
         mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1));
