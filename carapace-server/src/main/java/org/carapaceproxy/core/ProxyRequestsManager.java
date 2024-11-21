@@ -61,6 +61,7 @@ import jdk.net.ExtendedSocketOptions;
 import org.apache.http.HttpStatus;
 import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.SimpleHTTPResponse;
+import org.carapaceproxy.server.backends.BackendHealthStatus;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
@@ -106,7 +107,7 @@ public class ProxyRequestsManager {
         this.parent = parent;
     }
 
-    public EndpointStats getEndpointStats(EndpointKey key) {
+    public EndpointStats getEndpointStats(final EndpointKey key) {
         return endpointsStats.get(key);
     }
 
@@ -148,8 +149,8 @@ public class ProxyRequestsManager {
                 case BAD_REQUEST -> serveBadRequestMessage(request);
                 case STATIC, ACME_CHALLENGE -> serveStaticMessage(request);
                 case REDIRECT -> serveRedirect(request);
-                case PROXY -> forward(request, false);
-                case CACHE -> serveFromCache(request); // cached content
+                case PROXY -> forward(request, false, action.getHealthStatus());
+                case CACHE -> serveFromCache(request, action.getHealthStatus()); // cached content
                 default -> throw new IllegalStateException("Action " + action.getAction() + " not supported");
             };
         } finally {
@@ -347,20 +348,22 @@ public class ProxyRequestsManager {
      *
      * @param request      the unpacked incoming request to forward to the corresponding backend endpoint
      * @param cache        whether the request is cacheable or not
+     * @param healthStatus the health status of the chosen backend; it should be notified when connection starts and ends
      * @return a {@link Flux} forwarding the returned {@link Publisher} sequence
      */
-    public Publisher<Void> forward(ProxyRequest request, boolean cache) {
+    public Publisher<Void> forward(final ProxyRequest request, final boolean cache, final BackendHealthStatus healthStatus) {
         Objects.requireNonNull(request.getAction());
         final String endpointHost = request.getAction().getHost();
+        Objects.requireNonNull(endpointHost);
         final int endpointPort = request.getAction().getPort();
-        EndpointKey key = EndpointKey.make(endpointHost, endpointPort);
-        EndpointStats endpointStats = endpointsStats.computeIfAbsent(key, EndpointStats::new);
+        final EndpointKey key = EndpointKey.make(endpointHost, endpointPort);
+        final EndpointStats endpointStats = endpointsStats.computeIfAbsent(key, EndpointStats::new);
 
-        var connectionToEndpoint = connectionsManager.apply(request);
-        ConnectionPoolConfiguration connectionConfig = connectionToEndpoint.getKey();
-        ConnectionProvider connectionProvider = connectionToEndpoint.getValue();
+        final var connectionToEndpoint = connectionsManager.apply(request);
+        final ConnectionPoolConfiguration connectionConfig = connectionToEndpoint.getKey();
+        final ConnectionProvider connectionProvider = connectionToEndpoint.getValue();
         if (LOGGER.isDebugEnabled()) {
-            Map<String, HttpProxyServer.ConnectionPoolStats> stats = parent.getConnectionPoolsStats().get(key);
+            final Map<String, HttpProxyServer.ConnectionPoolStats> stats = parent.getConnectionPoolsStats().get(key);
             if (stats != null) {
                 LOGGER.debug("Connection {} stats: {}", connectionConfig.getId(), stats.get(connectionConfig.getId()));
             }
@@ -402,6 +405,7 @@ public class ProxyRequestsManager {
                     }
                 }).doAfterResponseSuccess((resp, conn) -> {
                     PENDING_REQUESTS_GAUGE.dec();
+                    healthStatus.decrementConnections();
                     endpointStats.getLastActivity().set(System.currentTimeMillis());
                 }));
 
@@ -415,6 +419,7 @@ public class ProxyRequestsManager {
         }
 
         PENDING_REQUESTS_GAUGE.inc();
+        healthStatus.incrementConnections();
         return forwarder.request(request.getMethod())
                 .uri(request.getUri())
                 .send((req, out) -> {
@@ -469,6 +474,7 @@ public class ProxyRequestsManager {
                     }));
                 }).onErrorResume(err -> { // custom endpoint request/response error handling
                     PENDING_REQUESTS_GAUGE.dec();
+                    healthStatus.decrementConnections();
 
                     EndpointKey endpoint = EndpointKey.make(request.getAction().getHost(), request.getAction().getPort());
                     if (err instanceof ReadTimeoutException) {
@@ -537,11 +543,11 @@ public class ProxyRequestsManager {
         }
     }
 
-    private Publisher<Void> serveFromCache(ProxyRequest request) {
+    private Publisher<Void> serveFromCache(ProxyRequest request, final BackendHealthStatus healthStatus) {
         ContentsCache.ContentSender cacheSender = parent.getCache().getCacheSender(request);
         if (cacheSender == null) {
             // content non cached, forwarding and caching...
-            return forward(request, true);
+            return forward(request, true, healthStatus);
         }
         request.setServedFromCache(true);
 

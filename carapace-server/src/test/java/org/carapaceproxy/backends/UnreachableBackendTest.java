@@ -98,7 +98,7 @@ public class UnreachableBackendTest {
                         </html>
                         """, resp.getBodyString());
             }
-            assertSame(server.getBackendHealthManager().getBackendStatus(key), BackendHealthStatus.Status.DOWN);
+            assertSame(server.getBackendHealthManager().getBackendStatus(key).getStatus(), BackendHealthStatus.Status.DOWN);
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
@@ -136,7 +136,7 @@ public class UnreachableBackendTest {
                         </html>
                         """, resp.getBodyString());
             }
-            assertSame(server.getBackendHealthManager().getBackendStatus(key), BackendHealthStatus.Status.COLD); // no troubles for new connections
+            assertSame(server.getBackendHealthManager().getBackendStatus(key).getStatus(), BackendHealthStatus.Status.COLD); // no troubles for new connections
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
@@ -168,7 +168,7 @@ public class UnreachableBackendTest {
                         </html>
                         """, resp.getBodyString());
             }
-            assertSame(server.getBackendHealthManager().getBackendStatus(key), BackendHealthStatus.Status.COLD); // no troubles for new connections
+            assertSame(server.getBackendHealthManager().getBackendStatus(key).getStatus(), BackendHealthStatus.Status.COLD); // no troubles for new connections
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
@@ -204,7 +204,7 @@ public class UnreachableBackendTest {
                         </html>
                         """, resp.getBodyString());
             }
-            assertSame(server.getBackendHealthManager().getBackendStatus(key), BackendHealthStatus.Status.COLD);
+            assertSame(server.getBackendHealthManager().getBackendStatus(key).getStatus(), BackendHealthStatus.Status.COLD);
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
