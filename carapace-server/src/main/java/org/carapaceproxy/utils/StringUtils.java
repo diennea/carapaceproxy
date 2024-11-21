@@ -25,7 +25,7 @@ package org.carapaceproxy.utils;
  */
 public class StringUtils {
 
-    private static String htmlEncodeCharacters(String s) {
+    private static String htmlEncodeCharacters(final String s) {
         StringBuilder res = new StringBuilder();
         for (char c : s.toCharArray()) {
             switch (c) {
@@ -48,7 +48,7 @@ public class StringUtils {
         return res.toString();
     }
 
-    public static String htmlEncode(String s) {
+    public static String htmlEncode(final String s) {
         if (s == null || s.isEmpty()) {
             return s;
         }
