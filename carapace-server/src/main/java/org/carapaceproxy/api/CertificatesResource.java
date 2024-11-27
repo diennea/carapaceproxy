@@ -44,8 +44,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
@@ -75,6 +73,8 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode;
 import org.carapaceproxy.utils.CertificatesUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Access to certificates
@@ -85,7 +85,7 @@ import org.carapaceproxy.utils.CertificatesUtils;
 @Produces(MediaType.APPLICATION_JSON)
 public class CertificatesResource {
 
-    private static final Logger LOG = Logger.getLogger(CertificatesResource.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(CertificatesResource.class);
 
     @Context
     private ServletContext context;
@@ -210,7 +210,7 @@ public class CertificatesResource {
             }
             bean.setStatus(certificateStateToString(state));
         } catch (GeneralSecurityException | IOException ex) {
-            LOG.log(Level.SEVERE, "Unable to read Keystore for certificate {0}. Reason: {1}", new Object[]{certificate.getId(), ex});
+            LOG.error("Unable to read Keystore for certificate {}. Reason: {}", certificate.getId(), ex);
         }
     }
 

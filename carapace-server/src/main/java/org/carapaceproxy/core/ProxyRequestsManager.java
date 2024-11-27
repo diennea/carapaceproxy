@@ -52,8 +52,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import jdk.net.ExtendedSocketOptions;
 import org.apache.http.HttpStatus;
@@ -69,6 +67,8 @@ import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.HttpUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
 import org.reactivestreams.Publisher;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.ByteBufFlux;
@@ -91,7 +91,7 @@ public class ProxyRequestsManager {
             "backends", "stuck_requests_total", "stuck requests, this requests will be killed"
     ).register();
 
-    private static final Logger LOGGER = Logger.getLogger(ProxyRequestsManager.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(ProxyRequestsManager.class);
 
     private final HttpProxyServer parent;
     private final Map<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
@@ -129,14 +129,14 @@ public class ProxyRequestsManager {
 
         MapResult action = parent.getMapper().map(request);
         if (action == null) {
-            LOGGER.log(Level.INFO, "Mapper returned NULL action for {0}", this);
+            LOGGER.info("Mapper returned NULL action for {}", this);
             action = MapResult.internalError(MapResult.NO_ROUTE);
         }
 
         request.setAction(action);
 
-        if (LOGGER.isLoggable(Level.FINER)) {
-            LOGGER.log(Level.FINER, "{0} Mapped {1} to {2}, userid {3}", new Object[]{this, request.getUri(), action, request.getUserId()});
+        if (LOGGER.isTraceEnabled()) {
+            LOGGER.trace("{} Mapped {} to {}, userid {}", this, request.getUri(), action, request.getUserId());
         }
 
         try {
@@ -496,7 +496,7 @@ public class ProxyRequestsManager {
                     EndpointKey endpoint = EndpointKey.make(request.getAction().host, request.getAction().port);
                     if (err instanceof io.netty.handler.timeout.ReadTimeoutException) {
                         STUCK_REQUESTS_COUNTER.inc();
-                        LOGGER.log(Level.SEVERE, "Read timeout error occurred for endpoint {0}; request: {1}", new Object[]{endpoint, request});
+                        LOGGER.error("Read timeout error occurred for endpoint {}; request: {}", endpoint, request);
                         if (parent.getCurrentConfiguration().isBackendsUnreachableOnStuckRequests()) {
                             parent.getBackendHealthManager().reportBackendUnreachable(
                                     endpoint, System.currentTimeMillis(), "Error: " + err
@@ -505,7 +505,7 @@ public class ProxyRequestsManager {
                         return serveInternalErrorMessage(request);
                     }
 
-                    LOGGER.log(Level.SEVERE, "Error proxying request for endpoint {0}; request: {1};\nError: {2}", new Object[]{endpoint, request, err});
+                    LOGGER.error("Error proxying request for endpoint {}; request: {}", endpoint, request, err);
                     if (err instanceof ConnectException) {
                         parent.getBackendHealthManager().reportBackendUnreachable(
                                 endpoint, System.currentTimeMillis(), "Error: " + err

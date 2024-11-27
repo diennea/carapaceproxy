@@ -83,8 +83,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -108,6 +106,8 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  *
@@ -116,7 +116,7 @@ import org.junit.runner.RunWith;
 @RunWith(JUnitParamsRunner.class)
 public class RawClientTest {
 
-    private static final Logger LOG = Logger.getLogger(RawClientTest.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(RawClientTest.class);
 
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
@@ -129,12 +129,12 @@ public class RawClientTest {
 
     @Before
     public void dumpTestName() {
-        LOG.log(Level.INFO, "Starting {0}", testName.getMethodName());
+        LOG.info("Starting {}", testName.getMethodName());
     }
 
     @After
     public void dumpTestNameEnd() {
-        LOG.log(Level.INFO, "End {0}", testName.getMethodName());
+        LOG.info("End {}", testName.getMethodName());
     }
 
     @Test

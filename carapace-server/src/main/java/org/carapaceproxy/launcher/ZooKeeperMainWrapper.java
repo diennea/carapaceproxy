@@ -26,10 +26,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.Properties;
 import java.util.logging.LogManager;
-import java.util.logging.Logger;
 import org.apache.zookeeper.server.ServerConfig;
 import org.apache.zookeeper.server.ZooKeeperServerMain;
 import org.apache.zookeeper.server.quorum.QuorumPeerConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Simple wrapper for standalone ZooKeeper server (for local demos/tests).
@@ -67,7 +68,7 @@ public class ZooKeeperMainWrapper implements AutoCloseable {
                 String arg = args[i];
                 if (!arg.startsWith("-")) {
                     File configFile = new File(args[i]).getAbsoluteFile();
-                    LOG.severe("Reading configuration from " + configFile);
+                    LOG.error("Reading configuration from {}", configFile);
                     try (InputStreamReader reader
                         = new InputStreamReader(new FileInputStream(configFile), StandardCharsets.UTF_8)) {
                         configuration.load(reader);
@@ -113,13 +114,13 @@ public class ZooKeeperMainWrapper implements AutoCloseable {
             if (datadir != null) {
                 File file = new File(datadir);
                 if (!file.isDirectory()) {
-                    LOG.severe("Creating directory " + file.getAbsolutePath());
+                    LOG.error("Creating directory {}", file.getAbsolutePath());
                     boolean result = file.mkdirs();
                     if (!result) {
-                        LOG.severe("Failed to create directory " + file.getAbsolutePath());
+                        LOG.error("Failed to create directory {}", file.getAbsolutePath());
                     }
                 } else {
-                    LOG.severe("Using directory " + file.getAbsolutePath());
+                    LOG.error("Using directory {}", file.getAbsolutePath());
                 }
             }
 
@@ -145,7 +146,7 @@ public class ZooKeeperMainWrapper implements AutoCloseable {
             Runtime.getRuntime().halt(0);
         }
     }
-    private static final Logger LOG = Logger.getLogger(ZooKeeperMainWrapper.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(ZooKeeperMainWrapper.class);
 
     public void run() throws Exception {
         pidFileLocker.lock();

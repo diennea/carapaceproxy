@@ -32,8 +32,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.apache.curator.ensemble.fixed.FixedEnsembleProvider;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
@@ -54,6 +52,8 @@ import org.apache.zookeeper.client.ZKClientConfig;
 import org.apache.zookeeper.data.ACL;
 import org.apache.zookeeper.data.Stat;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Implementation based on ZooKeeper. This class is very simple, we are not expecting heavy traffic on ZooKeeper. We have two systems:
@@ -70,7 +70,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     public static final String PROPERTY_PEER_ADMIN_SERVER_PORT = "peer_admin_server_port"; // port of the Admin UI/API
     public static final String PROPERTY_PEER_ADMIN_SERVER_HTTPS_PORT = "peer_admin_server_https_port"; // https port of the Admin UI/API
 
-    private static final Logger LOG = Logger.getLogger(ZooKeeperGroupMembershipHandler.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(ZooKeeperGroupMembershipHandler.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final CuratorFramework client;
@@ -101,10 +101,10 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
         final ZKClientConfig zkClientConfig = new ZKClientConfig();
         zkProperties.forEach((k, v) -> {
             zkClientConfig.setProperty(k.toString(), v.toString());
-            LOG.log(Level.INFO, "Setting ZK client config: {0}={1}", new Object[]{k, v});
+            LOG.info("Setting ZK client config: {}={}", k, v);
         });
         ZookeeperFactory zkFactory = (String connect, int timeout, Watcher wtchr, boolean canBeReadOnly) -> {
-            LOG.log(Level.INFO, "Creating ZK client: {0}, timeout {1}, canBeReadOnly:{2}", new Object[]{connect, timeout, canBeReadOnly});
+            LOG.info("Creating ZK client: {}, timeout {}, canBeReadOnly:{}", connect, timeout, canBeReadOnly);
             return new ZooKeeper(connect, timeout, wtchr, canBeReadOnly, zkClientConfig);
         };
 
@@ -117,13 +117,13 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
                 .retryPolicy(new ExponentialBackoffRetry(1000, 2))
                 .ensembleProvider(new FixedEnsembleProvider(zkAddress, true))
                 .build();
-        LOG.log(Level.INFO, "Waiting for ZK client connection to be established");
+        LOG.info("Waiting for ZK client connection to be established");
         try {
             boolean ok = client.blockUntilConnected(zkTimeout, TimeUnit.MILLISECONDS);
             if (!ok) {
-                LOG.log(Level.SEVERE, "First connection to ZK cannot be established");
+                LOG.error("First connection to ZK cannot be established");
             } else {
-                LOG.log(Level.SEVERE, "First connection to ZK established with success");
+                LOG.error("First connection to ZK established with success");
             }
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
@@ -173,7 +173,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
             byte[] data = MAPPER.writeValueAsBytes(info);
             client.setData().forPath(path, data);
         } catch (Exception ex) {
-            LOG.log(Level.SEVERE, "Cannot store info for peer " + peerId, ex);
+            LOG.error("Cannot store info for peer {}", peerId, ex);
         }
     }
 
@@ -189,7 +189,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
                 }
             }
         } catch (Exception ex) {
-            LOG.log(Level.SEVERE, "Cannot load info for peer " + id, ex);
+            LOG.error("Cannot load info for peer {}", id, ex);
         }
         return null;
     }
@@ -200,23 +200,23 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
             final String path = "/proxy/events";
             final String eventpath = "/proxy/events/" + eventId;
 
-            LOG.info("watching " + path);
+            LOG.info("watching {}", path);
             PathChildrenCache cache = new PathChildrenCache(client, path, true);
             // hold a strong reference to the PathChildrenCache
             watchedEvents.add(cache);
             cache.getListenable().addListener((PathChildrenCacheListener) (CuratorFramework cf, PathChildrenCacheEvent pcce) -> {
-                LOG.log(Level.INFO, "ZK event {0} at {1}", new Object[]{pcce, path});
+                LOG.info("ZK event {} at {}", pcce, path);
                 ChildData data = pcce.getData();
                 if (data != null && eventpath.equals(data.getPath())) {
                     byte[] content = data.getData();
-                    LOG.log(Level.INFO, "ZK event content {0}", new Object[]{new String(content, StandardCharsets.UTF_8)});
+                    LOG.info("ZK event content {}", new String(content, StandardCharsets.UTF_8));
                     if (content != null) {
                         Map<String, Object> info = MAPPER.readValue(new ByteArrayInputStream(content), Map.class);
                         String origin = info.remove("origin") + "";
                         if (peerId.equals(origin)) {
-                            LOG.log(Level.INFO, "discard self originated event {0}", origin);
+                            LOG.info("discard self originated event {}", origin);
                         } else {
-                            LOG.log(Level.INFO, "handle event {0}", info);
+                            LOG.info("handle event {}", info);
                             callback.eventFired(eventId, info);
                         }
                     }
@@ -244,7 +244,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
                         .withMode(CreateMode.PERSISTENT)
                         .forPath(path);
             }
-            LOG.log(Level.INFO, "Fire event {0}", path);
+            LOG.info("Fire event {}", path);
             Map<String, Object> info = new HashMap<>();
             info.put("origin", peerId);
             if (data != null) {
@@ -255,7 +255,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
             client.setData()
                     .forPath(path, content);
         } catch (Exception ex) {
-            LOG.log(Level.SEVERE, "Cannot fire event " + eventId, ex);
+            LOG.error("Cannot fire event {}", eventId, ex);
         }
 
     }
@@ -265,7 +265,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
         try {
             return client.getChildren().forPath("/proxy/peers");
         } catch (Exception ex) {
-            LOG.log(Level.SEVERE, "Cannot list peers", ex);
+            LOG.error("Cannot list peers", ex);
             return Collections.emptyList();
         }
     }
@@ -293,17 +293,17 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
         try {
             boolean acquired = mutex.acquire(timeout, TimeUnit.SECONDS);
             if (!acquired) {
-                LOG.log(Level.INFO, "Failed to acquire lock for executeInMutex (mutexId: " + mutexId + ", peerId: " + peerId + ")");
+                LOG.info("Failed to acquire lock for executeInMutex (mutexId: {}, peerId: {})", mutexId, peerId);
                 return;
             }
             runnable.run();
         } catch (Exception e) {
-            LOG.log(Level.SEVERE, "Failed to acquire lock for executeInMutex (mutexId: " + mutexId + ", peerId: " + peerId + ")", e);
+            LOG.error("Failed to acquire lock for executeInMutex (mutexId: {}, peerId: {})", mutexId, peerId, e);
         } finally {
             try {
                 mutex.release();
             } catch (Exception e) {
-                LOG.log(Level.SEVERE, "Failed to release lock for executeInMutex (mutexId: " + mutexId + ", peerId: " + peerId + ")", e);
+                LOG.error("Failed to release lock for executeInMutex (mutexId: {}, peerId: {})", mutexId, peerId, e);
             }
         }
     }

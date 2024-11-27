@@ -19,7 +19,7 @@
  */
 package org.carapaceproxy.utils;
 
-import java.util.logging.Level;
+import org.slf4j.LoggerFactory;
 
 /**
  *
@@ -27,7 +27,7 @@ import java.util.logging.Level;
  */
 public final class CarapaceLogger {
 
-    private static final java.util.logging.Logger LOG = java.util.logging.Logger.getLogger(CarapaceLogger.class.getName());
+    private static final org.slf4j.Logger LOG = LoggerFactory.getLogger(CarapaceLogger.class);
 
     private static boolean loggingDebugEnabled = false;
 
@@ -42,6 +42,10 @@ public final class CarapaceLogger {
     }
 
     public static void debug(String s, Object ... o) {
-        LOG.log(loggingDebugEnabled ? Level.INFO : Level.FINE, s, o);
+        if (loggingDebugEnabled) {
+            LOG.debug(s, o);
+        } else {
+            LOG.info(s, o);
+        }
     }
 }
