@@ -116,7 +116,7 @@ public abstract class EndpointMapper {
 
     public abstract void configure(ConfigurationStore properties) throws ConfigurationNotValidException;
 
-    public final void setParent(final HttpProxyServer parent) {
+    public final void setParent(HttpProxyServer parent) {
         this.parent = parent;
     }
 

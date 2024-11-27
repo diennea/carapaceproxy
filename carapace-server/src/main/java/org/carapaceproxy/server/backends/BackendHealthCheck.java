@@ -28,8 +28,20 @@ import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import javax.ws.rs.core.UriBuilder;
+import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.utils.IOUtils;
 
+/**
+ * The record models a single health check.
+ * It includes information about when the backend was probed and what it responded.
+ *
+ * @param path         the probe path
+ * @param startTs      when the request was done
+ * @param endTs        when the answer was received
+ * @param result       the probe result
+ * @param httpResponse a string representation of the response header line
+ * @param httpBody     a string representation of the body of the response
+ */
 public record BackendHealthCheck(
         String path,
         long startTs,
@@ -38,21 +50,12 @@ public record BackendHealthCheck(
         String httpResponse,
         String httpBody
 ) {
-    private enum Result {
-        SUCCESS, // 1
-        FAILURE_CONNECTION, // 2
-        FAILURE_STATUS // 3
+
+    public static BackendHealthCheck check(final BackendConfiguration bconf, final int timeoutMillis) {
+        return check(bconf.host(), bconf.port(), bconf.probePath(), timeoutMillis);
     }
 
-    public long getResponseTime() {
-        return endTs - startTs;
-    }
-
-    public boolean isOk() {
-        return result == Result.SUCCESS;
-    }
-
-    public static BackendHealthCheck check(String host, int port, String path, int timeoutMillis) {
+    public static BackendHealthCheck check(final String host, final int port, final String path, final int timeoutMillis) {
         if (path.isEmpty()) {
             long now = System.currentTimeMillis();
             return new BackendHealthCheck(path, now, now, Result.SUCCESS, "OK", "MOCK OK");
@@ -124,5 +127,19 @@ public record BackendHealthCheck(
                     httpErrorBody
             );
         }
+    }
+
+    public long responseTime() {
+        return endTs - startTs;
+    }
+
+    public boolean ok() {
+        return result == Result.SUCCESS;
+    }
+
+    public enum Result {
+        SUCCESS, // 1
+        FAILURE_CONNECTION, // 2
+        FAILURE_STATUS // 3
     }
 }

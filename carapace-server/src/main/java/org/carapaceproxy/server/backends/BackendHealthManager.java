@@ -21,9 +21,6 @@ package org.carapaceproxy.server.backends;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.prometheus.client.Gauge;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -53,20 +50,16 @@ public class BackendHealthManager implements Runnable {
     private static final Gauge BACKEND_UPSTATUS_GAUGE = PrometheusUtils
             .createGauge("health", "backend_status", "backend status", "host")
             .register();
-
+    private final ConcurrentHashMap<EndpointKey, BackendHealthStatus> backends = new ConcurrentHashMap<>();
     private EndpointMapper mapper;
-
     private ScheduledExecutorService timer;
     private ScheduledFuture<?> scheduledFuture;
-
     // can change at runtime
     private volatile int period;
     // can change at runtime
     private volatile int connectTimeout;
     // keep track of start() calling
     private volatile boolean started;
-
-    private final ConcurrentHashMap<EndpointKey, BackendHealthStatus> backends = new ConcurrentHashMap<>();
 
     public BackendHealthManager(final RuntimeServerConfiguration conf, final EndpointMapper mapper) {
         this.mapper = mapper;
@@ -141,73 +134,62 @@ public class BackendHealthManager implements Runnable {
         if (mapper == null) {
             return;
         }
-        Collection<BackendConfiguration> backendConfigurations = mapper.getBackends().values();
-        for (BackendConfiguration bconf : backendConfigurations) {
-            BackendHealthStatus status = backends.computeIfAbsent(bconf.hostPort(), BackendHealthStatus::new);
+        for (final BackendConfiguration backend : mapper.getBackends().values()) {
+            final EndpointKey endpoint = backend.hostPort();
+            final BackendHealthStatus status = findStatus(endpoint);
+            final BackendHealthCheck checkResult = BackendHealthCheck.check(backend, connectTimeout);
 
-            BackendHealthCheck checkResult = BackendHealthCheck.check(
-                    bconf.host(), bconf.port(), bconf.probePath(), connectTimeout);
-
-            if (checkResult.isOk()) {
-                final var responseTime = checkResult.endTs() - checkResult.startTs();
-                if (status.isReportedAsUnreachable()) {
-                    LOG.warn("backend {} was unreachable, setting again to reachable. Response time {} ms",
-                            status.getHostPort(), responseTime);
-                    reportBackendReachable(status.getHostPort());
-                } else {
-                    LOG.debug("backend {} seems reachable. Response time {} ms", status.getHostPort(), responseTime);
+            if (checkResult.ok()) {
+                switch (status.getStatus()) {
+                    case DOWN ->
+                            LOG.warn("backend {} was unreachable, setting again to reachable. Response time {} ms", endpoint, checkResult.responseTime());
+                    case COLD, STABLE ->
+                            LOG.debug("backend {} seems reachable. Response time {} ms", endpoint, checkResult.responseTime());
                 }
+                reportBackendReachable(endpoint, checkResult.endTs());
             } else {
-                if (status.isReportedAsUnreachable()) {
-                    LOG.debug("backend {} still unreachable. Cause: {}", status.getHostPort(), checkResult.httpResponse());
-                } else {
-                    LOG.warn("backend {} became unreachable. Cause: {}", status.getHostPort(), checkResult.httpResponse());
-                    reportBackendUnreachable(status.getHostPort(), checkResult.endTs(), checkResult.httpResponse());
+                switch (status.getStatus()) {
+                    case DOWN ->
+                            LOG.debug("backend {} still unreachable. Cause: {}", endpoint, checkResult.httpResponse());
+                    case COLD, STABLE ->
+                            LOG.warn("backend {} became unreachable. Cause: {}", endpoint, checkResult.httpResponse());
                 }
+                reportBackendUnreachable(endpoint, checkResult.endTs(), checkResult.httpResponse());
             }
             status.setLastProbe(checkResult);
 
             BACKEND_UPSTATUS_GAUGE
-                    .labels(bconf.host() + "_" + bconf.port())
-                    .set(status.isReportedAsUnreachable() ? 0 : 1);
+                    .labels(backend.host() + "_" + backend.port())
+                    .set(status.getStatus() == BackendHealthStatus.Status.DOWN ? 0 : 1);
         }
-        List<EndpointKey> toRemove = new ArrayList<>();
-        for (final EndpointKey key : backends.keySet()) {
-            boolean found = false;
-            for (BackendConfiguration bconf : backendConfigurations) {
-                if (bconf.hostPort().equals(key)) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                toRemove.add(key);
-            }
+        cleanup();
+    }
+
+    private void cleanup() {
+        if (mapper == null) {
+            return;
         }
-        if (!toRemove.isEmpty()) {
-            LOG.info("discarding backends {}", toRemove);
-            toRemove.forEach(backends::remove);
-        }
+        backends.keySet().retainAll(mapper.getBackends().values().stream().map(BackendConfiguration::hostPort).toList());
+    }
+
+    public void reportBackendReachable(final EndpointKey hostPort, final long timestamp) {
+        findStatus(hostPort).reportAsReachable(timestamp);
     }
 
     public void reportBackendUnreachable(final EndpointKey hostPort, final long timestamp, final String cause) {
-        getBackendStatus(hostPort).reportAsUnreachable(timestamp, cause);
+        findStatus(hostPort).reportAsUnreachable(timestamp, cause);
     }
 
-    private BackendHealthStatus getBackendStatus(final EndpointKey hostPort) {
+    private BackendHealthStatus findStatus(final EndpointKey hostPort) {
         return backends.computeIfAbsent(hostPort, BackendHealthStatus::new);
-    }
-
-    public void reportBackendReachable(final EndpointKey hostPort) {
-        getBackendStatus(hostPort).reportAsReachable();
     }
 
     public Map<EndpointKey, BackendHealthStatus> getBackendsSnapshot() {
         return Map.copyOf(backends);
     }
 
-    public boolean isAvailable(final EndpointKey hostPort) {
-        return getBackendStatus(hostPort).isAvailable();
+    public BackendHealthStatus.Status getBackendStatus(final EndpointKey hostPort) {
+        return findStatus(hostPort).getStatus();
     }
 
     @VisibleForTesting

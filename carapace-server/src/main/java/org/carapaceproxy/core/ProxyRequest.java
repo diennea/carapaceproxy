@@ -219,7 +219,7 @@ public class ProxyRequest implements MatchingContext {
                 return !host.isBlank()
                         && (InternetDomainName.isValid(host) || InetAddresses.isInetAddress(host))
                         && parsed.getPort() >= 0
-                        && parsed.getPort() <= 65535;
+                        && parsed.getPort() <= EndpointKey.MAX_PORT;
             } else {
                 return !host.isBlank()
                         && (InternetDomainName.isValid(host) || InetAddresses.isInetAddress(host));
