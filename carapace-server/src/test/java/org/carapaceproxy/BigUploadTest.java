@@ -19,6 +19,8 @@
  */
 package org.carapaceproxy;
 
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -35,8 +37,6 @@ import java.util.function.Supplier;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;

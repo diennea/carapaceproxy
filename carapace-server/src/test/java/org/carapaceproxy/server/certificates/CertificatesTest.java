@@ -123,6 +123,7 @@ public class CertificatesTest extends UseAdminServer {
         config.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
         config.put("aws.accesskey", "accesskey");
         config.put("aws.secretkey", "secretkey");
+        config.put("healthmanager.tolerant", "true");
         startServer(config);
 
         // Default certificate
