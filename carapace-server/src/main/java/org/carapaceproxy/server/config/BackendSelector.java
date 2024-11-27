@@ -26,5 +26,5 @@ import java.util.List;
  */
 public interface BackendSelector {
 
-    public List<String> selectBackends(String userId, String sessionId, String director);
+    List<String> selectBackends(String userId, String sessionId, String director);
 }
