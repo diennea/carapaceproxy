@@ -346,14 +346,17 @@ public class StandardEndpointMapper extends EndpointMapper {
 
         this.defaultServiceUnavailable = properties.getString("default.action.serviceunavailable", DEFAULT_SERVICE_UNAVAILABLE_ACTION);
         LOG.info("configured default.action.serviceunavailable={}", defaultServiceUnavailable);
+
         this.forceDirectorParameter = properties.getString("mapper.forcedirector.parameter", forceDirectorParameter);
         LOG.info("configured mapper.forcedirector.parameter={}", forceDirectorParameter);
+
         this.forceBackendParameter = properties.getString("mapper.forcebackend.parameter", forceBackendParameter);
         LOG.info("configured mapper.forcebackend.parameter={}", forceBackendParameter);
 
         // To add custom debugging header for request chosen mapping-path
         this.debuggingHeaderEnabled = properties.getBoolean("mapper.debug", false);
         LOG.info("configured mapper.debug={}", debuggingHeaderEnabled);
+
         this.debuggingHeaderName = properties.getString("mapper.debug.name", DEBUGGING_HEADER_DEFAULT_NAME);
         LOG.info("configured mapper.debug.name={}", debuggingHeaderName);
 
@@ -426,7 +429,8 @@ public class StandardEndpointMapper extends EndpointMapper {
                 }
 
                 addAction(action);
-                LOG.info("configured action {} type={} enabled:{} headers:{} redirect location:{} redirect proto:{} redirect host:{} redirect port:{} redirect path:{}", id, actionType, enabled, headersIds, redirectLocation, action.getRedirectProto(), action.getRedirectHost(), action.getRedirectPort(), action.getRedirectPath());
+                LOG.info("configured action {} type={} enabled:{} headers:{} redirect location:{} redirect proto:{} redirect host:{} redirect port:{} redirect path:{}",
+                        id, actionType, enabled, headersIds, redirectLocation, action.getRedirectProto(), action.getRedirectHost(), action.getRedirectPort(), action.getRedirectPath());
             }
         }
 
