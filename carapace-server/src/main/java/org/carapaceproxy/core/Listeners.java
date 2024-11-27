@@ -294,9 +294,7 @@ public class Listeners {
                 .handle((request, response) -> { // Custom request-response handling
                     if (LOG.isDebugEnabled()) {
                         LOG.debug(
-                                "Receive request {} From {} Timestamp {}",
-                                request.uri(),
-                                request.remoteAddress(),
+                                "Receive request {} From {} Timestamp {}", request.uri(), request.remoteAddress(),
                                 LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
                         );
                     }
@@ -312,10 +310,7 @@ public class Listeners {
         // response compression
         if (currentConfiguration.getResponseCompressionThreshold() >= 0) {
             LOG.debug(
-                    "Response compression enabled with min size = {} bytes for listener {}",
-                    currentConfiguration.getResponseCompressionThreshold(),
-                    hostPort
-            );
+                    "Response compression enabled with min size = {} bytes for listener {}", currentConfiguration.getResponseCompressionThreshold(), hostPort);
             httpServer = httpServer.compress(currentConfiguration.getResponseCompressionThreshold());
         } else {
             LOG.debug("Response compression disabled for listener {}", hostPort);
