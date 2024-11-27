@@ -71,7 +71,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.Socket;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -147,7 +146,7 @@ public class RawClientTest {
                         .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -193,9 +192,8 @@ public class RawClientTest {
                         .withBody("a")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.start();
             int port = server.getLocalPort();
 
@@ -234,7 +232,7 @@ public class RawClientTest {
                         .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.start();
             int port = server.getLocalPort();
             assertTrue(port > 0);
@@ -246,68 +244,68 @@ public class RawClientTest {
                 clients.add(client);
             }
 
-            int i = 0;
             for (RawHttpClient client : clients) {
                 client.close();
-                i++;
             }
         }
     }
 
     @Test
     public void testKeepAliveTimeout() throws Exception {
-        RawHttpServer httpServer = new RawHttpServer(new HttpServlet() {
+        final RawHttpServer httpServer = new RawHttpServer(new HttpServlet() {
             public void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
                 response.setContentType("text/html");
                 PrintWriter out = response.getWriter();
                 out.println("it <b>works</b> !!");
             }
         });
-        httpServer.setIdleTimeout(5);
-        int httpServerPort = httpServer.start();
+        try (httpServer) {
+            httpServer.setIdleTimeout(5);
+            int httpServerPort = httpServer.start();
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", httpServerPort);
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
-            server.start();
-            int port = server.getLocalPort();
-            assertTrue(port > 0);
+            TestEndpointMapper mapper = new TestEndpointMapper("localhost", httpServerPort);
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+                server.start();
+                int port = server.getLocalPort();
+                assertTrue(port > 0);
 
-            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                for (int j = 0; j < 2; j++) {
-                    RawHttpClient.HttpResponse res = client.get("/index.html");
-                    String resp = res.getBodyString();
-                    System.out.println("RESP: " + resp + "; HEADERS: " + String.join("; ", res.getHeaderLines()));
-                    Thread.sleep(10_000);
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    for (int j = 0; j < 2; j++) {
+                        RawHttpClient.HttpResponse res = client.get("/index.html");
+                        String resp = res.getBodyString();
+                        System.out.println("RESP: " + resp + "; HEADERS: " + String.join("; ", res.getHeaderLines()));
+                        Thread.sleep(10_000);
+                    }
+                } catch (Exception e) {
+                    System.out.println("EXCEPTION: " + e);
                 }
-            } catch (Exception e) {
-                System.out.println("EXCEPTION: " + e);
             }
         }
     }
 
     @Test
     public void testEmptyDataFromServer() throws Exception {
-
-        RawHttpServer httpServer = new RawHttpServer(new HttpServlet() {
+        final RawHttpServer httpServer = new RawHttpServer(new HttpServlet() {
             public void doGet(HttpServletRequest request, HttpServletResponse response) {
             }
         });
-        int httpServerPort = httpServer.start();
+        try (httpServer) {
+            int httpServerPort = httpServer.start();
+            TestEndpointMapper mapper = new TestEndpointMapper("localhost", httpServerPort);
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+                server.start();
+                int port = server.getLocalPort();
+                assertTrue(port > 0);
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", httpServerPort);
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
-            server.start();
-            int port = server.getLocalPort();
-            assertTrue(port > 0);
-
-            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                for (int j = 0; j < 2; j++) {
-                    RawHttpClient.HttpResponse res = client.get("/index.html");
-                    String resp = res.getBodyString();
-                    System.out.println("RESP: " + resp + "; HEADERS: " + String.join("; ", res.getHeaderLines()));
+                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                    for (int j = 0; j < 2; j++) {
+                        RawHttpClient.HttpResponse res = client.get("/index.html");
+                        String resp = res.getBodyString();
+                        System.out.println("RESP: " + resp + "; HEADERS: " + String.join("; ", res.getHeaderLines()));
+                    }
+                } catch (Exception e) {
+                    System.out.println("EXCEPTION: " + e);
                 }
-            } catch (Exception e) {
-                System.out.println("EXCEPTION: " + e);
             }
         }
     }
@@ -315,12 +313,13 @@ public class RawClientTest {
     @Test
     public void testServerRequestContinue() throws Exception {
         AtomicBoolean responseEnabled = new AtomicBoolean();
-        try (DummyServer server = new DummyServer("localhost", 8086, responseEnabled)) {
+        final int dummyServerPort = 8086;
+        try (DummyServer server = new DummyServer("localhost", dummyServerPort, responseEnabled)) {
 
-            TestEndpointMapper mapper = new TestEndpointMapper("localhost", 8086);
+            TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyServerPort);
 
             ExecutorService ex = Executors.newFixedThreadPool(2);
-            List<Future> futures = new ArrayList<>();
+            List<Future<?>> futures = new ArrayList<>();
 
             try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
                 ConnectionPoolConfiguration defaultConnectionPool = proxy.getCurrentConfiguration().getDefaultConnectionPool();
@@ -396,7 +395,7 @@ public class RawClientTest {
                         }
                     }));
                 } finally {
-                    for (Future future : futures) {
+                    for (Future<?> future : futures) {
                         try {
                             future.get();
                         } catch (InterruptedException | ExecutionException e) {
@@ -434,15 +433,14 @@ public class RawClientTest {
                         public void initChannel(SocketChannel channel) {
                             channel.pipeline().addLast(new HttpRequestDecoder());
                             channel.pipeline().addLast(new HttpResponseEncoder());
-                            channel.pipeline().addLast(new SimpleChannelInboundHandler<Object>() {
+                            channel.pipeline().addLast(new SimpleChannelInboundHandler<>() {
 
                                 private boolean keepAlive;
                                 private boolean continueRequest;
 
                                 @Override
                                 protected void channelRead0(ChannelHandlerContext ctx, Object msg) {
-                                    if (msg instanceof HttpRequest) {
-                                        HttpRequest request = (HttpRequest) msg;
+                                    if (msg instanceof final HttpRequest request) {
                                         System.out.println("[DummyServer] HttpRequest: " + request);
                                         keepAlive = HttpUtil.isKeepAlive(request);
                                         continueRequest = HttpUtil.is100ContinueExpected(request);
@@ -453,7 +451,7 @@ public class RawClientTest {
                                             );
                                             ctx.write(response);
                                         }
-                                    } else if (msg instanceof LastHttpContent) {
+                                    } else if (msg instanceof final LastHttpContent lastContent) {
                                         try {
                                             while (!responseEnabled.get()) {
                                                 Thread.sleep(1_000);
@@ -462,13 +460,12 @@ public class RawClientTest {
 
                                         }
 
-                                        LastHttpContent lastContent = (LastHttpContent) msg;
-                                        String trailer = lastContent.content().asReadOnly().readCharSequence(lastContent.content().readableBytes(), Charset.forName("utf-8")).toString();
+                                        String trailer = lastContent.content().asReadOnly().readCharSequence(lastContent.content().readableBytes(), StandardCharsets.UTF_8).toString();
                                         System.out.println("[DummyServer] LastHttpContent: " + trailer);
 
                                         DefaultFullHttpResponse response = new DefaultFullHttpResponse(
                                                 HTTP_1_1, HttpResponseStatus.OK,
-                                                Unpooled.copiedBuffer("resp=" + (continueRequest ? "client1" : "client2"), Charset.forName("utf-8"))
+                                                Unpooled.copiedBuffer("resp=" + (continueRequest ? "client1" : "client2"), StandardCharsets.UTF_8)
                                         );
                                         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8");
                                         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
@@ -479,9 +476,8 @@ public class RawClientTest {
                                         if (!keepAlive) {
                                             ctx.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
                                         }
-                                    } else if (msg instanceof HttpContent) {
-                                        HttpContent content = (HttpContent) msg;
-                                        String httpContent = content.content().asReadOnly().readCharSequence(content.content().readableBytes(), Charset.forName("utf-8")).toString();
+                                    } else if (msg instanceof final HttpContent content) {
+                                        String httpContent = content.content().asReadOnly().readCharSequence(content.content().readableBytes(), StandardCharsets.UTF_8).toString();
                                         System.out.println("[DummyServer] HttpContent: " + httpContent);
                                     }
                                 }
@@ -531,10 +527,8 @@ public class RawClientTest {
                         .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-
         ExecutorService ex = Executors.newFixedThreadPool(2);
-        List<Future> futures = new ArrayList<>();
+        List<Future<?>> futures = new ArrayList<>();
 
         try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             ConnectionPoolConfiguration defaultConnectionPool = proxy.getCurrentConfiguration().getDefaultConnectionPool();
@@ -597,7 +591,7 @@ public class RawClientTest {
                     }
                 }));
             } finally {
-                for (Future future : futures) {
+                for (Future<?> future : futures) {
                     try {
                         future.get();
                     } catch (InterruptedException | ExecutionException e) {
@@ -615,7 +609,7 @@ public class RawClientTest {
     @Test
     public void testMaxConnectionsAndBorrowTimeout() throws Exception {
         ExecutorService ex = Executors.newFixedThreadPool(2);
-        List<Future> futures = new ArrayList<>();
+        List<Future<?>> futures = new ArrayList<>();
         AtomicBoolean responseEnabled = new AtomicBoolean();
 
         try (DummyServer server = new DummyServer("localhost", 8086, responseEnabled)) {
@@ -721,7 +715,7 @@ public class RawClientTest {
                         .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -735,13 +729,12 @@ public class RawClientTest {
     @Test
     @Parameters({"http", "https"})
     public void testClosedProxy(String scheme) throws Exception {
-        String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+        TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
 
         // Proxy requests have to use "localhost:port" as endpoint instead of the one in the url (ex yahoo.com)
         // in order to avoid open proxy vulnerability
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", 0, scheme.equals("https"), null, "localhost", DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 100, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11.name())));
 
@@ -813,7 +806,7 @@ public class RawClientTest {
                         .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {

@@ -35,7 +35,6 @@ import java.net.InetAddress;
 import java.security.cert.X509Certificate;
 import java.util.Set;
 import javax.net.ssl.SSLSession;
-import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -70,9 +69,8 @@ public class SSLSNITest {
                         .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-        
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
+
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
             server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost /* default */, DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11.name())));
             server.start();
@@ -91,7 +89,7 @@ public class SSLSNITest {
     public void testChooseCertificate() throws Exception {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
 
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
 
             server.addCertificate(new SSLCertificateConfiguration("other", null, "cert", "pwd", STATIC));
             server.addCertificate(new SSLCertificateConfiguration("*.example.com", Set.of("example.com", "*.example2.com"), "cert", "pwd", STATIC));
@@ -135,7 +133,7 @@ public class SSLSNITest {
             assertEquals("*.example.com", server.getListeners().chooseCertificate("test.example2.com", "no-default").getId());
         }
 
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
 
             // full wildcard
             server.addCertificate(new SSLCertificateConfiguration("*", null, "cert", "pwd", STATIC));
