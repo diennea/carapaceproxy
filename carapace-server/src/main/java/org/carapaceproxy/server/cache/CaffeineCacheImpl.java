@@ -25,9 +25,9 @@ import com.github.benmanes.caffeine.cache.Expiry;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.github.benmanes.caffeine.cache.RemovalListener;
 import java.util.concurrent.atomic.AtomicLong;
+import org.carapaceproxy.server.cache.ContentsCache.CachedContent;
 import org.carapaceproxy.server.cache.ContentsCache.ContentKey;
 import org.slf4j.Logger;
-import org.carapaceproxy.server.cache.ContentsCache.CachedContent;
 
 /**
  *

@@ -38,7 +38,6 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
@@ -70,7 +69,6 @@ public class ChunkedEncodingResponseTest {
         );
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
 
-        CarapaceLogger.setLoggingDebugEnabled(true);
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.start();
             int port = server.getLocalPort();

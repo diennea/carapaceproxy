@@ -210,7 +210,7 @@ public class CertificatesResource {
             }
             bean.setStatus(certificateStateToString(state));
         } catch (GeneralSecurityException | IOException ex) {
-            LOG.error("Unable to read Keystore for certificate {}. Reason: {}", certificate.getId(), ex);
+            LOG.error("Unable to read Keystore for certificate {}", certificate.getId(), ex);
         }
     }
 

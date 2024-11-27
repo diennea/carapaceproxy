@@ -93,7 +93,6 @@ import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
-import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.RawHttpClient.HttpResponse;
 import org.carapaceproxy.utils.RawHttpServer;
@@ -323,8 +322,6 @@ public class RawClientTest {
             ExecutorService ex = Executors.newFixedThreadPool(2);
             List<Future> futures = new ArrayList<>();
 
-            CarapaceLogger.setLoggingDebugEnabled(true);
-
             try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
                 ConnectionPoolConfiguration defaultConnectionPool = proxy.getCurrentConfiguration().getDefaultConnectionPool();
                 defaultConnectionPool.setMaxConnectionsPerEndpoint(1);
@@ -539,8 +536,6 @@ public class RawClientTest {
         ExecutorService ex = Executors.newFixedThreadPool(2);
         List<Future> futures = new ArrayList<>();
 
-        CarapaceLogger.setLoggingDebugEnabled(true);
-
         try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             ConnectionPoolConfiguration defaultConnectionPool = proxy.getCurrentConfiguration().getDefaultConnectionPool();
             defaultConnectionPool.setMaxConnectionsPerEndpoint(1);
@@ -619,7 +614,6 @@ public class RawClientTest {
 
     @Test
     public void testMaxConnectionsAndBorrowTimeout() throws Exception {
-        CarapaceLogger.setLoggingDebugEnabled(true);
         ExecutorService ex = Executors.newFixedThreadPool(2);
         List<Future> futures = new ArrayList<>();
         AtomicBoolean responseEnabled = new AtomicBoolean();

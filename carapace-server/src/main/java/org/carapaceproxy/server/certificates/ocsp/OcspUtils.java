@@ -19,6 +19,8 @@
  */
 package org.carapaceproxy.server.certificates.ocsp;
 
+import io.netty.util.CharsetUtil;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -31,21 +33,19 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import javax.net.ssl.HttpsURLConnection;
 import javax.security.auth.x500.X500Principal;
+import org.bouncycastle.asn1.ASN1InputStream;
+import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.ASN1Primitive;
+import org.bouncycastle.asn1.ASN1TaggedObject;
+import org.bouncycastle.asn1.x509.AccessDescription;
+import org.bouncycastle.asn1.x509.AuthorityInformationAccess;
 import org.bouncycastle.asn1.x509.Extension;
+import org.bouncycastle.asn1.x509.GeneralName;
+import org.bouncycastle.asn1.x509.X509ObjectIdentifiers;
 import org.bouncycastle.cert.ocsp.OCSPReq;
 import org.bouncycastle.cert.ocsp.OCSPResp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import io.netty.util.CharsetUtil;
-import java.io.ByteArrayInputStream;
-import org.bouncycastle.asn1.ASN1InputStream;
-import org.bouncycastle.asn1.ASN1OctetString;
-import org.bouncycastle.asn1.ASN1TaggedObject;
-import org.bouncycastle.asn1.x509.AccessDescription;
-import org.bouncycastle.asn1.x509.AuthorityInformationAccess;
-import org.bouncycastle.asn1.x509.GeneralName;
-import org.bouncycastle.asn1.x509.X509ObjectIdentifiers;
 
 public final class OcspUtils {
 
@@ -57,7 +57,7 @@ public final class OcspUtils {
     private static final String OCSP_REQUEST_TYPE = "application/ocsp-request";
     private static final String OCSP_RESPONSE_TYPE = "application/ocsp-response";
 
-    private static final Logger LOG = LoggerFactory.getLogger(OcspStaplingManager.class);
+    private static final Logger LOG = LoggerFactory.getLogger(OcspUtils.class);
 
     private OcspUtils() {
     }

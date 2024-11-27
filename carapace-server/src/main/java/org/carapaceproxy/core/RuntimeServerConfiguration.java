@@ -55,7 +55,6 @@ import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
-import org.carapaceproxy.utils.CarapaceLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -247,10 +246,6 @@ public class RuntimeServerConfiguration {
 
         ocspStaplingManagerPeriod = properties.getInt("ocspstaplingmanager.period", 0);
         LOG.info("ocspstaplingmanager.period={}", ocspStaplingManagerPeriod);
-
-        boolean loggingDebugEnabled = properties.getBoolean("logging.debug.enabled", false);
-        CarapaceLogger.setLoggingDebugEnabled(loggingDebugEnabled);
-        LOG.info("logging.debug.enabled={}", loggingDebugEnabled);
 
         clientsIdleTimeoutSeconds = properties.getInt("clients.idle.timeout", clientsIdleTimeoutSeconds);
         LOG.info("clients.idle.timeout={}", clientsIdleTimeoutSeconds);

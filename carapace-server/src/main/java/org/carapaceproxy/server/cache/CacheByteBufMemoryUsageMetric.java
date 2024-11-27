@@ -3,14 +3,14 @@ package org.carapaceproxy.server.cache;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.prometheus.client.Gauge;
-import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.utils.PrometheusUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import org.carapaceproxy.core.HttpProxyServer;
+import org.carapaceproxy.utils.PrometheusUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class CacheByteBufMemoryUsageMetric implements Runnable {
 

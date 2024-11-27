@@ -391,7 +391,7 @@ public class DynamicCertificatesManager implements Runnable {
                     }
                 }
             } catch (AcmeException | IOException ex) {
-                LOG.error("Domain checking failed for {}: {}", name, ex);
+                LOG.error("Domain checking failed for {}", name, ex);
                 unreachableNames.put(name, ex.getMessage());
             }
         }

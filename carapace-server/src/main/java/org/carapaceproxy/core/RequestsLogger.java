@@ -46,7 +46,6 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPOutputStream;
-import org.carapaceproxy.server.cache.ContentsCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.stringtemplate.v4.NoIndentWriter;
@@ -59,7 +58,7 @@ import org.stringtemplate.v4.STWriter;
  */
 public class RequestsLogger implements Runnable, Closeable {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ContentsCache.class);
+    private static final Logger LOG = LoggerFactory.getLogger(RequestsLogger.class);
 
     private final BlockingQueue<Entry> queue;
 
@@ -201,7 +200,7 @@ public class RequestsLogger implements Runnable, Closeable {
                 LOG.info("{} was compressed successfully", source_filepath);
             }
         } catch (IOException ex) {
-            LOG.error("{} Compression failed:  {}", source_filepath, ex);
+            LOG.error("{} Compression failed", source_filepath, ex);
         }
     }
 

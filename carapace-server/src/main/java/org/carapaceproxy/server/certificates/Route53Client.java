@@ -106,7 +106,7 @@ public class Route53Client {
             ListHostedZonesByNameResponse res = client.listHostedZonesByName(
                     ListHostedZonesByNameRequest.builder().dnsName(dnsName).build()
             ).exceptionally(ext -> {
-                LOG.error("ERROR performing {} action for dns name {}. Reason: {}", action, dnsName, ext);
+                LOG.error("ERROR performing {} action for dns name {}.", action, dnsName, ext);
                 return null;
             }).get();
 
@@ -152,7 +152,7 @@ public class Route53Client {
             }
             Route53Response actionResult;
             actionResult = future.exceptionally(ext -> {
-                LOG.error("ERROR performing {} action for dns name {}. Reason: {}", action, dnsName, ext);
+                LOG.error("ERROR performing {} action for dns name {}.", action, dnsName, ext);
                 return null;
             }).get();
             if (actionResult != null && actionResult.sdkHttpResponse().isSuccessful()) {
@@ -163,7 +163,7 @@ public class Route53Client {
                 return true;
             }
         } catch (InterruptedException | ExecutionException ex) {
-            LOG.error("ERROR performing {} action for dns name {}. Reason: {}", action, dnsName, ex);
+            LOG.error("ERROR performing {} action for dns name {}.", action, dnsName, ex);
         }
 
         return false;
