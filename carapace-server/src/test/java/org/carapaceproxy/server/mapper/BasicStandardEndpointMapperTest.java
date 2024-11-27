@@ -49,6 +49,7 @@ import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.StaticContentsManager;
 import org.carapaceproxy.server.backends.BackendHealthManager;
+import org.carapaceproxy.server.backends.BackendHealthStatus;
 import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
@@ -66,7 +67,7 @@ import org.junit.rules.TemporaryFolder;
 public class BasicStandardEndpointMapperTest {
 
     @Rule
-    public WireMockRule backend1 = new WireMockRule(0);
+    public WireMockRule backend = new WireMockRule(0);
 
     @Rule
     public TemporaryFolder tmpDir = new TemporaryFolder();
@@ -91,7 +92,7 @@ public class BasicStandardEndpointMapperTest {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        int backendPort = backend1.port();
+        int backendPort = backend.port();
         StandardEndpointMapper mapper = new StandardEndpointMapper();
 
         mapper.addBackend(new BackendConfiguration("backend-a", "localhost", backendPort, "/"));
@@ -181,7 +182,7 @@ public class BasicStandardEndpointMapperTest {
 
             configuration.put("backend.1.id", "backend");
             configuration.put("backend.1.host", "localhost");
-            configuration.put("backend.1.port", String.valueOf(backend1.port()));
+            configuration.put("backend.1.port", String.valueOf(backend.port()));
             configuration.put("backend.1.enabled", "true");
 
             configuration.put("director.1.id", "director");
@@ -191,7 +192,7 @@ public class BasicStandardEndpointMapperTest {
             // unreachable backend -> expected service unavailable
             configuration.put("backend.2.id", "backend-down");
             configuration.put("backend.2.host", "localhost-down");
-            configuration.put("backend.2.port", String.valueOf(backend1.port()));
+            configuration.put("backend.2.port", String.valueOf(backend.port()));
             configuration.put("backend.2.enabled", "true");
 
             configuration.put("director.2.id", "director-down");
@@ -255,15 +256,21 @@ public class BasicStandardEndpointMapperTest {
             PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
 
             BackendHealthManager bhMan = mock(BackendHealthManager.class);
-            when(bhMan.isAvailable(eq(EndpointKey.make("localhost:" + backend1.port())))).thenReturn(true);
-            when(bhMan.isAvailable(eq(EndpointKey.make("localhost-down:" + backend1.port())))).thenReturn(false); // simulate unreachable backend -> expected 500 error
+            final EndpointKey alive = EndpointKey.make("localhost:" + backend.port());
+            final BackendHealthStatus mockAliveStatus = mock(BackendHealthStatus.class);
+            when(mockAliveStatus.getStatus()).thenReturn(BackendHealthStatus.Status.STABLE);
+            when(bhMan.getBackendStatus(eq(alive))).thenReturn(mockAliveStatus.getStatus());
+            final EndpointKey down = EndpointKey.make("localhost-down:" + backend.port());
+            final BackendHealthStatus mockDownStatus = mock(BackendHealthStatus.class);
+            when(mockDownStatus.getStatus()).thenReturn(BackendHealthStatus.Status.DOWN);
+            when(bhMan.getBackendStatus(eq(down))).thenReturn(mockDownStatus.getStatus()); // simulate unreachable backend -> expected 500 error
             server.setBackendHealthManager(bhMan);
             server.configureAtBoot(config);
             server.start();
 
             Thread.sleep(5_000);
 
-            // route-custom error (Internal Errror)
+            // route-custom error (Internal Error)
             {
                 HttpURLConnection conn = (HttpURLConnection) URI.create("http://localhost:" + server.getLocalPort() + "/custom-error.html").toURL().openConnection();
                 System.out.println("response core " +  conn.getResponseCode());
@@ -307,7 +314,7 @@ public class BasicStandardEndpointMapperTest {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        int backendPort = backend1.port();
+        int backendPort = backend.port();
 
         StandardEndpointMapper mapper = new StandardEndpointMapper();
         mapper.addBackend(new BackendConfiguration("backend", "localhost", backendPort, "/"));
@@ -321,8 +328,14 @@ public class BasicStandardEndpointMapperTest {
         mapper.addRoute(new RouteConfiguration("route-default", "cache", true, new RegexpRequestMatcher(PROPERTY_URI, ".*html")));
 
         BackendHealthManager bhMan = mock(BackendHealthManager.class);
-        when(bhMan.isAvailable(eq(EndpointKey.make("localhost:" + backendPort)))).thenReturn(true);
-        when(bhMan.isAvailable(eq(EndpointKey.make("localhost-down:" + backendPort)))).thenReturn(false); // simulate unreachable backend -> expected 500 error
+        final EndpointKey alive = EndpointKey.make("localhost:" + backendPort);
+        final BackendHealthStatus mockAliveStatus = mock(BackendHealthStatus.class);
+        when(mockAliveStatus.getStatus()).thenReturn(BackendHealthStatus.Status.STABLE);
+        when(bhMan.getBackendStatus(eq(alive))).thenReturn(mockAliveStatus.getStatus());
+        final EndpointKey down = EndpointKey.make("localhost-down:" + backendPort);
+        final BackendHealthStatus mockDownStatus = mock(BackendHealthStatus.class);
+        when(mockDownStatus.getStatus()).thenReturn(BackendHealthStatus.Status.DOWN);
+        when(bhMan.getBackendStatus(eq(down))).thenReturn(mockDownStatus.getStatus()); // simulate unreachable backend -> expected 500 error
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.setBackendHealthManager(bhMan);
@@ -362,7 +375,7 @@ public class BasicStandardEndpointMapperTest {
                 Properties configuration = new Properties();
                 configuration.put("backend.1.id", "foo");
                 configuration.put("backend.1.host", "localhost");
-                configuration.put("backend.1.port", String.valueOf(backend1.port()));
+                configuration.put("backend.1.port", String.valueOf(backend.port()));
                 configuration.put("backend.1.enabled", "true");
 
                 configuration.put("director.1.id", "*");
@@ -439,7 +452,7 @@ public class BasicStandardEndpointMapperTest {
             Properties configuration = new Properties();
             configuration.put("backend.1.id", "foo");
             configuration.put("backend.1.host", "localhost");
-            configuration.put("backend.1.port", String.valueOf(backend1.port()));
+            configuration.put("backend.1.port", String.valueOf(backend.port()));
             configuration.put("backend.1.enabled", "true");
 
             configuration.put("director.1.id", "*");
@@ -513,11 +526,11 @@ public class BasicStandardEndpointMapperTest {
             Properties configuration = new Properties();
             configuration.put("backend.1.id", "b1");
             configuration.put("backend.1.host", "localhost");
-            configuration.put("backend.1.port", String.valueOf(backend1.port()));
+            configuration.put("backend.1.port", String.valueOf(backend.port()));
             configuration.put("backend.1.enabled", "true");
             configuration.put("backend.2.id", "b2");
             configuration.put("backend.2.host", "localhost");
-            configuration.put("backend.2.port", String.valueOf(backend1.port()));
+            configuration.put("backend.2.port", String.valueOf(backend.port()));
             configuration.put("backend.2.enabled", "true");
 
             configuration.put("director.1.id", "d1");
