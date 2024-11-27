@@ -401,12 +401,7 @@ public class ProxyRequestsManager {
                 .doOnRequest((req, conn) -> {
                     if (LOGGER.isDebugEnabled()) {
                         LOGGER.debug(
-                                "Start sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}",
-                                key,
-                                connectionConfig.getId(),
-                                req.resourceUrl(),
-                                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")),
-                                endpointHost,
+                                "Start sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}", key, connectionConfig.getId(), req.resourceUrl(), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")), endpointHost,
                                 endpointPort
                         );
                     }
@@ -415,12 +410,7 @@ public class ProxyRequestsManager {
                 }).doAfterRequest((req, conn) -> {
                     if (LOGGER.isDebugEnabled()) {
                         LOGGER.debug(
-                                "Finished sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}",
-                                key,
-                                connectionConfig.getId(),
-                                request.getUri(),
-                                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")),
-                                endpointHost,
+                                "Finished sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}", key, connectionConfig.getId(), request.getUri(), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")), endpointHost,
                                 endpointPort
                         );
                     }
@@ -451,12 +441,7 @@ public class ProxyRequestsManager {
                 .response((resp, flux) -> { // endpoint response
                     if (LOGGER.isDebugEnabled()) {
                         LOGGER.debug(
-                                "Receive response from backend for {} Using client id {}_{} uri{} timestamp {} Backend: {}",
-                                request.getRemoteAddress(),
-                                key,
-                                connectionConfig.getId(),
-                                request.getUri(),
-                                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")),
+                                "Receive response from backend for {} Using client id {}_{} uri{} timestamp {} Backend: {}", request.getRemoteAddress(), key, connectionConfig.getId(), request.getUri(), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")),
                                 request.getAction().getHost()
                         );
                     }
@@ -494,12 +479,7 @@ public class ProxyRequestsManager {
                     }).doOnComplete(() -> {
                         if (LOGGER.isDebugEnabled()) {
                             LOGGER.debug(
-                                    "Send all response to client {} Using client id {}_{} for uri {} timestamp {} Backend: {}",
-                                    request.getRemoteAddress(),
-                                    key,
-                                    connectionConfig.getId(),
-                                    request.getUri(),
-                                    LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")),
+                                    "Send all response to client {} Using client id {}_{} for uri {} timestamp {} Backend: {}", request.getRemoteAddress(), key, connectionConfig.getId(), request.getUri(), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")),
                                     request.getAction().getHost()
                             );
                         }
@@ -644,12 +624,7 @@ public class ProxyRequestsManager {
                 // max connections per endpoint limit setup
                 newEndpoints.forEach(be -> {
                     LOGGER.debug(
-                            "Setup max connections per endpoint {}:{} = {} for connectionpool {}",
-                            be.host(),
-                            be.port(),
-                            connectionPool.getMaxConnectionsPerEndpoint(),
-                            connectionPool.getId()
-                    );
+                            "Setup max connections per endpoint {}:{} = {} for connectionpool {}", be.host(), be.port(), connectionPool.getMaxConnectionsPerEndpoint(), connectionPool.getId());
                     builder.forRemoteHost(InetSocketAddress.createUnresolved(be.host(), be.port()), spec -> {
                         spec.maxConnections(connectionPool.getMaxConnectionsPerEndpoint());
                         spec.pendingAcquireTimeout(Duration.ofMillis(connectionPool.getBorrowTimeout()));

@@ -320,7 +320,6 @@ public class RawClientTest {
 
             ExecutorService ex = Executors.newFixedThreadPool(2);
             List<Future<?>> futures = new ArrayList<>();
-
             try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
                 ConnectionPoolConfiguration defaultConnectionPool = proxy.getCurrentConfiguration().getDefaultConnectionPool();
                 defaultConnectionPool.setMaxConnectionsPerEndpoint(1);
@@ -529,7 +528,6 @@ public class RawClientTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         ExecutorService ex = Executors.newFixedThreadPool(2);
         List<Future<?>> futures = new ArrayList<>();
-
         try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             ConnectionPoolConfiguration defaultConnectionPool = proxy.getCurrentConfiguration().getDefaultConnectionPool();
             defaultConnectionPool.setMaxConnectionsPerEndpoint(1);
