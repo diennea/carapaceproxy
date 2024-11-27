@@ -1,19 +1,20 @@
 package org.carapaceproxy.core;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.junit.Assert.assertEquals;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import org.carapaceproxy.api.UseAdminServer;
-import org.carapaceproxy.utils.TestUtils;
-import org.junit.Rule;
-import org.junit.Test;
-
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Properties;
-
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
-import static org.junit.Assert.assertEquals;
+import org.carapaceproxy.api.UseAdminServer;
+import org.carapaceproxy.utils.TestUtils;
+import org.junit.Rule;
+import org.junit.Test;
 
 public class MaxHeaderSizeTest extends UseAdminServer {
 
@@ -33,6 +34,7 @@ public class MaxHeaderSizeTest extends UseAdminServer {
                         .withBody("it <b>works</b> !!")));
 
         config = new Properties(HTTP_ADMIN_SERVER_CONFIG);
+        config.put("healthmanager.tolerant", "true");
         startServer(config);
 
         // Default certificate
@@ -70,7 +72,6 @@ public class MaxHeaderSizeTest extends UseAdminServer {
         config.put("route.100.action", "proxy-all");
 
         changeDynamicConfiguration(config);
-
 
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)

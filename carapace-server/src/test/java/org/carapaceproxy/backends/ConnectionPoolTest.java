@@ -69,7 +69,6 @@ public class ConnectionPoolTest extends UseAdminServer {
     public WireMockRule wireMockRule = new WireMockRule(0);
 
     private void configureAndStartServer() throws Exception {
-
         HttpTestUtils.overrideJvmWideHttpsVerifier();
 
         stubFor(get(urlEqualTo("/index.html"))
@@ -85,6 +84,7 @@ public class ConnectionPoolTest extends UseAdminServer {
         config.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
         config.put("aws.accesskey", "accesskey");
         config.put("aws.secretkey", "secretkey");
+        config.put("healthmanager.tolerant", "true");
         startServer(config);
 
         // Default certificate

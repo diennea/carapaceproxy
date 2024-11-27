@@ -81,16 +81,19 @@ public class ApplyConfigurationTest {
      */
     public static final class StaticEndpointMapper extends TestEndpointMapper {
 
+        public StaticEndpointMapper(final HttpProxyServer ignoredServer) {
+            this(); // required for reflective construction
+        }
+
         public StaticEndpointMapper() {
             super("localhost", wireMockRule.port());
         }
-
     }
 
     @Test
     public void testChangeListenersConfig() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
 
             {
                 Properties configuration = new Properties();
@@ -217,7 +220,7 @@ public class ApplyConfigurationTest {
     @Test
     public void testReloadMapper() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
 
             {
                 Properties configuration = new Properties();
@@ -336,7 +339,7 @@ public class ApplyConfigurationTest {
     @Test
     public void testChangeFiltersConfiguration() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
 
             {
                 Properties configuration = new Properties();
@@ -375,7 +378,7 @@ public class ApplyConfigurationTest {
     @Test
     public void testChangeBackendHealthManagerConfiguration() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
 
             {
                 Properties configuration = new Properties();
