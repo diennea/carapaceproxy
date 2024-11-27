@@ -101,10 +101,10 @@ public class BackendsResource {
                 bean.reportedAsUnreachableTs = bhs.getReportedAsUnreachableTs();
                 BackendHealthCheck lastProbe = bhs.getLastProbe();
                 if (lastProbe != null) {
-                    bean.lastProbeTs = lastProbe.getEndTs();
+                    bean.lastProbeTs = lastProbe.endTs();
                     bean.lastProbeSuccess = lastProbe.isOk();
-                    bean.httpResponse = lastProbe.getHttpResponse();
-                    bean.httpBody = lastProbe.getHttpBody();
+                    bean.httpResponse = lastProbe.httpResponse();
+                    bean.httpBody = lastProbe.httpBody();
                 }
             }
             res.put(id, bean);
