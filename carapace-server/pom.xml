@@ -252,6 +252,13 @@
         </dependency>
 
         <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+            <!-- https://jspecify.dev/docs/using/#depending-on-the-annotations -->
+            <!-- JSpecify recommends to include the annotations at runtime and not to scope as provided or optional -->
+        </dependency>
+
+        <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>carapace-ui</artifactId>
             <version>${project.version}</version>

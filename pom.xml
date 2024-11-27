@@ -117,6 +117,7 @@
         <libs.jersey>2.35</libs.jersey>
         <libs.jackson>2.14.3</libs.jackson>
         <libs.javassist>3.27.0-GA</libs.javassist>
+        <libs.jspecify>1.0.0</libs.jspecify>
         <libs.slf4j>1.7.35</libs.slf4j>
         <libs.guava>33.3.1-jre</libs.guava>
         <libs.lombok>1.18.32</libs.lombok>
@@ -204,6 +205,11 @@
                 <type>pom</type>
             </dependency>
             <!-- Individual dependencies -->
+            <dependency>
+                <groupId>org.jspecify</groupId>
+                <artifactId>jspecify</artifactId>
+                <version>${libs.jspecify}</version>
+            </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-api</artifactId>
