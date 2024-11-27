@@ -23,151 +23,106 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
+import javax.ws.rs.core.UriBuilder;
 import org.carapaceproxy.utils.IOUtils;
 
-/**
- *
- * @author francesco.caliumi
- */
-public class BackendHealthCheck {
-
-    public static final int RESULT_SUCCESS = 1;
-    public static final int RESULT_FAILURE_CONNECTION = 2;
-    public static final int RESULT_FAILURE_STATUS = 3;
-
-    private final String path;
-    private final long startTs;
-    private final long endTs;
-    private final int result;
-    private final String httpResponse;
-    private final String httpBody;
-
-    public BackendHealthCheck(String path, long startTs, long endTs, int result, String httpResponse, String httpBody) {
-        this.path = path;
-        this.startTs = startTs;
-        this.endTs = endTs;
-        this.result = result;
-        this.httpResponse = httpResponse;
-        this.httpBody = httpBody;
-    }
-
-    @Override
-    public String toString() {
-        return "BackendHealthCheck{" + "path=" + path + ", startTs=" + startTs + ", endTs=" + endTs + ", result=" + result + ", httpResponse=" + httpResponse + ", httpBody=" + httpBody + '}';
-    }
-
-    public String getPath() {
-        return path;
-    }
-
-    public long getStartTs() {
-        return startTs;
-    }
-
-    public long getEndTs() {
-        return endTs;
+public record BackendHealthCheck(
+        String path,
+        long startTs,
+        long endTs,
+        Result result,
+        String httpResponse,
+        String httpBody
+) {
+    private enum Result {
+        SUCCESS, // 1
+        FAILURE_CONNECTION, // 2
+        FAILURE_STATUS // 3
     }
 
     public long getResponseTime() {
         return endTs - startTs;
     }
 
-    public int getResult() {
-        return result;
-    }
-
-    public String getHttpResponse() {
-        return httpResponse;
-    }
-
-    public String getHttpBody() {
-        return httpBody;
-    }
-
     public boolean isOk() {
-        return result == RESULT_SUCCESS;
+        return result == Result.SUCCESS;
     }
 
     public static BackendHealthCheck check(String host, int port, String path, int timeoutMillis) {
-
-        if (path == null || path.isEmpty()) {
+        if (path.isEmpty()) {
             long now = System.currentTimeMillis();
-            return new BackendHealthCheck(path, now, now, RESULT_SUCCESS, "OK", "MOCK OK");
-        } else {
-            long startts = System.currentTimeMillis();
-            URL url;
-            HttpURLConnection httpConn = null;
-            try {
-                url = new URI("http", null, host, port, path, null, null).toURL();
-                URLConnection conn = url.openConnection();
-                conn.setConnectTimeout(timeoutMillis);
-                conn.setReadTimeout(timeoutMillis);
-                conn.setUseCaches(false);
+            return new BackendHealthCheck(path, now, now, Result.SUCCESS, "OK", "MOCK OK");
+        }
+        final long startTs = System.currentTimeMillis();
+        HttpURLConnection httpConn = null;
+        try {
+            final URL url = UriBuilder.fromPath(path).scheme("http").host(host).port(port).build().toURL();
+            URLConnection conn = url.openConnection();
+            conn.setConnectTimeout(timeoutMillis);
+            conn.setReadTimeout(timeoutMillis);
+            conn.setUseCaches(false);
 
-                if (!(conn instanceof HttpURLConnection)) {
-                    throw new IllegalStateException("Only HttpURLConnection is supported");
-                }
-                httpConn = (HttpURLConnection) conn;
-                httpConn.setRequestMethod("GET");
-                httpConn.setInstanceFollowRedirects(true);
+            if (!(conn instanceof HttpURLConnection)) {
+                throw new IllegalStateException("Only HttpURLConnection is supported");
+            }
+            httpConn = (HttpURLConnection) conn;
+            httpConn.setRequestMethod("GET");
+            httpConn.setInstanceFollowRedirects(true);
 
-                try (InputStream is = httpConn.getInputStream()) {
-                    int httpCode = httpConn.getResponseCode();
-                    String httpResponse = httpCode + " " + Objects.toString(httpConn.getResponseMessage(), "");
-                    String httpBody = IOUtils.toString(is, StandardCharsets.UTF_8);
-                    return new BackendHealthCheck(
-                            path,
-                            startts,
-                            System.currentTimeMillis(),
-                            httpCode >= 200 && httpCode <= 299 ? RESULT_SUCCESS : RESULT_FAILURE_STATUS,
-                            httpResponse,
-                            httpBody
-                    );
-                }
-
-            } catch (MalformedURLException | URISyntaxException ex) {
-                throw new RuntimeException(ex);
-
-            } catch (IOException | RuntimeException ex) {
-                int result = RESULT_FAILURE_STATUS;
-                int httpCode = 0;
-                String httpResponse = "";
-                String httpErrorBody = "";
-
-                if (httpConn != null) {
-                    try {
-                        httpCode = httpConn.getResponseCode();
-                        httpResponse = httpCode + " " + Objects.toString(httpConn.getResponseMessage(), "");
-                    } catch (IOException ex2) {
-                        // Ignore
-                    }
-
-                    try {
-                        httpErrorBody = IOUtils.toString(httpConn.getErrorStream(), StandardCharsets.UTF_8);
-                    } catch (IOException ex2) {
-                        // Ignore
-                    }
-                }
-
-                if (httpCode <= 0) {
-                    result = RESULT_FAILURE_CONNECTION;
-                    httpResponse = ex.getMessage();
-                }
+            try (InputStream is = httpConn.getInputStream()) {
+                int httpCode = httpConn.getResponseCode();
+                String httpResponse = httpCode + " " + Objects.toString(httpConn.getResponseMessage(), "");
+                String httpBody = IOUtils.toString(is, StandardCharsets.UTF_8);
                 return new BackendHealthCheck(
                         path,
-                        startts,
+                        startTs,
                         System.currentTimeMillis(),
-                        result,
+                        httpCode >= 200 && httpCode <= 299 ? Result.SUCCESS : Result.FAILURE_STATUS,
                         httpResponse,
-                        httpErrorBody
+                        httpBody
                 );
             }
+
+        } catch (MalformedURLException ex) {
+            throw new RuntimeException(ex);
+
+        } catch (IOException | RuntimeException ex) {
+            Result result = Result.FAILURE_STATUS;
+            int httpCode = 0;
+            String httpResponse = "";
+            String httpErrorBody = "";
+
+            if (httpConn != null) {
+                try {
+                    httpCode = httpConn.getResponseCode();
+                    httpResponse = httpCode + " " + Objects.toString(httpConn.getResponseMessage(), "");
+                } catch (IOException ex2) {
+                    // Ignore
+                }
+
+                try {
+                    httpErrorBody = IOUtils.toString(httpConn.getErrorStream(), StandardCharsets.UTF_8);
+                } catch (IOException ex2) {
+                    // Ignore
+                }
+            }
+
+            if (httpCode <= 0) {
+                result = Result.FAILURE_CONNECTION;
+                httpResponse = ex.getMessage();
+            }
+            return new BackendHealthCheck(
+                    path,
+                    startTs,
+                    System.currentTimeMillis(),
+                    result,
+                    httpResponse,
+                    httpErrorBody
+            );
         }
     }
 }
