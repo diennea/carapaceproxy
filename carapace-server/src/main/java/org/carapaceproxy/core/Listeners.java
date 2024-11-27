@@ -65,7 +65,6 @@ import lombok.Data;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
-import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
 import org.slf4j.Logger;
@@ -202,19 +201,19 @@ public class Listeners {
         currentConfiguration = newConfiguration;
 
         try {
-            for (EndpointKey hostport : listenersToStop) {
+            for (final EndpointKey hostport : listenersToStop) {
                 LOG.info("Stopping {}", hostport);
                 stopListener(hostport);
             }
 
-            for (EndpointKey hostport : listenersToRestart) {
+            for (final EndpointKey hostport : listenersToRestart) {
                 LOG.info("Restart {}", hostport);
                 stopListener(hostport);
                 NetworkListenerConfiguration newConfigurationForListener = currentConfiguration.getListener(hostport);
                 bootListener(newConfigurationForListener);
             }
 
-            for (EndpointKey hostport : listenersToStart) {
+            for (final EndpointKey hostport : listenersToStart) {
                 LOG.info("Starting {}", hostport);
                 NetworkListenerConfiguration newConfigurationForListener = currentConfiguration.getListener(hostport);
                 bootListener(newConfigurationForListener);
@@ -293,10 +292,13 @@ public class Listeners {
                 })
                 .httpRequestDecoder(option -> option.maxHeaderSize(currentConfiguration.getMaxHeaderSize()))
                 .handle((request, response) -> { // Custom request-response handling
-                    if (CarapaceLogger.isLoggingDebugEnabled()) {
-                        CarapaceLogger.debug("Receive request " + request.uri()
-                        + " From " + request.remoteAddress()
-                        + " Timestamp " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")));
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug(
+                                "Receive request {} From {} Timestamp {}",
+                                request.uri(),
+                                request.remoteAddress(),
+                                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS"))
+                        );
                     }
 
                     ListeningChannel channel = listeningChannels.get(hostPort);
@@ -309,12 +311,14 @@ public class Listeners {
 
         // response compression
         if (currentConfiguration.getResponseCompressionThreshold() >= 0) {
-            CarapaceLogger.debug("Response compression enabled with min size = {0} bytes for listener {1}",
-                    currentConfiguration.getResponseCompressionThreshold(), hostPort
+            LOG.debug(
+                    "Response compression enabled with min size = {} bytes for listener {}",
+                    currentConfiguration.getResponseCompressionThreshold(),
+                    hostPort
             );
             httpServer = httpServer.compress(currentConfiguration.getResponseCompressionThreshold());
         } else {
-            CarapaceLogger.debug("Response compression disabled for listener {0}", hostPort);
+            LOG.debug("Response compression disabled for listener {}", hostPort);
         }
 
         // Initialization of event loop groups, native transport libraries and the native libraries for the security

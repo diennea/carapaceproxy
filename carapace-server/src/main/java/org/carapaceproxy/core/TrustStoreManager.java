@@ -1,10 +1,6 @@
 package org.carapaceproxy.core;
 
-import lombok.Getter;
-import org.carapaceproxy.utils.CertificatesUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import javax.net.ssl.TrustManagerFactory;
+import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
 import java.io.File;
 import java.io.IOException;
 import java.security.KeyStore;
@@ -14,8 +10,11 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.Map;
-
-import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
+import javax.net.ssl.TrustManagerFactory;
+import lombok.Getter;
+import org.carapaceproxy.utils.CertificatesUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class TrustStoreManager {
 
@@ -39,7 +38,7 @@ public class TrustStoreManager {
         String trustStoreFile = currentConfiguration.getSslTrustStoreFile();
         String trustStorePassword = currentConfiguration.getSslTrustStorePassword();
 
-        if(trustStoreFile == null) {
+        if (trustStoreFile == null) {
             return;
         }
 

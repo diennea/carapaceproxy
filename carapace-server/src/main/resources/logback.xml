@@ -2,7 +2,9 @@
 <configuration
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xmlns="http://ch.qos.logback/xml/ns/logback"
-        xsi:schemaLocation="http://ch.qos.logback/xml/ns/logback https://raw.githubusercontent.com/enricopulatzo/logback-XSD/master/src/main/xsd/logback.xsd">
+        xsi:schemaLocation="http://ch.qos.logback/xml/ns/logback https://raw.githubusercontent.com/enricopulatzo/logback-XSD/master/src/main/xsd/logback.xsd"
+        scan="true"
+        scanPeriod="1 minute">
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
     </root>

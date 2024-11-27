@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.user;
 
+import static org.carapaceproxy.utils.StringUtils.trimToNull;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -34,8 +35,6 @@ import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static org.carapaceproxy.utils.StringUtils.trimToNull;
 
 /**
  * User realm that takes the initial configuration of the authorized users from

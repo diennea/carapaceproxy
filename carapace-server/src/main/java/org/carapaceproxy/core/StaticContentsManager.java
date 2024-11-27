@@ -111,7 +111,7 @@ public class StaticContentsManager {
                 throw new IOException("cannot load resource " + resource + ", path must start with " + FILE_RESOURCE + " or " + CLASSPATH_RESOURCE);
             }
         } catch (IOException | NullPointerException err) {
-            LOG.error("Cannot load resource {}: {}", resource, err);
+            LOG.error("Cannot load resource {}", resource, err);
             return null;
         }
     }
