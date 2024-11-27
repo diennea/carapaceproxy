@@ -20,13 +20,14 @@
 package org.carapaceproxy.utils;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.SequencedMap;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
-import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.mapper.CustomHeader;
@@ -38,7 +39,7 @@ public class TestEndpointMapper extends EndpointMapper {
     private final String host;
     private final int port;
     private final boolean cacheAll;
-    private final Map<String, BackendConfiguration> backends;
+    private final SequencedMap<String, BackendConfiguration> backends;
     private final List<RouteConfiguration> routes = new ArrayList<>();
     private final List<ActionConfiguration> actions = new ArrayList<>();
     private final List<DirectorConfiguration> directors = new ArrayList<>();
@@ -56,7 +57,7 @@ public class TestEndpointMapper extends EndpointMapper {
         this.host = host;
         this.port = port;
         this.cacheAll = cacheAll;
-        this.backends = backends;
+        this.backends = new LinkedHashMap<>(backends);
     }
 
     @Override
@@ -87,7 +88,7 @@ public class TestEndpointMapper extends EndpointMapper {
     }
 
     @Override
-    public Map<String, BackendConfiguration> getBackends() {
+    public SequencedMap<String, BackendConfiguration> getBackends() {
         return backends;
     }
 
@@ -112,8 +113,6 @@ public class TestEndpointMapper extends EndpointMapper {
     }
 
     @Override
-    public void configure(ConfigurationStore properties) throws ConfigurationNotValidException {
-
+    public void configure(ConfigurationStore properties) {
     }
-
 }

@@ -166,9 +166,9 @@ public class ProxyRequestsManager {
         String resource = null;
         List<CustomHeader> customHeaders = null;
         if (res != null) {
-            code = res.getErrorcode();
-            resource = res.getResource();
-            customHeaders = res.getCustomHeaders();
+            code = res.errorCode();
+            resource = res.resource();
+            customHeaders = res.customHeaders();
         }
         if (resource == null) {
             resource = StaticContentsManager.DEFAULT_NOT_FOUND;
@@ -192,9 +192,9 @@ public class ProxyRequestsManager {
         String resource = null;
         List<CustomHeader> customHeaders = null;
         if (res != null) {
-            code = res.getErrorcode();
-            resource = res.getResource();
-            customHeaders = res.getCustomHeaders();
+            code = res.errorCode();
+            resource = res.resource();
+            customHeaders = res.customHeaders();
         }
         if (resource == null) {
             resource = StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
@@ -218,9 +218,9 @@ public class ProxyRequestsManager {
         String resource = null;
         List<CustomHeader> customHeaders = null;
         if (res != null) {
-            code = res.getErrorcode();
-            resource = res.getResource();
-            customHeaders = res.getCustomHeaders();
+            code = res.errorCode();
+            resource = res.resource();
+            customHeaders = res.customHeaders();
         }
         if (resource == null) {
             resource = StaticContentsManager.DEFAULT_MAINTENANCE_MODE_ERROR;
@@ -244,9 +244,9 @@ public class ProxyRequestsManager {
         String resource = null;
         List<CustomHeader> customHeaders = null;
         if (res != null) {
-            code = res.getErrorcode();
-            resource = res.getResource();
-            customHeaders = res.getCustomHeaders();
+            code = res.errorCode();
+            resource = res.resource();
+            customHeaders = res.customHeaders();
         }
         if (resource == null) {
             resource = StaticContentsManager.DEFAULT_BAD_REQUEST;
@@ -553,9 +553,9 @@ public class ProxyRequestsManager {
         String resource = null;
         List<CustomHeader> customHeaders = null;
         if (res != null) {
-            code = res.getErrorcode();
-            resource = res.getResource();
-            customHeaders = res.getCustomHeaders();
+            code = res.errorCode();
+            resource = res.resource();
+            customHeaders = res.customHeaders();
         }
         if (resource == null) {
             resource = StaticContentsManager.DEFAULT_SERVICE_UNAVAILABLE_ERROR;
