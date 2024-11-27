@@ -5,17 +5,17 @@ import io.netty.buffer.UnpooledByteBufAllocator;
 import io.prometheus.client.Gauge;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.PrometheusUtils;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
 
 public class CacheByteBufMemoryUsageMetric implements Runnable {
 
     public static final int DEFAULT_PERIOD = 5; // seconds
-    private static final Logger LOG = Logger.getLogger(CacheByteBufMemoryUsageMetric.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(CacheByteBufMemoryUsageMetric.class);
     private static final Gauge CACHE_POOLED_BYTEBUF_ALLOCATOR = PrometheusUtils.createGauge("cacheAllocator",
             "cache_pooled_allocator_direct_memory_usage",
             "Amount of direct memory usage by cache allocator").register();
@@ -52,7 +52,7 @@ public class CacheByteBufMemoryUsageMetric implements Runnable {
         if (timer == null) {
             timer = Executors.newSingleThreadScheduledExecutor();
         }
-        LOG.info("Starting cache ByteBufAllocator usage, period: " + period + " seconds");
+        LOG.info("Starting cache ByteBufAllocator usage, period: {} seconds", period);
         scheduledFuture = timer.scheduleAtFixedRate(this, period, period, TimeUnit.SECONDS);
     }
 

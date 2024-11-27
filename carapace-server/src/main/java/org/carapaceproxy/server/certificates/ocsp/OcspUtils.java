@@ -31,15 +31,14 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import javax.net.ssl.HttpsURLConnection;
 import javax.security.auth.x500.X500Principal;
-
 import org.bouncycastle.asn1.ASN1Primitive;
 import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.cert.ocsp.OCSPReq;
 import org.bouncycastle.cert.ocsp.OCSPResp;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import io.netty.util.CharsetUtil;
 import java.io.ByteArrayInputStream;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.ASN1TaggedObject;
@@ -58,7 +57,7 @@ public final class OcspUtils {
     private static final String OCSP_REQUEST_TYPE = "application/ocsp-request";
     private static final String OCSP_RESPONSE_TYPE = "application/ocsp-response";
 
-    private static final Logger LOG = Logger.getLogger(OcspStaplingManager.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(OcspStaplingManager.class);
 
     private OcspUtils() {
     }
@@ -109,7 +108,7 @@ public final class OcspUtils {
     public static OCSPResp request(String dn, URI uri, OCSPReq request, long timeout, TimeUnit unit) throws IOException {
         byte[] encoded = request.getEncoded();
         URL url = uri.toURL();
-        LOG.log(Level.INFO, "Performing OCSP request for {0} to {1}", new Object[]{dn, uri});
+        LOG.info("Performing OCSP request for {} to {}", dn, uri);
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         try {
             connection.setConnectTimeout((int) unit.toMillis(timeout));

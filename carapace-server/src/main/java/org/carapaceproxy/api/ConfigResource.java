@@ -24,8 +24,6 @@ import java.io.PrintWriter;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.Properties;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
@@ -39,6 +37,8 @@ import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Access to proxy cache
@@ -49,7 +49,7 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
 @Produces("application/json")
 public class ConfigResource {
 
-    private static final Logger LOG = Logger.getLogger(ConfigResource.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(ConfigResource.class);
 
     @javax.ws.rs.core.Context
     ServletContext context;
@@ -142,10 +142,10 @@ public class ConfigResource {
     private void dumpAndValidateInputConfiguration(PropertiesConfigurationStore simpleStore) throws ConfigurationNotValidException {
         int[] count = new int[]{0};
         simpleStore.forEach((k, v) -> {
-            LOG.log(Level.INFO, "{0} -> {1}", new Object[]{k, v});
+            LOG.info("{} -> {}", k, v);
             count[0]++;
         });
-        LOG.log(Level.INFO, "Number of entries: " + count[0]);
+        LOG.info("Number of entries: {}", count[0]);
         if (count[0] == 0) {
             throw new ConfigurationNotValidException("No entries in the new configuration ?");
         }

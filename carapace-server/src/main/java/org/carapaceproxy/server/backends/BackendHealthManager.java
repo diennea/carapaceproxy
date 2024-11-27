@@ -30,13 +30,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.mapper.EndpointMapper;
 import org.carapaceproxy.utils.PrometheusUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Keeps status about backends
@@ -46,7 +46,7 @@ import org.carapaceproxy.utils.PrometheusUtils;
 public class BackendHealthManager implements Runnable {
 
     public static final int DEFAULT_PERIOD = 60; // seconds
-    private static final Logger LOG = Logger.getLogger(BackendHealthManager.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(BackendHealthManager.class);
 
     private static final Gauge BACKEND_UPSTATUS_GAUGE = PrometheusUtils.createGauge("health", "backend_status",
             "backend status", "host").register();
@@ -90,7 +90,7 @@ public class BackendHealthManager implements Runnable {
         if (timer == null) {
             timer = Executors.newSingleThreadScheduledExecutor();
         }
-        LOG.info("Starting BackendHealthManager, period: " + period + " seconds");
+        LOG.info("Starting BackendHealthManager, period: {} seconds", period);
         scheduledFuture = timer.scheduleAtFixedRate(this, period, period, TimeUnit.SECONDS);
     }
 
@@ -119,12 +119,12 @@ public class BackendHealthManager implements Runnable {
 
         if (changePeriod) {
             period = newPeriod;
-            LOG.info("Applying health probe period " + period + " s");
+            LOG.info("Applying health probe period {} s", period);
         }
 
         if (this.connectTimeout != newConfiguration.getHealthConnectTimeout()) {
             this.connectTimeout = newConfiguration.getHealthConnectTimeout();
-            LOG.info("Applying new connect timeout " + this.connectTimeout + " ms");
+            LOG.info("Applying new connect timeout {} ms", this.connectTimeout);
         }
 
         this.mapper = mapper;
@@ -148,18 +148,16 @@ public class BackendHealthManager implements Runnable {
 
             if (checkResult.isOk()) {
                 if (status.isReportedAsUnreachable()) {
-                    LOG.log(Level.WARNING, "backend {0} was unreachable, setting again to reachable. Response time {1}ms",
-                            new Object[]{status.getHostPort(), checkResult.getEndTs() - checkResult.getStartTs()});
+                    LOG.warn("backend {} was unreachable, setting again to reachable. Response time {}ms", status.getHostPort(), checkResult.getEndTs() - checkResult.getStartTs());
                     reportBackendReachable(status.getHostPort());
                 } else {
-                    LOG.log(Level.FINE, "backend {0} seems reachable. Response time {1}ms",
-                            new Object[]{status.getHostPort(), checkResult.getEndTs() - checkResult.getStartTs()});
+                    LOG.debug("backend {} seems reachable. Response time {}ms", status.getHostPort(), checkResult.getEndTs() - checkResult.getStartTs());
                 }
             } else {
                 if (status.isReportedAsUnreachable()) {
-                    LOG.log(Level.FINE, "backend {0} still unreachable. Cause: {1}", new Object[]{status.getHostPort(), checkResult.getHttpResponse()});
+                    LOG.debug("backend {} still unreachable. Cause: {}", status.getHostPort(), checkResult.getHttpResponse());
                 } else {
-                    LOG.log(Level.WARNING, "backend {0} became unreachable. Cause: {1}", new Object[]{status.getHostPort(), checkResult.getHttpResponse()});
+                    LOG.warn("backend {} became unreachable. Cause: {}", status.getHostPort(), checkResult.getHttpResponse());
                     reportBackendUnreachable(status.getHostPort(), checkResult.getEndTs(), checkResult.getHttpResponse());
                 }
             }
@@ -185,7 +183,7 @@ public class BackendHealthManager implements Runnable {
             }
         }
         if (!toRemove.isEmpty()) {
-            LOG.log(Level.INFO, "discarding backends {0}", toRemove);
+            LOG.info("discarding backends {}", toRemove);
             toRemove.forEach(backends::remove);
         }
     }

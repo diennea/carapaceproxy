@@ -29,11 +29,12 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import static org.carapaceproxy.utils.StringUtils.trimToNull;
 
 /**
@@ -44,7 +45,7 @@ import static org.carapaceproxy.utils.StringUtils.trimToNull;
  */
 public class FileUserRealm implements UserRealm {
 
-    private static final Logger LOG = Logger.getLogger(FileUserRealm.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(FileUserRealm.class);
 
     public static final String USER_PREFIX = "user.";
     Map<String, String> users = new HashMap<>();
@@ -61,7 +62,7 @@ public class FileUserRealm implements UserRealm {
                 return;
             }
 
-            LOG.log(Level.INFO, "configured user with username={0}", username);
+            LOG.info("configured user with username={}", username);
             result.put(username, password);
         });
         return result;
@@ -81,7 +82,7 @@ public class FileUserRealm implements UserRealm {
                     this.users = createUsers(usersConfigStore);
                 }
             } else {
-                LOG.log(Level.SEVERE, "Path {0} is not a file.", path);
+                LOG.error("Path {} is not a file.", path);
             }
         } catch (IOException ex) {
             throw new ConfigurationNotValidException("File in path " + path + " not valid: " + ex);

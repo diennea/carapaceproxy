@@ -2,7 +2,8 @@ package org.carapaceproxy.core;
 
 import lombok.Getter;
 import org.carapaceproxy.utils.CertificatesUtils;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import javax.net.ssl.TrustManagerFactory;
 import java.io.File;
 import java.io.IOException;
@@ -13,14 +14,12 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
 
 public class TrustStoreManager {
 
-    private static final Logger LOG = Logger.getLogger(TrustStoreManager.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(TrustStoreManager.class);
 
     @Getter
     private Map<String, X509Certificate> certificateAuthorities = new HashMap<>();
@@ -44,7 +43,7 @@ public class TrustStoreManager {
             return;
         }
 
-        LOG.log(Level.FINE, "loading truststore from {0}", trustStoreFile);
+        LOG.debug("loading truststore from {}", trustStoreFile);
         try {
             KeyStore truststore = loadKeyStoreFromFile(trustStoreFile, trustStorePassword, basePath);
             if (truststore != null) {
@@ -53,7 +52,7 @@ public class TrustStoreManager {
                 certificateAuthorities = CertificatesUtils.loadCaCerts(trustManagerFactory);
             }
         } catch (CertificateException | NoSuchAlgorithmException | KeyStoreException | IOException e) {
-            LOG.log(Level.SEVERE, "Cannot load truststore from {0} : {1} ", new Object[]{trustStoreFile, e.getMessage()});
+            LOG.error("Cannot load truststore from {} : {} ", trustStoreFile, e.getMessage());
         }
     }
 
@@ -61,7 +60,7 @@ public class TrustStoreManager {
         if (newConfiguration == null) {
             return;
         }
-        LOG.log(Level.FINE, "Reload truststore");
+        LOG.debug("Reload truststore");
         this.currentConfiguration = newConfiguration;
         certificateAuthorities.clear();
         loadTrustStore();

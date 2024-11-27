@@ -24,9 +24,9 @@ import static org.carapaceproxy.server.certificates.Route53Client.DnsChallengeAc
 import static org.carapaceproxy.server.certificates.Route53Client.DnsChallengeAction.UPSERT;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.carapaceproxy.utils.CertificatesUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
@@ -67,7 +67,7 @@ public class Route53Client {
     private static final String DNS_CHALLENGE_PREFIX = "_acme-challenge.";
     private static final String HOSTEDZONE_ID_PREFIX = "/hostedzone/";
 
-    private static final Logger LOG = Logger.getLogger(Route53Client.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(Route53Client.class);
 
     private final Route53AsyncClient client;
 
@@ -106,7 +106,7 @@ public class Route53Client {
             ListHostedZonesByNameResponse res = client.listHostedZonesByName(
                     ListHostedZonesByNameRequest.builder().dnsName(dnsName).build()
             ).exceptionally(ext -> {
-                LOG.log(Level.SEVERE, "ERROR performing {0} action for dns name {1}. Reason: {2}", new Object[]{action, dnsName, ext});
+                LOG.error("ERROR performing {} action for dns name {}. Reason: {}", action, dnsName, ext);
                 return null;
             }).get();
 
@@ -114,12 +114,12 @@ public class Route53Client {
                 return false;
             }
             if (res.hostedZones().isEmpty()) {
-                LOG.log(Level.SEVERE, "No hostedzones found for dns name {0}", dnsName);
+                LOG.error("No hostedzones found for dns name {}", dnsName);
                 return false;
             }
             HostedZone hostedzone = res.hostedZones().get(0);
             if (!hostedzone.name().equals(dnsName)) {
-                LOG.log(Level.SEVERE, "Unable to find hostedzone for dns name {0}", dnsName);
+                LOG.error("Unable to find hostedzone for dns name {}", dnsName);
                 return false;
             }
 
@@ -152,7 +152,7 @@ public class Route53Client {
             }
             Route53Response actionResult;
             actionResult = future.exceptionally(ext -> {
-                LOG.log(Level.SEVERE, "ERROR performing {0} action for dns name {1}. Reason: {2}", new Object[]{action, dnsName, ext});
+                LOG.error("ERROR performing {} action for dns name {}. Reason: {}", action, dnsName, ext);
                 return null;
             }).get();
             if (actionResult != null && actionResult.sdkHttpResponse().isSuccessful()) {
@@ -163,7 +163,7 @@ public class Route53Client {
                 return true;
             }
         } catch (InterruptedException | ExecutionException ex) {
-            LOG.log(Level.SEVERE, "ERROR performing {0} action for dns name {1}. Reason: {2}", new Object[]{action, dnsName, ex});
+            LOG.error("ERROR performing {} action for dns name {}. Reason: {}", action, dnsName, ex);
         }
 
         return false;

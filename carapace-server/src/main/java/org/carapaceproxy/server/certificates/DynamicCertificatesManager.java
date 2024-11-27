@@ -60,8 +60,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import org.bouncycastle.util.io.pem.PemObject;
 import org.bouncycastle.util.io.pem.PemWriter;
@@ -82,6 +80,8 @@ import org.shredzone.acme4j.challenge.Http01Challenge;
 import org.shredzone.acme4j.exception.AcmeException;
 import org.shredzone.acme4j.toolbox.JSON;
 import org.shredzone.acme4j.util.KeyPairUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  *
@@ -100,7 +100,7 @@ public class DynamicCertificatesManager implements Runnable {
 
     private static final int DNS_CHALLENGE_REACHABILITY_CHECKS_LIMIT = Integer.getInteger("carapace.acme.dnschallengereachabilitycheck.limit", 10);
 
-    private static final Logger LOG = Logger.getLogger(DynamicCertificatesManager.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(DynamicCertificatesManager.class);
     private static final String EVENT_CERTIFICATES_STATE_CHANGED = "certificates_state_changed";
     private static final String EVENT_CERTIFICATES_REQUEST_STORE = "certificates_request_store";
 
@@ -251,7 +251,7 @@ public class DynamicCertificatesManager implements Runnable {
         if (scheduler == null) {
             scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat(THREAD_NAME).build());
         }
-        LOG.log(Level.INFO, "Starting DynamicCertificatesManager, period: {0} seconds{1}", new Object[]{period, TESTING_MODE ? " (TESTING_MODE)" : ""});
+        LOG.info("Starting DynamicCertificatesManager, period: {} seconds{}", period, TESTING_MODE ? " (TESTING_MODE)" : "");
         scheduledFuture = scheduler.scheduleWithFixedDelay(this, 0, period, TimeUnit.SECONDS);
     }
 
@@ -308,7 +308,7 @@ public class DynamicCertificatesManager implements Runnable {
                     case VERIFYING -> checkChallengesResponsesForCertificate(cert);
                     // challenge succeeded
                     case VERIFIED -> {
-                        LOG.log(Level.INFO, "Certificate for domain {0} VERIFIED.", domain);
+                        LOG.info("Certificate for domain {} VERIFIED.", domain);
                         Order pendingOrder = acmeClient.getLogin().bindOrder(cert.getPendingOrderLocation());
                         // if the order is already valid, we have to skip finalization
                         if (pendingOrder.getStatus() != Status.VALID) {
@@ -316,7 +316,7 @@ public class DynamicCertificatesManager implements Runnable {
                                 KeyPair keys = loadOrCreateKeyPairForDomain(domain);
                                 acmeClient.orderCertificate(pendingOrder, keys);
                             } catch (AcmeException ex) { // order finalization failed
-                                LOG.log(Level.SEVERE, "Certificate order finalization for domain {0} FAILED.", domain);
+                                LOG.error("Certificate order finalization for domain {} FAILED.", domain, ex);
                                 cert.error(ex.getMessage());
                                 break;
                             }
@@ -325,7 +325,7 @@ public class DynamicCertificatesManager implements Runnable {
                     }
                     // certificate ordering
                     case ORDERING -> {
-                        LOG.log(Level.INFO, "ORDERING certificate for domain {0}.", domain);
+                        LOG.info("ORDERING certificate for domain {}.", domain);
                         Order order = acmeClient.getLogin().bindOrder(cert.getPendingOrderLocation());
                         Status status = acmeClient.checkResponseForOrder(order);
                         if (status == Status.VALID) {
@@ -334,7 +334,7 @@ public class DynamicCertificatesManager implements Runnable {
                             String chain = base64EncodeCertificateChain(certificateChain.toArray(new Certificate[0]), key);
                             cert.setChain(chain);
                             cert.success(AVAILABLE);
-                            LOG.log(Level.INFO, "Certificate issuing for domain: {0} SUCCEED. Certificate AVAILABLE.", domain);
+                            LOG.info("Certificate issuing for domain: {} SUCCEED. Certificate AVAILABLE.", domain);
                         } else if (status == Status.INVALID) {
                             cert.error("Order status for certificate is " + status);
                         }
@@ -342,7 +342,7 @@ public class DynamicCertificatesManager implements Runnable {
                     // challenge/order failed
                     case REQUEST_FAILED -> {
                         if (cert.getAttemptsCount() <= getConfig().getMaxAttempts()){
-                            LOG.log(Level.INFO, "Certificate issuing for domain: {0} current status is FAILED, setting status=WAITING again.", domain);
+                            LOG.info("Certificate issuing for domain: {} current status is FAILED, setting status=WAITING again.", domain);
                             cert.step(WAITING);
                         }
                     }
@@ -356,18 +356,18 @@ public class DynamicCertificatesManager implements Runnable {
                     }
                     // certificate expired
                     case EXPIRED -> {
-                        LOG.log(Level.INFO, "Certificate for domain: {0} EXPIRED.", domain);
+                        LOG.info("Certificate for domain: {} EXPIRED.", domain);
                         cert.step(WAITING);
                     }
                     default -> throw new IllegalStateException();
                 }
                 if (updateCertificate) {
-                    LOG.log(Level.INFO, "Save certificate request status for domain {0}", domain);
+                    LOG.info("Save certificate request status for domain {}", domain);
                     store.saveCertificate(cert);
                     flushCache = true;
                 }
             } catch (AcmeException | IOException | GeneralSecurityException | IllegalStateException ex) {
-                LOG.log(Level.SEVERE, "Error while handling dynamic certificate for domain " + domain, ex);
+                LOG.error("Error while handling dynamic certificate for domain {}", domain, ex);
             }
         }
         if (flushCache) {
@@ -378,10 +378,10 @@ public class DynamicCertificatesManager implements Runnable {
     }
 
     private void startCertificateProcessing(final String domain, final CertificateData cert) throws AcmeException {
-        LOG.log(Level.INFO, "WAITING for certificate issuing process start for domain: {0}.", domain);
+        LOG.info("WAITING for certificate issuing process start for domain: {}.", domain);
         final var unreachableNames = new HashMap<String, String>();
         final var names = cert.getNames();
-        LOG.log(Level.INFO, "Names to check for {0} are {1}", new Object[]{domain, names});
+        LOG.info("Names to check for {} are {}", domain, names);
         for (final var name : names) {
             try {
                 if (!CertificatesUtils.isWildcard(name)) {
@@ -391,7 +391,7 @@ public class DynamicCertificatesManager implements Runnable {
                     }
                 }
             } catch (AcmeException | IOException ex) {
-                LOG.log(Level.SEVERE, "Domain checking failed for {0}: {1}", new Object[]{name, ex});
+                LOG.error("Domain checking failed for {}: {}", name, ex);
                 unreachableNames.put(name, ex.getMessage());
             }
         }
@@ -405,7 +405,7 @@ public class DynamicCertificatesManager implements Runnable {
     private Set<String> matchDomainIps(String domain) throws AcmeException, UnknownHostException {
         if (!domainsCheckerIPAddresses.isEmpty()) {
             final var allByName = InetAddress.getAllByName(domain);
-            LOG.log(Level.INFO, "Resolved names for {0} are {1}", new Object[]{domain, allByName});
+            LOG.info("Resolved names for {} are {}", domain, allByName);
             return Arrays.stream(allByName)
                     .map(InetAddress::getHostAddress)
                     .filter(not(domainsCheckerIPAddresses::contains))
@@ -425,7 +425,7 @@ public class DynamicCertificatesManager implements Runnable {
     private void createOrderAndChallengesForCertificate(CertificateData cert) throws AcmeException {
         Order order = acmeClient.createOrderForDomain(cert.getNames());
         cert.setPendingOrderLocation(order.getLocation());
-        LOG.log(Level.INFO, "Pending order location for domain {0}: {1}", new Object[]{cert.getDomain(), cert.getPendingOrderLocation()});
+        LOG.info("Pending order location for domain {}: {}", cert.getDomain(), cert.getPendingOrderLocation());
 
         final var challenges = acmeClient.getChallengesForOrder(order);
         if (challenges.isEmpty()) {
@@ -437,16 +437,14 @@ public class DynamicCertificatesManager implements Runnable {
                 final var domain = e.getKey();
                 final var challenge = e.getValue();
                 challengesData.put(domain, challenge.getJSON());
-                LOG.log(Level.INFO, "Pending challenge data for domain {0}: {1}", new Object[]{
-                        domain, challenge.getJSON()
-                });
+                LOG.info("Pending challenge data for domain {}: {}", domain, challenge.getJSON());
                 if (challenge instanceof final Dns01Challenge dns01Challenge) {
                     if (r53Client.createDnsChallengeForDomain(domain, dns01Challenge.getDigest())) {
                         cert.step(DNS_CHALLENGE_WAIT);
-                        LOG.log(Level.INFO, "Created new TXT DNS challenge-record for domain {0}.", domain);
+                        LOG.info("Created new TXT DNS challenge-record for domain {}.", domain);
                     } else {
                         cert.error("Creation of TXT DNS challenge-record failed");
-                        LOG.log(Level.SEVERE, "Creation of TXT DNS challenge-record for domain {0} FAILED.", domain);
+                        LOG.error("Creation of TXT DNS challenge-record for domain {} FAILED.", domain);
                         break;
                     }
                 } else {
@@ -456,7 +454,7 @@ public class DynamicCertificatesManager implements Runnable {
                 }
             }
             if (cert.getState() == REQUEST_FAILED) {
-                LOG.log(Level.INFO, "Cleaning up all challenges for certificate {0}", cert);
+                LOG.info("Cleaning up all challenges for certificate {}", cert);
                 challenges.forEach(this::cleanupChallengeForDomain);
             } else {
                 cert.setPendingChallengesData(challengesData);
@@ -475,7 +473,7 @@ public class DynamicCertificatesManager implements Runnable {
             }
             totalCount++;
             final var domain = c.getKey();
-            LOG.log(Level.INFO, "DNS CHALLENGE WAITING for domain {0}: {1}.", new Object[]{domain, challenge});
+            LOG.info("DNS CHALLENGE WAITING for domain {}: {}.", domain, challenge);
             if (r53Client.isDnsChallengeForDomainAvailable(domain, challenge.getDigest())) {
                 okCount++;
                 dnsChallengeReachabilityChecks.remove(domain);
@@ -483,7 +481,7 @@ public class DynamicCertificatesManager implements Runnable {
             } else {
                 Integer value = dnsChallengeReachabilityChecks.getOrDefault(domain, 0);
                 if (++value >= DNS_CHALLENGE_REACHABILITY_CHECKS_LIMIT) {
-                    LOG.log(Level.INFO, "Too many reachability attempts of TXT DNS challenge-record for domain {0}: {1}", new Object[]{domain, challenge});
+                    LOG.info("Too many reachability attempts of TXT DNS challenge-record for domain {}: {}", domain, challenge);
                     cert.error("Too many reachability attempts of TXT DNS challenge-record: " + value);
                 } else {
                     dnsChallengeReachabilityChecks.put(domain, value);
@@ -491,7 +489,7 @@ public class DynamicCertificatesManager implements Runnable {
             }
         }
         if (cert.getState() == REQUEST_FAILED) {
-            LOG.log(Level.INFO, "Cleaning up all challenges for certificate {0}", cert);
+            LOG.info("Cleaning up all challenges for certificate {}", cert);
             for (var c: challenges) {
                 final var domain = c.getKey();
                 dnsChallengeReachabilityChecks.remove(domain);
@@ -508,7 +506,7 @@ public class DynamicCertificatesManager implements Runnable {
         for (final var e: cert.getPendingChallengesData().entrySet()) {
             final var domain = e.getKey();
             final var challenge = e.getValue();
-            LOG.log(Level.FINE, "Challenge data for domain {0}: {1}", new Object[]{domain, challenge});
+            LOG.debug("Challenge data for domain {}: {}", domain, challenge);
             challengesData.put(domain, CertificatesUtils.isWildcard(domain)
                     ? new Dns01Challenge(login, challenge)
                     : new Http01Challenge(login, challenge)
@@ -524,7 +522,7 @@ public class DynamicCertificatesManager implements Runnable {
         for (var c: challenges) {
             final var domain = c.getKey();
             final var challenge = c.getValue();
-            LOG.log(Level.INFO, "VERIFYING challenge response for domain {0}: {1}", new Object[]{domain, challenge});
+            LOG.info("VERIFYING challenge response for domain {}: {}", domain, challenge);
             final var status = acmeClient.checkResponseForChallenge(challenge); // checks response and updates the challenge
             cert.getPendingChallengesData().put(domain, challenge.getJSON());
             if (status == Status.VALID) {
@@ -535,7 +533,7 @@ public class DynamicCertificatesManager implements Runnable {
             }
         }
         if (cert.getState() == REQUEST_FAILED) {
-            LOG.log(Level.INFO, "Cleaning up all challenges for certificate {0}", cert);
+            LOG.info("Cleaning up all challenges for certificate {}", cert);
             challenges.forEach(c -> cleanupChallengeForDomain(c.getKey(), c.getValue()));
         } else if (okCount == challenges.size()) {
             cert.step(VERIFIED);
@@ -545,9 +543,9 @@ public class DynamicCertificatesManager implements Runnable {
     private void cleanupChallengeForDomain(String domain, Challenge challenge) {
         if (challenge instanceof final Dns01Challenge ch) {
             if (r53Client.deleteDnsChallengeForDomain(domain, ch.getDigest())) {
-                LOG.log(Level.INFO, "DELETE TXT DNS challenge-record for domain {0}: {1}", new Object[]{domain, challenge});
+                LOG.info("DELETE TXT DNS challenge-record for domain {}: {}", domain, challenge);
             } else {
-                LOG.log(Level.INFO, "Deletion of TXT DNS challenge-record FAILED for domain {0}: {1}", new Object[]{domain, challenge});
+                LOG.info("Deletion of TXT DNS challenge-record FAILED for domain {}: {}", domain, challenge);
             }
         } else {
             final var ch = (Http01Challenge) challenge;
@@ -610,7 +608,7 @@ public class DynamicCertificatesManager implements Runnable {
     public byte[] getCertificateForDomain(String domain) {
         CertificateData cert = certificates.get(domain); // certs always retrived from cache
         if (cert == null || cert.getKeystoreData() == null || cert.getKeystoreData().length == 0) {
-            LOG.log(Level.SEVERE, "No dynamic certificate available for domain {0}", domain);
+            LOG.error("No dynamic certificate available for domain {}", domain);
             return null;
         }
         return cert.getKeystoreData();
@@ -624,21 +622,21 @@ public class DynamicCertificatesManager implements Runnable {
 
         @Override
         public void eventFired(String eventId, Map<String, Object> data) {
-            LOG.log(Level.INFO, "Certificates state changed");
+            LOG.info("Certificates state changed");
             try {
                 reloadCertificatesFromDB();
             } catch (Exception err) {
-                LOG.log(Level.SEVERE, "Failed to reload certificates from db. Cause: {0}", err);
+                LOG.error("Failed to reload certificates from db. Cause: {0}", err);
             }
         }
 
         @Override
         public void reconnected() {
-            LOG.log(Level.INFO, "Reloading certificates after ZK reconnection");
+            LOG.info("Reloading certificates after ZK reconnection");
             try {
                 reloadCertificatesFromDB();
             } catch (Exception err) {
-                LOG.log(Level.SEVERE, "Failed to reload certificates from db. Cause: {0}", err);
+                LOG.error("Failed to reload certificates from db. Cause: {0}", err);
             }
         }
     }
@@ -647,7 +645,7 @@ public class DynamicCertificatesManager implements Runnable {
 
         @Override
         public void eventFired(String eventId, Map<String, Object> data) {
-            LOG.log(Level.INFO, "Certificates request store");
+            LOG.info("Certificates request store");
             try {
                 final var certs = (List<?>) data.get("certs");
                 final var _certificates = certs.isEmpty()
@@ -658,7 +656,7 @@ public class DynamicCertificatesManager implements Runnable {
                                 .collect(Collectors.toList());
                 storeLocalCertificates(_certificates, null);
             } catch (Exception err) {
-                LOG.log(Level.SEVERE, "Failed to store certificates. Cause: {0}", err);
+                LOG.error("Failed to store certificates. Cause: {0}", err);
             }
         }
 
@@ -668,7 +666,7 @@ public class DynamicCertificatesManager implements Runnable {
     }
 
     private void reloadCertificatesFromDB() {
-        LOG.log(Level.INFO, "Reloading certificates from db");
+        LOG.info("Reloading certificates from db");
         try {
             Map<String, CertificateData> newCertificates = new ConcurrentHashMap<>();
             for (Entry<String, CertificateData> entry : certificates.entrySet()) {
@@ -677,7 +675,7 @@ public class DynamicCertificatesManager implements Runnable {
                 // "wildcard" and "manual" flags and "daysBeforeRenewal" are not stored in db > have to be re-set from existing config
                 CertificateData freshCert = loadOrCreateDynamicCertificateForDomain(domain, cert.getSubjectAltNames(), cert.isManual(), cert.getDaysBeforeRenewal());
                 newCertificates.put(domain, freshCert);
-                LOG.log(Level.INFO, "RELOADED certificate for domain {0}: {1}", new Object[]{domain, freshCert});
+                LOG.info("RELOADED certificate for domain {}: {}", domain, freshCert);
             }
             var oldCertificates = this.certificates;
             this.certificates = newCertificates; // only certificates/domains specified in the config have to be managed.
@@ -703,18 +701,14 @@ public class DynamicCertificatesManager implements Runnable {
             final var domainDir = CertificatesUtils.removeWildcard(cert.getDomain());
             var parent = new File(getConfig().getLocalCertificatesStorePath(), domainDir);
             parent.mkdirs();
-            LOG.log(Level.INFO, "Store certificate {0} to local path {1}", new Object[]{
-                cert.getDomain(), parent.getAbsolutePath()
-            });
+            LOG.info("Store certificate {} to local path {}", cert.getDomain(), parent.getAbsolutePath());
             try (var fos = new FileOutputStream(new File(parent, "privatekey.pem"));
                     var osw = new OutputStreamWriter(fos);
                     var writer = new PemWriter(osw)) {
                 var key = loadOrCreateKeyPairForDomain(cert.getDomain()).getPrivate();
                 writer.writeObject(new PemObject("", key.getEncoded()));
             } catch (IOException ex) {
-                LOG.log(Level.SEVERE, "Failed to save privatekey for certificate domain {0} to local path {1}", new Object[]{
-                    cert.getDomain(), parent.getAbsolutePath()
-                });
+                LOG.error("Failed to save privatekey for certificate domain {} to local path {}", cert.getDomain(), parent.getAbsolutePath());
             }
             try (var fos = new FileOutputStream(new File(parent, "chain.pem"));
                     var fos2 = new FileOutputStream(new File(parent, "fullchain.pem"));
@@ -731,11 +725,9 @@ public class DynamicCertificatesManager implements Runnable {
                     writer2.writeObject(new PemObject("", encoded));
                 }
             } catch (IOException ex) {
-                LOG.log(Level.SEVERE, "Failed to save chains for certificate domain {0} to local path {1}", new Object[]{
-                    cert.getDomain(), parent.getAbsolutePath()
-                });
+                LOG.error("Failed to save chains for certificate domain {} to local path {}", cert.getDomain(), parent.getAbsolutePath());
             } catch (GeneralSecurityException ex) {
-                LOG.log(Level.SEVERE, "Failed to read certificate data for domain {0}", new Object[]{cert.getDomain()});
+                LOG.error("Failed to read certificate data for domain {}", cert.getDomain());
             }
         });
     }

@@ -36,13 +36,13 @@ import java.util.Objects;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import lombok.Data;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.utils.PrometheusUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import reactor.netty.http.client.HttpClientResponse;
 
 /**
@@ -50,7 +50,7 @@ import reactor.netty.http.client.HttpClientResponse;
  */
 public class ContentsCache {
 
-    private static final Logger LOG = Logger.getLogger(ContentsCache.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(ContentsCache.class);
 
     private static final Counter NO_CACHE_REQUESTS_COUNTER = PrometheusUtils.createCounter("cache", "non_cacheable_requests_total", "not cacheable requests").register();
 
@@ -123,7 +123,7 @@ public class ContentsCache {
                 || headers.contains(HttpHeaderNames.PRAGMA, HttpHeaderValues.NO_CACHE, true)
                 || !isContentLengthCacheable(headers)) {
             // never cache Pragma: no-cache, Cache-Control: nostore/no-cache
-            LOG.log(Level.FINER, "not cacheable {0}", response);
+            LOG.trace("not cacheable {}", response);
             return false;
         }
         return switch (response.status().codeClass()) {
@@ -313,9 +313,9 @@ public class ContentsCache {
 
         synchronized void clear() {
             chunks.forEach(ByteBuf::release);
-            if (LOG.isLoggable(Level.FINE)) {
-                LOG.log(Level.FINE, "ContentsCache refCnt after release");
-                chunks.forEach(buff -> LOG.log(Level.FINE, "refCnt: {0}", buff.refCnt()));
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("ContentsCache refCnt after release");
+                chunks.forEach(buff -> LOG.debug("refCnt: {}", buff.refCnt()));
             }
             chunks.clear();
         }
@@ -497,7 +497,7 @@ public class ContentsCache {
         }
 
         public void abort() {
-            LOG.log(Level.FINEST, "Aborting cache receiver for {0}", key);
+            LOG.trace("Aborting cache receiver for {}", key);
             content.clear();
         }
 
@@ -516,7 +516,7 @@ public class ContentsCache {
             long lastModified = response.responseHeaders().getTimeMillis(HttpHeaderNames.LAST_MODIFIED, -1);
             content.lastModified = lastModified;
             if (notReallyCacheable) {
-                LOG.log(Level.FINEST, "{0} rejecting non-cacheable response", key);
+                LOG.trace("{} rejecting non-cacheable response", key);
                 abort();
                 return false;
             }
@@ -527,7 +527,7 @@ public class ContentsCache {
 
         public void receivedFromRemote(ByteBuf chunk, ByteBufAllocator allocator) {
             if (notReallyCacheable) {
-                LOG.log(Level.FINEST, "{0} rejecting non-cacheable response", key);
+                LOG.trace("{} rejecting non-cacheable response", key);
                 abort();
                 return;
             }

@@ -30,13 +30,13 @@ import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateException;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
-import java.util.logging.Level;
 import java.util.logging.LogManager;
-import java.util.logging.Logger;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Main entrypoint for the {@code server} service.
@@ -46,7 +46,7 @@ import org.carapaceproxy.server.config.ConfigurationNotValidException;
  */
 public class ServerMain implements AutoCloseable {
 
-    private static final Logger LOG = Logger.getLogger(ServerMain.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(ServerMain.class);
     private static final CountDownLatch running = new CountDownLatch(1);
 
     private final ConfigurationStore configuration;
@@ -65,12 +65,11 @@ public class ServerMain implements AutoCloseable {
 
     @Override
     public void close() {
-
         if (server != null) {
             try {
                 server.close();
             } catch (Exception ex) {
-                Logger.getLogger(ServerMain.class.getName()).log(Level.SEVERE, null, ex);
+                LoggerFactory.getLogger(ServerMain.class).error("Error while closing main server", ex);
             } finally {
                 server = null;
             }
@@ -87,7 +86,7 @@ public class ServerMain implements AutoCloseable {
             for (String arg : args) {
                 if (!arg.isEmpty()) {
                     File configFile = new File(arg).getAbsoluteFile();
-                    LOG.log(Level.SEVERE, "Reading configuration from {0}", configFile);
+                    LOG.error("Reading configuration from {}", configFile);
                     try (InputStreamReader reader = new InputStreamReader(new FileInputStream(configFile), StandardCharsets.UTF_8)) {
                         configuration.load(reader);
                     }
@@ -109,7 +108,7 @@ public class ServerMain implements AutoCloseable {
             LogManager.getLogManager().readConfiguration();
 
             Thread.setDefaultUncaughtExceptionHandler((Thread arg0, Throwable arg1) -> {
-                LOG.log(Level.SEVERE, "Uncaught error, thread " + arg0, arg1);
+                LOG.error("Uncaught error, thread {}", arg0, arg1);
             });
 
             Runtime.getRuntime().addShutdownHook(new Thread("ctrlc-hook") {

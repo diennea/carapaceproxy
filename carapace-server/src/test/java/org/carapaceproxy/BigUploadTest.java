@@ -34,8 +34,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Supplier;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
@@ -43,6 +41,8 @@ import org.carapaceproxy.utils.TestEndpointMapper;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The clients sends a big upload, and the server is very slow at draining the contents
@@ -51,7 +51,7 @@ import org.junit.rules.TemporaryFolder;
  */
 public class BigUploadTest {
 
-    private static final Logger LOG = Logger.getLogger(BigUploadTest.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(BigUploadTest.class);
 
     @Rule
     public TemporaryFolder tmpDir = new TemporaryFolder();
@@ -72,14 +72,14 @@ public class BigUploadTest {
                 while (b != -1) {
                     count++;
                     if (count > 2_000) {
-                        LOG.info("closing input stream after " + count);
+                        LOG.info("closing input stream after {}", count);
                         in.close();
                         break;
                     }
                     b = in.read();
                 }
             } catch (IOException ii) {
-                LOG.log(Level.SEVERE, "error", ii);
+                LOG.error("error", ii);
             }
         }
     }
@@ -99,7 +99,7 @@ public class BigUploadTest {
 
                 out.write(response);
             } catch (IOException ii) {
-                LOG.log(Level.SEVERE, "error", ii);
+                LOG.error("error", ii);
             }
         }
     }
@@ -128,13 +128,13 @@ public class BigUploadTest {
                     try {
                         beforeAccept.get().run();
                         Socket client = socket.accept();
-                        LOG.log(Level.INFO, "accepted HTTP client {0}", client);
+                        LOG.info("accepted HTTP client {}", client);
                         threadpool.submit(() -> {
                             try {
                                 ClientHandler newHandler = factory.get();
                                 newHandler.handle(client);
                             } catch (Exception err) {
-                                LOG.log(Level.SEVERE, "error accepting client", err);
+                                LOG.error("error accepting client", err);
                             } finally {
                                 try {
                                     client.close();
@@ -143,7 +143,7 @@ public class BigUploadTest {
                             }
                         });
                     } catch (Exception err) {
-                        LOG.log(Level.SEVERE, "error accepting client", err);
+                        LOG.error("error accepting client", err);
                     }
                 }
             });
