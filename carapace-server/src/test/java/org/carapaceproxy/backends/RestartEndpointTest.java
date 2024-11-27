@@ -45,7 +45,7 @@ public class RestartEndpointTest {
 
     // in order to be restartable this must be fixed
     private static int tryDiscoverEmptyPort() {
-        try (ServerSocket s = new ServerSocket();) {
+        try (ServerSocket s = new ServerSocket()) {
             s.bind(null);
             return s.getLocalPort();
         } catch (IOException err) {
@@ -74,7 +74,7 @@ public class RestartEndpointTest {
                 ));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.start();
             int port = server.getLocalPort();
 
@@ -109,7 +109,7 @@ public class RestartEndpointTest {
                 ));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.start();
             int port = server.getLocalPort();
 
@@ -149,7 +149,7 @@ public class RestartEndpointTest {
                 ));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.start();
             int port = server.getLocalPort();
 

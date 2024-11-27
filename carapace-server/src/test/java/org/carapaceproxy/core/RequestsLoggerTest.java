@@ -23,11 +23,18 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import com.google.common.io.Files;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpVersion;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -37,21 +44,13 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.List;
-
-import io.netty.handler.codec.http.HttpVersion;
 import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 import reactor.netty.http.server.HttpServerRequest;
 
 /**
@@ -512,7 +511,6 @@ public class RequestsLoggerTest {
 
     @Test
     public void testWithServer() throws Exception {
-
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -521,7 +519,6 @@ public class RequestsLoggerTest {
                         .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.getCurrentConfiguration().setAccessLogPath(tmpDir.getRoot().getAbsolutePath() + "/access.log");
@@ -565,7 +562,6 @@ public class RequestsLoggerTest {
                         .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.getCurrentConfiguration().setAccessLogPath(tmpDir.getRoot().getAbsolutePath() + "/access.log");
@@ -574,39 +570,39 @@ public class RequestsLoggerTest {
             server.start();
             int port = server.getLocalPort();
             System.out.println("CurrentAccessLogPath " + currentAccessLogPath);
-            FileChannel logFileChannel = FileChannel.open(currentAccessLogPath);
+            try (FileChannel logFileChannel = FileChannel.open(currentAccessLogPath)) {
+                while (logFileChannel.size() < 1024) {
+                    try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                        RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                        String s = resp.toString();
+                        assertTrue(s.contains("it <b>works</b> !!"));
+                    }
 
-            while (logFileChannel.size() < 1024) {
+                    try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                        {
+                            RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                            String s = resp.toString();
+                            assertTrue(s.contains("it <b>works</b> !!"));
+                        }
+
+                        {
+                            RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                            String s = resp.toString();
+                            assertTrue(s.contains("it <b>works</b> !!"));
+                        }
+                    }
+                }
+                Thread.sleep(3000);
+                //check if gzip file exist
+                File[] f = new File(tmpDir.getRoot().getAbsolutePath()).listFiles((dir, name) -> name.startsWith("access") && name.contains(".gzip"));
+                assertTrue(f.length == 1);
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                     String s = resp.toString();
                     assertTrue(s.contains("it <b>works</b> !!"));
                 }
-
-                try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                    {
-                        RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
-                        String s = resp.toString();
-                        assertTrue(s.contains("it <b>works</b> !!"));
-                    }
-
-                    {
-                        RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
-                        String s = resp.toString();
-                        assertTrue(s.contains("it <b>works</b> !!"));
-                    }
-                }
+                assertTrue(logFileChannel.size() > 0);
             }
-            Thread.sleep(3000);
-            //check if gzip file exist
-            File[] f = new File(tmpDir.getRoot().getAbsolutePath()).listFiles((dir, name) -> name.startsWith("access") && name.contains(".gzip"));
-            assertTrue(f.length == 1);
-            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-                String s = resp.toString();
-                assertTrue(s.contains("it <b>works</b> !!"));
-            }
-            assertTrue(logFileChannel.size() > 0);
         }
     }
 

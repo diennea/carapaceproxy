@@ -19,19 +19,20 @@ package org.carapaceproxy.server.cache;
  under the License.
 
  */
-import org.carapaceproxy.utils.HttpUtils;
-import org.carapaceproxy.utils.TestEndpointMapper;
+
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import org.carapaceproxy.core.HttpProxyServer;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import org.carapaceproxy.core.EndpointKey;
-import org.carapaceproxy.utils.RawHttpClient;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import org.carapaceproxy.core.EndpointKey;
+import org.carapaceproxy.core.HttpProxyServer;
+import org.carapaceproxy.utils.HttpUtils;
+import org.carapaceproxy.utils.RawHttpClient;
+import org.carapaceproxy.utils.TestEndpointMapper;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -57,7 +58,6 @@ public class NotModifiedTest {
                 ));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();
@@ -80,7 +80,7 @@ public class NotModifiedTest {
                             + "Host: localhost\r\n"
                             + "If-Modified-Since: " + HttpUtils.formatDateHeader(new java.util.Date(System.currentTimeMillis())) + "\r\n"
                             + "\r\n");
-                    assertTrue(resp.getStatusLine().trim().equals("HTTP/1.1 304 Not Modified"));
+                    assertEquals("HTTP/1.1 304 Not Modified", resp.getStatusLine().trim());
                     resp.getHeaderLines().forEach(h -> {
                         System.out.println("HEADER LINE :" + h);
                     });
