@@ -74,6 +74,7 @@ import org.slf4j.LoggerFactory;
 public class RuntimeServerConfiguration {
 
     private static final Logger LOG = LoggerFactory.getLogger(RuntimeServerConfiguration.class);
+    private static final int DEFAULT_PROBE_PERIOD = 0;
 
     private final List<NetworkListenerConfiguration> listeners = new ArrayList<>();
     private final Map<String, SSLCertificateConfiguration> certificates = new HashMap<>();
@@ -113,7 +114,7 @@ public class RuntimeServerConfiguration {
     private boolean accessLogAdvancedEnabled = false;
     private int accessLogAdvancedBodySize = 1_000; // bytes
     private String userRealmClassname;
-    private int healthProbePeriod = 0;
+    private int healthProbePeriod = DEFAULT_PROBE_PERIOD;
     private int healthConnectTimeout = 5_000;
     private int dynamicCertificatesManagerPeriod = 0;
     private int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
@@ -224,9 +225,9 @@ public class RuntimeServerConfiguration {
         configureFilters(properties);
         configureConnectionPools(properties);
 
-        healthProbePeriod = properties.getInt("healthmanager.period", 0);
+        healthProbePeriod = properties.getInt("healthmanager.period", DEFAULT_PROBE_PERIOD);
         LOG.info("healthmanager.period={}", healthProbePeriod);
-        if (healthProbePeriod <= 0) {
+        if (healthProbePeriod <= DEFAULT_PROBE_PERIOD) {
             LOG.warn("BACKEND-HEALTH-MANAGER DISABLED");
         }
 
