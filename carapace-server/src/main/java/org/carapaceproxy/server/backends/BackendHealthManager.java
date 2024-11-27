@@ -151,10 +151,11 @@ public class BackendHealthManager implements Runnable {
             if (checkResult.isOk()) {
                 final var responseTime = checkResult.endTs() - checkResult.startTs();
                 if (status.isReportedAsUnreachable()) {
-                    LOG.warn("backend {} was unreachable, setting again to reachable. Response time {}ms", status.getHostPort(), responseTime);
+                    LOG.warn("backend {} was unreachable, setting again to reachable. Response time {} ms",
+                            status.getHostPort(), responseTime);
                     reportBackendReachable(status.getHostPort());
                 } else {
-                    LOG.debug("backend {} seems reachable. Response time {}ms", status.getHostPort(), responseTime);
+                    LOG.debug("backend {} seems reachable. Response time {} ms", status.getHostPort(), responseTime);
                 }
             } else {
                 if (status.isReportedAsUnreachable()) {
