@@ -37,6 +37,7 @@ import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.timeout.ReadTimeoutException;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import java.net.ConnectException;
@@ -46,6 +47,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -127,10 +129,6 @@ public class ProxyRequestsManager {
         parent.getFilters().forEach(filter -> filter.apply(request));
 
         MapResult action = parent.getMapper().map(request);
-        if (action == null) {
-            LOGGER.info("Mapper returned NULL action for {}", this);
-            action = MapResult.internalError(MapResult.NO_ROUTE);
-        }
 
         request.setAction(action);
 
@@ -139,7 +137,7 @@ public class ProxyRequestsManager {
         }
 
         try {
-            return switch (action.action) {
+            return switch (action.getAction()) {
                 case NOTFOUND -> serveNotFoundMessage(request);
                 case INTERNAL_ERROR -> serveInternalErrorMessage(request);
                 case SERVICE_UNAVAILABLE -> serveServiceUnavailable(request);
@@ -149,7 +147,7 @@ public class ProxyRequestsManager {
                 case REDIRECT -> serveRedirect(request);
                 case PROXY -> forward(request, false);
                 case CACHE -> serveFromCache(request); // cached content
-                default -> throw new IllegalStateException("Action " + action.action + " not supported");
+                default -> throw new IllegalStateException("Action " + action.getAction() + " not supported");
             };
         } finally {
             parent.getRequestsLogger().logRequest(request);
@@ -161,7 +159,7 @@ public class ProxyRequestsManager {
             return Mono.empty();
         }
 
-        SimpleHTTPResponse res = parent.getMapper().mapPageNotFound(request.getAction().routeId);
+        SimpleHTTPResponse res = parent.getMapper().mapPageNotFound(request.getAction().getRouteId());
         int code = 0;
         String resource = null;
         List<CustomHeader> customHeaders = null;
@@ -187,7 +185,7 @@ public class ProxyRequestsManager {
             return Mono.empty();
         }
 
-        SimpleHTTPResponse res = parent.getMapper().mapInternalError(request.getAction().routeId);
+        SimpleHTTPResponse res = parent.getMapper().mapInternalError(request.getAction().getRouteId());
         int code = 0;
         String resource = null;
         List<CustomHeader> customHeaders = null;
@@ -213,7 +211,7 @@ public class ProxyRequestsManager {
             return Mono.empty();
         }
 
-        SimpleHTTPResponse res = parent.getMapper().mapMaintenanceMode(request.getAction().routeId);
+        SimpleHTTPResponse res = parent.getMapper().mapMaintenanceMode(request.getAction().getRouteId());
         int code = 0;
         String resource = null;
         List<CustomHeader> customHeaders = null;
@@ -266,8 +264,8 @@ public class ProxyRequestsManager {
         }
         FullHttpResponse response = parent
                 .getStaticContentsManager()
-                .buildResponse(request.getAction().errorCode, request.getAction().resource, request.getHttpProtocol());
-        return writeSimpleResponse(request, response, request.getAction().customHeaders);
+                .buildResponse(request.getAction().getErrorCode(), request.getAction().getResource(), request.getHttpProtocol());
+        return writeSimpleResponse(request, response, request.getAction().getCustomHeaders());
     }
 
     private Publisher<Void> serveRedirect(ProxyRequest request) {
@@ -279,26 +277,26 @@ public class ProxyRequestsManager {
         DefaultFullHttpResponse response = new DefaultFullHttpResponse(
                 request.getHttpProtocol(),
                 // redirect: 3XX
-                HttpResponseStatus.valueOf(action.errorCode < 0 ? HttpStatus.SC_MOVED_TEMPORARILY : action.errorCode)
+                HttpResponseStatus.valueOf(action.getErrorCode() < 0 ? HttpStatus.SC_MOVED_TEMPORARILY : action.getErrorCode())
         );
         response.headers().set(HttpHeaderNames.CACHE_CONTROL, "no-cache");
 
-        String location = action.redirectLocation;
+        String location = action.getRedirectLocation();
         String host = request.getRequestHostname();
         String port = host.contains(":") ? host.replaceFirst(".*:", ":") : "";
         host = host.split(":")[0];
         String path = request.getUri();
         if (location == null || location.isEmpty()) {
-            if (!action.host.isEmpty()) {
-                host = action.host;
+            if (!action.getHost().isEmpty()) {
+                host = action.getHost();
             }
-            if (action.port > 0) {
-                port = ":" + action.port;
-            } else if (REDIRECT_PROTO_HTTPS.equals(action.redirectProto)) {
+            if (action.getPort() > 0) {
+                port = ":" + action.getPort();
+            } else if (REDIRECT_PROTO_HTTPS.equals(action.getRedirectProto())) {
                 port = ""; // default https port
             }
-            if (!action.redirectPath.isEmpty()) {
-                path = action.redirectPath;
+            if (!action.getRedirectPath().isEmpty()) {
+                path = action.getRedirectPath();
             }
             location = host + port + path; // - custom redirection
         } else if (location.startsWith("/")) {
@@ -306,11 +304,11 @@ public class ProxyRequestsManager {
         } // else: implicit absolute redirection
 
         // - redirect to https
-        location = (REDIRECT_PROTO_HTTPS.equals(action.redirectProto) ? REDIRECT_PROTO_HTTPS : REDIRECT_PROTO_HTTP)
+        location = (REDIRECT_PROTO_HTTPS.equals(action.getRedirectProto()) ? REDIRECT_PROTO_HTTPS : REDIRECT_PROTO_HTTP)
                 + "://" + location.replaceFirst("http.?://", "");
         response.headers().set(HttpHeaderNames.LOCATION, location);
 
-        return writeSimpleResponse(request, response, request.getAction().customHeaders);
+        return writeSimpleResponse(request, response, request.getAction().getCustomHeaders());
     }
 
     private static Publisher<Void> writeSimpleResponse(ProxyRequest request, FullHttpResponse response, List<CustomHeader> customHeaders) {
@@ -357,8 +355,8 @@ public class ProxyRequestsManager {
      * @return a {@link Flux} forwarding the returned {@link Publisher} sequence
      */
     public Publisher<Void> forward(ProxyRequest request, boolean cache) {
-        final String endpointHost = request.getAction().host;
-        final int endpointPort = request.getAction().port;
+        final String endpointHost = request.getAction().getHost();
+        final int endpointPort = request.getAction().getPort();
         EndpointKey key = EndpointKey.make(endpointHost, endpointPort);
         EndpointStats endpointStats = endpointsStats.computeIfAbsent(key, EndpointStats::new);
 
@@ -463,7 +461,7 @@ public class ProxyRequestsManager {
                                 connectionConfig.getId(),
                                 request.getUri(),
                                 LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")),
-                                request.getAction().host
+                                request.getAction().getHost()
                         );
                     }
 
@@ -474,7 +472,7 @@ public class ProxyRequestsManager {
                     } else {
                         cacheable.set(false);
                     }
-                    addCustomResponseHeaders(request, request.getAction().customHeaders);
+                    addCustomResponseHeaders(request, request.getAction().getCustomHeaders());
 
                     if (aggregateChunksForLegacyHttp(request)) {
                         return request.sendResponseData(flux.aggregate().retain().map(ByteBuf::asByteBuf)
@@ -506,7 +504,7 @@ public class ProxyRequestsManager {
                                     connectionConfig.getId(),
                                     request.getUri(),
                                     LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")),
-                                    request.getAction().host
+                                    request.getAction().getHost()
                             );
                         }
                         if (cacheable.get()) {
@@ -516,8 +514,8 @@ public class ProxyRequestsManager {
                 }).onErrorResume(err -> { // custom endpoint request/response error handling
                     PENDING_REQUESTS_GAUGE.dec();
 
-                    EndpointKey endpoint = EndpointKey.make(request.getAction().host, request.getAction().port);
-                    if (err instanceof io.netty.handler.timeout.ReadTimeoutException) {
+                    EndpointKey endpoint = EndpointKey.make(request.getAction().getHost(), request.getAction().getPort());
+                    if (err instanceof ReadTimeoutException) {
                         STUCK_REQUESTS_COUNTER.inc();
                         LOGGER.error("Read timeout error occurred for endpoint {}; request: {}", endpoint, request);
                         if (parent.getCurrentConfiguration().isBackendsUnreachableOnStuckRequests()) {
@@ -548,7 +546,7 @@ public class ProxyRequestsManager {
             return Mono.empty();
         }
 
-        SimpleHTTPResponse res = parent.getMapper().mapServiceUnavailableError(request.getAction().routeId);
+        SimpleHTTPResponse res = parent.getMapper().mapServiceUnavailableError(request.getAction().getRouteId());
         int code = 0;
         String resource = null;
         List<CustomHeader> customHeaders = null;
@@ -583,7 +581,7 @@ public class ProxyRequestsManager {
     private void addCachedResponseHeaders(ProxyRequest request) {
         HttpHeaders headers = request.getResponseHeaders();
         if (!headers.contains(HttpHeaderNames.EXPIRES)) {
-            headers.add(HttpHeaderNames.EXPIRES, HttpUtils.formatDateHeader(new java.util.Date(parent.getCache().computeDefaultExpireDate())));
+            headers.add(HttpHeaderNames.EXPIRES, HttpUtils.formatDateHeader(new Date(parent.getCache().computeDefaultExpireDate())));
         }
     }
 
@@ -606,9 +604,9 @@ public class ProxyRequestsManager {
             headers.remove(HttpHeaderNames.ACCEPT_RANGES);
             headers.remove(HttpHeaderNames.ETAG);
             headers.add("X-Cached", "yes; ts=" + content.getCreationTs());
-            headers.add(HttpHeaderNames.EXPIRES, HttpUtils.formatDateHeader(new java.util.Date(content.getExpiresTs())));
+            headers.add(HttpHeaderNames.EXPIRES, HttpUtils.formatDateHeader(new Date(content.getExpiresTs())));
             request.setResponseHeaders(headers);
-            addCustomResponseHeaders(request, request.getAction().customHeaders);
+            addCustomResponseHeaders(request, request.getAction().getCustomHeaders());
             // If the request is http 1.0, we make sure to send without chunked
             if (aggregateChunksForLegacyHttp(request)) {
                 return request.sendResponseData(Mono.from(ByteBufFlux.fromIterable(content.getChunks())));
@@ -622,8 +620,8 @@ public class ProxyRequestsManager {
         // content not modified
         request.setResponseStatus(HttpResponseStatus.NOT_MODIFIED);
         HttpHeaders headers = new DefaultHttpHeaders();
-        headers.set(HttpHeaderNames.LAST_MODIFIED, HttpUtils.formatDateHeader(new java.util.Date(content.getLastModified())));
-        headers.set(HttpHeaderNames.EXPIRES, HttpUtils.formatDateHeader(new java.util.Date(content.getExpiresTs())));
+        headers.set(HttpHeaderNames.LAST_MODIFIED, HttpUtils.formatDateHeader(new Date(content.getLastModified())));
+        headers.set(HttpHeaderNames.EXPIRES, HttpUtils.formatDateHeader(new Date(content.getExpiresTs())));
         headers.add("X-Cached", "yes; ts=" + content.getCreationTs());
         request.setResponseHeaders(headers);
         return request.send();

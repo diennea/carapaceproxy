@@ -208,7 +208,7 @@ public class RequestsLogger implements Runnable, Closeable {
         this.newConfiguration = newConfiguration;
     }
 
-    private void _reloadConfiguration() throws IOException {
+    private void reloadConfiguration() throws IOException {
         if (newConfiguration == null) {
             return;
         }
@@ -286,13 +286,12 @@ public class RequestsLogger implements Runnable, Closeable {
         Entry currentEntry = null;
         while (!closed) {
             try {
-                _reloadConfiguration();
+                reloadConfiguration();
 
                 try {
                     ensureAccessLogFileOpened();
                 } catch (IOException ex) {
-                    LOG.error("Exception while trying to open access log file");
-                    LOG.error(null, ex);
+                    LOG.error("Exception while trying to open access log file", ex);
                     Thread.sleep(currentConfiguration.getAccessLogWaitBetweenFailures());
                     lastFlush = System.currentTimeMillis();
                     if (breakRunForTests) {
@@ -334,18 +333,16 @@ public class RequestsLogger implements Runnable, Closeable {
                 try {
                     closeAccessLogFile();
                 } catch (IOException ex1) {
-                    LOG.error(null, ex1);
+                    LOG.error("Failed to close access log after interrupt", ex1);
                 }
                 closed = true;
 
             } catch (IOException ex) {
-                LOG.error("Exception while writing on access log file");
-                LOG.error(null, ex);
+                LOG.error("Exception while writing on access log file", ex);
                 try {
                     closeAccessLogFile();
                 } catch (IOException ex1) {
-                    LOG.error("Exception while trying to close access log file");
-                    LOG.error(null, ex1);
+                    LOG.error("Exception while trying to close access log file", ex1);
                 }
                 // File opening will be retried at next cycle start
 
@@ -389,8 +386,8 @@ public class RequestsLogger implements Runnable, Closeable {
             this.format.add("uri", request.getUri());
             this.format.add("timestamp", tsFormatter.format(Instant.ofEpochMilli(request.getStartTs())));
             this.format.add("total_time", request.getLastActivity() - request.getStartTs());
-            this.format.add("action_id", request.getAction().action);
-            this.format.add("route_id", request.getAction().routeId);
+            this.format.add("action_id", request.getAction().getAction());
+            this.format.add("route_id", request.getAction().getRouteId());
             this.format.add("user_id", request.getUserId());
             this.format.add("session_id", request.getSessionId());
             this.format.add("http_protocol_version", request.getRequest().version());
@@ -398,7 +395,7 @@ public class RequestsLogger implements Runnable, Closeable {
                 this.format.add("backend_id", "CACHED");
                 this.format.add("backend_time", "0");
             } else {
-                this.format.add("backend_id", String.format("%s:%s", request.getAction().host, request.getAction().port));
+                this.format.add("backend_id", String.format("%s:%s", request.getAction().getHost(), request.getAction().getPort()));
                 this.format.add("backend_time", request.getBackendStartTs() - request.getStartTs());
             }
             formatSSLProperties(request);
