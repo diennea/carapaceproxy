@@ -26,7 +26,7 @@ import org.carapaceproxy.core.EndpointKey;
  */
 public record BackendConfiguration(String id, EndpointKey hostPort, String probePath) {
 
-    public BackendConfiguration(String id, String host, int port, String probePath) {
+    public BackendConfiguration(final String id, final String host, final int port, final String probePath) {
         this(id, new EndpointKey(host, port), probePath);
     }
 

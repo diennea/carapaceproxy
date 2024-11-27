@@ -51,6 +51,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
@@ -67,6 +69,7 @@ import org.carapaceproxy.server.mapper.CustomHeader;
 import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.utils.HttpUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
+import org.carapaceproxy.utils.StringUtils;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -159,15 +162,11 @@ public class ProxyRequestsManager {
             return Mono.empty();
         }
 
-        SimpleHTTPResponse res = parent.getMapper().mapPageNotFound(request.getAction().getRouteId());
-        int code = 0;
-        String resource = null;
-        List<CustomHeader> customHeaders = null;
-        if (res != null) {
-            code = res.errorCode();
-            resource = res.resource();
-            customHeaders = res.customHeaders();
-        }
+        final MapResult action = Objects.requireNonNull(request.getAction());
+        SimpleHTTPResponse res = parent.getMapper().mapPageNotFound(action.getRouteId());
+        int code = res.errorCode();
+        String resource = res.resource();
+        List<CustomHeader> customHeaders = res.customHeaders();
         if (resource == null) {
             resource = StaticContentsManager.DEFAULT_NOT_FOUND;
         }
@@ -185,15 +184,11 @@ public class ProxyRequestsManager {
             return Mono.empty();
         }
 
-        SimpleHTTPResponse res = parent.getMapper().mapInternalError(request.getAction().getRouteId());
-        int code = 0;
-        String resource = null;
-        List<CustomHeader> customHeaders = null;
-        if (res != null) {
-            code = res.errorCode();
-            resource = res.resource();
-            customHeaders = res.customHeaders();
-        }
+        final MapResult action = Objects.requireNonNull(request.getAction());
+        SimpleHTTPResponse res = parent.getMapper().mapInternalError(action.getRouteId());
+        int code = res.errorCode();
+        String resource = res.resource();
+        List<CustomHeader> customHeaders = res.customHeaders();
         if (resource == null) {
             resource = StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR;
         }
@@ -211,15 +206,11 @@ public class ProxyRequestsManager {
             return Mono.empty();
         }
 
-        SimpleHTTPResponse res = parent.getMapper().mapMaintenanceMode(request.getAction().getRouteId());
-        int code = 0;
-        String resource = null;
-        List<CustomHeader> customHeaders = null;
-        if (res != null) {
-            code = res.errorCode();
-            resource = res.resource();
-            customHeaders = res.customHeaders();
-        }
+        final MapResult action = Objects.requireNonNull(request.getAction());
+        SimpleHTTPResponse res = parent.getMapper().mapMaintenanceMode(action.getRouteId());
+        int code = res.errorCode();
+        String resource = res.resource();
+        List<CustomHeader> customHeaders = res.customHeaders();
         if (resource == null) {
             resource = StaticContentsManager.DEFAULT_MAINTENANCE_MODE_ERROR;
         }
@@ -238,14 +229,9 @@ public class ProxyRequestsManager {
         }
 
         SimpleHTTPResponse res = parent.getMapper().mapBadRequest();
-        int code = 0;
-        String resource = null;
-        List<CustomHeader> customHeaders = null;
-        if (res != null) {
-            code = res.errorCode();
-            resource = res.resource();
-            customHeaders = res.customHeaders();
-        }
+        int code = res.errorCode();
+        String resource = res.resource();
+        List<CustomHeader> customHeaders = res.customHeaders();
         if (resource == null) {
             resource = StaticContentsManager.DEFAULT_BAD_REQUEST;
         }
@@ -262,10 +248,11 @@ public class ProxyRequestsManager {
         if (request.getResponse().hasSentHeaders()) {
             return Mono.empty();
         }
+        final MapResult action = Objects.requireNonNull(request.getAction());
         FullHttpResponse response = parent
                 .getStaticContentsManager()
-                .buildResponse(request.getAction().getErrorCode(), request.getAction().getResource(), request.getHttpProtocol());
-        return writeSimpleResponse(request, response, request.getAction().getCustomHeaders());
+                .buildResponse(action.getErrorCode(), action.getResource(), request.getHttpProtocol());
+        return writeSimpleResponse(request, response, action.getCustomHeaders());
     }
 
     private Publisher<Void> serveRedirect(ProxyRequest request) {
@@ -273,7 +260,7 @@ public class ProxyRequestsManager {
             return Mono.empty();
         }
 
-        MapResult action = request.getAction();
+        MapResult action = Objects.requireNonNull(request.getAction());
         DefaultFullHttpResponse response = new DefaultFullHttpResponse(
                 request.getHttpProtocol(),
                 // redirect: 3XX
@@ -282,12 +269,16 @@ public class ProxyRequestsManager {
         response.headers().set(HttpHeaderNames.CACHE_CONTROL, "no-cache");
 
         String location = action.getRedirectLocation();
-        String host = request.getRequestHostname();
-        String port = host.contains(":") ? host.replaceFirst(".*:", ":") : "";
-        host = host.split(":")[0];
+        final String hostname = request.getRequestHostname();
+        String host = null;
+        String port = null;
+        if (hostname != null) {
+            host = hostname.split(":")[0];
+            port = hostname.contains(":") ? hostname.replaceFirst(".*:", ":") : "";
+        }
         String path = request.getUri();
         if (location == null || location.isEmpty()) {
-            if (!action.getHost().isEmpty()) {
+            if (!StringUtils.isBlank(action.getHost())) {
                 host = action.getHost();
             }
             if (action.getPort() > 0) {
@@ -295,10 +286,10 @@ public class ProxyRequestsManager {
             } else if (REDIRECT_PROTO_HTTPS.equals(action.getRedirectProto())) {
                 port = ""; // default https port
             }
-            if (!action.getRedirectPath().isEmpty()) {
+            if (!StringUtils.isBlank(action.getRedirectPath())) {
                 path = action.getRedirectPath();
             }
-            location = host + port + path; // - custom redirection
+            location = Objects.requireNonNull(host) + Objects.requireNonNull(port) + path; // - custom redirection
         } else if (location.startsWith("/")) {
             location = host + port + location; // - relative redirection
         } // else: implicit absolute redirection
@@ -324,25 +315,29 @@ public class ProxyRequestsManager {
         }
         request.setResponseStatus(response.status());
         request.setResponseHeaders(response.headers().copy());
-        addCustomResponseHeaders(request, customHeaders);
+        addCustomResponseHeaders(request.getResponseHeaders(), customHeaders);
 
         // Write the response
         return request.sendResponseData(Mono.just(response.content()).doFinally(f -> request.setLastActivity(System.currentTimeMillis())));
     }
 
-    private static void addCustomResponseHeaders(ProxyRequest request, List<CustomHeader> customHeaders) {
+    private static void applyCustomResponseHeaders(final ProxyRequest request) {
+        final MapResult action = Objects.requireNonNull(request.getAction());
+        addCustomResponseHeaders(request.getResponseHeaders(), action.getCustomHeaders());
+    }
+
+    private static void addCustomResponseHeaders(final HttpHeaders responseHeaders, final List<CustomHeader> customHeaders) {
         if (customHeaders == null || customHeaders.isEmpty()) {
             return;
         }
-        HttpHeaders headers = request.getResponseHeaders();
         customHeaders.forEach(customHeader -> {
             if (CustomHeader.HeaderMode.SET.equals(customHeader.getMode())
                     || CustomHeader.HeaderMode.REMOVE.equals(customHeader.getMode())) {
-                headers.remove(customHeader.getName());
+                responseHeaders.remove(customHeader.getName());
             }
             if (CustomHeader.HeaderMode.SET.equals(customHeader.getMode())
                     || CustomHeader.HeaderMode.ADD.equals(customHeader.getMode())) {
-                headers.add(customHeader.getName(), customHeader.getValue());
+                responseHeaders.add(customHeader.getName(), customHeader.getValue());
             }
         });
     }
@@ -350,11 +345,12 @@ public class ProxyRequestsManager {
     /**
      * Forward a requested received by the {@link Listeners} to the corresponding backend endpoint.
      *
-     * @param request the unpacked incoming request to forward to the corresponding backend endpoint
-     * @param cache whether the request is cacheable or not
+     * @param request      the unpacked incoming request to forward to the corresponding backend endpoint
+     * @param cache        whether the request is cacheable or not
      * @return a {@link Flux} forwarding the returned {@link Publisher} sequence
      */
     public Publisher<Void> forward(ProxyRequest request, boolean cache) {
+        Objects.requireNonNull(request.getAction());
         final String endpointHost = request.getAction().getHost();
         final int endpointPort = request.getAction().getPort();
         EndpointKey key = EndpointKey.make(endpointHost, endpointPort);
@@ -467,12 +463,12 @@ public class ProxyRequestsManager {
 
                     request.setResponseStatus(resp.status());
                     request.setResponseHeaders(resp.responseHeaders().copy()); // headers from endpoint to client
-                    if (cacheable.get() && parent.getCache().isCacheable(resp) && cacheReceiver.receivedFromRemote(resp)) {
+                    if (cacheable.get() && parent.getCache().isCacheable(resp) && Objects.requireNonNull(cacheReceiver).receivedFromRemote(resp)) {
                         addCachedResponseHeaders(request);
                     } else {
                         cacheable.set(false);
                     }
-                    addCustomResponseHeaders(request, request.getAction().getCustomHeaders());
+                    applyCustomResponseHeaders(request);
 
                     if (aggregateChunksForLegacyHttp(request)) {
                         return request.sendResponseData(flux.aggregate().retain().map(ByteBuf::asByteBuf)
@@ -480,7 +476,7 @@ public class ProxyRequestsManager {
                                     request.setLastActivity(System.currentTimeMillis());
                                     endpointStats.getLastActivity().set(System.currentTimeMillis());
                                     if (cacheable.get()) {
-                                        cacheReceiver.receivedFromRemote(data, parent.getCachePoolAllocator());
+                                        Objects.requireNonNull(cacheReceiver).receivedFromRemote(data, parent.getCachePoolAllocator());
                                     }
                                 }).doOnSuccess(data -> {
                                     if (cacheable.get()) {
@@ -493,7 +489,7 @@ public class ProxyRequestsManager {
                         request.setLastActivity(System.currentTimeMillis());
                         endpointStats.getLastActivity().set(System.currentTimeMillis());
                         if (cacheable.get()) {
-                            cacheReceiver.receivedFromRemote(data, parent.getCachePoolAllocator());
+                            Objects.requireNonNull(cacheReceiver).receivedFromRemote(data, parent.getCachePoolAllocator());
                         }
                     }).doOnComplete(() -> {
                         if (LOGGER.isDebugEnabled()) {
@@ -546,15 +542,11 @@ public class ProxyRequestsManager {
             return Mono.empty();
         }
 
-        SimpleHTTPResponse res = parent.getMapper().mapServiceUnavailableError(request.getAction().getRouteId());
-        int code = 0;
-        String resource = null;
-        List<CustomHeader> customHeaders = null;
-        if (res != null) {
-            code = res.errorCode();
-            resource = res.resource();
-            customHeaders = res.customHeaders();
-        }
+        final MapResult action = Objects.requireNonNull(request.getAction());
+        SimpleHTTPResponse res = parent.getMapper().mapServiceUnavailableError(action.getRouteId());
+        int code = res.errorCode();
+        String resource = res.resource();
+        List<CustomHeader> customHeaders = res.customHeaders();
         if (resource == null) {
             resource = StaticContentsManager.DEFAULT_SERVICE_UNAVAILABLE_ERROR;
         }
@@ -606,7 +598,7 @@ public class ProxyRequestsManager {
             headers.add("X-Cached", "yes; ts=" + content.getCreationTs());
             headers.add(HttpHeaderNames.EXPIRES, HttpUtils.formatDateHeader(new Date(content.getExpiresTs())));
             request.setResponseHeaders(headers);
-            addCustomResponseHeaders(request, request.getAction().getCustomHeaders());
+            applyCustomResponseHeaders(request);
             // If the request is http 1.0, we make sure to send without chunked
             if (aggregateChunksForLegacyHttp(request)) {
                 return request.sendResponseData(Mono.from(ByteBufFlux.fromIterable(content.getChunks())));
@@ -627,10 +619,10 @@ public class ProxyRequestsManager {
         return request.send();
     }
 
-    public static class ConnectionsManager implements AutoCloseable, Function<ProxyRequest, Map.Entry<ConnectionPoolConfiguration, ConnectionProvider>> {
+    public static class ConnectionsManager implements AutoCloseable, Function<ProxyRequest, Entry<ConnectionPoolConfiguration, ConnectionProvider>> {
 
         private final Map<ConnectionPoolConfiguration, ConnectionProvider> connectionPools = new ConcurrentHashMap<>();
-        private volatile Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> defaultConnectionPool;
+        private volatile Entry<ConnectionPoolConfiguration, ConnectionProvider> defaultConnectionPool;
 
         public void reloadConfiguration(RuntimeServerConfiguration newConfiguration, Collection<BackendConfiguration> newEndpoints) {
             close();
@@ -683,7 +675,9 @@ public class ProxyRequestsManager {
             connectionPools.clear();
 
             if (defaultConnectionPool != null) {
-                defaultConnectionPool.getValue().dispose(); // graceful shutdown according to disposeTimeout
+                // being it volatile, we don't have the compile-time certainty that it won't become null after the check
+                // still, it is reasonably safe to assume that it stay not null
+                Objects.requireNonNull(defaultConnectionPool).getValue().dispose(); // graceful shutdown according to disposeTimeout
             }
 
             // reset connections provider metrics
@@ -695,13 +689,14 @@ public class ProxyRequestsManager {
         }
 
         @Override
-        public Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> apply(ProxyRequest request) {
+        public Entry<ConnectionPoolConfiguration, ConnectionProvider> apply(ProxyRequest request) {
             String hostName = request.getRequestHostname();
-            Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> selectedPool = connectionPools.entrySet().stream()
+            Entry<ConnectionPoolConfiguration, ConnectionProvider> selectedPool = connectionPools.entrySet().stream()
                     .filter(e -> Pattern.matches(e.getKey().getDomain(), hostName))
                     .findFirst()
                     .orElse(defaultConnectionPool);
 
+            Objects.requireNonNull(selectedPool);
             LOGGER.debug("Using connection {} for domain {}", selectedPool.getKey().getId(), hostName);
 
             return selectedPool;
@@ -715,9 +710,9 @@ public class ProxyRequestsManager {
 
     @VisibleForTesting
     public Map<ConnectionPoolConfiguration, ConnectionProvider> getConnectionPools() {
-        HashMap<ConnectionPoolConfiguration, ConnectionProvider> pools = new HashMap<>(connectionsManager.connectionPools);
-        pools.put(connectionsManager.defaultConnectionPool.getKey(), connectionsManager.defaultConnectionPool.getValue());
-
+        final HashMap<ConnectionPoolConfiguration, ConnectionProvider> pools = new HashMap<>(connectionsManager.connectionPools);
+        final Entry<ConnectionPoolConfiguration, ConnectionProvider> defaultConnectionPool = Objects.requireNonNull(connectionsManager.defaultConnectionPool);
+        pools.put(defaultConnectionPool.getKey(), defaultConnectionPool.getValue());
         return pools;
     }
 }

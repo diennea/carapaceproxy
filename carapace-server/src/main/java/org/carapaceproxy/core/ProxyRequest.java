@@ -32,12 +32,15 @@ import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.ssl.SslHandler;
 import java.net.InetSocketAddress;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import lombok.Data;
 import org.carapaceproxy.server.filters.UrlEncodedQueryString;
 import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchingContext;
+import org.carapaceproxy.utils.StringUtils;
 import org.reactivestreams.Publisher;
 import reactor.netty.ByteBufFlux;
 import reactor.netty.http.server.HttpServerRequest;
@@ -51,9 +54,6 @@ import reactor.netty.http.server.HttpServerResponse;
 @Data
 public class ProxyRequest implements MatchingContext {
 
-    private static final Pattern NETTY_HTTP_1_VERSION_PATTERN =
-            Pattern.compile("(\\S+)/(\\d+)\\.(\\d+)");
-
     // All properties name have been converted to lowercase during parsing
     public static final String PROPERTY_URI = "request.uri";
     public static final String PROPERTY_METHOD = "request.method";
@@ -61,7 +61,7 @@ public class ProxyRequest implements MatchingContext {
     public static final String PROPERTY_HEADERS = "request.headers.";
     public static final String PROPERTY_LISTENER_HOST_PORT = "listener.hostport";
     public static final String PROPERTY_LISTENER_IPADDRESS = "listener.ipaddress";
-
+    private static final Pattern NETTY_HTTP_1_VERSION_PATTERN = Pattern.compile("(\\S+)/(\\d+)\\.(\\d+)");
     private static final int HEADERS_SUBSTRING_INDEX = PROPERTY_HEADERS.length();
     private static final AtomicLong REQUESTS_ID_GENERATOR = new AtomicLong();
 
@@ -69,6 +69,9 @@ public class ProxyRequest implements MatchingContext {
     private final HttpServerRequest request;
     private final HttpServerResponse response;
     private final EndpointKey listener;
+    private final HttpVersion httpProtocol;
+    private final String sslProtocol;
+    private final String cipherSuite;
     private MapResult action;
     private String userId;
     private String sessionId;
@@ -77,12 +80,11 @@ public class ProxyRequest implements MatchingContext {
     private volatile long lastActivity;
     private String uri;
     private UrlEncodedQueryString queryString;
-    private String sslProtocol;
-    private String cipherSuite;
     private boolean servedFromCache;
-    private HttpVersion httpProtocol;
 
-    public ProxyRequest(HttpServerRequest request, HttpServerResponse response, EndpointKey listener) {
+    public ProxyRequest(
+            final HttpServerRequest request, final HttpServerResponse response, final EndpointKey listener
+    ) {
         this.request = request;
         this.response = response;
         this.listener = listener;
@@ -94,13 +96,27 @@ public class ProxyRequest implements MatchingContext {
         } else {
             throw new IllegalArgumentException("Unsupported request protocol: " + protocol);
         }
-        request.withConnection(conn -> {
-            SslHandler handler = conn.channel().pipeline().get(SslHandler.class);
-            if (handler != null) {
-                sslProtocol = handler.engine().getSession().getProtocol();
-                cipherSuite = handler.engine().getSession().getCipherSuite();
-            }
-        });
+        final SslHandler handler = getSslHandler();
+        if (handler != null) {
+            this.sslProtocol = handler.engine().getSession().getProtocol();
+            this.cipherSuite = handler.engine().getSession().getCipherSuite();
+        } else {
+            this.sslProtocol = null;
+            this.cipherSuite = null;
+        }
+    }
+
+    public static UrlEncodedQueryString parseQueryString(final String uri) {
+        int pos = uri.indexOf('?');
+        return pos < 0 || pos == uri.length() - 1
+                ? UrlEncodedQueryString.create()
+                : UrlEncodedQueryString.parse(uri.substring(pos + 1));
+    }
+
+    private SslHandler getSslHandler() {
+        final AtomicReference<SslHandler> sslHandlerRef = new AtomicReference<>();
+        request.withConnection(conn -> sslHandlerRef.set(conn.channel().pipeline().get(SslHandler.class)));
+        return sslHandlerRef.get();
     }
 
     @Override
@@ -121,15 +137,15 @@ public class ProxyRequest implements MatchingContext {
 
     @Override
     public boolean isSecure() {
-        return request.scheme().equalsIgnoreCase(HttpScheme.HTTPS + "");
+        return HttpScheme.HTTPS.name().contentEqualsIgnoreCase(request.scheme());
     }
 
     public InetSocketAddress getLocalAddress() {
-        return request.hostAddress();
+        return Objects.requireNonNull(request.hostAddress());
     }
 
     public InetSocketAddress getRemoteAddress() {
-        return request.remoteAddress();
+        return Objects.requireNonNull(request.remoteAddress());
     }
 
     /**
@@ -149,17 +165,17 @@ public class ProxyRequest implements MatchingContext {
             uri = uri.substring(schemePrefix.length());
         }
         String fullPath = request.fullPath();
-        if (fullPath != null && !fullPath.isBlank()) {
-            int pos = uri.indexOf(request.fullPath());
-            if (pos > 0) {
-                uri = uri.substring(pos);
-            }
-        } else {
+        if (StringUtils.isBlank(fullPath)) {
             int queryStringPos = uri.indexOf("?");
             if (queryStringPos >= 0) {
                 uri = "/" + uri.substring(queryStringPos);
             } else {
                 uri = "/";
+            }
+        } else {
+            int pos = uri.indexOf(request.fullPath());
+            if (pos > 0) {
+                uri = uri.substring(pos);
             }
         }
 
@@ -192,7 +208,7 @@ public class ProxyRequest implements MatchingContext {
         return request.requestHeaders().get(HttpHeaderNames.HOST);
     }
 
-    public boolean isValidHostAndPort(String hostAndPort) {
+    public boolean isValidHostAndPort(final String hostAndPort) {
         try {
             if (hostAndPort == null) {
                 return false;
@@ -219,13 +235,6 @@ public class ProxyRequest implements MatchingContext {
         }
         queryString = parseQueryString(request.uri());
         return queryString;
-    }
-
-    public static UrlEncodedQueryString parseQueryString(String uri) {
-        int pos = uri.indexOf('?');
-        return pos < 0 || pos == uri.length() - 1
-                ? UrlEncodedQueryString.create()
-                : UrlEncodedQueryString.parse(uri.substring(pos + 1));
     }
 
     public HttpHeaders getRequestHeaders() {

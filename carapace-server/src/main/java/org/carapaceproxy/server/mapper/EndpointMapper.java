@@ -94,19 +94,19 @@ public abstract class EndpointMapper {
      */
     public abstract MapResult map(ProxyRequest request);
 
-    public SimpleHTTPResponse mapPageNotFound(String routeId) {
+    public SimpleHTTPResponse mapPageNotFound(final String routeId) {
         return SimpleHTTPResponse.notFound(StaticContentsManager.DEFAULT_NOT_FOUND);
     }
 
-    public SimpleHTTPResponse mapInternalError(String routeId) {
+    public SimpleHTTPResponse mapInternalError(final String routeId) {
         return SimpleHTTPResponse.internalError(StaticContentsManager.DEFAULT_INTERNAL_SERVER_ERROR);
     }
 
-    public SimpleHTTPResponse mapServiceUnavailableError(String routeId) {
+    public SimpleHTTPResponse mapServiceUnavailableError(final String routeId) {
         return SimpleHTTPResponse.serviceUnavailable(StaticContentsManager.DEFAULT_SERVICE_UNAVAILABLE_ERROR);
     }
 
-    public SimpleHTTPResponse mapMaintenanceMode(String routeId) {
+    public SimpleHTTPResponse mapMaintenanceMode(final String routeId) {
         return SimpleHTTPResponse.internalError(StaticContentsManager.DEFAULT_MAINTENANCE_MODE_ERROR);
     }
 

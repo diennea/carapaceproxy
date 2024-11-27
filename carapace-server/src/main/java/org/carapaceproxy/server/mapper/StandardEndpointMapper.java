@@ -25,6 +25,7 @@ import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_NOT_FOUND;
 import static org.carapaceproxy.core.StaticContentsManager.IN_MEMORY_RESOURCE;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -250,7 +251,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     }
 
     @Override
-    public SimpleHTTPResponse mapInternalError(String routeid) {
+    public SimpleHTTPResponse mapInternalError(final String routeid) {
         ActionConfiguration errorAction = getErrorActionConfiguration(routeid, defaultInternalErrorAction);
         if (errorAction != null) {
             return new SimpleHTTPResponse(errorAction.getErrorCode(), errorAction.getFile(), errorAction.getCustomHeaders());
@@ -260,7 +261,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     }
 
     @Override
-    public SimpleHTTPResponse mapServiceUnavailableError(String routeId) {
+    public SimpleHTTPResponse mapServiceUnavailableError(final String routeId) {
         ActionConfiguration errorAction = getErrorActionConfiguration(routeId, defaultServiceUnavailable);
         if (errorAction != null) {
             return new SimpleHTTPResponse(errorAction.getErrorCode(), errorAction.getFile(), errorAction.getCustomHeaders());
@@ -270,7 +271,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     }
 
     @Override
-    public SimpleHTTPResponse mapMaintenanceMode(String routeId) {
+    public SimpleHTTPResponse mapMaintenanceMode(final String routeId) {
         ActionConfiguration maintenanceAction = null;
         // custom for route
         Optional<RouteConfiguration> config = routes.stream().filter(r -> r.getId().equalsIgnoreCase(routeId)).findFirst();
@@ -303,7 +304,7 @@ public class StandardEndpointMapper extends EndpointMapper {
     }
 
     @Override
-    public SimpleHTTPResponse mapPageNotFound(String routeId) {
+    public SimpleHTTPResponse mapPageNotFound(final String routeId) {
         // custom global
         ActionConfiguration errorAction = actions.get(defaultNotFoundAction);
         if (errorAction != null) {
@@ -558,7 +559,7 @@ public class StandardEndpointMapper extends EndpointMapper {
 
     @Override
     public SequencedMap<String, BackendConfiguration> getBackends() {
-        return backends;
+        return Collections.unmodifiableSequencedMap(backends);
     }
 
     @Override
