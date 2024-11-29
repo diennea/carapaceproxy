@@ -64,7 +64,7 @@ public class FileUserRealmTest {
 
     @Test
     public void testFileUserRealm() throws Exception {
-        try (HttpProxyServer server = buildForTests("localhost", 0, parent -> new TestEndpointMapper("localhost", 0), tmpDir.newFolder())) {
+        try (HttpProxyServer server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), tmpDir.newFolder())) {
             Properties prop = new Properties();
             prop.setProperty("http.admin.enabled", "true");
             prop.setProperty("http.admin.port", "8761");
@@ -104,7 +104,7 @@ public class FileUserRealmTest {
 
     @Test
     public void testFileUserRealmRefresh() throws Exception {
-        try (HttpProxyServer server = buildForTests("localhost", 0, parent -> new TestEndpointMapper("localhost", 0), tmpDir.newFolder())) {
+        try (HttpProxyServer server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), tmpDir.newFolder())) {
             Map<String, String> users = new HashMap<>();
             users.put("test1", "pass1");
 
@@ -149,7 +149,7 @@ public class FileUserRealmTest {
 
     @Test
     public void testFileRelativePath() throws Exception {
-        try (HttpProxyServer server = buildForTests("localhost", 0, parent -> new TestEndpointMapper("localhost", 0), tmpDir.newFolder())) {
+        try (HttpProxyServer server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), tmpDir.newFolder())) {
             Properties prop = new Properties();
             prop.setProperty("http.admin.enabled", "true");
             prop.setProperty("http.admin.port", "8761");

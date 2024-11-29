@@ -62,7 +62,7 @@ public class UseAdminServer {
         assertNull(server);
         credentials = new RawHttpClient.BasicAuthCredentials(DEFAULT_USERNAME, DEFAULT_PASSWORD);
         File serverRoot = tmpDir.getRoot(); // at every reboot we must keep the same directory
-        server = buildForTests("localhost", 0, parent -> new TestEndpointMapper("localhost", 0), serverRoot);
+        server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), serverRoot);
     }
 
     @After
