@@ -33,6 +33,7 @@ import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.util.Properties;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
+import junitparams.naming.TestCaseName;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
@@ -64,7 +65,7 @@ public class StuckRequestsTest {
 
     @Test
     @Parameters({"true", "false"})
-    @junitparams.naming.TestCaseName("test(backend unreachable on stuck request: {0})")
+    @TestCaseName("test(backend unreachable on stuck request: {0})")
     public void testBackendUnreachableOnStuckRequest(boolean backendsUnreachableOnStuckRequests) throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
