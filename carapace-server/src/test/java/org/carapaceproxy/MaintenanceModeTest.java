@@ -55,12 +55,12 @@ public class MaintenanceModeTest extends UseAdminServer {
         config.put("backend.1.id", "localhost");
         config.put("backend.1.enabled", "true");
         config.put("backend.1.host", "localhost");
-        config.put("backend.1.port", wireMockRule.port() + "");
+        config.put("backend.1.port", String.valueOf(wireMockRule.port()));
 
         config.put("backend.2.id", "localhost2");
         config.put("backend.2.enabled", "true");
         config.put("backend.2.host", "localhost2");
-        config.put("backend.2.port", wireMockRule.port() + "");
+        config.put("backend.2.port", String.valueOf(wireMockRule.port()));
 
         // Default director
         config.put("director.1.id", "*");
@@ -113,6 +113,7 @@ public class MaintenanceModeTest extends UseAdminServer {
                         .withBody("it <b>works</b> !!")));
 
         config = new Properties(HTTP_ADMIN_SERVER_CONFIG);
+        config.put("healthmanager.tolerant", "true");
         startServer(config);
 
         // Default certificate
@@ -131,12 +132,12 @@ public class MaintenanceModeTest extends UseAdminServer {
         config.put("backend.1.id", "localhost");
         config.put("backend.1.enabled", "true");
         config.put("backend.1.host", "localhost");
-        config.put("backend.1.port", wireMockRule.port() + "");
+        config.put("backend.1.port", String.valueOf(wireMockRule.port()));
 
         config.put("backend.2.id", "localhost2");
         config.put("backend.2.enabled", "true");
         config.put("backend.2.host", "localhost2");
-        config.put("backend.2.port", wireMockRule.port() + "");
+        config.put("backend.2.port", String.valueOf(wireMockRule.port()));
 
         // Default director
         config.put("director.1.id", "*");
@@ -162,7 +163,7 @@ public class MaintenanceModeTest extends UseAdminServer {
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         assertEquals("it <b>works</b> !!", response.body());
 
-        //ENABLE MAINTENANCE MODE VIA API
+        // ENABLE MAINTENANCE MODE VIA API
         HttpRequest enableMaintenanceRequest = HttpRequest.newBuilder()
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .uri(URI.create("http://localhost:" + DEFAULT_ADMIN_PORT + "/api/config/maintenance?enable=true"))
