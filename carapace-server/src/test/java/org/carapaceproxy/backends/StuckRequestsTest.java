@@ -23,7 +23,6 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.carapaceproxy.core.ProxyRequest.PROPERTY_URI;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -40,14 +39,8 @@ import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.ProxyRequestsManager;
 import org.carapaceproxy.server.backends.BackendHealthStatus;
 import org.carapaceproxy.server.config.ActionConfiguration;
-import org.carapaceproxy.server.config.BackendConfiguration;
-import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
-import org.carapaceproxy.server.config.RouteConfiguration;
-import org.carapaceproxy.server.config.SafeBackendSelector;
-import org.carapaceproxy.server.mapper.EndpointMapper;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
-import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.junit.Rule;
 import org.junit.Test;
@@ -87,21 +80,13 @@ public class StuckRequestsTest {
         final int theport = wireMockRule.port();
         EndpointKey key = new EndpointKey("localhost", theport);
 
-        final EndpointMapper.Factory mapperFactory = parent -> {
-            StandardEndpointMapper mapper = new StandardEndpointMapper(parent, SafeBackendSelector::new);
-            mapper.addBackend(new BackendConfiguration("backend-a", "localhost", theport, "/", -1));
-            mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
-            mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1));
-            mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index.html.*")));
-            return mapper;
-        };
-        try (HttpProxyServer server = new HttpProxyServer(mapperFactory, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
             Properties properties = new Properties();
             properties.put("healthmanager.tolerant", "true");
             properties.put("backend.1.id", "backend-a");
             properties.put("backend.1.enabled", "true");
             properties.put("backend.1.host", "localhost");
-            properties.put("backend.1.port", theport);
+            properties.put("backend.1.port", String.valueOf(theport));
             properties.put("backend.1.probePath", "/");
             properties.put("director.1.id", "director-1");
             properties.put("director.1.backends", properties.getProperty("backend.1.id"));
