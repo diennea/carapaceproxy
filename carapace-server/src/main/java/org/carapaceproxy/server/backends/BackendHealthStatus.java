@@ -20,9 +20,10 @@
 package org.carapaceproxy.server.backends;
 
 import java.sql.Timestamp;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.carapaceproxy.core.EndpointKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.carapaceproxy.core.EndpointKey;
 
 /**
  * Health of a backend
@@ -34,62 +35,133 @@ public class BackendHealthStatus {
     private static final Logger LOG = LoggerFactory.getLogger(BackendHealthStatus.class);
 
     private final EndpointKey hostPort;
+    private final AtomicInteger connections;
 
-    private volatile boolean reportedAsUnreachable;
-    private long reportedAsUnreachableTs;
+    private volatile Status status;
+    private volatile long unreachableSince;
+    private volatile long lastUnreachable;
+    private volatile long lastReachable;
+    private volatile BackendHealthCheck lastProbe;
+    private volatile long warmupPeriod;
 
-    private BackendHealthCheck lastProbe;
-
-    public BackendHealthStatus(final EndpointKey hostPort) {
+    public BackendHealthStatus(final EndpointKey hostPort, final long warmupPeriod) {
         this.hostPort = hostPort;
+        // we assume that the backend just become reachable when the status is created
+        this.status = Status.COLD;
+        this.unreachableSince = 0L;
+        final long created = System.currentTimeMillis();
+        this.lastUnreachable = created;
+        this.lastReachable = created;
+        this.connections = new AtomicInteger();
+        this.warmupPeriod = warmupPeriod;
+    }
+
+    public long getUnreachableSince() {
+        return unreachableSince;
+    }
+
+    public long getLastUnreachable() {
+        return lastUnreachable;
+    }
+
+    public long getLastReachable() {
+        return lastReachable;
     }
 
     public EndpointKey getHostPort() {
-        return hostPort;
+        return this.hostPort;
     }
 
     public BackendHealthCheck getLastProbe() {
-        return lastProbe;
+        return this.lastProbe;
     }
 
-    public void setLastProbe(BackendHealthCheck lastProbe) {
+    public void setLastProbe(final BackendHealthCheck lastProbe) {
         this.lastProbe = lastProbe;
     }
 
-    public boolean isReportedAsUnreachable() {
-        return reportedAsUnreachable;
+    public Status getStatus() {
+        return status;
     }
 
-    public void setReportedAsUnreachable(boolean reportedAsUnreachable) {
-        this.reportedAsUnreachable = reportedAsUnreachable;
-    }
-
-    public long getReportedAsUnreachableTs() {
-        return reportedAsUnreachableTs;
-    }
-
-    public void setReportedAsUnreachableTs(long reportedAsUnreachableTs) {
-        this.reportedAsUnreachableTs = reportedAsUnreachableTs;
-    }
-
-    void reportAsUnreachable(long timestamp, final String cause) {
+    public void reportAsUnreachable(final long timestamp, final String cause) {
         LOG.info("{}: reportAsUnreachable {}, cause {}", hostPort, new Timestamp(timestamp), cause);
-        reportedAsUnreachableTs = timestamp;
-        reportedAsUnreachable = true;
+        if (this.status != Status.DOWN) {
+            this.status = Status.DOWN;
+            this.unreachableSince = timestamp;
+        }
+        this.lastUnreachable = timestamp;
+        this.connections.set(0);
     }
 
-    void reportAsReachable() {
-        reportedAsUnreachable = false;
-        reportedAsUnreachableTs = 0;
-    }
-
-    public boolean isAvailable() {
-        return !reportedAsUnreachable;
+    public void reportAsReachable(final long timestamp) {
+        LOG.info("{}: reportAsUnreachable {}", hostPort, new Timestamp(timestamp));
+        switch (this.status) {
+            case DOWN:
+                this.status = Status.COLD;
+                this.unreachableSince = 0;
+                this.lastReachable = timestamp;
+                break;
+            case COLD:
+                this.lastReachable = timestamp;
+                if (this.lastReachable - this.lastUnreachable > this.warmupPeriod) {
+                    this.status = Status.STABLE;
+                }
+                break;
+            case STABLE:
+                this.lastReachable = timestamp;
+                break;
+        }
     }
 
     @Override
     public String toString() {
-        return "BackendHealthStatus{" + "hostPort=" + hostPort + ", reportedAsUnreachable=" + reportedAsUnreachable + ", reportedAsUnreachableTs=" + reportedAsUnreachableTs + '}';
+        return "BackendHealthStatus{"
+                + " hostPort=" + this.hostPort
+                + ", connections=" + this.connections
+                + ", status=" + this.status
+                + ", unreachableSince=" + this.unreachableSince
+                + ", unreachableUntil=" + this.lastUnreachable
+                + ", lastReachable=" + this.lastReachable
+                + ", lastProbe=" + this.lastProbe
+                + '}';
     }
 
+    public int getConnections() {
+        return this.connections.get();
+    }
+
+    public void incrementConnections() {
+        this.connections.incrementAndGet();
+    }
+
+    public void decrementConnections() {
+        if (this.connections.getAcquire() > 0) {
+            this.connections.decrementAndGet();
+        }
+    }
+
+    public void setWarmupPeriod(final long warmupPeriod) {
+        this.warmupPeriod = warmupPeriod;
+    }
+
+    /**
+     * The enum models a simple status of the backend.
+     */
+    public enum Status {
+        /**
+         * The backend is unreachable.
+         */
+        DOWN,
+        /**
+         * The backend is reachable, but not since long.
+         * When in this safe, it is reasonable to assume that it is still warming-up,
+         * so it would be a sensible decision not to overload it with requests.
+         */
+        COLD,
+        /**
+         * The backend is reachable and was so since a reasonably-long time.
+         */
+        STABLE
+    }
 }

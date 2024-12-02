@@ -44,7 +44,11 @@ import org.carapaceproxy.server.config.RouteConfiguration;
  */
 public abstract class EndpointMapper {
 
-    private HttpProxyServer parent;
+    private final HttpProxyServer parent;
+
+    protected EndpointMapper(final HttpProxyServer parent) {
+        this.parent = parent;
+    }
 
     /**
      * Get the pool of {@link BackendConfiguration backends} to choose from.
@@ -71,9 +75,9 @@ public abstract class EndpointMapper {
     /**
      * Get all the configured {@link DirectorConfiguration directors} for the {@link BackendConfiguration backends}.
      *
-     * @return a list of directors, sorted according to configuration order
+     * @return a map of directors, sorted according to configuration order
      */
-    public abstract List<DirectorConfiguration> getDirectors();
+    public abstract SequencedMap<String, DirectorConfiguration> getDirectors();
 
     /**
      * Get all the {@link CustomHeader custom headers} that can be applied to the requests.
@@ -86,7 +90,8 @@ public abstract class EndpointMapper {
      * Process a request for a {@link ProxyRequestsManager}.
      * <p>
      * According to the incoming request and the underlying configuration,
-     * it computes an {@link MapResult#getAction() action} to execute on a specific {@link MapResult#routeId route}.
+     * it computes an {@link MapResult#getAction() action}
+     * to execute on a specific {@link MapResult#getRouteId() route}.
      *
      * @param request the request of a resource to be proxied
      * @return the result of the mapping process
@@ -116,16 +121,12 @@ public abstract class EndpointMapper {
 
     public abstract void configure(ConfigurationStore properties) throws ConfigurationNotValidException;
 
-    public final void setParent(final HttpProxyServer parent) {
-        this.parent = parent;
-    }
-
     protected final DynamicCertificatesManager getDynamicCertificatesManager() {
         Objects.requireNonNull(parent);
         return parent.getDynamicCertificatesManager();
     }
 
-    protected final BackendHealthManager getBackendHealthManager() {
+    public final BackendHealthManager getBackendHealthManager() {
         Objects.requireNonNull(parent);
         return parent.getBackendHealthManager();
     }
@@ -133,5 +134,11 @@ public abstract class EndpointMapper {
     protected final RuntimeServerConfiguration getCurrentConfiguration() {
         Objects.requireNonNull(parent);
         return parent.getCurrentConfiguration();
+    }
+
+    @FunctionalInterface
+    public interface Factory {
+
+        EndpointMapper build(HttpProxyServer httpProxyServer) throws ConfigurationNotValidException;
     }
 }

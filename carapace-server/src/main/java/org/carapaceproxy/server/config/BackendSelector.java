@@ -20,6 +20,7 @@
 package org.carapaceproxy.server.config;
 
 import java.util.List;
+import org.carapaceproxy.server.mapper.EndpointMapper;
 
 /**
  * Chooses the backend which can serve the request
@@ -27,4 +28,13 @@ import java.util.List;
 public interface BackendSelector {
 
     List<String> selectBackends(String userId, String sessionId, String director);
+
+    /**
+     * Functional interface that models a factory for selectors given the mapper they should be applied to.
+     */
+    @FunctionalInterface
+    interface SelectorFactory {
+
+        BackendSelector build(EndpointMapper endpointMapper);
+    }
 }

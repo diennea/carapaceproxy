@@ -23,26 +23,24 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.carapaceproxy.core.ProxyRequest.PROPERTY_URI;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.util.Properties;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
-import org.carapaceproxy.core.EndpointKey;
+import junitparams.naming.TestCaseName;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
+import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.ProxyRequestsManager;
+import org.carapaceproxy.server.backends.BackendHealthStatus;
 import org.carapaceproxy.server.config.ActionConfiguration;
-import org.carapaceproxy.server.config.BackendConfiguration;
-import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
-import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
-import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.junit.Rule;
 import org.junit.Test;
@@ -60,6 +58,7 @@ public class StuckRequestsTest {
 
     @Test
     @Parameters({"true", "false"})
+    @TestCaseName("test(backend unreachable on stuck request: {0})")
     public void testBackendUnreachableOnStuckRequest(boolean backendsUnreachableOnStuckRequests) throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
@@ -81,20 +80,31 @@ public class StuckRequestsTest {
         final int theport = wireMockRule.port();
         EndpointKey key = new EndpointKey("localhost", theport);
 
-        StandardEndpointMapper mapper = new StandardEndpointMapper();
-        mapper.addBackend(new BackendConfiguration("backend-a", "localhost", theport, "/"));
-        mapper.addDirector(new DirectorConfiguration("director-1").addBackend("backend-a"));
-        mapper.addAction(new ActionConfiguration("proxy-1", ActionConfiguration.TYPE_PROXY, "director-1", null, -1));
-        mapper.addRoute(new RouteConfiguration("route-1", "proxy-1", true, new RegexpRequestMatcher(PROPERTY_URI, ".*index.html.*")));
-
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
             Properties properties = new Properties();
+            properties.put("healthmanager.tolerant", "true");
+            properties.put("backend.1.id", "backend-a");
+            properties.put("backend.1.enabled", "true");
+            properties.put("backend.1.host", "localhost");
+            properties.put("backend.1.port", String.valueOf(theport));
+            properties.put("backend.1.probePath", "/");
+            properties.put("director.1.id", "director-1");
+            properties.put("director.1.backends", properties.getProperty("backend.1.id"));
+            properties.put("director.1.enabled", "true");
+            properties.put("action.1.id", "proxy-1");
+            properties.put("action.1.enabled", "true");
+            properties.put("action.1.type", ActionConfiguration.TYPE_PROXY);
+            properties.put("action.1.director", properties.getProperty("director.1.id"));
+            properties.put("route.100.id", "route-1");
+            properties.put("route.100.enabled", "true");
+            properties.put("route.100.match", "request.uri ~ \".*index.html.*\"");
+            properties.put("route.100.action", properties.getProperty("action.1.id"));
+
             properties.put("connectionsmanager.stuckrequesttimeout", "100"); // ms
             properties.put("connectionsmanager.backendsunreachableonstuckrequests", backendsUnreachableOnStuckRequests + "");
             // configure resets all listeners configurations
             server.configureAtBoot(new PropertiesConfigurationStore(properties));
             server.addListener(new NetworkListenerConfiguration("localhost", 0));
-            server.setMapper(mapper);
             assertEquals(100, server.getCurrentConfiguration().getStuckRequestTimeout());
             assertEquals(backendsUnreachableOnStuckRequests, server.getCurrentConfiguration().isBackendsUnreachableOnStuckRequests());
             server.start();
@@ -118,7 +128,10 @@ public class StuckRequestsTest {
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
             assertThat((int) ProxyRequestsManager.STUCK_REQUESTS_COUNTER.get() > 0, is(true));
 
-            assertEquals(backendsUnreachableOnStuckRequests, !server.getBackendHealthManager().isAvailable(key));
+            final BackendHealthStatus.Status expected = backendsUnreachableOnStuckRequests
+                    ? BackendHealthStatus.Status.DOWN
+                    : BackendHealthStatus.Status.COLD;
+            assertSame(expected, server.getBackendHealthManager().getBackendStatus(key).getStatus());
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /good-index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");

@@ -20,8 +20,13 @@
 package org.carapaceproxy.server.mapper;
 
 import java.util.List;
+import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Setter;
+import lombok.ToString;
+import org.carapaceproxy.server.backends.BackendHealthStatus;
 
 @Data
 @Builder
@@ -78,7 +83,6 @@ public class MapResult {
     public static final String REDIRECT_PROTO_HTTPS = "https";
     public static final String REDIRECT_PROTO_HTTP = "http";
 
-    // todo we don't actually want to have these nullable: probably we should have different classes for each case
     private String host;
     private int port;
     private Action action;
@@ -89,6 +93,11 @@ public class MapResult {
     private String redirectLocation;
     private String redirectProto;
     private String redirectPath;
+
+    @Setter(AccessLevel.NONE)
+    @EqualsAndHashCode.Exclude
+    @ToString.Exclude
+    private BackendHealthStatus healthStatus;
 
     public static MapResult notFound(String routeId) {
         return MapResult.builder()

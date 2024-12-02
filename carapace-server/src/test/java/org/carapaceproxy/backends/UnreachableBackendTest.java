@@ -23,20 +23,22 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.carapaceproxy.server.backends.BackendHealthStatus.Status.COLD;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import java.util.Arrays;
-import java.util.Collection;
+import java.util.List;
 import java.util.Properties;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.ProxyRequestsManager;
+import org.carapaceproxy.server.backends.BackendHealthStatus;
+import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
@@ -50,15 +52,9 @@ import org.junit.runners.Parameterized.Parameters;
 @RunWith(Parameterized.class)
 public class UnreachableBackendTest {
 
-    @Parameters
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][]{
-            {true /*
-             * useCache = true
-             */}, {false /*
-             * useCache = false
-             */}
-        });
+    @Parameters(name = "useCache = {0}")
+    public static Iterable<Boolean> data() {
+        return List.of(true, false);
     }
 
     @Rule
@@ -67,7 +63,7 @@ public class UnreachableBackendTest {
     @Rule
     public TemporaryFolder tmpDir = new TemporaryFolder();
 
-    private boolean useCache = false;
+    private final boolean useCache;
 
     public UnreachableBackendTest(boolean useCache) {
         this.useCache = useCache;
@@ -104,7 +100,7 @@ public class UnreachableBackendTest {
                         </html>
                         """, resp.getBodyString());
             }
-            assertFalse(server.getBackendHealthManager().isAvailable(key));
+            assertSame(BackendHealthStatus.Status.DOWN, server.getBackendHealthManager().getBackendStatus(key).getStatus());
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
@@ -120,12 +116,29 @@ public class UnreachableBackendTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.newFolder())) {
             Properties properties = new Properties();
+            properties.put("healthmanager.tolerant", "true");
+            properties.put("backend.1.id", "backend-a");
+            properties.put("backend.1.enabled", "true");
+            properties.put("backend.1.host", "localhost");
+            properties.put("backend.1.port", String.valueOf(wireMockRule.port()));
+            properties.put("backend.1.probePath", "/");
+            properties.put("director.1.id", "director-1");
+            properties.put("director.1.backends", properties.getProperty("backend.1.id"));
+            properties.put("director.1.enabled", "true");
+            properties.put("action.1.id", "proxy-1");
+            properties.put("action.1.enabled", "true");
+            properties.put("action.1.type", ActionConfiguration.TYPE_PROXY);
+            properties.put("action.1.director", properties.getProperty("director.1.id"));
+            properties.put("route.100.id", "route-1");
+            properties.put("route.100.enabled", "true");
+            properties.put("route.100.match", "request.uri ~ \".*index.html.*\"");
+            properties.put("route.100.action", properties.getProperty("action.1.id"));
+            properties.put("healthmanager.tolerant", "true");
             // configure resets all listeners configurations
             server.configureAtBoot(new PropertiesConfigurationStore(properties));
             server.addListener(new NetworkListenerConfiguration("localhost", 0));
-            server.setMapper(mapper);
             server.start();
             int port = server.getLocalPort();
             assertTrue(port > 0);
@@ -142,7 +155,7 @@ public class UnreachableBackendTest {
                         </html>
                         """, resp.getBodyString());
             }
-            assertTrue(server.getBackendHealthManager().isAvailable(key)); // no troubles for new connections
+            assertSame(COLD, server.getBackendHealthManager().getBackendStatus(key).getStatus()); // no troubles for new connections
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
@@ -174,7 +187,7 @@ public class UnreachableBackendTest {
                         </html>
                         """, resp.getBodyString());
             }
-            assertTrue(server.getBackendHealthManager().isAvailable(key)); // no troubles for new connections
+            assertSame(COLD, server.getBackendHealthManager().getBackendStatus(key).getStatus()); // no troubles for new connections
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
@@ -189,11 +202,28 @@ public class UnreachableBackendTest {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.newFolder())) {
             Properties properties = new Properties();
+            properties.put("healthmanager.tolerant", "true");
+            properties.put("backend.1.id", "backend-a");
+            properties.put("backend.1.enabled", "true");
+            properties.put("backend.1.host", "localhost");
+            properties.put("backend.1.port", String.valueOf(wireMockRule.port()));
+            properties.put("backend.1.probePath", "/");
+            properties.put("director.1.id", "director-1");
+            properties.put("director.1.backends", properties.getProperty("backend.1.id"));
+            properties.put("director.1.enabled", "true");
+            properties.put("action.1.id", "proxy-1");
+            properties.put("action.1.enabled", "true");
+            properties.put("action.1.type", ActionConfiguration.TYPE_PROXY);
+            properties.put("action.1.director", properties.getProperty("director.1.id"));
+            properties.put("route.100.id", "route-1");
+            properties.put("route.100.enabled", "true");
+            properties.put("route.100.match", "request.uri ~ \".*index.html.*\"");
+            properties.put("route.100.action", properties.getProperty("action.1.id"));
+            properties.put("healthmanager.tolerant", "true");
             server.configureAtBoot(new PropertiesConfigurationStore(properties));
             server.addListener(new NetworkListenerConfiguration("localhost", 0));
-            server.setMapper(mapper);
             server.start();
             int port = server.getLocalPort();
 
@@ -210,7 +240,7 @@ public class UnreachableBackendTest {
                         </html>
                         """, resp.getBodyString());
             }
-            assertTrue(server.getBackendHealthManager().isAvailable(key));
+            assertSame(COLD, server.getBackendHealthManager().getBackendStatus(key).getStatus());
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }

@@ -203,7 +203,7 @@ public class HttpProxyServer implements AutoCloseable {
      */
     private final ReentrantLock configurationLock = new ReentrantLock();
 
-    private Server adminserver;
+    private Server adminServer;
     private String adminAccessLogPath = "admin.access.log";
     private String adminAccessLogTimezone = "GMT";
     private int adminLogRetentionDays = 90;
@@ -226,31 +226,35 @@ public class HttpProxyServer implements AutoCloseable {
     @Getter
     private int listenersOffsetPort = 0;
 
-    public static HttpProxyServer buildForTests(String host, int port, EndpointMapper mapper, File baseDir) throws ConfigurationNotValidException {
-        HttpProxyServer res = new HttpProxyServer(mapper, baseDir.getAbsoluteFile());
-        res.currentConfiguration.addListener(new NetworkListenerConfiguration(host, port));
-        res.proxyRequestsManager.reloadConfiguration(res.currentConfiguration, mapper.getBackends().values());
-
-        return res;
+    @VisibleForTesting
+    public static HttpProxyServer buildForTests(
+            final String host,
+            final int port,
+            final EndpointMapper.Factory mapperFactory,
+            final File baseDir
+    ) throws ConfigurationNotValidException {
+        final HttpProxyServer server = new HttpProxyServer(mapperFactory, baseDir.getAbsoluteFile());
+        final EndpointMapper mapper = server.getMapper();
+        server.currentConfiguration.addListener(new NetworkListenerConfiguration(host, port));
+        server.proxyRequestsManager.reloadConfiguration(server.currentConfiguration, mapper.getBackends().values());
+        return server;
     }
 
-    public HttpProxyServer(EndpointMapper mapper, File basePath) {
+    public HttpProxyServer(final EndpointMapper.Factory mapperFactory, File basePath) throws ConfigurationNotValidException {
         // metrics
-        statsProvider = new PrometheusMetricsProvider();
-        mainLogger = statsProvider.getStatsLogger("");
-        prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
-        prometheusRegistry.config().meterFilter(new PrometheusRenameFilter());
-        Metrics.globalRegistry.add(prometheusRegistry);
+        this.statsProvider = new PrometheusMetricsProvider();
+        this.mainLogger = this.statsProvider.getStatsLogger("");
+        this.prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+        this.prometheusRegistry.config().meterFilter(new PrometheusRenameFilter());
+        Metrics.globalRegistry.add(this.prometheusRegistry);
         Metrics.globalRegistry.config()
                 .meterFilter(MeterFilter.denyNameStartsWith(("reactor.netty.http.server.data"))) // spam
                 .meterFilter(MeterFilter.denyNameStartsWith(("reactor.netty.http.server.response"))) // spam
                 .meterFilter(MeterFilter.denyNameStartsWith(("reactor.netty.http.server.errors"))); // spam
 
-        this.mapper = mapper;
         this.basePath = basePath;
         this.filters = new ArrayList<>();
         this.currentConfiguration = new RuntimeServerConfiguration();
-        this.backendHealthManager = new BackendHealthManager(currentConfiguration, mapper);
         this.listeners = new Listeners(this);
         this.cache = new ContentsCache(currentConfiguration);
         this.requestsLogger = new RequestsLogger(currentConfiguration);
@@ -258,16 +262,16 @@ public class HttpProxyServer implements AutoCloseable {
         this.trustStoreManager = new TrustStoreManager(currentConfiguration, this);
         this.ocspStaplingManager = new OcspStaplingManager(trustStoreManager);
         this.proxyRequestsManager = new ProxyRequestsManager(this);
-        if (mapper != null) {
-            mapper.setParent(this);
-            this.proxyRequestsManager.reloadConfiguration(currentConfiguration, mapper.getBackends().values());
-        }
+        this.mapper = mapperFactory.build(this);
+        this.backendHealthManager = new BackendHealthManager(currentConfiguration, this.mapper);
+        this.proxyRequestsManager.reloadConfiguration(currentConfiguration, this.mapper.getBackends().values());
 
         this.usePooledByteBufAllocator = Boolean.getBoolean("cache.allocator.usepooledbytebufallocator");
         this.cachePoolAllocator = usePooledByteBufAllocator
-                ? new PooledByteBufAllocator(true) : new UnpooledByteBufAllocator(true);
+                ? new PooledByteBufAllocator(true)
+                : new UnpooledByteBufAllocator(true);
         this.cacheByteBufMemoryUsageMetric = new CacheByteBufMemoryUsageMetric(this);
-        //Best practice is to reuse EventLoopGroup
+        // Best practice is to reuse EventLoopGroup
         // http://normanmaurer.me/presentations/2014-facebook-eng-netty/slides.html#25.0
         this.eventLoopGroup = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
     }
@@ -283,13 +287,6 @@ public class HttpProxyServer implements AutoCloseable {
         return listeners.getLocalPort();
     }
 
-    @VisibleForTesting
-    public void setMapper(EndpointMapper mapper) {
-        Objects.requireNonNull(mapper);
-        mapper.setParent(this);
-        this.mapper = mapper;
-    }
-
     public void startAdminInterface() throws Exception {
         if (!adminServerEnabled) {
             return;
@@ -299,17 +296,17 @@ public class HttpProxyServer implements AutoCloseable {
             throw new RuntimeException("To enable admin interface at least one between http and https port must be set");
         }
 
-        adminserver = new Server();
+        adminServer = new Server();
 
         ServerConnector httpConnector = null;
         if (adminServerHttpPort >= 0) {
             LOG.info("Starting Admin UI over HTTP");
 
-            httpConnector = new ServerConnector(adminserver);
+            httpConnector = new ServerConnector(adminServer);
             httpConnector.setPort(adminServerHttpPort);
             httpConnector.setHost(adminServerHost);
 
-            adminserver.addConnector(httpConnector);
+            adminServer.addConnector(httpConnector);
         }
 
         ServerConnector httpsConnector = null;
@@ -333,17 +330,17 @@ public class HttpProxyServer implements AutoCloseable {
             https.setSecurePort(adminServerHttpsPort);
             https.addCustomizer(new SecureRequestCustomizer());
 
-            httpsConnector = new ServerConnector(adminserver,
+            httpsConnector = new ServerConnector(adminServer,
                     new SslConnectionFactory(sslContextFactory, "http/1.1"),
                     new HttpConnectionFactory(https));
             httpsConnector.setPort(adminServerHttpsPort);
             httpsConnector.setHost(adminServerHost);
 
-            adminserver.addConnector(httpsConnector);
+            adminServer.addConnector(httpsConnector);
         }
 
         ContextHandlerCollection contexts = new ContextHandlerCollection();
-        adminserver.setHandler(constrainTraceMethod(contexts));
+        adminServer.setHandler(constrainTraceMethod(contexts));
 
         File webUi = new File(basePath, "web/ui");
         if (webUi.isDirectory()) {
@@ -379,7 +376,7 @@ public class HttpProxyServer implements AutoCloseable {
 
         contexts.addHandler(requestLogHandler);
 
-        adminserver.start();
+        adminServer.start();
 
         LOG.info("Admin UI started");
 
@@ -472,13 +469,13 @@ public class HttpProxyServer implements AutoCloseable {
         ocspStaplingManager.stop();
         cacheByteBufMemoryUsageMetric.stop();
 
-        if (adminserver != null) {
+        if (adminServer != null) {
             try {
-                adminserver.stop();
+                adminServer.stop();
             } catch (Exception err) {
                 LOG.error("Error while stopping admin server", err);
             } finally {
-                adminserver = null;
+                adminServer = null;
             }
         }
         statsProvider.stop();
@@ -496,21 +493,20 @@ public class HttpProxyServer implements AutoCloseable {
         staticContentsManager.close();
 
         if (dynamicConfigurationStore != null) {
-            // this will also shutdown embedded database
+            // this will also shut down embedded database
             dynamicConfigurationStore.close();
         }
     }
 
-    private static EndpointMapper buildMapper(String className, ConfigurationStore properties) throws ConfigurationNotValidException {
+    private static EndpointMapper buildMapper(final String className, final HttpProxyServer parent, final ConfigurationStore properties) throws ConfigurationNotValidException {
         try {
-            EndpointMapper res = (EndpointMapper) Class.forName(className).getConstructor().newInstance();
+            final Class<? extends EndpointMapper> mapperClass = Class.forName(className).asSubclass(EndpointMapper.class);
+            final EndpointMapper res = mapperClass.getConstructor(HttpProxyServer.class).newInstance(parent);
             res.configure(properties);
             return res;
-        } catch (ClassNotFoundException err) {
+        } catch (final ClassNotFoundException | ClassCastException | NoSuchMethodException err) {
             throw new ConfigurationNotValidException(err);
-        } catch (IllegalAccessException | IllegalArgumentException
-                | InstantiationException | NoSuchMethodException
-                | SecurityException | InvocationTargetException err) {
+        } catch (final IllegalAccessException | IllegalArgumentException | InstantiationException | SecurityException | InvocationTargetException err) {
             throw new RuntimeException(err);
         }
     }
@@ -654,7 +650,7 @@ public class HttpProxyServer implements AutoCloseable {
 
         // Try to perform a service configuration from the passed store.
         newConfiguration.configure(simpleStore);
-        buildMapper(newConfiguration.getMapperClassname(), simpleStore);
+        buildMapper(newConfiguration.getMapperClassname(), this, simpleStore);
         buildRealm(userRealmClassname, simpleStore);
 
         return newConfiguration;
@@ -747,8 +743,7 @@ public class HttpProxyServer implements AutoCloseable {
         }
         try {
             RuntimeServerConfiguration newConfiguration = buildValidConfiguration(storeWithConfig);
-            EndpointMapper newMapper = buildMapper(newConfiguration.getMapperClassname(), storeWithConfig);
-            newMapper.setParent(this);
+            EndpointMapper newMapper = buildMapper(newConfiguration.getMapperClassname(), this, storeWithConfig);
             UserRealm newRealm = buildRealm(userRealmClassname, storeWithConfig);
 
             this.filters = buildFilters(newConfiguration);
@@ -876,7 +871,8 @@ public class HttpProxyServer implements AutoCloseable {
             if (!metric.getName().startsWith(CONNECTION_PROVIDER_PREFIX)) {
                 return;
             }
-            EndpointKey key = EndpointKey.make(metric.getTag(REMOTE_ADDRESS));
+            final String remoteAddress = Objects.requireNonNull(metric.getTag(REMOTE_ADDRESS));
+            EndpointKey key = EndpointKey.make(remoteAddress);
             Map<String, ConnectionPoolStats> pools = res.computeIfAbsent(key, k -> new HashMap<>());
             String poolName = metric.getTag(NAME);
             ConnectionPoolStats stats = pools.computeIfAbsent(poolName, k -> new ConnectionPoolStats());
