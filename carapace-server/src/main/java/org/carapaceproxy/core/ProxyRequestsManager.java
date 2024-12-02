@@ -37,6 +37,7 @@ import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.timeout.ReadTimeoutException;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
@@ -437,8 +438,25 @@ public class ProxyRequestsManager {
         return forwarder.request(request.getMethod())
                 .uri(request.getUri())
                 .send((req, out) -> {
-                    // client request headers
-                    req.headers(request.getRequestHeaders().copy());
+                    // we don't want to upgrade to HTTP/2 if Carapace supports it, but the backend doesn't
+                    final HttpHeaders copy = request.getRequestHeaders().copy();
+                    if (copy.contains(HttpHeaderNames.UPGRADE)) {
+                        final List<String> upgrade = copy.getAll(HttpHeaderNames.UPGRADE);
+                        if (upgrade.contains("HTTP/2")) {
+                            // we drop connection and upgrade only if the target upgrade is HTTP/2.0;
+                            // else, we want to preserve upgrades to HTTPS or similar
+                            final List<String> connection = copy.getAll(HttpHeaderNames.CONNECTION);
+                            connection.removeIf("upgrade"::equalsIgnoreCase);
+                            copy.remove(HttpHeaderNames.CONNECTION);
+                            copy.add(HttpHeaderNames.CONNECTION, connection);
+
+                            upgrade.remove("HTTP/2");
+                            copy.remove(HttpHeaderNames.UPGRADE);
+                            copy.add(HttpHeaderNames.UPGRADE, upgrade);
+                        }
+                    }
+                    copy.remove(Http2CodecUtil.HTTP_UPGRADE_SETTINGS_HEADER);
+                    req.headers(copy);
                     // netty overrides the value, we need to force it
                     req.header(HttpHeaderNames.HOST, request.getRequestHeaders().get(HttpHeaderNames.HOST));
                     return out.send(request.getRequestData()); // client request body
