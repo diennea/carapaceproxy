@@ -160,11 +160,6 @@ public class NetworkListenerConfiguration {
     }
 
     public static Set<String> getDefaultHttpProtocols(final boolean ssl) {
-        // return Set.of(HTTP11.name(), (ssl ? H2 : H2C).name());
-        if (ssl) {
-            // todo: until #410 is done, we will allow HTTP/2 only in clear-text
-            return Set.of(HTTP11.name());
-        }
-        return Set.of(HTTP11.name(), H2C.name());
+        return Set.of(HTTP11.name(), (ssl ? H2 : H2C).name());
     }
 }

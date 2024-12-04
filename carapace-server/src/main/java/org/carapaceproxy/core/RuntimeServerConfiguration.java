@@ -43,6 +43,7 @@ import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -78,7 +79,7 @@ public class RuntimeServerConfiguration {
     private static final int DEFAULT_PROBE_PERIOD = 0;
     public static final long DEFAULT_WARMUP_PERIOD = Duration.ofSeconds(30).toMillis();
 
-    private final List<NetworkListenerConfiguration> listeners = new ArrayList<>();
+    private final Map<EndpointKey, NetworkListenerConfiguration> listeners = new LinkedHashMap<>();
     private final Map<String, SSLCertificateConfiguration> certificates = new HashMap<>();
     private final List<RequestFilterConfiguration> requestFilters = new ArrayList<>();
     private final Map<String, ConnectionPoolConfiguration> connectionPools = new HashMap<>();
@@ -471,7 +472,7 @@ public class RuntimeServerConfiguration {
                 throw new ConfigurationNotValidException(ex);
             }
         }
-        listeners.add(listener);
+        listeners.put(listener.getKey(), listener);
     }
 
     public void addCertificate(SSLCertificateConfiguration certificate) throws ConfigurationNotValidException {
@@ -486,7 +487,7 @@ public class RuntimeServerConfiguration {
     }
 
     public List<NetworkListenerConfiguration> getListeners() {
-        return listeners;
+        return List.copyOf(listeners.values());
     }
 
     public Map<String, SSLCertificateConfiguration> getCertificates() {
@@ -497,11 +498,7 @@ public class RuntimeServerConfiguration {
         return requestFilters;
     }
 
-    NetworkListenerConfiguration getListener(EndpointKey hostPort) {
-        return listeners
-                .stream()
-                .filter(s -> s.getHost().equalsIgnoreCase(hostPort.host()) && s.getPort() == hostPort.port())
-                .findFirst()
-                .orElse(null);
+    NetworkListenerConfiguration getListener(final EndpointKey hostPort) {
+        return listeners.getOrDefault(hostPort, null);
     }
 }

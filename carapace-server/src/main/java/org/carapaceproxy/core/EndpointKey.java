@@ -64,4 +64,8 @@ public record EndpointKey(String host, int port) {
     public String toString() {
         return host + ":" + port;
     }
+
+    public EndpointKey offsetPort(final int offsetPort) {
+        return make(host(), port() + offsetPort);
+    }
 }

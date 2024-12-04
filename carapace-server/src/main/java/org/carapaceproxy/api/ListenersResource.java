@@ -27,9 +27,7 @@ import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import lombok.Data;
-import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 
 /**
  * Access to listeners
@@ -58,23 +56,22 @@ public class ListenersResource {
 
     @GET
     public Map<String, ListenerBean> getAllListeners() {
-        HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
-
-        return server.getListeners().getListeningChannels().entrySet().stream().map(listener -> {
-            NetworkListenerConfiguration config = listener.getValue().getConfig();
-            int port = listener.getKey().port();
-            ListenerBean bean = new ListenerBean(
-                    config.getHost(),
-                    port,
-                    config.isSsl(),
-                    config.getSslCiphers(),
-                    config.getSslProtocols(),
-                    config.getDefaultCertificate(),
-                    (int) listener.getValue().getTotalRequests().get()
-            );
-            EndpointKey endpointKey = EndpointKey.make(config.getHost(), port);
-            return Map.entry(endpointKey.toString(), bean);
-        }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        final HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
+        return server.getListeners()
+                .getListeningChannels()
+                .values()
+                .stream()
+                .collect(Collectors.toMap(
+                        channel -> channel.getHostPort().toString(),
+                        channel -> new ListenerBean(
+                                channel.getHostPort().host(),
+                                channel.getHostPort().port(),
+                                channel.getConfig().isSsl(),
+                                channel.getConfig().getSslCiphers(),
+                                channel.getConfig().getSslProtocols(),
+                                channel.getConfig().getDefaultCertificate(),
+                                (int) channel.getTotalRequests().get()
+                        )));
     }
 
 }
