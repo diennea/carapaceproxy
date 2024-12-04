@@ -8,7 +8,7 @@ import java.util.Properties;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.core.Listeners;
+import org.carapaceproxy.core.ListeningChannel;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import org.junit.Rule;
@@ -37,7 +37,7 @@ public class ListenerConfigurationTest {
             EndpointKey listenerKey = new EndpointKey("localhost", 8080);
 
             {
-                Map<EndpointKey, Listeners.ListeningChannel> listeners = server.getListeners().getListeningChannels();
+                Map<EndpointKey, ListeningChannel> listeners = server.getListeners().getListeningChannels();
 
                 //check default configuration
                 assertTrue(listeners.get(listenerKey).getConfig().isKeepAlive());
@@ -57,7 +57,7 @@ public class ListenerConfigurationTest {
 
                 reloadConfiguration(configuration, server);
 
-                Map<EndpointKey, Listeners.ListeningChannel> listeners = server.getListeners().getListeningChannels();
+                Map<EndpointKey, ListeningChannel> listeners = server.getListeners().getListeningChannels();
 
                 assertEquals(1, listeners.size());
                 assertFalse(listeners.get(listenerKey).getConfig().isKeepAlive());
@@ -78,7 +78,7 @@ public class ListenerConfigurationTest {
                 configuration.put("listener.1.enabled", "true");
                 reloadConfiguration(configuration, server);
 
-                Map<EndpointKey, Listeners.ListeningChannel> listeners = server.getListeners().getListeningChannels();
+                Map<EndpointKey, ListeningChannel> listeners = server.getListeners().getListeningChannels();
 
                 assertTrue(listeners.get(listenerKey).getConfig().isKeepAlive());
                 assertEquals(10, listeners.get(listenerKey).getConfig().getSoBacklog());
