@@ -21,7 +21,6 @@ package org.carapaceproxy.server.certificates.ocsp;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.netty.handler.ssl.OpenSsl;
-
 import java.io.IOException;
 import java.math.BigInteger;
 import java.net.URI;
