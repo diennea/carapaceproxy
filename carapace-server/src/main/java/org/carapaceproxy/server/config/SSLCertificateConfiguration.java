@@ -38,7 +38,7 @@ import org.carapaceproxy.utils.CertificatesUtils;
 @Data
 public class SSLCertificateConfiguration {
 
-    public static enum CertificateMode {
+    public enum CertificateMode {
         STATIC, ACME, MANUAL
     }
 
