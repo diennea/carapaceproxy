@@ -73,7 +73,7 @@ public class CacheByteBufMemoryUsageMetric implements Runnable {
 
     @Override
     public void run() {
-        if(parent.getCachePoolAllocator() instanceof PooledByteBufAllocator) {
+        if (parent.getCachePoolAllocator() instanceof PooledByteBufAllocator) {
             CACHE_POOLED_BYTEBUF_ALLOCATOR.set(((PooledByteBufAllocator) parent.getCachePoolAllocator()).metric().usedDirectMemory());
         } else {
             CACHE_UNPOOLED_BYTEBUF_ALLOCATOR.set(((UnpooledByteBufAllocator) parent.getCachePoolAllocator()).metric().usedDirectMemory());

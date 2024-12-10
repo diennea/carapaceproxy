@@ -12,6 +12,8 @@ import static org.carapaceproxy.server.config.SSLCertificateConfiguration.Certif
 import static org.junit.Assert.assertTrue;
 import static reactor.netty.http.HttpProtocol.HTTP11;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import io.netty.channel.group.DefaultChannelGroup;
+import io.netty.util.concurrent.DefaultEventExecutor;
 import java.util.Collections;
 import java.util.Set;
 import org.carapaceproxy.core.EndpointKey;
@@ -59,7 +61,7 @@ public class XTlsCipherFilterTest {
             server.addRequestFilter(new RequestFilterConfiguration(XTlsCipherRequestFilter.TYPE, Collections.emptyMap()));
             server.addRequestFilter(new RequestFilterConfiguration(XTlsProtocolRequestFilter.TYPE, Collections.emptyMap()));
             server.addListener(new NetworkListenerConfiguration("0.0.0.0", 0, true, null, "*", Set.of("TLSv1.2"),
-                    128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11.name())));
+                    128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11), new DefaultChannelGroup(new DefaultEventExecutor())));
             server.start();
             int port = server.getLocalPort();
 
@@ -74,7 +76,7 @@ public class XTlsCipherFilterTest {
             server.addCertificate(new SSLCertificateConfiguration("*", null, certificate, "testproxy", STATIC));
             server.addRequestFilter(new RequestFilterConfiguration(XTlsProtocolRequestFilter.TYPE, Collections.emptyMap()));
             server.addListener(new NetworkListenerConfiguration("0.0.0.0", 0, true, null, "*", Set.of("TLSv1.2"),
-                    128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11.name())));
+                    128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11), new DefaultChannelGroup(new DefaultEventExecutor())));
             server.start();
             int port = server.getLocalPort();
 
