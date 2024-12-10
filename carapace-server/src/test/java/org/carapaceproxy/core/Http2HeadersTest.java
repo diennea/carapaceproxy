@@ -51,6 +51,7 @@ public class Http2HeadersTest {
                         .withBody("it <b>works</b> !!"))
         );
         final var mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        final HttpClientResponse response;
         try (final var server = new HttpProxyServer(mapper, tmpDir.newFolder())) {
             server.addListener(new NetworkListenerConfiguration(
                     "localhost",
@@ -72,7 +73,7 @@ public class Http2HeadersTest {
 
             server.start();
             final var port = server.getLocalPort();
-            final HttpClientResponse response = HttpClient.create()
+            response = HttpClient.create()
                     .protocol(HttpProtocol.H2C, HttpProtocol.HTTP11)
                     .headers(headers -> headers
                             .add(HttpHeaderNames.CONNECTION, "keep-alive")
@@ -83,9 +84,9 @@ public class Http2HeadersTest {
                     .uri("http://localhost:" + port + "/index.html")
                     .response()
                     .block();
-            assertThat(response, is(notNullValue()));
-            assertThat(response.status(), is(HttpResponseStatus.OK));
-            assertThat(response.version(), is(HttpVersion.HTTP_1_1));
         }
+        assertThat(response, is(notNullValue()));
+        assertThat(response.status(), is(HttpResponseStatus.OK));
+        assertThat(response.version(), is(HttpVersion.valueOf("HTTP/2.0")));
     }
 }
