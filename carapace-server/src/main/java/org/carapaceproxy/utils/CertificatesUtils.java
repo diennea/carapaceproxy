@@ -254,16 +254,16 @@ public final class CertificatesUtils {
         if (certificate.getSubjectAltNames() == null || certificate.getSubjectAltNames().isEmpty()) {
             if (exact) {
                 return !certificate.isWildcard() && hostname.equals(certificate.getHostname());
-            } else {
-                return certificate.isWildcard() && hostname.endsWith(certificate.getHostname());
             }
+            return certificate.isWildcard() && hostname.endsWith(certificate.getHostname());
         }
-        for (final var name : certificate.getNames()) {
-            final var wildcard = isWildcard(name);
-            if (exact) {
-                return !wildcard && hostname.equals(name);
-            } else {
-                return wildcard && hostname.endsWith(removeWildcard(name));
+        for (final String name : certificate.getNames()) {
+            final boolean wildcard = isWildcard(name);
+            if (exact && !wildcard && hostname.equals(name)) {
+                return true;
+            }
+            if (!exact && wildcard && hostname.endsWith(CertificatesUtils.removeWildcard(name))) {
+                return true;
             }
         }
         return false;
