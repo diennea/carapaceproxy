@@ -75,7 +75,7 @@
         <url>git@github.com:diennea/carapaceproxy.git</url>
         <connection>scm:git:${project.scm.url}</connection>
         <developerConnection>scm:git:${project.scm.url}</developerConnection>
-        <tag>release/1.11</tag>
+        <tag>HEAD</tag>
     </scm>
 
     <distributionManagement>
@@ -132,7 +132,7 @@
         <libs.objenesis>3.0.1</libs.objenesis>
         <libs.hamcrest>2.2</libs.hamcrest>
 
-        <libs.asm>9.2</libs.asm>
+        <libs.asm>9.4</libs.asm>
     </properties>
 
     <repositories>
@@ -430,6 +430,22 @@
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>build-helper-maven-plugin</artifactId>
                 <version>3.6.0</version>
+                <executions>
+                    <execution>
+                        <id>parse-version</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>parse-version</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>released-version</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>released-version</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -445,6 +461,7 @@
                     <updateVersionsToSnapshot>true</updateVersionsToSnapshot>
                     <updateWorkingCopyVersions>true</updateWorkingCopyVersions>
                     <autoVersionSubmodules>true</autoVersionSubmodules>
+                    <arguments>-DskipTests=true</arguments>
                 </configuration>
             </plugin>
             <plugin>
