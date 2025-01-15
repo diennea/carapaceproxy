@@ -104,7 +104,7 @@ public record NetworkListenerConfiguration(
                 ssl,
                 sslCiphers,
                 defaultCertificate,
-                DEFAULT_SSL_PROTOCOLS,
+                ssl ? DEFAULT_SSL_PROTOCOLS : Set.of(),
                 soBacklog,
                 keepAlive,
                 keepAliveIdle,

@@ -31,6 +31,7 @@ import io.netty.handler.codec.http.HttpScheme;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.ssl.SslHandler;
+import io.netty.util.AsciiString;
 import java.net.InetSocketAddress;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
@@ -42,6 +43,8 @@ import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchingContext;
 import org.carapaceproxy.utils.StringUtils;
 import org.reactivestreams.Publisher;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import reactor.netty.ByteBufFlux;
 import reactor.netty.http.server.HttpServerRequest;
 import reactor.netty.http.server.HttpServerResponse;
@@ -64,6 +67,7 @@ public class ProxyRequest implements MatchingContext {
     private static final Pattern NETTY_HTTP_1_VERSION_PATTERN = Pattern.compile("(\\S+)/(\\d+)\\.(\\d+)");
     private static final int HEADERS_SUBSTRING_INDEX = PROPERTY_HEADERS.length();
     private static final AtomicLong REQUESTS_ID_GENERATOR = new AtomicLong();
+    private static final Logger LOG = LoggerFactory.getLogger(ProxyRequest.class);
 
     private final long id = REQUESTS_ID_GENERATOR.incrementAndGet();
     private final HttpServerRequest request;
@@ -197,15 +201,27 @@ public class ProxyRequest implements MatchingContext {
      * it may be null over HTTP/1.1 if no {@code HOST} header is provided
      */
     public String getRequestHostname() {
-        if (HttpVersion.valueOf(request.protocol().toUpperCase()).majorVersion() == 2) {
+        final String protocol = request.protocol().toUpperCase();
+        if (HttpVersion.valueOf(protocol).majorVersion() == 2) {
             // RFC 3986 section 3.2 states that :authority may include port if provided, just like HTTP/1.1 HOST header
             // authority = [ userinfo "@" ] host [ ":" port ]
-            return request.requestHeaders().get(Http2Headers.PseudoHeaderName.AUTHORITY.value());
+            final AsciiString authorityHeaderName = Http2Headers.PseudoHeaderName.AUTHORITY.value();
+            final String authority = request.requestHeaders().get(authorityHeaderName);
+            if (!StringUtils.isBlank(authority)) {
+                return authority;
+            }
+            // sometimes :authority: is not set: https://github.com/jetty/jetty.project/issues/9436
+            LOG.info("Received request over protocol {}, but {} pseudo-header was not set ({})", protocol, authorityHeaderName, authority);
+            // fallback...
         }
         // The Host request header specifies the host and port number of the server to which the request is being sent.
         // If no port is included, the default port for the service requested is implied
         // Host: <host>:<port>
-        return request.requestHeaders().get(HttpHeaderNames.HOST);
+        final String host = request.requestHeaders().get(HttpHeaderNames.HOST);
+        if (StringUtils.isBlank(host)) {
+            LOG.info("Received request over protocol {}, but {} header was not set ({})", protocol, HttpHeaderNames.HOST, host);
+        }
+        return host;
     }
 
     public boolean isValidHostAndPort(final String hostAndPort) {

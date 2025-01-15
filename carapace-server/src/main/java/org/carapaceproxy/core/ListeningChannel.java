@@ -140,22 +140,33 @@ public class ListeningChannel {
     }
 
     private KeyStore loadKeyStore(final SSLCertificateConfiguration certificate, final EndpointKey hostPort) throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException {
-        // Try to find certificate data on db
-        final byte[] keystoreContent = parent.getDynamicCertificatesManager().getCertificateForDomain(certificate.getId());
-        final KeyStore keystore;
-        if (keystoreContent == null) {
-            if (StringUtils.isBlank(certificate.getFile())) {
-                LOG.warn("No certificate file or dynamic certificate data for certificate id {}", certificate.getId());
-                return null;
+        try {
+            // Try to find certificate data on db
+            final byte[] keystoreContent = parent.getDynamicCertificatesManager().getCertificateForDomain(certificate.getId());
+            final KeyStore keystore;
+            if (keystoreContent == null) {
+                if (StringUtils.isBlank(certificate.getFile())) {
+                    LOG.warn("No certificate file or dynamic certificate data for certificate id {}", certificate.getId());
+                    return null;
+                }
+                LOG.debug("Start SSL with certificate id {}, on listener {}:{} file={}", certificate.getId(), hostPort.host(), hostPort.port(), certificate.getFile());
+                keystore = loadKeyStoreFromFile(certificate.getFile(), certificate.getPassword(), basePath);
+            } else {
+                LOG.debug("Start SSL with dynamic certificate id {}, on listener {}:{}", certificate.getId(), hostPort.host(), hostPort.port());
+                keystore = loadKeyStoreData(keystoreContent, certificate.getPassword());
             }
-            LOG.debug("Start SSL with certificate id {}, on listener {}:{} file={}", certificate.getId(), hostPort.host(), hostPort.port(), certificate.getFile());
-            keystore = loadKeyStoreFromFile(certificate.getFile(), certificate.getPassword(), basePath);
-        } else {
-            LOG.debug("Start SSL with dynamic certificate id {}, on listener {}:{}", certificate.getId(), hostPort.host(), hostPort.port());
-            keystore = loadKeyStoreData(keystoreContent, certificate.getPassword());
+            LOG.debug("Loaded keystore with type: {}, size: {}, aliases: {}", keystore.getType(), keystore.size(), Collections.list(keystore.aliases()));
+            return keystore;
+        } catch (KeyStoreException | NoSuchAlgorithmException | CertificateException | IOException e) {
+            LOG.error(
+                    "ERROR loading keystore for certificate {id {}, hostname {}, file {}, mode {}}",
+                    certificate.getId(),
+                    certificate.getHostname(),
+                    certificate.getFile(),
+                    certificate.getMode()
+            );
+            throw e;
         }
-        LOG.debug("Loaded keystore with type: {}, size: {}, aliases: {}", keystore.getType(), keystore.size(), Collections.list(keystore.aliases()));
-        return keystore;
     }
 
     public NetworkListenerConfiguration getConfig() {
