@@ -95,7 +95,7 @@ public class BackendHealthStatus {
     }
 
     public void reportAsReachable(final long timestamp) {
-        LOG.info("{}: reportAsUnreachable {}", hostPort, new Timestamp(timestamp));
+        LOG.debug("{}: reportAsReachable {}", hostPort, new Timestamp(timestamp));
         switch (this.status) {
             case DOWN:
                 this.status = Status.COLD;
