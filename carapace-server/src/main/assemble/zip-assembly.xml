@@ -8,6 +8,13 @@
     <includeBaseDirectory>true</includeBaseDirectory>
     <fileSets>
         <fileSet>
+            <directory>src/main/resources</directory>
+            <outputDirectory>/</outputDirectory>
+            <includes>
+                <include>logback.xml</include>
+            </includes>
+        </fileSet>
+        <fileSet>
             <directory>src/main/resources/conf</directory>
             <outputDirectory>conf</outputDirectory>
             <includes>
@@ -30,7 +37,6 @@
                 <include>*</include>
             </includes>
         </fileSet>
-
     </fileSets>
     <dependencySets>
         <dependencySet>
