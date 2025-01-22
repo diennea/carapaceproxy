@@ -1,7 +1,5 @@
 #!/bin/bash
 
-
-
 # Licensed to Diennea S.r.l. under one
 # or more contributor license agreements. See the NOTICE file
 # distributed with this work for additional information
@@ -19,12 +17,16 @@
 # specific language governing permissions and limitations
 # under the License.
 
+for service in carapace-server/target/carapace-server-*/bin/service;
+do
+    if [ -f "$service" ]; then
+        # stop if running
+        $service server stop
+    fi
+done
 
 # Carapace version
 CARAPACE_V=$(mvn org.apache.maven.plugins:maven-help-plugin:3.1.1:evaluate -Dexpression=project.version -q -DforceStdout -Dmaven.wagon.http.ssl.insecure=true)
-
-# stop if running
-carapace-server/target/carapace-server-${CARAPACE_V}/bin/service server stop
 
 mvn clean install -DskipTests -Pproduction
 cd carapace-server/target || exit
@@ -38,4 +40,3 @@ timeout 22 sh -c "until nc -z \$0 \$1; do sleep 1; done" localhost 8001
 curl -X POST --data-binary @conf/server.dynamic.properties http://localhost:8001/api/config/apply --user admin:admin -H "Content-Type: text/plain"
 
 tail -f server.service.log
-
