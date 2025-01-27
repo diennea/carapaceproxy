@@ -131,6 +131,7 @@ public class ServerMain implements AutoCloseable {
             runningInstance.join();
 
         } catch (Exception t) {
+            LOG.error("Error while starting server", t);
             System.exit(1);
         }
     }
