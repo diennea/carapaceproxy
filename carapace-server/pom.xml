@@ -14,18 +14,11 @@
 
     <name>Carapace :: Server</name>
 
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>io.projectreactor</groupId>
-                <artifactId>reactor-bom</artifactId>
-                <version>${libs.projectreactor}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
     <dependencies>
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-tools</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.projectreactor.netty</groupId>
             <artifactId>reactor-netty-core</artifactId>
@@ -37,7 +30,22 @@
         <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-tcnative-boringssl-static</artifactId>
-            <version>${libs.netty.ssl}</version>
+            <!-- https://netty.io/wiki/forked-tomcat-native.html#how-to-download-netty-tcnative-boringssl-uber-jar -->
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-resolver-dns-native-macos</artifactId>
+            <!-- Reactor Netty brings in this x86 version of the native DNS bindings for macOS... -->
+            <classifier>osx-x86_64</classifier>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-resolver-dns-native-macos</artifactId>
+            <!-- ...but we also need the ARM version to fully support running on Apple devices -->
+            <classifier>osx-aarch_64</classifier>
+            <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>org.shredzone.acme4j</groupId>
@@ -71,12 +79,6 @@
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>route53</artifactId>
             <version>${libs.awssdk}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
@@ -141,13 +143,6 @@
             <groupId>org.apache.bookkeeper.stats</groupId>
             <artifactId>prometheus-metrics-provider</artifactId>
             <version>${libs.prometheus.metrics}</version>
-            <type>jar</type>
-            <exclusions>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.micrometer</groupId>
@@ -159,10 +154,6 @@
             <artifactId>herddb-jdbc</artifactId>
             <version>${libs.herddb}</version>
             <exclusions>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
                 <exclusion>
                     <groupId>org.bouncycastle</groupId>
                     <artifactId>*</artifactId>
@@ -314,6 +305,12 @@
             <artifactId>junit</artifactId>
             <version>${libs.junit}</version>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.hamcrest</groupId>
+                    <artifactId>hamcrest-core</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>pl.pragmatists</groupId>
@@ -327,12 +324,24 @@
             <artifactId>wiremock-jre8</artifactId>
             <version>${libs.wiremock}</version>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.hamcrest</groupId>
+                    <artifactId>hamcrest-core</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.powermock</groupId>
             <artifactId>powermock-module-junit4</artifactId>
             <version>${libs.powermock}</version>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.hamcrest</groupId>
+                    <artifactId>hamcrest-core</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.powermock</groupId>
@@ -366,7 +375,6 @@
         <dependency>
             <groupId>org.hamcrest</groupId>
             <artifactId>hamcrest</artifactId>
-            <version>${libs.hamcrest}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
