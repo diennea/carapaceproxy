@@ -134,23 +134,6 @@
         <libs.asm>9.4</libs.asm>
     </properties>
 
-    <repositories>
-        <repository>
-            <id>apache-snapshots</id>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-            <url>https://repository.apache.org/snapshots/</url>
-        </repository>
-        <repository>
-            <id>dev.majordodo.org.snapshots</id>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-            <url>https://dev.majordodo.org/nexus/content/repositories/snapshots/</url>
-        </repository>
-    </repositories>
-
     <dependencyManagement>
         <dependencies>
             <!-- BOMs -->
