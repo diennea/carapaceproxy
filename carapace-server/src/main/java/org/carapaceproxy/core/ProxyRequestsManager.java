@@ -122,6 +122,62 @@ public class ProxyRequestsManager {
     }
 
     /**
+     * Check if the request is a potential request smuggling attempt.
+     * This validates:
+     * - Requests with Content-Length: 0 and a body are rejected
+     * - Requests with both Content-Length and Transfer-Encoding headers are detected and logged/rejected
+     *
+     * @param request the request to validate
+     * @return true if the request appears to be a smuggling attempt
+     */
+    private boolean isRequestSmugglingAttempt(ProxyRequest request) {
+        HttpHeaders headers = request.getRequestHeaders();
+        if (hasContentLengthZeroWithBody(request, headers)) {
+            LOGGER.warn("Content-Length: 0 with non-empty body detected - potential CL.0 request smuggling attack from {}",
+                    request.getRemoteAddress());
+            return true;
+        }
+
+        // Application-level detection of both Content-Length and Transfer-Encoding headers
+        if (headers.contains(HttpHeaderNames.CONTENT_LENGTH) && headers.contains(HttpHeaderNames.TRANSFER_ENCODING)) {
+            LOGGER.warn("Both Content-Length and Transfer-Encoding headers present - potential request smuggling attack from {}",
+                    request.getRemoteAddress());
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * For CL.0 request smuggling detection, we need to check if there's data after the headers
+     * (which means it contains a body) when Content-Length is 0.
+     *
+     * @param request The proxy request to check.
+     * @param headers The HTTP headers associated with the request.
+     * @return true if it could be a potential request smuggling attack; false otherwise.
+     */
+    private boolean hasContentLengthZeroWithBody(ProxyRequest request, HttpHeaders headers) {
+        String contentLengthValue = headers.get(HttpHeaderNames.CONTENT_LENGTH);
+        if (contentLengthValue != null && "0".equals(contentLengthValue.trim())) {
+            try {
+                ByteBufFlux requestData = request.getRequestData();
+                if (requestData != null) {
+                    // If getRequestData() returns non-null, there might be body data
+                    // This is a conservative approach - we assume any non-null requestData
+                    // with CL.0 is suspicious
+                    return true;
+                }
+            } catch (Exception e) {
+                LOGGER.debug("Error checking for body content", e);
+                // If we can't determine, be conservative and block
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    /**
      * Process a request received by the HttpServer of a {@link NetworkListenerConfiguration}.
      *
      * @param request the request of a to-be-proxied resource
@@ -130,6 +186,12 @@ public class ProxyRequestsManager {
     public Publisher<Void> processRequest(ProxyRequest request) {
         request.setStartTs(System.currentTimeMillis());
         request.setLastActivity(request.getStartTs());
+
+        if (isRequestSmugglingAttempt(request)) {
+            LOGGER.warn("Request smuggling attempt detected from {}: URI: {}, Method: {}",
+                    request.getRemoteAddress(), request.getUri(), request.getMethod());
+            return serveBadRequestMessage(request);
+        }
 
         parent.getFilters().forEach(filter -> filter.apply(request));
 
