@@ -93,6 +93,7 @@ public class MapResult {
     private String redirectLocation;
     private String redirectProto;
     private String redirectPath;
+    private boolean ssl;
 
     @Setter(AccessLevel.NONE)
     @EqualsAndHashCode.Exclude
