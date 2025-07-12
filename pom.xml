@@ -107,7 +107,7 @@
         <libs.herddb>0.26.1</libs.herddb>
 
         <libs.commons.codec>1.15</libs.commons.codec>
-        <libs.commons.lang3>3.12.0</libs.commons.lang3>
+        <libs.commons.lang3>3.18.0</libs.commons.lang3>
         <libs.commons.logging>1.2</libs.commons.logging>
         <libs.commons.io>2.14.0</libs.commons.io>
         <libs.commons.net>3.11.0</libs.commons.net>
