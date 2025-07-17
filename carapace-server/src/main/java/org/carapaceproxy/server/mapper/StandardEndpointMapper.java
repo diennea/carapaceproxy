@@ -255,6 +255,7 @@ public class StandardEndpointMapper extends EndpointMapper {
                                     .routeId(route.getId())
                                     .customHeaders(customHeaders)
                                     .healthStatus(backendStatus)
+                                    .ssl(backend.ssl())
                                     .build();
                         }
                     }
@@ -481,9 +482,13 @@ public class StandardEndpointMapper extends EndpointMapper {
                 final int port = properties.getInt(prefix + "port", 8086);
                 final String probePath = properties.getString(prefix + "probePath", "");
                 final int safeCapacity = properties.getInt(prefix + "safeCapacity", DEFAULT_CAPACITY);
-                LOG.info("configured backend {} {}:{} enabled={} capacity={}", id, host, port, enabled, safeCapacity);
+                final boolean ssl = properties.getBoolean(prefix + "ssl", false);
+                final String caCertificatePath = properties.getString(prefix + "cacertificate", null);
+                final String caCertificatePassword = properties.getString(prefix + "cacertificatepassword", null);
+                LOG.info("configured backend {} {}:{} enabled={} capacity={} ssl={} caCertificate={} caCertificatePassword={}",
+                         id, host, port, enabled, safeCapacity, ssl, caCertificatePath, caCertificatePassword != null ? "******" : null);
                 if (enabled) {
-                    addBackend(new BackendConfiguration(id, host, port, probePath, safeCapacity));
+                    addBackend(new BackendConfiguration(id, host, port, probePath, safeCapacity, ssl, caCertificatePath, caCertificatePassword));
                 }
             }
         }

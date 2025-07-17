@@ -38,11 +38,14 @@ import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http2.Http2CodecUtil;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.timeout.ReadTimeoutException;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
+import java.security.KeyStore;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -58,6 +61,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.regex.Pattern;
+import javax.net.ssl.TrustManagerFactory;
 import jdk.net.ExtendedSocketOptions;
 import org.apache.http.HttpStatus;
 import org.carapaceproxy.EndpointStats;
@@ -69,6 +73,7 @@ import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.mapper.CustomHeader;
 import org.carapaceproxy.server.mapper.MapResult;
+import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.HttpUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
 import org.carapaceproxy.utils.StringUtils;
@@ -78,6 +83,7 @@ import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.ByteBufFlux;
+import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.http.client.HttpClientResponse;
 import reactor.netty.resources.ConnectionProvider;
@@ -381,48 +387,49 @@ public class ProxyRequestsManager {
 
         final var protocol = HttpUtils.toHttpProtocol(request.getHttpProtocol(), request.isSecure());
         final var clientKey = new ConnectionKey(key, connectionConfig.getId(), protocol);
-        HttpClient forwarder = forwardersPool.computeIfAbsent(clientKey, hostname -> HttpClient.create(connectionProvider)
-                .host(endpointHost)
-                .port(endpointPort)
-                .protocol(protocol)
-                .followRedirect(false) // client has to request the redirect, not the proxy
-                .runOn(parent.getEventLoopGroup())
-                .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
-                .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
-                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
-                // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
-                .option(ChannelOption.SO_KEEPALIVE, connectionConfig.isKeepAlive())
-                .option(Epoll.isAvailable()
-                        ? EpollChannelOption.TCP_KEEPIDLE
-                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE), connectionConfig.getKeepaliveIdle())
-                .option(Epoll.isAvailable()
-                        ? EpollChannelOption.TCP_KEEPINTVL
-                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL), connectionConfig.getKeepaliveInterval())
-                .option(Epoll.isAvailable()
-                        ? EpollChannelOption.TCP_KEEPCNT
-                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), connectionConfig.getKeepaliveCount())
-                .httpResponseDecoder(option -> option.maxHeaderSize(parent.getCurrentConfiguration().getMaxHeaderSize()))
-                .doOnRequest((req, conn) -> {
-                    if (LOGGER.isDebugEnabled()) {
-                        LOGGER.debug(
-                                "Start sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}", key, connectionConfig.getId(), req.resourceUrl(), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")), endpointHost,
-                                endpointPort
-                        );
-                    }
-                    endpointStats.getTotalRequests().incrementAndGet();
-                    endpointStats.getLastActivity().set(System.currentTimeMillis());
-                }).doAfterRequest((req, conn) -> {
-                    if (LOGGER.isDebugEnabled()) {
-                        LOGGER.debug(
-                                "Finished sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}", key, connectionConfig.getId(), request.getUri(), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")), endpointHost,
-                                endpointPort
-                        );
-                    }
-                }).doAfterResponseSuccess((resp, conn) -> {
-                    PENDING_REQUESTS_GAUGE.dec();
-                    healthStatus.decrementConnections();
-                    endpointStats.getLastActivity().set(System.currentTimeMillis());
-                }));
+        BackendConfiguration backendConfig = getBackendConfiguration(request);
+        String caCertificatePath = backendConfig != null ? backendConfig.caCertificatePath() : null;
+        String caCertificatePassword = backendConfig != null ? backendConfig.caCertificatePassword() : null;
+        HttpClient forwarder = forwardersPool.computeIfAbsent(clientKey, hostname ->
+                getClient(connectionProvider, endpointHost, endpointPort, protocol, request.getAction().isSsl(), caCertificatePath, caCertificatePassword)
+                        .followRedirect(false) // client has to request the redirect, not the proxy
+                        .runOn(parent.getEventLoopGroup())
+                        .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
+                        .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
+                        .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
+                        // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
+                        .option(ChannelOption.SO_KEEPALIVE, connectionConfig.isKeepAlive())
+                        .option(Epoll.isAvailable()
+                                ? EpollChannelOption.TCP_KEEPIDLE
+                                : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE), connectionConfig.getKeepaliveIdle())
+                        .option(Epoll.isAvailable()
+                                ? EpollChannelOption.TCP_KEEPINTVL
+                                : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL), connectionConfig.getKeepaliveInterval())
+                        .option(Epoll.isAvailable()
+                                ? EpollChannelOption.TCP_KEEPCNT
+                                : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), connectionConfig.getKeepaliveCount())
+                        .httpResponseDecoder(option -> option.maxHeaderSize(parent.getCurrentConfiguration().getMaxHeaderSize()))
+                        .doOnRequest((req, conn) -> {
+                            if (LOGGER.isDebugEnabled()) {
+                                LOGGER.debug(
+                                        "Start sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}", key, connectionConfig.getId(), req.resourceUrl(), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")), endpointHost,
+                                        endpointPort
+                                );
+                            }
+                            endpointStats.getTotalRequests().incrementAndGet();
+                            endpointStats.getLastActivity().set(System.currentTimeMillis());
+                        }).doAfterRequest((req, conn) -> {
+                            if (LOGGER.isDebugEnabled()) {
+                                LOGGER.debug(
+                                        "Finished sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}", key, connectionConfig.getId(), request.getUri(), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")), endpointHost,
+                                        endpointPort
+                                );
+                            }
+                        }).doAfterResponseSuccess((resp, conn) -> {
+                            PENDING_REQUESTS_GAUGE.dec();
+                            healthStatus.decrementConnections();
+                            endpointStats.getLastActivity().set(System.currentTimeMillis());
+                        }));
 
         AtomicBoolean cacheable = new AtomicBoolean(cache);
         final ContentsCache.ContentReceiver cacheReceiver = cacheable.get() ? parent.getCache().createCacheReceiver(request) : null;
@@ -534,6 +541,62 @@ public class ProxyRequestsManager {
                     }
                     return serveServiceUnavailable(request);
                 });
+    }
+
+    private HttpClient getClient(final ConnectionProvider connectionProvider, final String endpointHost, final int endpointPort, final HttpProtocol protocol, final boolean secure, final String caCertificatePath, final String caCertificatePassword) {
+        final HttpClient httpClient = HttpClient.create(connectionProvider)
+                .host(endpointHost)
+                .port(endpointPort)
+                .protocol(protocol);
+
+        if (secure) {
+            if (caCertificatePath != null && !caCertificatePath.isEmpty()) {
+                try {
+                    // Load the CA certificate from the specified path
+                    KeyStore trustStore = CertificatesUtils.loadKeyStoreFromFile(caCertificatePath, caCertificatePassword != null ? caCertificatePassword : "", parent.getBasePath());
+
+                    if (trustStore != null) {
+                        // Create a TrustManagerFactory with the custom trust store
+                        TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+                        trustManagerFactory.init(trustStore);
+
+                        // Create an SslContext with the custom trust manager
+                        SslContext sslContext = SslContextBuilder
+                                .forClient()
+                                .trustManager(trustManagerFactory)
+                                .build();
+
+                        // Configure the HttpClient with the custom SSL context
+                        return httpClient.secure(spec -> spec.sslContext(sslContext));
+                    }
+                } catch (Exception e) {
+                    LOGGER.error("Failed to load CA certificate from {} : {}", caCertificatePath, e.getMessage());
+                    // Fall back to default SSL context
+                    return httpClient.secure();
+                }
+            }
+            return httpClient.secure();
+        }
+        return httpClient;
+    }
+
+    private BackendConfiguration getBackendConfiguration(ProxyRequest request) {
+        if (request.getAction() == null) {
+            return null;
+        }
+
+        String host = request.getAction().getHost();
+        int port = request.getAction().getPort();
+        EndpointKey key = EndpointKey.make(host, port);
+
+        // Find the backend configuration that matches this endpoint
+        for (BackendConfiguration backend : parent.getMapper().getBackends().values()) {
+            if (backend.hostPort().equals(key)) {
+                return backend;
+            }
+        }
+
+        return null;
     }
 
     private boolean aggregateChunksForLegacyHttp(ProxyRequest request) {
