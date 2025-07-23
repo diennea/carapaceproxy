@@ -44,6 +44,7 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.timeout.ReadTimeoutException;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
+import java.io.File;
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.security.KeyStore;
@@ -62,6 +63,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.regex.Pattern;
+import javax.net.ssl.SSLException;
 import javax.net.ssl.TrustManagerFactory;
 import jdk.net.ExtendedSocketOptions;
 import org.apache.http.HttpStatus;
@@ -383,15 +385,18 @@ public class ProxyRequestsManager {
             );
         }
 
-        final var protocol = request.getAction().getBackendProtocol() != null
-                ? request.getAction().getBackendProtocol()
-                : HttpUtils.toHttpProtocol(request.getHttpProtocol(), request.isSecure());
+        // Use the client's HTTP protocol version for the backend connection
+        // This ensures that the same HTTP protocol version is used for both client-to-proxy
+        // and proxy-to-backend communications, maintaining protocol consistency end-to-end
+        final HttpVersion httpVersion = request.getHttpProtocol();
+        final boolean isSecure = request.isSecure();
+        final var protocol = HttpUtils.toHttpProtocol(httpVersion, isSecure);
         final var clientKey = new ConnectionKey(key, connectionConfig.getId(), protocol);
         BackendConfiguration backendConfig = getBackendConfiguration(request);
         String caCertificatePath = backendConfig != null ? backendConfig.caCertificatePath() : null;
         String caCertificatePassword = backendConfig != null ? backendConfig.caCertificatePassword() : null;
         HttpClient forwarder = forwardersPool.computeIfAbsent(clientKey, hostname ->
-                getClient(connectionProvider, key, protocol, request.getAction().isSsl(), caCertificatePath, caCertificatePassword)
+                getClient(connectionProvider, key, httpVersion, request.getAction().isSsl(), caCertificatePath, caCertificatePassword)
                         .followRedirect(false) // client has to request the redirect, not the proxy
                         .runOn(parent.getEventLoopGroup())
                         .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
@@ -543,20 +548,44 @@ public class ProxyRequestsManager {
                 });
     }
 
-    private HttpClient getClient(final ConnectionProvider connectionProvider, final EndpointKey endpoint, final HttpProtocol protocol, final boolean secure, final String caCertificatePath, final String caCertificatePassword) {
-        final HttpClient httpClient = HttpClient.create(connectionProvider)
-                .host(endpoint.host())
-                .port(endpoint.port())
-                .protocol(protocol);
+    /**
+     * Creates an HTTP client for connecting to a backend endpoint.
+     *
+     * This method ensures that the same HTTP protocol version is used for both client-to-proxy
+     * and proxy-to-backend communications, while ensuring compatibility with the SSL settings.
+     * For example, HTTP/2 over TLS (H2) is used for HTTPS connections, while HTTP/2 cleartext (H2C)
+     * is used for HTTP connections.
+     *
+     * @param connectionProvider the connection provider to use
+     * @param endpoint the endpoint to connect to
+     * @param httpVersion the HTTP version from the client request
+     * @param secure whether to use SSL/TLS for the connection
+     * @param caCertificatePath path to the CA certificate (may be null)
+     * @param caCertificatePassword password for the CA certificate (may be null)
+     * @return a configured HttpClient
+     */
+    private HttpClient getClient(final ConnectionProvider connectionProvider, final EndpointKey endpoint,
+                            HttpVersion httpVersion, final boolean secure,
+                            final String caCertificatePath, final String caCertificatePassword) {
+        try {
+            // Use the same HTTP protocol version for both client and backend connections
+            // but ensure it's compatible with the SSL setting
+            HttpProtocol protocol = HttpUtils.getAppropriateProtocol(httpVersion, secure);
 
-        if (secure) {
-            final SslContextBuilder sslContextBuilder = createSslContextBuilder(endpoint, protocol, caCertificatePath, caCertificatePassword);
-            // Build the SslContext and configure the HttpClient
-            HttpClient secureClient = buildSecureHttpClient(httpClient, sslContextBuilder, endpoint);
-            // Return the configured client or fall back to default secure client
-            return secureClient != null ? secureClient : httpClient.secure();
+            final HttpClient httpClient = HttpClient.create(connectionProvider)
+                    .host(endpoint.host())
+                    .port(endpoint.port())
+                    .protocol(protocol);
+
+            if (secure) {
+                final SslContextBuilder sslContextBuilder =
+                        createSslContextBuilder(endpoint, protocol, caCertificatePath, caCertificatePassword);
+                return buildSecureHttpClient(httpClient, sslContextBuilder);
+            }
+            return httpClient;
+        } catch (SSLException e) {
+            throw new RuntimeException(e);
         }
-        return httpClient;
     }
 
     /**
@@ -569,22 +598,15 @@ public class ProxyRequestsManager {
      * @return an SslContextBuilder configured with the appropriate settings, or null if configuration failed
      */
     private SslContextBuilder createSslContextBuilder(final EndpointKey endpoint, final HttpProtocol protocol, final String caCertificatePath, final String caCertificatePassword) {
-        // Case 1: Custom CA certificate is provided
-        if (caCertificatePath != null && !caCertificatePath.isEmpty()) {
+        if (!StringUtils.isBlank(caCertificatePath)) {
             try {
-                // Load the CA certificate from the specified path
-                KeyStore trustStore = CertificatesUtils.loadKeyStoreFromFile(caCertificatePath,
-                        caCertificatePassword != null ? caCertificatePassword : "",
-                        parent.getBasePath());
-
+                final String pwd = caCertificatePassword != null ? caCertificatePassword : "";
+                final File basePath = parent.getBasePath();
+                final KeyStore trustStore = CertificatesUtils.loadKeyStoreFromFile(caCertificatePath, pwd, basePath);
                 if (trustStore != null) {
-                    // Create a TrustManagerFactory with the custom trust store
-                    TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+                    final TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
                     trustManagerFactory.init(trustStore);
-
-                    // Create an SslContextBuilder with the custom trust manager
-                    SslContextBuilder builder = SslContextBuilder.forClient().trustManager(trustManagerFactory);
-                    // Configure ALPN if needed
+                    final SslContextBuilder builder = SslContextBuilder.forClient().trustManager(trustManagerFactory);
                     configureAlpnForClient(endpoint, protocol, builder);
                     return builder;
                 }
@@ -593,9 +615,7 @@ public class ProxyRequestsManager {
                 // Fall back to default SslContextBuilder
             }
         }
-        // Case 2: No custom CA certificate, but we need ALPN for HTTP/2
-        SslContextBuilder builder = SslContextBuilder.forClient();
-        // Configure ALPN if needed
+        final SslContextBuilder builder = SslContextBuilder.forClient();
         configureAlpnForClient(endpoint, protocol, builder);
         return builder;
     }
@@ -605,23 +625,11 @@ public class ProxyRequestsManager {
      *
      * @param httpClient the base HttpClient to configure
      * @param sslContextBuilder the SslContextBuilder to use
-     * @param endpoint the endpoint key containing host and port for logging
      * @return a configured secure HttpClient, or null if building the SslContext failed
      */
-    private HttpClient buildSecureHttpClient(final HttpClient httpClient, final SslContextBuilder sslContextBuilder, final EndpointKey endpoint) {
-        if (sslContextBuilder == null) {
-            return null;
-        }
-        try {
-            SslContext sslContext = sslContextBuilder.build();
-            // Configure the HttpClient with the custom SSL context
-            return httpClient.secure(spec -> spec.sslContext(sslContext));
-        } catch (Exception ex) {
-            LOGGER.error("Failed to build SSL context for backend connection to {}:{}: {}",
-                    endpoint.host(), endpoint.port(), ex.getMessage());
-            // Return null to indicate failure
-            return null;
-        }
+    private HttpClient buildSecureHttpClient(final HttpClient httpClient, final SslContextBuilder sslContextBuilder) throws SSLException {
+        final SslContext sslContext = sslContextBuilder.build();
+        return httpClient.secure(spec -> spec.sslContext(sslContext));
     }
 
     private BackendConfiguration getBackendConfiguration(ProxyRequest request) {

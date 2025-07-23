@@ -27,7 +27,11 @@ import java.time.ZonedDateTime;
 import reactor.netty.http.HttpProtocol;
 
 /**
- * HTTP utilities
+ * HTTP utilities for handling HTTP protocol versions and conversions.
+ *
+ * This class provides methods for working with HTTP protocols, including
+ * converting between HTTP versions and protocol implementations, and ensuring
+ * compatibility between protocol versions and transport security.
  *
  * @author paolo.venturi
  */
@@ -45,5 +49,23 @@ public class HttpUtils {
             case 2 -> ssl ? HttpProtocol.H2 : HttpProtocol.H2C;
             default -> throw new IllegalStateException("Unexpected HTTP Protocol: " + httpVersion);
         };
+    }
+
+    /**
+     * Gets the appropriate HttpProtocol based on HTTP version and security.
+     * This method ensures that the protocol is compatible with the SSL setting:
+     * - HTTP/1.1 can be used with both HTTP and HTTPS
+     * - HTTP/2 over TLS (H2) can only be used with HTTPS
+     * - HTTP/2 cleartext (H2C) can only be used with HTTP
+     *
+     * @param httpVersion the HTTP version (HTTP/1.1 or HTTP/2)
+     * @param ssl whether SSL/TLS is being used
+     * @return the appropriate HttpProtocol
+     */
+    public static HttpProtocol getAppropriateProtocol(final HttpVersion httpVersion, final boolean ssl) {
+        if (httpVersion.majorVersion() == 2) {
+            return ssl ? HttpProtocol.H2 : HttpProtocol.H2C;
+        }
+        return HttpProtocol.HTTP11;
     }
 }
