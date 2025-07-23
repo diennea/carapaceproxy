@@ -94,6 +94,7 @@ public class MapResult {
     private String redirectProto;
     private String redirectPath;
     private boolean ssl;
+    private reactor.netty.http.HttpProtocol backendProtocol;
 
     @Setter(AccessLevel.NONE)
     @EqualsAndHashCode.Exclude

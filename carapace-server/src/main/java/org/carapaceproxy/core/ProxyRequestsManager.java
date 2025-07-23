@@ -21,6 +21,7 @@ package org.carapaceproxy.core;
 
 import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTP;
 import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTPS;
+import static org.carapaceproxy.utils.AlpnUtils.configureAlpnForClient;
 import static reactor.netty.Metrics.CONNECTION_PROVIDER_PREFIX;
 import com.google.common.annotations.VisibleForTesting;
 import io.micrometer.core.instrument.Metrics;
@@ -360,10 +361,7 @@ public class ProxyRequestsManager {
      */
     public Publisher<Void> forward(final ProxyRequest request, final boolean cache, final BackendHealthStatus healthStatus) {
         Objects.requireNonNull(request.getAction());
-        final String endpointHost = request.getAction().getHost();
-        Objects.requireNonNull(endpointHost);
-        final int endpointPort = request.getAction().getPort();
-        final EndpointKey key = EndpointKey.make(endpointHost, endpointPort);
+        final EndpointKey key = EndpointKey.make(request.getAction().getHost(), request.getAction().getPort());
         final EndpointStats endpointStats = endpointsStats.computeIfAbsent(key, EndpointStats::new);
 
         final var connectionToEndpoint = connectionsManager.apply(request);
@@ -385,13 +383,15 @@ public class ProxyRequestsManager {
             );
         }
 
-        final var protocol = HttpUtils.toHttpProtocol(request.getHttpProtocol(), request.isSecure());
+        final var protocol = request.getAction().getBackendProtocol() != null
+                ? request.getAction().getBackendProtocol()
+                : HttpUtils.toHttpProtocol(request.getHttpProtocol(), request.isSecure());
         final var clientKey = new ConnectionKey(key, connectionConfig.getId(), protocol);
         BackendConfiguration backendConfig = getBackendConfiguration(request);
         String caCertificatePath = backendConfig != null ? backendConfig.caCertificatePath() : null;
         String caCertificatePassword = backendConfig != null ? backendConfig.caCertificatePassword() : null;
         HttpClient forwarder = forwardersPool.computeIfAbsent(clientKey, hostname ->
-                getClient(connectionProvider, endpointHost, endpointPort, protocol, request.getAction().isSsl(), caCertificatePath, caCertificatePassword)
+                getClient(connectionProvider, key, protocol, request.getAction().isSsl(), caCertificatePath, caCertificatePassword)
                         .followRedirect(false) // client has to request the redirect, not the proxy
                         .runOn(parent.getEventLoopGroup())
                         .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
@@ -412,8 +412,8 @@ public class ProxyRequestsManager {
                         .doOnRequest((req, conn) -> {
                             if (LOGGER.isDebugEnabled()) {
                                 LOGGER.debug(
-                                        "Start sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}", key, connectionConfig.getId(), req.resourceUrl(), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")), endpointHost,
-                                        endpointPort
+                                        "Start sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}", key, connectionConfig.getId(), req.resourceUrl(), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")), key.host(),
+                                        key.port()
                                 );
                             }
                             endpointStats.getTotalRequests().incrementAndGet();
@@ -421,8 +421,8 @@ public class ProxyRequestsManager {
                         }).doAfterRequest((req, conn) -> {
                             if (LOGGER.isDebugEnabled()) {
                                 LOGGER.debug(
-                                        "Finished sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}", key, connectionConfig.getId(), request.getUri(), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")), endpointHost,
-                                        endpointPort
+                                        "Finished sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}", key, connectionConfig.getId(), request.getUri(), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")), key.host(),
+                                        key.port()
                                 );
                             }
                         }).doAfterResponseSuccess((resp, conn) -> {
@@ -521,7 +521,7 @@ public class ProxyRequestsManager {
                     PENDING_REQUESTS_GAUGE.dec();
                     healthStatus.decrementConnections();
 
-                    EndpointKey endpoint = EndpointKey.make(request.getAction().getHost(), request.getAction().getPort());
+                    final EndpointKey endpoint = EndpointKey.make(request.getAction().getHost(), request.getAction().getPort());
                     if (err instanceof ReadTimeoutException) {
                         STUCK_REQUESTS_COUNTER.inc();
                         LOGGER.error("Read timeout error occurred for endpoint {}; request: {}", endpoint, request);
@@ -543,41 +543,85 @@ public class ProxyRequestsManager {
                 });
     }
 
-    private HttpClient getClient(final ConnectionProvider connectionProvider, final String endpointHost, final int endpointPort, final HttpProtocol protocol, final boolean secure, final String caCertificatePath, final String caCertificatePassword) {
+    private HttpClient getClient(final ConnectionProvider connectionProvider, final EndpointKey endpoint, final HttpProtocol protocol, final boolean secure, final String caCertificatePath, final String caCertificatePassword) {
         final HttpClient httpClient = HttpClient.create(connectionProvider)
-                .host(endpointHost)
-                .port(endpointPort)
+                .host(endpoint.host())
+                .port(endpoint.port())
                 .protocol(protocol);
 
         if (secure) {
-            if (caCertificatePath != null && !caCertificatePath.isEmpty()) {
-                try {
-                    // Load the CA certificate from the specified path
-                    KeyStore trustStore = CertificatesUtils.loadKeyStoreFromFile(caCertificatePath, caCertificatePassword != null ? caCertificatePassword : "", parent.getBasePath());
-
-                    if (trustStore != null) {
-                        // Create a TrustManagerFactory with the custom trust store
-                        TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-                        trustManagerFactory.init(trustStore);
-
-                        // Create an SslContext with the custom trust manager
-                        SslContext sslContext = SslContextBuilder
-                                .forClient()
-                                .trustManager(trustManagerFactory)
-                                .build();
-
-                        // Configure the HttpClient with the custom SSL context
-                        return httpClient.secure(spec -> spec.sslContext(sslContext));
-                    }
-                } catch (Exception e) {
-                    LOGGER.error("Failed to load CA certificate from {} : {}", caCertificatePath, e.getMessage());
-                    // Fall back to default SSL context
-                    return httpClient.secure();
-                }
-            }
-            return httpClient.secure();
+            final SslContextBuilder sslContextBuilder = createSslContextBuilder(endpoint, protocol, caCertificatePath, caCertificatePassword);
+            // Build the SslContext and configure the HttpClient
+            HttpClient secureClient = buildSecureHttpClient(httpClient, sslContextBuilder, endpoint);
+            // Return the configured client or fall back to default secure client
+            return secureClient != null ? secureClient : httpClient.secure();
         }
         return httpClient;
+    }
+
+    /**
+     * Creates an appropriate SslContextBuilder based on the provided parameters.
+     *
+     * @param endpoint the endpoint key containing host and port
+     * @param protocol the HTTP protocol to use
+     * @param caCertificatePath path to the CA certificate (may be null)
+     * @param caCertificatePassword password for the CA certificate (may be null)
+     * @return an SslContextBuilder configured with the appropriate settings, or null if configuration failed
+     */
+    private SslContextBuilder createSslContextBuilder(final EndpointKey endpoint, final HttpProtocol protocol, final String caCertificatePath, final String caCertificatePassword) {
+        // Case 1: Custom CA certificate is provided
+        if (caCertificatePath != null && !caCertificatePath.isEmpty()) {
+            try {
+                // Load the CA certificate from the specified path
+                KeyStore trustStore = CertificatesUtils.loadKeyStoreFromFile(caCertificatePath,
+                        caCertificatePassword != null ? caCertificatePassword : "",
+                        parent.getBasePath());
+
+                if (trustStore != null) {
+                    // Create a TrustManagerFactory with the custom trust store
+                    TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+                    trustManagerFactory.init(trustStore);
+
+                    // Create an SslContextBuilder with the custom trust manager
+                    SslContextBuilder builder = SslContextBuilder.forClient().trustManager(trustManagerFactory);
+                    // Configure ALPN if needed
+                    configureAlpnForClient(endpoint, protocol, builder);
+                    return builder;
+                }
+            } catch (Exception e) {
+                LOGGER.error("Failed to load CA certificate from {} : {}", caCertificatePath, e.getMessage());
+                // Fall back to default SslContextBuilder
+            }
+        }
+        // Case 2: No custom CA certificate, but we need ALPN for HTTP/2
+        SslContextBuilder builder = SslContextBuilder.forClient();
+        // Configure ALPN if needed
+        configureAlpnForClient(endpoint, protocol, builder);
+        return builder;
+    }
+
+    /**
+     * Builds a secure HttpClient using the provided SslContextBuilder.
+     *
+     * @param httpClient the base HttpClient to configure
+     * @param sslContextBuilder the SslContextBuilder to use
+     * @param endpoint the endpoint key containing host and port for logging
+     * @return a configured secure HttpClient, or null if building the SslContext failed
+     */
+    private HttpClient buildSecureHttpClient(final HttpClient httpClient, final SslContextBuilder sslContextBuilder, final EndpointKey endpoint) {
+        if (sslContextBuilder == null) {
+            return null;
+        }
+        try {
+            SslContext sslContext = sslContextBuilder.build();
+            // Configure the HttpClient with the custom SSL context
+            return httpClient.secure(spec -> spec.sslContext(sslContext));
+        } catch (Exception ex) {
+            LOGGER.error("Failed to build SSL context for backend connection to {}:{}: {}",
+                    endpoint.host(), endpoint.port(), ex.getMessage());
+            // Return null to indicate failure
+            return null;
+        }
     }
 
     private BackendConfiguration getBackendConfiguration(ProxyRequest request) {
