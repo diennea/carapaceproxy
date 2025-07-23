@@ -53,23 +53,21 @@ public class AlpnUtils {
             final String host,
             final int port
     ) {
+        LOG.debug("Configuring ALPN for HTTP/2 support on listener {}:{}", host, port);
+        List<String> alpnProtocols = new ArrayList<>();
         if (protocols.contains(HttpProtocol.H2)) {
-            LOG.debug("Configuring ALPN for HTTP/2 support on listener {}:{}", host, port);
-            List<String> alpnProtocols = new ArrayList<>();
-            if (protocols.contains(HttpProtocol.H2)) {
-                alpnProtocols.add(ApplicationProtocolNames.HTTP_2);
-            }
-            if (protocols.contains(HttpProtocol.HTTP11)) {
-                alpnProtocols.add(ApplicationProtocolNames.HTTP_1_1);
-            }
-
-            sslContextBuilder.applicationProtocolConfig(new ApplicationProtocolConfig(
-                    ApplicationProtocolConfig.Protocol.ALPN,
-                    ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
-                    ApplicationProtocolConfig.SelectedListenerFailureBehavior.ACCEPT,
-                    alpnProtocols
-            ));
+            alpnProtocols.add(ApplicationProtocolNames.HTTP_2);
         }
+        if (protocols.contains(HttpProtocol.HTTP11)) {
+            alpnProtocols.add(ApplicationProtocolNames.HTTP_1_1);
+        }
+
+        sslContextBuilder.applicationProtocolConfig(new ApplicationProtocolConfig(
+                ApplicationProtocolConfig.Protocol.ALPN,
+                ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
+                ApplicationProtocolConfig.SelectedListenerFailureBehavior.ACCEPT,
+                alpnProtocols
+        ));
         return sslContextBuilder;
     }
 
@@ -83,15 +81,13 @@ public class AlpnUtils {
      * @return the configured SslContextBuilder
      */
     public static SslContextBuilder configureAlpnForClient(final EndpointKey endpoint, final HttpProtocol protocol, final SslContextBuilder sslContextBuilder) {
-        if (protocol == HttpProtocol.H2) {
-            LOG.debug("Configuring ALPN for HTTP/2 support on backend connection to {}:{}", endpoint.host(), endpoint.port());
-            sslContextBuilder.applicationProtocolConfig(new ApplicationProtocolConfig(
-                    ApplicationProtocolConfig.Protocol.ALPN,
-                    ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
-                    ApplicationProtocolConfig.SelectedListenerFailureBehavior.ACCEPT,
-                    ApplicationProtocolNames.HTTP_2, ApplicationProtocolNames.HTTP_1_1
-            ));
-        }
+        LOG.debug("Configuring ALPN for HTTP/2 support on backend connection to {}:{}", endpoint.host(), endpoint.port());
+        sslContextBuilder.applicationProtocolConfig(new ApplicationProtocolConfig(
+                ApplicationProtocolConfig.Protocol.ALPN,
+                ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
+                ApplicationProtocolConfig.SelectedListenerFailureBehavior.ACCEPT,
+                ApplicationProtocolNames.HTTP_2, ApplicationProtocolNames.HTTP_1_1
+        ));
         return sslContextBuilder;
     }
 }
