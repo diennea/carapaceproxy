@@ -1,5 +1,6 @@
 package org.carapaceproxy.core;
 
+import static org.carapaceproxy.utils.AlpnUtils.configureAlpnForServer;
 import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreData;
 import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
 import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
@@ -119,6 +120,9 @@ public class ListeningChannel {
                     .trustManager(parent.getTrustStoreManager().getTrustManagerFactory())
                     .sslProvider(SslProvider.OPENSSL)
                     .protocols(listener.sslProtocols());
+
+            configureAlpnForServer(sslContextBuilder, listener.protocols(), listener.host(), listener.port());
+
             final String sslCiphers = listener.sslCiphers();
             if (sslCiphers != null && !sslCiphers.isEmpty()) {
                 LOG.debug("required sslCiphers {}", sslCiphers);
