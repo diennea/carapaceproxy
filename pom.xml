@@ -126,7 +126,7 @@
         <!-- test dependecies -->
         <libs.junit>4.13.2</libs.junit>
         <libs.junitparams>1.1.1</libs.junitparams>
-        <libs.wiremock>2.35.2</libs.wiremock>
+        <libs.wiremock>3.13.1</libs.wiremock>
         <libs.powermock>2.0.9</libs.powermock>
         <libs.objenesis>3.0.1</libs.objenesis>
         <libs.hamcrest>2.2</libs.hamcrest>
