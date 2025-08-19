@@ -8,6 +8,7 @@ import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAU
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 import static org.junit.Assert.assertEquals;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.util.concurrent.DefaultEventExecutor;
@@ -44,7 +45,6 @@ public class SSLBackendTest {
     private final boolean backendUsesHttps;
     @Rule
     public TemporaryFolder tmpDir = new TemporaryFolder();
-    private WireMockRule backend;
 
     public SSLBackendTest(boolean clientUsesHttps, boolean backendUsesHttps) {
         this.clientUsesHttps = clientUsesHttps;
@@ -63,42 +63,42 @@ public class SSLBackendTest {
 
     @Test
     public void testHttpAndHttpsBackends() throws Exception {
-        // This is still needed for the client-side HTTPS connection to Carapace
         HttpTestUtils.overrideJvmWideHttpsVerifier();
+        final String carapaceCertificate = TestUtils.deployResource("ia.p12", tmpDir.getRoot());
+        final String backendCertificate = TestUtils.deployResource("ca.p12", tmpDir.getRoot());
 
-        // Set up certificate for Carapace HTTPS listener
-        String certificate = TestUtils.deployResource("ia.p12", tmpDir.getRoot());
-
-        // Set up CA certificate for HTTPS backend
-        String caCertificate = TestUtils.deployResource("ca.p12", tmpDir.getRoot());
-
-        backend = new WireMockRule(options()
+        WireMockConfiguration config = options()
                 .dynamicPort()
-                .dynamicHttpsPort()
-                .keystorePath(caCertificate)
-                .keystoreType("PKCS12")
-                .keystorePassword("changeit")
-                .keyManagerPassword("changeit"));
-        backend.start();
+                .dynamicHttpsPort();
+
+        if (backendUsesHttps) {
+            config = config
+                    .keystorePath(backendCertificate)
+                    .keystoreType("PKCS12")
+                    .keystorePassword("changeit")
+                    .keyManagerPassword("changeit");
+        }
+
+        final WireMockRule backend = new WireMockRule(config);
 
         try {
             final int httpPort = TestUtils.getFreePort();
             final int httpsPort = TestUtils.getFreePort();
-
             final String path = "/test";
             final String expectedResponse = "Response from backend";
+            backend.start();
 
             backend.stubFor(get(urlEqualTo(path))
                     .willReturn(aResponse()
                             .withStatus(200)
-                            .withHeader("Content-Type", "text/plain")
+                            .withHeader("Content-Type", "text/html")
                             .withBody(expectedResponse)));
 
             final EndpointMapper.Factory mapperFactory = parent -> {
                 final int backendPort = backendUsesHttps ? backend.httpsPort() : backend.port();
 
                 final BackendConfiguration backendConfig = backendUsesHttps
-                        ? new BackendConfiguration("test-backend", "localhost", backendPort, path, 1000, true, caCertificate, "changeit")
+                        ? new BackendConfiguration("test-backend", "localhost", backendPort, path, 1000, true, backendCertificate, "changeit")
                         : new BackendConfiguration("test-backend", "localhost", backendPort, path, 1000, false);
 
                 return new TestEndpointMapper("localhost", backendPort, false, Map.of("test-backend", backendConfig)) {
@@ -125,7 +125,7 @@ public class SSLBackendTest {
             };
 
             try (final HttpProxyServer server = new HttpProxyServer(mapperFactory, tmpDir.getRoot())) {
-                server.addCertificate(new SSLCertificateConfiguration("localhost", null, certificate, "changeit", STATIC));
+                server.addCertificate(new SSLCertificateConfiguration("localhost", null, carapaceCertificate, "changeit", STATIC));
 
                 server.addListener(new NetworkListenerConfiguration(
                         "localhost", httpPort, false, null, null,
