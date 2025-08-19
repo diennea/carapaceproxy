@@ -73,7 +73,8 @@ public class AlpnUtils {
 
     /**
      * Configures ALPN for HTTP/2 support on a client.
-     * This method checks if the protocol is HTTP/2 and configures ALPN accordingly.
+     * This method only configures ALPN when HTTP/2 protocols are being used.
+     * For HTTP/1.1 connections, ALPN is skipped to maintain compatibility with HTTP/1.1-only backends.
      *
      * @param sslContextBuilder the SslContextBuilder to configure
      * @param protocol          the HTTP protocol to use
@@ -81,13 +82,18 @@ public class AlpnUtils {
      * @return the configured SslContextBuilder
      */
     public static SslContextBuilder configureAlpnForClient(final EndpointKey endpoint, final HttpProtocol protocol, final SslContextBuilder sslContextBuilder) {
-        LOG.debug("Configuring ALPN for HTTP/2 support on backend connection to {}:{}", endpoint.host(), endpoint.port());
-        sslContextBuilder.applicationProtocolConfig(new ApplicationProtocolConfig(
-                ApplicationProtocolConfig.Protocol.ALPN,
-                ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
-                ApplicationProtocolConfig.SelectedListenerFailureBehavior.ACCEPT,
-                ApplicationProtocolNames.HTTP_2, ApplicationProtocolNames.HTTP_1_1
-        ));
+        // Only configure ALPN for HTTP/2 protocols
+        if (protocol == HttpProtocol.H2 || protocol == HttpProtocol.H2C) {
+            LOG.debug("Configuring ALPN for HTTP/2 support on backend connection to {}:{}", endpoint.host(), endpoint.port());
+            sslContextBuilder.applicationProtocolConfig(new ApplicationProtocolConfig(
+                    ApplicationProtocolConfig.Protocol.ALPN,
+                    ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
+                    ApplicationProtocolConfig.SelectedListenerFailureBehavior.ACCEPT,
+                    ApplicationProtocolNames.HTTP_2, ApplicationProtocolNames.HTTP_1_1
+            ));
+        } else {
+            LOG.debug("Skipping ALPN configuration for HTTP/1.1 backend connection to {}:{}", endpoint.host(), endpoint.port());
+        }
         return sslContextBuilder;
     }
 }
