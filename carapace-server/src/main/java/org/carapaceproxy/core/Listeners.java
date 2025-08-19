@@ -126,10 +126,12 @@ public class Listeners {
             final EndpointKey hostPort = channel.getKey();
             final NetworkListenerConfiguration actualListenerConfig = currentConfiguration.getListener(hostPort);
             final NetworkListenerConfiguration newConfigurationForListener = newConfiguration.getListener(hostPort);
+            final boolean isReloadCertificate = newConfiguration == currentConfiguration && newConfigurationForListener.ssl();
             if (newConfigurationForListener == null) {
                 LOG.info("listener: {} is to be shut down", hostPort);
                 listenersToStop.add(hostPort);
             } else if (certificatesChanged
+                    || isReloadCertificate
                     || !newConfigurationForListener.equals(actualListenerConfig)
                     || newConfiguration.getResponseCompressionThreshold() != currentConfiguration.getResponseCompressionThreshold()
                     || newConfiguration.getMaxHeaderSize() != currentConfiguration.getMaxHeaderSize()) {
