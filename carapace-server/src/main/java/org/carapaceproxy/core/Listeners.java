@@ -117,7 +117,7 @@ public class Listeners {
         }
         // Clear cached ssl contexts
         sslContexts.clear();
-        final boolean certificatesChanged = newConfiguration.getCertificates().equals(currentConfiguration.getCertificates());
+        final boolean certificatesChanged = !newConfiguration.getCertificates().equals(currentConfiguration.getCertificates());
 
         // stop dropped listeners, start new one
         final List<EndpointKey> listenersToStop = new ArrayList<>();
