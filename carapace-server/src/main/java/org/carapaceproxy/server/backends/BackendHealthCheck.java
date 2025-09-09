@@ -19,17 +19,28 @@
  */
 package org.carapaceproxy.server.backends;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
 import java.util.Objects;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
 import javax.ws.rs.core.UriBuilder;
 import org.carapaceproxy.server.config.BackendConfiguration;
+import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.IOUtils;
+import org.carapaceproxy.utils.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The record models a single health check.
@@ -50,80 +61,91 @@ public record BackendHealthCheck(
         String httpResponse,
         String httpBody
 ) {
+    private static final Logger LOGGER = LoggerFactory.getLogger(BackendHealthCheck.class);
 
     public static BackendHealthCheck check(final BackendConfiguration bconf, final int timeoutMillis) {
-        return check(bconf.host(), bconf.port(), bconf.probePath(), timeoutMillis);
-    }
-
-    public static BackendHealthCheck check(final String host, final int port, final String path, final int timeoutMillis) {
-        if (path.isEmpty()) {
-            long now = System.currentTimeMillis();
-            return new BackendHealthCheck(path, now, now, Result.SUCCESS, "OK", "MOCK OK");
+        final String scheme = StringUtils.isBlank(bconf.probeScheme()) ? "http" : bconf.probeScheme();
+        final String probePath = bconf.probePath();
+        final String caCertificatePath = bconf.caCertificatePath();
+        final String caCertificatePassword = bconf.caCertificatePassword();
+        if (probePath.isEmpty()) {
+            final long now = System.currentTimeMillis();
+            return new BackendHealthCheck(probePath, now, now, Result.SUCCESS, "OK", "MOCK OK");
         }
-        final long startTs = System.currentTimeMillis();
-        HttpURLConnection httpConn = null;
+        final long now = System.currentTimeMillis();
+        HttpURLConnection httpConnection = null;
         try {
-            final URL url = UriBuilder.fromPath(path).scheme("http").host(host).port(port).build().toURL();
-            URLConnection conn = url.openConnection();
-            conn.setConnectTimeout(timeoutMillis);
-            conn.setReadTimeout(timeoutMillis);
-            conn.setUseCaches(false);
+            final URL url = UriBuilder.fromPath(probePath).scheme(scheme).host(bconf.host()).port(bconf.port()).build().toURL();
+            URLConnection urlConnection = url.openConnection();
+            urlConnection.setConnectTimeout(timeoutMillis);
+            urlConnection.setReadTimeout(timeoutMillis);
+            urlConnection.setUseCaches(false);
 
-            if (!(conn instanceof HttpURLConnection)) {
+            if (!(urlConnection instanceof HttpURLConnection)) {
                 throw new IllegalStateException("Only HttpURLConnection is supported");
             }
-            httpConn = (HttpURLConnection) conn;
-            httpConn.setRequestMethod("GET");
-            httpConn.setInstanceFollowRedirects(true);
+            httpConnection = (HttpURLConnection) urlConnection;
 
-            try (InputStream is = httpConn.getInputStream()) {
-                int httpCode = httpConn.getResponseCode();
-                String httpResponse = httpCode + " " + Objects.toString(httpConn.getResponseMessage(), "");
-                String httpBody = IOUtils.toString(is, StandardCharsets.UTF_8);
+            // If using HTTPS and a custom CA is provided, configure SSL trust store
+            if (httpConnection instanceof final HttpsURLConnection httpsConnection) {
+                if (caCertificatePath != null && !caCertificatePath.isBlank()) {
+                    try {
+                        final File basePath = new File(".");
+                        final KeyStore trustStore = CertificatesUtils.loadKeyStoreFromFile(caCertificatePath, caCertificatePassword != null ? caCertificatePassword : "", basePath);
+                        if (trustStore != null) {
+                            final TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+                            tmf.init(trustStore);
+                            final SSLContext sslContext = SSLContext.getInstance("TLS");
+                            sslContext.init(null, tmf.getTrustManagers(), null);
+                            httpsConnection.setSSLSocketFactory(sslContext.getSocketFactory());
+                        }
+                    } catch (GeneralSecurityException e) {
+                        LOGGER.warn("Unable to load trust store", e);
+                    }
+                }
+            }
+            httpConnection.setRequestMethod("GET");
+            httpConnection.setInstanceFollowRedirects(true);
+            try (final InputStream is = httpConnection.getInputStream()) {
+                final int httpCode = httpConnection.getResponseCode();
                 return new BackendHealthCheck(
-                        path,
-                        startTs,
+                        probePath,
+                        now,
                         System.currentTimeMillis(),
                         httpCode >= 200 && httpCode <= 299 ? Result.SUCCESS : Result.FAILURE_STATUS,
-                        httpResponse,
-                        httpBody
+                        httpCode + " " + Objects.toString(httpConnection.getResponseMessage(), ""),
+                        IOUtils.toString(is, StandardCharsets.UTF_8)
                 );
             }
-
         } catch (MalformedURLException ex) {
-            throw new RuntimeException(ex);
-
+            throw new UncheckedIOException(ex);
         } catch (IOException | RuntimeException ex) {
-            Result result = Result.FAILURE_STATUS;
             int httpCode = 0;
-            String httpResponse = "";
+            String response = "";
             String httpErrorBody = "";
-
-            if (httpConn != null) {
+            if (httpConnection != null) {
                 try {
-                    httpCode = httpConn.getResponseCode();
-                    httpResponse = httpCode + " " + Objects.toString(httpConn.getResponseMessage(), "");
-                } catch (IOException ex2) {
+                    httpCode = httpConnection.getResponseCode();
+                } catch (IOException ignored) {
                     // Ignore
                 }
-
                 try {
-                    httpErrorBody = IOUtils.toString(httpConn.getErrorStream(), StandardCharsets.UTF_8);
-                } catch (IOException ex2) {
+                    response = httpCode + " " + Objects.toString(httpConnection.getResponseMessage(), "");
+                } catch (IOException ignored) {
                     // Ignore
                 }
-            }
-
-            if (httpCode <= 0) {
-                result = Result.FAILURE_CONNECTION;
-                httpResponse = ex.getMessage();
+                try {
+                    httpErrorBody = IOUtils.toString(httpConnection.getErrorStream(), StandardCharsets.UTF_8);
+                } catch (IOException ignored) {
+                    // Ignore
+                }
             }
             return new BackendHealthCheck(
-                    path,
-                    startTs,
+                    probePath,
+                    now,
                     System.currentTimeMillis(),
-                    result,
-                    httpResponse,
+                    httpCode <= 0 ? Result.FAILURE_CONNECTION : Result.FAILURE_STATUS,
+                    httpCode <= 0 ? ex.getMessage() : response,
                     httpErrorBody
             );
         }
