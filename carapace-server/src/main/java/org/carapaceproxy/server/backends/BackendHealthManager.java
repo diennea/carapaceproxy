@@ -21,6 +21,8 @@ package org.carapaceproxy.server.backends;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.prometheus.client.Gauge;
+import java.io.File;
+import java.security.KeyStore;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -28,10 +30,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.TrustManagerFactory;
 import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.mapper.EndpointMapper;
+import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,6 +58,8 @@ public class BackendHealthManager implements Runnable {
             .createGauge("health", "backend_status", "backend status", "host")
             .register();
     private final ConcurrentHashMap<EndpointKey, BackendHealthStatus> backends = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, SSLSocketFactory> httpsFactoryCache = new ConcurrentHashMap<>();
+    private final File basePath;
     private EndpointMapper mapper;
     private ScheduledExecutorService timer;
     private ScheduledFuture<?> scheduledFuture;
@@ -65,10 +73,15 @@ public class BackendHealthManager implements Runnable {
     private volatile boolean tolerant;
 
     public BackendHealthManager(final RuntimeServerConfiguration conf, final EndpointMapper mapper) {
+        this(conf, mapper, new File("."));
+    }
+
+    public BackendHealthManager(final RuntimeServerConfiguration conf, final EndpointMapper mapper, final File basePath) {
         this.mapper = mapper;
         this.connectTimeout = conf.getHealthConnectTimeout();
         this.warmupPeriod = conf.getWarmupPeriod();
         this.tolerant = conf.isTolerant();
+        this.basePath = basePath != null ? basePath.getAbsoluteFile() : new File(".");
 
         // will be overridden before start
         this.period = DEFAULT_PERIOD;
@@ -113,6 +126,7 @@ public class BackendHealthManager implements Runnable {
     }
 
     public synchronized void reloadConfiguration(RuntimeServerConfiguration newConfiguration, EndpointMapper mapper) {
+        this.httpsFactoryCache.clear();
         final int newPeriod = newConfiguration.getHealthProbePeriod();
         final boolean changePeriod = period != newPeriod;
         final boolean restart = scheduledFuture != null && changePeriod;
@@ -157,7 +171,16 @@ public class BackendHealthManager implements Runnable {
         for (final BackendConfiguration backend : mapper.getBackends().values()) {
             final EndpointKey endpoint = backend.hostPort();
             final BackendHealthStatus status = getBackendStatus(endpoint);
-            final BackendHealthCheck checkResult = BackendHealthCheck.check(backend, connectTimeout);
+
+            SSLSocketFactory httpsFactory = null;
+            if ("https".equalsIgnoreCase(backend.probeScheme())) {
+                final String caPath = backend.caCertificatePath();
+                if (caPath != null && !caPath.isBlank()) {
+                    httpsFactory = getOrCreateHttpsFactory(backend);
+                }
+            }
+
+            final BackendHealthCheck checkResult = BackendHealthCheck.check(backend, connectTimeout, httpsFactory);
 
             if (checkResult.ok()) {
                 switch (status.getStatus()) {
@@ -183,6 +206,32 @@ public class BackendHealthManager implements Runnable {
                     .set(status.getStatus() == BackendHealthStatus.Status.DOWN ? 0 : 1);
         }
         cleanup();
+    }
+
+    private SSLSocketFactory getOrCreateHttpsFactory(final BackendConfiguration bconf) {
+        final String caPath = bconf.caCertificatePath();
+        final String pwd = bconf.caCertificatePassword() != null ? bconf.caCertificatePassword() : "";
+        if (caPath == null || caPath.isBlank()) {
+            return null;
+        }
+        final File caFile = caPath.startsWith("/") ? new File(caPath) : new File(basePath, caPath);
+        final String key = caFile.getAbsoluteFile().toString();
+        return httpsFactoryCache.computeIfAbsent(key, k -> {
+            try {
+                final KeyStore trustStore = CertificatesUtils.loadKeyStoreFromFile(caPath, pwd, basePath);
+                if (trustStore == null) {
+                    return null;
+                }
+                final TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+                tmf.init(trustStore);
+                final SSLContext ctx = SSLContext.getInstance("TLS");
+                ctx.init(null, tmf.getTrustManagers(), null);
+                return ctx.getSocketFactory();
+            } catch (Exception e) {
+                LOG.warn("Unable to build HTTPS SSLSocketFactory for backend {}: {}", bconf.id(), e.toString());
+                return null;
+            }
+        });
     }
 
     private void cleanup() {
