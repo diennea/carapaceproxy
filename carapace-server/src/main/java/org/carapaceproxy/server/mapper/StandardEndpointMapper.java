@@ -38,6 +38,7 @@ import java.util.SequencedMap;
 import java.util.Set;
 import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.configstore.ConfigurationStore;
+import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.server.backends.BackendHealthManager;
@@ -512,10 +513,19 @@ public class StandardEndpointMapper extends EndpointMapper {
                 final boolean ssl = properties.getBoolean(prefix + "ssl", false);
                 final String caCertificatePath = properties.getString(prefix + "cacertificate", null);
                 final String caCertificatePassword = properties.getString(prefix + "cacertificatepassword", null);
-                LOG.info("configured backend {} {}:{} enabled={} capacity={} ssl={} caCertificate={} caCertificatePassword={}",
-                         id, host, port, enabled, safeCapacity, ssl, caCertificatePath, caCertificatePassword != null ? "******" : null);
+                final String probeScheme = properties.getString(prefix + "probescheme", "http");
+                final String probeSchemeNormalized = probeScheme.toLowerCase();
+                switch (probeScheme.toLowerCase()) {
+                    case "http":
+                    case "https":
+                        break;
+                    default:
+                        throw new ConfigurationNotValidException("invalid probeScheme=" + probeScheme + " while configuring backend '" + id + "' (allowed: http|https)");
+                }
+                LOG.info("configured backend {} {}:{} enabled={} capacity={} ssl={} caCertificate={} caCertificatePassword={} probeScheme={}",
+                         id, host, port, enabled, safeCapacity, ssl, caCertificatePath, caCertificatePassword != null ? "******" : null, probeSchemeNormalized);
                 if (enabled) {
-                    addBackend(new BackendConfiguration(id, host, port, probePath, safeCapacity, ssl, caCertificatePath, caCertificatePassword));
+                    addBackend(new BackendConfiguration(id, new EndpointKey(host, port), probePath, safeCapacity, ssl, caCertificatePath, caCertificatePassword, probeSchemeNormalized));
                 }
             }
         }

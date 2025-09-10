@@ -263,7 +263,7 @@ public class HttpProxyServer implements AutoCloseable {
         this.ocspStaplingManager = new OcspStaplingManager(trustStoreManager);
         this.proxyRequestsManager = new ProxyRequestsManager(this);
         this.mapper = mapperFactory.build(this);
-        this.backendHealthManager = new BackendHealthManager(currentConfiguration, this.mapper);
+        this.backendHealthManager = new BackendHealthManager(currentConfiguration, this.mapper, this.basePath);
         this.proxyRequestsManager.reloadConfiguration(currentConfiguration, this.mapper.getBackends().values());
 
         this.usePooledByteBufAllocator = Boolean.getBoolean("cache.allocator.usepooledbytebufallocator");

@@ -33,7 +33,16 @@ import org.carapaceproxy.server.backends.BackendHealthStatus.Status;
  * @param caCertificatePath    path to a CA certificate to trust when connecting to this backend (optional)
  * @param caCertificatePassword password for the CA certificate (optional)
  */
-public record BackendConfiguration(String id, EndpointKey hostPort, String probePath, int safeCapacity, boolean ssl, String caCertificatePath, String caCertificatePassword) {
+public record BackendConfiguration(
+        String id,
+        EndpointKey hostPort,
+        String probePath,
+        int safeCapacity,
+        boolean ssl,
+        String caCertificatePath,
+        String caCertificatePassword,
+        String probeScheme
+) {
 
     /**
      * Configuration of a single backend server.
@@ -48,7 +57,7 @@ public record BackendConfiguration(String id, EndpointKey hostPort, String probe
      * @param caCertificatePassword password for the CA certificate (optional)
      */
     public BackendConfiguration(final String id, final String host, final int port, final String probePath, final int safeCapacity, final boolean ssl, final String caCertificatePath, final String caCertificatePassword) {
-        this(id, new EndpointKey(host, port), probePath, safeCapacity, ssl, caCertificatePath, caCertificatePassword);
+        this(id, new EndpointKey(host, port), probePath, safeCapacity, ssl, caCertificatePath, caCertificatePassword, "http");
     }
 
     /**
