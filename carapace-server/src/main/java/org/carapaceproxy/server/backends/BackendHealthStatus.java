@@ -46,7 +46,7 @@ public class BackendHealthStatus {
 
     public BackendHealthStatus(final EndpointKey hostPort, final long warmupPeriod) {
         this.hostPort = hostPort;
-        // we assume that the backend just become reachable when the status is created
+        // we assume that the backend just became reachable when the status is created
         this.status = Status.COLD;
         this.unreachableSince = 0L;
         final long created = System.currentTimeMillis();
