@@ -86,6 +86,49 @@ public record NetworkListenerConfiguration(
         );
     }
 
+    public static NetworkListenerConfiguration withDefaultSsl(final String host, final int port, final String defaultCertificate) {
+        return withDefault(
+                host,
+                port,
+                true,
+                null,
+                defaultCertificate,
+                DEFAULT_SO_BACKLOG,
+                DEFAULT_KEEP_ALIVE,
+                DEFAULT_KEEP_ALIVE_IDLE,
+                DEFAULT_KEEP_ALIVE_INTERVAL,
+                DEFAULT_KEEP_ALIVE_COUNT,
+                DEFAULT_MAX_KEEP_ALIVE_REQUESTS
+        );
+    }
+
+    /**
+     * Create a SSL-enabled listener with a custom set of allowed HTTP protocols (e.g. HTTP/1.1, H2).
+     */
+    public static NetworkListenerConfiguration withDefaultSsl(
+            final String host,
+            final int port,
+            final String defaultCertificate,
+            final Set<HttpProtocol> protocols) {
+        return new NetworkListenerConfiguration(
+                host,
+                port,
+                true,
+                null,
+                defaultCertificate,
+                DEFAULT_SSL_PROTOCOLS,
+                DEFAULT_SO_BACKLOG,
+                DEFAULT_KEEP_ALIVE,
+                DEFAULT_KEEP_ALIVE_IDLE,
+                DEFAULT_KEEP_ALIVE_INTERVAL,
+                DEFAULT_KEEP_ALIVE_COUNT,
+                DEFAULT_MAX_KEEP_ALIVE_REQUESTS,
+                DEFAULT_FORWARDED_STRATEGY,
+                Set.of(),
+                protocols,
+                new DefaultChannelGroup(new DefaultEventExecutor()));
+    }
+
     public static NetworkListenerConfiguration withDefault(
             final String host,
             final int port,
@@ -114,6 +157,32 @@ public record NetworkListenerConfiguration(
                 DEFAULT_FORWARDED_STRATEGY,
                 Set.of(),
                 getDefaultHttpProtocols(ssl),
+                new DefaultChannelGroup(new DefaultEventExecutor()));
+    }
+
+    /**
+     * Create a cleartext listener with a custom set of allowed HTTP protocols (e.g. HTTP/1.1, H2C).
+     */
+    public static NetworkListenerConfiguration withoutSsl(
+            final String host,
+            final int port,
+            final Set<HttpProtocol> protocols) {
+        return new NetworkListenerConfiguration(
+                host,
+                port,
+                false,
+                null,
+                null,
+                Set.of(),
+                DEFAULT_SO_BACKLOG,
+                DEFAULT_KEEP_ALIVE,
+                DEFAULT_KEEP_ALIVE_IDLE,
+                DEFAULT_KEEP_ALIVE_INTERVAL,
+                DEFAULT_KEEP_ALIVE_COUNT,
+                DEFAULT_MAX_KEEP_ALIVE_REQUESTS,
+                DEFAULT_FORWARDED_STRATEGY,
+                Set.of(),
+                protocols,
                 new DefaultChannelGroup(new DefaultEventExecutor()));
     }
 
