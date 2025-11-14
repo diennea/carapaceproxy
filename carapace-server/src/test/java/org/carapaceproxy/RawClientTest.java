@@ -613,7 +613,7 @@ public class RawClientTest {
         AtomicBoolean responseEnabled = new AtomicBoolean();
 
         try (DummyServer server = new DummyServer("localhost", 8086, responseEnabled)) {
-            TestEndpointMapper mapper = new TestEndpointMapper("localhost", 8086, false);
+            TestEndpointMapper mapper = new TestEndpointMapper("localhost", 8086, false, false);
             try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
                 ConnectionPoolConfiguration defaultConnectionPool = proxy.getCurrentConfiguration().getDefaultConnectionPool();
                 defaultConnectionPool.setMaxConnectionsPerEndpoint(1);
@@ -733,7 +733,7 @@ public class RawClientTest {
 
         // Proxy requests have to use "localhost:port" as endpoint instead of the one in the url (ex yahoo.com)
         // in order to avoid open proxy vulnerability
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", 0, scheme.equals("https"), null, "localhost", DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 100, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11), new DefaultChannelGroup(new DefaultEventExecutor())));

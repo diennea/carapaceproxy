@@ -77,7 +77,7 @@ public class Http2Test {
                         .withHeader("Content-Length", String.valueOf(RESPONSE.length()))
                         .withBody(RESPONSE))
         );
-        final var mapper = new TestEndpointMapper("localhost", wireMockRule.port(), withCache);
+        final var mapper = new TestEndpointMapper("localhost", wireMockRule.port(), withCache, false);
         try (final var server = new HttpProxyServer(mapper, tmpDir.newFolder())) {
             server.addListener(new NetworkListenerConfiguration(
                     "localhost",

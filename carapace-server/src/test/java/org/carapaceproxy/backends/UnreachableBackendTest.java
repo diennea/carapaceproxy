@@ -81,7 +81,7 @@ public class UnreachableBackendTest {
 
         int dummyport = wireMockRule.port();
         wireMockRule.stop();
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache, false);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
@@ -113,7 +113,7 @@ public class UnreachableBackendTest {
                         .withFault(Fault.EMPTY_RESPONSE)));
 
         int dummyport = wireMockRule.port();
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache, false);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.newFolder())) {
@@ -168,7 +168,7 @@ public class UnreachableBackendTest {
                         .withFault(Fault.CONNECTION_RESET_BY_PEER)));
 
         int dummyport = wireMockRule.port();
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache, false);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
@@ -199,7 +199,7 @@ public class UnreachableBackendTest {
                         .withFault(Fault.RANDOM_DATA_THEN_CLOSE)));
 
         int dummyport = wireMockRule.port();
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache, false);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.newFolder())) {

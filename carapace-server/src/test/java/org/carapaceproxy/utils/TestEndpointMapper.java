@@ -19,11 +19,9 @@
  */
 package org.carapaceproxy.utils;
 
-import static org.carapaceproxy.core.RuntimeServerConfiguration.DEFAULT_WARMUP_PERIOD;
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.SequencedMap;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
@@ -39,39 +37,35 @@ import org.carapaceproxy.server.mapper.MapResult;
 
 public class TestEndpointMapper extends EndpointMapper implements EndpointMapper.Factory {
 
-    private final String host;
-    private final int port;
-    private final boolean cacheAll;
-    private final SequencedMap<String, BackendConfiguration> backends;
-    private final List<RouteConfiguration> routes = new ArrayList<>();
-    private final List<ActionConfiguration> actions = new ArrayList<>();
-    private final SequencedMap<String, DirectorConfiguration> directors;
-    private final List<CustomHeader> headers = new ArrayList<>();
-
-    public TestEndpointMapper(String host, int port) {
-        this(host, port, false);
-    }
-
-    public TestEndpointMapper(String host, int port, boolean cacheAll) {
-        this(host, port, cacheAll, Map.of(host, new BackendConfiguration(host, host, port, "/index.html", -1)));
-    }
-
-    public TestEndpointMapper(String host, int port, boolean cacheAll, Map<String, BackendConfiguration> backends) {
-        super(null);
-        this.host = host;
-        this.port = port;
-        this.cacheAll = cacheAll;
-        this.backends = new LinkedHashMap<>(backends);
-        this.directors = new LinkedHashMap<>();
-    }
+    private final boolean proxyCache;
+    private final BackendConfiguration backend;
 
     public TestEndpointMapper(final HttpProxyServer ignoredServer) {
         this("localhost", 0); // required for reflective construction
     }
 
+    public TestEndpointMapper(final String host, final int port) {
+        this(host, port, false, false);
+    }
+
+    public TestEndpointMapper(final String host, final int port, final boolean proxyCache, final boolean ssl) {
+        this(new BackendConfiguration(host, host, port, "/index.html", -1, ssl), proxyCache);
+    }
+
+    public TestEndpointMapper(final BackendConfiguration backend, final boolean proxyCache) {
+        super(null);
+        this.proxyCache = proxyCache;
+        this.backend = backend;
+    }
+
     @Override
-    public MapResult map(ProxyRequest request) {
-        String uri = request.getUri();
+    public MapResult map(final ProxyRequest request) {
+        final String headerHost = request.getRequestHostname();
+        if (StringUtils.isBlank(headerHost) || !request.isValidHostAndPort(headerHost)) {
+            return MapResult.badRequest();
+        }
+
+        final String uri = request.getUri();
         if (uri.contains("not-found")) {
             return MapResult.notFound(MapResult.NO_ROUTE);
         }
@@ -81,19 +75,24 @@ public class TestEndpointMapper extends EndpointMapper implements EndpointMapper
                     .routeId(MapResult.NO_ROUTE)
                     .build();
         }
-        final BackendHealthStatus healthStatus = new BackendHealthStatus(request.getListener(), DEFAULT_WARMUP_PERIOD);
-        if (cacheAll) {
+        final BackendHealthStatus healthStatus = new BackendHealthStatus(request.getListener(), 0);
+        // warmupPeriod = 0 & status = COLD -> new status = STABLE
+        healthStatus.reportAsReachable(System.currentTimeMillis());
+        if (proxyCache) {
             return MapResult.builder()
-                    .host(host)
-                    .port(port)
+                    .host(backend.host())
+                    .port(backend.port())
+                    .ssl(backend.ssl())
                     .action(MapResult.Action.CACHE)
                     .routeId(MapResult.NO_ROUTE)
                     .healthStatus(healthStatus)
                     .build();
         }
+
         return MapResult.builder()
-                .host(host)
-                .port(port)
+                .host(backend.host())
+                .port(backend.port())
+                .ssl(backend.ssl())
                 .action(MapResult.Action.PROXY)
                 .routeId(MapResult.NO_ROUTE)
                 .healthStatus(healthStatus)
@@ -102,27 +101,29 @@ public class TestEndpointMapper extends EndpointMapper implements EndpointMapper
 
     @Override
     public SequencedMap<String, BackendConfiguration> getBackends() {
-        return backends;
+        final SequencedMap<String, BackendConfiguration> backends = new LinkedHashMap<>();
+        backends.put(backend.id(), backend);
+        return Collections.unmodifiableSequencedMap(backends);
     }
 
     @Override
     public List<RouteConfiguration> getRoutes() {
-        return routes;
+        return List.of();
     }
 
     @Override
     public List<ActionConfiguration> getActions() {
-        return actions;
+        return List.of();
     }
 
     @Override
     public SequencedMap<String, DirectorConfiguration> getDirectors() {
-        return directors;
+        return Collections.emptySortedMap();
     }
 
     @Override
     public List<CustomHeader> getHeaders() {
-        return headers;
+        return List.of();
     }
 
     @Override

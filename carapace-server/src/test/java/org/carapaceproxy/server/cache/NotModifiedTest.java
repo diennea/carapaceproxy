@@ -28,7 +28,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.HttpUtils;
 import org.carapaceproxy.utils.RawHttpClient;
@@ -57,7 +56,7 @@ public class NotModifiedTest {
                         .withBody("it <b>works</b> !!")
                 ));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
             server.start();

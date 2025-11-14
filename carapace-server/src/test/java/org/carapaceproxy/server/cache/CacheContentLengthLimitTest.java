@@ -80,7 +80,7 @@ public class CacheContentLengthLimitTest {
     }
 
     private void testFileSizeCache(String body, boolean chunked) throws Exception {
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
         // No size checking

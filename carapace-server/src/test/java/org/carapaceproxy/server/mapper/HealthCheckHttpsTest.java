@@ -26,11 +26,9 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import java.io.File;
-import java.util.HashMap;
 import java.util.Map;
 import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
@@ -89,9 +87,7 @@ public class HealthCheckHttpsTest {
                     "https"
             );
 
-            final Map<String, BackendConfiguration> backends = new HashMap<>();
-            backends.put(bconf.hostPort().toString(), bconf);
-            final EndpointMapper mapper = new TestEndpointMapper(null, 0, false, backends);
+            final EndpointMapper mapper = new TestEndpointMapper(bconf, false);
 
             final RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
             final BackendHealthManager hman = new BackendHealthManager(conf, mapper, tmpDir.getRoot());
@@ -145,9 +141,7 @@ public class HealthCheckHttpsTest {
                     "https"
             );
 
-            final Map<String, BackendConfiguration> backends = new HashMap<>();
-            backends.put(bconf.hostPort().toString(), bconf);
-            final EndpointMapper mapper = new TestEndpointMapper(null, 0, false, backends);
+            final EndpointMapper mapper = new TestEndpointMapper(bconf, false);
 
             final RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
             final BackendHealthManager hman = new BackendHealthManager(conf, mapper, tmpDir.getRoot());

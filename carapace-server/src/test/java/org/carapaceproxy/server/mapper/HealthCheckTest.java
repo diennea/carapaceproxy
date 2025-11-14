@@ -32,7 +32,6 @@ import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.lessThan;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import java.util.HashMap;
 import java.util.Map;
 import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
@@ -59,10 +58,8 @@ public class HealthCheckTest {
 
     @Test
     public void test() throws Exception {
-        final Map<String, BackendConfiguration> backends = new HashMap<>();
         final BackendConfiguration b1conf = new BackendConfiguration("myid", "localhost", wireMockRule.port(), "/status.html", -1);
-        backends.put(b1conf.hostPort().toString(), b1conf);
-        final EndpointMapper mapper = new TestEndpointMapper(null, 0, false, backends);
+        final EndpointMapper mapper = new TestEndpointMapper(b1conf, false);
         final RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         final BackendHealthManager hman = new BackendHealthManager(conf, mapper);
         {
@@ -81,7 +78,7 @@ public class HealthCheckTest {
             System.out.println("status=" + status);
             assertThat(status.size(), is(1));
 
-            final BackendConfiguration bconf = mapper.getBackends().get(b1conf.hostPort().toString());
+            final BackendConfiguration bconf = mapper.getBackends().get(b1conf.id());
             assertThat(bconf.id(), is("myid"));
             assertThat(bconf.host(), is("localhost"));
             assertThat(bconf.port(), is(wireMockRule.port()));
@@ -120,7 +117,7 @@ public class HealthCheckTest {
             System.out.println("status=" + status);
             assertThat(status.size(), is(1));
 
-            final BackendConfiguration bconf = mapper.getBackends().get(b1conf.hostPort().toString());
+            final BackendConfiguration bconf = mapper.getBackends().get(b1conf.id());
             assertThat(bconf.id(), is("myid"));
             assertThat(bconf.host(), is("localhost"));
             assertThat(bconf.port(), is(wireMockRule.port()));
@@ -161,7 +158,7 @@ public class HealthCheckTest {
             System.out.println("status=" + status);
             assertThat(status.size(), is(1));
 
-            final BackendConfiguration bconf = mapper.getBackends().get(b1conf.hostPort().toString());
+            final BackendConfiguration bconf = mapper.getBackends().get(b1conf.id());
             assertThat(bconf.id(), is("myid"));
             assertThat(bconf.host(), is("localhost"));
             assertThat(bconf.port(), is(wireMockRule.port()));
@@ -202,7 +199,7 @@ public class HealthCheckTest {
             System.out.println("status=" + status);
             assertThat(status.size(), is(1));
 
-            final BackendConfiguration bconf = mapper.getBackends().get(b1conf.hostPort().toString());
+            final BackendConfiguration bconf = mapper.getBackends().get(b1conf.id());
             assertThat(bconf.id(), is("myid"));
             assertThat(bconf.host(), is("localhost"));
             assertThat(bconf.port(), is(wireMockRule.port()));

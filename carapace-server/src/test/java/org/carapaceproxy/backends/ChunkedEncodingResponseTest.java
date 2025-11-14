@@ -119,7 +119,7 @@ public class ChunkedEncodingResponseTest {
                                 .withHeader("Content-Type", "text/html")
                                 .withBody("it <b>works</b> !!"))
         );
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.start();
@@ -179,7 +179,7 @@ public class ChunkedEncodingResponseTest {
                                 .withHeader("Content-Type", "text/html")
                                 .withBody("it <b>works</b> !!"))
         );
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.start();
