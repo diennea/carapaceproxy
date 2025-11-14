@@ -72,7 +72,7 @@ public class SSLSNITest {
                         .withHeader("Content-Length", String.valueOf("it <b>works</b> !!".length()))
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
             server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
@@ -91,7 +91,7 @@ public class SSLSNITest {
 
     @Test
     public void testChooseCertificate() throws Exception {
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
 
@@ -171,7 +171,7 @@ public class SSLSNITest {
                         .withHeader("Content-Length", String.valueOf("it <b>works</b> !!".length()))
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
 
         // TLS 1.3 support checking
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {

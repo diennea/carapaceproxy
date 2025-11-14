@@ -28,9 +28,7 @@ import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.util.concurrent.DefaultEventExecutor;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import org.carapaceproxy.server.backends.BackendHealthStatus;
 import org.carapaceproxy.server.config.BackendConfiguration;
@@ -141,9 +139,7 @@ public class HttpProtocolAndSSLTest {
             final BackendConfiguration backendConfig = backendUsesHttps
                     ? new BackendConfiguration("test-backend", "localhost", backendPort, path, 1000, true, backendCertificate, "changeit")
                     : new BackendConfiguration("test-backend", "localhost", backendPort, path, 1000, false);
-            final Map<String, BackendConfiguration> backends = new HashMap<>();
-            backends.put("test-backend", backendConfig);
-            final TestEndpointMapper mapper = new TestEndpointMapper("localhost", backendPort, false, backends) {
+            final TestEndpointMapper mapper = new TestEndpointMapper(backendConfig, false) {
                 @Override
                 public MapResult map(final ProxyRequest request) {
                     // Always return STABLE to bypass capacity check

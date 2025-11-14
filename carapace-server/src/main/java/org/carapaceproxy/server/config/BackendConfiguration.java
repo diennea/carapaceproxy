@@ -99,7 +99,7 @@ public record BackendConfiguration(
      * @param safeCapacity a capacity that is considered safe even when {@link Status#COLD cold}, or 0 for an infinite capacity
      */
     public BackendConfiguration(final String id, final String host, final int port, final String probePath, final int safeCapacity) {
-        this(id, host, port, probePath, safeCapacity, false, null, null);
+        this(id, host, port, probePath, safeCapacity, false);
     }
 
     public String host() {

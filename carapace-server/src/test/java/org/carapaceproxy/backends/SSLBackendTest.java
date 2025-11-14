@@ -16,17 +16,13 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Map;
 import java.util.Set;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.core.ProxyRequest;
-import org.carapaceproxy.server.backends.BackendHealthStatus;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.server.mapper.EndpointMapper;
-import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.utils.HttpTestUtils;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
@@ -101,27 +97,7 @@ public class SSLBackendTest {
                         ? new BackendConfiguration("test-backend", "localhost", backendPort, path, 1000, true, backendCertificate, "changeit")
                         : new BackendConfiguration("test-backend", "localhost", backendPort, path, 1000, false);
 
-                return new TestEndpointMapper("localhost", backendPort, false, Map.of("test-backend", backendConfig)) {
-                    @Override
-                    public MapResult map(final ProxyRequest request) {
-                        // Always return STABLE to bypass capacity check
-                        final BackendHealthStatus healthStatus = new BackendHealthStatus(request.getListener(), 0) {
-                            @Override
-                            public Status getStatus() {
-                                return Status.STABLE;
-                            }
-                        };
-
-                        return MapResult.builder()
-                                .host("localhost")
-                                .port(backendPort)
-                                .action(MapResult.Action.PROXY)
-                                .routeId("test-route")
-                                .healthStatus(healthStatus)
-                                .ssl(backendUsesHttps)
-                                .build();
-                    }
-                };
+                return new TestEndpointMapper(backendConfig, false);
             };
 
             try (final HttpProxyServer server = new HttpProxyServer(mapperFactory, tmpDir.getRoot())) {
