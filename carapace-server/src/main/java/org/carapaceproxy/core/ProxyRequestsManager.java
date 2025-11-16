@@ -22,9 +22,7 @@ package org.carapaceproxy.core;
 import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTP;
 import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTPS;
 import static org.carapaceproxy.utils.AlpnUtils.configureAlpnForClient;
-import static reactor.netty.Metrics.CONNECTION_PROVIDER_PREFIX;
 import com.google.common.annotations.VisibleForTesting;
-import io.micrometer.core.instrument.Metrics;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.epoll.Epoll;
@@ -46,23 +44,17 @@ import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import java.io.File;
 import java.net.ConnectException;
-import java.net.InetSocketAddress;
 import java.security.KeyStore;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
-import java.util.regex.Pattern;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.TrustManagerFactory;
 import jdk.net.ExtendedSocketOptions;
@@ -110,8 +102,7 @@ public class ProxyRequestsManager {
 
     private final HttpProxyServer parent;
     private final Map<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
-    private final Map<ConnectionKey, HttpClient> forwardersPool = new ConcurrentHashMap<>(); // endpoint_connectionpool -> forwarder to use
-    private final ConnectionsManager connectionsManager = new ConnectionsManager();
+    public final ConnectionsManager connectionsManager = new ConnectionsManager();
 
     public ProxyRequestsManager(HttpProxyServer parent) {
         this.parent = parent;
@@ -123,7 +114,6 @@ public class ProxyRequestsManager {
 
     public void reloadConfiguration(RuntimeServerConfiguration newConfiguration, Collection<BackendConfiguration> newEndpoints) {
         connectionsManager.reloadConfiguration(newConfiguration, newEndpoints);
-        forwardersPool.clear();
     }
 
     public void close() {
@@ -366,9 +356,10 @@ public class ProxyRequestsManager {
         final EndpointKey key = EndpointKey.make(request.getAction().getHost(), request.getAction().getPort());
         final EndpointStats endpointStats = endpointsStats.computeIfAbsent(key, EndpointStats::new);
 
-        final var connectionToEndpoint = connectionsManager.apply(request);
-        final ConnectionPoolConfiguration connectionConfig = connectionToEndpoint.getKey();
-        final ConnectionProvider connectionProvider = connectionToEndpoint.getValue();
+        final String hostName = request.getRequestHostname();
+        final ConnectionPoolConfiguration connectionConfig = connectionsManager.findConnectionPool(hostName);
+        final ConnectionProvider connectionProvider = connectionsManager.getConnectionProvider(connectionConfig);
+        LOGGER.debug("Using connection {} for domain {}", connectionConfig.getId(), hostName);
         if (LOGGER.isDebugEnabled()) {
             final Map<String, HttpProxyServer.ConnectionPoolStats> stats = parent.getConnectionPoolsStats().get(key);
             if (stats != null) {
@@ -385,56 +376,48 @@ public class ProxyRequestsManager {
             );
         }
 
-        // Use the client's HTTP protocol version for the backend connection
-        // This ensures that the same HTTP protocol version is used for both client-to-proxy
-        // and proxy-to-backend communications, maintaining protocol consistency end-to-end
-        final HttpVersion httpVersion = request.getHttpProtocol();
-        final boolean isSecure = request.isSecure();
-        final var protocol = HttpUtils.toHttpProtocol(httpVersion, isSecure);
-        final var clientKey = new ConnectionKey(key, connectionConfig.getId(), protocol);
         BackendConfiguration backendConfig = getBackendConfiguration(request);
         String caCertificatePath = backendConfig != null ? backendConfig.caCertificatePath() : null;
         String caCertificatePassword = backendConfig != null ? backendConfig.caCertificatePassword() : null;
-        HttpClient forwarder = forwardersPool.computeIfAbsent(clientKey, hostname ->
-                getClient(connectionProvider, key, httpVersion, request.getAction().isSsl(), caCertificatePath, caCertificatePassword)
-                        .followRedirect(false) // client has to request the redirect, not the proxy
-                        .runOn(parent.getEventLoopGroup())
-                        .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
-                        .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
-                        .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
-                        // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
-                        .option(ChannelOption.SO_KEEPALIVE, connectionConfig.isKeepAlive())
-                        .option(Epoll.isAvailable()
-                                ? EpollChannelOption.TCP_KEEPIDLE
-                                : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE), connectionConfig.getKeepaliveIdle())
-                        .option(Epoll.isAvailable()
-                                ? EpollChannelOption.TCP_KEEPINTVL
-                                : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL), connectionConfig.getKeepaliveInterval())
-                        .option(Epoll.isAvailable()
-                                ? EpollChannelOption.TCP_KEEPCNT
-                                : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), connectionConfig.getKeepaliveCount())
-                        .httpResponseDecoder(option -> option.maxHeaderSize(parent.getCurrentConfiguration().getMaxHeaderSize()))
-                        .doOnRequest((req, conn) -> {
-                            if (LOGGER.isDebugEnabled()) {
-                                LOGGER.debug(
-                                        "Start sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}", key, connectionConfig.getId(), req.resourceUrl(), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")), key.host(),
-                                        key.port()
-                                );
-                            }
-                            endpointStats.getTotalRequests().incrementAndGet();
-                            endpointStats.getLastActivity().set(System.currentTimeMillis());
-                        }).doAfterRequest((req, conn) -> {
-                            if (LOGGER.isDebugEnabled()) {
-                                LOGGER.debug(
-                                        "Finished sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}", key, connectionConfig.getId(), request.getUri(), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")), key.host(),
-                                        key.port()
-                                );
-                            }
-                        }).doAfterResponseSuccess((resp, conn) -> {
-                            PENDING_REQUESTS_GAUGE.dec();
-                            healthStatus.decrementConnections();
-                            endpointStats.getLastActivity().set(System.currentTimeMillis());
-                        }));
+        HttpClient forwarder = getClient(connectionProvider, key, request.getAction().isSsl(), caCertificatePath, caCertificatePassword)
+                .followRedirect(false) // client has to request the redirect, not the proxy
+                .runOn(parent.getEventLoopGroup())
+                .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
+                .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
+                // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
+                .option(ChannelOption.SO_KEEPALIVE, connectionConfig.isKeepAlive())
+                .option(Epoll.isAvailable()
+                        ? EpollChannelOption.TCP_KEEPIDLE
+                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE), connectionConfig.getKeepaliveIdle())
+                .option(Epoll.isAvailable()
+                        ? EpollChannelOption.TCP_KEEPINTVL
+                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL), connectionConfig.getKeepaliveInterval())
+                .option(Epoll.isAvailable()
+                        ? EpollChannelOption.TCP_KEEPCNT
+                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), connectionConfig.getKeepaliveCount())
+                .httpResponseDecoder(option -> option.maxHeaderSize(parent.getCurrentConfiguration().getMaxHeaderSize()))
+                .doOnRequest((req, conn) -> {
+                    if (LOGGER.isDebugEnabled()) {
+                        LOGGER.debug(
+                                "Start sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}", key, connectionConfig.getId(), req.resourceUrl(), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")), key.host(),
+                                key.port()
+                        );
+                    }
+                    endpointStats.getTotalRequests().incrementAndGet();
+                    endpointStats.getLastActivity().set(System.currentTimeMillis());
+                }).doAfterRequest((req, conn) -> {
+                    if (LOGGER.isDebugEnabled()) {
+                        LOGGER.debug(
+                                "Finished sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}", key, connectionConfig.getId(), request.getUri(), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")), key.host(),
+                                key.port()
+                        );
+                    }
+                }).doAfterResponseSuccess((resp, conn) -> {
+                    PENDING_REQUESTS_GAUGE.dec();
+                    healthStatus.decrementConnections();
+                    endpointStats.getLastActivity().set(System.currentTimeMillis());
+                });
 
         AtomicBoolean cacheable = new AtomicBoolean(cache);
         final ContentsCache.ContentReceiver cacheReceiver = cacheable.get() ? parent.getCache().createCacheReceiver(request) : null;
@@ -550,36 +533,31 @@ public class ProxyRequestsManager {
 
     /**
      * Creates an HTTP client for connecting to a backend endpoint.
-     *
+     * <p>
      * This method ensures that the same HTTP protocol version is used for both client-to-proxy
      * and proxy-to-backend communications, while ensuring compatibility with the SSL settings.
      * For example, HTTP/2 over TLS (H2) is used for HTTPS connections, while HTTP/2 cleartext (H2C)
      * is used for HTTP connections.
      *
-     * @param connectionProvider the connection provider to use
-     * @param endpoint the endpoint to connect to
-     * @param httpVersion the HTTP version from the client request
-     * @param secure whether to use SSL/TLS for the connection
-     * @param caCertificatePath path to the CA certificate (may be null)
+     * @param connectionProvider    the connection provider to use
+     * @param endpoint              the endpoint to connect to
+     * @param secure                whether to use SSL/TLS for the connection
+     * @param caCertificatePath     path to the CA certificate (may be null)
      * @param caCertificatePassword password for the CA certificate (may be null)
      * @return a configured HttpClient
      */
     private HttpClient getClient(final ConnectionProvider connectionProvider, final EndpointKey endpoint,
-                            HttpVersion httpVersion, final boolean secure,
+                                 final boolean secure,
                             final String caCertificatePath, final String caCertificatePassword) {
         try {
-            // Use the same HTTP protocol version for both client and backend connections
-            // but ensure it's compatible with the SSL setting
-            HttpProtocol protocol = HttpUtils.getAppropriateProtocol(httpVersion, secure);
-
             final HttpClient httpClient = HttpClient.create(connectionProvider)
                     .host(endpoint.host())
                     .port(endpoint.port())
-                    .protocol(protocol);
+                    .protocol(secure ? HttpProtocol.H2 : HttpProtocol.H2C, HttpProtocol.HTTP11);
 
             if (secure) {
                 final SslContextBuilder sslContextBuilder =
-                        createSslContextBuilder(endpoint, protocol, caCertificatePath, caCertificatePassword);
+                        createSslContextBuilder(endpoint, caCertificatePath, caCertificatePassword);
                 return buildSecureHttpClient(httpClient, sslContextBuilder);
             }
             return httpClient;
@@ -591,13 +569,12 @@ public class ProxyRequestsManager {
     /**
      * Creates an appropriate SslContextBuilder based on the provided parameters.
      *
-     * @param endpoint the endpoint key containing host and port
-     * @param protocol the HTTP protocol to use
-     * @param caCertificatePath path to the CA certificate (may be null)
+     * @param endpoint              the endpoint key containing host and port
+     * @param caCertificatePath     path to the CA certificate (may be null)
      * @param caCertificatePassword password for the CA certificate (may be null)
      * @return an SslContextBuilder configured with the appropriate settings, or null if configuration failed
      */
-    private SslContextBuilder createSslContextBuilder(final EndpointKey endpoint, final HttpProtocol protocol, final String caCertificatePath, final String caCertificatePassword) {
+    private SslContextBuilder createSslContextBuilder(final EndpointKey endpoint, final String caCertificatePath, final String caCertificatePassword) {
         if (!StringUtils.isBlank(caCertificatePath)) {
             try {
                 final String pwd = caCertificatePassword != null ? caCertificatePassword : "";
@@ -607,7 +584,7 @@ public class ProxyRequestsManager {
                     final TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
                     trustManagerFactory.init(trustStore);
                     final SslContextBuilder builder = SslContextBuilder.forClient().trustManager(trustManagerFactory);
-                    configureAlpnForClient(endpoint, protocol, builder);
+                    configureAlpnForClient(endpoint, builder);
                     return builder;
                 }
             } catch (Exception e) {
@@ -616,7 +593,7 @@ public class ProxyRequestsManager {
             }
         }
         final SslContextBuilder builder = SslContextBuilder.forClient();
-        configureAlpnForClient(endpoint, protocol, builder);
+        configureAlpnForClient(endpoint, builder);
         return builder;
     }
 
@@ -738,95 +715,9 @@ public class ProxyRequestsManager {
         return request.send();
     }
 
-    public static class ConnectionsManager implements AutoCloseable, Function<ProxyRequest, Entry<ConnectionPoolConfiguration, ConnectionProvider>> {
-
-        private final Map<ConnectionPoolConfiguration, ConnectionProvider> connectionPools = new ConcurrentHashMap<>();
-        private volatile Entry<ConnectionPoolConfiguration, ConnectionProvider> defaultConnectionPool;
-
-        public void reloadConfiguration(RuntimeServerConfiguration newConfiguration, Collection<BackendConfiguration> newEndpoints) {
-            close();
-
-            // custom pools
-            final var connectionPoolsCopy = new ArrayList<>(newConfiguration.getConnectionPools().values());
-
-            // default pool
-            connectionPoolsCopy.add(newConfiguration.getDefaultConnectionPool());
-
-            connectionPoolsCopy.forEach(connectionPool -> {
-                if (!connectionPool.isEnabled()) {
-                    return;
-                }
-
-                ConnectionProvider.Builder builder = ConnectionProvider.builder(connectionPool.getId())
-                        .disposeTimeout(Duration.ofMillis(connectionPool.getDisposeTimeout()));
-
-                // max connections per endpoint limit setup
-                newEndpoints.forEach(be -> {
-                    LOGGER.debug(
-                            "Setup max connections per endpoint {}:{} = {} for connectionpool {}", be.host(), be.port(), connectionPool.getMaxConnectionsPerEndpoint(), connectionPool.getId());
-                    builder.forRemoteHost(InetSocketAddress.createUnresolved(be.host(), be.port()), spec -> {
-                        spec.maxConnections(connectionPool.getMaxConnectionsPerEndpoint());
-                        spec.pendingAcquireTimeout(Duration.ofMillis(connectionPool.getBorrowTimeout()));
-                        spec.maxIdleTime(Duration.ofMillis(connectionPool.getIdleTimeout()));
-                        spec.maxLifeTime(Duration.ofMillis(connectionPool.getMaxLifeTime()));
-                        spec.evictInBackground(Duration.ofMillis(connectionPool.getIdleTimeout() * 2L));
-                        spec.metrics(true);
-                        spec.lifo();
-                    });
-                });
-
-                if (connectionPool.getId().equals("*")) {
-                    defaultConnectionPool = Map.entry(connectionPool, builder.build());
-                } else {
-                    connectionPools.put(connectionPool, builder.build());
-                }
-            });
-        }
-
-        @Override
-        public void close() {
-            connectionPools.values().forEach(ConnectionProvider::dispose); // graceful shutdown according to disposeTimeout
-            connectionPools.clear();
-
-            if (defaultConnectionPool != null) {
-                // being it volatile, we don't have the compile-time certainty that it won't become null after the check
-                // still, it is reasonably safe to assume that it stay not null
-                Objects.requireNonNull(defaultConnectionPool).getValue().dispose(); // graceful shutdown according to disposeTimeout
-            }
-
-            // reset connections provider metrics
-            Metrics.globalRegistry.forEachMeter(m -> {
-                if (m.getId().getName().startsWith(CONNECTION_PROVIDER_PREFIX)) {
-                    Metrics.globalRegistry.remove(m);
-                }
-            });
-        }
-
-        @Override
-        public Entry<ConnectionPoolConfiguration, ConnectionProvider> apply(ProxyRequest request) {
-            String hostName = request.getRequestHostname();
-            Entry<ConnectionPoolConfiguration, ConnectionProvider> selectedPool = connectionPools.entrySet().stream()
-                    .filter(e -> Pattern.matches(e.getKey().getDomain(), hostName))
-                    .findFirst()
-                    .orElse(defaultConnectionPool);
-
-            Objects.requireNonNull(selectedPool);
-            LOGGER.debug("Using connection {} for domain {}", selectedPool.getKey().getId(), hostName);
-
-            return selectedPool;
-        }
-    }
-
     @VisibleForTesting
     public ConnectionsManager getConnectionsManager() {
         return connectionsManager;
     }
 
-    @VisibleForTesting
-    public Map<ConnectionPoolConfiguration, ConnectionProvider> getConnectionPools() {
-        final HashMap<ConnectionPoolConfiguration, ConnectionProvider> pools = new HashMap<>(connectionsManager.connectionPools);
-        final Entry<ConnectionPoolConfiguration, ConnectionProvider> defaultConnectionPool = Objects.requireNonNull(connectionsManager.defaultConnectionPool);
-        pools.put(defaultConnectionPool.getKey(), defaultConnectionPool.getValue());
-        return pools;
-    }
 }

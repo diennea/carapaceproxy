@@ -48,10 +48,10 @@ import java.util.Map;
 import java.util.Properties;
 import org.carapaceproxy.api.ConnectionPoolsResource;
 import org.carapaceproxy.api.UseAdminServer;
+import org.carapaceproxy.core.ConnectionsManager;
 import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.ProxyRequest;
-import org.carapaceproxy.core.ProxyRequestsManager;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.utils.HttpTestUtils;
 import org.carapaceproxy.utils.RawHttpClient;
@@ -254,17 +254,12 @@ public class ConnectionPoolTest extends UseAdminServer {
         configureAndStartServer();
         int port = server.getLocalPort();
 
-        // connection pools checking
-        Map<ConnectionPoolConfiguration, ConnectionProvider> connectionPools = server.getProxyRequestsManager().getConnectionPools();
-
-        assertThat(connectionPools.size(), is(3)); // disabled one excluded
-
         // default pool
         ConnectionPoolConfiguration defaultPool = new ConnectionPoolConfiguration(
                 "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 100_000, 50_000, 500, 50, 5, true,true
         );
         {
-            ConnectionProvider provider = connectionPools.get(defaultPool);
+            ConnectionProvider provider = server.getProxyRequestsManager().connectionsManager.getConnectionProvider(defaultPool);
             assertThat(provider, not(nullValue()));
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));
@@ -277,7 +272,7 @@ public class ConnectionPoolTest extends UseAdminServer {
                 "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, 100_000, 50_000, 500, 50, 5, true, true
         );
         {
-            ConnectionProvider provider = connectionPools.get(poolWithDefaults);
+            ConnectionProvider provider = server.getProxyRequestsManager().connectionsManager.getConnectionProvider(poolWithDefaults);
             assertThat(provider, not(nullValue()));
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));
@@ -290,7 +285,7 @@ public class ConnectionPoolTest extends UseAdminServer {
                 "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, 100_000, 25_000, 250, 25, 2, true,true
         );
         {
-            ConnectionProvider provider = connectionPools.get(customPool);
+            ConnectionProvider provider = server.getProxyRequestsManager().connectionsManager.getConnectionProvider(customPool);
             assertThat(provider, not(nullValue()));
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));
@@ -299,7 +294,7 @@ public class ConnectionPoolTest extends UseAdminServer {
         }
 
         // connection pool selection
-        ProxyRequestsManager.ConnectionsManager connectionsManager = server.getProxyRequestsManager().getConnectionsManager();
+        ConnectionsManager connectionsManager = server.getProxyRequestsManager().getConnectionsManager();
 
         // default provider
         {
@@ -308,9 +303,10 @@ public class ConnectionPoolTest extends UseAdminServer {
             when(proxyRequest.getRequest()).thenReturn(request);
             when(proxyRequest.getRequestHostname()).thenReturn("localhostx");
 
-            Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> res = connectionsManager.apply(proxyRequest);
-            assertThat(res.getKey(), is(defaultPool));
-            ConnectionProvider provider = res.getValue();
+            final String hostName = proxyRequest.getRequestHostname();
+            final ConnectionPoolConfiguration configuration = connectionsManager.findConnectionPool(hostName);
+            final ConnectionProvider provider = connectionsManager.getConnectionProvider(configuration);
+            assertThat(configuration, is(defaultPool));
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));
             assertThat(maxConnectionsPerHost.size(), is(2));
@@ -333,9 +329,10 @@ public class ConnectionPoolTest extends UseAdminServer {
             when(proxyRequest.getRequest()).thenReturn(request);
             when(proxyRequest.getRequestHostname()).thenReturn("localhost");
 
-            Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> res = connectionsManager.apply(proxyRequest);
-            assertThat(res.getKey(), is(poolWithDefaults));
-            ConnectionProvider provider = res.getValue();
+            final String hostName = proxyRequest.getRequestHostname();
+            final ConnectionPoolConfiguration configuration = connectionsManager.findConnectionPool(hostName);
+            final ConnectionProvider provider = connectionsManager.getConnectionProvider(configuration);
+            assertThat(configuration, is(poolWithDefaults));
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));
             assertThat(maxConnectionsPerHost.size(), is(2));
@@ -358,9 +355,10 @@ public class ConnectionPoolTest extends UseAdminServer {
             when(proxyRequest.getRequest()).thenReturn(request);
             when(proxyRequest.getRequestHostname()).thenReturn("localhost3");
 
-            Map.Entry<ConnectionPoolConfiguration, ConnectionProvider> res = connectionsManager.apply(proxyRequest);
-            assertThat(res.getKey(), is(customPool));
-            ConnectionProvider provider = res.getValue();
+            final String hostName = proxyRequest.getRequestHostname();
+            final ConnectionPoolConfiguration configuration = connectionsManager.findConnectionPool(hostName);
+            final ConnectionProvider provider = connectionsManager.getConnectionProvider(configuration);
+            assertThat(configuration, is(customPool));
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));
             assertThat(maxConnectionsPerHost.size(), is(2));

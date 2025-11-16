@@ -19,9 +19,6 @@
  */
 package org.carapaceproxy.core;
 
-import com.google.common.net.HostAndPort;
-import com.google.common.net.InetAddresses;
-import com.google.common.net.InternetDomainName;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
@@ -201,48 +198,35 @@ public class ProxyRequest implements MatchingContext {
      * it may be null over HTTP/1.1 if no {@code HOST} header is provided
      */
     public String getRequestHostname() {
-        final String protocol = request.protocol().toUpperCase();
-        if (HttpVersion.valueOf(protocol).majorVersion() == 2) {
-            // RFC 3986 section 3.2 states that :authority may include port if provided, just like HTTP/1.1 HOST header
-            // authority = [ userinfo "@" ] host [ ":" port ]
-            final AsciiString authorityHeaderName = Http2Headers.PseudoHeaderName.AUTHORITY.value();
-            final String authority = request.requestHeaders().get(authorityHeaderName);
-            if (!StringUtils.isBlank(authority)) {
-                return authority;
-            }
-            // sometimes :authority: is not set: https://github.com/jetty/jetty.project/issues/9436
-            LOG.info("Received request over protocol {}, but {} pseudo-header was not set ({})", protocol, authorityHeaderName, authority);
-            // fallback...
-        }
+        final String virtualHostName = request.hostName();
+        final HttpHeaders httpHeaders = request.requestHeaders();
         // The Host request header specifies the host and port number of the server to which the request is being sent.
         // If no port is included, the default port for the service requested is implied
         // Host: <host>:<port>
-        final String host = request.requestHeaders().get(HttpHeaderNames.HOST);
-        if (StringUtils.isBlank(host)) {
-            LOG.info("Received request over protocol {}, but {} header was not set ({})", protocol, HttpHeaderNames.HOST, host);
-        }
-        return host;
-    }
-
-    public boolean isValidHostAndPort(final String hostAndPort) {
-        try {
-            if (hostAndPort == null) {
-                return false;
+        final String headerHostName = httpHeaders.get(HttpHeaderNames.HOST);
+        final String protocol = request.protocol().toUpperCase();
+        if (StringUtils.isBlank(headerHostName)) {
+            if (HttpVersion.valueOf(protocol).majorVersion() == 2) {
+                // RFC 3986 section 3.2 states that :authority may include port if provided, just like HTTP/1.1 HOST header
+                // authority = [ userinfo "@" ] host [ ":" port ]
+                final AsciiString authorityHeaderName = Http2Headers.PseudoHeaderName.AUTHORITY.value();
+                final String authority = httpHeaders.get(authorityHeaderName);
+                if (!StringUtils.isBlank(authority)) {
+                    // Reactor Netty usually strips pseudo-headers from the request, filling "traditional" ones...
+                    LOG.warn("Unexpected fallback to authority header; available headers are {}", httpHeaders);
+                    return authority;
+                }
             }
-            final HostAndPort parsed = HostAndPort.fromString(hostAndPort);
-            final String host = parsed.getHost();
-            if (parsed.hasPort()) {
-                return !host.isBlank()
-                        && (InternetDomainName.isValid(host) || InetAddresses.isInetAddress(host))
-                        && parsed.getPort() >= 0
-                        && parsed.getPort() <= EndpointKey.MAX_PORT;
-            } else {
-                return !host.isBlank()
-                        && (InternetDomainName.isValid(host) || InetAddresses.isInetAddress(host));
-            }
-        } catch (IllegalArgumentException e) {
-            return false;
+            LOG.warn(
+                    "Received request over protocol {}, but {} header was not set; using {} recognized by Netty. Available headers are {}",
+                    protocol,
+                    HttpHeaderNames.HOST,
+                    virtualHostName,
+                    httpHeaders
+            );
+            return virtualHostName;
         }
+        return headerHostName;
     }
 
     public UrlEncodedQueryString getQueryString() {

@@ -23,6 +23,9 @@ import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_INTERNAL_SERV
 import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_MAINTENANCE_MODE_ERROR;
 import static org.carapaceproxy.core.StaticContentsManager.DEFAULT_NOT_FOUND;
 import static org.carapaceproxy.core.StaticContentsManager.IN_MEMORY_RESOURCE;
+import com.google.common.net.HostAndPort;
+import com.google.common.net.InetAddresses;
+import com.google.common.net.InternetDomainName;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpResponseStatus;
@@ -107,6 +110,27 @@ public class StandardEndpointMapper extends EndpointMapper {
         this.backendSelector = backendSelector.build(this);
     }
 
+    public static boolean isValidHostAndPort(final String hostAndPort) {
+        try {
+            if (hostAndPort == null) {
+                return false;
+            }
+            final HostAndPort parsed = HostAndPort.fromString(hostAndPort);
+            final String host = parsed.getHost();
+            if (parsed.hasPort()) {
+                return !host.isBlank()
+                        && (InternetDomainName.isValid(host) || InetAddresses.isInetAddress(host))
+                        && parsed.getPort() >= 0
+                        && parsed.getPort() <= EndpointKey.MAX_PORT;
+            } else {
+                return !host.isBlank()
+                        && (InternetDomainName.isValid(host) || InetAddresses.isInetAddress(host));
+            }
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
     @Override
     public MapResult map(final ProxyRequest request) {
         // If the HOST header is null (when on HTTP/1.1 or less), then return bad request
@@ -118,7 +142,7 @@ public class StandardEndpointMapper extends EndpointMapper {
             return MapResult.badRequest();
         }
         // Invalid header host
-        if (!request.isValidHostAndPort(request.getRequestHostname())) {
+        if (!isValidHostAndPort(request.getRequestHostname())) {
             if (LOG.isTraceEnabled()) {
                 LOG.trace("Invalid header host {} for request {}", request.getRequestHostname(), request.getUri());
             }

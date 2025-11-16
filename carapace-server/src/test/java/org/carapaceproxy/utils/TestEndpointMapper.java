@@ -34,6 +34,7 @@ import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.mapper.CustomHeader;
 import org.carapaceproxy.server.mapper.EndpointMapper;
 import org.carapaceproxy.server.mapper.MapResult;
+import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 
 public class TestEndpointMapper extends EndpointMapper implements EndpointMapper.Factory {
 
@@ -61,7 +62,7 @@ public class TestEndpointMapper extends EndpointMapper implements EndpointMapper
     @Override
     public MapResult map(final ProxyRequest request) {
         final String headerHost = request.getRequestHostname();
-        if (StringUtils.isBlank(headerHost) || !request.isValidHostAndPort(headerHost)) {
+        if (StringUtils.isBlank(headerHost) || !StandardEndpointMapper.isValidHostAndPort(headerHost)) {
             return MapResult.badRequest();
         }
 
