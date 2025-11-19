@@ -1,8 +1,13 @@
 package org.carapaceproxy.core;
 
 import static org.carapaceproxy.utils.CertificatesUtils.loadKeyStoreFromFile;
+import io.netty.handler.ssl.ApplicationProtocolConfig;
+import io.netty.handler.ssl.ApplicationProtocolNames;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
 import java.io.File;
 import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -10,6 +15,7 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.Map;
+import javax.net.ssl.SSLException;
 import javax.net.ssl.TrustManagerFactory;
 import lombok.Getter;
 import org.carapaceproxy.utils.CertificatesUtils;
@@ -20,13 +26,13 @@ public class TrustStoreManager {
 
     private static final Logger LOG = LoggerFactory.getLogger(TrustStoreManager.class);
 
+    private final File basePath;
+    private RuntimeServerConfiguration currentConfiguration;
+
     @Getter
     private Map<String, X509Certificate> certificateAuthorities = new HashMap<>();
     @Getter
     private TrustManagerFactory trustManagerFactory;
-
-    private RuntimeServerConfiguration currentConfiguration;
-    private final File basePath;
 
     public TrustStoreManager(RuntimeServerConfiguration currentConfiguration, HttpProxyServer parent) {
         this.currentConfiguration = currentConfiguration;
@@ -63,6 +69,54 @@ public class TrustStoreManager {
         this.currentConfiguration = newConfiguration;
         certificateAuthorities.clear();
         loadTrustStore();
+    }
+
+    private SslContext buildClientSslContext(final TrustManagerFactory trustManager) throws SSLException {
+        final SslContextBuilder builder = SslContextBuilder.forClient();
+        if (trustManager != null) {
+            builder.trustManager(trustManager);
+        }
+        builder.applicationProtocolConfig(new ApplicationProtocolConfig(
+                ApplicationProtocolConfig.Protocol.ALPN,
+                ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
+                ApplicationProtocolConfig.SelectedListenerFailureBehavior.ACCEPT,
+                ApplicationProtocolNames.HTTP_2, ApplicationProtocolNames.HTTP_1_1
+        ));
+        return builder.build();
+    }
+
+    private TrustManagerFactory getTrustManagerFactory(final String caPath, final String password)
+            throws GeneralSecurityException, IOException {
+        final KeyStore trustStore = loadKeyStoreFromFile(caPath, password, basePath);
+        final String algorithm = TrustManagerFactory.getDefaultAlgorithm();
+        final TrustManagerFactory trustManager = TrustManagerFactory.getInstance(algorithm);
+        trustManager.init(trustStore);
+        return trustManager;
+    }
+
+    /**
+     * Build a default client-side Netty SslContext using the global TrustStore (if configured)
+     * and with ALPN configured for HTTP/2 support.
+     *
+     * @return the built SslContext
+     * @throws SSLException if SSL material cannot be built
+     */
+    public SslContext buildDefaultClientSslContext() throws SSLException {
+        return buildClientSslContext(getTrustManagerFactory());
+    }
+
+    /**
+     * Build a client-side Netty SslContext using a backend-specific CA file.
+     * ALPN will be configured for HTTP/2 support.
+     *
+     * @param caPath   path to the CA keystore file (relative to basePath allowed)
+     * @param password optional password for the keystore (null treated as empty)
+     * @return the built SslContext
+     * @throws IOException if the CA file cannot be read
+     */
+    public SslContext buildClientSslContextForCaFile(String caPath, String password)
+            throws GeneralSecurityException, IOException {
+        return buildClientSslContext(getTrustManagerFactory(caPath, password));
     }
 
 }

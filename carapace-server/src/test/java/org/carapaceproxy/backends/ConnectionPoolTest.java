@@ -259,7 +259,7 @@ public class ConnectionPoolTest extends UseAdminServer {
                 "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 100_000, 50_000, 500, 50, 5, true,true
         );
         {
-            ConnectionProvider provider = server.getProxyRequestsManager().connectionsManager.getConnectionProvider(defaultPool);
+            ConnectionProvider provider = server.getProxyRequestsManager().getConnectionsManager().getConnectionProvider(defaultPool);
             assertThat(provider, not(nullValue()));
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));
@@ -272,7 +272,7 @@ public class ConnectionPoolTest extends UseAdminServer {
                 "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, 100_000, 50_000, 500, 50, 5, true, true
         );
         {
-            ConnectionProvider provider = server.getProxyRequestsManager().connectionsManager.getConnectionProvider(poolWithDefaults);
+            ConnectionProvider provider = server.getProxyRequestsManager().getConnectionsManager().getConnectionProvider(poolWithDefaults);
             assertThat(provider, not(nullValue()));
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));
@@ -285,7 +285,7 @@ public class ConnectionPoolTest extends UseAdminServer {
                 "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, 100_000, 25_000, 250, 25, 2, true,true
         );
         {
-            ConnectionProvider provider = server.getProxyRequestsManager().connectionsManager.getConnectionProvider(customPool);
+            ConnectionProvider provider = server.getProxyRequestsManager().getConnectionsManager().getConnectionProvider(customPool);
             assertThat(provider, not(nullValue()));
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));

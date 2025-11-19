@@ -21,8 +21,6 @@ package org.carapaceproxy.core;
 
 import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTP;
 import static org.carapaceproxy.server.mapper.MapResult.REDIRECT_PROTO_HTTPS;
-import static org.carapaceproxy.utils.AlpnUtils.configureAlpnForClient;
-import com.google.common.annotations.VisibleForTesting;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.epoll.Epoll;
@@ -38,13 +36,12 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.timeout.ReadTimeoutException;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
-import java.io.File;
+import java.io.IOException;
 import java.net.ConnectException;
-import java.security.KeyStore;
+import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -55,8 +52,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import javax.net.ssl.SSLException;
-import javax.net.ssl.TrustManagerFactory;
 import jdk.net.ExtendedSocketOptions;
 import org.apache.http.HttpStatus;
 import org.carapaceproxy.EndpointStats;
@@ -64,11 +59,11 @@ import org.carapaceproxy.SimpleHTTPResponse;
 import org.carapaceproxy.server.backends.BackendHealthStatus;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.config.BackendConfiguration;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.mapper.CustomHeader;
 import org.carapaceproxy.server.mapper.MapResult;
-import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.HttpUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
 import org.carapaceproxy.utils.StringUtils;
@@ -88,7 +83,7 @@ import reactor.netty.resources.ConnectionProvider;
  *
  * @author paolo.venturi
  */
-public class ProxyRequestsManager {
+public class ProxyRequestsManager implements AutoCloseable {
 
     public static final Gauge PENDING_REQUESTS_GAUGE = PrometheusUtils.createGauge(
             "backends", "pending_requests", "pending requests"
@@ -99,10 +94,14 @@ public class ProxyRequestsManager {
     ).register();
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ProxyRequestsManager.class);
+    private static final String DEFAULT_KEY = "*";
+    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS");
 
     private final HttpProxyServer parent;
     private final Map<EndpointKey, EndpointStats> endpointsStats = new ConcurrentHashMap<>();
-    public final ConnectionsManager connectionsManager = new ConnectionsManager();
+    private final ConnectionsManager connectionsManager = new ConnectionsManager();
+
+    private volatile Map<String, SslContext> clientSslContexts = new ConcurrentHashMap<>();
 
     public ProxyRequestsManager(HttpProxyServer parent) {
         this.parent = parent;
@@ -112,11 +111,34 @@ public class ProxyRequestsManager {
         return endpointsStats.get(key);
     }
 
-    public void reloadConfiguration(RuntimeServerConfiguration newConfiguration, Collection<BackendConfiguration> newEndpoints) {
+    public void reloadConfiguration(RuntimeServerConfiguration newConfiguration, Collection<BackendConfiguration> newEndpoints) throws ConfigurationNotValidException {
+        final Map<String, SslContext> newContexts = new ConcurrentHashMap<>();
+        try {
+            for (final BackendConfiguration backend : newEndpoints) {
+                final String path = backend.caCertificatePath();
+                if (!StringUtils.isBlank(path)) {
+                    if (clientSslContexts.containsKey(path)) {
+                        LOGGER.debug("SSL context for backend {} was already loaded from {}", backend.id(), path);
+                    } else {
+                        final SslContext sslContext = parent.getTrustStoreManager()
+                                .buildClientSslContextForCaFile(path, backend.caCertificatePassword());
+                        newContexts.put(path, sslContext);
+                        LOGGER.debug("Cached SSL context for backend {} from {}", backend.id(), path);
+                    }
+                }
+            }
+            final SslContext defaultCtx = parent.getTrustStoreManager().buildDefaultClientSslContext();
+            newContexts.put(DEFAULT_KEY, defaultCtx);
+        } catch (IOException | GeneralSecurityException exception) {
+            throw new ConfigurationNotValidException(exception);
+        }
+        this.clientSslContexts = newContexts;
         connectionsManager.reloadConfiguration(newConfiguration, newEndpoints);
     }
 
+    @Override
     public void close() {
+        clientSslContexts.clear();
         connectionsManager.close();
     }
 
@@ -358,29 +380,19 @@ public class ProxyRequestsManager {
 
         final String hostName = request.getRequestHostname();
         final ConnectionPoolConfiguration connectionConfig = connectionsManager.findConnectionPool(hostName);
+        final String connectionId = connectionConfig.getId();
         final ConnectionProvider connectionProvider = connectionsManager.getConnectionProvider(connectionConfig);
-        LOGGER.debug("Using connection {} for domain {}", connectionConfig.getId(), hostName);
+        LOGGER.debug("Using connection {} for domain {}", connectionId, hostName);
         if (LOGGER.isDebugEnabled()) {
             final Map<String, HttpProxyServer.ConnectionPoolStats> stats = parent.getConnectionPoolsStats().get(key);
             if (stats != null) {
-                LOGGER.debug(
-                        "Connection {} stats: {}",
-                        connectionConfig.getId(),
-                        stats.get(connectionConfig.getId())
-                );
+                LOGGER.debug("Connection {} stats: {}", connectionId, stats.get(connectionId));
             }
-            LOGGER.debug(
-                    "Max connections for {}: {}",
-                    connectionConfig.getId(),
-                    connectionProvider.maxConnectionsPerHost()
-            );
+            LOGGER.debug("Max connections for {}: {}", connectionId, connectionProvider.maxConnectionsPerHost());
         }
 
-        BackendConfiguration backendConfig = getBackendConfiguration(request);
-        String caCertificatePath = backendConfig != null ? backendConfig.caCertificatePath() : null;
-        String caCertificatePassword = backendConfig != null ? backendConfig.caCertificatePassword() : null;
-        HttpClient forwarder = getClient(connectionProvider, key, request.getAction().isSsl(), caCertificatePath, caCertificatePassword)
-                .followRedirect(false) // client has to request the redirect, not the proxy
+        HttpClient forwarder = getClient(connectionProvider, key)
+                .followRedirect(false) // the client is the one that should follow the redirect, not the proxy
                 .runOn(parent.getEventLoopGroup())
                 .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
                 .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
@@ -400,7 +412,12 @@ public class ProxyRequestsManager {
                 .doOnRequest((req, conn) -> {
                     if (LOGGER.isDebugEnabled()) {
                         LOGGER.debug(
-                                "Start sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}", key, connectionConfig.getId(), req.resourceUrl(), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")), key.host(),
+                                "Start sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}",
+                                key,
+                                connectionId,
+                                req.resourceUrl(),
+                                DATE_TIME_FORMATTER.format(LocalDateTime.now()),
+                                key.host(),
                                 key.port()
                         );
                     }
@@ -409,7 +426,12 @@ public class ProxyRequestsManager {
                 }).doAfterRequest((req, conn) -> {
                     if (LOGGER.isDebugEnabled()) {
                         LOGGER.debug(
-                                "Finished sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}", key, connectionConfig.getId(), request.getUri(), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")), key.host(),
+                                "Finished sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}",
+                                key,
+                                connectionId,
+                                request.getUri(),
+                                DATE_TIME_FORMATTER.format(LocalDateTime.now()),
+                                key.host(),
                                 key.port()
                         );
                     }
@@ -459,7 +481,12 @@ public class ProxyRequestsManager {
                 .response((resp, flux) -> { // endpoint response
                     if (LOGGER.isDebugEnabled()) {
                         LOGGER.debug(
-                                "Receive response from backend for {} Using client id {}_{} uri{} timestamp {} Backend: {}", request.getRemoteAddress(), key, connectionConfig.getId(), request.getUri(), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")),
+                                "Receive response from backend for {} Using client id {}_{} uri{} timestamp {} Backend: {}",
+                                request.getRemoteAddress(),
+                                key,
+                                connectionId,
+                                request.getUri(),
+                                DATE_TIME_FORMATTER.format(LocalDateTime.now()),
                                 request.getAction().getHost()
                         );
                     }
@@ -497,7 +524,12 @@ public class ProxyRequestsManager {
                     }).doOnComplete(() -> {
                         if (LOGGER.isDebugEnabled()) {
                             LOGGER.debug(
-                                    "Send all response to client {} Using client id {}_{} for uri {} timestamp {} Backend: {}", request.getRemoteAddress(), key, connectionConfig.getId(), request.getUri(), LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS")),
+                                    "Send all response to client {} Using client id {}_{} for uri {} timestamp {} Backend: {}",
+                                    request.getRemoteAddress(),
+                                    key,
+                                    connectionId,
+                                    request.getUri(),
+                                    DATE_TIME_FORMATTER.format(LocalDateTime.now()),
                                     request.getAction().getHost()
                             );
                         }
@@ -539,93 +571,29 @@ public class ProxyRequestsManager {
      * For example, HTTP/2 over TLS (H2) is used for HTTPS connections, while HTTP/2 cleartext (H2C)
      * is used for HTTP connections.
      *
-     * @param connectionProvider    the connection provider to use
-     * @param endpoint              the endpoint to connect to
-     * @param secure                whether to use SSL/TLS for the connection
-     * @param caCertificatePath     path to the CA certificate (may be null)
-     * @param caCertificatePassword password for the CA certificate (may be null)
+     * @param connectionProvider the connection provider to use
+     * @param endpoint           the endpoint to connect to
      * @return a configured HttpClient
      */
-    private HttpClient getClient(final ConnectionProvider connectionProvider, final EndpointKey endpoint,
-                                 final boolean secure,
-                            final String caCertificatePath, final String caCertificatePassword) {
-        try {
-            final HttpClient httpClient = HttpClient.create(connectionProvider)
-                    .host(endpoint.host())
-                    .port(endpoint.port())
-                    .protocol(secure ? HttpProtocol.H2 : HttpProtocol.H2C, HttpProtocol.HTTP11);
-
-            if (secure) {
-                final SslContextBuilder sslContextBuilder =
-                        createSslContextBuilder(endpoint, caCertificatePath, caCertificatePassword);
-                return buildSecureHttpClient(httpClient, sslContextBuilder);
+    private HttpClient getClient(final ConnectionProvider connectionProvider, final EndpointKey endpoint) {
+        final BackendConfiguration backend = parent.getBackendConfiguration(endpoint);
+        final boolean secure = backend.ssl();
+        final HttpClient httpClient = HttpClient.create(connectionProvider)
+                .host(endpoint.host())
+                .port(endpoint.port())
+                .protocol(secure ? HttpProtocol.H2 : HttpProtocol.H2C, HttpProtocol.HTTP11);
+        if (secure) {
+            final String caCertificatePath = backend.caCertificatePath();
+            final SslContext sslContext;
+            if (!StringUtils.isBlank(caCertificatePath) && clientSslContexts.containsKey(caCertificatePath)) {
+                sslContext = clientSslContexts.get(caCertificatePath);
+            } else {
+                sslContext = clientSslContexts.get(DEFAULT_KEY);
             }
-            return httpClient;
-        } catch (SSLException e) {
-            throw new RuntimeException(e);
+            final SslContext finalSslContext = sslContext;
+            return httpClient.secure(spec -> spec.sslContext(finalSslContext));
         }
-    }
-
-    /**
-     * Creates an appropriate SslContextBuilder based on the provided parameters.
-     *
-     * @param endpoint              the endpoint key containing host and port
-     * @param caCertificatePath     path to the CA certificate (may be null)
-     * @param caCertificatePassword password for the CA certificate (may be null)
-     * @return an SslContextBuilder configured with the appropriate settings, or null if configuration failed
-     */
-    private SslContextBuilder createSslContextBuilder(final EndpointKey endpoint, final String caCertificatePath, final String caCertificatePassword) {
-        if (!StringUtils.isBlank(caCertificatePath)) {
-            try {
-                final String pwd = caCertificatePassword != null ? caCertificatePassword : "";
-                final File basePath = parent.getBasePath();
-                final KeyStore trustStore = CertificatesUtils.loadKeyStoreFromFile(caCertificatePath, pwd, basePath);
-                if (trustStore != null) {
-                    final TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-                    trustManagerFactory.init(trustStore);
-                    final SslContextBuilder builder = SslContextBuilder.forClient().trustManager(trustManagerFactory);
-                    configureAlpnForClient(endpoint, builder);
-                    return builder;
-                }
-            } catch (Exception e) {
-                LOGGER.error("Failed to load CA certificate from {} : {}", caCertificatePath, e.getMessage());
-                // Fall back to default SslContextBuilder
-            }
-        }
-        final SslContextBuilder builder = SslContextBuilder.forClient();
-        configureAlpnForClient(endpoint, builder);
-        return builder;
-    }
-
-    /**
-     * Builds a secure HttpClient using the provided SslContextBuilder.
-     *
-     * @param httpClient the base HttpClient to configure
-     * @param sslContextBuilder the SslContextBuilder to use
-     * @return a configured secure HttpClient, or null if building the SslContext failed
-     */
-    private HttpClient buildSecureHttpClient(final HttpClient httpClient, final SslContextBuilder sslContextBuilder) throws SSLException {
-        final SslContext sslContext = sslContextBuilder.build();
-        return httpClient.secure(spec -> spec.sslContext(sslContext));
-    }
-
-    private BackendConfiguration getBackendConfiguration(ProxyRequest request) {
-        if (request.getAction() == null) {
-            return null;
-        }
-
-        String host = request.getAction().getHost();
-        int port = request.getAction().getPort();
-        EndpointKey key = EndpointKey.make(host, port);
-
-        // Find the backend configuration that matches this endpoint
-        for (BackendConfiguration backend : parent.getMapper().getBackends().values()) {
-            if (backend.hostPort().equals(key)) {
-                return backend;
-            }
-        }
-
-        return null;
+        return httpClient;
     }
 
     private boolean aggregateChunksForLegacyHttp(ProxyRequest request) {
@@ -715,9 +683,7 @@ public class ProxyRequestsManager {
         return request.send();
     }
 
-    @VisibleForTesting
     public ConnectionsManager getConnectionsManager() {
         return connectionsManager;
     }
-
 }
