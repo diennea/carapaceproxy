@@ -823,7 +823,7 @@ public class RawClientTest {
                         .filter(h -> h.toLowerCase().contains("set-cookie"))
                         .toList();
                 assertThat(headerSetCookie.size(), is(1));
-                assertThat(headerSetCookie.get(0), is("Set-Cookie: responseCookie=responseValue; responseCookie2=responseValue2\r\n"));
+                assertThat(headerSetCookie.get(0), is("set-cookie: responseCookie=responseValue; responseCookie2=responseValue2\r\n"));
             }
         }
 
