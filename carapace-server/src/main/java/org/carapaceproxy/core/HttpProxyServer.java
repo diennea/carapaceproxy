@@ -829,6 +829,15 @@ public class HttpProxyServer implements AutoCloseable {
         }
     }
 
+    public BackendConfiguration getBackendConfiguration(final EndpointKey endpointKey) {
+        for (BackendConfiguration backend : getMapper().getBackends().values()) {
+            if (backend.hostPort().equals(endpointKey)) {
+                return backend;
+            }
+        }
+        throw new IllegalStateException("No backend configuration found for " + endpointKey);
+    }
+
     private class ConfigurationChangeCallback implements GroupMembershipHandler.EventCallback {
 
         @Override

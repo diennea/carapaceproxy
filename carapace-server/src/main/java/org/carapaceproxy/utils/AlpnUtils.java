@@ -25,7 +25,6 @@ import io.netty.handler.ssl.SslContextBuilder;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import org.carapaceproxy.core.EndpointKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.netty.http.HttpProtocol;
@@ -67,26 +66,6 @@ public class AlpnUtils {
                 ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
                 ApplicationProtocolConfig.SelectedListenerFailureBehavior.ACCEPT,
                 alpnProtocols
-        ));
-        return sslContextBuilder;
-    }
-
-    /**
-     * Configures ALPN for HTTP/2 support on a client.
-     * This method only configures ALPN when HTTP/2 protocols are being used.
-     * For HTTP/1.1 connections, ALPN is skipped to maintain compatibility with HTTP/1.1-only backends.
-     *
-     * @param endpoint          the host name and port number for logging
-     * @param sslContextBuilder the SslContextBuilder to configure
-     * @return the configured SslContextBuilder
-     */
-    public static SslContextBuilder configureAlpnForClient(final EndpointKey endpoint, final SslContextBuilder sslContextBuilder) {
-        LOG.debug("Configuring ALPN for HTTP/2 support on backend connection to {}:{}", endpoint.host(), endpoint.port());
-        sslContextBuilder.applicationProtocolConfig(new ApplicationProtocolConfig(
-                ApplicationProtocolConfig.Protocol.ALPN,
-                ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
-                ApplicationProtocolConfig.SelectedListenerFailureBehavior.ACCEPT,
-                ApplicationProtocolNames.HTTP_2, ApplicationProtocolNames.HTTP_1_1
         ));
         return sslContextBuilder;
     }
