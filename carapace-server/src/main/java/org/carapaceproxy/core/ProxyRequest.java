@@ -218,13 +218,13 @@ public class ProxyRequest implements MatchingContext {
                 }
             }
             LOG.warn(
-                    "Received request over protocol {}, but {} header was not set; using {} recognized by Netty. Available headers are {}",
+                    "Received request over protocol {}, but {} header was not set (using null). Netty recognized host {}. Available headers are {}.",
                     protocol,
                     HttpHeaderNames.HOST,
                     virtualHostName,
                     httpHeaders
             );
-            return virtualHostName;
+            return null;
         }
         return headerHostName;
     }

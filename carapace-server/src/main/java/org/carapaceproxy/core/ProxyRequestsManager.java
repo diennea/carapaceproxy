@@ -453,7 +453,7 @@ public class ProxyRequestsManager {
                     copy.remove(Http2CodecUtil.HTTP_UPGRADE_SETTINGS_HEADER);
                     req.headers(copy);
                     // netty overrides the value, we need to force it
-                    req.header(HttpHeaderNames.HOST, request.getRequestHeaders().get(HttpHeaderNames.HOST));
+                    req.header(HttpHeaderNames.HOST, request.getRequestHostname());
                     return out.send(request.getRequestData()); // client request body
                 })
                 .response((resp, flux) -> { // endpoint response
