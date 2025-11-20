@@ -21,6 +21,9 @@ package org.carapaceproxy.utils;
  */
 
 import static java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaderValues;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpVersion;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -67,5 +70,12 @@ public class HttpUtils {
             return ssl ? HttpProtocol.H2 : HttpProtocol.H2C;
         }
         return HttpProtocol.HTTP11;
+    }
+
+    public static boolean mayHaveBody(final HttpHeaders requestHeaders) {
+        final String transferEncoding = requestHeaders.get(HttpHeaderNames.TRANSFER_ENCODING);
+        final String contentLength = requestHeaders.get(HttpHeaderNames.CONTENT_LENGTH);
+        return (transferEncoding != null && transferEncoding.contains(HttpHeaderValues.CHUNKED.toString()))
+                || (contentLength != null && Long.parseLong(contentLength) > 0);
     }
 }

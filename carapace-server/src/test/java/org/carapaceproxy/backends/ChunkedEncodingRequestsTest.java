@@ -24,7 +24,6 @@ import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.junit.Assert.assertTrue;
-import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.RawHttpClient;
@@ -50,12 +49,7 @@ public class ChunkedEncodingRequestsTest {
             "4\r\nWiki\r\n"
             + "5\r\npe";
     @Rule
-    public WireMockRule wireMockRule = new WireMockRule(WireMockConfiguration
-            .options()
-            .dynamicPort()
-            // HTTP/2 doesn't support the `Transfer-Encoding: chunked` header
-            .http2TlsDisabled(true)
-            .http2PlainDisabled(true));
+    public WireMockRule wireMockRule = new WireMockRule(0);
 
     @Rule
     public TemporaryFolder tmpDir = new TemporaryFolder();

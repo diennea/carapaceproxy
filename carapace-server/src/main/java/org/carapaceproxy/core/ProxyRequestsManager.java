@@ -107,6 +107,51 @@ public class ProxyRequestsManager implements AutoCloseable {
         this.parent = parent;
     }
 
+    private static Publisher<Void> writeSimpleResponse(ProxyRequest request, FullHttpResponse response, List<CustomHeader> customHeaders) {
+        if (request.isKeepAlive()) {
+            if (response.content() != null) {
+                response.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+            }
+            response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
+        }
+        request.setResponseStatus(response.status());
+        request.setResponseHeaders(response.headers().copy());
+        addCustomResponseHeaders(request.getResponseHeaders(), customHeaders);
+        return request.sendResponseData(Mono.just(response.content()).doFinally(f -> request.setLastActivity(System.currentTimeMillis())));
+    }
+
+    private static void applyCustomResponseHeaders(final ProxyRequest request) {
+        final MapResult action = Objects.requireNonNull(request.getAction());
+        addCustomResponseHeaders(request.getResponseHeaders(), action.getCustomHeaders());
+    }
+
+    private static void addCustomResponseHeaders(final HttpHeaders responseHeaders, final List<CustomHeader> customHeaders) {
+        if (customHeaders == null || customHeaders.isEmpty()) {
+            return;
+        }
+        customHeaders.forEach(customHeader -> {
+            if (CustomHeader.HeaderMode.SET.equals(customHeader.getMode())
+                    || CustomHeader.HeaderMode.REMOVE.equals(customHeader.getMode())) {
+                responseHeaders.remove(customHeader.getName());
+            }
+            if (CustomHeader.HeaderMode.SET.equals(customHeader.getMode())
+                    || CustomHeader.HeaderMode.ADD.equals(customHeader.getMode())) {
+                responseHeaders.add(customHeader.getName(), customHeader.getValue());
+            }
+        });
+    }
+
+    private static void cleanRequestFromCacheValidators(ProxyRequest request) {
+        HttpHeaders headers = request.getRequestHeaders();
+        headers.remove(HttpHeaderNames.IF_MATCH);
+        headers.remove(HttpHeaderNames.IF_MODIFIED_SINCE);
+        headers.remove(HttpHeaderNames.IF_NONE_MATCH);
+        headers.remove(HttpHeaderNames.IF_RANGE);
+        headers.remove(HttpHeaderNames.IF_UNMODIFIED_SINCE);
+        headers.remove(HttpHeaderNames.ETAG);
+        headers.remove(HttpHeaderNames.CONNECTION);
+    }
+
     public EndpointStats getEndpointStats(final EndpointKey key) {
         return endpointsStats.get(key);
     }
@@ -325,46 +370,6 @@ public class ProxyRequestsManager implements AutoCloseable {
         return writeSimpleResponse(request, response, request.getAction().getCustomHeaders());
     }
 
-    private static Publisher<Void> writeSimpleResponse(ProxyRequest request, FullHttpResponse response, List<CustomHeader> customHeaders) {
-        // Prepare the response
-        if (request.isKeepAlive()) {
-            // Add 'Content-Length' header only for a keep-alive connection.
-            if (response.content() != null) {
-                response.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
-            }
-            // Add keep alive header as per:
-            // - http://www.w3.org/Protocols/HTTP/1.1/draft-ietf-http-v11-spec-01.html#Connection
-            response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
-        }
-        request.setResponseStatus(response.status());
-        request.setResponseHeaders(response.headers().copy());
-        addCustomResponseHeaders(request.getResponseHeaders(), customHeaders);
-
-        // Write the response
-        return request.sendResponseData(Mono.just(response.content()).doFinally(f -> request.setLastActivity(System.currentTimeMillis())));
-    }
-
-    private static void applyCustomResponseHeaders(final ProxyRequest request) {
-        final MapResult action = Objects.requireNonNull(request.getAction());
-        addCustomResponseHeaders(request.getResponseHeaders(), action.getCustomHeaders());
-    }
-
-    private static void addCustomResponseHeaders(final HttpHeaders responseHeaders, final List<CustomHeader> customHeaders) {
-        if (customHeaders == null || customHeaders.isEmpty()) {
-            return;
-        }
-        customHeaders.forEach(customHeader -> {
-            if (CustomHeader.HeaderMode.SET.equals(customHeader.getMode())
-                    || CustomHeader.HeaderMode.REMOVE.equals(customHeader.getMode())) {
-                responseHeaders.remove(customHeader.getName());
-            }
-            if (CustomHeader.HeaderMode.SET.equals(customHeader.getMode())
-                    || CustomHeader.HeaderMode.ADD.equals(customHeader.getMode())) {
-                responseHeaders.add(customHeader.getName(), customHeader.getValue());
-            }
-        });
-    }
-
     /**
      * Forward a requested received by the {@link Listeners} to the corresponding backend endpoint.
      *
@@ -390,8 +395,7 @@ public class ProxyRequestsManager implements AutoCloseable {
             }
             LOGGER.debug("Max connections for {}: {}", connectionId, connectionProvider.maxConnectionsPerHost());
         }
-
-        HttpClient forwarder = getClient(connectionProvider, key)
+        HttpClient forwarder = getClient(connectionProvider, request)
                 .followRedirect(false) // the client is the one that should follow the redirect, not the proxy
                 .runOn(parent.getEventLoopGroup())
                 .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
@@ -572,16 +576,17 @@ public class ProxyRequestsManager implements AutoCloseable {
      * is used for HTTP connections.
      *
      * @param connectionProvider the connection provider to use
-     * @param endpoint           the endpoint to connect to
+     * @param request            the request object
      * @return a configured HttpClient
      */
-    private HttpClient getClient(final ConnectionProvider connectionProvider, final EndpointKey endpoint) {
+    private HttpClient getClient(final ConnectionProvider connectionProvider, final ProxyRequest request) {
+        final EndpointKey endpoint = EndpointKey.make(request.getAction().getHost(), request.getAction().getPort());
         final BackendConfiguration backend = parent.getBackendConfiguration(endpoint);
         final boolean secure = backend.ssl();
         final HttpClient httpClient = HttpClient.create(connectionProvider)
                 .host(endpoint.host())
                 .port(endpoint.port())
-                .protocol(secure ? HttpProtocol.H2 : HttpProtocol.H2C, HttpProtocol.HTTP11);
+                .protocol(getClientProtocols(secure, request));
         if (secure) {
             final String caCertificatePath = backend.caCertificatePath();
             final SslContext sslContext;
@@ -594,6 +599,18 @@ public class ProxyRequestsManager implements AutoCloseable {
             return httpClient.secure(spec -> spec.sslContext(finalSslContext));
         }
         return httpClient;
+    }
+
+    private HttpProtocol[] getClientProtocols(final boolean secure, final ProxyRequest request) {
+        if (secure) {
+            // ALPN handles negotiation safely
+            return new HttpProtocol[]{HttpProtocol.H2, HttpProtocol.HTTP11};
+        }
+        if (HttpUtils.mayHaveBody(request.getRequestHeaders())) {
+            // H2C uses "Upgrade" header; RFC 7540 forbids "Upgrade: h2c" if the request has a body.
+            return new HttpProtocol[]{HttpProtocol.HTTP11};
+        }
+        return new HttpProtocol[]{HttpProtocol.H2C, HttpProtocol.HTTP11};
     }
 
     private boolean aggregateChunksForLegacyHttp(ProxyRequest request) {
@@ -621,17 +638,6 @@ public class ProxyRequestsManager implements AutoCloseable {
                 .getStaticContentsManager()
                 .buildResponse(code, resource, request.getHttpProtocol());
         return writeSimpleResponse(request, response, customHeaders);
-    }
-
-    private static void cleanRequestFromCacheValidators(ProxyRequest request) {
-        HttpHeaders headers = request.getRequestHeaders();
-        headers.remove(HttpHeaderNames.IF_MATCH);
-        headers.remove(HttpHeaderNames.IF_MODIFIED_SINCE);
-        headers.remove(HttpHeaderNames.IF_NONE_MATCH);
-        headers.remove(HttpHeaderNames.IF_RANGE);
-        headers.remove(HttpHeaderNames.IF_UNMODIFIED_SINCE);
-        headers.remove(HttpHeaderNames.ETAG);
-        headers.remove(HttpHeaderNames.CONNECTION);
     }
 
     private void addCachedResponseHeaders(ProxyRequest request) {
