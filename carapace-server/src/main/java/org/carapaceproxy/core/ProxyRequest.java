@@ -20,6 +20,7 @@
 package org.carapaceproxy.core;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.channel.Channel;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
@@ -116,8 +117,23 @@ public class ProxyRequest implements MatchingContext {
 
     private SslHandler getSslHandler() {
         final AtomicReference<SslHandler> sslHandlerRef = new AtomicReference<>();
-        request.withConnection(conn -> sslHandlerRef.set(conn.channel().pipeline().get(SslHandler.class)));
+        request.withConnection(conn -> sslHandlerRef.set(getSslHandler(conn.channel())));
         return sslHandlerRef.get();
+    }
+
+    private static SslHandler getSslHandler(final Channel channel) {
+        if (channel == null) {
+            return null;
+        }
+        final SslHandler sslHandler = channel.pipeline().get(SslHandler.class);
+        if (sslHandler == null) {
+            /*
+             * Parent traversal is needed because in some Netty setups (i.e., for HTTP/2)
+             * the SSL/TLS handler may be attached higher in the pipeline hierarchy.
+             */
+            return getSslHandler(channel.parent());
+        }
+        return sslHandler;
     }
 
     @Override
