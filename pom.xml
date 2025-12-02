@@ -132,7 +132,7 @@
         <libs.wiremock>3.13.1</libs.wiremock>
         <libs.powermock>2.0.9</libs.powermock>
         <libs.objenesis>3.0.1</libs.objenesis>
-        <libs.hamcrest>2.2</libs.hamcrest>
+        <libs.hamcrest>3.0</libs.hamcrest>
 
         <libs.asm>9.4</libs.asm>
     </properties>
@@ -471,16 +471,20 @@
                                 </banDynamicVersions>
                                 <bannedDependencies>
                                     <excludes>
+                                        <exclude>org.bouncycastle:*</exclude>
+                                        <!-- Excluding unnecessary annotations that are bundled in multiple versions by libraries -->
+                                        <exclude>org.checkerframework</exclude>
                                         <exclude>com.google.errorprone</exclude>
                                         <exclude>com.google.code.findbugs</exclude>
-                                        <exclude>org.bouncycastle:*</exclude>
-                                        <exclude>org.checkerframework</exclude>
-                                        <exclusion>org.hamcrest:hamcrest-core</exclusion>
+                                        <!-- Clashes with org.hamcrest:hamcrest -->
+                                        <exclude>org.hamcrest:hamcrest-core</exclude>
+                                        <exclude>org.hamcrest:hamcrest-library</exclude>
                                         <!-- We want only SLF4J as logging APIs and Logback as logging backend -->
-                                        <exclusion>commons-logging:commons-logging</exclusion>
-                                        <exclusion>org.apache.logging.log4j:*</exclusion>
-                                        <exclusion>log4j:*</exclusion>
-                                        <exclusion>ch.qos.reload4j:*</exclusion>
+                                        <exclude>ch.qos.reload4j:*</exclude>
+                                        <exclude>commons-logging:commons-logging</exclude>
+                                        <exclude>org.apache.logging.log4j:*</exclude>
+                                        <exclude>org.jboss.logmanager:*</exclude>
+                                        <exclude>log4j:*</exclude>
                                     </excludes>
                                     <includes>
                                         <include>org.bouncycastle:*-jdk18on</include>
