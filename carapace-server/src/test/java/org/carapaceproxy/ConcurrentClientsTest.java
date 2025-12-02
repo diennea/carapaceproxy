@@ -23,28 +23,29 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-import org.apache.commons.io.IOUtils;
+import java.io.IOException;
+import java.util.function.Function;
+import junitparams.JUnitParamsRunner;
+import junitparams.Parameters;
 import org.carapaceproxy.core.HttpProxyServer;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.netty.http.client.HttpClient;
+import reactor.netty.resources.ConnectionProvider;
+import reactor.test.StepVerifier;
 
 /**
  *
  * @author enrico.olivelli
  */
+@RunWith(JUnitParamsRunner.class)
 public class ConcurrentClientsTest {
 
     @Rule
@@ -54,48 +55,36 @@ public class ConcurrentClientsTest {
     public TemporaryFolder tmpDir = new TemporaryFolder();
 
     @Test
-    public void test() throws Exception {
-
+    @Parameters({"true", "false"})
+    public void testClients(final boolean concurrent) throws ConfigurationNotValidException, InterruptedException, IOException {
         stubFor(get(urlEqualTo("/index.html"))
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withHeader("Content-Type", "text/html")
-                .withBody("it <b>works</b> !!")));
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-
-        int size = 100;
-        int concurrentClients = 4;
+        final TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
             server.start();
-            int port = server.getLocalPort();
-
-            ExecutorService threadPool = Executors.newFixedThreadPool(concurrentClients);
-            AtomicReference<Throwable> oneError = new AtomicReference<>();
-            CountDownLatch count = new CountDownLatch(size);
-            for (int i = 0; i < size; i++) {
-                threadPool.submit(new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            String s = IOUtils.toString(URI.create("http://localhost:" + port + "/index.html"), StandardCharsets.UTF_8);
-                            assertEquals("it <b>works</b> !!", s);
-                        } catch (Throwable t) {
-                            t.printStackTrace();
-                            oneError.set(t);
-                        }
-                        count.countDown();
-                    }
-                });
-            }
-            threadPool.shutdown();
-            assertTrue(threadPool.awaitTermination(1, TimeUnit.MINUTES));
-            assertTrue(count.await(1, TimeUnit.MINUTES));
-
-            if (oneError.get() != null) {
-                fail("error! " + oneError.get());
-            }
+            final int numRequests = 200;
+            final int concurrency = concurrent ? 4 : 1;
+            final ConnectionProvider provider = ConnectionProvider
+                    .builder("test-pool")
+                    .maxConnections(concurrency)
+                    .pendingAcquireMaxCount(-1 /* no upper limit in the queue of registered requests for acquire */)
+                    .build();
+            final HttpClient client = HttpClient.create(provider);
+            final Function<Integer, Mono<String>> executeRequest = i -> client
+                    .get()
+                    .uri("http://localhost:" + server.getLocalPort() + "/index.html")
+                    .responseContent()
+                    .aggregate()
+                    .asString()
+                    .onErrorMap(ex -> new RuntimeException("Request " + i + " failed", ex));
+            final Flux<String> results = Flux.range(0, numRequests).flatMap(executeRequest, concurrency);
+            StepVerifier.create(results)
+                    .expectNextCount(numRequests)
+                    .verifyComplete();
         }
     }
-
 }
