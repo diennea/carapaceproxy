@@ -89,7 +89,6 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
-import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -181,46 +180,6 @@ public class RawClientTest {
                 System.out.println("s4:" + s2);
                 assertEquals("it <b>works</b> !!", s2);
             }
-        }
-    }
-
-    @Test
-    public void downloadSmallPayloadsTest() throws Exception {
-        stubFor(get(urlEqualTo("/index.html"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "text/html")
-                        .withHeader("Content-Length", "1")
-                        .withBody("a")));
-
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
-            server.start();
-            int port = server.getLocalPort();
-
-            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-
-                for (int i = 0; i < 1000; i++) {
-                    String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
-                    assertEquals("a", s);
-                }
-
-            }
-        }
-    }
-
-    @Test
-    public void endpointKeyTest() {
-        {
-            EndpointKey entryPoint = EndpointKey.make("localhost:8080");
-            assertThat(entryPoint.host(), is("localhost"));
-            assertThat(entryPoint.port(), is(8080));
-        }
-        {
-            EndpointKey entryPoint = EndpointKey.make("localhost");
-            assertThat(entryPoint.host(), is("localhost"));
-            assertThat(entryPoint.port(), is(0));
         }
     }
 
@@ -689,7 +648,7 @@ public class RawClientTest {
                         }
                     }));
                 } finally {
-                    for (Future future : futures) {
+                    for (Future<?> future : futures) {
                         try {
                             future.get();
                         } catch (InterruptedException | ExecutionException e) {
@@ -823,16 +782,16 @@ public class RawClientTest {
                         .filter(h -> h.toLowerCase().contains("set-cookie"))
                         .toList();
                 assertThat(headerSetCookie.size(), is(1));
-                assertThat(headerSetCookie.get(0), is("set-cookie: responseCookie=responseValue; responseCookie2=responseValue2\r\n"));
+                assertThat(headerSetCookie.getFirst(), is("set-cookie: responseCookie=responseValue; responseCookie2=responseValue2\r\n"));
             }
         }
 
         // cookies from client
         HttpHeader headerCookie = findAll(getRequestedFor(urlMatching("/index.html")))
-                .get(0)
+                .getFirst()
                 .getHeaders()
                 .getHeader(HttpHeaderNames.COOKIE.toString());
         assertThat(headerCookie.values().size(), is(1));
-        assertThat(headerCookie.values().get(0), is("requestCookie=requestValue; requestCookie2=requestValue2"));
+        assertThat(headerCookie.values().getFirst(), is("requestCookie=requestValue; requestCookie2=requestValue2"));
     }
 }

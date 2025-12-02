@@ -19,213 +19,80 @@
  */
 package org.carapaceproxy;
 
-import static org.junit.Assert.assertThrows;
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.post;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.net.URI;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.function.Supplier;
-import org.apache.commons.io.IOUtils;
+import com.github.tomakehurst.wiremock.http.Fault;
+import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.TestEndpointMapper;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.netty.http.client.HttpClient;
+import reactor.netty.http.client.HttpClientResponse;
+import reactor.test.StepVerifier;
+import reactor.util.function.Tuple2;
 
 /**
- * The clients sends a big upload, and the server is very slow at draining the contents
+ * Tests the proxy's behavior with large uploads and backend failures.
  *
  * @author enrico.olivelli
  */
 public class BigUploadTest {
 
-    private static final Logger LOG = LoggerFactory.getLogger(BigUploadTest.class);
-
     @Rule
     public TemporaryFolder tmpDir = new TemporaryFolder();
 
-    public interface ClientHandler {
+    @Rule
+    public WireMockRule wireMockRule = new WireMockRule(wireMockConfig().dynamicPort());
 
-        public void handle(Socket client) throws Exception;
+    private HttpProxyServer server;
+
+    @Before
+    public void setUp() throws Exception {
+        final TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());
+        server.start();
     }
 
-    public static class ConnectionResetByPeerHandler implements ClientHandler {
-
-        @Override
-        public void handle(Socket client) {
-            try (Socket _client = client; // autoclose
-                    InputStream in = client.getInputStream()) {
-                int count = 0;
-                int b = in.read();
-                while (b != -1) {
-                    count++;
-                    if (count > 2_000) {
-                        LOG.info("closing input stream after {}", count);
-                        in.close();
-                        break;
-                    }
-                    b = in.read();
-                }
-            } catch (IOException ii) {
-                LOG.error("error", ii);
-            }
-        }
-    }
-
-    public static class StaticResponseHandler implements ClientHandler {
-
-        private final byte[] response;
-
-        public StaticResponseHandler(byte[] response) {
-            this.response = response;
-        }
-
-        @Override
-        public void handle(Socket client) {
-            try (Socket _client = client; // autoclose
-                    OutputStream out = client.getOutputStream();) {
-
-                out.write(response);
-            } catch (IOException ii) {
-                LOG.error("error", ii);
-            }
-        }
-    }
-
-    public static final class SimpleBlockingTcpServer implements AutoCloseable {
-
-        private final ServerSocket socket;
-        private volatile boolean closed;
-        private final ExecutorService threadpool = Executors.newCachedThreadPool();
-        private final Supplier<ClientHandler> factory;
-
-        public SimpleBlockingTcpServer(Supplier<ClientHandler> factory) throws IOException {
-            socket = new ServerSocket();
-            this.factory = factory;
-        }
-
-        public void start() throws Exception {
-            start(() -> () -> {
-            });
-        }
-
-        public void start(Supplier<Runnable> beforeAccept) throws Exception {
-            socket.bind(new InetSocketAddress(0));
-            threadpool.submit(() -> {
-                while (!closed) {
-                    try {
-                        beforeAccept.get().run();
-                        Socket client = socket.accept();
-                        LOG.info("accepted HTTP client {}", client);
-                        threadpool.submit(() -> {
-                            try {
-                                ClientHandler newHandler = factory.get();
-                                newHandler.handle(client);
-                            } catch (Exception err) {
-                                LOG.error("error accepting client", err);
-                            } finally {
-                                try {
-                                    client.close();
-                                } catch (IOException err) {
-                                }
-                            }
-                        });
-                    } catch (Exception err) {
-                        LOG.error("error accepting client", err);
-                    }
-                }
-            });
-        }
-
-        public int getPort() {
-            return socket.getLocalPort();
-        }
-
-        @Override
-        public void close() throws IOException {
-            closed = true;
-            threadpool.shutdown();
-            if (socket != null) {
-                socket.close();
-            }
+    @After
+    public void tearDown() {
+        if (server != null) {
+            server.close();
         }
     }
 
     @Test
-    public void testConnectionResetByPeerDuringWriteToEndpoint() throws Exception {
-
-        try (SimpleBlockingTcpServer mockServer =
-                new SimpleBlockingTcpServer(ConnectionResetByPeerHandler::new)) {
-
-            mockServer.start();
-
-            TestEndpointMapper mapper = new TestEndpointMapper("localhost", mockServer.getPort());
-
-            int size = 20_000_000;
-
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
-                server.start();
-                int port = server.getLocalPort();
-                URL url = URI.create("http://localhost:" + port + "/index.html").toURL();
-                HttpURLConnection con = (HttpURLConnection) url.openConnection();
-                con.setDoOutput(true);
-
-                byte[] contents = "foo".getBytes(StandardCharsets.US_ASCII);
-                try (OutputStream o = con.getOutputStream()) {
-                    for (int i = 0; i < size; i++) {
-                        o.write(contents);
-                    }
-                }
-                assertThrows(IOException.class, () -> {
-                    try (InputStream in = con.getInputStream()) {
-                        IOUtils.toString(in, StandardCharsets.US_ASCII);
-                    } catch (IOException ex) {
-                        throw ex;
-                    }
-                });
-                con.disconnect();
-            }
-        }
+    public void testProxyReturns503OnBackendConnectionDrop() {
+        wireMockRule.stubFor(post(urlEqualTo("/index.html"))
+                // backend server abruptly closes the connection while the client is sending a large upload
+                .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER).withFixedDelay(2000)));
+        // Create a large, streaming request body (20MB).
+        final byte[] chunk = new byte[1024];
+        final Flux<ByteBuf> requestBody = Flux.range(0, 20_000).map(i -> Unpooled.wrappedBuffer(chunk));
+        final HttpClient client = HttpClient.create();
+        final Mono<Tuple2<HttpClientResponse, String>> result = client
+                .post()
+                .uri("http://localhost:" + server.getLocalPort() + "/index.html")
+                .send(requestBody)
+                .responseSingle((response, bodyMono) -> Mono.zip(Mono.just(response), bodyMono.asString()));
+        StepVerifier.create(result)
+                .assertNext(tuple -> {
+                    final HttpClientResponse response = tuple.getT1();
+                    final String body = tuple.getT2();
+                    assertEquals(503, response.status().code());
+                    assertTrue(body.contains("Service Unavailable"));
+                })
+                .verifyComplete();
     }
-
-    @Test
-    public void testBlockingServerWorks() throws Exception {
-        SimpleBlockingTcpServer mockServer = new SimpleBlockingTcpServer(() -> new StaticResponseHandler("""
-                HTTP/1.1 200 OK\r
-                Content-Type: text/plain\r
-                \r
-                it works!\r
-                """.getBytes(StandardCharsets.US_ASCII)));
-        try (mockServer) {
-            mockServer.start();
-
-            TestEndpointMapper mapper = new TestEndpointMapper("localhost", mockServer.getPort());
-
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
-                server.start();
-                int port = server.getLocalPort();
-                URL url = URI.create("http://localhost:" + port + "/index.html").toURL();
-                HttpURLConnection con = (HttpURLConnection) url.openConnection();
-
-                try (InputStream in = con.getInputStream()) {
-                    String res = IOUtils.toString(in, StandardCharsets.US_ASCII);
-                    System.out.println("res:" + res);
-                    assertTrue(res.contains("it works!"));
-                }
-                con.disconnect();
-            }
-        }
-    }
-
 }
