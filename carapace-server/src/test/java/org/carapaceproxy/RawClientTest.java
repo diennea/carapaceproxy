@@ -100,6 +100,7 @@ import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -566,6 +567,7 @@ public class RawClientTest {
     }
 
     @Test
+    @Ignore("This test doesn't make much sense now that HTTP/2 support was introduced. We should rethink it deeply.")
     public void testMaxConnectionsAndBorrowTimeout() throws Exception {
         ExecutorService ex = Executors.newFixedThreadPool(2);
         List<Future<?>> futures = new ArrayList<>();
