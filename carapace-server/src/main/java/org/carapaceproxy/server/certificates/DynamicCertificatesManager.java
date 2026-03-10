@@ -73,6 +73,7 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.CertificatesUtils;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
 import org.shredzone.acme4j.Order;
+import org.shredzone.acme4j.Problem;
 import org.shredzone.acme4j.Status;
 import org.shredzone.acme4j.challenge.Challenge;
 import org.shredzone.acme4j.challenge.Dns01Challenge;
@@ -529,7 +530,9 @@ public class DynamicCertificatesManager implements Runnable {
                 okCount++;
                 cleanupChallengeForDomain(domain, challenge);
             } else if (status == Status.INVALID) {
-                cert.error("Challenge response verification failed, status is " + status);
+                cert.error(challenge.getError()
+                        .flatMap(Problem::getDetail)
+                        .orElse("Challenge response verification failed, status is " + status));
             }
         }
         if (cert.getState() == REQUEST_FAILED) {

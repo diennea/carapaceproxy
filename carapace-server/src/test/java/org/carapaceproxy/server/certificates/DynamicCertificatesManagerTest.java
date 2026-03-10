@@ -51,6 +51,7 @@ import java.security.cert.X509Certificate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
@@ -75,6 +76,7 @@ import org.shredzone.acme4j.connector.Connection;
 import org.shredzone.acme4j.exception.AcmeException;
 import org.shredzone.acme4j.toolbox.JSON;
 import org.shredzone.acme4j.util.KeyPairUtils;
+import org.shredzone.acme4j.Problem;
 
 /**
  * Test for DynamicCertificatesManager.
@@ -92,6 +94,8 @@ public class DynamicCertificatesManagerTest {
         "challenge_null,false",
         "challenge_status_invalid,true",
         "challenge_status_invalid,false",
+        "challenge_status_invalid_with_detail,true",
+        "challenge_status_invalid_with_detail,false",
         "order_already_valid,true",
         "order_already_valid,false",
         "order_finalization_error,true",
@@ -117,16 +121,32 @@ public class DynamicCertificatesManagerTest {
         when(ac.createOrderForDomain(any())).thenReturn(o);
         Http01Challenge c = mock(Http01Challenge.class);
         when(c.getToken()).thenReturn("");
-        when(c.getJSON()).thenReturn(JSON.parse("""
-            {
-                "url": "https://localhost/index",
-                "type": "http-01",
-                "token": "mytoken"
-            }"""
+        when(c.getJSON()).thenReturn(JSON.parse(runCase.equals("challenge_status_invalid_with_detail")
+                ? """
+                  {
+                      "url": "https://localhost/index",
+                      "type": "http-01",
+                      "token": "mytoken",
+                      "error": {
+                          "detail": "CAA record prevents issuance"
+                      }
+                  }"""
+                : """
+                  {
+                      "url": "https://localhost/index",
+                      "type": "http-01",
+                      "token": "mytoken"
+                  }"""
         ));
         when(c.getAuthorization()).thenReturn("");
+        when(c.getError()).thenReturn(Optional.empty());
+        if (runCase.equals("challenge_status_invalid_with_detail")) {
+            final var problem = mock(Problem.class);
+            when(problem.getDetail()).thenReturn(Optional.of("CAA record prevents issuance"));
+            when(c.getError()).thenReturn(Optional.of(problem));
+        }
         when(ac.getChallengesForOrder(any())).thenReturn(runCase.equals("challenge_null") ? Collections.emptyMap() : Map.of("domain", c));
-        when(ac.checkResponseForChallenge(any())).thenReturn(runCase.equals("challenge_status_invalid") ? INVALID : VALID);
+        when(ac.checkResponseForChallenge(any())).thenReturn(runCase.startsWith("challenge_status_invalid") ? INVALID : VALID);
         when(ac.checkResponseForOrder(any())).thenReturn(runCase.equals("order_response_error") ? INVALID : VALID);
         if (runCase.equals("order_already_valid") || runCase.equals("order_finalization_error")) {
             doThrow(AcmeException.class).when(ac).orderCertificate(any(), any());
@@ -214,8 +234,14 @@ public class DynamicCertificatesManagerTest {
         verify(store, times(++saveCounter)).saveCertificate(any());
         if (runCase.equals("challenge_null")) { // VERIFIED
             assertCertificateState(d1, ORDERING, expectedCycleCount, man);
-        } else if (runCase.equals("challenge_status_invalid")) {
+        } else if (runCase.startsWith("challenge_status_invalid")) {
             assertCertificateState(d1, REQUEST_FAILED, ++expectedCycleCount, man);
+            assertEquals(
+                    runCase.equals("challenge_status_invalid_with_detail")
+                            ? "CAA record prevents issuance"
+                            : "Challenge response verification failed, status is INVALID",
+                    man.getCertificateDataForDomain(d1).getMessage()
+            );
             man.run();
             verify(store, times(++saveCounter)).saveCertificate(any());
             assertCertificateState(d1, maxedOutTrials ? REQUEST_FAILED : WAITING, expectedCycleCount, man);
@@ -319,7 +345,7 @@ public class DynamicCertificatesManagerTest {
         when(c.getJSON()).thenReturn(JSON.parse(
                 "{\"url\": \"https://localhost/index\", \"type\": \"dns-01\", \"token\": \"mytoken\"}"
         ));
-
+        when(c.getError()).thenReturn(Optional.empty());
         when(ac.getChallengesForOrder(any())).thenReturn(Map.of(domain, c));
         when(ac.checkResponseForChallenge(any())).thenReturn(runCase.equals("challenge_failed") ? INVALID : VALID);
 
@@ -448,12 +474,14 @@ public class DynamicCertificatesManagerTest {
         when(dns01Challenge.getJSON()).thenReturn(JSON.parse(
                 "{\"url\": \"https://localhost/index\", \"type\": \"dns-01\", \"token\": \"mytoken\"}"
         ));
+        when(dns01Challenge.getError()).thenReturn(Optional.empty());
         Http01Challenge http01Challenge = mock(Http01Challenge.class);
         when(http01Challenge.getToken()).thenReturn("");
         when(http01Challenge.getJSON()).thenReturn(JSON.parse(
                 "{\"url\": \"https://localhost/index\", \"type\": \"http-01\", \"token\": \"mytoken\"}"
         ));
         when(http01Challenge.getAuthorization()).thenReturn("");
+        when(http01Challenge.getError()).thenReturn(Optional.empty());
         when(ac.getChallengesForOrder(any())).thenReturn(Map.of(
                 domain, dns01Challenge,
                 san1, http01Challenge,
