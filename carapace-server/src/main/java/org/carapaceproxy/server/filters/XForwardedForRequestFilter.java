@@ -27,23 +27,26 @@ import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
  * Add a X-Forwarded-For Header
  */
 @Deprecated
-public class XForwardedForRequestFilter extends BasicRequestFilter {
+public class XForwardedForRequestFilter extends HeaderRequestFilter {
 
     @Deprecated
     public static final String TYPE = "add-x-forwarded-for";
 
     public XForwardedForRequestFilter(RequestMatcher matcher) {
-        super(matcher);
+        super("X-Forwarded-For", matcher);
     }
 
     @Override
-    public void apply(ProxyRequest request) {
-        if (!checkRequestMatching(request)) {
-            return;
-        }
-        request.getRequestHeaders().remove("X-Forwarded-For");
+    protected String computeHeaderValue(ProxyRequest request) {
         InetSocketAddress address = request.getRemoteAddress();
-        request.getRequestHeaders().add("X-Forwarded-For", address.getAddress().getHostAddress());
+        if (address == null || address.getAddress() == null) {
+            return null;
+        }
+        return address.getAddress().getHostAddress();
     }
 
+    @Override
+    public String getType() {
+        return TYPE;
+    }
 }

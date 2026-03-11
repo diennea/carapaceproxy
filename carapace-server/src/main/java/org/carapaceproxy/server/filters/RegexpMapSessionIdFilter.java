@@ -19,8 +19,6 @@
  */
 package org.carapaceproxy.server.filters;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 
@@ -29,45 +27,21 @@ import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
  *
  * @author enrico.olivelli
  */
-public class RegexpMapSessionIdFilter extends BasicRequestFilter {
+public class RegexpMapSessionIdFilter extends RegexMapRequestFilter {
 
     public static final String TYPE = "match-session-regexp";
 
-    private final String parameterName;
-    private final Pattern compiledPattern;
-
     public RegexpMapSessionIdFilter(String parameterName, String pattern, RequestMatcher matcher) {
-        super(matcher);
-        this.parameterName = parameterName;
-        this.compiledPattern = Pattern.compile(pattern);
-    }
-
-    public String getParameterName() {
-        return parameterName;
-    }
-
-    public Pattern getCompiledPattern() {
-        return compiledPattern;
+        super(parameterName, pattern, matcher);
     }
 
     @Override
-    public void apply(ProxyRequest request) {
-        if (!checkRequestMatching(request)) {
-            return;
-        }
-        UrlEncodedQueryString queryString = request.getQueryString();
-        String value = queryString.get(parameterName);
-        if (value == null) {
-            return;
-        }
-        Matcher _matcher = compiledPattern.matcher(value);
-        if (!_matcher.find()) {
-            return;
-        }
-        if (_matcher.groupCount() <= 0) {
-            return;
-        }
-        String group = _matcher.group(1);
+    protected void applyMappedValue(ProxyRequest request, String group) {
         request.setSessionId(group);
+    }
+
+    @Override
+    public String getType() {
+        return TYPE;
     }
 }

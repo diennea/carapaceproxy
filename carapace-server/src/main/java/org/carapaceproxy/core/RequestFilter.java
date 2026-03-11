@@ -30,4 +30,9 @@ public interface RequestFilter {
      * @param request
      */
     void apply(ProxyRequest request);
+
+    /**
+     * Return the filter type identifier (used for configuration and API).
+     */
+    String getType();
 }

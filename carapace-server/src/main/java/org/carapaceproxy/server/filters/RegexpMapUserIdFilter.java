@@ -19,8 +19,6 @@
  */
 package org.carapaceproxy.server.filters;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 
@@ -29,46 +27,22 @@ import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
  *
  * @author enrico.olivelli
  */
-public class RegexpMapUserIdFilter extends BasicRequestFilter {
+public class RegexpMapUserIdFilter extends RegexMapRequestFilter {
 
     public static final String TYPE = "match-user-regexp";
 
-    private final String parameterName;
-    private final Pattern compiledPattern;
-
     public RegexpMapUserIdFilter(String parameterName, String pattern, RequestMatcher matcher) {
-        super(matcher);
-        this.parameterName = parameterName;
-        this.compiledPattern = Pattern.compile(pattern);
-    }
-
-    public String getParameterName() {
-        return parameterName;
-    }
-
-    public Pattern getCompiledPattern() {
-        return compiledPattern;
+        super(parameterName, pattern, matcher);
     }
 
     @Override
-    public void apply(ProxyRequest request) {
-        if (!checkRequestMatching(request)) {
-            return;
-        }
-        UrlEncodedQueryString queryString = request.getQueryString();
-        String value = queryString.get(parameterName);
-        if (value == null) {
-            return;
-        }
-        Matcher matcher = compiledPattern.matcher(value);
-        if (!matcher.find()) {
-            return;
-        }
-        if (matcher.groupCount() <= 0) {
-            return;
-        }
-        String group = matcher.group(1);
+    protected void applyMappedValue(ProxyRequest request, String group) {
         request.setUserId(group);
+    }
+
+    @Override
+    public String getType() {
+        return TYPE;
     }
 
 }
