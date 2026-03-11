@@ -52,6 +52,14 @@ public class RequestFilterFactory {
                 return new XTlsCipherRequestFilter(matcher);
             case XTlsProtocolRequestFilter.TYPE:
                 return new XTlsProtocolRequestFilter(matcher);
+            case ServerHeaderRequestFilter.TYPE: {
+                if (!filterConfig.containsKey("value")) {
+                    return new ServerHeaderRequestFilter(ServerHeaderRequestFilter.DEFAULT_SERVER, matcher);
+                } else {
+                    final String value = filterConfig.get("value");
+                    return new ServerHeaderRequestFilter(value, matcher);
+                }
+            }
             case RegexpMapUserIdFilter.TYPE: {
                 String param = filterConfig.getOrDefault("param", "userid").trim();
                 String regexp = filterConfig.getOrDefault("regexp", "(.*)").trim();

@@ -62,6 +62,7 @@ import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
+import org.carapaceproxy.server.filters.ServerHeaderRequestFilter;
 import org.carapaceproxy.server.mapper.CustomHeader;
 import org.carapaceproxy.server.mapper.MapResult;
 import org.carapaceproxy.utils.HttpUtils;
@@ -196,6 +197,7 @@ public class ProxyRequestsManager implements AutoCloseable {
     public Publisher<Void> processRequest(ProxyRequest request) {
         request.setStartTs(System.currentTimeMillis());
         request.setLastActivity(request.getStartTs());
+        request.getRequestHeaders().set(HttpHeaderNames.SERVER, ServerHeaderRequestFilter.DEFAULT_SERVER);
 
         parent.getFilters().forEach(filter -> filter.apply(request));
 
