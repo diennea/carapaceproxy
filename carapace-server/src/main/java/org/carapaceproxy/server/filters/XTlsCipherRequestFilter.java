@@ -3,21 +3,23 @@ package org.carapaceproxy.server.filters;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
 
-public class XTlsCipherRequestFilter extends BasicRequestFilter {
+public class XTlsCipherRequestFilter extends HeaderRequestFilter {
     public static final String TYPE = "add-x-tls-cipher";
 
     public XTlsCipherRequestFilter(RequestMatcher matcher) {
-        super(matcher);
+        super("X-Tls-Cipher", matcher);
     }
 
     @Override
-    public void apply(ProxyRequest request) {
-        if (!checkRequestMatching(request)) {
-            return;
+    protected String computeHeaderValue(ProxyRequest request) {
+        if (!request.isSecure()) {
+            return null;
         }
-        if (request.isSecure()) {
-            request.getRequestHeaders().remove("X-Tls-Cipher");
-            request.getRequestHeaders().add("X-Tls-Cipher", request.getCipherSuite());
-        }
+        return request.getCipherSuite();
+    }
+
+    @Override
+    public String getType() {
+        return TYPE;
     }
 }

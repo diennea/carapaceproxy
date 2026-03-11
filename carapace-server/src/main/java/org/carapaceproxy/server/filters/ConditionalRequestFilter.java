@@ -29,16 +29,39 @@ import org.carapaceproxy.server.mapper.requestmatcher.RequestMatcher;
  *
  * @author paolo.venturi
  */
-public abstract class BasicRequestFilter implements RequestFilter {
+public abstract class ConditionalRequestFilter implements RequestFilter {
 
     private final RequestMatcher matcher;
 
-    public BasicRequestFilter(RequestMatcher matcher) {
+    public ConditionalRequestFilter(RequestMatcher matcher) {
         this.matcher = matcher;
     }
 
-    boolean checkRequestMatching(ProxyRequest request) {
+    /**
+     * Check if the request matches the filter condition.
+     *
+     * <br>This method is called before applying the filter to the request.
+     *
+     * @param request the request to check for matching the filter condition
+     * @return true if the request matches the filter condition, false otherwise
+     */
+    protected boolean checkRequestMatching(ProxyRequest request) {
         return matcher.matches(request);
     }
 
+    @Override
+    public final void apply(ProxyRequest request) {
+        if (checkRequestMatching(request)) {
+            applyFilter(request);
+        }
+    }
+
+    /**
+     * Apply the filter to the request.
+     *
+     * <br>This method is called only if the request matches the filter condition.
+     *
+     * @param request the request to apply the filter to, if matching the condition
+     */
+    protected abstract void applyFilter(final ProxyRequest request);
 }
