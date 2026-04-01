@@ -20,6 +20,6 @@ jobs:
       - name: 'Build and publish snapshot'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./mvnw -B deploy --file pom.xml -DskipTests
+        run: ./mvnw -B deploy --file pom.xml -DskipTests -Pproduction
       - name: 'Submit Dependency Snapshot'
         uses: advanced-security/maven-dependency-submission-action@v5
