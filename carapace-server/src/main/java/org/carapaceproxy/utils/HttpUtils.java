@@ -27,6 +27,7 @@ import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpVersion;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.Set;
 import reactor.netty.http.HttpProtocol;
 
 /**
@@ -41,6 +42,54 @@ import reactor.netty.http.HttpProtocol;
 public class HttpUtils {
 
     private static final ZoneId GMT = ZoneId.of("GMT");
+
+    /**
+     * Standard hop-by-hop headers that must not be forwarded by a reverse proxy,
+     * as defined by RFC 2616 §13.5.1 and RFC 7230 §6.1.
+     * The {@code Proxy-Connection} header is a non-standard but widely-used extension that is also treated as hop-by-hop.
+     *
+     * <p>Note: {@code Transfer-Encoding} is intentionally excluded from this set. It is connection-specific
+     * between adjacent peers, but Reactor Netty's HTTP/2 codec already enforces its removal at the wire
+     * level (RFC 9113 §8.2.2). Stripping it here would break HTTP/1.1 chunked proxying by removing the
+     * framing signal that clients need to reassemble the response body.
+     */
+    @SuppressWarnings("deprecation")
+    private static final Set<CharSequence> HOP_BY_HOP_HEADERS = Set.of(
+            HttpHeaderNames.CONNECTION,
+            HttpHeaderNames.KEEP_ALIVE,
+            HttpHeaderNames.PROXY_AUTHENTICATE,
+            HttpHeaderNames.PROXY_AUTHORIZATION,
+            HttpHeaderNames.TE,
+            HttpHeaderNames.TRAILER,
+            HttpHeaderNames.UPGRADE,
+            HttpHeaderNames.PROXY_CONNECTION
+    );
+
+    /**
+     * Strips hop-by-hop headers from the given {@link HttpHeaders} in place.
+     *
+     * <p>A reverse proxy must not forward hop-by-hop headers between connections
+     * (RFC 2616 §13.5.1, RFC 7230 §6.1). This method:
+     * <ol>
+     *   <li>Removes any headers dynamically nominated as hop-by-hop via the {@code Connection}
+     *       header value (RFC 7230 §6.1).</li>
+     *   <li>Removes the standard set of hop-by-hop headers.</li>
+     * </ol>
+     * This also ensures compliance with HTTP/2, which prohibits connection-specific headers
+     * (RFC 9113 §8.2.2).
+     *
+     * @param headers the headers to strip in place (must be mutable)
+     */
+    public static void stripHopByHopHeaders(final HttpHeaders headers) {
+        // Remove headers dynamically nominated via the Connection header (RFC 7230 §6.1)
+        for (final String connectionValue : headers.getAll(HttpHeaderNames.CONNECTION)) {
+            for (final String token : connectionValue.split(",")) {
+                headers.remove(token.trim());
+            }
+        }
+        // Remove standard hop-by-hop headers
+        HOP_BY_HOP_HEADERS.forEach(headers::remove);
+    }
 
     public static String formatDateHeader(java.util.Date date) {
         return RFC_1123_DATE_TIME.format(ZonedDateTime.ofInstant(date.toInstant(), GMT));
