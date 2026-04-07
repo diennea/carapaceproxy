@@ -150,6 +150,10 @@ public class ProxyRequestsManager implements AutoCloseable {
         headers.remove(HttpHeaderNames.IF_RANGE);
         headers.remove(HttpHeaderNames.IF_UNMODIFIED_SINCE);
         headers.remove(HttpHeaderNames.ETAG);
+        // Connection is a hop-by-hop header and must not influence cache validation (RFC 7234 §4.3.4).
+        // Only Connection is removed here (on the live headers object); full hop-by-hop stripping is
+        // performed later in forward() on a copy of the headers, so that getClientProtocols() can still
+        // read Transfer-Encoding via mayHaveBody() before the copy is made.
         headers.remove(HttpHeaderNames.CONNECTION);
     }
 
@@ -461,23 +465,11 @@ public class ProxyRequestsManager implements AutoCloseable {
         return forwarder.request(request.getMethod())
                 .uri(request.getUri())
                 .send((req, out) -> {
-                    // we don't want to upgrade to HTTP/2 if Carapace supports it, but the backend doesn't
                     final HttpHeaders copy = request.getRequestHeaders().copy();
-                    if (copy.contains(HttpHeaderNames.UPGRADE)) {
-                        final List<String> upgrade = copy.getAll(HttpHeaderNames.UPGRADE);
-                        if (upgrade.contains("HTTP/2")) {
-                            // we drop connection and upgrade only if the target upgrade is HTTP/2.0;
-                            // else, we want to preserve upgrades to HTTPS or similar
-                            final List<String> connection = copy.getAll(HttpHeaderNames.CONNECTION);
-                            connection.removeIf("upgrade"::equalsIgnoreCase);
-                            copy.remove(HttpHeaderNames.CONNECTION);
-                            copy.add(HttpHeaderNames.CONNECTION, connection);
-
-                            upgrade.remove("HTTP/2");
-                            copy.remove(HttpHeaderNames.UPGRADE);
-                            copy.add(HttpHeaderNames.UPGRADE, upgrade);
-                        }
-                    }
+                    // Strip hop-by-hop headers before forwarding to the backend (RFC 2616 §13.5.1, RFC 7230 §6.1).
+                    // This also ensures compliance with HTTP/2 which prohibits connection-specific headers (RFC 9113 §8.2.2).
+                    HttpUtils.stripHopByHopHeaders(copy);
+                    // HTTP2-Settings is connection-specific and must not be forwarded (RFC 7540 §3.2)
                     copy.remove(Http2CodecUtil.HTTP_UPGRADE_SETTINGS_HEADER);
                     req.headers(copy);
                     // netty overrides the value, we need to force it
@@ -498,7 +490,9 @@ public class ProxyRequestsManager implements AutoCloseable {
                     }
 
                     request.setResponseStatus(resp.status());
-                    request.setResponseHeaders(resp.responseHeaders().copy()); // headers from endpoint to client
+                    final HttpHeaders responseHeaders = resp.responseHeaders().copy();
+                    HttpUtils.stripHopByHopHeaders(responseHeaders);
+                    request.setResponseHeaders(responseHeaders);
                     if (cacheable.get() && parent.getCache().isCacheable(resp) && Objects.requireNonNull(cacheReceiver).receivedFromRemote(resp)) {
                         addCachedResponseHeaders(request);
                     } else {
