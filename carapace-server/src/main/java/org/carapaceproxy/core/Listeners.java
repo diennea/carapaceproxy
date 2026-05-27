@@ -36,7 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.function.Function;
 import jdk.net.ExtendedSocketOptions;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -204,7 +203,11 @@ public class Listeners {
             });
         }
         httpServer = httpServer
-                .metrics(true, Function.identity())
+                // reactor-netty's server metrics handler resolves the request path via resolvePath() -> ops.fullPath(),
+                // and ResponseTimeHandlerContext later calls path.substring(1); an empty fullPath() (e.g. an
+                // undecodable request) throws on the event loop. Map a null/empty path to "/" to prevent that crash.
+                // reactor-netty 1.2.6: https://github.com/reactor/reactor-netty/blob/b6e72c423245595c39ef00faa818e0109c96b57b/reactor-netty-http/src/main/java/reactor/netty/http/server/MicrometerHttpServerMetricsHandler.java#L199
+                .metrics(true, uri -> uri == null || uri.isEmpty() ? "/" : uri)
                 .forwarded(ForwardedStrategy.of(config.forwardedStrategy(), config.trustedIps()))
                 .option(ChannelOption.SO_BACKLOG, config.soBacklog())
                 .childOption(ChannelOption.SO_KEEPALIVE, config.keepAlive())
