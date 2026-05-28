@@ -270,7 +270,7 @@ public class BackendHealthManager implements Runnable {
             return false;
         }
         final BackendHealthStatus backendStatus = getBackendStatus(backendConfiguration.hostPort());
-        return backendConfiguration.safeCapacity() > backendStatus.getConnections();
+        return backendStatus.getConnections() > backendConfiguration.safeCapacity();
     }
 
     @VisibleForTesting
