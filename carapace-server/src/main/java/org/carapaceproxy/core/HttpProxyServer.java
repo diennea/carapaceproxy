@@ -795,7 +795,7 @@ public class HttpProxyServer implements AutoCloseable {
                 zkAddress = staticConfiguration.getString("zkAddress", "localhost:2181");
                 zkSecure = staticConfiguration.getBoolean("zkSecure", false);
                 zkTimeout = staticConfiguration.getInt("zkTimeout", 40_000);
-                zkProperties = new Properties(staticConfiguration.asProperties("zookeeper."));
+                zkProperties = new Properties(staticConfiguration.asProperties("zookeeper"));
                 LOG.info("mode=cluster, zkAddress=\"{}\", zkTimeout={}, peer.id=\"{}\", zkSecure: {}", zkAddress, zkTimeout, peerId, zkSecure);
                 zkProperties.forEach((k, v) -> LOG.info("additional zkclient property: {}={}", k, v));
                 break;
