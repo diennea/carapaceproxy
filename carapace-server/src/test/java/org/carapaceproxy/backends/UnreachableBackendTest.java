@@ -42,6 +42,7 @@ import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
+import org.carapaceproxy.utils.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -101,6 +102,7 @@ public class UnreachableBackendTest {
                         """, resp.getBodyString());
             }
             assertSame(BackendHealthStatus.Status.DOWN, server.getBackendHealthManager().getBackendStatus(key).getStatus());
+            TestUtils.waitForCondition(() -> ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get() == 0, 10);
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
@@ -156,6 +158,7 @@ public class UnreachableBackendTest {
                         """, resp.getBodyString());
             }
             assertSame(COLD, server.getBackendHealthManager().getBackendStatus(key).getStatus()); // no troubles for new connections
+            TestUtils.waitForCondition(() -> ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get() == 0, 10);
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
@@ -188,6 +191,7 @@ public class UnreachableBackendTest {
                         """, resp.getBodyString());
             }
             assertSame(COLD, server.getBackendHealthManager().getBackendStatus(key).getStatus()); // no troubles for new connections
+            TestUtils.waitForCondition(() -> ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get() == 0, 10);
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
@@ -241,6 +245,7 @@ public class UnreachableBackendTest {
                         """, resp.getBodyString());
             }
             assertSame(COLD, server.getBackendHealthManager().getBackendStatus(key).getStatus());
+            TestUtils.waitForCondition(() -> ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get() == 0, 10);
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
     }
