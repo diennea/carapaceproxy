@@ -142,6 +142,15 @@ public class ProxyRequestsManager implements AutoCloseable {
         });
     }
 
+    private static boolean rejectAsSmuggling(ProxyRequest request) {
+        final HttpHeaders headers = request.getRequestHeaders();
+        if (headers.get(HttpHeaderNames.CONTENT_LENGTH) != null && headers.get(HttpHeaderNames.TRANSFER_ENCODING) != null) {
+            LOGGER.warn("Potential CL.TE request smuggling attack: both Content-Length and Transfer-Encoding present. Request: {}", request.getUri());
+            return true;
+        }
+        return false;
+    }
+
     private static void cleanRequestFromCacheValidators(ProxyRequest request) {
         HttpHeaders headers = request.getRequestHeaders();
         headers.remove(HttpHeaderNames.IF_MATCH);
@@ -205,10 +214,12 @@ public class ProxyRequestsManager implements AutoCloseable {
         request.setLastActivity(request.getStartTs());
         request.getRequestHeaders().set(HttpHeaderNames.SERVER, ServerHeaderRequestFilter.DEFAULT_SERVER);
 
+        // HTTP/1.x request-smuggling validation runs on the raw inbound headers, before any request filter
+        // or the mapper, so a filter that mutates Content-Length / Transfer-Encoding cannot bypass it.
+        // HTTP/2 framing is not vulnerable.
+        final boolean smuggling = request.getHttpProtocol().majorVersion() < 2 && rejectAsSmuggling(request);
         parent.getFilters().forEach(filter -> filter.apply(request));
-
-        MapResult action = parent.getMapper().map(request);
-
+        final MapResult action = smuggling ? MapResult.badRequest() : parent.getMapper().map(request);
         request.setAction(action);
 
         if (LOGGER.isTraceEnabled()) {
