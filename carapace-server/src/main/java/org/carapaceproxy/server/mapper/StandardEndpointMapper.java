@@ -26,8 +26,6 @@ import static org.carapaceproxy.core.StaticContentsManager.IN_MEMORY_RESOURCE;
 import com.google.common.net.HostAndPort;
 import com.google.common.net.InetAddresses;
 import com.google.common.net.InternetDomainName;
-import io.netty.handler.codec.http.HttpHeaderNames;
-import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -147,30 +145,6 @@ public class StandardEndpointMapper extends EndpointMapper {
                 LOG.trace("Invalid header host {} for request {}", request.getRequestHostname(), request.getUri());
             }
             return MapResult.badRequest();
-        }
-
-        // CL.0 and CL.TE request smuggling validation
-        // HTTP/2 requests are not vulnerable to these attacks, so we only check HTTP/1.x
-        if (request.getHttpProtocol().majorVersion() < 2) {
-            HttpHeaders headers = request.getRequestHeaders();
-            String contentLength = headers.get(HttpHeaderNames.CONTENT_LENGTH);
-            String transferEncoding = headers.get(HttpHeaderNames.TRANSFER_ENCODING);
-
-            // Check for CL.TE attack: both Content-Length and Transfer-Encoding headers present
-            if (contentLength != null && transferEncoding != null) {
-                LOG.warn("Potential CL.TE request smuggling attack detected: both Content-Length and Transfer-Encoding headers present. Request: {}", request.getUri());
-                return MapResult.badRequest();
-            }
-
-            // Check for CL.0 attack: Content-Length: 0 but with body
-            if (contentLength != null && contentLength.trim().equals("0")) {
-                // It's OK to consume the string in the flux, as it should be empty anyway
-                final String body = request.getRequestData().asString().blockFirst();
-                if (body != null && !body.isEmpty()) {
-                    LOG.warn("Request with Content-Length: 0 but with body detected: {}", request.getUri());
-                    return MapResult.badRequest();
-                }
-            }
         }
 
         for (final RouteConfiguration route : routes) {
