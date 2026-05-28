@@ -151,23 +151,37 @@ public class Listeners {
         // apply new configuration, this has to be done before rebooting listeners
         currentConfiguration = newConfiguration;
 
+        // Per-listener try/catch isolates failures (e.g. disposeChannel timeouts, bad cert in bootListener)
+        // so one listener cannot cascade into halting the whole reload. InterruptedException still aborts.
         try {
             for (final EndpointKey hostPort : listenersToStop) {
                 LOG.info("Stopping {}", hostPort);
-                stopListener(hostPort);
+                try {
+                    stopListener(hostPort);
+                } catch (final RuntimeException ex) {
+                    LOG.error("Failed to stop listener {}", hostPort, ex);
+                }
             }
 
             for (final EndpointKey hostPort : listenersToRestart) {
                 LOG.info("Restart {}", hostPort);
-                stopListener(hostPort);
-                final var newConfigurationForListener = currentConfiguration.getListener(hostPort);
-                bootListener(newConfigurationForListener);
+                try {
+                    stopListener(hostPort);
+                    final var newConfigurationForListener = currentConfiguration.getListener(hostPort);
+                    bootListener(newConfigurationForListener);
+                } catch (final ConfigurationNotValidException | RuntimeException ex) {
+                    LOG.error("Failed to restart listener {}", hostPort, ex);
+                }
             }
 
             for (final EndpointKey hostPort : listenersToStart) {
                 LOG.info("Starting {}", hostPort);
-                final var newConfigurationForListener = currentConfiguration.getListener(hostPort);
-                bootListener(newConfigurationForListener);
+                try {
+                    final var newConfigurationForListener = currentConfiguration.getListener(hostPort);
+                    bootListener(newConfigurationForListener);
+                } catch (final ConfigurationNotValidException | RuntimeException ex) {
+                    LOG.error("Failed to start listener {}", hostPort, ex);
+                }
             }
         } catch (final InterruptedException stopMe) {
             Thread.currentThread().interrupt();
@@ -280,6 +294,8 @@ public class Listeners {
             } catch (InterruptedException ex) {
                 LOG.error("Interrupted while stopping a listener", ex);
                 Thread.currentThread().interrupt();
+            } catch (RuntimeException ex) {
+                LOG.error("Failed to stop listener {}", key, ex);
             }
         }
     }

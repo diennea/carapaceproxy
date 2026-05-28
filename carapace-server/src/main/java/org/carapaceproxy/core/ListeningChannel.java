@@ -93,8 +93,15 @@ public class ListeningChannel {
     }
 
     public void disposeChannel() {
-        this.channel.disposeNow(Duration.ofSeconds(10));
-        FutureMono.from(this.config.group().close()).block(Duration.ofSeconds(10));
+        // 2s timeouts: a longer wait can't drain HTTP/2 connections that the client keeps idle anyway,
+        // and overlapping a 10s+ stall with a 30s certificate-rotation cycle stalls the reload pipeline.
+        // Always attempt the event-loop group close in a finally so a disposeNow timeout doesn't leak it;
+        // the group close itself can still throw IllegalStateException, callers must guard accordingly.
+        try {
+            this.channel.disposeNow(Duration.ofSeconds(2));
+        } finally {
+            FutureMono.from(this.config.group().close()).block(Duration.ofSeconds(2));
+        }
     }
 
     public void incRequests() {
