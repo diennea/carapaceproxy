@@ -448,8 +448,6 @@ public class ProxyRequestsManager implements AutoCloseable {
                         );
                     }
                 }).doAfterResponseSuccess((resp, conn) -> {
-                    PENDING_REQUESTS_GAUGE.dec();
-                    healthStatus.decrementConnections();
                     endpointStats.getLastActivity().set(System.currentTimeMillis());
                 });
 
@@ -550,9 +548,6 @@ public class ProxyRequestsManager implements AutoCloseable {
                         }
                     }));
                 }).onErrorResume(err -> { // custom endpoint request/response error handling
-                    PENDING_REQUESTS_GAUGE.dec();
-                    healthStatus.decrementConnections();
-
                     final EndpointKey endpoint = EndpointKey.make(request.getAction().getHost(), request.getAction().getPort());
                     if (err instanceof ReadTimeoutException) {
                         STUCK_REQUESTS_COUNTER.inc();
@@ -572,6 +567,11 @@ public class ProxyRequestsManager implements AutoCloseable {
                         );
                     }
                     return serveServiceUnavailable(request);
+                })
+                // decrement once per request: success and error callbacks can both fire (headers ok, body fails)
+                .doFinally(signal -> {
+                    PENDING_REQUESTS_GAUGE.dec();
+                    healthStatus.decrementConnections();
                 });
     }
 
