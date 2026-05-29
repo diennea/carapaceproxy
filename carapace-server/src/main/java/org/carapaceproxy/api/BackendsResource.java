@@ -96,9 +96,10 @@ public class BackendsResource {
             }
             BackendHealthStatus bhs = backendsSnapshot.get(key);
             if (bhs != null) {
-                bean.available = bhs.getStatus() != BackendHealthStatus.Status.DOWN;
-                bean.reportedAsUnreachable = bhs.getStatus() == BackendHealthStatus.Status.DOWN;
-                bean.reportedAsUnreachableTs = bhs.getUnreachableSince();
+                final BackendHealthStatus.Snapshot snap = bhs.snapshot();
+                bean.available = snap.status() != BackendHealthStatus.Status.DOWN;
+                bean.reportedAsUnreachable = snap.status() == BackendHealthStatus.Status.DOWN;
+                bean.reportedAsUnreachableTs = snap.unreachableSince();
                 BackendHealthCheck lastProbe = bhs.getLastProbe();
                 if (lastProbe != null) {
                     bean.lastProbeTs = lastProbe.endTs();
