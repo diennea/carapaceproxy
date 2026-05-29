@@ -23,20 +23,25 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.concurrent.DefaultEventExecutor;
 import java.io.IOException;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import reactor.core.publisher.Mono;
+import reactor.netty.DisposableServer;
 import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.http.client.HttpClientResponse;
+import reactor.netty.http.server.HttpServer;
 
 public class Http2HeadersTest {
 
@@ -176,5 +181,57 @@ public class Http2HeadersTest {
         // Connection is excluded from this check because Reactor Netty's HTTP server manages it
         // autonomously for the client-facing connection.
         assertThat(response.responseHeaders().get(HttpHeaderNames.KEEP_ALIVE), is(nullValue()));
+    }
+
+    /**
+     * Anchors the original PR symptom: an HTTP/1.x client sending hop-by-hop headers through Carapace
+     * to an HTTP/2-capable backend. Without the strip, Carapace would forward the client's
+     * {@code Connection}/{@code Keep-Alive} verbatim onto an H2C-upgraded backend connection, where
+     * Netty's strict H2 encoder rejects connection-specific headers (RFC 9113 §8.2.2) and the
+     * request fails with a {@code StreamException}. Uses a Reactor Netty {@code HttpServer} configured
+     * for H2C as the backend so Carapace's outbound {@code HttpClient} can negotiate H2.
+     */
+    @Test
+    public void testHopByHopHeadersStrippedForH2cBackend() throws IOException, ConfigurationNotValidException, InterruptedException {
+        final AtomicReference<HttpHeaders> capturedRequestHeaders = new AtomicReference<>();
+        final DisposableServer h2cBackend = HttpServer.create()
+                .host("localhost")
+                .port(0)
+                .protocol(HttpProtocol.H2C, HttpProtocol.HTTP11)
+                .route(routes -> routes.get("/index.html", (req, resp) -> {
+                    capturedRequestHeaders.set(req.requestHeaders().copy());
+                    return resp.status(HttpResponseStatus.OK)
+                            .sendString(Mono.just("ok"));
+                }))
+                .bindNow();
+        try {
+            final var mapper = new TestEndpointMapper("localhost", h2cBackend.port());
+            final HttpClientResponse response;
+            try (final var server = new HttpProxyServer(mapper, tmpDir.newFolder())) {
+                server.addListener(newH2CListenerConfiguration());
+                server.start();
+                final var port = server.getLocalPort();
+                response = HttpClient.create()
+                        .protocol(HttpProtocol.HTTP11)
+                        .headers(headers -> headers
+                                .add(HttpHeaderNames.CONNECTION, "keep-alive")
+                                .add(HttpHeaderNames.KEEP_ALIVE, "timeout=5, max=100")
+                        )
+                        .get()
+                        .uri("http://localhost:" + port + "/index.html")
+                        .response()
+                        .block();
+            }
+            // The request itself must succeed: pre-fix this would 503 once the connection switches to H2
+            // and Netty's H2 encoder rejects the forwarded Keep-Alive header.
+            assertThat(response, is(notNullValue()));
+            assertThat(response.status(), is(HttpResponseStatus.OK));
+            // And the backend must never see Keep-Alive — regardless of which protocol the proxy used
+            // to talk to it.
+            assertThat(capturedRequestHeaders.get(), is(notNullValue()));
+            assertThat(capturedRequestHeaders.get().get(HttpHeaderNames.KEEP_ALIVE), is(nullValue()));
+        } finally {
+            h2cBackend.disposeNow();
+        }
     }
 }
