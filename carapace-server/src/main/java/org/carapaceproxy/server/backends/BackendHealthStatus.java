@@ -21,6 +21,7 @@ package org.carapaceproxy.server.backends;
 
 import java.sql.Timestamp;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.carapaceproxy.core.EndpointKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,35 +38,33 @@ public class BackendHealthStatus {
     private final EndpointKey hostPort;
     private final AtomicInteger connections;
 
-    private volatile Status status;
-    private volatile long unreachableSince;
-    private volatile long lastUnreachable;
-    private volatile long lastReachable;
+    // Status + the three associated timestamps move together via a single AtomicReference so concurrent
+    // reportAs(Un)Reachable callers cannot leave the four fields in a torn combination (e.g. status=DOWN
+    // with unreachableSince=0). Configuration knobs (warmupPeriod) and the periodic probe handle
+    // (lastProbe) stay as separate volatile fields — they aren't part of the transition's atom.
+    private final AtomicReference<State> state;
     private volatile BackendHealthCheck lastProbe;
     private volatile long warmupPeriod;
 
     public BackendHealthStatus(final EndpointKey hostPort, final long warmupPeriod) {
         this.hostPort = hostPort;
         // we assume that the backend just became reachable when the status is created
-        this.status = Status.COLD;
-        this.unreachableSince = 0L;
         final long created = System.currentTimeMillis();
-        this.lastUnreachable = created;
-        this.lastReachable = created;
+        this.state = new AtomicReference<>(new State(Status.COLD, 0L, created, created));
         this.connections = new AtomicInteger();
         this.warmupPeriod = warmupPeriod;
     }
 
     public long getUnreachableSince() {
-        return unreachableSince;
+        return state.get().unreachableSince();
     }
 
     public long getLastUnreachable() {
-        return lastUnreachable;
+        return state.get().lastUnreachable();
     }
 
     public long getLastReachable() {
-        return lastReachable;
+        return state.get().lastReachable();
     }
 
     public EndpointKey getHostPort() {
@@ -81,48 +80,45 @@ public class BackendHealthStatus {
     }
 
     public Status getStatus() {
-        return status;
+        return state.get().status();
+    }
+
+    /**
+     * Returns a coherent snapshot of the four state-machine fields ({@code status}, {@code unreachableSince},
+     * {@code lastUnreachable}, {@code lastReachable}). Use this instead of calling several field-level getters
+     * in a row when more than one field is needed — each individual getter is itself atomic, but two
+     * consecutive getter calls can straddle a state transition and observe an inconsistent pair.
+     */
+    public Snapshot snapshot() {
+        final State s = state.get();
+        return new Snapshot(s.status(), s.unreachableSince(), s.lastUnreachable(), s.lastReachable());
     }
 
     public void reportAsUnreachable(final long timestamp, final String cause) {
         LOG.info("{}: reportAsUnreachable {}, cause {}", hostPort, new Timestamp(timestamp), cause);
-        if (this.status != Status.DOWN) {
-            this.status = Status.DOWN;
-            this.unreachableSince = timestamp;
-        }
-        this.lastUnreachable = timestamp;
-        this.connections.set(0);
+        state.updateAndGet(s -> s.withUnreachable(timestamp));
+        // The historical connections.set(0) reset has been dropped: with the inc/dec invariant
+        // restored (NiccoMlt/carapaceproxy#13 — single decrement on terminal) and the atomic
+        // clamp (#17), in-flight requests' decrements drain the counter naturally; SafeBackendSelector
+        // already ignores `connections` for DOWN backends, so the value while DOWN is irrelevant.
     }
 
     public void reportAsReachable(final long timestamp) {
         LOG.debug("{}: reportAsReachable {}", hostPort, new Timestamp(timestamp));
-        switch (this.status) {
-            case DOWN:
-                this.status = Status.COLD;
-                this.unreachableSince = 0;
-                this.lastReachable = timestamp;
-                break;
-            case COLD:
-                this.lastReachable = timestamp;
-                if (this.lastReachable - this.lastUnreachable > this.warmupPeriod) {
-                    this.status = Status.STABLE;
-                }
-                break;
-            case STABLE:
-                this.lastReachable = timestamp;
-                break;
-        }
+        final long warmup = this.warmupPeriod;
+        state.updateAndGet(s -> s.withReachable(timestamp, warmup));
     }
 
     @Override
     public String toString() {
+        final State snapshot = state.get();
         return "BackendHealthStatus{"
                 + " hostPort=" + this.hostPort
                 + ", connections=" + this.connections
-                + ", status=" + this.status
-                + ", unreachableSince=" + this.unreachableSince
-                + ", unreachableUntil=" + this.lastUnreachable
-                + ", lastReachable=" + this.lastReachable
+                + ", status=" + snapshot.status()
+                + ", unreachableSince=" + snapshot.unreachableSince()
+                + ", unreachableUntil=" + snapshot.lastUnreachable()
+                + ", lastReachable=" + snapshot.lastReachable()
                 + ", lastProbe=" + this.lastProbe
                 + '}';
     }
@@ -164,5 +160,41 @@ public class BackendHealthStatus {
          * The backend is reachable and was so since a reasonably-long time.
          */
         STABLE
+    }
+
+    /**
+     * Coherent read-only view of {@link #getStatus()}, {@link #getUnreachableSince()},
+     * {@link #getLastUnreachable()}, and {@link #getLastReachable()} captured atomically via {@link #snapshot()}.
+     */
+    public record Snapshot(Status status, long unreachableSince, long lastUnreachable, long lastReachable) {
+    }
+
+    /**
+     * Immutable internal record of the four state-machine fields that transition together.
+     * Held in an {@link AtomicReference} so {@code reportAs(Un)Reachable} callers cannot interleave their
+     * field writes; each {@link AtomicReference#updateAndGet} call is a single linearization point.
+     */
+    private record State(Status status, long unreachableSince, long lastUnreachable, long lastReachable) {
+        State withUnreachable(final long timestamp) {
+            if (status == Status.DOWN) {
+                // Already DOWN; just refresh lastUnreachable, preserve unreachableSince.
+                return new State(status, unreachableSince, timestamp, lastReachable);
+            }
+            // Transition from COLD/STABLE to DOWN.
+            return new State(Status.DOWN, timestamp, timestamp, lastReachable);
+        }
+
+        State withReachable(final long timestamp, final long warmupPeriod) {
+            return switch (status) {
+                case DOWN -> new State(Status.COLD, 0L, lastUnreachable, timestamp);
+                case COLD -> {
+                    // Warmup check uses a coherent (lastUnreachable, timestamp) pair from this snapshot,
+                    // so concurrent reportAsUnreachable cannot move lastUnreachable between the two reads.
+                    final Status next = (timestamp - lastUnreachable) > warmupPeriod ? Status.STABLE : Status.COLD;
+                    yield new State(next, unreachableSince, lastUnreachable, timestamp);
+                }
+                case STABLE -> new State(Status.STABLE, unreachableSince, lastUnreachable, timestamp);
+            };
+        }
     }
 }
