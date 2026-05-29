@@ -173,23 +173,23 @@ public class HttpProxyServer implements AutoCloseable {
     private OcspStaplingManager ocspStaplingManager;
 
     @Getter
-    private RuntimeServerConfiguration currentConfiguration;
+    private volatile RuntimeServerConfiguration currentConfiguration;
 
     @Getter
     private ConfigurationStore dynamicConfigurationStore;
 
     @Getter
-    private EndpointMapper mapper;
+    private volatile EndpointMapper mapper;
 
     @Getter
     @Setter
-    private UserRealm realm;
+    private volatile UserRealm realm;
 
     @Getter
     private final TrustStoreManager trustStoreManager;
 
     @Getter
-    private List<RequestFilter> filters;
+    private volatile List<RequestFilter> filters;
     private volatile boolean started;
 
     @Getter
