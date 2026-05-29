@@ -209,22 +209,20 @@ public class ProxyRequestsManager implements AutoCloseable {
             LOGGER.trace("{} Mapped {} to {}, userid {}", this, request.getUri(), action, request.getUserId());
         }
 
-        try {
-            return switch (action.getAction()) {
-                case NOTFOUND -> serveNotFoundMessage(request);
-                case INTERNAL_ERROR -> serveInternalErrorMessage(request);
-                case SERVICE_UNAVAILABLE -> serveServiceUnavailable(request);
-                case MAINTENANCE_MODE -> serveMaintenanceMessage(request);
-                case BAD_REQUEST -> serveBadRequestMessage(request);
-                case STATIC, ACME_CHALLENGE -> serveStaticMessage(request);
-                case REDIRECT -> serveRedirect(request);
-                case PROXY -> forward(request, false, action.getHealthStatus());
-                case CACHE -> serveFromCache(request, action.getHealthStatus()); // cached content
-                default -> throw new IllegalStateException("Action " + action.getAction() + " not supported");
-            };
-        } finally {
-            parent.getRequestsLogger().logRequest(request);
-        }
+        final Publisher<Void> result = switch (action.getAction()) {
+            case NOTFOUND -> serveNotFoundMessage(request);
+            case INTERNAL_ERROR -> serveInternalErrorMessage(request);
+            case SERVICE_UNAVAILABLE -> serveServiceUnavailable(request);
+            case MAINTENANCE_MODE -> serveMaintenanceMessage(request);
+            case BAD_REQUEST -> serveBadRequestMessage(request);
+            case STATIC, ACME_CHALLENGE -> serveStaticMessage(request);
+            case REDIRECT -> serveRedirect(request);
+            case PROXY -> forward(request, false, action.getHealthStatus());
+            case CACHE -> serveFromCache(request, action.getHealthStatus()); // cached content
+            default -> throw new IllegalStateException("Action " + action.getAction() + " not supported");
+        };
+        // Log on terminal signal so response status, backend timing, and cache info are populated.
+        return Mono.from(result).doFinally(sig -> parent.getRequestsLogger().logRequest(request));
     }
 
     private Publisher<Void> serveNotFoundMessage(ProxyRequest request) {
