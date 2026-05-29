@@ -136,9 +136,10 @@ public class BackendHealthStatus {
     }
 
     public void decrementConnections() {
-        if (this.connections.getAcquire() > 0) {
-            this.connections.decrementAndGet();
-        }
+        // Clamp at 0 atomically: reportAsUnreachable resets the counter via set(0), so in-flight
+        // decrements that arrive afterwards would otherwise underflow. A bare check-then-decrement
+        // is non-atomic and can race with concurrent decrements or set(0).
+        this.connections.updateAndGet(v -> Math.max(0, v - 1));
     }
 
     public void setWarmupPeriod(final long warmupPeriod) {
