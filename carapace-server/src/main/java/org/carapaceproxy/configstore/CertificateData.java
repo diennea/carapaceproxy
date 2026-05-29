@@ -21,6 +21,7 @@ package org.carapaceproxy.configstore;
 
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.REQUEST_FAILED;
 import java.net.URL;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
 import java.util.Map;
@@ -114,6 +115,34 @@ public class CertificateData {
                     Optional.ofNullable(subjectAltNames).stream().flatMap(Set::stream)
                 )
                 .collect(Collectors.toUnmodifiableSet());
+    }
+
+    /**
+     * Tells whether two certificates would bind identically on a TLS listener.
+     * <p>
+     * Compares only the binding-relevant fields: the decoded keystore bytes and the
+     * subject-alternative-name set. Differences in transient ACME state such as
+     * {@code state}, {@code attemptsCount}, {@code message}, or {@code pendingOrderLocation}
+     * are ignored, because those tick on every failing renewal attempt without changing
+     * what the listener actually serves.
+     * <p>
+     * The Lombok-generated {@link #equals(Object)} cannot be used here: it includes
+     * {@code attemptsCount} and {@code message}, so a stuck ACME order would report
+     * "changed" on every poll, defeating any reload-guard built on top of it.
+     *
+     * @param a a certificate (nullable)
+     * @param b a certificate (nullable)
+     * @return {@code true} if both are null, or if both carry the same keystore bytes and SANs
+     */
+    public static boolean bindingEquivalent(final CertificateData a, final CertificateData b) {
+        if (a == b) {
+            return true;
+        }
+        if (a == null || b == null) {
+            return false;
+        }
+        return Arrays.equals(a.getKeystoreData(), b.getKeystoreData())
+                && Objects.equals(a.getSubjectAltNames(), b.getSubjectAltNames());
     }
 
     /**

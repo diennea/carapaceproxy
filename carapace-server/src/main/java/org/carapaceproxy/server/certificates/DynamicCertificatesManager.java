@@ -105,7 +105,7 @@ public class DynamicCertificatesManager implements Runnable {
     private static final String EVENT_CERTIFICATES_STATE_CHANGED = "certificates_state_changed";
     private static final String EVENT_CERTIFICATES_REQUEST_STORE = "certificates_request_store";
 
-    private Map<String, CertificateData> certificates = new ConcurrentHashMap<>();
+    private volatile Map<String, CertificateData> certificates = new ConcurrentHashMap<>();
     private ACMEClient acmeClient; // Let's Encrypt client
     private Route53Client r53Client;
     private String awsAccessKey;
@@ -373,8 +373,9 @@ public class DynamicCertificatesManager implements Runnable {
         }
         if (flushCache) {
             groupMembershipHandler.fireEvent(EVENT_CERTIFICATES_STATE_CHANGED, null);
-            // remember that events  are not delivered to the local JVM
-            reloadCertificatesFromDB();
+            // remember that events  are not delivered to the local JVM;
+            // already running inside the mutex via certificatesLifecycle's caller, so skip the dispatcher.
+            reloadCertificatesFromDBInternal();
         }
     }
 
@@ -668,7 +669,27 @@ public class DynamicCertificatesManager implements Runnable {
         }
     }
 
+    /**
+     * Dispatcher entry point: serialises reloads across the scheduler thread, ZK callbacks,
+     * and the admin REST path through {@link GroupMembershipHandler#executeInMutex}, which
+     * is reentrant per-thread in both standalone and cluster modes.
+     * <p>
+     * Falls back to a direct call when {@link #groupMembershipHandler} has not been attached
+     * yet (test runs, local-only setups), matching the null-guard pattern used elsewhere in
+     * this class (e.g. {@link #run()} and {@link #setStateOfCertificate}).
+     * <p>
+     * Callers already running inside the mutex (e.g. {@link #certificatesLifecycle()})
+     * should invoke {@link #reloadCertificatesFromDBInternal()} directly instead.
+     */
     private void reloadCertificatesFromDB() {
+        if (groupMembershipHandler != null) {
+            groupMembershipHandler.executeInMutex(THREAD_NAME, period > 0 ? period : 1, this::reloadCertificatesFromDBInternal);
+        } else {
+            reloadCertificatesFromDBInternal();
+        }
+    }
+
+    private void reloadCertificatesFromDBInternal() {
         LOG.info("Reloading certificates from db");
         try {
             Map<String, CertificateData> newCertificates = new ConcurrentHashMap<>();
@@ -681,13 +702,31 @@ public class DynamicCertificatesManager implements Runnable {
                 LOG.info("RELOADED certificate for domain {}: {}", domain, freshCert);
             }
             var oldCertificates = this.certificates;
+            final boolean anyBindingChange = hasAnyBindingChange(oldCertificates, newCertificates);
             this.certificates = newCertificates; // only certificates/domains specified in the config have to be managed.
-            server.getListeners().reloadCurrentConfiguration();
+            if (anyBindingChange) {
+                server.getListeners().reloadCurrentConfiguration();
+            } else {
+                LOG.debug("No certificate binding change detected; skipping listener reload");
+            }
             // storing certificates on local path
             storeLocalCertificates(newCertificates.values(), oldCertificates);
         } catch (GeneralSecurityException | MalformedURLException | InterruptedException | ConfigurationNotValidException e) {
             throw new DynamicCertificatesManagerException("Unable to load dynamic certificates from db.", e);
         }
+    }
+
+    static boolean hasAnyBindingChange(final Map<String, CertificateData> oldCertificates,
+                                       final Map<String, CertificateData> newCertificates) {
+        if (!oldCertificates.keySet().equals(newCertificates.keySet())) {
+            return true;
+        }
+        for (final Entry<String, CertificateData> entry : newCertificates.entrySet()) {
+            if (!CertificateData.bindingEquivalent(oldCertificates.get(entry.getKey()), entry.getValue())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void storeLocalCertificates(Collection<CertificateData> newCertificates, Map<String, CertificateData> oldCertificates) {
