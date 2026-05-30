@@ -126,6 +126,10 @@ public class Listeners {
             final EndpointKey hostPort = channel.getKey();
             final NetworkListenerConfiguration actualListenerConfig = currentConfiguration.getListener(hostPort);
             final NetworkListenerConfiguration newConfigurationForListener = newConfiguration.getListener(hostPort);
+            // Certificate-only reload: the dynamic-certificate manager re-applies the current configuration
+            // (same object reference) after a certificate changes. Every SSL listener serves the full
+            // certificate set via SNI (see ListeningChannel#sslContexts), so there is no per-listener subset
+            // to narrow to — any certificate change rebinds every SSL listener.
             final boolean isReloadCertificate = newConfiguration == currentConfiguration && newConfigurationForListener.ssl();
             if (newConfigurationForListener == null) {
                 LOG.info("listener: {} is to be shut down", hostPort);
