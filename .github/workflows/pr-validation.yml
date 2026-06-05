@@ -36,7 +36,7 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -59,8 +59,6 @@ jobs:
           retention-days: 7
       - name: 'Run validations with Maven'
         run: ./mvnw -B test --file pom.xml
-      - name: 'Submit Dependency Snapshot'
-        uses: advanced-security/maven-dependency-submission-action@v5
       - uses: actions/upload-artifact@v4
         if: always()
         with:
