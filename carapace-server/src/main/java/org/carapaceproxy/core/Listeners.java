@@ -130,7 +130,9 @@ public class Listeners {
             // (same object reference) after a certificate changes. Every SSL listener serves the full
             // certificate set via SNI (see ListeningChannel#sslContexts), so there is no per-listener subset
             // to narrow to — any certificate change rebinds every SSL listener.
-            final boolean isReloadCertificate = newConfiguration == currentConfiguration && newConfigurationForListener.ssl();
+            final boolean isReloadCertificate = newConfiguration == currentConfiguration 
+                    && newConfigurationForListener != null 
+                    && newConfigurationForListener.ssl();
             if (newConfigurationForListener == null) {
                 LOG.info("listener: {} is to be shut down", hostPort);
                 listenersToStop.add(hostPort);
