@@ -36,7 +36,9 @@ import org.carapaceproxy.utils.TestEndpointMapper;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.netty.ByteBufFlux;
 import reactor.netty.DisposableServer;
 import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.client.HttpClient;
@@ -230,6 +232,56 @@ public class Http2HeadersTest {
             // to talk to it.
             assertThat(capturedRequestHeaders.get(), is(notNullValue()));
             assertThat(capturedRequestHeaders.get().get(HttpHeaderNames.KEEP_ALIVE), is(nullValue()));
+        } finally {
+            h2cBackend.disposeNow();
+        }
+    }
+
+    /**
+     * Companion to {@link #testHopByHopHeadersStrippedForH2cBackend}: a chunked ({@code Transfer-Encoding})
+     * request body proxied to the backend. {@code Transfer-Encoding} is connection-specific and forbidden in
+     * HTTP/2 (RFC 9113 §8.2.2), yet — unlike {@code Connection}/{@code Keep-Alive} — it is intentionally NOT
+     * in the hop-by-hop strip set, because removing it would break HTTP/1.1 chunked proxying (it carries the
+     * body framing). This asserts that forwarding a {@code Transfer-Encoding} request body proxies end-to-end
+     * without tripping the outbound encoder, confirming the deliberate non-stripping is safe. (The proxy
+     * negotiates HTTP/1.1 to the backend here, where forwarding {@code Transfer-Encoding} is correct.)
+     */
+    @Test
+    public void testChunkedRequestBodyForwardedToH2cBackend() throws IOException, ConfigurationNotValidException, InterruptedException {
+        final AtomicReference<HttpHeaders> capturedRequestHeaders = new AtomicReference<>();
+        final DisposableServer h2cBackend = HttpServer.create()
+                .host("localhost")
+                .port(0)
+                .protocol(HttpProtocol.H2C, HttpProtocol.HTTP11)
+                .route(routes -> routes.post("/upload", (req, resp) -> {
+                    capturedRequestHeaders.set(req.requestHeaders().copy());
+                    return req.receive() // drain the request body
+                            .then(resp.status(HttpResponseStatus.OK).sendString(Mono.just("ok")).then());
+                }))
+                .bindNow();
+        try {
+            final var mapper = new TestEndpointMapper("localhost", h2cBackend.port());
+            final HttpClientResponse response;
+            try (final var server = new HttpProxyServer(mapper, tmpDir.newFolder())) {
+                server.addListener(newH2CListenerConfiguration());
+                server.start();
+                final var port = server.getLocalPort();
+                response = HttpClient.create()
+                        .protocol(HttpProtocol.HTTP11)
+                        .post()
+                        .uri("http://localhost:" + port + "/upload")
+                        // A multi-element body with no Content-Length makes the client frame the request with
+                        // Transfer-Encoding: chunked, which Carapace then forwards toward the H2 backend.
+                        .send(ByteBufFlux.fromString(Flux.just("a", "b", "c")))
+                        .response()
+                        .block();
+            }
+            // The concern was that a forwarded Transfer-Encoding could trip the encoder (RFC 9113 §8.2.2) and 503;
+            // the request must instead complete normally.
+            assertThat(response, is(notNullValue()));
+            assertThat(response.status(), is(HttpResponseStatus.OK));
+            // The chunked request reached the backend — forwarding Transfer-Encoding did not break the hop.
+            assertThat(capturedRequestHeaders.get(), is(notNullValue()));
         } finally {
             h2cBackend.disposeNow();
         }
