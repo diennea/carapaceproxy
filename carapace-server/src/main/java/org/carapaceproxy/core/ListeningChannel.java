@@ -51,6 +51,16 @@ public class ListeningChannel {
     private final int localPort;
     private final NetworkListenerConfiguration config;
     private final Counter.Child totalRequests;
+    /**
+     * SSL contexts this listener can present, keyed by certificate id.
+     * <p>
+     * Built from the <em>global</em> {@link RuntimeServerConfiguration#getCertificates()} map, so it is the
+     * same set for every SSL listener: a listener serves the full certificate set and selects per connection
+     * by SNI (see {@link #apply}). A {@link NetworkListenerConfiguration} carries no per-listener certificate
+     * list — only a single {@link NetworkListenerConfiguration#defaultCertificate()} for clients that send no
+     * SNI. Consequently there is no listener-specific certificate subset: when any certificate's binding
+     * changes, every SSL listener must rebind.
+     */
     private final Map<String, SslContext> sslContexts;
     private final File basePath;
     private final RuntimeServerConfiguration currentConfiguration;
@@ -93,8 +103,15 @@ public class ListeningChannel {
     }
 
     public void disposeChannel() {
-        this.channel.disposeNow(Duration.ofSeconds(10));
-        FutureMono.from(this.config.group().close()).block(Duration.ofSeconds(10));
+        // 2s timeouts: a longer wait can't drain HTTP/2 connections that the client keeps idle anyway,
+        // and overlapping a 10s+ stall with a 30s certificate-rotation cycle stalls the reload pipeline.
+        // Always attempt the event-loop group close in a finally so a disposeNow timeout doesn't leak it;
+        // the group close itself can still throw IllegalStateException, callers must guard accordingly.
+        try {
+            this.channel.disposeNow(Duration.ofSeconds(2));
+        } finally {
+            FutureMono.from(this.config.group().close()).block(Duration.ofSeconds(2));
+        }
     }
 
     public void incRequests() {
