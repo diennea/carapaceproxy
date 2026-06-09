@@ -173,23 +173,23 @@ public class HttpProxyServer implements AutoCloseable {
     private OcspStaplingManager ocspStaplingManager;
 
     @Getter
-    private RuntimeServerConfiguration currentConfiguration;
+    private volatile RuntimeServerConfiguration currentConfiguration;
 
     @Getter
     private ConfigurationStore dynamicConfigurationStore;
 
     @Getter
-    private EndpointMapper mapper;
+    private volatile EndpointMapper mapper;
 
     @Getter
     @Setter
-    private UserRealm realm;
+    private volatile UserRealm realm;
 
     @Getter
     private final TrustStoreManager trustStoreManager;
 
     @Getter
-    private List<RequestFilter> filters;
+    private volatile List<RequestFilter> filters;
     private volatile boolean started;
 
     @Getter
@@ -742,11 +742,14 @@ public class HttpProxyServer implements AutoCloseable {
             throw new ConfigurationChangeInProgressException();
         }
         try {
+            // Build everything as locals first; do not touch the four `this.X` view fields yet.
             RuntimeServerConfiguration newConfiguration = buildValidConfiguration(storeWithConfig);
             EndpointMapper newMapper = buildMapper(newConfiguration.getMapperClassname(), this, storeWithConfig);
             UserRealm newRealm = buildRealm(userRealmClassname, storeWithConfig);
+            List<RequestFilter> newFilters = buildFilters(newConfiguration);
 
-            this.filters = buildFilters(newConfiguration);
+            // Reload subsystems. Any of these can throw; if it does, the four view fields below
+            // are left untouched, so request-time readers keep seeing a coherent old snapshot.
             this.backendHealthManager.reloadConfiguration(newConfiguration, newMapper);
             this.dynamicCertificatesManager.reloadConfiguration(newConfiguration);
             this.trustStoreManager.reloadConfiguration(newConfiguration);
@@ -754,10 +757,8 @@ public class HttpProxyServer implements AutoCloseable {
             this.listeners.reloadConfiguration(newConfiguration);
             this.cache.reloadConfiguration(newConfiguration);
             this.requestsLogger.reloadConfiguration(newConfiguration);
-            this.realm = newRealm;
             Map<String, BackendConfiguration> currentBackends = mapper != null ? mapper.getBackends() : Collections.emptyMap();
             Map<String, BackendConfiguration> newBackends = newMapper.getBackends();
-            this.mapper = newMapper;
 
             if (!newBackends.equals(currentBackends) || isConnectionsConfigurationChanged(newConfiguration)) {
                 proxyRequestsManager.reloadConfiguration(newConfiguration, newBackends.values());
@@ -767,6 +768,12 @@ public class HttpProxyServer implements AutoCloseable {
                 dynamicConfigurationStore.commitConfiguration(newConfigurationStore);
             }
 
+            // Commit point: every subsystem has reloaded and persistence succeeded; swap the four
+            // view fields back-to-back so the cross-field tearing window observed by readers shrinks
+            // from the full subsystem-reload duration to a handful of volatile writes.
+            this.filters = newFilters;
+            this.realm = newRealm;
+            this.mapper = newMapper;
             this.currentConfiguration = newConfiguration;
         } catch (ConfigurationNotValidException err) {
             // impossible to have a non valid configuration here
