@@ -74,7 +74,7 @@
         <url>https://github.com/diennea/carapaceproxy</url>
         <connection>scm:git:${project.scm.url}</connection>
         <developerConnection>scm:git:${project.scm.url}</developerConnection>
-        <tag>release/2.3</tag>
+        <tag>HEAD</tag>
     </scm>
 
     <distributionManagement>
