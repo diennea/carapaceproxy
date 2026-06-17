@@ -55,8 +55,8 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
           server-id: github
-          server-username: GITHUB_ACTOR
-          server-password: GITHUB_TOKEN
+          server-username: ${{ github.actor }}
+          server-password: ${{ steps.app-token.outputs.token }}
 
       - name: 'Configure Git'
         run: |
