@@ -1,0 +1,16 @@
+name: 'Configure Git'
+description: 'Configure the diennea-bot Git identity and set up the gh credential helper for pushes'
+inputs:
+  token:
+    description: 'GitHub App token used by the gh Git credential helper for pushes'
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        git config user.name "diennea-bot"
+        git config user.email "172403682+diennea-bot@users.noreply.github.com"
+        gh auth setup-git

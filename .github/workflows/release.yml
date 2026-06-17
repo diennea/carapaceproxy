@@ -51,12 +51,9 @@ jobs:
           server-password: GITHUB_TOKEN
 
       - name: 'Configure Git'
-        run: |
-            git config user.name "diennea-bot"
-            git config user.email "172403682+diennea-bot@users.noreply.github.com"
-            gh auth setup-git
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        uses: ./.github/actions/configure-git
+        with:
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: 'Verify Git remote'
         run: |
@@ -124,12 +121,9 @@ jobs:
 
       - if: ${{ inputs.bump == 'major' || inputs.bump == 'minor' }}
         name: 'Reconfigure Git after branch checkout'
-        run: |
-          git config user.name 'diennea-bot'
-          git config user.email '172403682+diennea-bot@users.noreply.github.com'
-          gh auth setup-git
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        uses: ./.github/actions/configure-git
+        with:
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: 'Prepare release ${{ inputs.bump }} version ${{ steps.compute_versions.outputs.release_version }} on branch ${{ steps.compute_versions.outputs.branch_name }}'
         env:
