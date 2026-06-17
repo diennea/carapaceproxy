@@ -31,14 +31,6 @@ jobs:
           client-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
           permission-contents: write
-          permission-packages: write
-
-      - name: 'Get GitHub App User ID'
-        id: get-user-id
-        run: echo "user-id=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
 
       - name: 'Checkout ${{ github.ref_name }} branch'
         uses: actions/checkout@v6
@@ -55,18 +47,16 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
           server-id: github
-          server-username: ${{ github.actor }}
-          server-password: ${{ steps.app-token.outputs.token }}
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
 
       - name: 'Configure Git'
         run: |
-            git config user.name "${APP_SLUG}[bot]"
-            git config user.email "${USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
+            git config user.name "diennea-bot"
+            git config user.email "172403682+diennea-bot@users.noreply.github.com"
             gh auth setup-git
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
-          USER_ID: ${{ steps.get-user-id.outputs.user-id }}
 
       - name: 'Verify Git remote'
         run: |
@@ -135,8 +125,8 @@ jobs:
       - if: ${{ inputs.bump == 'major' || inputs.bump == 'minor' }}
         name: 'Reconfigure Git after branch checkout'
         run: |
-          git config user.name '${{ steps.app-token.outputs.app-slug }}[bot]'
-          git config user.email '${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com'
+          git config user.name 'diennea-bot'
+          git config user.email '172403682+diennea-bot@users.noreply.github.com'
           gh auth setup-git
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -152,7 +142,7 @@ jobs:
 
       - name: 'Perform release'
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ./mvnw release:perform
 
@@ -160,7 +150,7 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v2
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.compute_versions.outputs.tag }}
           name: Release ${{ steps.compute_versions.outputs.release_version }}
