@@ -35,9 +35,10 @@ jobs:
 
       - name: 'Get GitHub App User ID'
         id: get-user-id
-        run: echo "user-id=$(gh api "/users/${{ steps.app-token.outputs.app-slug }}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
+        run: echo "user-id=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
 
       - name: 'Checkout ${{ github.ref_name }} branch'
         uses: actions/checkout@v6
@@ -56,11 +57,13 @@ jobs:
 
       - name: 'Configure Git'
         run: |
-          git config user.name '${{ steps.app-token.outputs.app-slug }}[bot]'
-          git config user.email '${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com'
-          gh auth setup-git
+            git config user.name "${APP_SLUG}[bot]"
+            git config user.email "${USER_ID}+${APP_SLUG}[bot]`@users.noreply.github.com`"
+            gh auth setup-git
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          USER_ID: ${{ steps.get-user-id.outputs.user-id }}
 
       - name: 'Verify Git remote'
         run: |
