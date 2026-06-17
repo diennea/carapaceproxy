@@ -24,11 +24,28 @@ jobs:
     name: 'Perform ${{ inputs.bump }} release'
     runs-on: ubuntu-latest
     steps:
+      - name: 'Generate GitHub App token'
+        uses: actions/create-github-app-token@v3
+        id: app-token
+        with:
+          client-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+          permission-contents: write
+          permission-packages: write
+
+      - name: 'Get GitHub App User ID'
+        id: get-user-id
+        run: echo "user-id=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+
       - name: 'Checkout ${{ github.ref_name }} branch'
         uses: actions/checkout@v6
         with:
           ref: ${{ github.ref_name }}
-          persist-credentials: true
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
           fetch-depth: 0
 
       - name: 'Set up JDK 21'
@@ -40,8 +57,13 @@ jobs:
 
       - name: 'Configure Git'
         run: |
-          git config user.name "Diennea[bot]"
-          git config user.email "172403682+diennea-bot@users.noreply.github.com"
+            git config user.name "${APP_SLUG}[bot]"
+            git config user.email "${USER_ID}+${APP_SLUG}[bot]`@users.noreply.github.com`"
+            gh auth setup-git
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          USER_ID: ${{ steps.get-user-id.outputs.user-id }}
 
       - name: 'Verify Git remote'
         run: |
@@ -91,7 +113,7 @@ jobs:
       - if: ${{ inputs.bump == 'major' || inputs.bump == 'minor' }}
         name: 'Create ${{ inputs.bump }} release branch ${{ steps.compute_versions.outputs.branch_name }}'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           ./mvnw release:clean release:branch \
               -DbranchName=${{ steps.compute_versions.outputs.branch_name }} \
@@ -103,10 +125,22 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ steps.compute_versions.outputs.branch_name }}
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - if: ${{ inputs.bump == 'major' || inputs.bump == 'minor' }}
+        name: 'Reconfigure Git after branch checkout'
+        run: |
+          git config user.name '${{ steps.app-token.outputs.app-slug }}[bot]'
+          git config user.email '${{ steps.get-user-id.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com'
+          gh auth setup-git
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
 
       - name: 'Prepare release ${{ inputs.bump }} version ${{ steps.compute_versions.outputs.release_version }} on branch ${{ steps.compute_versions.outputs.branch_name }}'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           ./mvnw release:clean release:prepare \
               -DreleaseVersion=${{ steps.compute_versions.outputs.release_version }} \
@@ -115,13 +149,15 @@ jobs:
 
       - name: 'Perform release'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           ./mvnw release:perform
 
       - name: 'Create GitHub Release'
         id: create_release
         uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         with:
           tag_name: ${{ steps.compute_versions.outputs.tag }}
           name: Release ${{ steps.compute_versions.outputs.release_version }}
