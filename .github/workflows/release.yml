@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 'Generate GitHub App token'
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: app-token
         with:
           client-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
@@ -33,7 +33,7 @@ jobs:
           permission-contents: write
 
       - name: 'Checkout ${{ github.ref_name }} branch'
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: ${{ github.ref_name }}
           token: ${{ steps.app-token.outputs.token }}
@@ -41,7 +41,7 @@ jobs:
           fetch-depth: 0
 
       - name: 'Set up JDK 21'
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@ad2b38190b15e4d6bdf0c97fb4fca8412226d287 # v5.3.0
         with:
           java-version: '21'
           distribution: 'temurin'
@@ -112,7 +112,7 @@ jobs:
 
       - if: ${{ inputs.bump == 'major' || inputs.bump == 'minor' }}
         name: 'Checkout ${{ inputs.bump }} release branch ${{ steps.compute_versions.outputs.branch_name }}'
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: ${{ steps.compute_versions.outputs.branch_name }}
           token: ${{ steps.app-token.outputs.token }}
@@ -142,7 +142,7 @@ jobs:
 
       - name: 'Create GitHub Release'
         id: create_release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
