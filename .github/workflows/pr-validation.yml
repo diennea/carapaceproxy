@@ -17,6 +17,14 @@ name: PR Validation
 
 on:
   pull_request:
+    paths:
+      - 'carapace-server/**'
+      - 'carapace-ui/**'
+      - 'pom.xml'
+      - '.mvn/**'
+      - 'mvnw'
+      - 'mvnw.cmd'
+      - '.github/workflows/pr-validation.yml'
 
 env:
   MAVEN_OPTS: >-
@@ -51,7 +59,7 @@ jobs:
           cache: 'maven'
       - name: 'Build with Maven'
         run: ./mvnw -B package -DskipTests --file pom.xml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: packages
@@ -59,7 +67,7 @@ jobs:
           retention-days: 7
       - name: 'Run validations with Maven'
         run: ./mvnw -B test --file pom.xml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: test-results # as expected by pr-validation-report workflow
