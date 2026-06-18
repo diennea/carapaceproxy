@@ -18,12 +18,12 @@
         "jquery": "^3.6.0",
         "moment": "2.29.4",
         "popper.js": "^1.16.1",
-        "serialize-javascript": "7.0.5",
-        "vue": "^2.6.14",
+        "serialize-javascript": "7.0.6",
+        "vue": "^3.0.0",
         "vue-router": "3.5.3"
     },
     "devDependencies": {
-        "@babel/core": "^7.12.16",
+        "@babel/core": "^7.29.6",
         "@babel/eslint-parser": "^7.12.16",
         "@vue/cli-plugin-babel": "~5.0.0",
         "@vue/cli-plugin-eslint": "~5.0.0",
