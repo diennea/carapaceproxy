@@ -17,6 +17,15 @@ name: PR Validation
 
 on:
   pull_request:
+    paths:
+      - 'carapace-server/**'
+      - 'carapace-ui/**'
+      - 'pom.xml'
+      - '.mvn/**'
+      - 'mvnw'
+      - 'mvnw.cmd'
+      - '.github/workflows/pr-validation.yml'
+      - '.github/workflows/pr-validation-report.yml'
 
 env:
   MAVEN_OPTS: >-
@@ -42,16 +51,18 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
       - name: 'Set up JDK 21'
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@ad2b38190b15e4d6bdf0c97fb4fca8412226d287 # v5.3.0
         with:
           java-version: '21'
           distribution: 'temurin'
           cache: 'maven'
       - name: 'Build with Maven'
         run: ./mvnw -B package -DskipTests --file pom.xml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: packages
@@ -59,7 +70,7 @@ jobs:
           retention-days: 7
       - name: 'Run validations with Maven'
         run: ./mvnw -B test --file pom.xml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: test-results # as expected by pr-validation-report workflow
