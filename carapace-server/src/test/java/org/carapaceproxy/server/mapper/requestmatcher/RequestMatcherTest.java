@@ -48,6 +48,7 @@ public class RequestMatcherTest {
     public void test() throws Exception {
         HttpServerRequest serverRequest = mock(HttpServerRequest.class);
         when(serverRequest.uri()).thenReturn("/test.html");
+        when(serverRequest.fullPath()).thenReturn("/test.html");
         when(serverRequest.method()).thenReturn(HttpMethod.GET);
         when(serverRequest.scheme()).thenReturn("https");
         when(serverRequest.protocol()).thenReturn("HTTP/2");
@@ -304,5 +305,24 @@ public class RequestMatcherTest {
             RequestMatcher matcher = new RequestMatchParser("listener.ipaddress = \"127.0.1.2\"").parse();
             assertFalse(matcher.matches(request));
         }
+    }
+
+    @Test
+    public void testAbsoluteFormRequestTargetMatchesPathRule() throws Exception {
+        // An absolute-form request target (scheme://authority/path) is valid HTTP/1.1 and
+        // is forwarded to the backend as just "/path" (see ProxyRequest.getUri()). A
+        // path-anchored route/ACL must therefore still match on "/path"; otherwise it can
+        // be bypassed by sending the same request in absolute form.
+        HttpServerRequest serverRequest = mock(HttpServerRequest.class);
+        when(serverRequest.uri()).thenReturn("http://victim.example/admin/secret");
+        when(serverRequest.fullPath()).thenReturn("/admin/secret");
+        when(serverRequest.method()).thenReturn(HttpMethod.GET);
+        when(serverRequest.scheme()).thenReturn("http");
+        when(serverRequest.protocol()).thenReturn("HTTP/1.1");
+
+        ProxyRequest request = new ProxyRequest(serverRequest, null, null);
+
+        RequestMatcher matcher = new RequestMatchParser("request.uri ~ \"/admin/.*\"").parse();
+        assertTrue(matcher.matches(request));
     }
 }

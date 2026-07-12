@@ -143,7 +143,12 @@ public class ProxyRequest implements MatchingContext {
             return request.requestHeaders().get(name.substring(HEADERS_SUBSTRING_INDEX), "");
         }
         return switch (name) {
-            case PROPERTY_URI -> request.uri();
+            // Match on the same normalized path that is forwarded to the backend
+            // (see getUri()). Using the raw request.uri() here would let an
+            // absolute-form request target (scheme://authority/path) bypass a
+            // path-anchored route/ACL: the matcher would see "http://host/path"
+            // while the backend receives just "/path".
+            case PROPERTY_URI -> getUri();
             case PROPERTY_METHOD -> request.method().name();
             case PROPERTY_CONTENT_TYPE -> request.requestHeaders().get(HttpHeaderNames.CONTENT_TYPE, "");
             case PROPERTY_LISTENER_IPADDRESS -> getLocalAddress().getAddress().getHostAddress();
