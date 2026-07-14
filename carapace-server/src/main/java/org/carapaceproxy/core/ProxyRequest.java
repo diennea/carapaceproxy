@@ -195,7 +195,7 @@ public class ProxyRequest implements MatchingContext {
                 uri = "/";
             }
         } else {
-            int pos = uri.indexOf(request.fullPath());
+            int pos = uri.indexOf(fullPath);
             if (pos > 0) {
                 uri = uri.substring(pos);
             }
