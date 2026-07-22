@@ -136,8 +136,7 @@ public class ACMEClient {
      * @return {@link Http01Challenge} to verify
      */
     private Http01Challenge httpChallenge(Authorization auth) throws AcmeException {
-        Http01Challenge challenge = auth.findChallenge(Http01Challenge.TYPE)
-                .map(Http01Challenge.class::cast)
+        Http01Challenge challenge = auth.findChallenge(Http01Challenge.class)
                 .orElseThrow(() -> new AcmeException("Found no " + Http01Challenge.TYPE + " challenge, don't know what to do..."));
         LOG.debug("It must be reachable at: http://{}/.well-known/acme-challenge/{}",
                 auth.getIdentifier().getDomain(), challenge.getToken()
@@ -157,8 +156,7 @@ public class ACMEClient {
      */
     public Challenge dnsChallenge(Authorization auth) throws AcmeException {
         Dns01Challenge challenge = auth
-                .findChallenge(Dns01Challenge.TYPE)
-                .map(Dns01Challenge.class::cast)
+                .findChallenge(Dns01Challenge.class)
                 .orElseThrow(() -> new AcmeException("Found no " + Dns01Challenge.TYPE + " challenge, don't know what to do..."));
         LOG.info("DNS-challenge _acme-challenge.{}. to save as TXT-record with content {}", auth.getIdentifier().getDomain(), challenge.getDigest());
         return challenge;
