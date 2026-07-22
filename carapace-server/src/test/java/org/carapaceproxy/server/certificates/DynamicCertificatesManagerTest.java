@@ -338,7 +338,7 @@ public class DynamicCertificatesManagerTest {
         ));
         when(session.connect()).thenReturn(conn);
         when(login.getSession()).thenReturn(session);
-        when(login.getKeyPair()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE));
+        when(login.getPublicKey()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE).getPublic());
 
         Dns01Challenge c = mock(Dns01Challenge.class);
         when(c.getDigest()).thenReturn("");
@@ -465,7 +465,7 @@ public class DynamicCertificatesManagerTest {
         ));
         when(session.connect()).thenReturn(conn);
         when(login.getSession()).thenReturn(session);
-        when(login.getKeyPair()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE));
+        when(login.getPublicKey()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE).getPublic());
 
         // challenges
         when(ac.checkResponseForChallenge(any())).thenReturn(runCase.equals("challenge_failed")? INVALID : VALID);
@@ -594,7 +594,7 @@ public class DynamicCertificatesManagerTest {
         Session session = mock(Session.class);
         when(session.connect()).thenReturn(mock(Connection.class));
         when(login.getSession()).thenReturn(session);
-        when(login.getKeyPair()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE));
+        when(login.getPublicKey()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE).getPublic());
 
         Http01Challenge c = mock(Http01Challenge.class);
         when(c.getToken()).thenReturn("");
