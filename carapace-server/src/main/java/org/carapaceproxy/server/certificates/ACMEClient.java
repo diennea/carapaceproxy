@@ -167,10 +167,12 @@ public class ACMEClient {
         if (status == Status.VALID) {
             // The authorization is already valid. No need to process a challenge.
             // or the challenge is already verified, there's no need to execute it again.
-        } else if (status != Status.INVALID) {
+            return status;
+        }
+        if (status != Status.INVALID) {
             challenge.fetch();
         }
-        return status;
+        return challenge.getStatus();
     }
 
     /**
@@ -197,10 +199,12 @@ public class ACMEClient {
         Status status = order.getStatus();
         if (status == Status.VALID) {
             LOG.info("Order has been completed.");
-        } else if (status != Status.INVALID) {
+            return status;
+        }
+        if (status != Status.INVALID) {
             order.fetch();
         }
-        return status;
+        return order.getStatus();
     }
 
     public Certificate fetchCertificateForOrder(Order order) throws AcmeException {
