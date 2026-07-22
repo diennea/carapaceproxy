@@ -170,7 +170,7 @@ public class ACMEClient {
             // The authorization is already valid. No need to process a challenge.
             // or the challenge is already verified, there's no need to execute it again.
         } else if (status != Status.INVALID) {
-            challenge.update();
+            challenge.fetch();
         }
         return status;
     }
@@ -200,7 +200,7 @@ public class ACMEClient {
         if (status == Status.VALID) {
             LOG.info("Order has been completed.");
         } else if (status != Status.INVALID) {
-            order.update();
+            order.fetch();
         }
         return status;
     }
