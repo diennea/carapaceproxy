@@ -66,6 +66,23 @@
 
                 <b-form-group
                     v-if="form.type === 'acme'"
+                    id="provider-group"
+                    ref="field-provider-group"
+                    label="ACME provider:"
+                    label-for="provider"
+                    invalid-feedback="Choose the ACME provider"
+                >
+                    <b-form-select
+                        id="provider"
+                        ref="field-provider"
+                        v-model="form.provider"
+                        :options="providers"
+                        required
+                    ></b-form-select>
+                </b-form-group>
+
+                <b-form-group
+                    v-if="form.type === 'acme'"
                     id="daysbeforerenewal-group"
                     ref="field-daysBeforeRenewal-group"
                     label="Days before renewal:"
@@ -92,13 +109,21 @@
 <script>
 import {doPost} from "../../serverapi";
     import StatusBox from "../StatusBox.vue";
+
+    // must match the backend built-in provider name (AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME)
+    const DEFAULT_PROVIDER = 'letsencrypt';
+
     export default {
         name: "CertificateForm",
         components: {
             "status-box": StatusBox
         },
         props: {
-            id: String
+            id: String,
+            acmeProviders: {
+                type: Array,
+                default: () => [DEFAULT_PROVIDER]
+            }
         },
         data() {
             return {
@@ -106,7 +131,8 @@ import {doPost} from "../../serverapi";
                     domain: '',
                     subjectAltNames: [],
                     type: 'acme',
-                    daysBeforeRenewal: 30
+                    daysBeforeRenewal: 30,
+                    provider: DEFAULT_PROVIDER
                 },
                 globalError: null,
                 showOverlay: false
@@ -117,6 +143,9 @@ import {doPost} from "../../serverapi";
                 return [
                     {value: 'acme', text: 'Acme'}
                 ]
+            },
+            providers() {
+                return this.acmeProviders.map(name => ({value: name, text: name}))
             }
         },
         methods: {
@@ -125,6 +154,7 @@ import {doPost} from "../../serverapi";
                 this.form.subjectAltNames = []
                 this.form.type = 'acme'
                 this.form.daysBeforeRenewal = 30
+                this.form.provider = DEFAULT_PROVIDER
                 this.clearFormErrors()
             },
             clearFormErrors() {

@@ -20,6 +20,7 @@
 package org.carapaceproxy.configstore;
 
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
+import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
 import static org.carapaceproxy.utils.TestUtils.assertEqualsKey;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
@@ -231,8 +232,12 @@ public class ConfigurationStoreTest {
     private void testKeyPairOperations() {
         // KeyPairs generation + saving
         KeyPair acmePair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
-        store.saveAcmeUserKey(acmePair);
-        store.saveAcmeUserKey(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE)); // key not overwritten
+        store.saveAcmeUserKey(acmePair, DEFAULT_PROVIDER_NAME);
+        store.saveAcmeUserKey(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), DEFAULT_PROVIDER_NAME); // key not overwritten
+
+        KeyPair customProviderPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        store.saveAcmeUserKey(customProviderPair, "customprovider"); // each provider has its own account key
+        store.saveAcmeUserKey(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), "customprovider"); // key not overwritten
 
         store.saveKeyPairForDomain(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), d1, true);
         KeyPair domain1Pair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
@@ -243,9 +248,13 @@ public class ConfigurationStoreTest {
         store.saveKeyPairForDomain(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), d2, false); // key not overwritten
 
         // KeyPairs loading
-        KeyPair loadedPair = store.loadAcmeUserKeyPair();
+        KeyPair loadedPair = store.loadAcmeUserKeyPair(DEFAULT_PROVIDER_NAME);
         assertEqualsKey(acmePair.getPrivate(), loadedPair.getPrivate());
         assertEqualsKey(acmePair.getPublic(), loadedPair.getPublic());
+
+        loadedPair = store.loadAcmeUserKeyPair("customprovider");
+        assertEqualsKey(customProviderPair.getPrivate(), loadedPair.getPrivate());
+        assertEqualsKey(customProviderPair.getPublic(), loadedPair.getPublic());
 
         loadedPair = store.loadKeyPairForDomain(d1);
         assertEqualsKey(domain1Pair.getPrivate(), loadedPair.getPrivate());

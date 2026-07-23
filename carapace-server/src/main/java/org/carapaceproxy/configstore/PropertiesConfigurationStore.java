@@ -43,7 +43,7 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
     private final ConcurrentHashMap<String, CertificateData> certificates = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, KeyPair> domainsKeyPair = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String> acmeChallengeTokens = new ConcurrentHashMap<>();
-    private KeyPair acmeUserKey;
+    private final ConcurrentHashMap<String, KeyPair> acmeUserKeys = new ConcurrentHashMap<>();
 
     public PropertiesConfigurationStore(Properties properties) {
         this.properties = properties;
@@ -69,17 +69,13 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
     }
 
     @Override
-    public KeyPair loadAcmeUserKeyPair() {
-        return acmeUserKey;
+    public KeyPair loadAcmeUserKeyPair(String providerName) {
+        return acmeUserKeys.get(providerName);
     }
 
     @Override
-    public boolean saveAcmeUserKey(KeyPair pair) {
-        if (acmeUserKey == null) {
-            acmeUserKey = pair;
-            return true;
-        }
-        return false;
+    public boolean saveAcmeUserKey(KeyPair pair, String providerName) {
+        return acmeUserKeys.putIfAbsent(providerName, pair) == null;
     }
 
     @Override

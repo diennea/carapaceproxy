@@ -187,9 +187,22 @@ public interface ConfigurationStore extends AutoCloseable {
     default void commitConfiguration(ConfigurationStore newConfigurationStore) {
     }
 
-    KeyPair loadAcmeUserKeyPair();
+    /**
+     * Load the ACME account key pair for the given provider.
+     *
+     * @param providerName the name of the ACME provider the account belongs to
+     * @return the key pair, or null if none was saved yet
+     */
+    KeyPair loadAcmeUserKeyPair(String providerName);
 
-    boolean saveAcmeUserKey(KeyPair pair);
+    /**
+     * Save the ACME account key pair for the given provider, without overwriting an existing one.
+     *
+     * @param pair the key pair to save
+     * @param providerName the name of the ACME provider the account belongs to
+     * @return true if the key pair was saved, false if one already exists (e.g. saved concurrently by another peer)
+     */
+    boolean saveAcmeUserKey(KeyPair pair, String providerName);
 
     KeyPair loadKeyPairForDomain(String domain);
 

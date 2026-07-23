@@ -48,7 +48,10 @@ import org.slf4j.LoggerFactory;
 
 /**
  *
- * Let's Encrypt ACME client for automatic SSL certificate issuing.
+ * ACME client for automatic SSL certificate issuing.
+ * <p>
+ * It works against any RFC 8555 compliant CA, given its directory URL;
+ * Let's Encrypt is the default one, and CAs requiring External Account Binding (e.g. DigiCert) are supported too.
  *
  * @author paolo.venturi
  *
@@ -63,13 +66,35 @@ public class ACMEClient {
     // For testing server use
     public static final String TESTING_CA = "https://acme-staging-v02.api.letsencrypt.org/directory"; //"acme://letsencrypt.org/staging";
 
-    private final boolean testingModeOn;
     private final KeyPair userKey;
+    private final String directoryUrl;
+    private final String kid;
+    private final String hmac;
 
+    /**
+     * Build a client for the Let's Encrypt CA.
+     *
+     * @param userKey the ACME account key pair
+     * @param testingMode whether to use the staging endpoint instead of the production one
+     */
     public ACMEClient(KeyPair userKey, boolean testingMode) {
+        this(userKey, testingMode ? TESTING_CA : PRODUCTION_CA, null, null);
+    }
+
+    /**
+     * Build a client for any RFC 8555 compliant CA.
+     *
+     * @param userKey the ACME account key pair
+     * @param directoryUrl the directory URL of the CA
+     * @param kid the key identifier for External Account Binding, or null if the CA doesn't require it
+     * @param hmac the base64-encoded MAC key for External Account Binding, or null if the CA doesn't require it
+     */
+    public ACMEClient(KeyPair userKey, String directoryUrl, String kid, String hmac) {
         Security.addProvider(new BouncyCastleProvider());
         this.userKey = userKey;
-        this.testingModeOn = testingMode;
+        this.directoryUrl = directoryUrl;
+        this.kid = kid;
+        this.hmac = hmac;
     }
 
     /**
@@ -81,10 +106,13 @@ public class ACMEClient {
      * @throws org.shredzone.acme4j.exception.AcmeException
      */
     public Login getLogin() throws AcmeException {
-        return new AccountBuilder()
+        final var accountBuilder = new AccountBuilder()
                 .agreeToTermsOfService()
-                .useKeyPair(userKey)
-                .createLogin(new Session(testingModeOn ? TESTING_CA : PRODUCTION_CA));
+                .useKeyPair(userKey);
+        if (kid != null && !kid.isEmpty()) {
+            accountBuilder.withKeyIdentifier(kid, hmac);
+        }
+        return accountBuilder.createLogin(new Session(directoryUrl));
     }
 
     /*

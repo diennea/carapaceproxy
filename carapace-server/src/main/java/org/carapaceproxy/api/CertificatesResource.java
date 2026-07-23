@@ -37,6 +37,7 @@ import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
@@ -68,6 +69,7 @@ import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
+import org.carapaceproxy.server.config.AcmeProviderConfiguration;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
@@ -96,12 +98,21 @@ public class CertificatesResource {
 
         private final Collection<CertificateBean> certificates;
         private final String localStorePath;
+        private final Collection<String> acmeProviders;
 
         public CertificatesResponse(final Collection<CertificateBean> certificates, final HttpProxyServer server) {
             this.certificates = certificates;
             this.localStorePath = server.getCurrentConfiguration().getLocalCertificatesStorePath();
+            this.acmeProviders = availableProviders(server.getCurrentConfiguration());
         }
 
+    }
+
+    private static Collection<String> availableProviders(final RuntimeServerConfiguration conf) {
+        final var providers = new ArrayList<String>();
+        providers.add(AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME);
+        conf.getAcmeProviders().keySet().stream().sorted().forEach(providers::add);
+        return providers;
     }
 
     @Data
@@ -119,6 +130,7 @@ public class CertificatesResource {
         private String serialNumber;
         private int attemptsCount;
         private String message;
+        private String provider;
 
         public CertificateBean(
                 final String id,
@@ -207,6 +219,7 @@ public class CertificatesResource {
             }
             if (certificate.isAcme()) {
                 bean.setDaysBeforeRenewal(certificate.getDaysBeforeRenewal() + "");
+                bean.setProvider(certificate.getProvider());
             }
             bean.setStatus(certificateStateToString(state));
         } catch (GeneralSecurityException | IOException ex) {
@@ -232,6 +245,7 @@ public class CertificatesResource {
         private Set<String> subjectAltNames;
         private String type;
         private int daysBeforeRenewal = DEFAULT_DAYS_BEFORE_RENEWAL;
+        private String provider = AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
     }
 
     @POST
@@ -254,6 +268,11 @@ public class CertificatesResource {
         if (form.daysBeforeRenewal < 0) {
             return FormValidationResponse.fieldInvalid("daysBeforeRenewal");
         }
+        final var server = (HttpProxyServer) context.getAttribute("server");
+        final var provider = normalizeProvider(form.provider);
+        if (!isKnownProvider(provider, server)) {
+            return FormValidationResponse.fieldInvalid("provider");
+        }
         if (findCertificateById(form.domain) != null) {
             return FormValidationResponse.fieldConflict("domain");
         }
@@ -261,8 +280,9 @@ public class CertificatesResource {
         final var cert = new CertificateData(form.domain, null, WAITING);
         cert.setSubjectAltNames(form.subjectAltNames);
         cert.setDaysBeforeRenewal(form.daysBeforeRenewal);
+        cert.setProvider(provider);
         try {
-            ((HttpProxyServer) context.getAttribute("server")).updateDynamicCertificateForDomain(cert);
+            server.updateDynamicCertificateForDomain(cert);
         } catch (Exception e) {
             return FormValidationResponse.error(e);
         }
@@ -302,6 +322,15 @@ public class CertificatesResource {
                 .build();
     }
 
+    private static String normalizeProvider(final String provider) {
+        return provider == null || provider.isBlank() ? AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME : provider;
+    }
+
+    private static boolean isKnownProvider(final String provider, final HttpProxyServer server) {
+        return AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME.equals(provider)
+                || server.getCurrentConfiguration().getAcmeProviders().containsKey(provider);
+    }
+
     private CertificateBean findCertificateById(final String certId) {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         SSLCertificateConfiguration certificate = server.getCurrentConfiguration().getCertificates().get(certId);
@@ -329,6 +358,7 @@ public class CertificatesResource {
             @QueryParam("subjectaltnames") final List<String> subjectAltNames,
             @QueryParam("type") @DefaultValue("manual") final String type,
             @QueryParam("daysbeforerenewal") final Integer daysbeforerenewal,
+            @QueryParam("provider") final String provider,
             final InputStream uploadedInputStream) throws Exception {
 
         try (InputStream input = uploadedInputStream) {
@@ -354,6 +384,14 @@ public class CertificatesResource {
                 }
             }
 
+            final var acmeProvider = normalizeProvider(provider);
+            if (provider != null && !provider.isBlank() && !CertificateMode.ACME.equals(certType)) {
+                return Response.status(422).entity("ERROR: param 'provider' available for type 'acme' only").build();
+            }
+            if (!isKnownProvider(acmeProvider, (HttpProxyServer) context.getAttribute("server"))) {
+                return Response.status(422).entity("ERROR: unknown ACME provider '" + acmeProvider + "'").build();
+            }
+
             String encodedData = "";
             DynamicCertificateState state = WAITING;
             if (data != null && data.length > 0) {
@@ -367,6 +405,7 @@ public class CertificatesResource {
             cert.setManual(MANUAL.equals(certType));
             cert.setSubjectAltNames(Set.copyOf(subjectAltNames));
             cert.setDaysBeforeRenewal(daysbeforerenewal != null ? daysbeforerenewal : DEFAULT_DAYS_BEFORE_RENEWAL);
+            cert.setProvider(acmeProvider);
 
             ((HttpProxyServer) context.getAttribute("server")).updateDynamicCertificateForDomain(cert);
 
