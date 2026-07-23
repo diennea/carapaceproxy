@@ -396,7 +396,7 @@ public class DynamicCertificatesManager implements Runnable {
                 // RuntimeException included on purpose, as an escaped one would silently cancel the scheduled task;
                 // this would kill the renewal loop for every certificate
                 LOG.error("Error while handling dynamic certificate for domain {}", domain, ex);
-                if (cert != null && AcmeFailureClassifier.isRejectedByProvider(ex)) {
+                if (cert != null && !AcmeFailureClassifier.isTransient(ex)) {
                     cert.error(ex.getMessage() != null ? ex.getMessage() : ex.toString());
                     try {
                         store.saveCertificate(cert);

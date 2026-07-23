@@ -40,32 +40,32 @@ public class AcmeFailureClassifierTest {
     @Test
     public void testRejections() throws Exception {
         // the persisted state is unusable, retrying it won't help
-        assertTrue(AcmeFailureClassifier.isRejectedByProvider(new AcmeException("unknown order")));
-        assertTrue(AcmeFailureClassifier.isRejectedByProvider(new AcmeProtocolException("malformed CA response")));
-        assertTrue(AcmeFailureClassifier.isRejectedByProvider(new AcmeLazyLoadingException(
+        assertFalse(AcmeFailureClassifier.isTransient(new AcmeException("unknown order")));
+        assertFalse(AcmeFailureClassifier.isTransient(new AcmeProtocolException("malformed CA response")));
+        assertFalse(AcmeFailureClassifier.isTransient(new AcmeLazyLoadingException(
                 Order.class, URI.create("https://localhost/order").toURL(), new AcmeException("unknown order"))));
-        assertTrue(AcmeFailureClassifier.isRejectedByProvider(
+        assertFalse(AcmeFailureClassifier.isTransient(
                 new AcmeServerException(problemOfType("urn:ietf:params:acme:error:unauthorized"))));
     }
 
     @Test
     public void testTransientFailures() throws Exception {
         // worth retrying in the same state
-        assertFalse(AcmeFailureClassifier.isRejectedByProvider(new AcmeNetworkException(new IOException("io"))));
-        assertFalse(AcmeFailureClassifier.isRejectedByProvider(new AcmeRateLimitedException(
+        assertTrue(AcmeFailureClassifier.isTransient(new AcmeNetworkException(new IOException("io"))));
+        assertTrue(AcmeFailureClassifier.isTransient(new AcmeRateLimitedException(
                 problemOfType("urn:ietf:params:acme:error:rateLimited"), null, List.of())));
-        assertFalse(AcmeFailureClassifier.isRejectedByProvider(
+        assertTrue(AcmeFailureClassifier.isTransient(
                 new AcmeServerException(problemOfType("urn:ietf:params:acme:error:serverInternal"))));
-        assertFalse(AcmeFailureClassifier.isRejectedByProvider(
+        assertTrue(AcmeFailureClassifier.isTransient(
                 new AcmeServerException(problemOfType("urn:ietf:params:acme:error:badNonce"))));
         // a 5xx without a problem document, e.g., from a load balancer
-        assertFalse(AcmeFailureClassifier.isRejectedByProvider(new AcmeException("HTTP 503")));
+        assertTrue(AcmeFailureClassifier.isTransient(new AcmeException("HTTP 503")));
     }
 
     @Test
     public void testNonAcmeFailures() {
-        // anything non-ACME is not the CA rejecting the request
-        assertFalse(AcmeFailureClassifier.isRejectedByProvider(new IllegalStateException("boom")));
+        // an unexpected local failure must be counted too, or it would retry invisibly forever
+        assertFalse(AcmeFailureClassifier.isTransient(new IllegalStateException("boom")));
     }
 
     private static Problem problemOfType(String type) throws Exception {

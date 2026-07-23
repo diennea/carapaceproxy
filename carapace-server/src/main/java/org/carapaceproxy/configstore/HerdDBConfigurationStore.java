@@ -367,6 +367,10 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
 
     /**
      * Whether the primary key belongs to a provider account key pair, hence off-limits for domain key pairs.
+     * <p>
+     * The whole {@code _acmeuserkey} prefix is reserved: a domain literally named like that
+     * would be silently skipped by the domain lookups.
+     * Safe assumption, as hostnames cannot start with {@code _} and the suffix is a validated provider name.
      *
      * @param pk a primary key of the key pairs table
      * @return true if it is an {@link #acmeUserKeyName(String) account key name}
