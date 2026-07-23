@@ -34,6 +34,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
+import org.carapaceproxy.server.config.AcmeProviderConfiguration;
 import org.shredzone.acme4j.toolbox.JSON;
 
 /**
@@ -57,6 +58,8 @@ public class CertificateData {
     @EqualsAndHashCode.Exclude
     private Map<String, JSON> pendingChallengesData;
     private boolean manual;
+    // not stored in db: re-set from the certificate configuration, like manual and daysBeforeRenewal
+    private String provider = AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
     private int daysBeforeRenewal;
     private Date expiringDate;
     private String serialNumber; // hex

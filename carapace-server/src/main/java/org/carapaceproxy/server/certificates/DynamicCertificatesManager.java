@@ -31,6 +31,7 @@ import static org.carapaceproxy.server.certificates.DynamicCertificateState.REQU
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERIFIED;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERIFYING;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
+import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.MANUAL;
 import static org.carapaceproxy.utils.CertificatesUtils.isCertificateExpired;
 import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
@@ -106,7 +107,7 @@ public class DynamicCertificatesManager implements Runnable {
     private static final String EVENT_CERTIFICATES_REQUEST_STORE = "certificates_request_store";
 
     private volatile Map<String, CertificateData> certificates = new ConcurrentHashMap<>();
-    private ACMEClient acmeClient; // Let's Encrypt client
+    private volatile Map<String, ACMEClient> acmeClients = Map.of(); // one client per ACME provider, keyed by provider name
     private Route53Client r53Client;
     private String awsAccessKey;
     private String awsSecretKey;
@@ -170,9 +171,15 @@ public class DynamicCertificatesManager implements Runnable {
             throw new DynamicCertificatesManagerException("ConfigurationStore not set.");
         }
         keyPairsSize = configuration.getKeyPairsSize();
-        if (acmeClient == null) {
-            acmeClient = new ACMEClient(loadOrCreateAcmeUserKeyPair(), TESTING_MODE);
+        // rebuilt on every reload, so that changes to provider url/kid/hmac take effect
+        final var clients = new HashMap<String, ACMEClient>();
+        clients.put(DEFAULT_PROVIDER_NAME, new ACMEClient(loadOrCreateAcmeUserKeyPair(DEFAULT_PROVIDER_NAME), TESTING_MODE));
+        for (final var provider : configuration.getAcmeProviders().values()) {
+            clients.put(provider.name(), new ACMEClient(
+                    loadOrCreateAcmeUserKeyPair(provider.name()), provider.url(), provider.kid(), provider.hmac()
+            ));
         }
+        acmeClients = Map.copyOf(clients);
         domainsCheckerIPAddresses = configuration.getDomainsCheckerIPAddresses();
         loadCertificates(configuration.getCertificates());
         period = configuration.getDynamicCertificatesManagerPeriod();
@@ -184,16 +191,24 @@ public class DynamicCertificatesManager implements Runnable {
         }
     }
 
-    private KeyPair loadOrCreateAcmeUserKeyPair() {
-        KeyPair pair = store.loadAcmeUserKeyPair();
+    private KeyPair loadOrCreateAcmeUserKeyPair(String providerName) {
+        KeyPair pair = store.loadAcmeUserKeyPair(providerName);
         if (pair == null) {
             pair = KeyPairUtils.createKeyPair(keyPairsSize > 0 ? keyPairsSize : DEFAULT_KEYPAIRS_SIZE);
-            if (!store.saveAcmeUserKey(pair)) {
-                pair = store.loadAcmeUserKeyPair(); // load key created concurrently by another peer
+            if (!store.saveAcmeUserKey(pair, providerName)) {
+                pair = store.loadAcmeUserKeyPair(providerName); // load key created concurrently by another peer
             }
         }
 
         return pair;
+    }
+
+    private ACMEClient acmeClientFor(CertificateData cert) {
+        final var client = acmeClients.get(cert.getProvider());
+        if (client == null) {
+            throw new IllegalStateException("No ACME client available for provider " + cert.getProvider());
+        }
+        return client;
     }
 
     private void loadCertificates(Map<String, SSLCertificateConfiguration> certificates) throws ConfigurationNotValidException {
@@ -210,7 +225,7 @@ public class DynamicCertificatesManager implements Runnable {
                     }
                     boolean forceManual = MANUAL == config.getMode();
                     _certificates.put(domain, loadOrCreateDynamicCertificateForDomain(
-                            domain, config.getSubjectAltNames(), forceManual, config.getDaysBeforeRenewal()
+                            domain, config.getSubjectAltNames(), forceManual, config.getDaysBeforeRenewal(), config.getProvider()
                     ));
                 }
             }
@@ -223,7 +238,8 @@ public class DynamicCertificatesManager implements Runnable {
     private CertificateData loadOrCreateDynamicCertificateForDomain(String domain,
                                                                     Set<String> subjectAltNames,
                                                                     boolean forceManual,
-                                                                    int daysBeforeRenewal) throws GeneralSecurityException, MalformedURLException {
+                                                                    int daysBeforeRenewal,
+                                                                    String provider) throws GeneralSecurityException, MalformedURLException {
         CertificateData cert = store.loadCertificateForDomain(domain);
         if (cert == null) {
             cert = new CertificateData(domain, subjectAltNames, null, WAITING, null, null);
@@ -240,6 +256,7 @@ public class DynamicCertificatesManager implements Runnable {
         cert.setManual(forceManual);
         if (!forceManual) { // only for ACME
             cert.setDaysBeforeRenewal(daysBeforeRenewal);
+            cert.setProvider(provider);
         }
         return cert;
     }
@@ -293,7 +310,7 @@ public class DynamicCertificatesManager implements Runnable {
             final var domain = data.getDomain();
             try {
                 // this has to be always fetch from db!
-                CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, data.getSubjectAltNames(), false, data.getDaysBeforeRenewal());
+                CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, data.getSubjectAltNames(), false, data.getDaysBeforeRenewal(), data.getProvider());
                 switch (cert.getState()) {
                     // certificate waiting to be issues/renew
                     case WAITING -> startCertificateProcessing(domain, cert);
@@ -310,12 +327,12 @@ public class DynamicCertificatesManager implements Runnable {
                     // challenge succeeded
                     case VERIFIED -> {
                         LOG.info("Certificate for domain {} VERIFIED.", domain);
-                        Order pendingOrder = acmeClient.getLogin().bindOrder(cert.getPendingOrderLocation());
+                        Order pendingOrder = acmeClientFor(cert).getLogin().bindOrder(cert.getPendingOrderLocation());
                         // if the order is already valid, we have to skip finalization
                         if (pendingOrder.getStatus() != Status.VALID) {
                             try {
                                 KeyPair keys = loadOrCreateKeyPairForDomain(domain);
-                                acmeClient.orderCertificate(pendingOrder, keys);
+                                acmeClientFor(cert).orderCertificate(pendingOrder, keys);
                             } catch (AcmeException ex) { // order finalization failed
                                 LOG.error("Certificate order finalization for domain {} FAILED.", domain, ex);
                                 cert.error(ex.getMessage());
@@ -327,6 +344,7 @@ public class DynamicCertificatesManager implements Runnable {
                     // certificate ordering
                     case ORDERING -> {
                         LOG.info("ORDERING certificate for domain {}.", domain);
+                        final var acmeClient = acmeClientFor(cert);
                         Order order = acmeClient.getLogin().bindOrder(cert.getPendingOrderLocation());
                         Status status = acmeClient.checkResponseForOrder(order);
                         if (status == Status.VALID) {
@@ -367,7 +385,9 @@ public class DynamicCertificatesManager implements Runnable {
                     store.saveCertificate(cert);
                     flushCache = true;
                 }
-            } catch (AcmeException | IOException | GeneralSecurityException | IllegalStateException ex) {
+            } catch (AcmeException | IOException | GeneralSecurityException | RuntimeException ex) {
+                // RuntimeException included on purpose, as an escaped one would silently cancel the scheduled task;
+                // this would kill the renewal loop for every certificate
                 LOG.error("Error while handling dynamic certificate for domain {}", domain, ex);
             }
         }
@@ -425,6 +445,7 @@ public class DynamicCertificatesManager implements Runnable {
      * </ul>
      */
     private void createOrderAndChallengesForCertificate(CertificateData cert) throws AcmeException {
+        final var acmeClient = acmeClientFor(cert);
         Order order = acmeClient.createOrderForDomain(cert.getNames());
         cert.setPendingOrderLocation(order.getLocation());
         LOG.info("Pending order location for domain {}: {}", cert.getDomain(), cert.getPendingOrderLocation());
@@ -504,7 +525,7 @@ public class DynamicCertificatesManager implements Runnable {
 
     private Map<String, Challenge> getChallengesFromCertificate(CertificateData cert) throws AcmeException {
         final var challengesData = new HashMap<String, Challenge>();
-        final var login = acmeClient.getLogin();
+        final var login = acmeClientFor(cert).getLogin();
         for (final var e: cert.getPendingChallengesData().entrySet()) {
             final var domain = e.getKey();
             final var challenge = e.getValue();
@@ -525,7 +546,7 @@ public class DynamicCertificatesManager implements Runnable {
             final var domain = c.getKey();
             final var challenge = c.getValue();
             LOG.info("VERIFYING challenge response for domain {}: {}", domain, challenge);
-            final var status = acmeClient.checkResponseForChallenge(challenge); // checks response and updates the challenge
+            final var status = acmeClientFor(cert).checkResponseForChallenge(challenge); // checks response and updates the challenge
             cert.getPendingChallengesData().put(domain, challenge.getJSON());
             if (status == Status.VALID) {
                 okCount++;
@@ -696,8 +717,8 @@ public class DynamicCertificatesManager implements Runnable {
             for (Entry<String, CertificateData> entry : certificates.entrySet()) {
                 String domain = entry.getKey();
                 CertificateData cert = entry.getValue();
-                // "wildcard" and "manual" flags and "daysBeforeRenewal" are not stored in db > have to be re-set from existing config
-                CertificateData freshCert = loadOrCreateDynamicCertificateForDomain(domain, cert.getSubjectAltNames(), cert.isManual(), cert.getDaysBeforeRenewal());
+                // "wildcard" and "manual" flags, "daysBeforeRenewal" and "provider" are not stored in db > have to be re-set from existing config
+                CertificateData freshCert = loadOrCreateDynamicCertificateForDomain(domain, cert.getSubjectAltNames(), cert.isManual(), cert.getDaysBeforeRenewal(), cert.getProvider());
                 newCertificates.put(domain, freshCert);
                 LOG.info("RELOADED certificate for domain {}: {}", domain, freshCert);
             }

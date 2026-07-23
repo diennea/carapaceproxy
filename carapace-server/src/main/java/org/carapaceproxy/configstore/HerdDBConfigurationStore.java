@@ -52,6 +52,7 @@ import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
+import org.carapaceproxy.server.config.AcmeProviderConfiguration;
 import org.carapaceproxy.utils.StringUtils;
 import org.shredzone.acme4j.toolbox.JSON;
 import org.slf4j.Logger;
@@ -329,29 +330,39 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     }
 
     @Override
-    public KeyPair loadAcmeUserKeyPair() {
+    public KeyPair loadAcmeUserKeyPair(String providerName) {
         try {
-            return loadKeyPair(ACME_USER_KEY);
+            return loadKeyPair(acmeUserKeyName(providerName));
         } catch (Exception err) {
-            LOG.error("Error while performing KeyPair loading for ACME user.", err);
+            LOG.error("Error while performing KeyPair loading for ACME user of provider {}.", providerName, err);
             throw new ConfigurationStoreException(err);
         }
     }
 
     @Override
-    public boolean saveAcmeUserKey(KeyPair pair) {
+    public boolean saveAcmeUserKey(KeyPair pair, String providerName) {
         try {
-            return saveKeyPair(pair, ACME_USER_KEY, false);
+            return saveKeyPair(pair, acmeUserKeyName(providerName), false);
         } catch (Exception err) {
-            LOG.error("Error while performing KeyPar saving for ACME user.", err);
+            LOG.error("Error while performing KeyPar saving for ACME user of provider {}.", providerName, err);
             throw new ConfigurationStoreException(err);
         }
+    }
+
+    /**
+     * The account key of the built-in provider keeps the legacy {@link #ACME_USER_KEY} name,
+     * so existing Let's Encrypt accounts survive the upgrade; other providers get a dedicated key.
+     */
+    private static String acmeUserKeyName(String providerName) {
+        return AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME.equals(providerName)
+                ? ACME_USER_KEY
+                : ACME_USER_KEY + "_" + providerName;
     }
 
     @Override
     public KeyPair loadKeyPairForDomain(String domain) {
         try {
-            if (domain.equals(ACME_USER_KEY)) {
+            if (domain.startsWith(ACME_USER_KEY)) {
                 return null;
             }
             return loadKeyPair(domain);
@@ -364,7 +375,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     @Override
     public boolean saveKeyPairForDomain(KeyPair pair, String domain, boolean update) {
         try {
-            if (!domain.equals(ACME_USER_KEY)) {
+            if (!domain.startsWith(ACME_USER_KEY)) {
                 return saveKeyPair(pair, domain, update);
             }
         } catch (Exception err) {
@@ -414,7 +425,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
 
     @Override
     public CertificateData loadCertificateForDomain(String domain) {
-        if (domain.equals(ACME_USER_KEY)) {
+        if (domain.startsWith(ACME_USER_KEY)) {
             return null;
         }
         try (Connection con = datasource.getConnection()) {

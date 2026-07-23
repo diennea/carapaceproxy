@@ -49,6 +49,7 @@ public class SSLCertificateConfiguration {
     private final String password;
     private final boolean wildcard;
     private final CertificateMode mode;
+    private final String provider; // ACME provider name, only meaningful for ACME certificates
     private int daysBeforeRenewal;
 
     public SSLCertificateConfiguration(String hostname,
@@ -56,6 +57,15 @@ public class SSLCertificateConfiguration {
                                        String file,
                                        String password,
                                        CertificateMode mode) {
+        this(hostname, subjectAltNames, file, password, mode, AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME);
+    }
+
+    public SSLCertificateConfiguration(String hostname,
+                                       Set<String> subjectAltNames,
+                                       String file,
+                                       String password,
+                                       CertificateMode mode,
+                                       String provider) {
         this.id = Objects.requireNonNull(hostname);
         if (hostname.equals("*")) {
             this.hostname = "";
@@ -75,6 +85,7 @@ public class SSLCertificateConfiguration {
         this.file = file;
         this.password = password;
         this.mode = mode;
+        this.provider = provider;
     }
 
     public boolean isWildcard() {

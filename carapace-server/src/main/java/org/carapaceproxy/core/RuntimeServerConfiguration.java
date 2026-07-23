@@ -21,6 +21,7 @@ package org.carapaceproxy.core;
 
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
+import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
 import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_BORROW_TIMEOUT;
 import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_CONNECT_TIMEOUT;
 import static org.carapaceproxy.server.config.ConnectionPoolConfiguration.DEFAULT_DISPOSE_TIMEOUT;
@@ -39,11 +40,14 @@ import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequest
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.util.concurrent.DefaultEventExecutor;
 import java.io.File;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -53,6 +57,7 @@ import java.util.stream.Collectors;
 import javax.net.ssl.SSLContext;
 import lombok.Data;
 import org.carapaceproxy.configstore.ConfigurationStore;
+import org.carapaceproxy.server.config.AcmeProviderConfiguration;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -60,6 +65,7 @@ import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
+import org.shredzone.acme4j.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.netty.http.HttpProtocol;
@@ -84,6 +90,7 @@ public class RuntimeServerConfiguration {
     public static final long DEFAULT_WARMUP_PERIOD = Duration.ofSeconds(30).toMillis();
 
     private final Map<EndpointKey, NetworkListenerConfiguration> listeners = new LinkedHashMap<>();
+    private final Map<String, AcmeProviderConfiguration> acmeProviders = new HashMap<>();
     private final Map<String, SSLCertificateConfiguration> certificates = new HashMap<>();
     private final List<RequestFilterConfiguration> requestFilters = new ArrayList<>();
     private final Map<String, ConnectionPoolConfiguration> connectionPools = new HashMap<>();
@@ -229,6 +236,7 @@ public class RuntimeServerConfiguration {
         LOG.info("accesslog.advanced.enabled={}", accessLogAdvancedEnabled);
         LOG.info("accesslog.advanced.body.size={}", accessLogAdvancedBodySize);
 
+        configureAcmeProviders(properties);
         configureCertificates(properties);
         configureListeners(properties);
         configureFilters(properties);
@@ -312,6 +320,75 @@ public class RuntimeServerConfiguration {
         LOG.info("cache.cachealways={}", alwaysCachedExtensions);
     }
 
+    private void configureAcmeProviders(ConfigurationStore properties) throws ConfigurationNotValidException {
+        final var max = properties.findMaxIndexForPrefix("acme");
+        for (int i = 0; i <= max; i++) {
+            final var prefix = "acme." + i + ".";
+            final var name = properties.getString(prefix + "name", "");
+            if (name.isEmpty()) {
+                continue;
+            }
+            if (DEFAULT_PROVIDER_NAME.equals(name)) {
+                throw new ConfigurationNotValidException(
+                        "Invalid value '" + name + "' for " + prefix + "name: it is the built-in provider and cannot be redefined"
+                );
+            }
+            if (!name.matches("[a-z0-9][a-z0-9_-]*")) {
+                throw new ConfigurationNotValidException(
+                        "Invalid value '" + name + "' for " + prefix + "name: only lowercase letters, digits, '-' and '_' are allowed"
+                );
+            }
+            if (acmeProviders.containsKey(name)) {
+                throw new ConfigurationNotValidException(
+                        "Invalid value '" + name + "' for " + prefix + "name: duplicate provider name"
+                );
+            }
+            final var url = properties.getString(prefix + "url", "");
+            if (url.isEmpty()) {
+                throw new ConfigurationNotValidException(
+                        "Invalid ACME provider configuration " + prefix + ": url cannot be empty"
+                );
+            }
+            try {
+                // acme4j accepts both https directory URLs and acme: provider URIs (e.g. acme://pebble)
+                // acme4j resolves providers by exact scheme match, so no case-insensitive comparison here
+                final var scheme = new URI(url).getScheme();
+                if (!"https".equals(scheme) && !"acme".equals(scheme)) {
+                    throw new ConfigurationNotValidException(
+                            "Invalid value '" + url + "' for " + prefix + "url: scheme must be https or acme (lowercase)"
+                    );
+                }
+                // resolves the acme: provider via ServiceLoader and validates the URL, without network I/O
+                new Session(url);
+            } catch (URISyntaxException | IllegalArgumentException e) {
+                throw new ConfigurationNotValidException(
+                        "Invalid value '" + url + "' for " + prefix + "url: " + e.getMessage()
+                );
+            }
+            final var kid = properties.getString(prefix + "kid", "");
+            final var hmac = properties.getString(prefix + "hmac", "");
+            if (kid.isEmpty() != hmac.isEmpty()) {
+                throw new ConfigurationNotValidException(
+                        "Invalid ACME provider configuration " + prefix
+                        + ": kid and hmac must be both set (external account binding) or both empty"
+                );
+            }
+            if (!hmac.isEmpty()) {
+                try {
+                    // acme4j expects the MAC key base64url-encoded, fail at configuration time instead of at account login
+                    Base64.getUrlDecoder().decode(hmac);
+                } catch (IllegalArgumentException e) {
+                    throw new ConfigurationNotValidException(
+                            "Invalid ACME provider configuration " + prefix + ": hmac is not a valid base64url-encoded key"
+                    );
+                }
+            }
+            final var provider = new AcmeProviderConfiguration(name, url, kid, hmac);
+            acmeProviders.put(name, provider);
+            LOG.info("Configured ACME provider acme.{}: name={}, url={}, external account binding: {}", i, name, url, provider.hasExternalAccountBinding());
+        }
+    }
+
     private void configureCertificates(ConfigurationStore properties) throws ConfigurationNotValidException {
         final var max = properties.findMaxIndexForPrefix("certificate");
         for (int i = 0; i <= max; i++) {
@@ -323,8 +400,14 @@ public class RuntimeServerConfiguration {
                 final var pw = properties.getString(prefix + "password", "");
                 final var mode = properties.getString(prefix + "mode", "static");
                 final var daysBeforeRenewal = properties.getInt(prefix + "daysbeforerenewal", DEFAULT_DAYS_BEFORE_RENEWAL);
+                final var provider = properties.getString(prefix + "provider", DEFAULT_PROVIDER_NAME);
+                if (!DEFAULT_PROVIDER_NAME.equals(provider) && !acmeProviders.containsKey(provider)) {
+                    throw new ConfigurationNotValidException(
+                            "Invalid value '" + provider + "' for " + prefix + "provider. No ACME provider configured with such name"
+                    );
+                }
                 try {
-                    final var config = new SSLCertificateConfiguration(hostname, subjectAltNames, file, pw, CertificateMode.valueOf(mode.toUpperCase()));
+                    final var config = new SSLCertificateConfiguration(hostname, subjectAltNames, file, pw, CertificateMode.valueOf(mode.toUpperCase()), provider);
                     if (config.isAcme()) {
                         config.setDaysBeforeRenewal(daysBeforeRenewal);
                     }
