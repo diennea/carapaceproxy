@@ -20,7 +20,7 @@
 package org.carapaceproxy.server.certificates;
 
 import java.io.IOException;
-import java.net.URI;
+import java.net.URL;
 import java.security.KeyPair;
 import java.security.Security;
 import java.util.Collection;
@@ -87,9 +87,13 @@ public class ACMEClient {
      * @param userKey the ACME account key pair
      * @param directoryUrl the directory URL of the CA
      * @param kid the key identifier for External Account Binding, or null if the CA doesn't require it
-     * @param hmac the base64-encoded MAC key for External Account Binding, or null if the CA doesn't require it
+     * @param hmac the base64url-encoded MAC key for External Account Binding, or null if the CA doesn't require it
+     * @throws IllegalArgumentException if only one of {@code kid} and {@code hmac} is provided
      */
     public ACMEClient(KeyPair userKey, String directoryUrl, String kid, String hmac) {
+        if ((kid == null || kid.isEmpty()) != (hmac == null || hmac.isEmpty())) {
+            throw new IllegalArgumentException("kid and hmac must be provided together (external account binding)");
+        }
         Security.addProvider(new BouncyCastleProvider());
         this.userKey = userKey;
         this.directoryUrl = directoryUrl;
@@ -98,12 +102,16 @@ public class ACMEClient {
     }
 
     /**
-     * Finds your {@link Account} at the ACME server.It will be found by your user's public key.If your key is not known to the server yet, a new account will be created.<p>
-     * This is a simple way of finding your {@link Account}. A better way is to get the URL and KeyIdentifier of your new account with {@link Account#getLocation()}
-     * {@link Session#getKeyIdentifier()} and store it somewhere. If you need to get access to your account later, reconnect to it via {@link Account#bind(Session, URI)} by using the stored location.
+     * Finds your {@link Account} at the ACME server. It will be found by your user's public key.
+     * If your key is not known to the server yet, a new account will be created.
+     * <p>
+     * This is a simple way of finding your {@link Account}. A better way is to get the URL of your
+     * new account with {@link Account#getLocation()} and store it somewhere. If you need to get
+     * access to your account later, reconnect to it via {@link Session#login(URL, KeyPair)}
+     * by using the stored location.
      *
-     * @return
-     * @throws org.shredzone.acme4j.exception.AcmeException
+     * @return the {@link Login} bound to the account
+     * @throws AcmeException if the account cannot be found or created
      */
     public Login getLogin() throws AcmeException {
         final var accountBuilder = new AccountBuilder()
@@ -223,24 +231,22 @@ public class ACMEClient {
     }
 
     public Status checkResponseForOrder(Order order) throws AcmeException {
-        LOG.info("Certificate order checking for domain {}", order.getIdentifiers().get(0).getDomain());
+        // fetch eagerly: on a freshly bound order any accessor would lazy-fetch anyway,
+        // so this guarantees a single server round-trip per poll
+        order.fetch();
+        LOG.info("Certificate order checking for domain {}", order.getIdentifiers().getFirst().getDomain());
         Status status = order.getStatus();
         if (status == Status.VALID) {
             LOG.info("Order has been completed.");
-            return status;
         }
-        if (status != Status.INVALID) {
-            order.fetch();
-        }
-        return order.getStatus();
+        return status;
     }
 
-    public Certificate fetchCertificateForOrder(Order order) throws AcmeException {
+    public Certificate fetchCertificateForOrder(Order order) {
+        // getCertificate() itself throws if the order is not ready
         Certificate certificate = order.getCertificate();
-        if (certificate == null) {
-            throw new AcmeException("Certificate not fetched");
-        }
-        LOG.info("Success! The certificate for domain {} has been generated!", order.getIdentifiers().get(0).getDomain());
+        LOG.info("Success! The certificate for domain {} has been generated!",
+                order.getIdentifiers().getFirst().getDomain());
         LOG.info("Certificate URL: {}", certificate.getLocation());
         return certificate;
     }

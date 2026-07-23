@@ -17,7 +17,9 @@
                         <li class="list-group-item"><strong>Hostname:</strong> {{certificate.hostname}}</li>
                         <li class="list-group-item"><strong>Subject Alternative Names:</strong> {{certificate.subjectAltNames}}</li>
                         <li class="list-group-item"><strong>Mode:</strong> {{certificate.mode}}</li>
-                        <li v-if="certificate.mode === 'acme'" class="list-group-item"><strong>ACME provider:</strong> {{certificate.provider}}</li>
+                        <li v-if="certificate.mode === 'acme'" class="list-group-item">
+                            <strong>ACME provider:</strong> {{certificate.provider}}
+                        </li>
                         <li class="list-group-item"><strong>Dynamic:</strong> {{certificate.dynamic | symbolFormat}}</li>
                         <li class="list-group-item">
                             <div class="flex-container">

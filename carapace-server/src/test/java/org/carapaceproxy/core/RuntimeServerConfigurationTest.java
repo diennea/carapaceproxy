@@ -21,6 +21,7 @@ package org.carapaceproxy.core;
 
 import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
 import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -63,6 +64,7 @@ public class RuntimeServerConfigurationTest {
         assertEquals("my-kid", digicert.kid());
         assertEquals("my-base64-hmac", digicert.hmac());
         assertTrue(digicert.hasExternalAccountBinding());
+        assertThat(digicert.toString(), not(containsString(digicert.hmac()))); // the hmac is a secret
 
         final var pebble = config.getAcmeProviders().get("pebble");
         assertEquals("https://localhost:14000/dir", pebble.url());

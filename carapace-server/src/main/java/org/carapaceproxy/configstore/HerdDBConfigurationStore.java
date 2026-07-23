@@ -344,7 +344,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         try {
             return saveKeyPair(pair, acmeUserKeyName(providerName), false);
         } catch (Exception err) {
-            LOG.error("Error while performing KeyPar saving for ACME user of provider {}.", providerName, err);
+            LOG.error("Error while performing KeyPair saving for ACME user of provider {}.", providerName, err);
             throw new ConfigurationStoreException(err);
         }
     }
@@ -352,6 +352,12 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     /**
      * The account key of the built-in provider keeps the legacy {@link #ACME_USER_KEY} name,
      * so existing Let's Encrypt accounts survive the upgrade; other providers get a dedicated key.
+     * <p>
+     * Renaming a provider intentionally registers a fresh ACME account under the new name;
+     * the row of the old one stays around, unused but harmless.
+     *
+     * @param providerName the name of the ACME provider
+     * @return the primary key of the provider account key pair in the keypairs table
      */
     private static String acmeUserKeyName(String providerName) {
         return AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME.equals(providerName)
@@ -359,10 +365,20 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 : ACME_USER_KEY + "_" + providerName;
     }
 
+    /**
+     * Whether the primary key belongs to a provider account key pair, hence off-limits for domain key pairs.
+     *
+     * @param pk a primary key of the key pairs table
+     * @return true if it is an {@link #acmeUserKeyName(String) account key name}
+     */
+    private static boolean isAcmeUserKey(String pk) {
+        return pk.equals(ACME_USER_KEY) || pk.startsWith(ACME_USER_KEY + "_");
+    }
+
     @Override
     public KeyPair loadKeyPairForDomain(String domain) {
         try {
-            if (domain.startsWith(ACME_USER_KEY)) {
+            if (isAcmeUserKey(domain)) {
                 return null;
             }
             return loadKeyPair(domain);
@@ -375,11 +391,11 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     @Override
     public boolean saveKeyPairForDomain(KeyPair pair, String domain, boolean update) {
         try {
-            if (!domain.startsWith(ACME_USER_KEY)) {
+            if (!isAcmeUserKey(domain)) {
                 return saveKeyPair(pair, domain, update);
             }
         } catch (Exception err) {
-            LOG.error("Error while performing KeyPar saving for domain {}.", domain, err);
+            LOG.error("Error while performing KeyPair saving for domain {}.", domain, err);
             throw new ConfigurationStoreException(err);
         }
         return false;
@@ -425,7 +441,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
 
     @Override
     public CertificateData loadCertificateForDomain(String domain) {
-        if (domain.startsWith(ACME_USER_KEY)) {
+        if (isAcmeUserKey(domain)) {
             return null;
         }
         try (Connection con = datasource.getConnection()) {

@@ -330,12 +330,12 @@ public class RuntimeServerConfiguration {
             }
             if (DEFAULT_PROVIDER_NAME.equals(name)) {
                 throw new ConfigurationNotValidException(
-                        "Invalid value '" + name + "' for " + prefix + "name: it is the built-in provider and cannot be redefined"
+                        "Invalid value '" + name + "' for " + prefix + "name: reserved for the built-in provider"
                 );
             }
             if (!name.matches("[a-z0-9][a-z0-9_-]*")) {
                 throw new ConfigurationNotValidException(
-                        "Invalid value '" + name + "' for " + prefix + "name: only lowercase letters, digits, '-' and '_' are allowed"
+                        "Invalid value '" + name + "' for " + prefix + "name: must match [a-z0-9][a-z0-9_-]*"
                 );
             }
             if (acmeProviders.containsKey(name)) {
@@ -355,10 +355,10 @@ public class RuntimeServerConfiguration {
                 final var scheme = new URI(url).getScheme();
                 if (!"https".equals(scheme) && !"acme".equals(scheme)) {
                     throw new ConfigurationNotValidException(
-                            "Invalid value '" + url + "' for " + prefix + "url: scheme must be https or acme (lowercase)"
+                            "Invalid value '" + url + "' for " + prefix + "url: scheme must be https or acme"
                     );
                 }
-                // resolves the acme: provider via ServiceLoader and validates the URL, without network I/O
+                // fail now on unknown acme: providers or invalid URLs; resolution does no network I/O
                 new Session(url);
             } catch (URISyntaxException | IllegalArgumentException e) {
                 throw new ConfigurationNotValidException(
@@ -375,17 +375,18 @@ public class RuntimeServerConfiguration {
             }
             if (!hmac.isEmpty()) {
                 try {
-                    // acme4j expects the MAC key base64url-encoded, fail at configuration time instead of at account login
+                    // acme4j expects base64url: fail at configuration time instead of at account login
                     Base64.getUrlDecoder().decode(hmac);
                 } catch (IllegalArgumentException e) {
                     throw new ConfigurationNotValidException(
-                            "Invalid ACME provider configuration " + prefix + ": hmac is not a valid base64url-encoded key"
+                            "Invalid ACME provider configuration " + prefix + ": hmac is not valid base64url"
                     );
                 }
             }
             final var provider = new AcmeProviderConfiguration(name, url, kid, hmac);
             acmeProviders.put(name, provider);
-            LOG.info("Configured ACME provider acme.{}: name={}, url={}, external account binding: {}", i, name, url, provider.hasExternalAccountBinding());
+            LOG.info("Configured ACME provider acme.{}: name={}, url={}, external account binding: {}",
+                    i, name, url, provider.hasExternalAccountBinding());
         }
     }
 
@@ -403,11 +404,12 @@ public class RuntimeServerConfiguration {
                 final var provider = properties.getString(prefix + "provider", DEFAULT_PROVIDER_NAME);
                 if (!DEFAULT_PROVIDER_NAME.equals(provider) && !acmeProviders.containsKey(provider)) {
                     throw new ConfigurationNotValidException(
-                            "Invalid value '" + provider + "' for " + prefix + "provider. No ACME provider configured with such name"
+                            "Invalid value '" + provider + "' for " + prefix + "provider: no such ACME provider"
                     );
                 }
                 try {
-                    final var config = new SSLCertificateConfiguration(hostname, subjectAltNames, file, pw, CertificateMode.valueOf(mode.toUpperCase()), provider);
+                    final var config = new SSLCertificateConfiguration(
+                            hostname, subjectAltNames, file, pw, CertificateMode.valueOf(mode.toUpperCase()), provider);
                     if (config.isAcme()) {
                         config.setDaysBeforeRenewal(daysBeforeRenewal);
                     }

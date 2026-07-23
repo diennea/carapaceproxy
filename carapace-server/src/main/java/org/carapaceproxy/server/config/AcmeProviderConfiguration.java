@@ -29,13 +29,30 @@ package org.carapaceproxy.server.config;
  * @param name the provider name, unique across the configuration
  * @param url  the ACME directory URL of the CA
  * @param kid  the key identifier for External Account Binding, if the CA requires it
- * @param hmac the base64-encoded MAC key for External Account Binding, if the CA requires it
+ * @param hmac the base64url-encoded MAC key for External Account Binding, if the CA requires it
  */
 public record AcmeProviderConfiguration(String name, String url, String kid, String hmac) {
 
+    /** Name of the built-in Let's Encrypt provider, used when a certificate doesn't specify one. */
     public static final String DEFAULT_PROVIDER_NAME = "letsencrypt";
 
+    /**
+     * Whether the CA requires External Account Binding credentials.
+     *
+     * @return true if a key identifier is configured
+     */
     public boolean hasExternalAccountBinding() {
         return kid != null && !kid.isEmpty();
+    }
+
+    /**
+     * The hmac is masked: it is a secret and must not leak into logs or debug dumps.
+     *
+     * @return the record representation, with the hmac masked
+     */
+    @Override
+    public String toString() {
+        return "AcmeProviderConfiguration[name=%s, url=%s, kid=%s, hmac=%s]"
+                .formatted(name, url, kid, hmac == null || hmac.isEmpty() ? hmac : "******");
     }
 }

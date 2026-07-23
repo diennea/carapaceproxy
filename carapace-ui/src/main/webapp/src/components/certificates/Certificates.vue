@@ -67,9 +67,6 @@ import {toBooleanSymbol} from '../../lib/formatter';
 import CertificateForm from './CertificateForm.vue';
 import StatusBox from '../StatusBox.vue';
 
-// must match the backend built-in provider name (AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME)
-const DEFAULT_PROVIDER = 'letsencrypt';
-
 /**
  * Certificate status options for dynamic SSL certificates.
  *
@@ -113,10 +110,10 @@ export default {
             certificates: [],
             localStorePath: null,
             /**
-             * Names of the configured ACME providers.
+             * Names of the configured ACME providers, the default one first.
              * @type {string[]}
              */
-            acmeProviders: [DEFAULT_PROVIDER],
+            acmeProviders: [],
             loading: true,
             opSuccess: null,
             opMessage: '',
@@ -192,7 +189,7 @@ export default {
             doGet("/api/certificates", data => {
                 this.certificates = data.certificates || [];
                 this.localStorePath = data.localStorePath;
-                this.acmeProviders = data.acmeProviders || [DEFAULT_PROVIDER];
+                this.acmeProviders = data.acmeProviders || [];
                 this.loading = false;
             });
         },
