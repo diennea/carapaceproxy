@@ -91,6 +91,8 @@
     <properties>
         <!-- Keeps @{argLine} resolvable when JaCoCo does not run -->
         <argLine></argLine>
+        <!-- Empty by default; carapace-server overrides it to attach the Mockito java agent. -->
+        <surefire.argline.agent></surefire.argline.agent>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <toolchain.java.version>21</toolchain.java.version>
         <maven.compiler.release>${toolchain.java.version}</maven.compiler.release>
@@ -354,6 +356,7 @@
                         <trimStackTrace>false</trimStackTrace>
                         <argLine>
                             @{argLine}
+                            ${surefire.argline.agent}
                             --add-opens java.base/java.io=ALL-UNNAMED
                             --add-opens java.base/java.lang=ALL-UNNAMED
                             --add-opens java.base/java.util=ALL-UNNAMED
