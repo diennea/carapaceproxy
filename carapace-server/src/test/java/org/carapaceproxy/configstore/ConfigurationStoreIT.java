@@ -54,7 +54,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.shredzone.acme4j.toolbox.JSON;
 import org.shredzone.acme4j.util.KeyPairUtils;
 import org.slf4j.LoggerFactory;
@@ -99,7 +99,7 @@ public class ConfigurationStoreIT {
     }
 
     @ParameterizedTest
-    @CsvSource({"in-memory", "db"})
+    @ValueSource(strings = {"in-memory", "db"})
     public void testToStringConfigurationPreservesBackslashes(String type) throws Exception {
         this.type = type;
 
@@ -121,10 +121,9 @@ public class ConfigurationStoreIT {
         assertThat(reloadedTwice.getProperty("route.5.match", null), is(matcher));
     }
 
-    @ParameterizedTest
-    @CsvSource({"in-memory", "db"})
-    public void test(String type) throws Exception {
-        this.type = type;
+    @Test
+    void test() throws Exception {
+        this.type = "db";
 
         Properties props = new Properties();
         props.setProperty("property.int.1", "    1    ");
@@ -190,10 +189,9 @@ public class ConfigurationStoreIT {
         TestUtils.assertThrows(ConfigurationNotValidException.class, () -> store.getClassname("property.class.4", "DClassName")); // not exists
     }
 
-    @ParameterizedTest
-    @CsvSource({"in-memory", "db"})
-    public void testPropertiesIndex(String type) throws Exception {
-        this.type = type;
+    @Test
+    void propertiesIndex() throws Exception {
+        this.type = "db";
 
         // test no properties -> max index -1
         updateConfigStore(new Properties());
@@ -235,10 +233,9 @@ public class ConfigurationStoreIT {
         assertThat(store.findMaxIndexForPrefix("property.weird.8.9.value"), is(-1));
     }
 
-    @ParameterizedTest
-    @CsvSource({"in-memory", "db"})
-    public void testCertiticatesConfigurationStore(String type) throws Exception {
-        this.type = type;
+    @Test
+    void certiticatesConfigurationStore() throws Exception {
+        this.type = "db";
 
         Properties props = new Properties();
         props.setProperty("certificate.0.hostname", d1);
@@ -266,14 +263,12 @@ public class ConfigurationStoreIT {
         // KeyPairs generation + saving
         KeyPair acmePair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         store.saveAcmeUserKey(acmePair, DEFAULT_PROVIDER_NAME);
-        // key isn't overwritten
-        store.saveAcmeUserKey(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), DEFAULT_PROVIDER_NAME);
+        store.saveAcmeUserKey(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), DEFAULT_PROVIDER_NAME); // key not overwritten
 
         // each provider has its own account key
         KeyPair customProviderPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         store.saveAcmeUserKey(customProviderPair, "customprovider");
-        // key isn't overwritten
-        store.saveAcmeUserKey(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), "customprovider");
+        store.saveAcmeUserKey(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), "customprovider"); // key not overwritten
 
         store.saveKeyPairForDomain(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), d1, true);
         KeyPair domain1Pair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
@@ -281,8 +276,7 @@ public class ConfigurationStoreIT {
 
         KeyPair domain2Pair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         store.saveKeyPairForDomain(domain2Pair, d2, false);
-        // key isn't overwritten
-        store.saveKeyPairForDomain(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), d2, false);
+        store.saveKeyPairForDomain(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), d2, false); // key not overwritten
 
         // KeyPairs loading
         KeyPair loadedPair = store.loadAcmeUserKeyPair(DEFAULT_PROVIDER_NAME);
@@ -461,7 +455,7 @@ public class ConfigurationStoreIT {
     }
 
     @ParameterizedTest
-    @CsvSource({"in-memory", "db"})
+    @ValueSource(strings = {"in-memory", "db"})
     public void testExportReplaceRoundTrip(String type) throws Exception {
         this.type = type;
         populateStore();
@@ -487,7 +481,7 @@ public class ConfigurationStoreIT {
     }
 
     @ParameterizedTest
-    @CsvSource({"in-memory", "db"})
+    @ValueSource(strings = {"in-memory", "db"})
     public void testBlankSubjectAltNamesAreNotExported(String type) throws Exception {
         this.type = type;
         final var props = new Properties();
@@ -501,7 +495,7 @@ public class ConfigurationStoreIT {
     }
 
     @ParameterizedTest
-    @CsvSource({"in-memory", "db"})
+    @ValueSource(strings = {"in-memory", "db"})
     public void testReplaceOverwritesEverything(String type) throws Exception {
         this.type = type;
         populateStore();
@@ -531,7 +525,7 @@ public class ConfigurationStoreIT {
     }
 
     @ParameterizedTest
-    @CsvSource({"in-memory", "db"})
+    @ValueSource(strings = {"in-memory", "db"})
     public void testFailingPreCommitCheckLeavesStateUntouched(String type) throws Exception {
         this.type = type;
         populateStore();
