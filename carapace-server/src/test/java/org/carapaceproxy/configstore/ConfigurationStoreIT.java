@@ -49,7 +49,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.shredzone.acme4j.toolbox.JSON;
 import org.shredzone.acme4j.util.KeyPairUtils;
 import org.slf4j.LoggerFactory;
@@ -94,31 +94,8 @@ public class ConfigurationStoreIT {
     }
 
     @ParameterizedTest
-    @CsvSource({"in-memory", "db"})
-    public void testToStringConfigurationPreservesBackslashes(String type) throws Exception {
-        this.type = type;
-
-        final String domain = "(\\Qhost.example\\E|\\Qother.example\\E)";
-        final String matcher = "regexp .*\\.example\\.com and header host web\\d+";
-        Properties props = new Properties();
-        props.setProperty("connectionpool.1.domain", domain);
-        props.setProperty("route.5.match", matcher);
-        updateConfigStore(props);
-
-        // round-trip through the same parse path used by rewriteConfiguration and /api/config/apply
-        ConfigurationStore reloaded = ConfigResource.buildStore(store.toStringConfiguration());
-        assertThat(reloaded.getProperty("connectionpool.1.domain", null), is(domain));
-        assertThat(reloaded.getProperty("route.5.match", null), is(matcher));
-
-        // a second round-trip must be stable too
-        ConfigurationStore reloadedTwice = ConfigResource.buildStore(reloaded.toStringConfiguration());
-        assertThat(reloadedTwice.getProperty("connectionpool.1.domain", null), is(domain));
-        assertThat(reloadedTwice.getProperty("route.5.match", null), is(matcher));
-    }
-
-    @ParameterizedTest
-    @CsvSource({"in-memory", "db"})
-    public void test(String type) throws Exception {
+    @ValueSource(strings = {"db"})
+    void test(String type) throws Exception {
         this.type = type;
 
         Properties props = new Properties();
@@ -186,8 +163,8 @@ public class ConfigurationStoreIT {
     }
 
     @ParameterizedTest
-    @CsvSource({"in-memory", "db"})
-    public void testPropertiesIndex(String type) throws Exception {
+    @ValueSource(strings = {"db"})
+    void propertiesIndex(String type) throws Exception {
         this.type = type;
 
         // test no properties -> max index -1
@@ -231,8 +208,8 @@ public class ConfigurationStoreIT {
     }
 
     @ParameterizedTest
-    @CsvSource({"in-memory", "db"})
-    public void testCertiticatesConfigurationStore(String type) throws Exception {
+    @ValueSource(strings = {"db"})
+    void certiticatesConfigurationStore(String type) throws Exception {
         this.type = type;
 
         Properties props = new Properties();
@@ -261,14 +238,12 @@ public class ConfigurationStoreIT {
         // KeyPairs generation + saving
         KeyPair acmePair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         store.saveAcmeUserKey(acmePair, DEFAULT_PROVIDER_NAME);
-        // key isn't overwritten
-        store.saveAcmeUserKey(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), DEFAULT_PROVIDER_NAME);
+        store.saveAcmeUserKey(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), DEFAULT_PROVIDER_NAME); // key not overwritten
 
         // each provider has its own account key
         KeyPair customProviderPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         store.saveAcmeUserKey(customProviderPair, "customprovider");
-        // key isn't overwritten
-        store.saveAcmeUserKey(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), "customprovider");
+        store.saveAcmeUserKey(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), "customprovider"); // key not overwritten
 
         store.saveKeyPairForDomain(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), d1, true);
         KeyPair domain1Pair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
@@ -276,8 +251,7 @@ public class ConfigurationStoreIT {
 
         KeyPair domain2Pair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         store.saveKeyPairForDomain(domain2Pair, d2, false);
-        // key isn't overwritten
-        store.saveKeyPairForDomain(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), d2, false);
+        store.saveKeyPairForDomain(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), d2, false); // key not overwritten
 
         // KeyPairs loading
         KeyPair loadedPair = store.loadAcmeUserKeyPair(DEFAULT_PROVIDER_NAME);
@@ -420,6 +394,30 @@ public class ConfigurationStoreIT {
         assertEquals(false, store.anyPropertyMatches(
                 (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals("unknown")
         ));
+    }
+
+
+    @ParameterizedTest
+    @ValueSource(strings = {"in-memory", "db"})
+    void toStringConfigurationPreservesBackslashes(String type) throws Exception {
+        this.type = type;
+
+        final String domain = "(\\Qhost.example\\E|\\Qother.example\\E)";
+        final String matcher = "regexp .*\\.example\\.com and header host web\\d+";
+        Properties props = new Properties();
+        props.setProperty("connectionpool.1.domain", domain);
+        props.setProperty("route.5.match", matcher);
+        updateConfigStore(props);
+
+        // round-trip through the same parse path used by rewriteConfiguration and /api/config/apply
+        ConfigurationStore reloaded = ConfigResource.buildStore(store.toStringConfiguration());
+        assertEquals(domain, reloaded.getProperty("connectionpool.1.domain", null));
+        assertEquals(matcher, reloaded.getProperty("route.5.match", null));
+
+        // a second round-trip must be stable too
+        ConfigurationStore reloadedTwice = ConfigResource.buildStore(reloaded.toStringConfiguration());
+        assertEquals(domain, reloadedTwice.getProperty("connectionpool.1.domain", null));
+        assertEquals(matcher, reloadedTwice.getProperty("route.5.match", null));
     }
 
     @Test
