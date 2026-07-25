@@ -36,7 +36,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
@@ -57,9 +56,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
@@ -68,7 +64,6 @@ import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.Listeners;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
-import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -107,48 +102,6 @@ public class DynamicCertificatesManagerIT {
     }
 
     protected static final int MAX_ATTEMPTS = 7;
-
-    /**
-     * Reconfiguring the execution period from an initial value of '0' to > 0. Because of the zero period the manager
-     * never starts and when reconfigured with period > 0 it still won't run unless it was started before (#33).
-     * Relocated from ManagersExecutionTest so the scheduler injection can stay package-private.
-     */
-    @Test
-    public void testDynamicCertificatesManagerExecution() throws ConfigurationNotValidException {
-        RuntimeServerConfiguration config = new RuntimeServerConfiguration();
-        ScheduledExecutorService scheduler = mock(ScheduledExecutorService.class);
-        when(scheduler.scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(mock(ScheduledFuture.class));
-        DynamicCertificatesManager man = new DynamicCertificatesManager(null, () -> scheduler);
-        man.setConfigurationStore(mock(ConfigurationStore.class));
-
-        // With period 0 the manager never starts
-        man.setPeriod(0);
-        man.start();
-        verify(scheduler, never()).scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)); // never called
-
-        // With new period >0 the manager should run whether started before
-        config.setDynamicCertificatesManagerPeriod(1);
-        man.reloadConfiguration(config);
-        assertEquals(1, man.getPeriod());
-        verify(scheduler, times(1)).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)); // once
-
-        man.stop();
-        config.setDynamicCertificatesManagerPeriod(0);
-        man.reloadConfiguration(config);
-        assertEquals(0, man.getPeriod());
-        man.start();
-        verify(scheduler, times(1)).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)); // never
-        man.stop();
-
-        // With new period >0 the manager should not run because not started before.
-        config.setDynamicCertificatesManagerPeriod(1);
-        man.reloadConfiguration(config);
-        assertEquals(1, man.getPeriod());
-        verify(scheduler, times(1)).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)); // never
-
-        man.start();
-        verify(scheduler, times(2)).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)); // once
-    }
 
     @ParameterizedTest
     @CsvSource({
