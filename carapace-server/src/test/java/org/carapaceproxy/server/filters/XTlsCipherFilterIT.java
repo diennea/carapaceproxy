@@ -9,11 +9,9 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 import java.util.Map;
-import java.util.Set;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
-import reactor.netty.http.HttpProtocol;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class XTlsCipherFilterIT extends AbstractXTlsFilterTest {
 
@@ -29,7 +27,7 @@ public class XTlsCipherFilterIT extends AbstractXTlsFilterTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"true", "false"})
+    @ValueSource(booleans = {true, false})
     public void testHttpsWithCipherAndProtocol(boolean http1) throws Exception {
         WireMockServer wireMockRule = newWireMock(http1);
         wireMockRule.start();
@@ -46,7 +44,7 @@ public class XTlsCipherFilterIT extends AbstractXTlsFilterTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"true", "false"})
+    @ValueSource(booleans = {true, false})
     public void testHttpsWithProtocolOnly(boolean http1) throws Exception {
         WireMockServer wireMockRule = newWireMock(http1);
         wireMockRule.start();
@@ -61,35 +59,7 @@ public class XTlsCipherFilterIT extends AbstractXTlsFilterTest {
         }
     }
 
-    @ParameterizedTest
-    @CsvSource({"true", "false"})
-    public void testHttpWithCipherOnly(boolean http1) throws Exception {
-        Set<HttpProtocol> protocols = http1 ? Set.of(HttpProtocol.HTTP11) : Set.of(HttpProtocol.HTTP11, HttpProtocol.H2C);
-        WireMockServer wireMockRule = newWireMock(http1);
-        wireMockRule.start();
-        try {
-            setupWireMockForCipherFilter(wireMockRule);
-            try (var server = startServer(wireMockRule, http1, false,
-                    new RequestFilterConfiguration(XTlsCipherRequestFilter.TYPE, Map.of()))) {
-                assertResponseContains(http1, server.getLocalPort(), false, "it <b>absent</b> !!");
-            }
-        } finally {
-            wireMockRule.stop();
-        }
-    }
-
-    @ParameterizedTest
-    @CsvSource({"true", "false"})
-    public void testHttpWithoutFilter(boolean http1) throws Exception {
-        WireMockServer wireMockRule = newWireMock(http1);
-        wireMockRule.start();
-        try {
-            setupWireMockForCipherFilter(wireMockRule);
-            try (var server = startServer(wireMockRule, http1, false)) {
-                assertResponseContains(http1, server.getLocalPort(), false, "it <b>absent</b> !!");
-            }
-        } finally {
-            wireMockRule.stop();
-        }
-    }
+    // Plaintext filter behaviour (!isSecure() -> no header) is covered by the unit
+    // XTlsCipherRequestFilterTest. The no-filter plaintext case is covered once by
+    // XTlsProtocolFilterIT.httpWithoutFilter (no filter configured, no filter code runs either way).
 }
