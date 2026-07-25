@@ -60,6 +60,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class CacheIT {
 
@@ -438,8 +439,9 @@ public class CacheIT {
         }
     }
 
-    @Test
-    public void testServeFromCacheChunked() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void serveFromCacheChunked(boolean connectionClose) throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -453,70 +455,11 @@ public class CacheIT {
             int port = server.getLocalPort();
             server.getCache().getStats().resetCacheMetrics();
 
+            final String firstRequest = connectionClose
+                    ? "GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+                    : "GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n";
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
-                String s = resp.toString();
-                System.out.println("s:" + s);
-                assertTrue(s.contains("""
-                        12\r
-                        it <b>works</b> !!\r
-                        0\r
-                        \r
-                        """));
-                resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
-                assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
-            }
-
-            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                {
-                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
-                    String s = resp.toString();
-                    System.out.println("s:" + s);
-                    assertTrue(s.contains("""
-                            12\r
-                            it <b>works</b> !!\r
-                            0\r
-                            \r
-                            """));
-                    assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
-                }
-                {
-                    RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
-                    String s = resp.toString();
-                    System.out.println("s:" + s);
-                    assertTrue(s.contains("""
-                            12\r
-                            it <b>works</b> !!\r
-                            0\r
-                            \r
-                            """));
-                    assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
-                }
-            }
-
-            assertEquals(1, server.getCache().getCacheSize());
-            assertEquals(2, server.getCache().getStats().getHits());
-            assertEquals(1, server.getCache().getStats().getMisses());
-        }
-    }
-
-    @Test
-    public void testServeFromCacheWithConnectionClose() throws Exception {
-        stubFor(get(urlEqualTo("/index.html"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "text/html")
-                        .withBody("it <b>works</b> !!")));
-
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
-
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
-            server.start();
-            int port = server.getLocalPort();
-            server.getCache().getStats().resetCacheMetrics();
-
-            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                RawHttpClient.HttpResponse resp = client.executeRequest(firstRequest);
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertTrue(s.contains("""
@@ -631,8 +574,8 @@ public class CacheIT {
     }
 
     @ParameterizedTest
-    @MethodSource("parametersForTestNoCacheResponse")
-    public void testNoCacheResponse(String headerName, String headerValue) throws Exception {
+    @MethodSource("noCacheHeaderCases")
+    void noCacheResponse(String headerName, String headerValue) throws Exception {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
             server.start();
@@ -667,7 +610,7 @@ public class CacheIT {
         }
     }
 
-    private static Object[] parametersForTestNoCacheResponse() {
+    private static Object[] noCacheHeaderCases() {
         return new Object[]{
             new Object[]{HttpHeaderNames.CACHE_CONTROL.toString(), "private"},
             new Object[]{HttpHeaderNames.CACHE_CONTROL.toString(), "no-cache"},
@@ -714,8 +657,8 @@ public class CacheIT {
     }
 
     @ParameterizedTest
-    @MethodSource("parametersForTestNoCacheRequest")
-    public void testNoCacheRequest(String headerName, String headerValue) throws Exception {
+    @MethodSource("noCacheHeaderCases")
+    void noCacheRequest(String headerName, String headerValue) throws Exception {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
         EndpointKey key = new EndpointKey("localhost", wireMockRule.getPort());
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
@@ -751,20 +694,6 @@ public class CacheIT {
             assertEquals(0, server.getCache().getStats().getHits());
             assertEquals(0, server.getCache().getStats().getMisses());
         }
-    }
-
-    private static Object[] parametersForTestNoCacheRequest() {
-        return new Object[]{
-            new Object[]{HttpHeaderNames.CACHE_CONTROL.toString(), "private"},
-            new Object[]{HttpHeaderNames.CACHE_CONTROL.toString(), "no-cache"},
-            new Object[]{HttpHeaderNames.CACHE_CONTROL.toString(), "no-store"},
-            new Object[]{HttpHeaderNames.CACHE_CONTROL.toString(), "max-age=0"},
-            new Object[]{HttpHeaderNames.CACHE_CONTROL.toString(), "no-cache, no-store"},
-            new Object[]{HttpHeaderNames.CACHE_CONTROL.toString(), "max-age  = 0"},
-            new Object[]{HttpHeaderNames.CACHE_CONTROL.toString(), "No-CacHe"},
-            new Object[]{HttpHeaderNames.PRAGMA.toString(), "no-cache"},
-            new Object[]{HttpHeaderNames.PRAGMA.toString(), "No-CacHe"}
-        };
     }
 
     @Test
