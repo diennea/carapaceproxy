@@ -81,11 +81,7 @@ public class HealthCheckIT {
             System.out.println("status=" + status);
             assertThat(status.size(), is(1));
 
-            final BackendConfiguration bconf = mapper.getBackends().get(b1conf.id());
-            assertThat(bconf.id(), is("myid"));
-            assertThat(bconf.host(), is("localhost"));
-            assertThat(bconf.port(), is(wireMockRule.getPort()));
-            assertThat(bconf.probePath(), is("/status.html"));
+            assertStaticBackendConfig(mapper, b1conf.id());
 
             final BackendHealthStatus _status = status.get(b1conf.hostPort());
             assertThat(_status, is(not(nullValue())));
@@ -120,11 +116,7 @@ public class HealthCheckIT {
             System.out.println("status=" + status);
             assertThat(status.size(), is(1));
 
-            final BackendConfiguration bconf = mapper.getBackends().get(b1conf.id());
-            assertThat(bconf.id(), is("myid"));
-            assertThat(bconf.host(), is("localhost"));
-            assertThat(bconf.port(), is(wireMockRule.getPort()));
-            assertThat(bconf.probePath(), is("/status.html"));
+            assertStaticBackendConfig(mapper, b1conf.id());
 
             final BackendHealthStatus _status = status.get(b1conf.hostPort());
             assertThat(_status, is(not(nullValue())));
@@ -161,11 +153,7 @@ public class HealthCheckIT {
             System.out.println("status=" + status);
             assertThat(status.size(), is(1));
 
-            final BackendConfiguration bconf = mapper.getBackends().get(b1conf.id());
-            assertThat(bconf.id(), is("myid"));
-            assertThat(bconf.host(), is("localhost"));
-            assertThat(bconf.port(), is(wireMockRule.getPort()));
-            assertThat(bconf.probePath(), is("/status.html"));
+            assertStaticBackendConfig(mapper, b1conf.id());
 
             final BackendHealthStatus _status = status.get(b1conf.hostPort());
             assertThat(_status, is(not(nullValue())));
@@ -202,11 +190,7 @@ public class HealthCheckIT {
             System.out.println("status=" + status);
             assertThat(status.size(), is(1));
 
-            final BackendConfiguration bconf = mapper.getBackends().get(b1conf.id());
-            assertThat(bconf.id(), is("myid"));
-            assertThat(bconf.host(), is("localhost"));
-            assertThat(bconf.port(), is(wireMockRule.getPort()));
-            assertThat(bconf.probePath(), is("/status.html"));
+            assertStaticBackendConfig(mapper, b1conf.id());
 
             final BackendHealthStatus _status = status.get(b1conf.hostPort());
             assertThat(_status, is(not(nullValue())));
@@ -227,5 +211,13 @@ public class HealthCheckIT {
             assertThat(lastProbe.httpResponse(), is("201 Created"));
             assertThat(lastProbe.httpBody(), is("Ok..."));
         }
+    }
+
+    private void assertStaticBackendConfig(final EndpointMapper mapper, final String backendId) {
+        final BackendConfiguration bconf = mapper.getBackends().get(backendId);
+        assertThat(bconf.id(), is("myid"));
+        assertThat(bconf.host(), is("localhost"));
+        assertThat(bconf.port(), is(wireMockRule.getPort()));
+        assertThat(bconf.probePath(), is("/status.html"));
     }
 }

@@ -263,15 +263,7 @@ public class BasicStandardEndpointMapperIT {
 
             PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
 
-            BackendHealthManager bhMan = mock(BackendHealthManager.class);
-            final EndpointKey alive = EndpointKey.make("localhost:" + backend.getPort());
-            final BackendHealthStatus mockAliveStatus = mock(BackendHealthStatus.class);
-            when(mockAliveStatus.getStatus()).thenReturn(BackendHealthStatus.Status.STABLE);
-            when(bhMan.getBackendStatus(eq(alive))).thenReturn(mockAliveStatus);
-            final EndpointKey down = EndpointKey.make("localhost-down:" + backend.getPort());
-            final BackendHealthStatus mockDownStatus = mock(BackendHealthStatus.class);
-            when(mockDownStatus.getStatus()).thenReturn(BackendHealthStatus.Status.DOWN);
-            when(bhMan.getBackendStatus(eq(down))).thenReturn(mockDownStatus); // simulate unreachable backend -> expected 500 error
+            final BackendHealthManager bhMan = mockHealth(backend.getPort());
             server.setBackendHealthManager(bhMan);
             server.configureAtBoot(config);
             server.start();
@@ -337,15 +329,7 @@ public class BasicStandardEndpointMapperIT {
             mapper.addRoute(new RouteConfiguration("route-default", "cache", true, new RegexpRequestMatcher(PROPERTY_URI, ".*html")));
             return mapper;
         };
-        BackendHealthManager bhMan = mock(BackendHealthManager.class);
-        final EndpointKey alive = EndpointKey.make("localhost:" + backendPort);
-        final BackendHealthStatus mockAliveStatus = mock(BackendHealthStatus.class);
-        when(mockAliveStatus.getStatus()).thenReturn(BackendHealthStatus.Status.STABLE);
-        when(bhMan.getBackendStatus(eq(alive))).thenReturn(mockAliveStatus);
-        final EndpointKey down = EndpointKey.make("localhost-down:" + backendPort);
-        final BackendHealthStatus mockDownStatus = mock(BackendHealthStatus.class);
-        when(mockDownStatus.getStatus()).thenReturn(BackendHealthStatus.Status.DOWN);
-        when(bhMan.getBackendStatus(eq(down))).thenReturn(mockDownStatus); // simulate unreachable backend -> expected 500 error
+        final BackendHealthManager bhMan = mockHealth(backendPort);
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapperFactory, newFolder(tmpDir, "junit"))) {
             server.setBackendHealthManager(bhMan);
@@ -747,6 +731,17 @@ public class BasicStandardEndpointMapperIT {
                 assertTrue(conn.getHeaderFields().toString().contains("307 Temporary Redirect"));
             }
         }
+    }
+
+    private static BackendHealthManager mockHealth(final int backendPort) {
+        final BackendHealthManager bhMan = mock(BackendHealthManager.class);
+        final BackendHealthStatus aliveStatus = mock(BackendHealthStatus.class);
+        when(aliveStatus.getStatus()).thenReturn(BackendHealthStatus.Status.STABLE);
+        when(bhMan.getBackendStatus(eq(EndpointKey.make("localhost:" + backendPort)))).thenReturn(aliveStatus);
+        final BackendHealthStatus downStatus = mock(BackendHealthStatus.class);
+        when(downStatus.getStatus()).thenReturn(BackendHealthStatus.Status.DOWN);
+        when(bhMan.getBackendStatus(eq(EndpointKey.make("localhost-down:" + backendPort)))).thenReturn(downStatus); // unreachable backend -> expected 500 error
+        return bhMan;
     }
 
     private static File newFolder(File root, String... subDirs) throws IOException {
