@@ -113,12 +113,15 @@ public class UnreachableBackendIT {
     }
 
     @ParameterizedTest
-    @CsvSource({"true", "false"})
-    public void testEmptyResponse(boolean useCache) throws Exception {
+    @CsvSource({
+        "EMPTY_RESPONSE, true", "EMPTY_RESPONSE, false",
+        "RANDOM_DATA_THEN_CLOSE, true", "RANDOM_DATA_THEN_CLOSE, false"
+    })
+    void faultyResponseKeepsBackendCold(Fault fault, boolean useCache) throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
-                        .withFault(Fault.EMPTY_RESPONSE)));
+                        .withFault(fault)));
 
         int dummyport = wireMockRule.port();
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache, false);
@@ -198,61 +201,6 @@ public class UnreachableBackendIT {
                         """, resp.getBodyString());
             }
             assertSame(COLD, server.getBackendHealthManager().getBackendStatus(key).getStatus()); // no troubles for new connections
-            TestUtils.waitForCondition(() -> ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get() == 0, 10);
-            assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
-        }
-    }
-
-    @ParameterizedTest
-    @CsvSource({"true", "false"})
-    public void testNonHttpResponseThenClose(boolean useCache) throws Exception {
-        stubFor(get(urlEqualTo("/index.html"))
-                .willReturn(aResponse()
-                        .withFault(Fault.RANDOM_DATA_THEN_CLOSE)));
-
-        int dummyport = wireMockRule.port();
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache, false);
-        EndpointKey key = new EndpointKey("localhost", dummyport);
-
-        try (HttpProxyServer server = new HttpProxyServer(mapper, newFolder(tmpDir, "junit"))) {
-            Properties properties = new Properties();
-            properties.put("healthmanager.tolerant", "true");
-            properties.put("backend.1.id", "backend-a");
-            properties.put("backend.1.enabled", "true");
-            properties.put("backend.1.host", "localhost");
-            properties.put("backend.1.port", String.valueOf(wireMockRule.port()));
-            properties.put("backend.1.probePath", "/");
-            properties.put("director.1.id", "director-1");
-            properties.put("director.1.backends", properties.getProperty("backend.1.id"));
-            properties.put("director.1.enabled", "true");
-            properties.put("action.1.id", "proxy-1");
-            properties.put("action.1.enabled", "true");
-            properties.put("action.1.type", ActionConfiguration.TYPE_PROXY);
-            properties.put("action.1.director", properties.getProperty("director.1.id"));
-            properties.put("route.100.id", "route-1");
-            properties.put("route.100.enabled", "true");
-            properties.put("route.100.match", "request.uri ~ \".*index.html.*\"");
-            properties.put("route.100.action", properties.getProperty("action.1.id"));
-            properties.put("healthmanager.tolerant", "true");
-            server.configureAtBoot(new PropertiesConfigurationStore(properties));
-            server.addListener(NetworkListenerConfiguration.withDefault("localhost", 0));
-            server.start();
-            int port = server.getLocalPort();
-
-            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-                String s = resp.toString();
-                System.out.println("s:" + s);
-                assertEquals("HTTP/1.1 503 Service Unavailable\r\n", resp.getStatusLine());
-                assertEquals("""
-                        <html>
-                            <body>
-                                Service Unavailable
-                            </body>
-                        </html>
-                        """, resp.getBodyString());
-            }
-            assertSame(COLD, server.getBackendHealthManager().getBackendStatus(key).getStatus());
             TestUtils.waitForCondition(() -> ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get() == 0, 10);
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
         }
