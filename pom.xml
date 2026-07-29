@@ -122,8 +122,10 @@
         <libs.slf4j>2.0.16</libs.slf4j>
         <libs.logback>1.5.35</libs.logback>
         <libs.guava>33.3.1-jre</libs.guava>
+        <libs.checkerqual>3.43.0</libs.checkerqual>
         <libs.lombok>1.18.32</libs.lombok>
-        <libs.spotbugsannotations>4.5.3</libs.spotbugsannotations>
+        <libs.spotbugs>4.10.3</libs.spotbugs>
+        <libs.spotbugs.plugin>4.10.3.0</libs.spotbugs.plugin>
         <libs.protobuf>3.25.5</libs.protobuf>
 
         <!-- test dependecies -->
@@ -133,8 +135,6 @@
         <libs.powermock>2.0.9</libs.powermock>
         <libs.objenesis>3.0.1</libs.objenesis>
         <libs.hamcrest>3.0</libs.hamcrest>
-
-        <libs.asm>9.4</libs.asm>
     </properties>
 
     <dependencyManagement>
@@ -190,6 +190,11 @@
                 <type>pom</type>
             </dependency>
             <!-- Individual dependencies -->
+            <dependency>
+                <groupId>org.checkerframework</groupId>
+                <artifactId>checker-qual</artifactId>
+                <version>${libs.checkerqual}</version>
+            </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-api</artifactId>
@@ -312,19 +317,12 @@
                 <plugin>
                     <groupId>com.github.spotbugs</groupId>
                     <artifactId>spotbugs-maven-plugin</artifactId>
-                    <version>4.8.6.4</version>
+                    <version>${libs.spotbugs.plugin}</version>
                     <configuration>
                         <effort>Max</effort>
                         <maxHeap>4096</maxHeap>
                         <fork>true</fork>
                     </configuration>
-                    <dependencies>
-                        <dependency>
-                            <groupId>org.ow2.asm</groupId>
-                            <artifactId>asm</artifactId>
-                            <version>${libs.asm}</version>
-                        </dependency>
-                    </dependencies>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -473,7 +471,6 @@
                                     <excludes>
                                         <exclude>org.bouncycastle:*</exclude>
                                         <!-- Excluding unnecessary annotations that are bundled in multiple versions by libraries -->
-                                        <exclude>org.checkerframework</exclude>
                                         <exclude>com.google.errorprone</exclude>
                                         <exclude>com.google.code.findbugs</exclude>
                                         <!-- Clashes with org.hamcrest:hamcrest -->
