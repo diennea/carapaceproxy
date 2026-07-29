@@ -90,10 +90,6 @@
             <exclusions>
                 <!-- Excluding unnecessary annotations that are bundled in multiple versions by libraries -->
                 <exclusion>
-                    <groupId>org.checkerframework</groupId>
-                    <artifactId>checker-qual</artifactId>
-                </exclusion>
-                <exclusion>
                     <groupId>com.google.errorprone</groupId>
                     <artifactId>error_prone_annotations</artifactId>
                 </exclusion>
@@ -144,10 +140,6 @@
             <version>${libs.herddb}</version>
             <exclusions>
                 <!-- Excluding unnecessary annotations that are bundled in multiple versions by libraries -->
-                <exclusion>
-                    <groupId>org.checkerframework</groupId>
-                    <artifactId>checker-qual</artifactId>
-                </exclusion>
                 <exclusion>
                     <groupId>com.google.errorprone</groupId>
                     <artifactId>error_prone_annotations</artifactId>
@@ -247,10 +239,6 @@
             <exclusions>
                 <!-- Excluding unnecessary annotations that are bundled in multiple versions by libraries -->
                 <exclusion>
-                    <groupId>org.checkerframework</groupId>
-                    <artifactId>checker-qual</artifactId>
-                </exclusion>
-                <exclusion>
                     <groupId>com.google.code.findbugs</groupId>
                     <artifactId>jsr305</artifactId>
                 </exclusion>
@@ -269,7 +257,7 @@
         <dependency>
             <groupId>com.github.spotbugs</groupId>
             <artifactId>spotbugs-annotations</artifactId>
-            <version>${libs.spotbugsannotations}</version>
+            <version>${libs.spotbugs}</version>
             <scope>provided</scope>
             <exclusions>
                 <exclusion>
