@@ -101,6 +101,7 @@
         <libs.awssdk>2.17.113</libs.awssdk>
         <libs.caffeine>3.0.5</libs.caffeine>
         <libs.antlr>4.3.1</libs.antlr>
+        <libs.javacc>7.0.13</libs.javacc>
 
         <libs.bookkeeper>4.14.8</libs.bookkeeper>
         <libs.zookkeeper>3.8.6</libs.zookkeeper>
@@ -371,6 +372,13 @@
                     <groupId>org.codehaus.mojo</groupId>
                     <artifactId>javacc-maven-plugin</artifactId>
                     <version>${javacc-maven-plugin.version}</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>net.java.dev.javacc</groupId>
+                            <artifactId>javacc</artifactId>
+                            <version>${libs.javacc}</version>
+                        </dependency>
+                    </dependencies>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
