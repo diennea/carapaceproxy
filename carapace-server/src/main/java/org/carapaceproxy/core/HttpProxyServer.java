@@ -43,9 +43,10 @@ import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.epoll.Epoll;
-import io.netty.channel.epoll.EpollEventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.epoll.EpollIoHandler;
+import io.netty.channel.nio.NioIoHandler;
 import io.netty.handler.codec.http.HttpMethod;
 import io.prometheus.client.exporter.MetricsServlet;
 import java.io.File;
@@ -274,7 +275,9 @@ public class HttpProxyServer implements AutoCloseable {
         this.cacheByteBufMemoryUsageMetric = new CacheByteBufMemoryUsageMetric(this);
         // Best practice is to reuse EventLoopGroup
         // http://normanmaurer.me/presentations/2014-facebook-eng-netty/slides.html#25.0
-        this.eventLoopGroup = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
+        this.eventLoopGroup = new MultiThreadIoEventLoopGroup(
+                Epoll.isAvailable() ? EpollIoHandler.newFactory() : NioIoHandler.newFactory()
+        );
     }
 
     public void rewriteConfiguration(final ConfigurationConsumer function) throws ConfigurationNotValidException, InterruptedException, ConfigurationChangeInProgressException {
