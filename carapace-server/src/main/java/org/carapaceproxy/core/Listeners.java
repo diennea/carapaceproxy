@@ -226,7 +226,7 @@ public class Listeners {
                 // reactor-netty's server metrics handler resolves the request path via resolvePath() -> ops.fullPath(),
                 // and ResponseTimeHandlerContext later calls path.substring(1); an empty fullPath() (e.g. an
                 // undecodable request) throws on the event loop. Map a null/empty path to "/" to prevent that crash.
-                // reactor-netty 1.2.6: https://github.com/reactor/reactor-netty/blob/b6e72c423245595c39ef00faa818e0109c96b57b/reactor-netty-http/src/main/java/reactor/netty/http/server/MicrometerHttpServerMetricsHandler.java#L199
+                // reactor-netty 1.3.7: https://github.com/reactor/reactor-netty/blob/b0395bec56155b3c6ed9c2a4b2b81ccb857bdcf5/reactor-netty-http/src/main/java/reactor/netty/http/server/MicrometerHttpServerMetricsHandler.java#L210
                 .metrics(true, uri -> uri == null || uri.isEmpty() ? "/" : uri)
                 .forwarded(ForwardedStrategy.of(config.forwardedStrategy(), config.trustedIps()))
                 .option(ChannelOption.SO_BACKLOG, config.soBacklog())

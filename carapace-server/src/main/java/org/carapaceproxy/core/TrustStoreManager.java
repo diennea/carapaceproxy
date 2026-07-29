@@ -72,6 +72,8 @@ public class TrustStoreManager {
     }
 
     private SslContext buildClientSslContext(final TrustManagerFactory trustManager) throws SSLException {
+        // Since Netty 4.2 the client default verifies the backend certificate against the configured
+        // host, which 4.1 did not: a backend reached by IP needs an IP SAN, or the handshake fails
         final SslContextBuilder builder = SslContextBuilder.forClient();
         if (trustManager != null) {
             builder.trustManager(trustManager);
