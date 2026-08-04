@@ -136,8 +136,7 @@ public class ACMEClient {
      * @return {@link Http01Challenge} to verify
      */
     private Http01Challenge httpChallenge(Authorization auth) throws AcmeException {
-        Http01Challenge challenge = auth.findChallenge(Http01Challenge.TYPE)
-                .map(Http01Challenge.class::cast)
+        Http01Challenge challenge = auth.findChallenge(Http01Challenge.class)
                 .orElseThrow(() -> new AcmeException("Found no " + Http01Challenge.TYPE + " challenge, don't know what to do..."));
         LOG.debug("It must be reachable at: http://{}/.well-known/acme-challenge/{}",
                 auth.getIdentifier().getDomain(), challenge.getToken()
@@ -157,8 +156,7 @@ public class ACMEClient {
      */
     public Challenge dnsChallenge(Authorization auth) throws AcmeException {
         Dns01Challenge challenge = auth
-                .findChallenge(Dns01Challenge.TYPE)
-                .map(Dns01Challenge.class::cast)
+                .findChallenge(Dns01Challenge.class)
                 .orElseThrow(() -> new AcmeException("Found no " + Dns01Challenge.TYPE + " challenge, don't know what to do..."));
         LOG.info("DNS-challenge _acme-challenge.{}. to save as TXT-record with content {}", auth.getIdentifier().getDomain(), challenge.getDigest());
         return challenge;
@@ -169,10 +167,12 @@ public class ACMEClient {
         if (status == Status.VALID) {
             // The authorization is already valid. No need to process a challenge.
             // or the challenge is already verified, there's no need to execute it again.
-        } else if (status != Status.INVALID) {
-            challenge.update();
+            return status;
         }
-        return status;
+        if (status != Status.INVALID) {
+            challenge.fetch();
+        }
+        return challenge.getStatus();
     }
 
     /**
@@ -199,10 +199,12 @@ public class ACMEClient {
         Status status = order.getStatus();
         if (status == Status.VALID) {
             LOG.info("Order has been completed.");
-        } else if (status != Status.INVALID) {
-            order.update();
+            return status;
         }
-        return status;
+        if (status != Status.INVALID) {
+            order.fetch();
+        }
+        return order.getStatus();
     }
 
     public Certificate fetchCertificateForOrder(Order order) throws AcmeException {

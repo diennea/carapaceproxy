@@ -96,7 +96,7 @@
 
         <libs.projectreactor>2024.0.6</libs.projectreactor>
         <libs.netty>4.1.121.Final</libs.netty>
-        <libs.acme4j>3.4.0</libs.acme4j>
+        <libs.acme4j>5.1.0</libs.acme4j>
         <libs.bouncycastle>1.84</libs.bouncycastle>
         <libs.awssdk>2.17.113</libs.awssdk>
         <libs.caffeine>3.0.5</libs.caffeine>
@@ -119,8 +119,8 @@
         <libs.jersey>2.35</libs.jersey>
         <libs.jackson>2.14.3</libs.jackson>
         <libs.javassist>3.27.0-GA</libs.javassist>
-        <libs.slf4j>2.0.16</libs.slf4j>
-        <libs.logback>1.5.35</libs.logback>
+        <libs.slf4j>2.0.18</libs.slf4j>
+        <libs.logback>1.5.38</libs.logback>
         <libs.guava>33.3.1-jre</libs.guava>
         <libs.checkerqual>3.43.0</libs.checkerqual>
         <libs.lombok>1.18.32</libs.lombok>
