@@ -110,9 +110,6 @@
 import {doPost} from "../../serverapi";
     import StatusBox from "../StatusBox.vue";
 
-    // must match the backend built-in provider name (AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME)
-    const DEFAULT_PROVIDER = 'letsencrypt';
-
     export default {
         name: "CertificateForm",
         components: {
@@ -122,7 +119,7 @@ import {doPost} from "../../serverapi";
             id: String,
             acmeProviders: {
                 type: Array,
-                default: () => [DEFAULT_PROVIDER]
+                default: () => []
             }
         },
         data() {
@@ -132,7 +129,7 @@ import {doPost} from "../../serverapi";
                     subjectAltNames: [],
                     type: 'acme',
                     daysBeforeRenewal: 30,
-                    provider: DEFAULT_PROVIDER
+                    provider: this.acmeProviders[0] || ''
                 },
                 globalError: null,
                 showOverlay: false
@@ -148,13 +145,21 @@ import {doPost} from "../../serverapi";
                 return this.acmeProviders.map(name => ({value: name, text: name}))
             }
         },
+        watch: {
+            // the provider list may arrive after the modal is opened
+            acmeProviders(providers) {
+                if (!this.form.provider) {
+                    this.form.provider = providers[0] || ''
+                }
+            }
+        },
         methods: {
             resetModal() {
                 this.form.domain = ''
                 this.form.subjectAltNames = []
                 this.form.type = 'acme'
                 this.form.daysBeforeRenewal = 30
-                this.form.provider = DEFAULT_PROVIDER
+                this.form.provider = this.acmeProviders[0] || ''
                 this.clearFormErrors()
             },
             clearFormErrors() {

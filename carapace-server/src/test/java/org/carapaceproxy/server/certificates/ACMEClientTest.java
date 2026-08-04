@@ -23,6 +23,7 @@ import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.D
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import java.util.List;
@@ -65,30 +66,23 @@ public class ACMEClientTest {
     }
 
     @Test
-    public void testCheckResponseForOrderReturnsRefreshedStatus() throws Exception {
-        Order order = mockOrder();
-        when(order.getStatus()).thenReturn(Status.PROCESSING, Status.VALID);
-
-        assertEquals(Status.VALID, client.checkResponseForOrder(order));
-        verify(order).fetch();
-    }
-
-    @Test
-    public void testCheckResponseForOrderSkipsFetchWhenAlreadyValid() throws Exception {
+    public void testCheckResponseForOrderReturnsFetchedStatus() throws Exception {
         Order order = mockOrder();
         when(order.getStatus()).thenReturn(Status.VALID);
 
         assertEquals(Status.VALID, client.checkResponseForOrder(order));
-        verify(order, never()).fetch();
+        verify(order, times(1)).fetch();
     }
 
     @Test
-    public void testCheckResponseForOrderSkipsFetchWhenInvalid() throws Exception {
+    public void testCheckResponseForOrderFetchesOncePerPoll() throws Exception {
+        // a freshly bound order has no cached state and any accessor would lazy-fetch,
+        // so the explicit eager fetch has to be the only server round-trip of the poll
         Order order = mockOrder();
-        when(order.getStatus()).thenReturn(Status.INVALID);
+        when(order.getStatus()).thenReturn(Status.PROCESSING);
 
-        assertEquals(Status.INVALID, client.checkResponseForOrder(order));
-        verify(order, never()).fetch();
+        assertEquals(Status.PROCESSING, client.checkResponseForOrder(order));
+        verify(order, times(1)).fetch();
     }
 
     private static Order mockOrder() {

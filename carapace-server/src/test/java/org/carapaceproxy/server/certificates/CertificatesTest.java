@@ -93,6 +93,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.reflect.Whitebox;
 import org.shredzone.acme4j.Login;
+import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.util.KeyPairUtils;
 
 /**
@@ -421,8 +422,7 @@ public class CertificatesTest extends UseAdminServer {
     }
 
     @Test
-    @Parameters({"acme", "manual"})
-    public void testUploadTypedCertificatesWithProvider(String type) throws Exception {
+    public void testUploadTypedCertificatesWithProvider() throws Exception {
         configureAndStartServer();
         DynamicCertificatesManager dynCertsMan = server.getDynamicCertificatesManager();
         KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
@@ -435,20 +435,17 @@ public class CertificatesTest extends UseAdminServer {
         changeDynamicConfiguration(config);
 
         try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
+            // provider is an ACME-only parameter
+            HttpResponse resp = uploadCertificate(
+                    "localhost2", "type=manual&provider=custom", chainData, client, credentials);
+            assertTrue(resp.getBodyString().contains("ERROR: param 'provider' available for type 'acme' only"));
+
             // unknown provider
-            HttpResponse resp = uploadCertificate("localhost2", "type=" + type + "&provider=unknown", chainData, client, credentials);
-            if (type.equals("manual")) {
-                assertTrue(resp.getBodyString().contains("ERROR: param 'provider' available for type 'acme' only"));
-            } else {
-                assertTrue(resp.getBodyString().contains("ERROR: unknown ACME provider"));
-            }
+            resp = uploadCertificate("localhost2", "type=acme&provider=unknown", chainData, client, credentials);
+            assertTrue(resp.getBodyString().contains("ERROR: unknown ACME provider"));
 
             // custom provider
-            resp = uploadCertificate("localhost2", "type=" + type + "&provider=custom", chainData, client, credentials);
-            if (type.equals("manual")) {
-                assertTrue(resp.getBodyString().contains("ERROR: param 'provider' available for type 'acme' only"));
-                return;
-            }
+            resp = uploadCertificate("localhost2", "type=acme&provider=custom", chainData, client, credentials);
             assertTrue(resp.getBodyString().contains("SUCCESS"));
             CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost2");
             assertNotNull(data);
@@ -572,13 +569,16 @@ public class CertificatesTest extends UseAdminServer {
 
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
-        when(ac.getLogin()).thenReturn(mock(Login.class));
+        Login login = mock(Login.class);
+        when(login.bindOrder(any())).thenReturn(mock(Order.class));
+        when(ac.getLogin()).thenReturn(login);
         when(ac.checkResponseForOrder(any())).thenReturn(VALID);
         org.shredzone.acme4j.Certificate _cert = mock(org.shredzone.acme4j.Certificate.class);
         List<X509Certificate> renewed = Arrays.asList((X509Certificate[]) generateSampleChain(keyPair, false));
         when(_cert.getCertificateChain()).thenReturn(renewed);
         when(ac.fetchCertificateForOrder(any())).thenReturn(_cert);
-        Whitebox.setInternalState(dcMan, "acmeClients", Map.of(DEFAULT_PROVIDER_NAME, ac)); // by-name because there are other map fields
+        // by-name, because there are other map fields
+        Whitebox.setInternalState(dcMan, "acmeClients", Map.of(DEFAULT_PROVIDER_NAME, ac));
 
         // Renew
         dcMan.run();
@@ -674,13 +674,16 @@ public class CertificatesTest extends UseAdminServer {
 
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
-        when(ac.getLogin()).thenReturn(mock(Login.class));
+        Login login = mock(Login.class);
+        when(login.bindOrder(any())).thenReturn(mock(Order.class));
+        when(ac.getLogin()).thenReturn(login);
         when(ac.checkResponseForOrder(any())).thenReturn(VALID);
         org.shredzone.acme4j.Certificate _cert = mock(org.shredzone.acme4j.Certificate.class);
         List<X509Certificate> renewed = Arrays.asList((X509Certificate[]) generateSampleChain(keyPair, false));
         when(_cert.getCertificateChain()).thenReturn(renewed);
         when(ac.fetchCertificateForOrder(any())).thenReturn(_cert);
-        Whitebox.setInternalState(dcMan, "acmeClients", Map.of(DEFAULT_PROVIDER_NAME, ac)); // by-name because there are other map fields
+        // by-name, because there are other map fields
+        Whitebox.setInternalState(dcMan, "acmeClients", Map.of(DEFAULT_PROVIDER_NAME, ac));
 
         // Renew
         File certsDir = tmpDir.newFolder("certs");

@@ -361,6 +361,7 @@ public class CertificatesResource {
             @QueryParam("provider") final String provider,
             final InputStream uploadedInputStream) throws Exception {
 
+        final var server = (HttpProxyServer) context.getAttribute("server");
         try (InputStream input = uploadedInputStream) {
             // Certificate type (manual | acme)
             CertificateMode certType = stringToCertificateMode(type);
@@ -388,7 +389,7 @@ public class CertificatesResource {
             if (provider != null && !provider.isBlank() && !CertificateMode.ACME.equals(certType)) {
                 return Response.status(422).entity("ERROR: param 'provider' available for type 'acme' only").build();
             }
-            if (!isKnownProvider(acmeProvider, (HttpProxyServer) context.getAttribute("server"))) {
+            if (!isKnownProvider(acmeProvider, server)) {
                 return Response.status(422).entity("ERROR: unknown ACME provider '" + acmeProvider + "'").build();
             }
 
@@ -407,7 +408,7 @@ public class CertificatesResource {
             cert.setDaysBeforeRenewal(daysbeforerenewal != null ? daysbeforerenewal : DEFAULT_DAYS_BEFORE_RENEWAL);
             cert.setProvider(acmeProvider);
 
-            ((HttpProxyServer) context.getAttribute("server")).updateDynamicCertificateForDomain(cert);
+            server.updateDynamicCertificateForDomain(cert);
 
             return Response.status(200).entity("SUCCESS: Certificate saved").build();
         }
