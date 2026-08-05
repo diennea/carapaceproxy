@@ -101,7 +101,7 @@
         </b-overlay>
         <template #modal-footer="{ok, cancel}">
             <b-button variant="outline-secondary" @click="cancel()">Cancel</b-button>
-            <b-button variant="success" @click="ok()">Create</b-button>
+            <b-button variant="success" :disabled="form.type === 'acme' && !form.provider" @click="ok()">Create</b-button>
         </template>
     </b-modal>
 </template>
@@ -180,6 +180,10 @@ import {doPost} from "../../serverapi";
             },
             handleSubmit() {
                 this.clearFormErrors();
+                if (this.form.type === 'acme' && !this.form.provider) {
+                    this.setErrorForField('provider', 'Choose the ACME provider');
+                    return;
+                }
                 this.showOverlay = true;
                 doPost(
                     "/api/certificates/",

@@ -658,6 +658,9 @@ public class HttpProxyServer implements AutoCloseable {
     }
 
     public void updateDynamicCertificateForDomain(CertificateData cert) throws Exception {
+        // snapshot to restore on a failed apply: the domain may still be referenced by the active configuration
+        final CertificateData previous = dynamicConfigurationStore.loadCertificateForDomain(cert.getDomain());
+
         // Certificate saving on db
         dynamicConfigurationStore.saveCertificate(cert);
 
@@ -675,7 +678,18 @@ public class HttpProxyServer implements AutoCloseable {
         }
 
         // Configuration reloading
-        applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(props));
+        try {
+            applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(props));
+        } catch (Exception e) {
+            if (previous != null) {
+                try {
+                    dynamicConfigurationStore.saveCertificate(previous);
+                } catch (RuntimeException restoreEx) {
+                    LOG.error("Failed to restore certificate data for domain {} after a failed configuration apply", cert.getDomain(), restoreEx);
+                }
+            }
+            throw e;
+        }
     }
 
     public void updateMaintenanceMode(boolean value) throws ConfigurationChangeInProgressException, InterruptedException {

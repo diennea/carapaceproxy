@@ -40,6 +40,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.SQLIntegrityConstraintViolationException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -49,6 +50,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
@@ -153,6 +155,8 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             """.formatted(ACME_CHALLENGE_TOKENS_TABLE_NAME);
 
     private static final Logger LOG = LoggerFactory.getLogger(HerdDBConfigurationStore.class);
+
+    private static final Pattern SENSITIVE_PROPERTY = Pattern.compile("(?i)password|secret|hmac");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -291,7 +295,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                     PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_CONFIG_TABLE)) {
                 newConfigurationStore.forEach((k, v) -> {
                     try {
-                        LOG.info("Saving \"{}\"=\"{}\"", k, v);
+                        LOG.info("Saving \"{}\"=\"{}\"", k, maskSensitiveValue(k, v));
                         currentKeys.remove(k);
                         newProperties.put(k, v);
                         psUpdate.setString(1, v);
@@ -327,6 +331,17 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             LOG.error("Error while saving configuration from Database", err);
             throw err;
         }
+    }
+
+    /**
+     * Mask secrets in log output; the stored value stays raw, as it is needed at use time.
+     *
+     * @param key the property key, used to detect secrets (e.g. {@code acme.<n>.hmac}, passwords, AWS keys)
+     * @param value the property value
+     * @return the value, or {@code ******} if the key holds a secret
+     */
+    private static String maskSensitiveValue(String key, String value) {
+        return SENSITIVE_PROPERTY.matcher(key).find() && !value.isEmpty() ? "******" : value;
     }
 
     @Override
@@ -438,8 +453,10 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 return psInsert.executeUpdate() > 0;
             }
             return updateDone;
+        } catch (SQLIntegrityConstraintViolationException e) {
+            return false; // key already exists, e.g. created concurrently by another peer
         } catch (SQLException e) {
-            return false;
+            throw new ConfigurationStoreException(e);
         }
     }
 

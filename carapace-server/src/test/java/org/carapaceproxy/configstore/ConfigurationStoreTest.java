@@ -22,11 +22,15 @@ package org.carapaceproxy.configstore;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
 import static org.carapaceproxy.utils.TestUtils.assertEqualsKey;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import java.net.URI;
 import java.security.KeyPair;
 import java.util.Collections;
@@ -47,6 +51,7 @@ import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.shredzone.acme4j.toolbox.JSON;
 import org.shredzone.acme4j.util.KeyPairUtils;
+import org.slf4j.LoggerFactory;
 
 /**
  * Test for {@link PropertiesConfigurationStore} and {@link HerdDBConfigurationStore}.
@@ -392,6 +397,39 @@ public class ConfigurationStoreTest {
         assertEquals(false, store.anyPropertyMatches(
                 (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals("unknown")
         ));
+    }
+
+    @Test
+    public void testCommitConfigurationMasksSecretsInLogs() throws Exception {
+        this.type = "db";
+        final var logAppender = new ListAppender<ILoggingEvent>();
+        logAppender.start();
+        final var logger = (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(HerdDBConfigurationStore.class);
+        logger.addAppender(logAppender);
+        try {
+            final var hmac = "very-secret-mac-key";
+            final var password = "very-secret-password";
+            Properties props = new Properties();
+            props.setProperty("acme.1.name", "digicert");
+            props.setProperty("acme.1.url", "https://acme.example.com/directory");
+            props.setProperty("acme.1.kid", "my-kid");
+            props.setProperty("acme.1.hmac", hmac);
+            props.setProperty("certificate.1.password", password);
+            updateConfigStore(props);
+
+            final var loggedLines = logAppender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+            assertThat(loggedLines, hasItems(containsString("acme.1.hmac"), containsString("******")));
+            for (final var line : loggedLines) {
+                assertThat(line, not(containsString(hmac)));
+                assertThat(line, not(containsString(password)));
+            }
+
+            // masking applies to the log only: the stored values stay raw, they are needed at use time
+            assertEquals(hmac, store.getProperty("acme.1.hmac", ""));
+            assertEquals(password, store.getProperty("certificate.1.password", ""));
+        } finally {
+            logger.detachAppender(logAppender);
+        }
     }
 
 }

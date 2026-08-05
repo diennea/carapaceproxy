@@ -38,6 +38,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -464,6 +465,33 @@ public class CertificatesTest extends UseAdminServer {
             assertEquals(DEFAULT_PROVIDER_NAME, data.getProvider());
             assertFalse(store.anyPropertyMatches((k, v) -> k.matches("certificate\\.[0-9]+\\.provider")));
         }
+    }
+
+    @Test
+    public void testFailedConfigurationApplyRestoresCertificateData() throws Exception {
+        configureAndStartServer();
+        KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        Certificate[] chain = generateSampleChain(endUserKeyPair, false);
+        byte[] chainData = createKeystore(chain, endUserKeyPair.getPrivate());
+
+        // an existing certificate with data
+        try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
+            HttpResponse resp = uploadCertificate("localhost2", "type=acme", chainData, client, credentials);
+            assertTrue(resp.getBodyString().contains("SUCCESS"));
+        }
+        ConfigurationStore store = server.getDynamicConfigurationStore();
+        CertificateData previous = store.loadCertificateForDomain("localhost2");
+        assertNotNull(previous.getChain());
+
+        // unknown provider bypassing the API pre-validation: the configuration apply fails
+        CertificateData update = new CertificateData("localhost2", null, DynamicCertificateState.WAITING);
+        update.setProvider("ghost");
+        assertThrows(IllegalStateException.class, () -> server.updateDynamicCertificateForDomain(update));
+
+        // the overwritten row was restored, so the failed update cannot go live
+        CertificateData restored = store.loadCertificateForDomain("localhost2");
+        assertEquals(previous.getChain(), restored.getChain());
+        assertEquals(previous.getState(), restored.getState());
     }
 
     @Test
