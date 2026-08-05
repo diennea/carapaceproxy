@@ -87,6 +87,7 @@ import org.carapaceproxy.server.cache.CacheByteBufMemoryUsageMetric;
 import org.carapaceproxy.server.cache.ContentsCache;
 import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
 import org.carapaceproxy.server.certificates.ocsp.OcspStaplingManager;
+import org.carapaceproxy.server.config.AcmeProviderConfiguration;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
@@ -657,6 +658,9 @@ public class HttpProxyServer implements AutoCloseable {
     }
 
     public void updateDynamicCertificateForDomain(CertificateData cert) throws Exception {
+        // snapshot to restore on a failed apply: the domain may still be referenced by the active configuration
+        final CertificateData previous = dynamicConfigurationStore.loadCertificateForDomain(cert.getDomain());
+
         // Certificate saving on db
         dynamicConfigurationStore.saveCertificate(cert);
 
@@ -674,7 +678,18 @@ public class HttpProxyServer implements AutoCloseable {
         }
 
         // Configuration reloading
-        applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(props));
+        try {
+            applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(props));
+        } catch (Exception e) {
+            if (previous != null) {
+                try {
+                    dynamicConfigurationStore.saveCertificate(previous);
+                } catch (RuntimeException restoreEx) {
+                    LOG.error("Failed to restore certificate data for domain {} after a failed configuration apply", cert.getDomain(), restoreEx);
+                }
+            }
+            throw e;
+        }
     }
 
     public void updateMaintenanceMode(boolean value) throws ConfigurationChangeInProgressException, InterruptedException {
@@ -687,8 +702,14 @@ public class HttpProxyServer implements AutoCloseable {
         props.setProperty(key.replace("hostname", "mode"), cert.isManual() ? "manual" : "acme");
         if (cert.isManual()) {
             props.remove(key.replace("hostname", "daysbeforerenewal")); // type changed from acme to manual
+            props.remove(key.replace("hostname", "provider"));
         } else {
             props.setProperty(key.replace("hostname", "daysbeforerenewal"), cert.getDaysBeforeRenewal() + "");
+            if (AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME.equals(cert.getProvider())) {
+                props.remove(key.replace("hostname", "provider")); // default provider is implicit
+            } else {
+                props.setProperty(key.replace("hostname", "provider"), cert.getProvider());
+            }
         }
         if (cert.getSubjectAltNames() != null && !cert.getSubjectAltNames().isEmpty()) {
             props.setProperty(
@@ -707,6 +728,9 @@ public class HttpProxyServer implements AutoCloseable {
         props.setProperty(prefix + "mode", cert.isManual() ? "manual" : "acme");
         if (!cert.isManual()) {
             props.setProperty(prefix + "daysbeforerenewal", cert.getDaysBeforeRenewal() + "");
+            if (!AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME.equals(cert.getProvider())) {
+                props.setProperty(prefix + "provider", cert.getProvider());
+            }
         }
         if (cert.getSubjectAltNames() != null && !cert.getSubjectAltNames().isEmpty()) {
             props.setProperty(prefix + "san", String.join(",", cert.getSubjectAltNames()));

@@ -20,7 +20,7 @@
 package org.carapaceproxy.server.certificates;
 
 import java.io.IOException;
-import java.net.URI;
+import java.net.URL;
 import java.security.KeyPair;
 import java.security.Security;
 import java.util.Collection;
@@ -48,7 +48,10 @@ import org.slf4j.LoggerFactory;
 
 /**
  *
- * Let's Encrypt ACME client for automatic SSL certificate issuing.
+ * ACME client for automatic SSL certificate issuing.
+ * <p>
+ * It works against any RFC 8555 compliant CA, given its directory URL;
+ * Let's Encrypt is the default one, and CAs requiring External Account Binding (e.g. DigiCert) are supported too.
  *
  * @author paolo.venturi
  *
@@ -63,28 +66,61 @@ public class ACMEClient {
     // For testing server use
     public static final String TESTING_CA = "https://acme-staging-v02.api.letsencrypt.org/directory"; //"acme://letsencrypt.org/staging";
 
-    private final boolean testingModeOn;
     private final KeyPair userKey;
+    private final String directoryUrl;
+    private final String kid;
+    private final String hmac;
 
+    /**
+     * Build a client for the Let's Encrypt CA.
+     *
+     * @param userKey the ACME account key pair
+     * @param testingMode whether to use the staging endpoint instead of the production one
+     */
     public ACMEClient(KeyPair userKey, boolean testingMode) {
-        Security.addProvider(new BouncyCastleProvider());
-        this.userKey = userKey;
-        this.testingModeOn = testingMode;
+        this(userKey, testingMode ? TESTING_CA : PRODUCTION_CA, null, null);
     }
 
     /**
-     * Finds your {@link Account} at the ACME server.It will be found by your user's public key.If your key is not known to the server yet, a new account will be created.<p>
-     * This is a simple way of finding your {@link Account}. A better way is to get the URL and KeyIdentifier of your new account with {@link Account#getLocation()}
-     * {@link Session#getKeyIdentifier()} and store it somewhere. If you need to get access to your account later, reconnect to it via {@link Account#bind(Session, URI)} by using the stored location.
+     * Build a client for any RFC 8555 compliant CA.
      *
-     * @return
-     * @throws org.shredzone.acme4j.exception.AcmeException
+     * @param userKey the ACME account key pair
+     * @param directoryUrl the directory URL of the CA
+     * @param kid the key identifier for External Account Binding, or null if the CA doesn't require it
+     * @param hmac the base64url-encoded MAC key for External Account Binding, or null if the CA doesn't require it
+     * @throws IllegalArgumentException if only one of {@code kid} and {@code hmac} is provided
+     */
+    public ACMEClient(KeyPair userKey, String directoryUrl, String kid, String hmac) {
+        if ((kid == null || kid.isEmpty()) != (hmac == null || hmac.isEmpty())) {
+            throw new IllegalArgumentException("kid and hmac must be provided together (external account binding)");
+        }
+        Security.addProvider(new BouncyCastleProvider());
+        this.userKey = userKey;
+        this.directoryUrl = directoryUrl;
+        this.kid = kid;
+        this.hmac = hmac;
+    }
+
+    /**
+     * Finds your {@link Account} at the ACME server. It will be found by your user's public key.
+     * If your key is not known to the server yet, a new account will be created.
+     * <p>
+     * This is a simple way of finding your {@link Account}. A better way is to get the URL of your
+     * new account with {@link Account#getLocation()} and store it somewhere. If you need to get
+     * access to your account later, reconnect to it via {@link Session#login(URL, KeyPair)}
+     * by using the stored location.
+     *
+     * @return the {@link Login} bound to the account
+     * @throws AcmeException if the account cannot be found or created
      */
     public Login getLogin() throws AcmeException {
-        return new AccountBuilder()
+        final var accountBuilder = new AccountBuilder()
                 .agreeToTermsOfService()
-                .useKeyPair(userKey)
-                .createLogin(new Session(testingModeOn ? TESTING_CA : PRODUCTION_CA));
+                .useKeyPair(userKey);
+        if (kid != null && !kid.isEmpty()) {
+            accountBuilder.withKeyIdentifier(kid, hmac);
+        }
+        return accountBuilder.createLogin(new Session(directoryUrl));
     }
 
     /*
@@ -195,24 +231,22 @@ public class ACMEClient {
     }
 
     public Status checkResponseForOrder(Order order) throws AcmeException {
-        LOG.info("Certificate order checking for domain {}", order.getIdentifiers().get(0).getDomain());
+        // fetch eagerly: on a freshly bound order any accessor would lazy-fetch anyway,
+        // so this guarantees a single server round-trip per poll
+        order.fetch();
+        LOG.info("Certificate order checking for domain {}", order.getIdentifiers().getFirst().getDomain());
         Status status = order.getStatus();
         if (status == Status.VALID) {
             LOG.info("Order has been completed.");
-            return status;
         }
-        if (status != Status.INVALID) {
-            order.fetch();
-        }
-        return order.getStatus();
+        return status;
     }
 
-    public Certificate fetchCertificateForOrder(Order order) throws AcmeException {
+    public Certificate fetchCertificateForOrder(Order order) {
+        // getCertificate() itself throws if the order is not ready
         Certificate certificate = order.getCertificate();
-        if (certificate == null) {
-            throw new AcmeException("Certificate not fetched");
-        }
-        LOG.info("Success! The certificate for domain {} has been generated!", order.getIdentifiers().get(0).getDomain());
+        LOG.info("Success! The certificate for domain {} has been generated!",
+                order.getIdentifiers().getFirst().getDomain());
         LOG.info("Certificate URL: {}", certificate.getLocation());
         return certificate;
     }

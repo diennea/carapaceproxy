@@ -15,7 +15,7 @@
                 </b-form-radio-group>
                 <b-button v-b-modal.edit>Create certificate</b-button>
             </div>
-            <certificate-form id="edit" @done="showCertStatus"></certificate-form>
+            <certificate-form id="edit" :acme-providers="acmeProviders" @done="showCertStatus"></certificate-form>
             <b-button v-if="localStorePath"
                       @click="openConfirmModal"
                       class="btn">
@@ -79,6 +79,7 @@ import StatusBox from '../StatusBox.vue';
  * @property {string} hostname - The hostname the certificate is issued for.
  * @property {string[]} subjectAltNames - Array of Subject Alternative Names (SANs).
  * @property {string} mode - The mode of the certificate.
+ * @property {string} provider - The ACME provider name (ACME certificates only).
  * @property {boolean} dynamic - Indicates if the certificate is dynamic.
  * @property {CertificateStatus} status - The current status of the certificate.
  * @property {number} attemptsCount - Number of attempts made to renew the certificate.
@@ -108,6 +109,11 @@ export default {
              */
             certificates: [],
             localStorePath: null,
+            /**
+             * Names of the configured ACME providers, the default one first.
+             * @type {string[]}
+             */
+            acmeProviders: [],
             loading: true,
             opSuccess: null,
             opMessage: '',
@@ -131,6 +137,7 @@ export default {
                 { key: "hostname", label: "Hostname", sortable: true },
                 { key: "subjectAltNames", label: "SANs", sortable: true },
                 { key: "mode", label: "Mode", sortable: true },
+                { key: "provider", label: "Provider", sortable: true },
                 { key: "dynamic", label: "Dynamic", sortable: true, formatter: toBooleanSymbol },
                 { key: "status", label: "Status", sortable: true },
                 { key: "attemptsCount", label: "Attempts count", sortable: true },
@@ -182,6 +189,7 @@ export default {
             doGet("/api/certificates", data => {
                 this.certificates = data.certificates || [];
                 this.localStorePath = data.localStorePath;
+                this.acmeProviders = data.acmeProviders || [];
                 this.loading = false;
             });
         },

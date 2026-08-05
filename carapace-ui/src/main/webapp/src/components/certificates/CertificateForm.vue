@@ -66,6 +66,23 @@
 
                 <b-form-group
                     v-if="form.type === 'acme'"
+                    id="provider-group"
+                    ref="field-provider-group"
+                    label="ACME provider:"
+                    label-for="provider"
+                    invalid-feedback="Choose the ACME provider"
+                >
+                    <b-form-select
+                        id="provider"
+                        ref="field-provider"
+                        v-model="form.provider"
+                        :options="providers"
+                        required
+                    ></b-form-select>
+                </b-form-group>
+
+                <b-form-group
+                    v-if="form.type === 'acme'"
                     id="daysbeforerenewal-group"
                     ref="field-daysBeforeRenewal-group"
                     label="Days before renewal:"
@@ -84,7 +101,7 @@
         </b-overlay>
         <template #modal-footer="{ok, cancel}">
             <b-button variant="outline-secondary" @click="cancel()">Cancel</b-button>
-            <b-button variant="success" @click="ok()">Create</b-button>
+            <b-button variant="success" :disabled="form.type === 'acme' && !form.provider" @click="ok()">Create</b-button>
         </template>
     </b-modal>
 </template>
@@ -92,13 +109,18 @@
 <script>
 import {doPost} from "../../serverapi";
     import StatusBox from "../StatusBox.vue";
+
     export default {
         name: "CertificateForm",
         components: {
             "status-box": StatusBox
         },
         props: {
-            id: String
+            id: String,
+            acmeProviders: {
+                type: Array,
+                default: () => []
+            }
         },
         data() {
             return {
@@ -106,7 +128,8 @@ import {doPost} from "../../serverapi";
                     domain: '',
                     subjectAltNames: [],
                     type: 'acme',
-                    daysBeforeRenewal: 30
+                    daysBeforeRenewal: 30,
+                    provider: this.acmeProviders[0] || ''
                 },
                 globalError: null,
                 showOverlay: false
@@ -117,6 +140,17 @@ import {doPost} from "../../serverapi";
                 return [
                     {value: 'acme', text: 'Acme'}
                 ]
+            },
+            providers() {
+                return this.acmeProviders.map(name => ({value: name, text: name}))
+            }
+        },
+        watch: {
+            // the provider list may arrive after the modal is opened
+            acmeProviders(providers) {
+                if (!this.form.provider) {
+                    this.form.provider = providers[0] || ''
+                }
             }
         },
         methods: {
@@ -125,6 +159,7 @@ import {doPost} from "../../serverapi";
                 this.form.subjectAltNames = []
                 this.form.type = 'acme'
                 this.form.daysBeforeRenewal = 30
+                this.form.provider = this.acmeProviders[0] || ''
                 this.clearFormErrors()
             },
             clearFormErrors() {
@@ -145,6 +180,10 @@ import {doPost} from "../../serverapi";
             },
             handleSubmit() {
                 this.clearFormErrors();
+                if (this.form.type === 'acme' && !this.form.provider) {
+                    this.setErrorForField('provider', 'Choose the ACME provider');
+                    return;
+                }
                 this.showOverlay = true;
                 doPost(
                     "/api/certificates/",

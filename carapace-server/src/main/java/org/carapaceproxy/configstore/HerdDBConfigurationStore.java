@@ -40,6 +40,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.SQLIntegrityConstraintViolationException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -49,9 +50,11 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
+import org.carapaceproxy.server.config.AcmeProviderConfiguration;
 import org.carapaceproxy.utils.StringUtils;
 import org.shredzone.acme4j.toolbox.JSON;
 import org.slf4j.Logger;
@@ -152,6 +155,8 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             """.formatted(ACME_CHALLENGE_TOKENS_TABLE_NAME);
 
     private static final Logger LOG = LoggerFactory.getLogger(HerdDBConfigurationStore.class);
+
+    private static final Pattern SENSITIVE_PROPERTY = Pattern.compile("(?i)password|secret|hmac");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -290,7 +295,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                     PreparedStatement psInsert = con.prepareStatement(INSERT_INTO_CONFIG_TABLE)) {
                 newConfigurationStore.forEach((k, v) -> {
                     try {
-                        LOG.info("Saving \"{}\"=\"{}\"", k, v);
+                        LOG.info("Saving \"{}\"=\"{}\"", k, maskSensitiveValue(k, v));
                         currentKeys.remove(k);
                         newProperties.put(k, v);
                         psUpdate.setString(1, v);
@@ -328,30 +333,71 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         }
     }
 
+    /**
+     * Mask secrets in log output; the stored value stays raw, as it is needed at use time.
+     *
+     * @param key the property key, used to detect secrets (e.g. {@code acme.<n>.hmac}, passwords, AWS keys)
+     * @param value the property value
+     * @return the value, or {@code ******} if the key holds a secret
+     */
+    private static String maskSensitiveValue(String key, String value) {
+        return SENSITIVE_PROPERTY.matcher(key).find() && !value.isEmpty() ? "******" : value;
+    }
+
     @Override
-    public KeyPair loadAcmeUserKeyPair() {
+    public KeyPair loadAcmeUserKeyPair(String providerName) {
         try {
-            return loadKeyPair(ACME_USER_KEY);
+            return loadKeyPair(acmeUserKeyName(providerName));
         } catch (Exception err) {
-            LOG.error("Error while performing KeyPair loading for ACME user.", err);
+            LOG.error("Error while performing KeyPair loading for ACME user of provider {}.", providerName, err);
             throw new ConfigurationStoreException(err);
         }
     }
 
     @Override
-    public boolean saveAcmeUserKey(KeyPair pair) {
+    public boolean saveAcmeUserKey(KeyPair pair, String providerName) {
         try {
-            return saveKeyPair(pair, ACME_USER_KEY, false);
+            return saveKeyPair(pair, acmeUserKeyName(providerName), false);
         } catch (Exception err) {
-            LOG.error("Error while performing KeyPar saving for ACME user.", err);
+            LOG.error("Error while performing KeyPair saving for ACME user of provider {}.", providerName, err);
             throw new ConfigurationStoreException(err);
         }
+    }
+
+    /**
+     * The account key of the built-in provider keeps the legacy {@link #ACME_USER_KEY} name,
+     * so existing Let's Encrypt accounts survive the upgrade; other providers get a dedicated key.
+     * <p>
+     * Renaming a provider intentionally registers a fresh ACME account under the new name;
+     * the row of the old one stays around, unused but harmless.
+     *
+     * @param providerName the name of the ACME provider
+     * @return the primary key of the provider account key pair in the keypairs table
+     */
+    private static String acmeUserKeyName(String providerName) {
+        return AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME.equals(providerName)
+                ? ACME_USER_KEY
+                : ACME_USER_KEY + "_" + providerName;
+    }
+
+    /**
+     * Whether the primary key belongs to a provider account key pair, hence off-limits for domain key pairs.
+     * <p>
+     * The whole {@code _acmeuserkey} prefix is reserved: a domain literally named like that
+     * would be silently skipped by the domain lookups.
+     * Safe assumption, as hostnames cannot start with {@code _} and the suffix is a validated provider name.
+     *
+     * @param pk a primary key of the key pairs table
+     * @return true if it is an {@link #acmeUserKeyName(String) account key name}
+     */
+    private static boolean isAcmeUserKey(String pk) {
+        return pk.equals(ACME_USER_KEY) || pk.startsWith(ACME_USER_KEY + "_");
     }
 
     @Override
     public KeyPair loadKeyPairForDomain(String domain) {
         try {
-            if (domain.equals(ACME_USER_KEY)) {
+            if (isAcmeUserKey(domain)) {
                 return null;
             }
             return loadKeyPair(domain);
@@ -364,11 +410,11 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     @Override
     public boolean saveKeyPairForDomain(KeyPair pair, String domain, boolean update) {
         try {
-            if (!domain.equals(ACME_USER_KEY)) {
+            if (!isAcmeUserKey(domain)) {
                 return saveKeyPair(pair, domain, update);
             }
         } catch (Exception err) {
-            LOG.error("Error while performing KeyPar saving for domain {}.", domain, err);
+            LOG.error("Error while performing KeyPair saving for domain {}.", domain, err);
             throw new ConfigurationStoreException(err);
         }
         return false;
@@ -407,14 +453,16 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 return psInsert.executeUpdate() > 0;
             }
             return updateDone;
+        } catch (SQLIntegrityConstraintViolationException e) {
+            return false; // key already exists, e.g. created concurrently by another peer
         } catch (SQLException e) {
-            return false;
+            throw new ConfigurationStoreException(e);
         }
     }
 
     @Override
     public CertificateData loadCertificateForDomain(String domain) {
-        if (domain.equals(ACME_USER_KEY)) {
+        if (isAcmeUserKey(domain)) {
             return null;
         }
         try (Connection con = datasource.getConnection()) {

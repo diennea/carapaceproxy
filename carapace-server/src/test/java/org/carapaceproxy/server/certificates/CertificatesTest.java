@@ -26,6 +26,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_DAYS_BEFORE_RENEWAL;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
+import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.carapaceproxy.utils.CertificatesTestUtils.uploadCertificate;
 import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
@@ -37,6 +38,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -92,6 +94,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.reflect.Whitebox;
 import org.shredzone.acme4j.Login;
+import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.util.KeyPairUtils;
 
 /**
@@ -420,6 +423,79 @@ public class CertificatesTest extends UseAdminServer {
     }
 
     @Test
+    public void testUploadTypedCertificatesWithProvider() throws Exception {
+        configureAndStartServer();
+        DynamicCertificatesManager dynCertsMan = server.getDynamicCertificatesManager();
+        KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        Certificate[] chain = generateSampleChain(endUserKeyPair, false);
+        byte[] chainData = createKeystore(chain, endUserKeyPair.getPrivate());
+
+        // configure a custom ACME provider
+        config.put("acme.1.name", "custom");
+        config.put("acme.1.url", "https://acme.example.com/directory");
+        changeDynamicConfiguration(config);
+
+        try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
+            // provider is an ACME-only parameter
+            HttpResponse resp = uploadCertificate(
+                    "localhost2", "type=manual&provider=custom", chainData, client, credentials);
+            assertTrue(resp.getBodyString().contains("ERROR: param 'provider' available for type 'acme' only"));
+
+            // unknown provider
+            resp = uploadCertificate("localhost2", "type=acme&provider=unknown", chainData, client, credentials);
+            assertTrue(resp.getBodyString().contains("ERROR: unknown ACME provider"));
+
+            // custom provider
+            resp = uploadCertificate("localhost2", "type=acme&provider=custom", chainData, client, credentials);
+            assertTrue(resp.getBodyString().contains("SUCCESS"));
+            CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost2");
+            assertNotNull(data);
+            assertEquals("custom", data.getProvider());
+            assertEquals("custom", server.getCurrentConfiguration().getCertificates().get("localhost2").getProvider());
+            ConfigurationStore store = server.getDynamicConfigurationStore();
+            assertTrue(store.anyPropertyMatches((k, v) ->
+                    k.matches("certificate\\.[0-9]+\\.provider") && v.equals("custom")
+            ));
+
+            // update back to the default provider: the property gets removed
+            resp = uploadCertificate("localhost2", "type=acme", chainData, client, credentials);
+            assertTrue(resp.getBodyString().contains("SUCCESS"));
+            data = dynCertsMan.getCertificateDataForDomain("localhost2");
+            assertNotNull(data);
+            assertEquals(DEFAULT_PROVIDER_NAME, data.getProvider());
+            assertFalse(store.anyPropertyMatches((k, v) -> k.matches("certificate\\.[0-9]+\\.provider")));
+        }
+    }
+
+    @Test
+    public void testFailedConfigurationApplyRestoresCertificateData() throws Exception {
+        configureAndStartServer();
+        KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        Certificate[] chain = generateSampleChain(endUserKeyPair, false);
+        byte[] chainData = createKeystore(chain, endUserKeyPair.getPrivate());
+
+        // an existing certificate with data
+        try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
+            HttpResponse resp = uploadCertificate("localhost2", "type=acme", chainData, client, credentials);
+            assertTrue(resp.getBodyString().contains("SUCCESS"));
+        }
+        ConfigurationStore store = server.getDynamicConfigurationStore();
+        CertificateData previous = store.loadCertificateForDomain("localhost2");
+        assertNotNull(previous.getChain());
+
+        // unknown provider bypassing the API pre-validation: the configuration apply fails
+        CertificateData update = new CertificateData("localhost2", null, DynamicCertificateState.WAITING);
+        update.setProvider("ghost");
+        assertThrows(IllegalStateException.class, () -> server.updateDynamicCertificateForDomain(update));
+
+        // the overwritten row was restored, so the failed update cannot go live
+        CertificateData restored = store.loadCertificateForDomain("localhost2");
+        assertEquals(previous.getChain(), restored.getChain());
+        assertEquals(previous.getState(), restored.getState());
+        assertEquals(previous.getProvider(), restored.getProvider());
+    }
+
+    @Test
     public void testOCSP() throws Exception {
         configureAndStartServer();
         int port = server.getLocalPort();
@@ -522,13 +598,16 @@ public class CertificatesTest extends UseAdminServer {
 
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
-        when(ac.getLogin()).thenReturn(mock(Login.class));
+        Login login = mock(Login.class);
+        when(login.bindOrder(any())).thenReturn(mock(Order.class));
+        when(ac.getLogin()).thenReturn(login);
         when(ac.checkResponseForOrder(any())).thenReturn(VALID);
         org.shredzone.acme4j.Certificate _cert = mock(org.shredzone.acme4j.Certificate.class);
         List<X509Certificate> renewed = Arrays.asList((X509Certificate[]) generateSampleChain(keyPair, false));
         when(_cert.getCertificateChain()).thenReturn(renewed);
         when(ac.fetchCertificateForOrder(any())).thenReturn(_cert);
-        Whitebox.setInternalState(dcMan, ac);
+        // by-name, because there are other map fields
+        Whitebox.setInternalState(dcMan, "acmeClients", Map.of(DEFAULT_PROVIDER_NAME, ac));
 
         // Renew
         dcMan.run();
@@ -624,13 +703,16 @@ public class CertificatesTest extends UseAdminServer {
 
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
-        when(ac.getLogin()).thenReturn(mock(Login.class));
+        Login login = mock(Login.class);
+        when(login.bindOrder(any())).thenReturn(mock(Order.class));
+        when(ac.getLogin()).thenReturn(login);
         when(ac.checkResponseForOrder(any())).thenReturn(VALID);
         org.shredzone.acme4j.Certificate _cert = mock(org.shredzone.acme4j.Certificate.class);
         List<X509Certificate> renewed = Arrays.asList((X509Certificate[]) generateSampleChain(keyPair, false));
         when(_cert.getCertificateChain()).thenReturn(renewed);
         when(ac.fetchCertificateForOrder(any())).thenReturn(_cert);
-        Whitebox.setInternalState(dcMan, ac);
+        // by-name, because there are other map fields
+        Whitebox.setInternalState(dcMan, "acmeClients", Map.of(DEFAULT_PROVIDER_NAME, ac));
 
         // Renew
         File certsDir = tmpDir.newFolder("certs");
@@ -791,6 +873,8 @@ public class CertificatesTest extends UseAdminServer {
         when(_cert.getCertificateChain()).thenReturn(renewed);
 
         server.getCurrentConfiguration().setLocalCertificatesStorePath(certsDir.getAbsolutePath());
+        // the certificate upload above reloaded the configuration, rebuilding the ACME clients: re-inject the mock
+        Whitebox.setInternalState(dcMan, "acmeClients", Map.of(DEFAULT_PROVIDER_NAME, ac));
         dcMan.run();
         updated = dcMan.getCertificateDataForDomain("localhost2");
         assertNotNull(updated);

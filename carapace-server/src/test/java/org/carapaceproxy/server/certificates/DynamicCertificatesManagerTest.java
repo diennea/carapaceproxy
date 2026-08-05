@@ -30,6 +30,7 @@ import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERI
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERIFYING;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
+import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -40,11 +41,13 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.shredzone.acme4j.Status.INVALID;
 import static org.shredzone.acme4j.Status.VALID;
+import java.io.IOException;
 import java.net.URI;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
@@ -58,6 +61,7 @@ import junitparams.Parameters;
 import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
+import org.carapaceproxy.configstore.ConfigurationStoreException;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.Listeners;
@@ -73,10 +77,11 @@ import org.shredzone.acme4j.Status;
 import org.shredzone.acme4j.challenge.Dns01Challenge;
 import org.shredzone.acme4j.challenge.Http01Challenge;
 import org.shredzone.acme4j.connector.Connection;
+import org.shredzone.acme4j.Problem;
 import org.shredzone.acme4j.exception.AcmeException;
+import org.shredzone.acme4j.exception.AcmeNetworkException;
 import org.shredzone.acme4j.toolbox.JSON;
 import org.shredzone.acme4j.util.KeyPairUtils;
-import org.shredzone.acme4j.Problem;
 
 /**
  * Test for DynamicCertificatesManager.
@@ -85,6 +90,13 @@ import org.shredzone.acme4j.Problem;
  */
 @RunWith(JUnitParamsRunner.class)
 public class DynamicCertificatesManagerTest {
+
+    static {
+        // DynamicCertificatesManager reads the limit into a static final field, so the property must be set
+        // before whatever test method happens to run first loads that class.
+        // No effect on other test classes: surefire runs each one in its own JVM (reuseForks=false).
+        System.setProperty("carapace.acme.dnschallengereachabilitycheck.limit", "2");
+    }
 
     protected static final int MAX_ATTEMPTS = 7;
 
@@ -162,7 +174,6 @@ public class DynamicCertificatesManagerTest {
         when(parent.getListeners()).thenReturn(mock(Listeners.class));
         DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
-        Whitebox.setInternalState(man, ac);
 
         // Store mocking
         ConfigurationStore store = mock(ConfigurationStore.class);
@@ -212,6 +223,7 @@ public class DynamicCertificatesManagerTest {
         conf.configure(configStore);
         when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
+        injectAcmeClients(man, Map.of(DEFAULT_PROVIDER_NAME, ac));
 
         assertCertificateState(d0, AVAILABLE, cycleCount, man);
         assertCertificateState(d2, AVAILABLE, 0, man);
@@ -301,6 +313,11 @@ public class DynamicCertificatesManagerTest {
         }
     }
 
+    // must run after reloadConfiguration, which rebuilds the client map; by-name, because there are other map fields
+    private static void injectAcmeClients(DynamicCertificatesManager man, Map<String, ACMEClient> clients) {
+        Whitebox.setInternalState(man, "acmeClients", clients);
+    }
+
     private void assertCertificateState(String domain, DynamicCertificateState expectedState, int expectedCycleCount, DynamicCertificatesManager dCMan) {
         assertEquals(expectedState, dCMan.getStateOfCertificate(domain)); // on db
         assertEquals(expectedState, dCMan.getCertificateDataForDomain(domain).getState()); // on cache
@@ -321,7 +338,6 @@ public class DynamicCertificatesManagerTest {
     })
     public void testWildcardCertificateStateManagement(String runCase) throws Exception {
         final var domain = "*.localhost";
-        System.setProperty("carapace.acme.dnschallengereachabilitycheck.limit", "2");
 
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
@@ -359,7 +375,6 @@ public class DynamicCertificatesManagerTest {
         when(parent.getListeners()).thenReturn(mock(Listeners.class));
         DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
-        Whitebox.setInternalState(man, ac);
 
         // Route53Cliente mocking
         man.initAWSClient("access", "secret");
@@ -390,6 +405,7 @@ public class DynamicCertificatesManagerTest {
         conf.configure(configStore);
         when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
+        injectAcmeClients(man, Map.of(DEFAULT_PROVIDER_NAME, ac));
 
         int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
 
@@ -448,7 +464,6 @@ public class DynamicCertificatesManagerTest {
         final var domain = "*.localhost";
         final var san1 = "test1.localhost";
         final var san2 = "*.localhost2";
-        System.setProperty("carapace.acme.dnschallengereachabilitycheck.limit", "2");
 
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
@@ -498,7 +513,6 @@ public class DynamicCertificatesManagerTest {
         when(parent.getListeners()).thenReturn(mock(Listeners.class));
         DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
-        Whitebox.setInternalState(man, ac);
 
         // Route53Cliente mocking
         man.initAWSClient("access", "secret");
@@ -530,6 +544,7 @@ public class DynamicCertificatesManagerTest {
         conf.configure(configStore);
         when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
+        injectAcmeClients(man, Map.of(DEFAULT_PROVIDER_NAME, ac));
 
         int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
 
@@ -615,7 +630,6 @@ public class DynamicCertificatesManagerTest {
         when(parent.getListeners()).thenReturn(mock(Listeners.class));
         DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
-        Whitebox.setInternalState(man, ac);
 
         // Store mocking
         ConfigurationStore store = mock(ConfigurationStore.class);
@@ -641,6 +655,7 @@ public class DynamicCertificatesManagerTest {
         conf.configure(configStore);
         when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
+        injectAcmeClients(man, Map.of(DEFAULT_PROVIDER_NAME, ac));
 
         int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
 
@@ -660,5 +675,121 @@ public class DynamicCertificatesManagerTest {
             assertCertificateState(domain, VERIFIED, 0, man);
         }
     }
+
+    @Test
+    public void testCertificateProviderRouting() throws Exception {
+        // one mocked ACME client per provider
+        ACMEClient letsencryptClient = mock(ACMEClient.class);
+        ACMEClient customClient = mock(ACMEClient.class);
+        Order o = mock(Order.class);
+        when(o.getLocation()).thenReturn(URI.create("https://localhost/index").toURL());
+        for (ACMEClient ac : List.of(letsencryptClient, customClient)) {
+            Login login = mock(Login.class);
+            when(login.bindOrder(any())).thenReturn(o);
+            when(ac.getLogin()).thenReturn(login);
+            when(ac.createOrderForDomain(any())).thenReturn(o);
+            when(ac.getChallengesForOrder(any())).thenReturn(Collections.emptyMap());
+        }
+
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        when(parent.getListeners()).thenReturn(mock(Listeners.class));
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
+
+        // Store mocking
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        when(store.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
+        when(store.loadCertificateForDomain(eq("le.local"))).thenReturn(new CertificateData("le.local", null, WAITING));
+        when(store.loadCertificateForDomain(eq("custom.local")))
+                .thenReturn(new CertificateData("custom.local", null, WAITING));
+        man.setConfigurationStore(store);
+
+        // Manager setup: one certificate on the default provider, one on the custom one
+        Properties props = new Properties();
+        props.setProperty("acme.1.name", "custom");
+        props.setProperty("acme.1.url", "https://acme.example.com/directory");
+        props.setProperty("certificate.0.hostname", "le.local");
+        props.setProperty("certificate.0.mode", "acme");
+        props.setProperty("certificate.1.hostname", "custom.local");
+        props.setProperty("certificate.1.mode", "acme");
+        props.setProperty("certificate.1.provider", "custom");
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(new PropertiesConfigurationStore(props));
+        when(parent.getCurrentConfiguration()).thenReturn(conf);
+        man.reloadConfiguration(conf);
+        injectAcmeClients(man, Map.of(
+                DEFAULT_PROVIDER_NAME, letsencryptClient,
+                "custom", customClient
+        ));
+
+        man.run(); // both certificates WAITING > order created on each provider's client
+
+        verify(letsencryptClient, times(1))
+                .createOrderForDomain(eq(new CertificateData("le.local", null, WAITING).getNames()));
+        verify(customClient, times(1))
+                .createOrderForDomain(eq(new CertificateData("custom.local", null, WAITING).getNames()));
+        // routing is exclusive: neither client sees the other provider's certificate
+        verify(letsencryptClient, never())
+                .createOrderForDomain(eq(new CertificateData("custom.local", null, WAITING).getNames()));
+        verify(customClient, never())
+                .createOrderForDomain(eq(new CertificateData("le.local", null, WAITING).getNames()));
+    }
+
+    @Test
+    @Parameters({"stale", "transient", "store"})
+    public void testPendingOrderPollFailure(String failureCase) throws Exception {
+        // ACME mocking: the pending order cannot be polled back from the CA
+        ACMEClient ac = mock(ACMEClient.class);
+        Login login = mock(Login.class);
+        Order order = mock(Order.class);
+        when(login.bindOrder(any())).thenReturn(order);
+        when(ac.getLogin()).thenReturn(login);
+        doThrow(switch (failureCase) {
+            case "transient" -> new AcmeNetworkException(new IOException("connection reset"));
+            case "store" -> new ConfigurationStoreException(new IOException("db down"));
+            // e.g., the order belongs to a different CA after a provider change
+            default -> new AcmeException("unknown order");
+        }).when(ac).checkResponseForOrder(any());
+
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        when(parent.getListeners()).thenReturn(mock(Listeners.class));
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
+
+        // Store mocking
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        String domain = "localhost";
+        CertificateData cd = new CertificateData(domain, null, ORDERING);
+        cd.setPendingOrderLocation(URI.create("https://old-ca.example.com/order/1").toURL());
+        when(store.loadCertificateForDomain(eq(domain))).thenReturn(cd);
+        man.setConfigurationStore(store);
+
+        // Manager setup
+        Properties props = new Properties();
+        props.setProperty("certificate.1.hostname", domain);
+        props.setProperty("certificate.1.mode", "acme");
+        props.setProperty("dynamiccertificatesmanager.errors.maxattempts", String.valueOf(MAX_ATTEMPTS));
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(new PropertiesConfigurationStore(props));
+        when(parent.getCurrentConfiguration()).thenReturn(conf);
+        man.reloadConfiguration(conf);
+        injectAcmeClients(man, Map.of(DEFAULT_PROVIDER_NAME, ac));
+
+        man.run();
+
+        if (failureCase.equals("stale")) {
+            // failure counted, so the certificate falls back to WAITING and a fresh order
+            assertCertificateState(domain, REQUEST_FAILED, 1, man);
+            assertEquals("unknown order", man.getCertificateDataForDomain(domain).getMessage());
+            man.run();
+            assertCertificateState(domain, WAITING, 1, man);
+        } else {
+            // transient ACME and store failures alike: state untouched and nothing persisted, retried at the next cycle
+            assertCertificateState(domain, ORDERING, 0, man);
+            verify(store, never()).saveCertificate(any());
+        }
+    }
+
 
 }
