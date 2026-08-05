@@ -98,7 +98,7 @@
         <libs.netty>4.1.121.Final</libs.netty>
         <libs.acme4j>5.1.0</libs.acme4j>
         <libs.bouncycastle>1.84</libs.bouncycastle>
-        <libs.awssdk>2.17.113</libs.awssdk>
+        <libs.awssdk>2.32.16</libs.awssdk>
         <libs.caffeine>3.0.5</libs.caffeine>
         <libs.antlr>4.3.1</libs.antlr>
 
@@ -109,7 +109,8 @@
         <libs.micrometer>1.14.14</libs.micrometer>
         <libs.herddb>0.26.1</libs.herddb>
 
-        <libs.commons.codec>1.15</libs.commons.codec>
+        <libs.commons.codec>1.17.1</libs.commons.codec>
+        <libs.httpcore>4.4.16</libs.httpcore>
         <libs.commons.lang3>3.18.0</libs.commons.lang3>
         <libs.commons.logging>1.2</libs.commons.logging>
         <libs.commons.io>2.14.0</libs.commons.io>
@@ -197,6 +198,12 @@
                 <type>pom</type>
             </dependency>
             <!-- Individual dependencies -->
+            <dependency>
+                <!-- align the versions wanted by AWS SDK apache-client and its httpclient -->
+                <groupId>org.apache.httpcomponents</groupId>
+                <artifactId>httpcore</artifactId>
+                <version>${libs.httpcore}</version>
+            </dependency>
             <dependency>
                 <groupId>org.checkerframework</groupId>
                 <artifactId>checker-qual</artifactId>
