@@ -156,9 +156,10 @@
             </exclusions>
         </dependency>
         <dependency>
+            <!-- needed at runtime by the AWS SDK apache-client's httpclient -->
             <groupId>commons-codec</groupId>
             <artifactId>commons-codec</artifactId>
-            <scope>test</scope>
+            <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>commons-io</groupId>
