@@ -61,6 +61,7 @@ import junitparams.Parameters;
 import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
+import org.carapaceproxy.configstore.ConfigurationStoreException;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.Listeners;
@@ -736,7 +737,7 @@ public class DynamicCertificatesManagerTest {
     }
 
     @Test
-    @Parameters({"stale", "transient"})
+    @Parameters({"stale", "transient", "store"})
     public void testPendingOrderPollFailure(String failureCase) throws Exception {
         // ACME mocking: the pending order cannot be polled back from the CA
         ACMEClient ac = mock(ACMEClient.class);
@@ -744,11 +745,12 @@ public class DynamicCertificatesManagerTest {
         Order order = mock(Order.class);
         when(login.bindOrder(any())).thenReturn(order);
         when(ac.getLogin()).thenReturn(login);
-        doThrow(failureCase.equals("transient")
-                ? new AcmeNetworkException(new IOException("connection reset"))
-                // e.g., the order belongs to a different CA after a provider change
-                : new AcmeException("unknown order")
-        ).when(ac).checkResponseForOrder(any());
+        doThrow(switch (failureCase) {
+            case "transient" -> new AcmeNetworkException(new IOException("connection reset"));
+            case "store" -> new ConfigurationStoreException(new IOException("db down"));
+            // e.g., the order belongs to a different CA after a provider change
+            default -> new AcmeException("unknown order");
+        }).when(ac).checkResponseForOrder(any());
 
         HttpProxyServer parent = mock(HttpProxyServer.class);
         when(parent.getListeners()).thenReturn(mock(Listeners.class));
@@ -783,7 +785,7 @@ public class DynamicCertificatesManagerTest {
             man.run();
             assertCertificateState(domain, WAITING, 1, man);
         } else {
-            // state untouched and nothing persisted, will be retried at the next cycle
+            // transient ACME and store failures alike: state untouched and nothing persisted, retried at the next cycle
             assertCertificateState(domain, ORDERING, 0, man);
             verify(store, never()).saveCertificate(any());
         }

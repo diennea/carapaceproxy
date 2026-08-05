@@ -67,6 +67,7 @@ import org.bouncycastle.util.io.pem.PemWriter;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
+import org.carapaceproxy.configstore.ConfigurationStoreException;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
@@ -170,19 +171,23 @@ public class DynamicCertificatesManager implements Runnable {
         if (store == null) {
             throw new DynamicCertificatesManagerException("ConfigurationStore not set.");
         }
-        keyPairsSize = configuration.getKeyPairsSize();
+        final var newKeyPairsSize = configuration.getKeyPairsSize();
         // rebuilt on every reload, so that changes to provider url/kid/hmac take effect
         final var clients = new HashMap<String, ACMEClient>();
         clients.put(DEFAULT_PROVIDER_NAME,
-                new ACMEClient(loadOrCreateAcmeUserKeyPair(DEFAULT_PROVIDER_NAME), TESTING_MODE));
+                new ACMEClient(loadOrCreateAcmeUserKeyPair(DEFAULT_PROVIDER_NAME, newKeyPairsSize), TESTING_MODE));
         for (final var provider : configuration.getAcmeProviders().values()) {
             clients.put(provider.name(), new ACMEClient(
-                    loadOrCreateAcmeUserKeyPair(provider.name()), provider.url(), provider.kid(), provider.hmac()
+                    loadOrCreateAcmeUserKeyPair(provider.name(), newKeyPairsSize),
+                    provider.url(), provider.kid(), provider.hmac()
             ));
         }
-        acmeClients = Map.copyOf(clients);
+        final var newCertificates = loadCertificates(configuration.getCertificates());
+        // published together once loading succeeded: a failed reload must leave the runtime state untouched
+        keyPairsSize = newKeyPairsSize;
         domainsCheckerIPAddresses = configuration.getDomainsCheckerIPAddresses();
-        loadCertificates(configuration.getCertificates());
+        acmeClients = Map.copyOf(clients);
+        this.certificates = newCertificates;
         period = configuration.getDynamicCertificatesManagerPeriod();
         if (scheduledFuture != null) {
             scheduledFuture.cancel(true);
@@ -192,7 +197,7 @@ public class DynamicCertificatesManager implements Runnable {
         }
     }
 
-    private KeyPair loadOrCreateAcmeUserKeyPair(String providerName) {
+    private KeyPair loadOrCreateAcmeUserKeyPair(String providerName, int keyPairsSize) {
         KeyPair pair = store.loadAcmeUserKeyPair(providerName);
         if (pair == null) {
             pair = KeyPairUtils.createKeyPair(keyPairsSize > 0 ? keyPairsSize : DEFAULT_KEYPAIRS_SIZE);
@@ -219,7 +224,7 @@ public class DynamicCertificatesManager implements Runnable {
         return client;
     }
 
-    private void loadCertificates(Map<String, SSLCertificateConfiguration> certificates) throws ConfigurationNotValidException {
+    private Map<String, CertificateData> loadCertificates(Map<String, SSLCertificateConfiguration> certificates) throws ConfigurationNotValidException {
         try {
             final var _certificates = new ConcurrentHashMap<String, CertificateData>();
             for (Entry<String, SSLCertificateConfiguration> e : certificates.entrySet()) {
@@ -238,7 +243,7 @@ public class DynamicCertificatesManager implements Runnable {
                     ));
                 }
             }
-            this.certificates = _certificates; // only certificates/domains specified in the config have to be managed.
+            return _certificates; // only certificates/domains specified in the config have to be managed.
         } catch (GeneralSecurityException | MalformedURLException e) {
             throw new DynamicCertificatesManagerException("Unable to load dynamic certificates configuration.", e);
         }
@@ -392,6 +397,9 @@ public class DynamicCertificatesManager implements Runnable {
                     store.saveCertificate(cert);
                     flushCache = true;
                 }
+            } catch (ConfigurationStoreException ex) {
+                // a store failure is infra-transient: retried at the next cycle, not counted as a CA rejection
+                LOG.error("Store failure while handling dynamic certificate for domain {}", domain, ex);
             } catch (AcmeException | IOException | GeneralSecurityException | RuntimeException ex) {
                 // RuntimeException included on purpose, as an escaped one would silently cancel the scheduled task;
                 // this would kill the renewal loop for every certificate

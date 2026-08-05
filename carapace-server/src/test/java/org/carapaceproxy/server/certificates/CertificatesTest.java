@@ -492,6 +492,7 @@ public class CertificatesTest extends UseAdminServer {
         CertificateData restored = store.loadCertificateForDomain("localhost2");
         assertEquals(previous.getChain(), restored.getChain());
         assertEquals(previous.getState(), restored.getState());
+        assertEquals(previous.getProvider(), restored.getProvider());
     }
 
     @Test
