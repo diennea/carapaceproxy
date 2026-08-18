@@ -40,6 +40,7 @@ import java.util.Set;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
 import org.apache.bookkeeper.stats.NullStatsLogger;
+import org.carapaceproxy.api.ConfigResource;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.utils.TestUtils;
@@ -91,6 +92,29 @@ public class ConfigurationStoreTest {
         } else {
             store = newStore;
         }
+    }
+
+    @Test
+    @Parameters({"in-memory", "db"})
+    public void testToStringConfigurationPreservesBackslashes(String type) throws Exception {
+        this.type = type;
+
+        final String domain = "(\\Qhost.example\\E|\\Qother.example\\E)";
+        final String matcher = "regexp .*\\.example\\.com and header host web\\d+";
+        Properties props = new Properties();
+        props.setProperty("connectionpool.1.domain", domain);
+        props.setProperty("route.5.match", matcher);
+        updateConfigStore(props);
+
+        // round-trip through the same parse path used by rewriteConfiguration and /api/config/apply
+        ConfigurationStore reloaded = ConfigResource.buildStore(store.toStringConfiguration());
+        assertThat(reloaded.getProperty("connectionpool.1.domain", null), is(domain));
+        assertThat(reloaded.getProperty("route.5.match", null), is(matcher));
+
+        // a second round-trip must be stable too
+        ConfigurationStore reloadedTwice = ConfigResource.buildStore(reloaded.toStringConfiguration());
+        assertThat(reloadedTwice.getProperty("connectionpool.1.domain", null), is(domain));
+        assertThat(reloadedTwice.getProperty("route.5.match", null), is(matcher));
     }
 
     @Test

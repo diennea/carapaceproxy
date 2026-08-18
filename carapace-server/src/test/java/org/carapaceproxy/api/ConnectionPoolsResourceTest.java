@@ -191,6 +191,29 @@ public class ConnectionPoolsResourceTest extends UseAdminServer {
     }
 
     @Test
+    public void testRegexDomainSurvivesSubsequentSaves() throws Exception {
+        configureAndStartServer();
+        final var regexDomain = "(\\Qhost.example\\E|\\Qother.example\\E)";
+        try (final var client = new RawHttpClient("localhost", 8761)) {
+            final var pool = buildConnectionPoolBean();
+            pool.setDomain(regexDomain);
+            final var response = client.post(CONNECTION_POOLS_PATH, null, pool, credentials);
+            assertThat(response.getStatusLine(), containsString(CREATED));
+            assertThat(server.getCurrentConfiguration().getConnectionPools().get(ALTERNATIVE_EXAMPLE_COM).getDomain(), is(regexDomain));
+
+            // any further save re-serializes the whole configuration: the regex pool must not lose its backslashes
+            final var otherPool = buildConnectionPoolBean();
+            otherPool.setId(DEFAULT_EXAMPLE_ORG);
+            final var putResponse = client.put(CONNECTION_POOLS_PATH + "/" + DEFAULT_EXAMPLE_ORG, null, otherPool, credentials);
+            assertThat(putResponse.getStatusLine(), containsString(OK));
+
+            final var result = client.get(CONNECTION_POOLS_PATH + "/" + ALTERNATIVE_EXAMPLE_COM, credentials);
+            final var resultBean = MAPPER.readValue(result.getBodyString(), ConnectionPoolsResource.ConnectionPoolBean.class);
+            assertThat(resultBean.getDomain(), is(regexDomain));
+        }
+    }
+
+    @Test
     public void testDelete() throws Exception {
         configureAndStartServer();
         try (final var client = new RawHttpClient("localhost", 8761)) {

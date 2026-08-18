@@ -20,14 +20,17 @@
 package org.carapaceproxy.configstore;
 
 import herddb.utils.BooleanHolder;
+import java.io.IOException;
+import java.io.StringWriter;
+import java.io.UncheckedIOException;
 import java.security.KeyPair;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
+import java.util.stream.Collectors;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 
@@ -43,12 +46,28 @@ public interface ConfigurationStore extends AutoCloseable {
 
     String PROPERTY_VALUES_SEPARATOR = ",";
 
+    /**
+     * Serialize the configuration as a {@link Properties}-format string.
+     * <br>
+     * The output must round-trip through {@link Properties#load(java.io.Reader)} without altering values,
+     * so it is generated with {@link Properties#store(java.io.Writer, String)}, which escapes backslashes
+     * and other special characters.
+     *
+     * @return the configuration properties, one per line, sorted by key
+     */
     default String toStringConfiguration() {
-        Set<String> props = new TreeSet<>();
-        forEach((k, v) -> props.add(k + "=" + v));
-        StringBuilder builder = new StringBuilder();
-        props.forEach(p -> builder.append(p).append("\n"));
-        return builder.toString();
+        final Properties props = new Properties();
+        forEach(props::setProperty);
+        final StringWriter writer = new StringWriter();
+        try {
+            props.store(writer, null);
+        } catch (IOException impossible) {
+            throw new UncheckedIOException(impossible);
+        }
+        return writer.toString().lines()
+                .filter(line -> !line.startsWith("#")) // drop the timestamp comment store() always writes
+                .sorted()
+                .collect(Collectors.joining("\n", "", "\n"));
     }
 
     String getProperty(String key, String defaultValue);
