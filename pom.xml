@@ -118,7 +118,7 @@
 
         <libs.jetty>9.4.57.v20241219</libs.jetty>
         <libs.jersey>2.35</libs.jersey>
-        <libs.jackson>2.14.3</libs.jackson>
+        <libs.jackson>2.22.2</libs.jackson>
         <libs.javassist>3.27.0-GA</libs.javassist>
         <libs.slf4j>2.0.18</libs.slf4j>
         <libs.logback>1.5.38</libs.logback>
