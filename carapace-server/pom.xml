@@ -130,6 +130,7 @@
             </exclusions>
         </dependency>
         <dependency>
+            <!-- Prometheus client 0.x API, which BookKeeper still requires; see #625 -->
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus-simpleclient</artifactId>
         </dependency>

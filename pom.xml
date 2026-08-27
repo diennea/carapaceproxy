@@ -106,7 +106,7 @@
         <libs.zookkeeper>3.8.6</libs.zookkeeper>
         <libs.curator>5.2.0</libs.curator>
         <libs.prometheus>0.16.0</libs.prometheus>
-        <libs.micrometer>1.14.14</libs.micrometer>
+        <libs.micrometer>1.17.1</libs.micrometer>
         <libs.herddb>0.26.1</libs.herddb>
 
         <libs.commons.codec>1.17.1</libs.commons.codec>
