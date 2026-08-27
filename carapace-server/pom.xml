@@ -397,6 +397,16 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
             </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <configuration>
+                    <!-- JavaCC-generated parser classes live in the .parser subpackage; hand-written matchers in requestmatcher/ are kept -->
+                    <excludes>
+                        <exclude>**/requestmatcher/parser/*.class</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>

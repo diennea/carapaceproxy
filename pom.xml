@@ -89,6 +89,8 @@
     </distributionManagement>
 
     <properties>
+        <!-- Keeps @{argLine} resolvable when JaCoCo does not run -->
+        <argLine></argLine>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <toolchain.java.version>21</toolchain.java.version>
         <maven.compiler.release>${toolchain.java.version}</maven.compiler.release>
@@ -346,6 +348,7 @@
                         <reuseForks>false</reuseForks>
                         <trimStackTrace>false</trimStackTrace>
                         <argLine>
+                            @{argLine}
                             --add-opens java.base/java.io=ALL-UNNAMED
                             --add-opens java.base/java.lang=ALL-UNNAMED
                             --add-opens java.base/java.util=ALL-UNNAMED
@@ -424,6 +427,26 @@
             </plugins>
         </pluginManagement>
         <plugins>
+            <plugin>
+                <!-- Bound here so every module gets the agent -->
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.15</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>build-helper-maven-plugin</artifactId>
