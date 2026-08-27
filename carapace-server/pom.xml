@@ -153,7 +153,17 @@
                     <artifactId>commons-logging</artifactId>
                     <groupId>commons-logging</groupId>
                 </exclusion>
+                <!-- Abandoned since 2014, replaced by at.yawk.lz4:lz4-java -->
+                <exclusion>
+                    <groupId>net.jpountz.lz4</groupId>
+                    <artifactId>lz4</artifactId>
+                </exclusion>
             </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>at.yawk.lz4</groupId>
+            <artifactId>lz4-java</artifactId>
+            <version>1.11.2</version>
         </dependency>
         <dependency>
             <!-- needed at runtime by the AWS SDK apache-client's httpclient -->
