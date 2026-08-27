@@ -475,6 +475,18 @@
                         <configuration>
                             <rules>
                                 <banDependencyManagementScope />
+                                <requireSameVersions>
+                                    <dependencies>
+                                        <dependency>org.apache.bookkeeper</dependency>
+                                        <dependency>org.apache.bookkeeper.stats</dependency>
+                                        <dependency>org.apache.bookkeeper.http</dependency>
+                                    </dependencies>
+                                </requireSameVersions>
+                                <requireSameVersions>
+                                    <dependencies>
+                                        <dependency>org.apache.zookeeper</dependency>
+                                    </dependencies>
+                                </requireSameVersions>
                                 <banDuplicatePomDependencyVersions />
                                 <banDynamicVersions>
                                     <ignores>
