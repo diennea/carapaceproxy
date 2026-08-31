@@ -96,11 +96,11 @@
         <maven.compiler.release>${toolchain.java.version}</maven.compiler.release>
         <javacc-maven-plugin.version>2.4</javacc-maven-plugin.version>
 
-        <libs.projectreactor>2024.0.6</libs.projectreactor>
-        <libs.netty>4.1.121.Final</libs.netty>
+        <libs.projectreactor>2024.0.18</libs.projectreactor>
+        <libs.netty>4.1.137.Final</libs.netty>
         <libs.acme4j>5.1.0</libs.acme4j>
         <libs.bouncycastle>1.84</libs.bouncycastle>
-        <libs.awssdk>2.32.16</libs.awssdk>
+        <libs.awssdk>2.45.1</libs.awssdk>
         <libs.caffeine>3.0.5</libs.caffeine>
         <libs.antlr>4.3.1</libs.antlr>
 
@@ -108,7 +108,7 @@
         <libs.zookkeeper>3.8.6</libs.zookkeeper>
         <libs.curator>5.2.0</libs.curator>
         <libs.prometheus>0.16.0</libs.prometheus>
-        <libs.micrometer>1.14.14</libs.micrometer>
+        <libs.micrometer>1.17.1</libs.micrometer>
         <libs.herddb>0.26.1</libs.herddb>
 
         <libs.commons.codec>1.17.1</libs.commons.codec>
