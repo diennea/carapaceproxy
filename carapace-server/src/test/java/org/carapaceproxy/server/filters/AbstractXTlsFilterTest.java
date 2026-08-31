@@ -20,16 +20,14 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.KeyStoreRule;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
+import org.junit.BeforeClass;
 import org.junit.ClassRule;
-import org.junit.Rule;
 import org.junit.rules.TemporaryFolder;
 import reactor.netty.http.HttpProtocol;
 
 public abstract class AbstractXTlsFilterTest {
 
     public static final String TLS_PROTOCOL = "TLSv1.2";
-
-    protected final boolean http1;
 
     @ClassRule(order = 0)
     public static TemporaryFolder tmpDir = new TemporaryFolder();
@@ -40,27 +38,26 @@ public abstract class AbstractXTlsFilterTest {
     @ClassRule(order = 2)
     public static KeyStoreRule backendKeyStore = new KeyStoreRule(tmpDir);
 
-    @Rule(order = 3)
-    public WireMockRule wireMockRule;
+    @BeforeClass
+    public static void setupDefaultSslContext() throws GeneralSecurityException {
+        SSLContext sslContext = SSLContext.getInstance(TLS_PROTOCOL);
+        sslContext.init(null, carapaceKeyStore.getTrustManagerFactory().getTrustManagers(), null);
+        SSLContext.setDefault(sslContext);
+    }
 
-    protected AbstractXTlsFilterTest(boolean http1) throws GeneralSecurityException {
-        this.http1 = http1;
-        this.wireMockRule = new WireMockRule(WireMockConfiguration.options()
+    // Per-test WireMock backend; parameterized tests can't feed a @Rule, so each test owns the lifecycle.
+    protected WireMockRule newWireMock(boolean http1) {
+        return new WireMockRule(WireMockConfiguration.options()
                 .dynamicPort()
                 .dynamicHttpsPort()
                 .http2TlsDisabled(http1)
                 .http2PlainDisabled(http1)
                 .keystoreType(backendKeyStore.getKeyStore().getType())
                 .keystorePath(backendKeyStore.getKeyStoreFile().getAbsolutePath())
-                .keystorePassword(new String(backendKeyStore.getKeyStorePassword()))
-        );
-
-        SSLContext sslContext = SSLContext.getInstance(TLS_PROTOCOL);
-        sslContext.init(null, carapaceKeyStore.getTrustManagerFactory().getTrustManagers(), null);
-        SSLContext.setDefault(sslContext);
+                .keystorePassword(new String(backendKeyStore.getKeyStorePassword())));
     }
 
-    protected HttpProxyServer startServer(boolean ssl, RequestFilterConfiguration... filters)
+    protected HttpProxyServer startServer(WireMockRule wireMockRule, boolean http1, boolean ssl, RequestFilterConfiguration... filters)
             throws InterruptedException, ConfigurationNotValidException, IOException {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         final String certificate = carapaceKeyStore.getKeyStoreFile().getAbsolutePath();
@@ -91,7 +88,7 @@ public abstract class AbstractXTlsFilterTest {
         return server;
     }
 
-    protected void assertResponseContains(int port, boolean ssl, String expected) throws IOException, InterruptedException {
+    protected void assertResponseContains(boolean http1, int port, boolean ssl, String expected) throws IOException, InterruptedException {
         if (http1) {
             try (var client = new RawHttpClient("localhost", port, ssl, null, new String[]{TLS_PROTOCOL}, null, 10_000)) {
                 String response = client.executeRequest("""
