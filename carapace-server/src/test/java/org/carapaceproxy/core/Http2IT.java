@@ -26,17 +26,18 @@ import java.util.List;
 import java.util.Set;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
+import junitparams.JUnitParamsRunner;
+import junitparams.Parameters;
+import junitparams.naming.TestCaseName;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
 import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.client.HttpClient;
 
-@RunWith(Parameterized.class)
+@RunWith(JUnitParamsRunner.class)
 public class Http2IT {
 
     public static final String RESPONSE = "it <b>works</b> !!";
@@ -46,17 +47,6 @@ public class Http2IT {
     @Rule
     public TemporaryFolder tmpDir = new TemporaryFolder();
 
-    private final HttpProtocol protocol;
-    private final Set<HttpProtocol> carapaceProtocols;
-    private final boolean withCache;
-
-    public Http2IT(final HttpProtocol protocol, final Set<HttpProtocol> carapaceProtocols, final boolean withCache) {
-        this.protocol = protocol;
-        this.carapaceProtocols = carapaceProtocols;
-        this.withCache = withCache;
-    }
-
-    @Parameters(name = "Client: {0}, Carapace conf: {1}, using cache: {2}")
     public static Collection<Object[]> data() {
         return List.of(
                 new Object[]{HttpProtocol.HTTP11, Set.of(HttpProtocol.HTTP11), false},
@@ -69,7 +59,9 @@ public class Http2IT {
     }
 
     @Test
-    public void test() throws IOException, ConfigurationNotValidException, InterruptedException {
+    @Parameters(method = "data")
+    @TestCaseName("Client: {0}, Carapace conf: {1}, using cache: {2}")
+    public void test(final HttpProtocol protocol, final Set<HttpProtocol> carapaceProtocols, final boolean withCache) throws IOException, ConfigurationNotValidException, InterruptedException {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(HttpResponseStatus.OK.code())
@@ -99,14 +91,14 @@ public class Http2IT {
 
             server.start();
             final var port = server.getLocalPort();
-            assertThat(executeRequest(port), is(RESPONSE));
+            assertThat(executeRequest(protocol, port), is(RESPONSE));
             if (withCache) {
-                assertThat(executeRequest(port), is(RESPONSE));
+                assertThat(executeRequest(protocol, port), is(RESPONSE));
             }
         }
     }
 
-    private String executeRequest(final int port) {
+    private String executeRequest(final HttpProtocol protocol, final int port) {
         return HttpClient.create()
                 .protocol(protocol)
                 .get()

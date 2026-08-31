@@ -31,8 +31,9 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import java.util.List;
 import java.util.Properties;
+import junitparams.JUnitParamsRunner;
+import junitparams.Parameters;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
@@ -47,16 +48,9 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
 
-@RunWith(Parameterized.class)
+@RunWith(JUnitParamsRunner.class)
 public class UnreachableBackendIT {
-
-    @Parameters(name = "useCache = {0}")
-    public static Iterable<Boolean> data() {
-        return List.of(true, false);
-    }
 
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
@@ -64,14 +58,9 @@ public class UnreachableBackendIT {
     @Rule
     public TemporaryFolder tmpDir = new TemporaryFolder();
 
-    private final boolean useCache;
-
-    public UnreachableBackendIT(boolean useCache) {
-        this.useCache = useCache;
-    }
-
     @Test
-    public void testWithUnreachableBackend() throws Exception {
+    @Parameters({"true", "false"})
+    public void testWithUnreachableBackend(boolean useCache) throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -108,7 +97,8 @@ public class UnreachableBackendIT {
     }
 
     @Test
-    public void testEmptyResponse() throws Exception {
+    @Parameters({"true", "false"})
+    public void testEmptyResponse(boolean useCache) throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -164,7 +154,8 @@ public class UnreachableBackendIT {
     }
 
     @Test
-    public void testConnectionResetByPeer() throws Exception {
+    @Parameters({"true", "false"})
+    public void testConnectionResetByPeer(boolean useCache) throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -197,7 +188,8 @@ public class UnreachableBackendIT {
     }
 
     @Test
-    public void testNonHttpResponseThenClose() throws Exception {
+    @Parameters({"true", "false"})
+    public void testNonHttpResponseThenClose(boolean useCache) throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withFault(Fault.RANDOM_DATA_THEN_CLOSE)));
