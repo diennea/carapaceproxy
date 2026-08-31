@@ -135,8 +135,8 @@
         <libs.junit>4.13.2</libs.junit>
         <libs.junitparams>1.1.1</libs.junitparams>
         <libs.wiremock>3.13.1</libs.wiremock>
-        <libs.powermock>2.0.9</libs.powermock>
-        <libs.objenesis>3.0.1</libs.objenesis>
+        <libs.mockito>5.20.0</libs.mockito>
+        <libs.objenesis>3.3</libs.objenesis>
         <libs.hamcrest>3.0</libs.hamcrest>
     </properties>
 
@@ -293,6 +293,11 @@
                         <artifactId>hamcrest-core</artifactId>
                     </exclusion>
                 </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>org.mockito</groupId>
+                <artifactId>mockito-core</artifactId>
+                <version>${libs.mockito}</version>
             </dependency>
             <dependency>
                 <groupId>org.objenesis</groupId>
