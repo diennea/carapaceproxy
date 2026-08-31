@@ -39,6 +39,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -53,6 +54,7 @@ import static org.mockito.Mockito.when;
 import static org.shredzone.acme4j.Status.INVALID;
 import static org.shredzone.acme4j.Status.VALID;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.net.URI;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
@@ -61,6 +63,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import junitparams.JUnitParamsRunner;
@@ -74,9 +78,9 @@ import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.Listeners;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.powermock.reflect.Whitebox;
 import org.shredzone.acme4j.Certificate;
 import org.shredzone.acme4j.Login;
 import org.shredzone.acme4j.Order;
@@ -108,6 +112,48 @@ public class DynamicCertificatesManagerTest {
     }
 
     protected static final int MAX_ATTEMPTS = 7;
+
+    /**
+     * Reconfiguring the execution period from an initial value of '0' to > 0. Because of the zero period the manager
+     * never starts and when reconfigured with period > 0 it still won't run unless it was started before (#33).
+     * Relocated from ManagersExecutionTest so the scheduler injection can stay package-private.
+     */
+    @Test
+    public void testDynamicCertificatesManagerExecution() throws ConfigurationNotValidException {
+        RuntimeServerConfiguration config = new RuntimeServerConfiguration();
+        ScheduledExecutorService scheduler = mock(ScheduledExecutorService.class);
+        when(scheduler.scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(mock(ScheduledFuture.class));
+        DynamicCertificatesManager man = new DynamicCertificatesManager(null, () -> scheduler);
+        man.setConfigurationStore(mock(ConfigurationStore.class));
+
+        // With period 0 the manager never starts
+        man.setPeriod(0);
+        man.start();
+        verify(scheduler, never()).scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)); // never called
+
+        // With new period >0 the manager should run whether started before
+        config.setDynamicCertificatesManagerPeriod(1);
+        man.reloadConfiguration(config);
+        assertEquals(1, man.getPeriod());
+        verify(scheduler, times(1)).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)); // once
+
+        man.stop();
+        config.setDynamicCertificatesManagerPeriod(0);
+        man.reloadConfiguration(config);
+        assertEquals(0, man.getPeriod());
+        man.start();
+        verify(scheduler, times(1)).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)); // never
+        man.stop();
+
+        // With new period >0 the manager should not run because not started before.
+        config.setDynamicCertificatesManagerPeriod(1);
+        man.reloadConfiguration(config);
+        assertEquals(1, man.getPeriod());
+        verify(scheduler, times(1)).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)); // never
+
+        man.start();
+        verify(scheduler, times(2)).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)); // once
+    }
 
     @Test
     @Parameters({
@@ -334,9 +380,9 @@ public class DynamicCertificatesManagerTest {
         }
     }
 
-    // must run after reloadConfiguration, which rebuilds the client map; by-name, because there are other map fields
+    // must run after reloadConfiguration, which rebuilds the client map
     private static void injectAcmeClients(DynamicCertificatesManager man, Map<String, ACMEClient> clients) {
-        Whitebox.setInternalState(man, "acmeClients", clients);
+        man.setAcmeClients(clients);
     }
 
     private void assertCertificateState(String domain, DynamicCertificateState expectedState, int expectedCycleCount, DynamicCertificatesManager dCMan) {
@@ -404,7 +450,7 @@ public class DynamicCertificatesManagerTest {
         when(r53Client.isDnsChallengeForDomainAvailable(any(), any())).thenReturn(
                 !(runCase.equals("challenge_creation_failed_n_reboot") || runCase.equals("challenge_check_limit_expired"))
         );
-        Whitebox.setInternalState(man, r53Client);
+        man.setRoute53Client(r53Client);
 
         // Store mocking
         ConfigurationStore store = mock(ConfigurationStore.class);
@@ -542,7 +588,7 @@ public class DynamicCertificatesManagerTest {
         when(r53Client.isDnsChallengeForDomainAvailable(any(), any())).thenReturn(
                 !(runCase.equals("challenge_creation_failed_n_reboot") || runCase.equals("challenge_check_limit_expired"))
         );
-        Whitebox.setInternalState(man, r53Client);
+        man.setRoute53Client(r53Client);
 
         // Store mocking
         ConfigurationStore store = mock(ConfigurationStore.class);
@@ -823,7 +869,7 @@ public class DynamicCertificatesManagerTest {
         man.setConfigurationStore(store);
         if (r53Client != null) {
             man.initAWSClient("access", "secret");
-            Whitebox.setInternalState(man, r53Client);
+            man.setRoute53Client(r53Client);
         }
         RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
         conf.configure(new PropertiesConfigurationStore(props));
@@ -1124,13 +1170,21 @@ public class DynamicCertificatesManagerTest {
         conf.configure(new PropertiesConfigurationStore(new Properties()));
 
         man.reloadConfiguration(conf);
-        ACMEClient before = Whitebox.<Map<String, ACMEClient>>getInternalState(man, "acmeClients").get(DEFAULT_PROVIDER_NAME);
-        assertSame(backupKey, Whitebox.getInternalState(before, KeyPair.class));
+        assertSame(backupKey, accountKeyOf(man));
 
         // a restore replaced the account key in the store: the reload that applies it picks the new key
         when(store.loadAcmeUserKeyPair(DEFAULT_PROVIDER_NAME)).thenReturn(restoredKey);
         man.reloadConfiguration(conf);
-        ACMEClient after = Whitebox.<Map<String, ACMEClient>>getInternalState(man, "acmeClients").get(DEFAULT_PROVIDER_NAME);
-        assertSame(restoredKey, Whitebox.getInternalState(after, KeyPair.class));
+        assertSame(restoredKey, accountKeyOf(man));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static KeyPair accountKeyOf(DynamicCertificatesManager man) throws Exception {
+        Field clients = DynamicCertificatesManager.class.getDeclaredField("acmeClients");
+        clients.setAccessible(true);
+        ACMEClient client = ((Map<String, ACMEClient>) clients.get(man)).get(DEFAULT_PROVIDER_NAME);
+        Field userKey = ACMEClient.class.getDeclaredField("userKey");
+        userKey.setAccessible(true);
+        return (KeyPair) userKey.get(client);
     }
 }
