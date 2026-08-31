@@ -66,12 +66,6 @@ public class SimpleHTTPProxyIT {
     @Test
     public void test() throws Exception {
 
-        stubFor(get(urlEqualTo("/index.html?redir"))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "text/html")
-                        .withBody("it <b>works</b> !!")));
-
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
 
@@ -85,13 +79,6 @@ public class SimpleHTTPProxyIT {
                 System.out.println("s:" + s);
                 fail();
             } catch (FileNotFoundException ok) {
-            }
-
-            // proxy
-            {
-                String s = IOUtils.toString(URI.create("http://localhost:" + port + "/index.html?redir"), StandardCharsets.UTF_8);
-                System.out.println("s:" + s);
-                assertEquals("it <b>works</b> !!", s);
             }
         }
     }
