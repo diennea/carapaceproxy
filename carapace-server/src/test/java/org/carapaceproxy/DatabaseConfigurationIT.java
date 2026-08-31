@@ -22,17 +22,11 @@ package org.carapaceproxy;
 
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import java.io.File;
 import java.util.Properties;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;
-import org.carapaceproxy.server.filters.XForwardedForRequestFilter;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -64,72 +58,4 @@ public class DatabaseConfigurationIT {
         }
 
     }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    @Ignore("Disabled since its introduction in 2018 and never finished. Exercises HerdDB-backed "
-            + "dynamic filter reconfiguration through the deprecated applyDynamicConfigurationFromAPI path.")
-    public void testChangeFiltersConfiguration() throws Exception {
-
-        File databaseFolder = tmpDir.newFolder();
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
-
-            Properties configurationAtBoot = new Properties();
-            configurationAtBoot.put("db.jdbc.url", "jdbc:herddb:localhost");
-            configurationAtBoot.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
-
-            server.configureAtBoot(new PropertiesConfigurationStore(configurationAtBoot));
-            server.start();
-
-            Properties newConfig = new Properties();
-            newConfig.put("filter.1.type", "add-x-forwarded-for");
-            server.applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(newConfig));
-
-            assertThat(server.getDynamicConfigurationStore(), instanceOf(HerdDBConfigurationStore.class));
-            assertEquals(1, server.getFilters().size());
-            assertTrue(server.getFilters().get(0) instanceof XForwardedForRequestFilter);
-
-            // add a filter
-            Properties configuration = new Properties();
-            configuration.put("filter.1.type", "add-x-forwarded-for");
-            configuration.put("filter.2.type", "match-user-regexp");
-            server.applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(configuration));
-
-            // verify configuration is applied
-            assertEquals(2, server.getFilters().size());
-            assertTrue(server.getFilters().get(0) instanceof XForwardedForRequestFilter);
-            assertTrue(server.getFilters().get(1) instanceof RegexpMapUserIdFilter);
-        }
-
-        // reboot, new configuration MUST be kept
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
-            Properties configurationAtBoot = new Properties();
-            configurationAtBoot.put("db.jdbc.url", "jdbc:herddb:localhost");
-            configurationAtBoot.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
-            server.configureAtBoot(new PropertiesConfigurationStore(configurationAtBoot));
-
-            assertEquals(2, server.getFilters().size());
-            assertTrue(server.getFilters().get(0) instanceof XForwardedForRequestFilter);
-            assertTrue(server.getFilters().get(1) instanceof RegexpMapUserIdFilter);
-
-            server.start();
-
-            // remove one filter
-            Properties configuration = new Properties();
-            configuration.put("filter.2.type", "match-user-regexp");
-            server.applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(configuration));
-
-        }
-        // reboot, new configuration MUST be kept
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
-            Properties configurationAtBoot = new Properties();
-            configurationAtBoot.put("db.jdbc.url", "jdbc:herddb:localhost");
-            configurationAtBoot.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
-            server.configureAtBoot(new PropertiesConfigurationStore(configurationAtBoot));
-
-            assertEquals(1, server.getFilters().size());
-            assertTrue(server.getFilters().get(0) instanceof RegexpMapUserIdFilter);
-        }
-    }
-
 }
