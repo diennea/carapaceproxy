@@ -61,7 +61,7 @@ public class ClusterConfigurationStoreIT {
      * Shortens the wait of {@link HerdDBConfigurationStore} on the tablespace, so that a broken setup fails the
      * test instead of hanging on the five minutes it waits by default. The store reads the property once, when
      * its class is loaded, so this only takes effect while this class is the first to use the store in the fork,
-     * which is what surefire does here by not reusing forks.
+     * which is what failsafe does here by not reusing forks.
      */
     @BeforeClass
     public static void shortenTableSpaceTimeout() {
@@ -70,7 +70,7 @@ public class ClusterConfigurationStoreIT {
 
     /**
      * Restores the timeout, as the property is process wide and this class shares the JVM with other tests
-     * whenever surefire is configured to reuse forks.
+     * whenever failsafe is configured to reuse forks.
      */
     @AfterClass
     public static void restoreTableSpaceTimeout() {

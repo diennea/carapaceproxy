@@ -69,10 +69,12 @@ jobs:
           path: carapace-*/target/carapace-*.jar
           retention-days: 7
       - name: 'Run validations with Maven'
-        run: ./mvnw -B test --file pom.xml
+        run: ./mvnw -B verify --file pom.xml
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: test-results # as expected by pr-validation-report workflow
-          path: carapace-*/target/surefire-reports/*.xml
+          path: |
+            carapace-*/target/surefire-reports/*.xml
+            carapace-*/target/failsafe-reports/TEST-*.xml
           retention-days: 1
