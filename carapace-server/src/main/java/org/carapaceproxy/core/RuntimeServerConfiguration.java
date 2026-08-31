@@ -447,12 +447,35 @@ public class RuntimeServerConfiguration {
                         properties.getInt(prefix + "maxkeepaliverequests", maxKeepAliveRequests),
                         properties.getString(prefix + "forwarded", DEFAULT_FORWARDED_STRATEGY),
                         properties.getValues(prefix + "trustedips", Set.of()),
-                        protocols.isEmpty() ? getDefaultHttpProtocols(ssl) : protocols.stream()
-                                .map(String::toUpperCase)
-                                .map(HttpProtocol::valueOf)
-                                .collect(Collectors.toUnmodifiableSet()),
+                        parseListenerProtocols(protocols, ssl, i),
                         new DefaultChannelGroup(new DefaultEventExecutor())));
             }
+        }
+    }
+
+    /**
+     * Parses the protocols configured for one listener, falling back to the defaults for its TLS mode
+     * when none are set.
+     *
+     * @param protocols     the configured protocol names, case-insensitive, possibly empty
+     * @param ssl           whether the listener is TLS-enabled, which selects the defaults
+     * @param listenerIndex the listener index, used to name the offending property in the error
+     * @return the parsed protocols, or the defaults when none are configured
+     * @throws ConfigurationNotValidException if a name is not one of HTTP11, H2, H2C
+     */
+    private Set<HttpProtocol> parseListenerProtocols(Set<String> protocols, boolean ssl, int listenerIndex) throws ConfigurationNotValidException {
+        if (protocols.isEmpty()) {
+            return getDefaultHttpProtocols(ssl);
+        }
+        try {
+            return protocols.stream()
+                    .map(String::toUpperCase)
+                    .map(HttpProtocol::valueOf)
+                    .collect(Collectors.toUnmodifiableSet());
+        } catch (IllegalArgumentException e) {
+            // Wrap the raw enum-parse failure into the configuration contract (supported: HTTP11, H2, H2C).
+            throw new ConfigurationNotValidException(
+                    "Invalid value for listener." + listenerIndex + ".protocol, supported: HTTP11, H2, H2C (" + e.getMessage() + ")");
         }
     }
 
