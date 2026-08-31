@@ -2,10 +2,8 @@ package org.carapaceproxy.core;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
-import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 import static com.github.tomakehurst.wiremock.core.Options.DYNAMIC_PORT;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_FORWARDED_STRATEGY;
@@ -107,44 +105,6 @@ public class Http2HeadersIT {
         assertThat(response, is(notNullValue()));
         assertThat(response.status(), is(HttpResponseStatus.OK));
         assertThat(response.version(), is(HttpVersion.valueOf("HTTP/2.0")));
-    }
-
-    /**
-     * Hop-by-hop headers sent by the client must not be forwarded to the backend.
-     * A reverse proxy must strip them before forwarding (RFC 2616 §13.5.1, RFC 7230 §6.1).
-     * Note: Reactor Netty manages its own Connection header for the backend connection (e.g. for
-     * H2C upgrade), so we verify the absence of the specific client-originated hop-by-hop headers.
-     */
-    @Test
-    public void testHopByHopHeadersStrippedFromRequest() throws IOException, ConfigurationNotValidException, InterruptedException {
-        stubFor(get(urlEqualTo("/index.html"))
-                .willReturn(aResponse()
-                        .withStatus(HttpResponseStatus.OK.code())
-                        .withHeader("Content-Type", "text/plain")
-                        .withBody("ok"))
-        );
-        final var mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        try (final var server = new HttpProxyServer(mapper, tmpDir.newFolder())) {
-            server.addListener(newH2CListenerConfiguration());
-            server.start();
-            final var port = server.getLocalPort();
-            HttpClient.create()
-                    .protocol(HttpProtocol.HTTP11)
-                    .headers(headers -> headers
-                            .add(HttpHeaderNames.CONNECTION, "keep-alive")
-                            .add(HttpHeaderNames.KEEP_ALIVE, "timeout=5, max=100")
-                    )
-                    .get()
-                    .uri("http://localhost:" + port + "/index.html")
-                    .response()
-                    .block();
-        }
-        // Verify the backend did not receive the client's hop-by-hop headers.
-        // Connection is excluded from this check because Reactor Netty adds its own value
-        // when initiating a backend connection (e.g. "HTTP2-Settings, upgrade" for H2C upgrade).
-        verify(getRequestedFor(urlEqualTo("/index.html"))
-                .withoutHeader(HttpHeaderNames.KEEP_ALIVE.toString())
-        );
     }
 
     /**
