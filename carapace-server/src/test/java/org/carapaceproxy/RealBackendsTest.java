@@ -76,7 +76,8 @@ public class RealBackendsTest {
     public TemporaryFolder tmpDir = new TemporaryFolder();
 
     @Test
-    @Ignore
+    @Ignore("Manual load/concurrency harness, not runnable in CI: set 'host' to a real backend on port 8443 "
+            + "(bearer-authenticated) and run 15 threads x 1000 requests to stress connection pooling (#243).")
     public void testRequestsRealBackend() throws Exception {
         String host = "";
         int threads = 15;

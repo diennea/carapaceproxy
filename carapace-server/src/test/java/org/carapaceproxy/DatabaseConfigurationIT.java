@@ -67,7 +67,8 @@ public class DatabaseConfigurationIT {
 
     @SuppressWarnings("deprecation")
     @Test
-    @Ignore
+    @Ignore("Disabled since its introduction in 2018 and never finished. Exercises HerdDB-backed "
+            + "dynamic filter reconfiguration through the deprecated applyDynamicConfigurationFromAPI path.")
     public void testChangeFiltersConfiguration() throws Exception {
 
         File databaseFolder = tmpDir.newFolder();
