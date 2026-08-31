@@ -23,6 +23,7 @@ import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -31,6 +32,8 @@ import java.util.Properties;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 /**
  * Tests for the {@code acme.<n>.*} provider family and the {@code certificate.<n>.provider} property.
@@ -45,6 +48,92 @@ public class RuntimeServerConfigurationTest {
         final var config = new RuntimeServerConfiguration();
         config.configure(new PropertiesConfigurationStore(props));
         return config;
+    }
+
+    @Test
+    public void testEmptyConfigurationYieldsValidDefaults() throws Exception {
+        final var conf = configure();
+
+        assertEquals(8192, conf.getMaxHeaderSize());
+        assertEquals(60000, conf.getIdleTimeout());
+        assertEquals(100000, conf.getMaxLifeTime());
+        assertEquals(300000, conf.getDisposeTimeout());
+        assertEquals(5000, conf.getHealthConnectTimeout());
+        assertEquals(30000L, conf.getWarmupPeriod());
+        assertEquals("yyyy-MM-dd HH:mm:ss.SSS", conf.getAccessLogTimestampFormat());
+        assertTrue(conf.getListeners().isEmpty());
+        assertTrue(conf.getCertificates().isEmpty());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "connectionsmanager.idletimeout, 0",
+        "connectionsmanager.maxlifetime, 0",
+        "carapace.maxheadersize, 0",
+        "healthmanager.connecttimeout, -1"
+    })
+    public void testRejectsNonPositiveNumericConfig(String key, String value) {
+        assertThrows(ConfigurationNotValidException.class, () -> configure(key, value));
+    }
+
+    @Test
+    public void testRejectsNonNumericIntValue() {
+        assertThrows(ConfigurationNotValidException.class,
+                () -> configure("connectionsmanager.disposetimeout", "abc"));
+    }
+
+    @Test
+    public void testRejectsInvalidAccessLogTimestampFormat() {
+        assertThrows(ConfigurationNotValidException.class,
+                () -> configure("accesslog.format.timestamp", "'unterminated"));
+    }
+
+    @Test
+    public void testRejectsNonWritableLocalCertificatesStorePath() {
+        assertThrows(ConfigurationNotValidException.class, () -> configure(
+                "dynamiccertificatesmanager.localcertificates.store.path", "/nonexistent-carapace-test-dir/certs"));
+    }
+
+    @Test
+    public void testRejectsInvalidCertificateMode() {
+        assertThrows(ConfigurationNotValidException.class, () -> configure(
+                "certificate.0.hostname", "example.com",
+                "certificate.0.mode", "badmode"));
+    }
+
+    @Test
+    public void testRejectsConnectionPoolWithEmptyDomain() {
+        assertThrows(ConfigurationNotValidException.class, () -> configure(
+                "connectionpool.0.id", "p0",
+                "connectionpool.0.enabled", "true",
+                "connectionpool.0.domain", ""));
+    }
+
+    @Test
+    public void testRejectsUnknownFilterType() {
+        assertThrows(ConfigurationNotValidException.class, () -> configure("filter.0.type", "badtype"));
+    }
+
+    @Test
+    public void testRejectsSslListenerWithoutDefaultCertificate() {
+        assertThrows(ConfigurationNotValidException.class, () -> configure(
+                "listener.0.port", "8080",
+                "listener.0.ssl", "true"));
+    }
+
+    @Test
+    public void testRejectsInvalidListenerProtocol() {
+        // Regression: an unknown protocol used to escape as a raw IllegalArgumentException.
+        assertThrows(ConfigurationNotValidException.class, () -> configure(
+                "listener.0.port", "8080",
+                "listener.0.protocol", "BADPROTO"));
+    }
+
+    @Test
+    public void testAcceptsValidListenerProtocol() {
+        assertDoesNotThrow(() -> configure(
+                "listener.0.port", "8080",
+                "listener.0.protocol", "H2C"));
     }
 
     @Test
