@@ -146,8 +146,7 @@
         <libs.protobuf>3.25.5</libs.protobuf>
 
         <!-- test dependecies -->
-        <libs.junit>4.13.2</libs.junit>
-        <libs.junitparams>1.1.1</libs.junitparams>
+        <libs.junit5>5.14.4</libs.junit5>
         <libs.wiremock>3.13.1</libs.wiremock>
         <libs.mockito>5.20.0</libs.mockito>
         <libs.objenesis>3.3</libs.objenesis>
@@ -297,16 +296,11 @@
                 <version>${libs.hamcrest}</version>
             </dependency>
             <dependency>
-                <groupId>junit</groupId>
-                <artifactId>junit</artifactId>
-                <version>${libs.junit}</version>
-                <exclusions>
-                    <!-- Clashes with org.hamcrest:hamcrest -->
-                    <exclusion>
-                        <groupId>org.hamcrest</groupId>
-                        <artifactId>hamcrest-core</artifactId>
-                    </exclusion>
-                </exclusions>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${libs.junit5}</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
             <dependency>
                 <groupId>org.mockito</groupId>

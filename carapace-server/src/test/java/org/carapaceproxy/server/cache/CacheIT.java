@@ -29,20 +29,22 @@ import static org.carapaceproxy.server.config.SSLCertificateConfiguration.Certif
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static reactor.netty.http.HttpProtocol.HTTP11;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.util.concurrent.DefaultEventExecutor;
+import java.io.File;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import junitparams.JUnitParamsRunner;
-import junitparams.Parameters;
 import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
@@ -52,19 +54,20 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
-@RunWith(JUnitParamsRunner.class)
 public class CacheIT {
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
+    @RegisterExtension
+    public WireMockExtension wireMockRule = WireMockExtension.newInstance().configureStaticDsl(true).options(WireMockConfiguration.options().port(0)).build();
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     @Test
     public void testServeFromCache() throws Exception {
@@ -75,9 +78,9 @@ public class CacheIT {
                         .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
             server.start();
             int port = server.getLocalPort();
             server.getCache().getStats().resetCacheMetrics();
@@ -142,9 +145,9 @@ public class CacheIT {
                         .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
             server.start();
             int port = server.getLocalPort();
             server.getCache().getStats().resetCacheMetrics();
@@ -186,7 +189,7 @@ public class CacheIT {
 
     @Test
     public void testBootSslRelativeCertificatePath() throws Exception {
-        TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+        TestUtils.deployResource("localhost.p12", tmpDir);
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -195,9 +198,9 @@ public class CacheIT {
                         .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
 
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir);) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost",
                     DEFAULT_SSL_PROTOCOLS,
@@ -206,10 +209,10 @@ public class CacheIT {
         }
     }
 
-    @Test
-    @Parameters({"true", "false"})
+    @ParameterizedTest
+    @CsvSource({"true", "false"})
     public void testServeFromCacheSsl(boolean cacheDisabledForSecureRequestsWithoutPublic) throws Exception {
-        TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+        TestUtils.deployResource("localhost.p12", tmpDir);
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -218,9 +221,9 @@ public class CacheIT {
                         .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
 
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir);) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost",
                     DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11), new DefaultChannelGroup(new DefaultEventExecutor())));
@@ -334,7 +337,7 @@ public class CacheIT {
 
     @Test
     public void testServeFromCacheWithRequestProtocol() throws Exception {
-        TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+        TestUtils.deployResource("localhost.p12", tmpDir);
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -343,11 +346,11 @@ public class CacheIT {
                         .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
         int httpPort = 1234;
         int httpsPort = 1235;
 
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir);) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", httpsPort, true, null, "localhost",
                     DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11), new DefaultChannelGroup(new DefaultEventExecutor())));
@@ -443,9 +446,9 @@ public class CacheIT {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
             server.start();
             int port = server.getLocalPort();
             server.getCache().getStats().resetCacheMetrics();
@@ -505,9 +508,9 @@ public class CacheIT {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
             server.start();
             int port = server.getLocalPort();
             server.getCache().getStats().resetCacheMetrics();
@@ -568,9 +571,9 @@ public class CacheIT {
                         .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
             server.start();
             int port = server.getLocalPort();
             server.getCache().getStats().resetCacheMetrics();
@@ -602,9 +605,9 @@ public class CacheIT {
                         .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
             server.start();
             int port = server.getLocalPort();
             server.getCache().getStats().resetCacheMetrics();
@@ -627,11 +630,11 @@ public class CacheIT {
         }
     }
 
-    @Test
-    @Parameters
+    @ParameterizedTest
+    @MethodSource("parametersForTestNoCacheResponse")
     public void testNoCacheResponse(String headerName, String headerValue) throws Exception {
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
             server.start();
             int port = server.getLocalPort();
 
@@ -664,7 +667,7 @@ public class CacheIT {
         }
     }
 
-    private Object[] parametersForTestNoCacheResponse() {
+    private static Object[] parametersForTestNoCacheResponse() {
         return new Object[]{
             new Object[]{HttpHeaderNames.CACHE_CONTROL.toString(), "private"},
             new Object[]{HttpHeaderNames.CACHE_CONTROL.toString(), "no-cache"},
@@ -680,8 +683,8 @@ public class CacheIT {
 
     @Test
     public void testNoCacheResponse_cachable() throws Exception {
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
             server.start();
             int port = server.getLocalPort();
             server.getCache().getStats().resetCacheMetrics();
@@ -710,12 +713,12 @@ public class CacheIT {
         }
     }
 
-    @Test
-    @Parameters
+    @ParameterizedTest
+    @MethodSource("parametersForTestNoCacheRequest")
     public void testNoCacheRequest(String headerName, String headerValue) throws Exception {
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.getPort());
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
             server.start();
             int port = server.getLocalPort();
             server.getCache().getStats().resetCacheMetrics();
@@ -750,7 +753,7 @@ public class CacheIT {
         }
     }
 
-    private Object[] parametersForTestNoCacheRequest() {
+    private static Object[] parametersForTestNoCacheRequest() {
         return new Object[]{
             new Object[]{HttpHeaderNames.CACHE_CONTROL.toString(), "private"},
             new Object[]{HttpHeaderNames.CACHE_CONTROL.toString(), "no-cache"},
@@ -766,8 +769,8 @@ public class CacheIT {
 
     @Test
     public void testNoCacheRequest_cachable() throws Exception {
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
             server.start();
             int port = server.getLocalPort();
             server.getCache().getStats().resetCacheMetrics();
@@ -794,5 +797,14 @@ public class CacheIT {
             assertEquals(1, server.getCache().getStats().getHits());
             assertEquals(1, server.getCache().getStats().getMisses());
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

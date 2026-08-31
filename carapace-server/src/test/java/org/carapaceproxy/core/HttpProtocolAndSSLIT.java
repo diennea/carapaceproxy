@@ -5,15 +5,18 @@ import static com.github.tomakehurst.wiremock.client.WireMock.okForContentType;
 import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import com.github.tomakehurst.wiremock.WireMockServer;
 import io.netty.handler.ssl.ApplicationProtocolConfig;
 import io.netty.handler.ssl.ApplicationProtocolNames;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -22,36 +25,32 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import junitparams.JUnitParamsRunner;
-import junitparams.Parameters;
-import junitparams.naming.TestCaseName;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.KeyStoreRule;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.ClassRule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import reactor.core.publisher.Flux;
 import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.resources.ConnectionProvider;
 
-@RunWith(JUnitParamsRunner.class)
 public class HttpProtocolAndSSLIT {
 
     private static final String RESPONSE = "Response from backend";
     private static final String BIG_PAYLOAD = "X".repeat(500_000);
 
-    @ClassRule(order = 0)
-    public static TemporaryFolder temporaryFolder = new TemporaryFolder();
-    @ClassRule(order = 1)
-    public static KeyStoreRule carapaceKeyStore = new KeyStoreRule(temporaryFolder);
-    @ClassRule(order = 2)
-    public static KeyStoreRule backendKeyStore = new KeyStoreRule(temporaryFolder);
+    @TempDir
+    public static File temporaryFolder;
+    @RegisterExtension
+    public static KeyStoreRule carapaceKeyStore = new KeyStoreRule();
+    @RegisterExtension
+    public static KeyStoreRule backendKeyStore = new KeyStoreRule();
 
     public static Collection<Object[]> scenarios() {
         final Set<EnumSet<HttpProtocol>> clearTextOptions = Set.of(
@@ -106,9 +105,8 @@ public class HttpProtocolAndSSLIT {
         return scenarios.stream().map(s -> new Object[]{s}).toList();
     }
 
-    @Test
-    @Parameters(method = "scenarios")
-    @TestCaseName("{0}")
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("scenarios")
     public void testMatrixCase(final Scenario scenario) throws Exception {
         final AtomicReference<String> channelIdRef = new AtomicReference<>();
         final AtomicBoolean allSameConnection = new AtomicBoolean(true);
@@ -125,7 +123,7 @@ public class HttpProtocolAndSSLIT {
                     .httpDisabled(false)
                     .http2PlainDisabled(scenario.backendHttp11());
         }
-        final WireMockRule backendRule = new WireMockRule(cfg);
+        final WireMockServer backendRule = new WireMockServer(cfg);
         backendRule.start();
 
         backendRule.stubFor(get(urlEqualTo("/tomcatstatus/up"))
@@ -151,7 +149,7 @@ public class HttpProtocolAndSSLIT {
         final int carapaceProxyPort = TestUtils.getFreePort();
 
         final TestEndpointMapper endpointMapper = getMapper(scenario, backendPort);
-        try (final HttpProxyServer server = new HttpProxyServer(endpointMapper, temporaryFolder.newFolder())) {
+        try (final HttpProxyServer server = new HttpProxyServer(endpointMapper, newFolder(temporaryFolder, "junit"))) {
             final NetworkListenerConfiguration listenerConfiguration;
             if (scenario.clientToProxyTls) {
                 final SSLCertificateConfiguration certificateConfiguration = new SSLCertificateConfiguration(
@@ -217,12 +215,12 @@ public class HttpProtocolAndSSLIT {
             assertEquals(jsFiles + cssFiles, allBodies.size());
             for (String body : allBodies) {
                 assertNotNull(body);
-                assertTrue("Body too small", body.length() > 10_000);
+                assertTrue(body.length() > 10_000, "Body too small");
             }
             if (scenario.proxyHttp2()) {
                 assertTrue(
-                        "HTTP/2 requests must be multiplexed over a single TCP connection " + channelIdRef.get(),
-                        allSameConnection.get()
+                        allSameConnection.get(),
+                        "HTTP/2 requests must be multiplexed over a single TCP connection " + channelIdRef.get()
                 );
             }
         } finally {
@@ -310,5 +308,14 @@ public class HttpProtocolAndSSLIT {
                     ? proxyProtocols.contains(HttpProtocol.H2)
                     : proxyProtocols.contains(HttpProtocol.H2C);
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

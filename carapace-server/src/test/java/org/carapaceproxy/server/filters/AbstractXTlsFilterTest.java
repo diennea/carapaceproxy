@@ -2,8 +2,9 @@ package org.carapaceproxy.server.filters;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -20,25 +21,25 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.KeyStoreRule;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
 import reactor.netty.http.HttpProtocol;
 
 public abstract class AbstractXTlsFilterTest {
 
     public static final String TLS_PROTOCOL = "TLSv1.2";
 
-    @ClassRule(order = 0)
-    public static TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public static File tmpDir;
 
-    @ClassRule(order = 1)
-    public static KeyStoreRule carapaceKeyStore = new KeyStoreRule(tmpDir);
+    @RegisterExtension
+    public static KeyStoreRule carapaceKeyStore = new KeyStoreRule();
 
-    @ClassRule(order = 2)
-    public static KeyStoreRule backendKeyStore = new KeyStoreRule(tmpDir);
+    @RegisterExtension
+    public static KeyStoreRule backendKeyStore = new KeyStoreRule();
 
-    @BeforeClass
+    @BeforeAll
     public static void setupDefaultSslContext() throws GeneralSecurityException {
         SSLContext sslContext = SSLContext.getInstance(TLS_PROTOCOL);
         sslContext.init(null, carapaceKeyStore.getTrustManagerFactory().getTrustManagers(), null);
@@ -46,8 +47,8 @@ public abstract class AbstractXTlsFilterTest {
     }
 
     // Per-test WireMock backend; parameterized tests can't feed a @Rule, so each test owns the lifecycle.
-    protected WireMockRule newWireMock(boolean http1) {
-        return new WireMockRule(WireMockConfiguration.options()
+    protected WireMockServer newWireMock(boolean http1) {
+        return new WireMockServer(WireMockConfiguration.options()
                 .dynamicPort()
                 .dynamicHttpsPort()
                 .http2TlsDisabled(http1)
@@ -57,7 +58,7 @@ public abstract class AbstractXTlsFilterTest {
                 .keystorePassword(new String(backendKeyStore.getKeyStorePassword())));
     }
 
-    protected HttpProxyServer startServer(WireMockRule wireMockRule, boolean http1, boolean ssl, RequestFilterConfiguration... filters)
+    protected HttpProxyServer startServer(WireMockServer wireMockRule, boolean http1, boolean ssl, RequestFilterConfiguration... filters)
             throws InterruptedException, ConfigurationNotValidException, IOException {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         final String certificate = carapaceKeyStore.getKeyStoreFile().getAbsolutePath();
@@ -73,7 +74,7 @@ public abstract class AbstractXTlsFilterTest {
                 ? NetworkListenerConfiguration.withDefaultSsl("0.0.0.0", 0, "*", protocols)
                 : NetworkListenerConfiguration.withoutSsl("localhost", 0, protocols);
 
-        HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());
+        HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));
         if (ssl) {
             server.addCertificate(new SSLCertificateConfiguration(
                     "*", null, certificate, password, SSLCertificateConfiguration.CertificateMode.STATIC));
@@ -108,5 +109,14 @@ public abstract class AbstractXTlsFilterTest {
                 assertThat(response.body(), containsString(expected));
             }
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

@@ -19,7 +19,8 @@
  */
 package org.carapaceproxy.utils;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -29,7 +30,7 @@ import java.nio.file.Path;
 import java.security.Key;
 import java.util.Arrays;
 import java.util.concurrent.Callable;
-import org.junit.Assert;
+import org.junit.jupiter.api.Assertions;
 
 /**
  * Utility for tests
@@ -62,13 +63,13 @@ public class TestUtils {
                 Thread.sleep(100);
             }
         } catch (InterruptedException ee) {
-            Assert.fail("test interrupted!");
+            Assertions.fail("test interrupted!");
             return;
         } catch (Exception ee) {
-            Assert.fail("error while evalutaing condition:" + ee);
+            Assertions.fail("error while evalutaing condition:" + ee);
             return;
         }
-        Assert.fail("condition not met in time!");
+        Assertions.fail("condition not met in time!");
     }
 
     public static String deployResource(String resource, File tmpDir) throws IOException {

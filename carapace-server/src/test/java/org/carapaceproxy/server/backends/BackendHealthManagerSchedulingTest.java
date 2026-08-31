@@ -19,7 +19,7 @@
  */
 package org.carapaceproxy.server.backends;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -34,7 +34,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.mapper.EndpointMapper;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 /**
  * Reconfiguring the execution period from an initial value of '0' to > 0. Because of the zero period the manager never

@@ -23,7 +23,8 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import io.netty.buffer.Unpooled;
 import java.util.ArrayList;
@@ -34,8 +35,8 @@ import java.util.concurrent.Executors;
 import org.carapaceproxy.server.cache.ContentsCache.CachedContent;
 import org.carapaceproxy.server.cache.ContentsCache.ContentKey;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,7 +52,7 @@ public class CaffeineCacheImplTest {
 
     private final Logger logger = LoggerFactory.getLogger(CaffeineCacheImplTest.class);
 
-    @After
+    @AfterEach
     public void afterEach() {
         stats.resetCacheMetrics();
     }
@@ -152,9 +153,7 @@ public class CaffeineCacheImplTest {
         }
 
         if (expectedEvictions > 0) {
-            TestUtils.waitForCondition(() -> {
-                return evictedResources.size() >= expectedEvictions;
-            }, () -> {
+            TestUtils.waitForCondition(() -> evictedResources.size() >= expectedEvictions, () -> {
                 cache.evict();
                 return null;
             }, 10);

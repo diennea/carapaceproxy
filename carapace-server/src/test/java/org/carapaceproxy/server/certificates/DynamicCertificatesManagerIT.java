@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.server.certificates;
 
+import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.DNS_CHALLENGE_WAIT;
@@ -30,11 +31,10 @@ import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERI
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERIFYING;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
-import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -48,8 +48,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.shredzone.acme4j.Status.INVALID;
 import static org.shredzone.acme4j.Status.VALID;
-import java.io.IOException;
 import java.net.URI;
+import java.io.IOException;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
 import java.util.Collections;
@@ -60,8 +60,6 @@ import java.util.Properties;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import junitparams.JUnitParamsRunner;
-import junitparams.Parameters;
 import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
@@ -71,8 +69,10 @@ import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.Listeners;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.shredzone.acme4j.Certificate;
 import org.shredzone.acme4j.Login;
 import org.shredzone.acme4j.Order;
@@ -81,25 +81,29 @@ import org.shredzone.acme4j.Status;
 import org.shredzone.acme4j.challenge.Dns01Challenge;
 import org.shredzone.acme4j.challenge.Http01Challenge;
 import org.shredzone.acme4j.connector.Connection;
-import org.shredzone.acme4j.Problem;
 import org.shredzone.acme4j.exception.AcmeException;
 import org.shredzone.acme4j.exception.AcmeNetworkException;
 import org.shredzone.acme4j.toolbox.JSON;
 import org.shredzone.acme4j.util.KeyPairUtils;
+import org.shredzone.acme4j.Problem;
 
 /**
  * Test for DynamicCertificatesManager.
  *
  * @author paolo.venturi
  */
-@RunWith(JUnitParamsRunner.class)
 public class DynamicCertificatesManagerIT {
 
     static {
         // DynamicCertificatesManager reads the limit into a static final field, so the property must be set
         // before whatever test method happens to run first loads that class.
-        // No effect on other test classes: surefire runs each one in its own JVM (reuseForks=false).
+        // No effect on other test classes: the build forks a JVM per class (reuseForks=false).
         System.setProperty("carapace.acme.dnschallengereachabilitycheck.limit", "2");
+    }
+
+    // must run after reloadConfiguration, which rebuilds the client map
+    private static void injectAcmeClients(DynamicCertificatesManager man, Map<String, ACMEClient> clients) {
+        man.setAcmeClients(clients);
     }
 
     protected static final int MAX_ATTEMPTS = 7;
@@ -146,24 +150,24 @@ public class DynamicCertificatesManagerIT {
         verify(scheduler, times(2)).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)); // once
     }
 
-    @Test
-    @Parameters({
-        "challenge_null,true",
-        "challenge_null,false",
-        "challenge_status_invalid,true",
-        "challenge_status_invalid,false",
-        "challenge_status_invalid_with_detail,true",
-        "challenge_status_invalid_with_detail,false",
-        "order_already_valid,true",
-        "order_already_valid,false",
-        "order_finalization_error,true",
-        "order_finalization_error,false",
-        "order_response_error,true",
-        "order_response_error,false",
-        "available_to_expired,true",
-        "available_to_expired,false",
-        "all_ok,true",
-        "all_ok,false"
+    @ParameterizedTest
+    @CsvSource({
+            "challenge_null,true",
+            "challenge_null,false",
+            "challenge_status_invalid,true",
+            "challenge_status_invalid,false",
+            "challenge_status_invalid_with_detail,true",
+            "challenge_status_invalid_with_detail,false",
+            "order_already_valid,true",
+            "order_already_valid,false",
+            "order_finalization_error,true",
+            "order_finalization_error,false",
+            "order_response_error,true",
+            "order_response_error,false",
+            "available_to_expired,true",
+            "available_to_expired,false",
+            "all_ok,true",
+            "all_ok,false"
     })
     public void testCertificateSimpleStateManagement(String runCase, boolean maxedOutTrials) throws Exception {
         // ACME mocking
@@ -359,28 +363,23 @@ public class DynamicCertificatesManagerIT {
         }
     }
 
-    // must run after reloadConfiguration, which rebuilds the client map
-    private static void injectAcmeClients(DynamicCertificatesManager man, Map<String, ACMEClient> clients) {
-        man.setAcmeClients(clients);
-    }
-
     private void assertCertificateState(String domain, DynamicCertificateState expectedState, int expectedCycleCount, DynamicCertificatesManager dCMan) {
         assertEquals(expectedState, dCMan.getStateOfCertificate(domain)); // on db
         assertEquals(expectedState, dCMan.getCertificateDataForDomain(domain).getState()); // on cache
         assertEquals(expectedCycleCount, dCMan.getCertificateDataForDomain(domain).getAttemptsCount());
     }
 
-    @Test
+    @ParameterizedTest
     // A) record not created -> request failed
     // B) record created but not ready -> request failed after LIMIT attempts
     // C) record created and ready -> VERIFYING
     // D) challenge verified -> record deleted
     // E) challenge failed -> record deleted
-    @Parameters({
-        "challenge_creation_failed",
-        "challenge_check_limit_expired",
-        "challenge_failed",
-        "challenge_verified",
+    @CsvSource({
+            "challenge_creation_failed",
+            "challenge_check_limit_expired",
+            "challenge_failed",
+            "challenge_verified",
     })
     public void testWildcardCertificateStateManagement(String runCase) throws Exception {
         final var domain = "*.localhost";
@@ -494,13 +493,13 @@ public class DynamicCertificatesManagerIT {
         }
     }
 
-    @Test
+    @ParameterizedTest
     // A) record not created -> request failed
     // B) record created but not ready -> request failed after LIMIT attempts
     // C) record created and ready -> VERIFYING
     // D) challenge verified -> record deleted
     // E) challenge failed -> record deleted
-    @Parameters({
+    @CsvSource({
             "challenge_creation_failed",
             "challenge_check_limit_expired",
             "challenge_failed",
@@ -637,9 +636,9 @@ public class DynamicCertificatesManagerIT {
         }
     }
 
-    @Test
-    @Parameters({
-        "localhost-no-ip-check", "localhost-ip-check-partial", "localhost-ip-check-full"
+    @ParameterizedTest
+    @CsvSource({
+            "localhost-no-ip-check", "localhost-ip-check-partial", "localhost-ip-check-full"
     })
     public void testDomainReachabilityCheck(String domainCase) throws Exception {
         final var domain = "localhost";
@@ -722,8 +721,9 @@ public class DynamicCertificatesManagerIT {
         }
     }
 
+
     @Test
-    public void testCertificateProviderRouting() throws Exception {
+    void certificateProviderRouting() throws Exception {
         // one mocked ACME client per provider
         ACMEClient letsencryptClient = mock(ACMEClient.class);
         ACMEClient customClient = mock(ACMEClient.class);
@@ -782,9 +782,9 @@ public class DynamicCertificatesManagerIT {
                 .createOrderForDomain(eq(new CertificateData("le.local", null, WAITING).getNames()));
     }
 
-    @Test
-    @Parameters({"stale", "transient", "store"})
-    public void testPendingOrderPollFailure(String failureCase) throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"stale", "transient", "store"})
+    void pendingOrderPollFailure(String failureCase) throws Exception {
         // ACME mocking: the pending order cannot be polled back from the CA
         ACMEClient ac = mock(ACMEClient.class);
         Login login = mock(Login.class);
@@ -836,6 +836,5 @@ public class DynamicCertificatesManagerIT {
             verify(store, never()).saveCertificate(any());
         }
     }
-
 
 }

@@ -30,11 +30,12 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
@@ -65,10 +66,9 @@ import org.carapaceproxy.server.mapper.requestmatcher.MatchAllRequestMatcher;
 import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.shredzone.acme4j.util.KeyPairUtils;
 
 /**
@@ -77,8 +77,8 @@ import org.shredzone.acme4j.util.KeyPairUtils;
  */
 public class StartAPIServerIT extends UseAdminServer {
 
-    @Rule
-    public TemporaryFolder tmpFolder = new TemporaryFolder();
+    @TempDir
+    public File tmpFolder;
 
     @Test
     public void test() throws Exception {
@@ -295,7 +295,7 @@ public class StartAPIServerIT extends UseAdminServer {
         String serialNumber1 = certificate.getSerialNumber().toString(16).toUpperCase();
         String expiringDate1 = certificate.getNotAfter().toString();
         byte[] keystoreData = createKeystore(originalChain, endUserKeyPair.getPrivate());
-        File mock1 = tmpFolder.newFile("mock1.p12");
+        File mock1 = newFile(tmpFolder, "mock1.p12");
         Files.write(mock1.toPath(), keystoreData);
         properties.put("certificate.1.hostname", "localhost");
         properties.put("certificate.1.file", mock1.getAbsolutePath());
@@ -307,7 +307,7 @@ public class StartAPIServerIT extends UseAdminServer {
         String serialNumber2 = certificate.getSerialNumber().toString(16).toUpperCase();
         String expiringDate2 = certificate.getNotAfter().toString();
         keystoreData = createKeystore(originalChain, endUserKeyPair.getPrivate());
-        File mock2 = tmpFolder.newFile("mock2.p12");
+        File mock2 = newFile(tmpFolder, "mock2.p12");
         Files.write(mock2.toPath(), keystoreData);
         properties.put("certificate.2.hostname", "127.0.0.1");
         properties.put("certificate.2.file", mock2.getAbsolutePath());
@@ -318,7 +318,7 @@ public class StartAPIServerIT extends UseAdminServer {
         properties.put("certificate.3.mode", "acme");
 
         // local certificate storing
-        File nowrite = tmpDir.newFolder("nowrite");
+        File nowrite = newFolder(tmpDir, "nowrite");
         nowrite.setWritable(false);
         properties.put("dynamiccertificatesmanager.localcertificates.store.path", nowrite.getAbsolutePath());
         assertThrows(Exception.class, () -> startServer(properties));
@@ -582,7 +582,7 @@ public class StartAPIServerIT extends UseAdminServer {
 
     @Test
     public void testHttpsApi() throws Exception {
-        String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+        String certificate = TestUtils.deployResource("localhost.p12", tmpDir);
 
         Properties properties = new Properties();
         properties.setProperty("http.admin.enabled", "true");
@@ -607,13 +607,13 @@ public class StartAPIServerIT extends UseAdminServer {
             exc = ex;
         }
 
-        Assert.assertNotNull(exc);
+        Assertions.assertNotNull(exc);
         assertThat(exc.getMessage(), containsString("bad response, does not start with HTTP/1.1"));
     }
 
     @Test
     public void testHttpAndHttpsApi() throws Exception {
-        String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+        String certificate = TestUtils.deployResource("localhost.p12", tmpDir);
 
         Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         properties.setProperty("https.admin.port", "8762");
@@ -639,14 +639,14 @@ public class StartAPIServerIT extends UseAdminServer {
 
     @Test
     public void testApiRequestsLogger() throws Exception {
-        String certificate = TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+        String certificate = TestUtils.deployResource("localhost.p12", tmpDir);
 
         Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         properties.setProperty("https.admin.port", "8762");
         properties.setProperty("https.admin.sslcertfile", certificate);
         properties.setProperty("https.admin.sslcertfilepassword", "testproxy");
 
-        File accessLog = tmpDir.newFile().getAbsoluteFile();
+        File accessLog = File.createTempFile("junit", null, tmpDir).getAbsoluteFile();
         properties.put("admin.accesslog.path", accessLog.getAbsolutePath());
 
         startServer(properties);
@@ -671,6 +671,21 @@ public class StartAPIServerIT extends UseAdminServer {
 
             assertEquals(2, lineCount);
         }
+    }
+
+    private static File newFile(File parent, String child) throws IOException {
+        File result = new File(parent, child);
+        result.createNewFile();
+        return result;
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 
 }

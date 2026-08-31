@@ -23,8 +23,9 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.junit.Assert.assertEquals;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -36,8 +37,8 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.Test;
 
 /**
  * Guards the two metric-scraping endpoints of the admin interface: {@code /metrics}, backed by the
@@ -111,8 +112,12 @@ public class MetricsEndpointsIT extends UseAdminServer {
             .connectTimeout(TIMEOUT)
             .build();
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
+    @RegisterExtension
+    public WireMockExtension wireMockRule = WireMockExtension.newInstance()
+            // the static WireMock.stubFor(...) DSL is used below
+            .configureStaticDsl(true)
+            .options(WireMockConfiguration.options().port(0))
+            .build();
 
     @Test
     public void bothEndpointsExposeMetrics() throws Exception {
@@ -133,7 +138,7 @@ public class MetricsEndpointsIT extends UseAdminServer {
         config.put("backend.1.id", "localhost");
         config.put("backend.1.enabled", "true");
         config.put("backend.1.host", "localhost");
-        config.put("backend.1.port", String.valueOf(wireMockRule.port()));
+        config.put("backend.1.port", String.valueOf(wireMockRule.getPort()));
 
         config.put("director.1.id", "*");
         config.put("director.1.backends", "localhost");
@@ -151,8 +156,8 @@ public class MetricsEndpointsIT extends UseAdminServer {
         assertEquals(200, response.statusCode());
         assertEquals("it <b>works</b> !!", response.body());
 
-        assertEquals("metrics exposed by /metrics changed", EXPECTED_METRICS, metricNames("/metrics"));
-        assertEquals("metrics exposed by /micrometrics changed", EXPECTED_MICROMETRICS, metricNames("/micrometrics"));
+        assertEquals(EXPECTED_METRICS, metricNames("/metrics"), "metrics exposed by /metrics changed");
+        assertEquals(EXPECTED_MICROMETRICS, metricNames("/micrometrics"), "metrics exposed by /micrometrics changed");
     }
 
     /**
@@ -165,7 +170,7 @@ public class MetricsEndpointsIT extends UseAdminServer {
      */
     private static Set<String> metricNames(final String path) throws IOException, InterruptedException {
         final HttpResponse<String> response = httpGet(URI.create("http://localhost:" + DEFAULT_ADMIN_PORT + path));
-        assertEquals("could not scrape " + path, 200, response.statusCode());
+        assertEquals(200, response.statusCode(), "could not scrape " + path);
         return response.body().lines()
                 .filter(line -> line.startsWith("# TYPE "))
                 .map(line -> line.split(" ")[2])

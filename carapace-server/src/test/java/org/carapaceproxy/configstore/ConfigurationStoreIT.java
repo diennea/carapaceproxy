@@ -27,29 +27,29 @@ import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+
+import java.io.File;
 import java.net.URI;
 import java.security.KeyPair;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import junitparams.JUnitParamsRunner;
-import junitparams.Parameters;
 import org.apache.bookkeeper.stats.NullStatsLogger;
 import org.carapaceproxy.api.ConfigResource;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.utils.TestUtils;
 import org.hamcrest.core.IsNull;
-import org.junit.After;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.shredzone.acme4j.toolbox.JSON;
 import org.shredzone.acme4j.util.KeyPairUtils;
 import org.slf4j.LoggerFactory;
@@ -59,11 +59,10 @@ import org.slf4j.LoggerFactory;
  *
  * @author paolo.venturi
  */
-@RunWith(JUnitParamsRunner.class)
 public class ConfigurationStoreIT {
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     private ConfigurationStore store;
     private String type;
@@ -71,7 +70,7 @@ public class ConfigurationStoreIT {
     private static final String d2 = "localhost2";
     private static final String d3 = "localhost3";
 
-    @After
+    @AfterEach
     public void after() {
         if (store != null) {
             store.close();
@@ -86,7 +85,7 @@ public class ConfigurationStoreIT {
                 props.put("db.admin.username", "theusername");
                 props.put("db.admin.password", "thepassword");
                 newStore = new PropertiesConfigurationStore(props);
-                store = new HerdDBConfigurationStore(newStore, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
+                store = new HerdDBConfigurationStore(newStore, false, null, tmpDir, NullStatsLogger.INSTANCE);
             }
             store.commitConfiguration(newStore);
         } else {
@@ -94,8 +93,8 @@ public class ConfigurationStoreIT {
         }
     }
 
-    @Test
-    @Parameters({"in-memory", "db"})
+    @ParameterizedTest
+    @CsvSource({"in-memory", "db"})
     public void testToStringConfigurationPreservesBackslashes(String type) throws Exception {
         this.type = type;
 
@@ -117,8 +116,8 @@ public class ConfigurationStoreIT {
         assertThat(reloadedTwice.getProperty("route.5.match", null), is(matcher));
     }
 
-    @Test
-    @Parameters({"in-memory", "db"})
+    @ParameterizedTest
+    @CsvSource({"in-memory", "db"})
     public void test(String type) throws Exception {
         this.type = type;
 
@@ -186,8 +185,8 @@ public class ConfigurationStoreIT {
         TestUtils.assertThrows(ConfigurationNotValidException.class, () -> store.getClassname("property.class.4", "DClassName")); // not exists
     }
 
-    @Test
-    @Parameters({"in-memory", "db"})
+    @ParameterizedTest
+    @CsvSource({"in-memory", "db"})
     public void testPropertiesIndex(String type) throws Exception {
         this.type = type;
 
@@ -231,8 +230,8 @@ public class ConfigurationStoreIT {
         assertThat(store.findMaxIndexForPrefix("property.weird.8.9.value"), is(-1));
     }
 
-    @Test
-    @Parameters({"in-memory", "db"})
+    @ParameterizedTest
+    @CsvSource({"in-memory", "db"})
     public void testCertiticatesConfigurationStore(String type) throws Exception {
         this.type = type;
 
@@ -349,7 +348,7 @@ public class ConfigurationStoreIT {
 
         PropertiesConfigurationStore propertiesConfigurationStore = new PropertiesConfigurationStore(props);
 
-        store = new HerdDBConfigurationStore(propertiesConfigurationStore, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
+        store = new HerdDBConfigurationStore(propertiesConfigurationStore, false, null, tmpDir, NullStatsLogger.INSTANCE);
 
         // Check applied configuration (loaded from empty db NB: passed configuration is ignored)
         assertEquals("", store.getProperty("certificate.0.hostname", ""));
@@ -395,7 +394,7 @@ public class ConfigurationStoreIT {
         props = new Properties();
         props.put("db.jdbc.url", "jdbc:herddb:localhost");
         propertiesConfigurationStore = new PropertiesConfigurationStore(props);
-        store = new HerdDBConfigurationStore(propertiesConfigurationStore, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
+        store = new HerdDBConfigurationStore(propertiesConfigurationStore, false, null, tmpDir, NullStatsLogger.INSTANCE);
         checkConfiguration();
     }
 

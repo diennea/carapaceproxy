@@ -34,12 +34,15 @@ import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.fail;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
+
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Map;
@@ -60,25 +63,24 @@ import org.carapaceproxy.user.UserRealm;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUserRealm;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 /**
  * @author enrico.olivelli
  */
 public class ApplyConfigurationIT {
 
-    @ClassRule
-    public static WireMockRule wireMockRule = new WireMockRule(0);
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @RegisterExtension
+    public static WireMockExtension wireMockRule = WireMockExtension.newInstance().options(WireMockConfiguration.options().port(0)).configureStaticDsl(true).build();
+    @TempDir
+    public File tmpDir;
 
-    @BeforeClass
-    public static void setupWireMock() {
-        stubFor(get(urlEqualTo("/index.html?redir"))
+    @BeforeEach
+    public void setupWireMock() {
+        wireMockRule.stubFor(get(urlEqualTo("/index.html?redir"))
                 .willReturn(aResponse()
                         .withStatus(HttpStatus.SC_OK)
                         .withHeader("Content-Type", "text/html")
@@ -90,7 +92,7 @@ public class ApplyConfigurationIT {
 
     @Test
     public void testChangeListenersConfig() throws Exception {
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"));) {
             server.configureAtBoot(new PropertiesConfigurationStore(propsWithMapper(Map.of(
                     "aws.accesskey", "accesskey",
                     "aws.secretkey", "secretkey"
@@ -148,7 +150,7 @@ public class ApplyConfigurationIT {
             testIt(1426, false);
 
             // listener with correct tls version
-            String defaultCertificate = TestUtils.deployResource("ia.p12", tmpDir.getRoot());
+            String defaultCertificate = TestUtils.deployResource("ia.p12", tmpDir);
             reloadConfiguration(server, propsWithMapperAndCertificate(defaultCertificate, Map.of(
                     "listener.1.host", "localhost",
                     "listener.1.port", "1423",
@@ -190,7 +192,7 @@ public class ApplyConfigurationIT {
 
     @Test
     public void testReloadMapper() throws Exception {
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"));) {
             server.configureAtBoot(new PropertiesConfigurationStore(new Properties()));
             server.start();
 
@@ -260,7 +262,7 @@ public class ApplyConfigurationIT {
     public void testUserRealm() throws Exception {
 
         // Default UserRealm
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"))) {
             server.configureAtBoot(new PropertiesConfigurationStore(new Properties()));
             server.start();
 
@@ -277,7 +279,7 @@ public class ApplyConfigurationIT {
         }
 
         // TestUserRealm
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"))) {
             server.configureAtBoot(new PropertiesConfigurationStore(props(Map.of(
                     "userrealm.class", "org.carapaceproxy.utils.TestUserRealm",
                     "user.test1", "pass1",
@@ -311,7 +313,7 @@ public class ApplyConfigurationIT {
     @SuppressWarnings("deprecation")
     @Test
     public void testChangeFiltersConfiguration() throws Exception {
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"));) {
             server.configureAtBoot(new PropertiesConfigurationStore(props("filter.1.type", "add-x-forwarded-for")));
             server.start();
             assertThat(server.getFilters(), hasSize(1));
@@ -340,7 +342,7 @@ public class ApplyConfigurationIT {
 
     @Test
     public void testChangeBackendHealthManagerConfiguration() throws Exception {
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder());) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"));) {
             server.configureAtBoot(new PropertiesConfigurationStore(props("healthmanager.connecttimeout", "9479")));
             server.start();
             assertEquals(9479, server.getBackendHealthManager().getConnectTimeout());
@@ -407,7 +409,16 @@ public class ApplyConfigurationIT {
         }
 
         public StaticEndpointMapper() {
-            super("localhost", wireMockRule.port());
+            super("localhost", wireMockRule.getPort());
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

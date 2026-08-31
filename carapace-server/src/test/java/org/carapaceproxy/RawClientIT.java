@@ -35,12 +35,14 @@ import static org.carapaceproxy.server.config.SSLCertificateConfiguration.Certif
 import static org.carapaceproxy.utils.RawHttpClient.consumeHttpResponseInput;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static reactor.netty.http.HttpProtocol.HTTP11;
+
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.http.HttpHeader;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.github.tomakehurst.wiremock.matching.UrlPattern;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.Unpooled;
@@ -69,14 +71,17 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.concurrent.DefaultEventExecutor;
+import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
+import java.lang.reflect.Method;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -87,8 +92,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import junitparams.JUnitParamsRunner;
-import junitparams.Parameters;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -98,13 +101,14 @@ import org.carapaceproxy.utils.RawHttpClient.HttpResponse;
 import org.carapaceproxy.utils.RawHttpServer;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import org.junit.rules.TestName;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -112,28 +116,30 @@ import org.slf4j.LoggerFactory;
  *
  * @author enrico.olivelli
  */
-@RunWith(JUnitParamsRunner.class)
 public class RawClientIT {
 
     private static final Logger LOG = LoggerFactory.getLogger(RawClientIT.class);
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
+    @RegisterExtension
+    public WireMockExtension wireMockRule = WireMockExtension.newInstance().configureStaticDsl(true).options(WireMockConfiguration.options().port(0)).build();
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
-    @Rule
-    public TestName testName = new TestName();
+    private String testName;
 
-    @Before
-    public void dumpTestName() {
-        LOG.info("Starting {}", testName.getMethodName());
+    @BeforeEach
+    public void dumpTestName(TestInfo testInfo) {
+        Optional<Method> testMethod = testInfo.getTestMethod();
+        if (testMethod.isPresent()) {
+            this.testName = testMethod.get().getName();
+        }
+        LOG.info("Starting {}", testName);
     }
 
-    @After
+    @AfterEach
     public void dumpTestNameEnd() {
-        LOG.info("End {}", testName.getMethodName());
+        LOG.info("End {}", testName);
     }
 
     @Test
@@ -146,8 +152,8 @@ public class RawClientIT {
                         .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -192,8 +198,8 @@ public class RawClientIT {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
             server.start();
             int port = server.getLocalPort();
             assertTrue(port > 0);
@@ -225,7 +231,7 @@ public class RawClientIT {
             int httpServerPort = httpServer.start();
 
             TestEndpointMapper mapper = new TestEndpointMapper("localhost", httpServerPort);
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
                 server.start();
                 int port = server.getLocalPort();
                 assertTrue(port > 0);
@@ -253,7 +259,7 @@ public class RawClientIT {
         try (httpServer) {
             int httpServerPort = httpServer.start();
             TestEndpointMapper mapper = new TestEndpointMapper("localhost", httpServerPort);
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
                 server.start();
                 int port = server.getLocalPort();
                 assertTrue(port > 0);
@@ -281,7 +287,7 @@ public class RawClientIT {
 
             ExecutorService ex = Executors.newFixedThreadPool(2);
             List<Future<?>> futures = new ArrayList<>();
-            try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+            try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
                 ConnectionPoolConfiguration defaultConnectionPool = proxy.getCurrentConfiguration().getDefaultConnectionPool();
                 defaultConnectionPool.setMaxConnectionsPerEndpoint(1);
                 proxy.getCurrentConfiguration().setClientsIdleTimeoutSeconds(300);
@@ -486,10 +492,10 @@ public class RawClientIT {
                         .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
         ExecutorService ex = Executors.newFixedThreadPool(2);
         List<Future<?>> futures = new ArrayList<>();
-        try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+        try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
             ConnectionPoolConfiguration defaultConnectionPool = proxy.getCurrentConfiguration().getDefaultConnectionPool();
             defaultConnectionPool.setMaxConnectionsPerEndpoint(1);
             proxy.getCurrentConfiguration().setClientsIdleTimeoutSeconds(10);
@@ -574,8 +580,8 @@ public class RawClientIT {
                         .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -586,15 +592,15 @@ public class RawClientIT {
         }
     }
 
-    @Test
-    @Parameters({"http", "https"})
+    @ParameterizedTest
+    @CsvSource({"http", "https"})
     public void testClosedProxy(String scheme) throws Exception {
-        TestUtils.deployResource("localhost.p12", tmpDir.getRoot());
+        TestUtils.deployResource("localhost.p12", tmpDir);
 
         // Proxy requests have to use "localhost:port" as endpoint instead of the one in the url (ex yahoo.com)
         // in order to avoid open proxy vulnerability
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir)) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, "localhost.p12", "testproxy", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", 0, scheme.equals("https"), null, "localhost", DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 100, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11), new DefaultChannelGroup(new DefaultEventExecutor())));
 
@@ -665,8 +671,8 @@ public class RawClientIT {
                         .withHeader(HttpHeaderNames.SET_COOKIE.toString(), "responseCookie=responseValue; responseCookie2=responseValue2")
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -694,5 +700,14 @@ public class RawClientIT {
                 .getHeader(HttpHeaderNames.COOKIE.toString());
         assertThat(headerCookie.values().size(), is(1));
         assertThat(headerCookie.values().getFirst(), is("requestCookie=requestValue; requestCookie2=requestValue2"));
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

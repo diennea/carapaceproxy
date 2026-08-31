@@ -26,17 +26,21 @@ import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.junit.Assert.assertTrue;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import java.io.File;
+import java.io.IOException;
 import java.util.Collections;
 import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 /**
  *
@@ -45,11 +49,11 @@ import org.junit.rules.TemporaryFolder;
 @SuppressWarnings("deprecation")
 public class XForwardedForFilterIT {
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
+    @RegisterExtension
+    public WireMockExtension wireMockRule = WireMockExtension.newInstance().configureStaticDsl(true).options(WireMockConfiguration.options().port(0)).build();
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     @Test
     public void testXForwardedForFilter() throws Exception {
@@ -61,9 +65,9 @@ public class XForwardedForFilterIT {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
             server.addRequestFilter(new RequestFilterConfiguration(XForwardedForRequestFilter.TYPE, Collections.emptyMap()));
             server.start();
             int port = server.getLocalPort();
@@ -101,9 +105,9 @@ public class XForwardedForFilterIT {
                                 .withHeader("Content-Type", "text/html")
                                 .withBody("No X-Forwarded-For")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
             server.start();
             int port = server.getLocalPort();
 
@@ -118,6 +122,15 @@ public class XForwardedForFilterIT {
                 assertTrue(s.contains("No X-Forwarded-For"));
             }
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 
 }
