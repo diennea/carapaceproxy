@@ -1,13 +1,14 @@
 package org.carapaceproxy.core;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import io.netty.handler.codec.http.HttpMethod;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
 import javax.servlet.http.HttpServletResponse;
 import org.carapaceproxy.api.UseAdminServer;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class JettyHttpTraceMethodIT extends UseAdminServer {
 

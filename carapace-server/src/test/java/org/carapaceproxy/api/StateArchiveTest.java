@@ -23,10 +23,11 @@ import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
@@ -39,7 +40,7 @@ import org.carapaceproxy.configstore.StoreSnapshot.CertificateRow;
 import org.carapaceproxy.configstore.StoreSnapshot.EncodedKeyPair;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.utils.CarapaceVersion;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
 /**
@@ -65,7 +66,7 @@ public class StateArchiveTest {
     }
 
     private void assertAccepted(String archiveVersion, String runtimeVersion, boolean acceptNewer) throws Exception {
-        assertEquals(archiveVersion + " on " + runtimeVersion, SNAPSHOT, archive(archiveVersion).toSnapshot(runtimeVersion, acceptNewer));
+        assertEquals(SNAPSHOT, archive(archiveVersion).toSnapshot(runtimeVersion, acceptNewer), archiveVersion + " on " + runtimeVersion);
     }
 
     @Test
@@ -167,7 +168,7 @@ public class StateArchiveTest {
         final var order = List.of("\"format\"", "\"formatVersion\"", "\"carapaceVersion\"", "\"carapaceCommit\"", "\"createdAt\"",
                 "\"config\"", "\"keyPairs\"", "\"acmeAccountKeys\"", "\"certificates\"");
         for (int i = 1; i < order.size(); i++) {
-            assertTrue(json, json.indexOf(order.get(i - 1)) < json.indexOf(order.get(i)));
+            assertTrue(json.indexOf(order.get(i - 1)) < json.indexOf(order.get(i)), json);
         }
         final var read = read(json);
         assertEquals(archive, read);

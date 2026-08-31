@@ -25,18 +25,21 @@ import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import java.io.File;
 import java.io.IOException;
 import org.carapaceproxy.EndpointStats;
 import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 /**
  *
@@ -44,11 +47,11 @@ import org.junit.rules.TemporaryFolder;
  */
 public class CacheContentLengthLimitIT {
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
+    @RegisterExtension
+    public WireMockExtension wireMockRule = WireMockExtension.newInstance().configureStaticDsl(true).options(WireMockConfiguration.options().port(0)).build();
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     @Test
     public void testWithContentLengthHeader() throws Exception {
@@ -80,12 +83,12 @@ public class CacheContentLengthLimitIT {
     }
 
     private void testFileSizeCache(String body, boolean chunked) throws Exception {
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.getPort());
 
         // No size checking
         {
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(0);
                 server.getCurrentConfiguration().setRequestCompressionEnabled(false);
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
@@ -101,7 +104,7 @@ public class CacheContentLengthLimitIT {
 
         // Max size set to current content size
         {
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(body.length());
                 server.getCurrentConfiguration().setRequestCompressionEnabled(false);
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
@@ -117,7 +120,7 @@ public class CacheContentLengthLimitIT {
 
         // Max size set to drop current content
         {
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
                 server.getCurrentConfiguration().setCacheMaxFileSize(body.length() - 1);
                 server.getCurrentConfiguration().setRequestCompressionEnabled(false);
                 server.getCache().reloadConfiguration(server.getCurrentConfiguration());
@@ -154,6 +157,15 @@ public class CacheContentLengthLimitIT {
             assertNotNull(stats);
             assertThat(server.getCache().getCacheSize(), is(cacheSize));
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 
 }

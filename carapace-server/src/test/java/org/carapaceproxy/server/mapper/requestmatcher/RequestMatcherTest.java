@@ -19,9 +19,9 @@
  */
 package org.carapaceproxy.server.mapper.requestmatcher;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import herddb.utils.TestUtils;
@@ -35,7 +35,7 @@ import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.ParseException;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.RequestMatchParser;
 import org.carapaceproxy.server.mapper.requestmatcher.parser.TokenMgrError;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import reactor.netty.http.server.HttpServerRequest;
 
 /**

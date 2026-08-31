@@ -19,8 +19,9 @@
  */
 package org.carapaceproxy.configstore;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.io.File;
 import java.io.IOException;
 import java.sql.Connection;
@@ -31,12 +32,11 @@ import java.util.Properties;
 import org.apache.bookkeeper.stats.NullStatsLogger;
 import org.apache.curator.test.TestingServer;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Test for {@link HerdDBConfigurationStore} running in cluster mode, where the replica count of a custom
@@ -63,7 +63,7 @@ public class ClusterConfigurationStoreIT {
      * its class is loaded, so this only takes effect while this class is the first to use the store in the fork,
      * which is what failsafe does here by not reusing forks.
      */
-    @BeforeClass
+    @BeforeAll
     public static void shortenTableSpaceTimeout() {
         previousTableSpaceTimeout = System.setProperty(TABLESPACE_TIMEOUT_PROPERTY, "60000");
     }
@@ -72,7 +72,7 @@ public class ClusterConfigurationStoreIT {
      * Restores the timeout, as the property is process wide and this class shares the JVM with other tests
      * whenever failsafe is configured to reuse forks.
      */
-    @AfterClass
+    @AfterAll
     public static void restoreTableSpaceTimeout() {
         if (previousTableSpaceTimeout == null) {
             System.clearProperty(TABLESPACE_TIMEOUT_PROPERTY);
@@ -81,13 +81,13 @@ public class ClusterConfigurationStoreIT {
         }
     }
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     private ConfigurationStore peer;
     private ConfigurationStore store;
 
-    @After
+    @AfterEach
     public void after() {
         if (store != null) {
             store.close();
@@ -99,10 +99,10 @@ public class ClusterConfigurationStoreIT {
 
     @Test
     public void testCustomTablespaceReplicaCount() throws Exception {
-        File zooKeeperDir = tmpDir.newFolder();
+        File zooKeeperDir = newFolder(tmpDir, "junit");
         try (TestingServer zooKeeper = new TestingServer(TestUtils.getFreeNonEphemeralPort(), zooKeeperDir)) {
             // the peer stays on the default tablespace and provides the second bookie
-            File peerDir = tmpDir.newFolder();
+            File peerDir = newFolder(tmpDir, "junit");
             peer = openStore(zooKeeper, new PropertiesConfigurationStore(nodeProperties()), peerDir);
 
             Properties props = nodeProperties();
@@ -110,7 +110,7 @@ public class ClusterConfigurationStoreIT {
             props.setProperty("replication.factor", REPLICATION_FACTOR + "");
             PropertiesConfigurationStore staticConfiguration = new PropertiesConfigurationStore(props);
 
-            File nodeDir = tmpDir.newFolder();
+            File nodeDir = newFolder(tmpDir, "junit");
             store = openStore(zooKeeper, staticConfiguration, nodeDir);
             assertEquals(REPLICATION_FACTOR, expectedReplicaCount(zooKeeper, TABLESPACE));
 
@@ -174,9 +174,18 @@ public class ClusterConfigurationStoreIT {
                 )) {
             ps.setString(1, tableSpace);
             try (ResultSet rs = ps.executeQuery()) {
-                assertTrue("tablespace " + tableSpace + " not found", rs.next());
+                assertTrue(rs.next(), "tablespace " + tableSpace + " not found");
                 return rs.getInt(1);
             }
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

@@ -26,11 +26,15 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
-import org.junit.Rule;
-import org.junit.rules.ExternalResource;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.extension.AfterAllCallback;
+import org.junit.jupiter.api.extension.BeforeAllCallback;
+import org.junit.jupiter.api.extension.ExtensionContext;
 
-public class KeyStoreRule extends ExternalResource {
+/**
+ * JUnit 5 extension that generates a self-signed keystore and matching truststore once before all tests.
+ * Register it with {@code @RegisterExtension static KeyStoreRule ... = new KeyStoreRule();}.
+ */
+public class KeyStoreRule implements BeforeAllCallback, AfterAllCallback {
 
     private static final String KEYSTORE_ALIAS = "server";
     private static final int KEY_SIZE = 2048;
@@ -38,7 +42,6 @@ public class KeyStoreRule extends ExternalResource {
     private static final char[] PASSWORD = "password".toCharArray();
     private final char[] keystorePassword;
     private final char[] keyPassword;
-    private final TemporaryFolder temporaryFolder;
 
     private File keyStoreFile;
     private KeyStore keyStore;
@@ -49,19 +52,13 @@ public class KeyStoreRule extends ExternalResource {
     private Provider securityProvider;
     private boolean removeProvider;
 
-    /**
-     * The rule will be built around a specified temporary folder for storing the generated keystore file.
-     *
-     * @param temporaryFolder the temporary directory; this rule should have lower {@link Rule#order()} in the test
-     */
-    public KeyStoreRule(final TemporaryFolder temporaryFolder) {
+    public KeyStoreRule() {
         this.keystorePassword = PASSWORD;
         this.keyPassword = PASSWORD;
-        this.temporaryFolder = temporaryFolder;
     }
 
     @Override
-    protected void before() throws Throwable {
+    public void beforeAll(ExtensionContext context) throws Exception {
         initSecurityProvider();
         initKeyPair();
         initCertificate();
@@ -73,7 +70,7 @@ public class KeyStoreRule extends ExternalResource {
         trustStore = KeyStore.getInstance("PKCS12");
         trustStore.load(null, null);
         trustStore.setCertificateEntry(KEYSTORE_ALIAS, certificate);
-        trustStoreFile = File.createTempFile("test-truststore-", ".p12", temporaryFolder.getRoot());
+        trustStoreFile = File.createTempFile("test-truststore-", ".p12");
         trustStoreFile.deleteOnExit();
         try (FileOutputStream fos = new FileOutputStream(trustStoreFile)) {
             trustStore.store(fos, keystorePassword);
@@ -89,7 +86,7 @@ public class KeyStoreRule extends ExternalResource {
                 keyPassword,
                 new X509Certificate[]{certificate}
         );
-        keyStoreFile = File.createTempFile("test-keystore-", ".p12", temporaryFolder.getRoot());
+        keyStoreFile = File.createTempFile("test-keystore-", ".p12");
         keyStoreFile.deleteOnExit();
         try (FileOutputStream fos = new FileOutputStream(keyStoreFile)) {
             keyStore.store(fos, keystorePassword);
@@ -131,7 +128,7 @@ public class KeyStoreRule extends ExternalResource {
     }
 
     @Override
-    protected void after() {
+    public void afterAll(ExtensionContext context) {
         if (keyStoreFile != null && keyStoreFile.exists()) {
             if (!keyStoreFile.delete()) {
                 System.err.println("Unable to delete keystore file: " + keyStoreFile.getAbsolutePath());

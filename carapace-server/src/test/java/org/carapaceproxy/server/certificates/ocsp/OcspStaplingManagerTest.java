@@ -26,9 +26,10 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+
 import java.security.cert.Certificate;
 import org.carapaceproxy.core.TrustStoreManager;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.shredzone.acme4j.util.KeyPairUtils;
 
 public class OcspStaplingManagerTest {

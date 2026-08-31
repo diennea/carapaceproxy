@@ -22,14 +22,16 @@ package org.carapaceproxy;
 
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
+
+import java.io.File;
+import java.io.IOException;
 import java.util.Properties;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  *
@@ -37,19 +39,19 @@ import org.junit.rules.TemporaryFolder;
  */
 public class DatabaseConfigurationIT {
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     @Test
     public void testBootWithDatabaseStore() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"))) {
 
             Properties configuration = new Properties();
 
             configuration.put("config.type", "database");
             configuration.put("db.jdbc.url", "jdbc:herddb:localhost");
-            configuration.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
+            configuration.put("db.server.base.dir", newFolder(tmpDir, "junit").getAbsolutePath());
             server.configureAtBoot(new PropertiesConfigurationStore(configuration));
 
             server.start();
@@ -58,4 +60,15 @@ public class DatabaseConfigurationIT {
         }
 
     }
+
+    @SuppressWarnings("deprecation")
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
+    }
+
 }

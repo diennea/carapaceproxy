@@ -6,7 +6,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class HttpUtilsTest {
 

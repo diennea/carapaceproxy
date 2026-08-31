@@ -19,6 +19,8 @@
  */
 package org.carapaceproxy.cluster.impl;
 
+import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collections;
@@ -36,30 +38,30 @@ import org.apache.zookeeper.ZooKeeper;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.utils.TestUtils;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.Test;
 import java.util.HashMap;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.io.TempDir;
 
 public class ZooKeeperGroupMembershipHandlerIT {
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
     String peerId1 = "p1";
     String peerId2 = "p2";
     String peerId3 = "p3";
 
     @Test
     public void testPeerDiscovery() throws Exception {
-        try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder())) {
+        try (TestingServer testingServer = new TestingServer(2229, newFolder(tmpDir, "junit"))) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
                     6000, false /*acl */, peerId1, Collections.EMPTY_MAP, new Properties());
@@ -105,7 +107,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
 
     @Test
     public void testWatchEvent() throws Exception {
-        try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder());) {
+        try (TestingServer testingServer = new TestingServer(2229, newFolder(tmpDir, "junit"));) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
                     6000, false /*acl */, peerId1, Collections.EMPTY_MAP, new Properties());
@@ -134,9 +136,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
                 });
 
                 peer1.fireEvent("foo", null);
-                TestUtils.waitForCondition(() -> {
-                    return eventFired2.get() >= 1;
-                }, 100);
+                TestUtils.waitForCondition(() -> eventFired2.get() >= 1, 100);
                 assertTrue(eventFired2.get() >= 1);
                 assertTrue(dataRes2.isEmpty());
                 eventFired2.set(0);
@@ -147,9 +147,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
                         "list", List.of(1, 2),
                         "obj", new DummyObject(1, "s")
                 ));
-                TestUtils.waitForCondition(() -> {
-                    return eventFired2.get() >= 1;
-                }, 100);
+                TestUtils.waitForCondition(() -> eventFired2.get() >= 1, 100);
                 assertTrue(eventFired2.get() >= 1);
                 assertTrue(((int) dataRes2.get("number")) == 1);
                 assertTrue(dataRes2.get("string").equals("mystring"));
@@ -181,10 +179,8 @@ public class ZooKeeperGroupMembershipHandlerIT {
                     });
 
                     peer1.fireEvent("foo", null);
-                    TestUtils.waitForCondition(() -> {
-                        return (eventFired2.get() >= 1
-                                && eventFired3.get() >= 1);
-                    }, 100);
+                    TestUtils.waitForCondition(() -> (eventFired2.get() >= 1
+                                && eventFired3.get() >= 1), 100);
                     assertTrue(eventFired2.get() >= 1);
                     assertTrue(dataRes2.isEmpty());
                     eventFired2.set(0);
@@ -198,10 +194,8 @@ public class ZooKeeperGroupMembershipHandlerIT {
                             "list", List.of("1", "2"),
                             "obj", new DummyObject(1, "s")
                     ));
-                    TestUtils.waitForCondition(() -> {
-                        return (eventFired2.get() >= 1
-                                && eventFired3.get() >= 1);
-                    }, 100);
+                    TestUtils.waitForCondition(() -> (eventFired2.get() >= 1
+                                && eventFired3.get() >= 1), 100);
                     assertTrue(eventFired2.get() >= 1);
                     assertTrue(((int) dataRes2.get("number")) == 1);
                     assertTrue(dataRes2.get("string").equals("mystring"));
@@ -249,7 +243,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
 
     @Test
     public void testPeerInfo() throws Exception {
-        try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder());) {
+        try (TestingServer testingServer = new TestingServer(2229, newFolder(tmpDir, "junit"));) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
                     6000, false /*acl */, peerId1, Map.of("name", "peer1"), new Properties());
@@ -296,7 +290,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
 
     @Test
     public void testRestoreSignal() throws Exception {
-        try (TestingServer testingServer = new TestingServer(TestUtils.getFreeNonEphemeralPort(), tmpDir.newFolder())) {
+        try (TestingServer testingServer = new TestingServer(TestUtils.getFreeNonEphemeralPort(), newFolder(tmpDir, "junit"))) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
                     6000, false /*acl */, peerId1, Collections.EMPTY_MAP, new Properties());
@@ -372,7 +366,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
 
     @Test
     public void testExecuteInMutexKeepsTheInterrupt() throws Exception {
-        try (TestingServer testingServer = new TestingServer(TestUtils.getFreeNonEphemeralPort(), tmpDir.newFolder())) {
+        try (TestingServer testingServer = new TestingServer(TestUtils.getFreeNonEphemeralPort(), newFolder(tmpDir, "junit"))) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
                     6000, false /*acl */, peerId1, Collections.EMPTY_MAP, new Properties());
@@ -417,5 +411,14 @@ public class ZooKeeperGroupMembershipHandlerIT {
         Field client = ZooKeeperGroupMembershipHandler.class.getDeclaredField("client");
         client.setAccessible(true);
         return ((CuratorFramework) client.get(handler)).getZookeeperClient().getZooKeeper();
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

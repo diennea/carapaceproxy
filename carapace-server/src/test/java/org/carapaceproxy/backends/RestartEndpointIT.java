@@ -20,14 +20,17 @@
 package org.carapaceproxy.backends;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.configureFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import com.github.tomakehurst.wiremock.WireMockServer;
+import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.ServerSocket;
@@ -37,9 +40,10 @@ import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.Test;
 
 public class RestartEndpointIT {
 
@@ -53,15 +57,27 @@ public class RestartEndpointIT {
         }
     }
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(
-            options()
-                    .bindAddress("localhost")
-                    .jettyStopTimeout(1L) // questo serve perchè se no allo stop del server i socket restano appesi
-                    .port(tryDiscoverEmptyPort())); // non possiamo mettere 0 se no al restart wiremock sceglie una altra porta
+    // Manually managed (not @RegisterExtension): these tests stop/start the backend mid-test.
+    private final WireMockServer wireMockRule = new WireMockServer(options()
+            .bindAddress("localhost")
+            .jettyStopTimeout(1L) // questo serve perchè se no allo stop del server i socket restano appesi
+            .port(tryDiscoverEmptyPort())); // non possiamo mettere 0 se no al restart wiremock sceglie una altra porta
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
+
+    @BeforeEach
+    public void startWireMock() {
+        wireMockRule.start();
+        configureFor("localhost", wireMockRule.port());
+    }
+
+    @AfterEach
+    public void stopWireMock() {
+        if (wireMockRule.isRunning()) {
+            wireMockRule.stop();
+        }
+    }
 
     @Test
     public void testClientsSendsRequestOnDownBackendAtSendRequest() throws Exception {
@@ -74,7 +90,7 @@ public class RestartEndpointIT {
                 ));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
             server.start();
             int port = server.getLocalPort();
 
@@ -109,7 +125,7 @@ public class RestartEndpointIT {
                 ));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
             server.start();
             int port = server.getLocalPort();
 
@@ -149,7 +165,7 @@ public class RestartEndpointIT {
                 ));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder())) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
             server.start();
             int port = server.getLocalPort();
 
@@ -165,6 +181,15 @@ public class RestartEndpointIT {
                 assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
             }
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 
 }
