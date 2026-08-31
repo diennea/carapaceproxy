@@ -238,6 +238,60 @@ public class ZooKeeperGroupMembershipHandlerTest {
     }
 
     @Test
+    public void testWatchEventNotFiredOnStartupForExistingNode() throws Exception {
+        try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder())) {
+            testingServer.start();
+            try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
+                    6000, false /*acl */, peerId1, Collections.EMPTY_MAP, new Properties())) {
+                peer1.start();
+
+                AtomicInteger eventFired2 = new AtomicInteger();
+                try (ZooKeeperGroupMembershipHandler peer2 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
+                        6000, false /*acl */, peerId2, Collections.EMPTY_MAP, new Properties())) {
+                    peer2.start();
+                    peer2.watchEvent("foo", new GroupMembershipHandler.EventCallback() {
+                        @Override
+                        public void eventFired(String eventId, Map<String, Object> data) {
+                            eventFired2.incrementAndGet();
+                        }
+
+                        @Override
+                        public void reconnected() {
+                        }
+                    });
+                    // leave a persistent /proxy/events/foo node behind, originated by peer1
+                    peer1.fireEvent("foo", null);
+                    TestUtils.waitForCondition(() -> eventFired2.get() >= 1, 100);
+                }
+
+                // simulate a restart of peer2: the stale event node must not fire the callback
+                eventFired2.set(0);
+                try (ZooKeeperGroupMembershipHandler peer2 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
+                        6000, false /*acl */, peerId2, Collections.EMPTY_MAP, new Properties())) {
+                    peer2.start();
+                    peer2.watchEvent("foo", new GroupMembershipHandler.EventCallback() {
+                        @Override
+                        public void eventFired(String eventId, Map<String, Object> data) {
+                            eventFired2.incrementAndGet();
+                        }
+
+                        @Override
+                        public void reconnected() {
+                        }
+                    });
+                    Thread.sleep(2000); // give the initial cache population time to replay
+                    assertEquals(0, eventFired2.get());
+
+                    // live events must still be delivered after initialization
+                    peer1.fireEvent("foo", null);
+                    TestUtils.waitForCondition(() -> eventFired2.get() >= 1, 100);
+                    assertTrue(eventFired2.get() >= 1);
+                }
+            }
+        }
+    }
+
+    @Test
     public void testPeerInfo() throws Exception {
         try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder());) {
             testingServer.start();

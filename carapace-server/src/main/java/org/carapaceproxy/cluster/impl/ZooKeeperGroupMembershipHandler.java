@@ -19,6 +19,7 @@
  */
 package org.carapaceproxy.cluster.impl;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
@@ -29,6 +30,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -37,11 +39,10 @@ import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.api.ACLProvider;
 import org.apache.curator.framework.imps.DefaultACLProvider;
-import org.apache.curator.framework.recipes.cache.ChildData;
-import org.apache.curator.framework.recipes.cache.PathChildrenCache;
-import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent;
-import org.apache.curator.framework.recipes.cache.PathChildrenCacheListener;
+import org.apache.curator.framework.recipes.cache.CuratorCache;
+import org.apache.curator.framework.recipes.cache.CuratorCacheListener;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
+import org.apache.curator.framework.state.ConnectionState;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.curator.utils.ZookeeperFactory;
 import org.apache.zookeeper.CreateMode;
@@ -76,7 +77,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     private final CuratorFramework client;
     private final String peerId; // of the local one
     private final Map<String, String> peerInfo; // of the local one
-    private final CopyOnWriteArrayList<PathChildrenCache> watchedEvents = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<CuratorCache> watchedEvents = new CopyOnWriteArrayList<>();
     private final ConcurrentHashMap<String, InterProcessMutex> mutexes = new ConcurrentHashMap<>();
     private final ExecutorService callbacksExecutor = Executors.newSingleThreadExecutor();
 
@@ -185,7 +186,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
             if (exists != null) {
                 byte[] data = client.getData().forPath(path); // Should be at least an empty Map.
                 if (data != null) {
-                    return MAPPER.readValue(new ByteArrayInputStream(data), Map.class);
+                    return MAPPER.readValue(new ByteArrayInputStream(data), new TypeReference<>() {});
                 }
             }
         } catch (Exception ex) {
@@ -201,31 +202,46 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
             final String eventpath = "/proxy/events/" + eventId;
 
             LOG.info("watching {}", path);
-            PathChildrenCache cache = new PathChildrenCache(client, path, true);
-            // hold a strong reference to the PathChildrenCache
+            CuratorCache cache = CuratorCache.build(client, path);
             watchedEvents.add(cache);
-            cache.getListenable().addListener((PathChildrenCacheListener) (CuratorFramework cf, PathChildrenCacheEvent pcce) -> {
-                LOG.info("ZK event {} at {}", pcce, path);
-                ChildData data = pcce.getData();
-                if (data != null && eventpath.equals(data.getPath())) {
-                    byte[] content = data.getData();
-                    LOG.info("ZK event content {}", new String(content, StandardCharsets.UTF_8));
-                    if (content != null) {
-                        Map<String, Object> info = MAPPER.readValue(new ByteArrayInputStream(content), Map.class);
-                        String origin = info.remove("origin") + "";
-                        if (peerId.equals(origin)) {
-                            LOG.info("discard self originated event {}", origin);
-                        } else {
-                            LOG.info("handle event {}", info);
-                            callback.eventFired(eventId, info);
+            final CountDownLatch initialized = new CountDownLatch(1);
+            CuratorCacheListener listener = CuratorCacheListener.builder()
+                    .forCreatesAndChanges((oldNode, node) -> {
+                        LOG.info("ZK event at {}", node.getPath());
+                        if (eventpath.equals(node.getPath())) {
+                            byte[] content = node.getData();
+                            LOG.info("ZK event content {}", new String(content, StandardCharsets.UTF_8));
+                            try {
+                                Map<String, Object> info = MAPPER
+                                        .readValue(new ByteArrayInputStream(content), new TypeReference<>() {});
+                                String origin = info.remove("origin") + "";
+                                if (peerId.equals(origin)) {
+                                    LOG.info("discard self originated event {}", origin);
+                                } else {
+                                    LOG.info("handle event {}", info);
+                                    callback.eventFired(eventId, info);
+                                }
+                            } catch (Exception ex) {
+                                LOG.error("Cannot process ZK event at {}", eventpath, ex);
+                            }
                         }
-                    }
-                } else if (pcce.getType() == PathChildrenCacheEvent.Type.CONNECTION_RECONNECTED) {
+                    })
+                    .forInitialized(initialized::countDown)
+                    // skip the replay of pre-existing nodes on start, like the old BUILD_INITIAL_CACHE did
+                    .afterInitialized()
+                    .build();
+            cache.listenable().addListener(listener, callbacksExecutor);
+            client.getConnectionStateListenable().addListener((cf, state) -> {
+                if (state == ConnectionState.RECONNECTED) {
                     callback.reconnected();
                 }
             }, callbacksExecutor);
-            cache.start(PathChildrenCache.StartMode.BUILD_INITIAL_CACHE);
-
+            cache.start();
+            // wait for the initial population, so events fired after this method returns are never lost
+            initialized.await();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(ex);
         } catch (Exception ex) {
             throw new RuntimeException(ex);
         }
@@ -281,6 +297,8 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
 
     @Override
     public void stop() {
+        watchedEvents.forEach(CuratorCache::close);
+        watchedEvents.clear();
         client.close();
         callbacksExecutor.shutdown();
     }

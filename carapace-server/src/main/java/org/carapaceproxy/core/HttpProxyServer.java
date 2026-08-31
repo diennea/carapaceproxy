@@ -67,7 +67,6 @@ import javax.servlet.DispatcherType;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.bookkeeper.stats.StatsLogger;
 import org.apache.bookkeeper.stats.prometheus.PrometheusMetricsProvider;
 import org.apache.commons.configuration.PropertiesConfiguration;
 import org.carapaceproxy.api.ApplicationConfig;
@@ -133,8 +132,6 @@ public class HttpProxyServer implements AutoCloseable {
 
     @Getter
     private final ContentsCache cache;
-    private final StatsLogger mainLogger;
-
     @Getter
     private final File basePath;
 
@@ -244,7 +241,6 @@ public class HttpProxyServer implements AutoCloseable {
     public HttpProxyServer(final EndpointMapper.Factory mapperFactory, File basePath) throws ConfigurationNotValidException {
         // metrics
         this.statsProvider = new PrometheusMetricsProvider();
-        this.mainLogger = this.statsProvider.getStatsLogger("");
         this.prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
         this.prometheusRegistry.config().meterFilter(new PrometheusRenameFilter());
         Metrics.globalRegistry.add(this.prometheusRegistry);
@@ -542,7 +538,7 @@ public class HttpProxyServer implements AutoCloseable {
                 }
                 break;
             case "database":
-                this.dynamicConfigurationStore = new HerdDBConfigurationStore(bootConfigurationStore, cluster, zkAddress, basePath, mainLogger);
+                this.dynamicConfigurationStore = new HerdDBConfigurationStore(bootConfigurationStore, cluster, zkAddress, basePath, statsProvider);
                 break;
             default:
                 throw new ConfigurationNotValidException("invalid config.type='" + dynamicConfigurationType + "', only 'file' and 'database' are supported");

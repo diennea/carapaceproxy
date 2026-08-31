@@ -39,7 +39,7 @@ import java.util.Properties;
 import java.util.Set;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
-import org.apache.bookkeeper.stats.NullStatsLogger;
+import org.apache.bookkeeper.stats.NullStatsProvider;
 import org.carapaceproxy.api.ConfigResource;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
@@ -86,7 +86,7 @@ public class ConfigurationStoreTest {
                 props.put("db.admin.username", "theusername");
                 props.put("db.admin.password", "thepassword");
                 newStore = new PropertiesConfigurationStore(props);
-                store = new HerdDBConfigurationStore(newStore, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
+                store = new HerdDBConfigurationStore(newStore, false, null, tmpDir.getRoot(), new NullStatsProvider());
             }
             store.commitConfiguration(newStore);
         } else {
@@ -349,7 +349,7 @@ public class ConfigurationStoreTest {
 
         PropertiesConfigurationStore propertiesConfigurationStore = new PropertiesConfigurationStore(props);
 
-        store = new HerdDBConfigurationStore(propertiesConfigurationStore, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
+        store = new HerdDBConfigurationStore(propertiesConfigurationStore, false, null, tmpDir.getRoot(), new NullStatsProvider());
 
         // Check applied configuration (loaded from empty db NB: passed configuration is ignored)
         assertEquals("", store.getProperty("certificate.0.hostname", ""));
@@ -395,7 +395,7 @@ public class ConfigurationStoreTest {
         props = new Properties();
         props.put("db.jdbc.url", "jdbc:herddb:localhost");
         propertiesConfigurationStore = new PropertiesConfigurationStore(props);
-        store = new HerdDBConfigurationStore(propertiesConfigurationStore, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
+        store = new HerdDBConfigurationStore(propertiesConfigurationStore, false, null, tmpDir.getRoot(), new NullStatsProvider());
         checkConfiguration();
     }
 

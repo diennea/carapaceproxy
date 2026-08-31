@@ -52,7 +52,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import org.apache.bookkeeper.stats.StatsLogger;
+import org.apache.bookkeeper.stats.StatsProvider;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.carapaceproxy.server.config.AcmeProviderConfiguration;
 import org.carapaceproxy.utils.StringUtils;
@@ -164,8 +164,8 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     private final HerdDBEmbeddedDataSource datasource;
 
     public HerdDBConfigurationStore(ConfigurationStore staticConfiguration,
-                                    boolean cluster, String zkAddress, File baseDir, StatsLogger statsLogger) {
-        this.datasource = buildDatasource(staticConfiguration, cluster, zkAddress, baseDir, statsLogger);
+                                    boolean cluster, String zkAddress, File baseDir, StatsProvider statsProvider) {
+        this.datasource = buildDatasource(staticConfiguration, cluster, zkAddress, baseDir, statsProvider);
         loadCurrentConfiguration();
     }
 
@@ -189,7 +189,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     }
 
     private HerdDBEmbeddedDataSource buildDatasource(ConfigurationStore staticConfiguration,
-                                                     boolean cluster, String zkAddress, File baseDir, StatsLogger statsLogger) {
+                                                     boolean cluster, String zkAddress, File baseDir, StatsProvider statsProvider) {
         Properties props = new Properties();
 
         if (cluster) {
@@ -214,7 +214,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
 
         LOG.info("HerdDB datasource configuration: {}", props);
         HerdDBEmbeddedDataSource ds = new HerdDBEmbeddedDataSource(props);
-        ds.setStatsLogger(statsLogger);
+        ds.setStatsProvider(statsProvider);
         if (cluster) {
             ds.setWaitForTableSpace("herd");
             ds.setWaitForTableSpaceTimeout(TIMEOUT_WAIT_FOR_TABLE_SPACE);

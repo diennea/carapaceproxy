@@ -104,12 +104,12 @@
         <libs.caffeine>3.0.5</libs.caffeine>
         <libs.antlr>4.3.1</libs.antlr>
 
-        <libs.bookkeeper>4.14.8</libs.bookkeeper>
+        <libs.bookkeeper>4.16.3</libs.bookkeeper>
         <libs.zookkeeper>3.8.6</libs.zookkeeper>
-        <libs.curator>5.2.0</libs.curator>
+        <libs.curator>5.9.0</libs.curator>
         <libs.prometheus>0.16.0</libs.prometheus>
         <libs.micrometer>1.14.14</libs.micrometer>
-        <libs.herddb>0.26.1</libs.herddb>
+        <libs.herddb>0.28.0</libs.herddb>
 
         <libs.commons.codec>1.17.1</libs.commons.codec>
         <libs.httpcore>4.4.16</libs.httpcore>
@@ -498,6 +498,18 @@
                         <configuration>
                             <rules>
                                 <banDependencyManagementScope />
+                                <requireSameVersions>
+                                    <dependencies>
+                                        <dependency>org.apache.bookkeeper</dependency>
+                                        <dependency>org.apache.bookkeeper.stats</dependency>
+                                        <dependency>org.apache.bookkeeper.http</dependency>
+                                    </dependencies>
+                                </requireSameVersions>
+                                <requireSameVersions>
+                                    <dependencies>
+                                        <dependency>org.apache.zookeeper</dependency>
+                                    </dependencies>
+                                </requireSameVersions>
                                 <banDuplicatePomDependencyVersions />
                                 <banDynamicVersions>
                                     <ignores>
