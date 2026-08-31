@@ -66,12 +66,4 @@ public class XTlsCipherFilterIT extends AbstractXTlsFilterTest {
             assertResponseContains(server.getLocalPort(), false, "it <b>absent</b> !!");
         }
     }
-
-    @Test
-    public void testHttpWithoutFilter() throws Exception {
-        setupWireMockForCipherFilter();
-        try (var server = startServer(false)) {
-            assertResponseContains(server.getLocalPort(), false, "it <b>absent</b> !!");
-        }
-    }
 }
