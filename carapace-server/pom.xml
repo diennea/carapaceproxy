@@ -158,6 +158,11 @@
                     <artifactId>commons-logging</artifactId>
                     <groupId>commons-logging</groupId>
                 </exclusion>
+                <!-- A test mock, pulled at compile scope, whose bundled json-path shadows the real one: see #485 -->
+                <exclusion>
+                    <groupId>org.herddb</groupId>
+                    <artifactId>herddb-mock</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>

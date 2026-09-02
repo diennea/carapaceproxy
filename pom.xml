@@ -525,8 +525,6 @@
                                         <!-- Excluding unnecessary annotations that are bundled in multiple versions by libraries -->
                                         <exclude>com.google.errorprone</exclude>
                                         <exclude>com.google.code.findbugs</exclude>
-                                        <!-- AssertJ is the only assertion library: keep Hamcrest off the test classpath -->
-                                        <exclude>org.hamcrest:*</exclude>
                                         <!-- We want only SLF4J as logging APIs and Logback as logging backend -->
                                         <exclude>ch.qos.reload4j:*</exclude>
                                         <exclude>commons-logging:commons-logging</exclude>
