@@ -19,8 +19,8 @@
  */
 package org.carapaceproxy.server.certificates;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -34,54 +34,54 @@ import org.shredzone.acme4j.Status;
 import org.shredzone.acme4j.challenge.Challenge;
 import org.shredzone.acme4j.util.KeyPairUtils;
 
-public class ACMEClientTest {
+class ACMEClientTest {
 
     private final ACMEClient client = new ACMEClient(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), true);
 
     @Test
-    public void testCheckResponseForChallengeReturnsRefreshedStatus() throws Exception {
+    void checkResponseForChallengeReturnsRefreshedStatus() throws Exception {
         Challenge challenge = mock(Challenge.class);
         when(challenge.getStatus()).thenReturn(Status.PROCESSING, Status.VALID);
 
-        assertEquals(Status.VALID, client.checkResponseForChallenge(challenge));
+        assertThat(client.checkResponseForChallenge(challenge)).isEqualTo(Status.VALID);
         verify(challenge).fetch();
     }
 
     @Test
-    public void testCheckResponseForChallengeSkipsFetchWhenAlreadyValid() throws Exception {
+    void checkResponseForChallengeSkipsFetchWhenAlreadyValid() throws Exception {
         Challenge challenge = mock(Challenge.class);
         when(challenge.getStatus()).thenReturn(Status.VALID);
 
-        assertEquals(Status.VALID, client.checkResponseForChallenge(challenge));
+        assertThat(client.checkResponseForChallenge(challenge)).isEqualTo(Status.VALID);
         verify(challenge, never()).fetch();
     }
 
     @Test
-    public void testCheckResponseForChallengeSkipsFetchWhenInvalid() throws Exception {
+    void checkResponseForChallengeSkipsFetchWhenInvalid() throws Exception {
         Challenge challenge = mock(Challenge.class);
         when(challenge.getStatus()).thenReturn(Status.INVALID);
 
-        assertEquals(Status.INVALID, client.checkResponseForChallenge(challenge));
+        assertThat(client.checkResponseForChallenge(challenge)).isEqualTo(Status.INVALID);
         verify(challenge, never()).fetch();
     }
 
     @Test
-    public void testCheckResponseForOrderReturnsFetchedStatus() throws Exception {
+    void checkResponseForOrderReturnsFetchedStatus() throws Exception {
         Order order = mockOrder();
         when(order.getStatus()).thenReturn(Status.VALID);
 
-        assertEquals(Status.VALID, client.checkResponseForOrder(order));
+        assertThat(client.checkResponseForOrder(order)).isEqualTo(Status.VALID);
         verify(order, times(1)).fetch();
     }
 
     @Test
-    public void testCheckResponseForOrderFetchesOncePerPoll() throws Exception {
+    void checkResponseForOrderFetchesOncePerPoll() throws Exception {
         // a freshly bound order has no cached state and any accessor would lazy-fetch,
         // so the explicit eager fetch has to be the only server round-trip of the poll
         Order order = mockOrder();
         when(order.getStatus()).thenReturn(Status.PROCESSING);
 
-        assertEquals(Status.PROCESSING, client.checkResponseForOrder(order));
+        assertThat(client.checkResponseForOrder(order)).isEqualTo(Status.PROCESSING);
         verify(order, times(1)).fetch();
     }
 

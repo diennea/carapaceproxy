@@ -19,12 +19,10 @@
  */
 package org.carapaceproxy.configstore;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Base64;
 import java.util.Collections;
@@ -41,7 +39,7 @@ import org.shredzone.acme4j.util.KeyPairUtils;
 /**
  * Test for {@link StoreSnapshot#validate()}.
  */
-public class StoreSnapshotTest {
+class StoreSnapshotTest {
 
     private static final String DOMAIN = "app.example.test";
     private static final Map<String, String> CONFIG = Map.of("certificate.0.hostname", DOMAIN);
@@ -50,7 +48,7 @@ public class StoreSnapshotTest {
     private static String chain;
 
     @BeforeAll
-    public static void setUp() throws Exception {
+    static void setUp() throws Exception {
         final var pair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         keyPair = new EncodedKeyPair(
                 ConfigurationStoreUtils.base64EncodeKey(pair.getPrivate()),
@@ -72,7 +70,7 @@ public class StoreSnapshotTest {
     }
 
     @Test
-    public void testValidSnapshot() throws Exception {
+    void validSnapshot() throws Exception {
         snapshot(validRow()).validate();
         // optional fields absent and no chain yet, as for a certificate still waiting
         snapshot(row(null, null, "WAITING", null, null, 0)).validate();
@@ -84,7 +82,7 @@ public class StoreSnapshotTest {
     }
 
     @Test
-    public void testInvalidSnapshots() {
+    void invalidSnapshots() {
         final var badPrivate = new EncodedKeyPair("not a key", keyPair.publicKey());
         final var badPublic = new EncodedKeyPair(keyPair.privateKey(), Base64.getEncoder().encodeToString(new byte[]{1, 2, 3}));
         final var notAChain = Base64.getEncoder().encodeToString(new byte[]{1, 2, 3});
@@ -124,16 +122,16 @@ public class StoreSnapshotTest {
                 Map.entry(new StoreSnapshot(CONFIG, null, null, Map.of("", validRow())), List.of("domain", "certificates"))
         );
         for (final var invalid : cases) {
-            final var err = assertThrows(ConfigurationNotValidException.class, invalid.getKey()::validate, invalid.getKey().toString());
+            final var err = assertThatExceptionOfType(ConfigurationNotValidException.class).as(invalid.getKey().toString()).isThrownBy(invalid.getKey()::validate).actual();
             for (final var part : invalid.getValue()) {
-                assertThat(err.getMessage(), containsString(part));
+                assertThat(err.getMessage()).contains(part);
             }
         }
     }
 
     @Test
-    public void testToStringHidesKeyMaterial() {
-        assertThat(new EncodedKeyPair("PRIV", "PUB").toString(), not(containsString("PRIV")));
-        assertThat(validRow().toString(), not(containsString(validRow().chain())));
+    void toStringHidesKeyMaterial() {
+        assertThat(new EncodedKeyPair("PRIV", "PUB").toString()).doesNotContain("PRIV");
+        assertThat(validRow().toString()).doesNotContain(validRow().chain());
     }
 }

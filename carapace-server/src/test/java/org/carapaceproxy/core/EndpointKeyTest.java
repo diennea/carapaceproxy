@@ -1,23 +1,22 @@
 package org.carapaceproxy.core;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
-public class EndpointKeyTest {
+class EndpointKeyTest {
 
     @Test
-    public void endpointKeyTest() {
+    void endpointKeyTest() {
         {
             EndpointKey entryPoint = EndpointKey.make("localhost:8080");
-            assertThat(entryPoint.host(), is("localhost"));
-            assertThat(entryPoint.port(), is(8080));
+            assertThat(entryPoint.host()).isEqualTo("localhost");
+            assertThat(entryPoint.port()).isEqualTo(8080);
         }
         {
             EndpointKey entryPoint = EndpointKey.make("localhost");
-            assertThat(entryPoint.host(), is("localhost"));
-            assertThat(entryPoint.port(), is(0));
+            assertThat(entryPoint.host()).isEqualTo("localhost");
+            assertThat(entryPoint.port()).isZero();
         }
     }
 

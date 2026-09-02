@@ -1,9 +1,6 @@
 package org.carapaceproxy.listeners;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.File;
 import java.io.IOException;
@@ -26,7 +23,7 @@ public class ListenerConfigurationIT {
     public File tmpDir;
 
     @Test
-    public void testListenerKeepAliveConfiguration() throws Exception {
+    void listenerKeepAliveConfiguration() throws Exception {
         try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir)) {
 
             {
@@ -45,12 +42,12 @@ public class ListenerConfigurationIT {
                 Map<EndpointKey, ListeningChannel> listeners = server.getListeners().getListeningChannels();
 
                 //check default configuration
-                assertTrue(listeners.get(listenerKey).getConfig().keepAlive());
-                assertEquals(128, listeners.get(listenerKey).getConfig().soBacklog());
-                assertEquals(300, listeners.get(listenerKey).getConfig().keepAliveIdle());
-                assertEquals(60, listeners.get(listenerKey).getConfig().keepAliveInterval());
-                assertEquals(8, listeners.get(listenerKey).getConfig().keepAliveCount());
-                assertEquals(1000, listeners.get(listenerKey).getConfig().maxKeepAliveRequests());
+                assertThat(listeners.get(listenerKey).getConfig().keepAlive()).isTrue();
+                assertThat(listeners.get(listenerKey).getConfig().soBacklog()).isEqualTo(128);
+                assertThat(listeners.get(listenerKey).getConfig().keepAliveIdle()).isEqualTo(300);
+                assertThat(listeners.get(listenerKey).getConfig().keepAliveInterval()).isEqualTo(60);
+                assertThat(listeners.get(listenerKey).getConfig().keepAliveCount()).isEqualTo(8);
+                assertThat(listeners.get(listenerKey).getConfig().maxKeepAliveRequests()).isEqualTo(1000);
             }
             //disable keepAlive
             {
@@ -64,8 +61,8 @@ public class ListenerConfigurationIT {
 
                 Map<EndpointKey, ListeningChannel> listeners = server.getListeners().getListeningChannels();
 
-                assertEquals(1, listeners.size());
-                assertFalse(listeners.get(listenerKey).getConfig().keepAlive());
+                assertThat(listeners).hasSize(1);
+                assertThat(listeners.get(listenerKey).getConfig().keepAlive()).isFalse();
             }
 
             //customize keepAlive options
@@ -85,12 +82,12 @@ public class ListenerConfigurationIT {
 
                 Map<EndpointKey, ListeningChannel> listeners = server.getListeners().getListeningChannels();
 
-                assertTrue(listeners.get(listenerKey).getConfig().keepAlive());
-                assertEquals(10, listeners.get(listenerKey).getConfig().soBacklog());
-                assertEquals(10, listeners.get(listenerKey).getConfig().keepAliveIdle());
-                assertEquals(5, listeners.get(listenerKey).getConfig().keepAliveInterval());
-                assertEquals(2, listeners.get(listenerKey).getConfig().keepAliveCount());
-                assertEquals(2, listeners.get(listenerKey).getConfig().maxKeepAliveRequests());
+                assertThat(listeners.get(listenerKey).getConfig().keepAlive()).isTrue();
+                assertThat(listeners.get(listenerKey).getConfig().soBacklog()).isEqualTo(10);
+                assertThat(listeners.get(listenerKey).getConfig().keepAliveIdle()).isEqualTo(10);
+                assertThat(listeners.get(listenerKey).getConfig().keepAliveInterval()).isEqualTo(5);
+                assertThat(listeners.get(listenerKey).getConfig().keepAliveCount()).isEqualTo(2);
+                assertThat(listeners.get(listenerKey).getConfig().maxKeepAliveRequests()).isEqualTo(2);
             }
 
             //negative maxkeepAliverequests
@@ -107,7 +104,7 @@ public class ListenerConfigurationIT {
                     reloadConfiguration(configuration, server);
 
                 } catch (IllegalArgumentException e) {
-                    assertTrue(e.getMessage().contains("maxKeepAliveRequests must be positive or -1"));
+                    assertThat(e.getMessage()).contains("maxKeepAliveRequests must be positive or -1");
                 }
             }
 
@@ -125,14 +122,14 @@ public class ListenerConfigurationIT {
                     reloadConfiguration(configuration, server);
 
                 } catch (IllegalArgumentException e) {
-                    assertTrue(e.getMessage().contains("maxKeepAliveRequests must be positive or -1"));
+                    assertThat(e.getMessage()).contains("maxKeepAliveRequests must be positive or -1");
                 }
             }
         }
     }
 
     @Test
-    public void testListenerWaitsForThePortToBeReleased() throws Exception {
+    void listenerWaitsForThePortToBeReleased() throws Exception {
         ServerSocket occupant = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
         int port = occupant.getLocalPort();
         Thread release = new Thread(() -> {
@@ -146,23 +143,22 @@ public class ListenerConfigurationIT {
         release.start();
         try (HttpProxyServer server = newServerListeningOn(port)) {
             server.start();
-            assertNotNull(server.getListeners().getListeningChannels()
-                    .get(new EndpointKey("127.0.0.1", port)));
+            assertThat(server.getListeners().getListeningChannels()
+                    .get(new EndpointKey("127.0.0.1", port))).isNotNull();
         } finally {
             release.join();
         }
     }
 
     @Test
-    public void testListenerFailsWhenThePortStaysBusy() throws Exception {
+    void listenerFailsWhenThePortStaysBusy() throws Exception {
         try (ServerSocket occupant = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
              HttpProxyServer server = newServerListeningOn(occupant.getLocalPort())) {
             long start = System.nanoTime();
             // the failed bind is logged, not thrown: the listener stays down
             server.start();
-            assertTrue(System.nanoTime() - start >= 1_000_000_000L);
-            assertFalse(server.getListeners().getListeningChannels()
-                    .containsKey(new EndpointKey("127.0.0.1", occupant.getLocalPort())));
+            assertThat(System.nanoTime() - start).isGreaterThanOrEqualTo(1_000_000_000L);
+            assertThat(server.getListeners().getListeningChannels()).doesNotContainKey(new EndpointKey("127.0.0.1", occupant.getLocalPort()));
         }
     }
 

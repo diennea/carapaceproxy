@@ -32,10 +32,10 @@ import org.carapaceproxy.core.TrustStoreManager;
 import org.junit.jupiter.api.Test;
 import org.shredzone.acme4j.util.KeyPairUtils;
 
-public class OcspStaplingManagerTest {
+class OcspStaplingManagerTest {
 
     @Test
-    public void testStaplingSurvivesFailingCertificates() throws Exception {
+    void staplingSurvivesFailingCertificates() throws Exception {
         final var manager = spy(new OcspStaplingManager(mock(TrustStoreManager.class)));
         final Certificate[] first = generateSampleChain(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), false);
         final Certificate[] second = generateSampleChain(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), false);
@@ -51,7 +51,7 @@ public class OcspStaplingManagerTest {
     }
 
     @Test
-    public void testStaplingSurvivesError() throws Exception {
+    void staplingSurvivesError() throws Exception {
         final var manager = spy(new OcspStaplingManager(mock(TrustStoreManager.class)));
         final Certificate[] chain = generateSampleChain(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), false);
         manager.addCertificateForStapling(chain);

@@ -19,11 +19,9 @@
  */
 package org.carapaceproxy.server.filters;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import java.util.List;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchAllRequestMatcher;
@@ -42,7 +40,7 @@ class XTlsCipherRequestFilterTest {
 
         new XTlsCipherRequestFilter(new MatchAllRequestMatcher()).apply(request);
 
-        assertTrue(headers.getAll(HEADER).isEmpty());
+        assertThat(headers.getAll(HEADER)).isEmpty();
     }
 
     @Test
@@ -55,7 +53,7 @@ class XTlsCipherRequestFilterTest {
 
         new XTlsCipherRequestFilter(new MatchAllRequestMatcher()).apply(request);
 
-        assertEquals("TLS_AES_128_GCM_SHA256", headers.get(HEADER));
+        assertThat(headers.get(HEADER)).isEqualTo("TLS_AES_128_GCM_SHA256");
     }
 
     @Test
@@ -69,6 +67,6 @@ class XTlsCipherRequestFilterTest {
 
         new XTlsCipherRequestFilter(new MatchAllRequestMatcher()).apply(request);
 
-        assertEquals(List.of("TLS_AES_256_GCM_SHA384"), headers.getAll(HEADER));
+        assertThat(headers.getAll(HEADER)).containsExactly("TLS_AES_256_GCM_SHA384");
     }
 }

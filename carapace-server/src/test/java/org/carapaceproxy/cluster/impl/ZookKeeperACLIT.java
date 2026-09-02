@@ -21,7 +21,6 @@ package org.carapaceproxy.cluster.impl;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -34,8 +33,7 @@ import org.apache.curator.test.TestingServer;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.utils.TestUtils;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -61,10 +59,10 @@ public class ZookKeeperACLIT {
      *
      */
     @BeforeAll
-    public static void setUpEnvironment() {
+    static void setUpEnvironment() {
         File file = new File("src/test/resources/jaas/test_jaas.conf");
         System.setProperty("java.security.auth.login.config", file.getAbsolutePath());
-        assertTrue(file.isFile());
+        assertThat(file).isFile();
         Configuration.getConfiguration().refresh();
     }
 
@@ -74,13 +72,13 @@ public class ZookKeeperACLIT {
      * @throws IOException
      */
     @AfterAll
-    public static void cleanUpEnvironment() throws InterruptedException, IOException {
+    static void cleanUpEnvironment() throws InterruptedException, IOException {
         System.clearProperty("java.security.auth.login.config");
         Configuration.getConfiguration().refresh();
     }
 
     @Test
-    public void testUseAcl() throws Exception {
+    void useAcl() throws Exception {
         Map<String, Object> customProperties = new HashMap<>();
         customProperties.put("authProvider.1", "org.apache.zookeeper.server.auth.SASLAuthenticationProvider");
         InstanceSpec def = InstanceSpec.newInstanceSpec();
@@ -99,8 +97,8 @@ public class ZookKeeperACLIT {
                 peer2.start();
                 List<String> peersFrom1 = peer1.getPeers();
                 List<String> peersFrom2 = peer2.getPeers();
-                assertEquals(Arrays.asList(peerId1, peerId2), peersFrom1);
-                assertEquals(Arrays.asList(peerId1, peerId2), peersFrom2);
+                assertThat(peersFrom1).containsExactly(peerId1, peerId2);
+                assertThat(peersFrom2).containsExactly(peerId1, peerId2);
 
                 AtomicInteger eventFired2 = new AtomicInteger();
                 Map<String, Object> dataRes2 = new HashMap<>();
@@ -119,14 +117,14 @@ public class ZookKeeperACLIT {
 
                 peer1.fireEvent("foo", null);
                 TestUtils.waitForCondition(() -> eventFired2.get() >= 1, 100);
-                assertTrue(eventFired2.get() >= 1);
-                assertTrue(dataRes2.isEmpty());
+                assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1);
+                assertThat(dataRes2).isEmpty();
                 eventFired2.set(0);
 
                 peer1.fireEvent("foo", Map.of("data", "mydata"));
                 TestUtils.waitForCondition(() -> eventFired2.get() >= 1, 100);
-                assertTrue(eventFired2.get() >= 1);
-                assertTrue(dataRes2.get("data").equals("mydata"));
+                assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1);
+                assertThat(dataRes2).containsEntry("data", "mydata");
                 eventFired2.set(0);
                 dataRes2.clear();
 
@@ -152,22 +150,22 @@ public class ZookKeeperACLIT {
                     peer1.fireEvent("foo", null);
                     TestUtils.waitForCondition(() -> (eventFired2.get() >= 1
                                 && eventFired3.get() >= 1), 100);
-                    assertTrue(eventFired2.get() >= 1);
-                    assertTrue(dataRes2.isEmpty());
+                    assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1);
+                    assertThat(dataRes2).isEmpty();
                     eventFired2.set(0);
-                    assertTrue(eventFired3.get() >= 1);
-                    assertTrue(dataRes3.isEmpty());
+                    assertThat(eventFired3.get()).isGreaterThanOrEqualTo(1);
+                    assertThat(dataRes3).isEmpty();
                     eventFired3.set(0);
 
                     peer1.fireEvent("foo", Map.of("data", "mydata"));
                     TestUtils.waitForCondition(() -> (eventFired2.get() >= 1
                                 && eventFired3.get() >= 1), 100);
-                    assertTrue(eventFired2.get() >= 1);
-                    assertTrue(dataRes2.get("data").equals("mydata"));
+                    assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1);
+                    assertThat(dataRes2).containsEntry("data", "mydata");
                     eventFired2.set(0);
                     dataRes2.clear();
-                    assertTrue(eventFired3.get() >= 1);
-                    assertTrue(dataRes3.get("data").equals("mydata"));
+                    assertThat(eventFired3.get()).isGreaterThanOrEqualTo(1);
+                    assertThat(dataRes3).containsEntry("data", "mydata");
                     eventFired3.set(0);
                     dataRes3.clear();
 
@@ -179,11 +177,11 @@ public class ZookKeeperACLIT {
                         }
                         Thread.sleep(100);
                     }
-                    assertTrue(eventFired2.get() > 0);
-                    assertTrue(dataRes2.get("data").equals("mydata"));
+                    assertThat(eventFired2.get()).isGreaterThan(0);
+                    assertThat(dataRes2).containsEntry("data", "mydata");
                     // self events are not fired
-                    assertTrue(eventFired3.get() == 0);
-                    assertTrue(dataRes3.isEmpty());
+                    assertThat(eventFired3.get()).isZero();
+                    assertThat(dataRes3).isEmpty();
                 }
 
             }

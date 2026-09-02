@@ -23,9 +23,9 @@ import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.Certificate;
-import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePrivateKey;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePublicKey;
@@ -34,9 +34,6 @@ import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64Encode
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.carapaceproxy.utils.TestUtils.assertEqualsKey;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.shredzone.acme4j.util.KeyPairUtils;
 
@@ -44,10 +41,10 @@ import org.shredzone.acme4j.util.KeyPairUtils;
  *
  * @author paolo.venturi
  */
-public class ConfigurationStoreUtilsTest {
+class ConfigurationStoreUtilsTest {
 
     @Test
-    public void testBase64EncodeDecodeKeys() throws Exception {
+    void base64EncodeDecodeKeys() throws Exception {
         KeyPair pair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         PrivateKey privateKey = pair.getPrivate();
         PublicKey publicKey = pair.getPublic();
@@ -62,18 +59,19 @@ public class ConfigurationStoreUtilsTest {
     }
 
     @Test
-    public void testBase64EncodeEncodeCertificateChain() throws Exception {
+    void base64EncodeEncodeCertificateChain() throws Exception {
         KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         Certificate[] originalChain = generateSampleChain(endUserKeyPair, false);
         String encodedChain = base64EncodeCertificateChain(originalChain, endUserKeyPair.getPrivate());
         Certificate[] decodedChain = base64DecodeCertificateChain(encodedChain);
 
-        assertNotNull(decodedChain);
-        assertEquals(originalChain.length, decodedChain.length);
+        assertThat(decodedChain)
+                .isNotNull()
+                .hasSameSizeAs(originalChain);
         for (int i = 0; i < decodedChain.length; i++) {
             Certificate decodedCert = decodedChain[i];
-            assertNotNull(decodedCert);
-            assertTrue(Arrays.equals(decodedCert.getEncoded(), originalChain[i].getEncoded()));
+            assertThat(decodedCert).isNotNull();
+            assertThat(decodedCert.getEncoded()).isEqualTo(originalChain[i].getEncoded());
         }
     }
 

@@ -19,19 +19,15 @@
  */
 package org.carapaceproxy.server.certificates;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodeCertificateChain;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.carapaceproxy.utils.CertificatesUtils.compareChains;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.security.KeyPair;
 import java.security.cert.Certificate;
-import java.util.Arrays;
 import org.carapaceproxy.utils.CertificatesUtils;
 import org.junit.jupiter.api.Test;
 import org.shredzone.acme4j.util.KeyPairUtils;
@@ -42,47 +38,48 @@ import java.util.Date;
  *
  * @author paolo.venturi
  */
-public class CertificatesUtilsTest {
+class CertificatesUtilsTest {
 
     @Test
-    public void testCompareCertificatesChains() throws Exception {
+    void compareCertificatesChains() throws Exception {
         KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         Certificate[] originalChain = generateSampleChain(endUserKeyPair, false);
-        assertTrue(compareChains(originalChain, originalChain));
-        assertFalse(compareChains(originalChain, null));
-        assertFalse(compareChains(originalChain, new Certificate[0]));
+        assertThat(compareChains(originalChain, originalChain)).isTrue();
+        assertThat(compareChains(originalChain, null)).isFalse();
+        assertThat(compareChains(originalChain, new Certificate[0])).isFalse();
 
         String encodedChain = base64EncodeCertificateChain(originalChain, endUserKeyPair.getPrivate());
         Certificate[] decodedChain = base64DecodeCertificateChain(encodedChain);
-        assertNotNull(decodedChain);
-        assertEquals(originalChain.length, decodedChain.length);
+        assertThat(decodedChain)
+                .isNotNull()
+                .hasSameSizeAs(originalChain);
         for (int i = 0; i < decodedChain.length; i++) {
             Certificate decodedCert = decodedChain[i];
-            assertNotNull(decodedCert);
-            assertTrue(Arrays.equals(decodedCert.getEncoded(), originalChain[i].getEncoded()));
+            assertThat(decodedCert).isNotNull();
+            assertThat(decodedCert.getEncoded()).isEqualTo(originalChain[i].getEncoded());
         }
-        assertTrue(compareChains(originalChain, decodedChain));
+        assertThat(compareChains(originalChain, decodedChain)).isTrue();
 
         KeyPair endUserKeyPair2 = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         Certificate[] otherChain = generateSampleChain(endUserKeyPair2, false);
-        assertFalse(compareChains(originalChain, otherChain));
+        assertThat(compareChains(originalChain, otherChain)).isFalse();
     }
 
     @Test
-    public void testCertificatesExpiration() throws Exception {
+    void certificatesExpiration() throws Exception {
         {
             KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
             Certificate[] chain = generateSampleChain(endUserKeyPair, false); // not before == not after == today
             Date expiringDate = ((X509Certificate) chain[0]).getNotAfter();
-            assertFalse(CertificatesUtils.isCertificateExpired(expiringDate, 0));
-            assertTrue(CertificatesUtils.isCertificateExpired(expiringDate, 30)); // not after
+            assertThat(CertificatesUtils.isCertificateExpired(expiringDate, 0)).isFalse();
+            assertThat(CertificatesUtils.isCertificateExpired(expiringDate, 30)).isTrue(); // not after
         }
         {
             KeyPair endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
             Certificate[] chain = generateSampleChain(endUserKeyPair, true); // not before == not after == today
             Date expiringDate = ((X509Certificate) chain[0]).getNotAfter();
-            assertTrue(CertificatesUtils.isCertificateExpired(expiringDate, 0));
-            assertTrue(CertificatesUtils.isCertificateExpired(expiringDate, 30)); // not after
+            assertThat(CertificatesUtils.isCertificateExpired(expiringDate, 0)).isTrue();
+            assertThat(CertificatesUtils.isCertificateExpired(expiringDate, 30)).isTrue(); // not after
         }
     }
 }

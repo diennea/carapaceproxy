@@ -19,8 +19,8 @@
  */
 package org.carapaceproxy.api;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -40,10 +40,10 @@ import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.junit.jupiter.api.Test;
 
-public class RestoreInProgressFilterTest {
+class RestoreInProgressFilterTest {
 
     @Test
-    public void testWritesRefusedWhileRestoreRuns() throws Exception {
+    void writesRefusedWhileRestoreRuns() throws Exception {
         NullGroupMembershipHandler handler = new NullGroupMembershipHandler();
         HttpProxyServer server = mock(HttpProxyServer.class);
         when(server.isRestoreInProgress()).thenAnswer(invocation -> handler.isRestoreInProgress());
@@ -60,7 +60,7 @@ public class RestoreInProgressFilterTest {
         GroupMembershipHandler.RestoreSignal signal = handler.raiseRestoreSignal();
         try {
             signal.ensureHeld();
-            assertThrows(ConfigurationChangeInProgressException.class, handler::raiseRestoreSignal);
+            assertThatExceptionOfType(ConfigurationChangeInProgressException.class).isThrownBy(handler::raiseRestoreSignal);
             assertRefused(filter, "POST", "/api/config/apply");
             assertRefused(filter, "DELETE", "/api/certificates/a.example");
             assertRefused(filter, "PUT", "/api/connectionpools/p");
@@ -70,7 +70,7 @@ public class RestoreInProgressFilterTest {
         } finally {
             signal.close();
         }
-        assertThrows(IllegalStateException.class, signal::ensureHeld);
+        assertThatExceptionOfType(IllegalStateException.class).isThrownBy(signal::ensureHeld);
         assertPasses(filter, "POST", "/api/config/apply");
 
         // a stale handle never clears a newer signal
@@ -93,7 +93,7 @@ public class RestoreInProgressFilterTest {
         verify(response).setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
         verify(response).setHeader("Retry-After", String.valueOf(RestoreInProgressFilter.RETRY_AFTER_SECONDS));
         verify(response).setContentType("application/json");
-        assertEquals("{\"message\":\"Restore in progress, try again later\"}", body.toString());
+        assertThat(body).hasToString("{\"message\":\"Restore in progress, try again later\"}");
     }
 
     private static void assertPasses(RestoreInProgressFilter filter, String method, String uri) throws Exception {

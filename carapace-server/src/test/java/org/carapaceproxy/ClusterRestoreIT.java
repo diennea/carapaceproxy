@@ -19,14 +19,10 @@
  */
 package org.carapaceproxy;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChainData;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
@@ -76,7 +72,7 @@ public class ClusterRestoreIT {
     private HttpProxyServer node2;
 
     @AfterEach
-    public void stop() throws Exception {
+    void stop() throws Exception {
         for (AutoCloseable closeable : new AutoCloseable[]{node2, node1, zooKeeper}) {
             if (closeable != null) {
                 closeable.close();
@@ -113,7 +109,7 @@ public class ClusterRestoreIT {
     }
 
     @Test
-    public void testPeerReloadsTheRestoredState() throws Exception {
+    void peerReloadsTheRestoredState() throws Exception {
         zooKeeper = new TestingServer(TestUtils.getFreeNonEphemeralPort(), newFolder(tmpDir, "junit"));
         final int port = TestUtils.getFreeNonEphemeralPort();
         node1 = startNode("node1", Files.createDirectory(tmpDir.toPath().resolve("node1")).toFile(), 0);
@@ -124,13 +120,13 @@ public class ClusterRestoreIT {
         TestUtils.waitForCondition(() -> !node1.isRestoreInProgress() && !node2.isRestoreInProgress(), 30);
         try (CuratorFramework client = CuratorFrameworkFactory.newClient(zooKeeper.getConnectString(), new RetryOneTime(100))) {
             client.start();
-            assertNull(client.checkExists().forPath("/proxy/restore-in-progress"));
+            assertThat(client.checkExists().forPath("/proxy/restore-in-progress")).isNull();
         }
         peerMissingABackendCaReloadsOnceItArrives(port);
     }
 
     @Test
-    public void testRestoreRefusedWhenThePeersCannotBeRead() throws Exception {
+    void restoreRefusedWhenThePeersCannotBeRead() throws Exception {
         zooKeeper = new TestingServer(TestUtils.getFreeNonEphemeralPort(), newFolder(tmpDir, "junit"));
         node1 = startNode("node1", Files.createDirectory(tmpDir.toPath().resolve("node1")).toFile(), 0);
         final StoreSnapshot archive = withConfig(node1.backupState(), "healthmanager.period", "25");
@@ -139,14 +135,14 @@ public class ClusterRestoreIT {
             client.start();
             // a listed peer whose information cannot be read
             client.create().forPath("/proxy/peers/ghost", "not json".getBytes(StandardCharsets.UTF_8));
-            assertThrows(StoreNotReadyException.class, () -> node1.restoreState(archive, null, null));
+            assertThatExceptionOfType(StoreNotReadyException.class).isThrownBy(() -> node1.restoreState(archive, null, null));
             client.delete().forPath("/proxy/peers/ghost");
             // a list without this node, as read when ZooKeeper does not answer
             client.delete().forPath("/proxy/peers/node1");
-            assertThrows(StoreNotReadyException.class, () -> node1.restoreState(archive, null, null));
+            assertThatExceptionOfType(StoreNotReadyException.class).isThrownBy(() -> node1.restoreState(archive, null, null));
         }
-        assertFalse(node1.isRestoreInProgress());
-        assertEquals(period, node1.getBackendHealthManager().getPeriod());
+        assertThat(node1.isRestoreInProgress()).isFalse();
+        assertThat(node1.getBackendHealthManager().getPeriod()).isEqualTo(period);
     }
 
     private void writeRefusedWhileThePeerWaitsToReload() throws Exception {
@@ -181,16 +177,16 @@ public class ClusterRestoreIT {
             }
         });
         try {
-            assertTrue(entered.await(30, TimeUnit.SECONDS));
-            assertTrue(node1.restoreState(archive, null, null).ok());
+            assertThat(entered.await(30, TimeUnit.SECONDS)).isTrue();
+            assertThat(node1.restoreState(archive, null, null).ok()).isTrue();
             // the signal is gone: the reload on the peer waits for the lock held by the write
             TestUtils.waitForCondition(ClusterRestoreIT::reloadWaitsForTheLock, 30);
         } finally {
             release.countDown();
         }
         // the write is refused at its commit, after the reload was asked
-        final ExecutionException refused = assertThrows(ExecutionException.class, write::get);
-        assertTrue(refused.getCause().getCause() instanceof RestoreInProgressException);
+        final ExecutionException refused = assertThatExceptionOfType(ExecutionException.class).isThrownBy(write::get).actual();
+        assertThat(refused.getCause().getCause()).isInstanceOf(RestoreInProgressException.class);
         TestUtils.waitForCondition(() -> !node2.isRestoreInProgress() && node2.getBackendHealthManager().getPeriod() == 25, 30);
     }
 
@@ -230,23 +226,23 @@ public class ClusterRestoreIT {
                 && node2.getListeners().getListeningChannels().size() == 1, 30);
         final ListeningChannel listening = node2.getListeners().getListeningChannels().values().iterator().next();
         final File fullChain = new File(new File(localStore, DOMAIN), "fullchain.pem");
-        assertFalse(fullChain.exists());
+        assertThat(fullChain.exists()).isFalse();
 
-        assertTrue(node1.restoreState(archive, null, null).ok());
-        assertEquals(26, node1.getBackendHealthManager().getPeriod());
+        assertThat(node1.restoreState(archive, null, null).ok()).isTrue();
+        assertThat(node1.getBackendHealthManager().getPeriod()).isEqualTo(26);
         TestUtils.waitForCondition(() -> !node1.isRestoreInProgress(), 30);
         // the apply would load the CA after restarting every listener: the peer checks first and touches nothing
         Thread.sleep(3_000);
-        assertTrue(node2.isRestoreInProgress());
-        assertEquals(30, node2.getBackendHealthManager().getPeriod());
-        assertSame(listening, node2.getListeners().getListeningChannels().values().iterator().next());
+        assertThat(node2.isRestoreInProgress()).isTrue();
+        assertThat(node2.getBackendHealthManager().getPeriod()).isEqualTo(30);
+        assertThat(node2.getListeners().getListeningChannels().values().iterator().next()).isSameAs(listening);
 
         // the file arrives: the next retry, every 30 seconds, applies the restored state
         TestUtils.deployResource("ca.p12", new File(tmpDir, "node2"));
         TestUtils.waitForCondition(() -> !node2.isRestoreInProgress() && node2.getBackendHealthManager().getPeriod() == 26, 90);
-        assertEquals(backedUpChain, node2.getDynamicCertificatesManager().getCertificateDataForDomain(DOMAIN).getChain());
+        assertThat(node2.getDynamicCertificatesManager().getCertificateDataForDomain(DOMAIN).getChain()).isEqualTo(backedUpChain);
         // the local files are rewritten after the reload, with the restored chain
-        assertTrue(fullChain.exists());
+        assertThat(fullChain).exists();
     }
 
     private static boolean reloadWaitsForTheLock() {

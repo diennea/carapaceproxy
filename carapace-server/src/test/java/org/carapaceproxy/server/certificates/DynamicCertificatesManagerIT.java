@@ -20,6 +20,7 @@
 package org.carapaceproxy.server.certificates;
 
 import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.DNS_CHALLENGE_WAIT;
@@ -32,12 +33,7 @@ import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERI
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -97,7 +93,7 @@ import org.shredzone.acme4j.Problem;
  *
  * @author paolo.venturi
  */
-public class DynamicCertificatesManagerIT {
+class DynamicCertificatesManagerIT {
 
     static {
         // DynamicCertificatesManager reads the limit into a static final field, so the property must be set
@@ -134,7 +130,7 @@ public class DynamicCertificatesManagerIT {
             "all_ok,true",
             "all_ok,false"
     })
-    public void testCertificateSimpleStateManagement(String runCase, boolean maxedOutTrials) throws Exception {
+    void certificateSimpleStateManagement(String runCase, boolean maxedOutTrials) throws Exception {
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
         Order o = mock(Order.class);
@@ -247,8 +243,8 @@ public class DynamicCertificatesManagerIT {
         assertCertificateState(d0, AVAILABLE, cycleCount, man);
         assertCertificateState(d2, AVAILABLE, 0, man);
         assertCertificateState(d3, AVAILABLE, 0, man);
-        assertNotNull(man.getCertificateForDomain(d2));
-        assertNull(man.getCertificateForDomain(d3)); // empty
+        assertThat(man.getCertificateForDomain(d2)).isNotNull();
+        assertThat(man.getCertificateForDomain(d3)).isNull(); // empty
         man.setStateOfCertificate(d2, WAITING); // has not to be renewed by the manager (saveCounter = 1)
         assertCertificateState(d2, WAITING, 0, man);
 
@@ -267,12 +263,9 @@ public class DynamicCertificatesManagerIT {
             assertCertificateState(d1, ORDERING, expectedCycleCount, man);
         } else if (runCase.startsWith("challenge_status_invalid")) {
             assertCertificateState(d1, REQUEST_FAILED, ++expectedCycleCount, man);
-            assertEquals(
-                    runCase.equals("challenge_status_invalid_with_detail")
-                            ? "CAA record prevents issuance"
-                            : "Challenge response verification failed, status is INVALID",
-                    man.getCertificateDataForDomain(d1).getMessage()
-            );
+            assertThat(man.getCertificateDataForDomain(d1).getMessage()).isEqualTo(runCase.equals("challenge_status_invalid_with_detail")
+                    ? "CAA record prevents issuance"
+                    : "Challenge response verification failed, status is INVALID");
             man.run();
             verify(store, times(maxedOutTrials ? saveCounter : ++saveCounter)).saveCertificate(any());
             assertCertificateState(d1, maxedOutTrials ? REQUEST_FAILED : WAITING, expectedCycleCount, man);
@@ -339,9 +332,9 @@ public class DynamicCertificatesManagerIT {
     }
 
     private void assertCertificateState(String domain, DynamicCertificateState expectedState, int expectedCycleCount, DynamicCertificatesManager dCMan) {
-        assertEquals(expectedState, dCMan.getStateOfCertificate(domain)); // on db
-        assertEquals(expectedState, dCMan.getCertificateDataForDomain(domain).getState()); // on cache
-        assertEquals(expectedCycleCount, dCMan.getCertificateDataForDomain(domain).getAttemptsCount());
+        assertThat(dCMan.getStateOfCertificate(domain)).isEqualTo(expectedState); // on db
+        assertThat(dCMan.getCertificateDataForDomain(domain).getState()).isEqualTo(expectedState); // on cache
+        assertThat(dCMan.getCertificateDataForDomain(domain).getAttemptsCount()).isEqualTo(expectedCycleCount);
     }
 
     @ParameterizedTest
@@ -350,13 +343,13 @@ public class DynamicCertificatesManagerIT {
     // C) record created and ready -> VERIFYING
     // D) challenge verified -> record deleted
     // E) challenge failed -> record deleted
-    @CsvSource({
+    @ValueSource(strings = {
             "challenge_creation_failed",
             "challenge_check_limit_expired",
             "challenge_failed",
             "challenge_verified",
     })
-    public void testWildcardCertificateStateManagement(String runCase) throws Exception {
+    void wildcardCertificateStateManagement(String runCase) throws Exception {
         final var domain = "*.localhost";
 
         // ACME mocking
@@ -474,13 +467,13 @@ public class DynamicCertificatesManagerIT {
     // C) record created and ready -> VERIFYING
     // D) challenge verified -> record deleted
     // E) challenge failed -> record deleted
-    @CsvSource({
+    @ValueSource(strings = {
             "challenge_creation_failed",
             "challenge_check_limit_expired",
             "challenge_failed",
             "challenge_verified"
     })
-    public void testSanCertificateStateManagement(String runCase) throws Exception {
+    void sanCertificateStateManagement(String runCase) throws Exception {
         final var domain = "*.localhost";
         final var san1 = "test1.localhost";
         final var san2 = "*.localhost2";
@@ -612,10 +605,10 @@ public class DynamicCertificatesManagerIT {
     }
 
     @ParameterizedTest
-    @CsvSource({
+    @ValueSource(strings = {
             "localhost-no-ip-check", "localhost-ip-check-partial", "localhost-ip-check-full"
     })
-    public void testDomainReachabilityCheck(String domainCase) throws Exception {
+    void domainReachabilityCheck(String domainCase) throws Exception {
         final var domain = "localhost";
 
         // ACME mocking
@@ -802,7 +795,7 @@ public class DynamicCertificatesManagerIT {
         if (failureCase.equals("stale")) {
             // failure counted, so the certificate falls back to WAITING and a fresh order
             assertCertificateState(domain, REQUEST_FAILED, 1, man);
-            assertEquals("unknown order", man.getCertificateDataForDomain(domain).getMessage());
+            assertThat(man.getCertificateDataForDomain(domain).getMessage()).isEqualTo("unknown order");
             man.run();
             assertCertificateState(domain, WAITING, 1, man);
         } else {
@@ -872,8 +865,8 @@ public class DynamicCertificatesManagerIT {
     }
 
     @ParameterizedTest
-    @CsvSource({"0", "2"})
-    public void testAcmeStepsPerRunAreCapped(int rateLimit) throws Exception {
+    @ValueSource(ints = {0, 2})
+    void acmeStepsPerRunAreCapped(int rateLimit) throws Exception {
         final var domains = List.of("localhost1", "localhost2", "localhost3");
         final var props = acmeCertificates(domains);
         props.setProperty("dynamiccertificatesmanager.ratelimit", String.valueOf(rateLimit));
@@ -889,7 +882,7 @@ public class DynamicCertificatesManagerIT {
     }
 
     @Test
-    public void testLifecycleSurvivesReloadFailure() throws Exception {
+    void lifecycleSurvivesReloadFailure() throws Exception {
         final var domain = "localhost";
         final var store = waitingCertificatesStore(List.of(domain));
         final var man = buildManager(store, httpChallengeClient(), null, acmeCertificates(List.of(domain)));
@@ -910,7 +903,7 @@ public class DynamicCertificatesManagerIT {
 
     @ParameterizedTest
     @CsvSource({"creation, false", "verification, false", "verification, true"})
-    public void testFailedAttemptCleansUpChallenges(String step, boolean transientFailure) throws Exception {
+    void failedAttemptCleansUpChallenges(String step, boolean transientFailure) throws Exception {
         final var domain = "localhost";
         final var store = waitingCertificatesStore(List.of(domain));
         final var ac = httpChallengeClient();
@@ -935,7 +928,7 @@ public class DynamicCertificatesManagerIT {
     }
 
     @Test
-    public void testFailureAfterInvalidChallengeCleansUpAllChallenges() throws Exception {
+    void failureAfterInvalidChallengeCleansUpAllChallenges() throws Exception {
         final var domain = "localhost";
         final var store = waitingCertificatesStore(List.of(domain));
         final var ac = httpChallengeClient();
@@ -965,9 +958,9 @@ public class DynamicCertificatesManagerIT {
         return challenge;
     }
 
-    @Test
     // the wildcard certificate spends the cap on a DNS challenge, the other three steps stay local
-    public void testOnlyStepsReachingTheCaSpendTheCap() throws Exception {
+    @Test
+    void onlyStepsReachingTheCaSpendTheCap() throws Exception {
         final var wildcard = "*.localhost";
         final var available = "available.localhost";
         final var failed = "failed.localhost";
@@ -1025,7 +1018,7 @@ public class DynamicCertificatesManagerIT {
     }
 
     @Test
-    public void testCappedRunsRotateOverTheDomains() throws Exception {
+    void cappedRunsRotateOverTheDomains() throws Exception {
         final var domains = List.of("localhost1", "localhost2", "localhost3");
         final var props = acmeCertificates(domains);
         props.setProperty("dynamiccertificatesmanager.ratelimit", "2");
@@ -1044,7 +1037,7 @@ public class DynamicCertificatesManagerIT {
     }
 
     @Test
-    public void testLifecyclePausedByRestore() throws Exception {
+    void lifecyclePausedByRestore() throws Exception {
         final var domains = List.of("a.example", "b.example", "c.example");
         final var props = acmeCertificates(domains);
         props.setProperty("dynamiccertificatesmanager.ratelimit", "2");
@@ -1078,7 +1071,7 @@ public class DynamicCertificatesManagerIT {
         verify(store, times(2)).loadCertificateForDomain(eq("b.example"));
         verify(ac, times(1)).createOrderForDomain(any());
         assertCertificateState("a.example", VERIFYING, 0, man);
-        assertEquals("", man.getCertificateDataForDomain("a.example").getMessage());
+        assertThat(man.getCertificateDataForDomain("a.example").getMessage()).isEmpty();
         assertCertificateState("b.example", WAITING, 0, man);
         assertCertificateState("c.example", WAITING, 0, man);
         verify(store, never()).saveCertificate(argThat(saved -> !"a.example".equals(saved.getDomain())));
@@ -1089,20 +1082,20 @@ public class DynamicCertificatesManagerIT {
         verify(ac, times(1)).createOrderForDomain(any());
 
         signal.get().close();
-        assertFalse(handler.isRestoreInProgress());
+        assertThat(handler.isRestoreInProgress()).isFalse();
         // a restore holds the renewal lock, in standalone mode too: the pass waits for it
-        assertTrue(man.tryLockRenewal(1, TimeUnit.SECONDS));
+        assertThat(man.tryLockRenewal(1, TimeUnit.SECONDS)).isTrue();
         Thread pass = new Thread(man);
         try {
             pass.start();
             pass.join(500);
-            assertTrue(pass.isAlive());
+            assertThat(pass.isAlive()).isTrue();
             verify(ac, times(1)).createOrderForDomain(any());
         } finally {
             man.unlockRenewal();
         }
         pass.join(10_000);
-        assertFalse(pass.isAlive());
+        assertThat(pass.isAlive()).isFalse();
         // the pass resumes after a.example: b.example and c.example spend the rate limit
         verify(ac).createOrderForDomain(argThat(names -> names.contains("b.example")));
         assertCertificateState("b.example", VERIFYING, 0, man);
@@ -1111,7 +1104,7 @@ public class DynamicCertificatesManagerIT {
     }
 
     @Test
-    public void testRestoredAccountKeyUsedAfterReload() throws Exception {
+    void restoredAccountKeyUsedAfterReload() throws Exception {
         HttpProxyServer parent = mock(HttpProxyServer.class);
         DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
@@ -1124,12 +1117,12 @@ public class DynamicCertificatesManagerIT {
         conf.configure(new PropertiesConfigurationStore(new Properties()));
 
         man.reloadConfiguration(conf);
-        assertSame(backupKey, accountKeyOf(man));
+        assertThat(accountKeyOf(man)).isSameAs(backupKey);
 
         // a restore replaced the account key in the store: the reload that applies it picks the new key
         when(store.loadAcmeUserKeyPair(DEFAULT_PROVIDER_NAME)).thenReturn(restoredKey);
         man.reloadConfiguration(conf);
-        assertSame(restoredKey, accountKeyOf(man));
+        assertThat(accountKeyOf(man)).isSameAs(restoredKey);
     }
 
     @SuppressWarnings("unchecked")

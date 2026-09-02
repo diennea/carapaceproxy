@@ -19,17 +19,16 @@
  */
 package org.carapaceproxy.configstore;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.REQUEST_FAILED;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.URI;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
-public class CertificateDataBindingEquivalentTest {
+class CertificateDataBindingEquivalentTest {
 
     private static final byte[] KEYSTORE_A = {0x01, 0x02, 0x03};
     private static final byte[] KEYSTORE_B = {0x04, 0x05, 0x06};
@@ -37,25 +36,25 @@ public class CertificateDataBindingEquivalentTest {
     private static final Set<String> SANS_B = Set.of("alt-b.example.com");
 
     @Test
-    public void testBothNullReturnsTrue() {
-        assertTrue(CertificateData.bindingEquivalent(null, null));
+    void bothNullReturnsTrue() {
+        assertThat(CertificateData.bindingEquivalent(null, null)).isTrue();
     }
 
     @Test
-    public void testOneNullReturnsFalse() {
+    void oneNullReturnsFalse() {
         final CertificateData cert = buildCert(KEYSTORE_A, SANS_A);
-        assertFalse(CertificateData.bindingEquivalent(cert, null));
-        assertFalse(CertificateData.bindingEquivalent(null, cert));
+        assertThat(CertificateData.bindingEquivalent(cert, null)).isFalse();
+        assertThat(CertificateData.bindingEquivalent(null, cert)).isFalse();
     }
 
     @Test
-    public void testSameReferenceReturnsTrue() {
+    void sameReferenceReturnsTrue() {
         final CertificateData cert = buildCert(KEYSTORE_A, SANS_A);
-        assertTrue(CertificateData.bindingEquivalent(cert, cert));
+        assertThat(CertificateData.bindingEquivalent(cert, cert)).isTrue();
     }
 
     @Test
-    public void testIdenticalKeystoreAndSansReturnsTrueDespiteTransientState() throws Exception {
+    void identicalKeystoreAndSansReturnsTrueDespiteTransientState() throws Exception {
         // Staging symptom: a stuck ACME order ticks attemptsCount/message/state/pendingOrderLocation
         // every poll while keystore bytes and SANs stay the same.
         final CertificateData stable = buildCert(KEYSTORE_A, SANS_A);
@@ -70,28 +69,28 @@ public class CertificateDataBindingEquivalentTest {
         ticked.setMessage("stuck order");
         ticked.setPendingOrderLocation(URI.create("https://acme/order/42").toURL());
 
-        assertTrue(CertificateData.bindingEquivalent(stable, ticked));
+        assertThat(CertificateData.bindingEquivalent(stable, ticked)).isTrue();
     }
 
     @Test
-    public void testKeystoreBytesDifferReturnsFalse() {
+    void keystoreBytesDifferReturnsFalse() {
         final CertificateData a = buildCert(KEYSTORE_A, SANS_A);
         final CertificateData b = buildCert(KEYSTORE_B, SANS_A);
-        assertFalse(CertificateData.bindingEquivalent(a, b));
+        assertThat(CertificateData.bindingEquivalent(a, b)).isFalse();
     }
 
     @Test
-    public void testKeystoreNullVsBytesReturnsFalse() {
+    void keystoreNullVsBytesReturnsFalse() {
         final CertificateData a = buildCert(null, SANS_A);
         final CertificateData b = buildCert(KEYSTORE_A, SANS_A);
-        assertFalse(CertificateData.bindingEquivalent(a, b));
+        assertThat(CertificateData.bindingEquivalent(a, b)).isFalse();
     }
 
     @Test
-    public void testSubjectAltNamesDifferReturnsFalse() {
+    void subjectAltNamesDifferReturnsFalse() {
         final CertificateData a = buildCert(KEYSTORE_A, SANS_A);
         final CertificateData b = buildCert(KEYSTORE_A, SANS_B);
-        assertFalse(CertificateData.bindingEquivalent(a, b));
+        assertThat(CertificateData.bindingEquivalent(a, b)).isFalse();
     }
 
     private static CertificateData buildCert(final byte[] keystoreData, final Set<String> sans) {
