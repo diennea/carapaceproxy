@@ -23,10 +23,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -54,7 +51,7 @@ public class CacheContentLengthLimitIT {
     public File tmpDir;
 
     @Test
-    public void testWithContentLengthHeader() throws Exception {
+    void withContentLengthHeader() throws Exception {
 
         String body = "01234567890123456789";
 
@@ -69,7 +66,7 @@ public class CacheContentLengthLimitIT {
     }
 
     @Test
-    public void testWithoutContentLengthHeader() throws Exception {
+    void withoutContentLengthHeader() throws Exception {
 
         String body = "01234567890123456789";
 
@@ -144,18 +141,17 @@ public class CacheContentLengthLimitIT {
             String s = resp.toString();
             System.out.println("s:" + s);
             if (!chunked) {
-                assertTrue(s.contains(body));
+                assertThat(s).contains(body);
             } else {
-                assertTrue(s.contains(
-                        Integer.toString(body.length(), 16) + "\r\n"
+                assertThat(s).contains(Integer.toString(body.length(), 16) + "\r\n"
                         + body + "\r\n"
-                        + "0\r\n\r\n"));
+                        + "0\r\n\r\n");
             }
-            assertThat(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")), is(cached));
+            assertThat(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached"))).isEqualTo(cached);
 
             EndpointStats stats = server.getProxyRequestsManager().getEndpointStats(key);
-            assertNotNull(stats);
-            assertThat(server.getCache().getCacheSize(), is(cacheSize));
+            assertThat(stats).isNotNull();
+            assertThat(server.getCache().getCacheSize()).isEqualTo(cacheSize);
         }
     }
 

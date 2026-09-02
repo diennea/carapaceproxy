@@ -23,7 +23,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import java.io.IOException;
@@ -120,7 +121,7 @@ public class MetricsEndpointsIT extends UseAdminServer {
             .build();
 
     @Test
-    public void bothEndpointsExposeMetrics() throws Exception {
+    void bothEndpointsExposeMetrics() throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -153,11 +154,11 @@ public class MetricsEndpointsIT extends UseAdminServer {
 
         // traverse the proxy once, so that the listener and Reactor Netty publish their meters
         final HttpResponse<String> response = httpGet(URI.create("http://localhost:" + listenerPort + "/index.html"));
-        assertEquals(200, response.statusCode());
-        assertEquals("it <b>works</b> !!", response.body());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEqualTo("it <b>works</b> !!");
 
-        assertEquals(EXPECTED_METRICS, metricNames("/metrics"), "metrics exposed by /metrics changed");
-        assertEquals(EXPECTED_MICROMETRICS, metricNames("/micrometrics"), "metrics exposed by /micrometrics changed");
+        assertThat(metricNames("/metrics")).as("metrics exposed by /metrics changed").isEqualTo(EXPECTED_METRICS);
+        assertThat(metricNames("/micrometrics")).as("metrics exposed by /micrometrics changed").isEqualTo(EXPECTED_MICROMETRICS);
     }
 
     /**
@@ -170,7 +171,7 @@ public class MetricsEndpointsIT extends UseAdminServer {
      */
     private static Set<String> metricNames(final String path) throws IOException, InterruptedException {
         final HttpResponse<String> response = httpGet(URI.create("http://localhost:" + DEFAULT_ADMIN_PORT + path));
-        assertEquals(200, response.statusCode(), "could not scrape " + path);
+        assertThat(response.statusCode()).as("could not scrape " + path).isEqualTo(200);
         return response.body().lines()
                 .filter(line -> line.startsWith("# TYPE "))
                 .map(line -> line.split(" ")[2])

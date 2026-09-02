@@ -20,10 +20,7 @@ package org.carapaceproxy;
 
  */
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.File;
 import java.io.IOException;
@@ -47,7 +44,7 @@ public class DatabaseConfigurationIT {
     public File tmpDir;
 
     @Test
-    public void testBootWithDatabaseStore() throws Exception {
+    void bootWithDatabaseStore() throws Exception {
 
         try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"))) {
 
@@ -59,7 +56,7 @@ public class DatabaseConfigurationIT {
             server.configureAtBoot(new PropertiesConfigurationStore(configuration));
 
             server.start();
-            assertThat(server.getDynamicConfigurationStore(), instanceOf(HerdDBConfigurationStore.class));
+            assertThat(server.getDynamicConfigurationStore()).isInstanceOf(HerdDBConfigurationStore.class);
 
         }
 
@@ -81,41 +78,41 @@ public class DatabaseConfigurationIT {
         try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"))) {
             server.configureAtBoot(new PropertiesConfigurationStore(dbBootConfig(dbDir)));
             server.start();
-            assertInstanceOf(HerdDBConfigurationStore.class, server.getDynamicConfigurationStore());
+            assertThat(server.getDynamicConfigurationStore()).isInstanceOf(HerdDBConfigurationStore.class);
 
             server.applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(
                     filters("filter.1.type", XForwardedForRequestFilter.TYPE)));
-            assertEquals(1, server.getFilters().size());
-            assertInstanceOf(XForwardedForRequestFilter.class, server.getFilters().get(0));
+            assertThat(server.getFilters()).hasSize(1);
+            assertThat(server.getFilters().get(0)).isInstanceOf(XForwardedForRequestFilter.class);
 
             server.applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(filters(
                     "filter.1.type", XForwardedForRequestFilter.TYPE,
                     "filter.2.type", RegexpMapUserIdFilter.TYPE)));
-            assertEquals(2, server.getFilters().size());
-            assertInstanceOf(XForwardedForRequestFilter.class, server.getFilters().get(0));
-            assertInstanceOf(RegexpMapUserIdFilter.class, server.getFilters().get(1));
+            assertThat(server.getFilters()).hasSize(2);
+            assertThat(server.getFilters().get(0)).isInstanceOf(XForwardedForRequestFilter.class);
+            assertThat(server.getFilters().get(1)).isInstanceOf(RegexpMapUserIdFilter.class);
         }
 
         // Boot #2: the two filters must have persisted; then reduce to a single filter.
         try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"))) {
             server.configureAtBoot(new PropertiesConfigurationStore(dbBootConfig(dbDir)));
-            assertEquals(2, server.getFilters().size());
-            assertInstanceOf(XForwardedForRequestFilter.class, server.getFilters().get(0));
-            assertInstanceOf(RegexpMapUserIdFilter.class, server.getFilters().get(1));
+            assertThat(server.getFilters()).hasSize(2);
+            assertThat(server.getFilters().get(0)).isInstanceOf(XForwardedForRequestFilter.class);
+            assertThat(server.getFilters().get(1)).isInstanceOf(RegexpMapUserIdFilter.class);
 
             server.start();
 
             server.applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(
                     filters("filter.1.type", RegexpMapUserIdFilter.TYPE)));
-            assertEquals(1, server.getFilters().size());
-            assertInstanceOf(RegexpMapUserIdFilter.class, server.getFilters().get(0));
+            assertThat(server.getFilters()).hasSize(1);
+            assertThat(server.getFilters().get(0)).isInstanceOf(RegexpMapUserIdFilter.class);
         }
 
         // Boot #3: the single remaining filter must have persisted.
         try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"))) {
             server.configureAtBoot(new PropertiesConfigurationStore(dbBootConfig(dbDir)));
-            assertEquals(1, server.getFilters().size());
-            assertInstanceOf(RegexpMapUserIdFilter.class, server.getFilters().get(0));
+            assertThat(server.getFilters()).hasSize(1);
+            assertThat(server.getFilters().get(0)).isInstanceOf(RegexpMapUserIdFilter.class);
         }
     }
 

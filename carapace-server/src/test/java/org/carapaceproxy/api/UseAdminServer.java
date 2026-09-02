@@ -19,8 +19,8 @@
  */
 package org.carapaceproxy.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.carapaceproxy.core.HttpProxyServer.buildForTests;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.io.File;
 import java.io.IOException;
@@ -58,15 +58,15 @@ public class UseAdminServer {
     public RawHttpClient.BasicAuthCredentials credentials;
 
     @BeforeEach
-    public void buildNewServer() throws Exception {
-        assertNull(server);
+    void buildNewServer() throws Exception {
+        assertThat(server).isNull();
         credentials = new RawHttpClient.BasicAuthCredentials(DEFAULT_USERNAME, DEFAULT_PASSWORD);
         File serverRoot = tmpDir; // at every reboot we must keep the same directory
         server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), serverRoot);
     }
 
     @AfterEach
-    public void stopServer() {
+    void stopServer() {
         if (server != null) {
             server.close();
             server = null;

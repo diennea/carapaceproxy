@@ -23,14 +23,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -162,7 +155,7 @@ public class ConnectionPoolIT extends UseAdminServer {
     }
 
     @Test
-    public void hostHeaderTest() throws Exception {
+    void hostHeaderTest() throws Exception {
         configureAndStartServer();
         int port = server.getLocalPort();
         String hostname = "localhost";
@@ -170,55 +163,55 @@ public class ConnectionPoolIT extends UseAdminServer {
 
         //No Http header host
         String response = sendRequest(false, hostname, port, path, null);
-        assertThat(response, containsString("Bad request"));
+        assertThat(response).contains("Bad request");
 
         //Add Http header host
         String response2 = sendRequest(true, hostname, port, path, "localhost");
-        assertThat(response2, containsString("it <b>works</b> !!"));
+        assertThat(response2).contains("it <b>works</b> !!");
 
         //Empty header host
         String response3 = sendRequest(true, hostname, port, path, "");
-        assertThat(response3, containsString("Bad request"));
+        assertThat(response3).contains("Bad request");
 
         //Empty header host
         String response4 = sendRequest(true, hostname, port, path, " ");
-        assertThat(response4, containsString("Bad request"));
+        assertThat(response4).contains("Bad request");
 
         //Header host with special character
         String response5 = sendRequest(true, hostname, port, path, "local%&&host");
-        assertThat(response5, containsString("Bad request"));
+        assertThat(response5).contains("Bad request");
 
         //Header host with multiple domain
         String response6 = sendRequest(true, hostname, port, path, "localhost1,localhost2");
-        assertThat(response6, containsString("Bad request"));
+        assertThat(response6).contains("Bad request");
 
         //Ip address as host header
         String response7 = sendRequest(true, hostname, port, path, "127.0.0.1");
-        assertThat(response7, containsString("it <b>works</b> !!"));
+        assertThat(response7).contains("it <b>works</b> !!");
 
         //Invalid ip address
         String response8 = sendRequest(true, hostname, port, path, "256.0.0.0");
-        assertThat(response8, containsString("Bad request"));
+        assertThat(response8).contains("Bad request");
 
         //Ip address as host header with port
         String response9 = sendRequest(true, hostname, port, path, "127.0.0.1:8080");
-        assertThat(response9, containsString("it <b>works</b> !!"));
+        assertThat(response9).contains("it <b>works</b> !!");
 
         //Hostname as host header with port
         String response10 = sendRequest(true, hostname, port, path, "localhost:8080");
-        assertThat(response10, containsString("it <b>works</b> !!"));
+        assertThat(response10).contains("it <b>works</b> !!");
 
         //Hostname as host header with port
         String response11 = sendRequest(true, hostname, port, path, "localhost:8080&");
-        assertThat(response11, containsString("Bad Request"));
+        assertThat(response11).contains("Bad Request");
 
         //Invalid hostname
         String response12 = sendRequest(true, hostname, port, path, "::::8080::9999");
-        assertThat(response12, containsString("Bad Request"));
+        assertThat(response12).contains("Bad Request");
 
         //Add Http header host
         String response13 = sendRequest(true, hostname, port, path, "localhost3");
-        assertThat(response13, containsString("it <b>works</b> !!"));
+        assertThat(response13).contains("it <b>works</b> !!");
     }
 
     public String sendRequest(boolean addHeaderHost, String hostname, int port, String path, String headerHost) throws IOException {
@@ -252,7 +245,7 @@ public class ConnectionPoolIT extends UseAdminServer {
     }
 
     @Test
-    public void test() throws Exception {
+    void test() throws Exception {
         configureAndStartServer();
         int port = server.getLocalPort();
 
@@ -262,11 +255,11 @@ public class ConnectionPoolIT extends UseAdminServer {
         );
         {
             ConnectionProvider provider = server.getProxyRequestsManager().getConnectionsManager().getConnectionProvider(defaultPool);
-            assertThat(provider, not(nullValue()));
+            assertThat(provider).isNotNull();
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
-            assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));
-            assertThat(maxConnectionsPerHost.size(), is(2));
-            assertTrue(maxConnectionsPerHost.values().stream().allMatch(e -> e == 10));
+            assertThat(maxConnectionsPerHost)
+                    .hasSize(2);
+            assertThat(maxConnectionsPerHost.values()).allMatch(e -> e == 10);
         }
 
         // pool with defaults
@@ -275,11 +268,11 @@ public class ConnectionPoolIT extends UseAdminServer {
         );
         {
             ConnectionProvider provider = server.getProxyRequestsManager().getConnectionsManager().getConnectionProvider(poolWithDefaults);
-            assertThat(provider, not(nullValue()));
+            assertThat(provider).isNotNull();
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
-            assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));
-            assertThat(maxConnectionsPerHost.size(), is(2));
-            assertTrue(maxConnectionsPerHost.values().stream().allMatch(e -> e == 10));
+            assertThat(maxConnectionsPerHost)
+                    .hasSize(2);
+            assertThat(maxConnectionsPerHost.values()).allMatch(e -> e == 10);
         }
 
         // custom pool
@@ -288,11 +281,11 @@ public class ConnectionPoolIT extends UseAdminServer {
         );
         {
             ConnectionProvider provider = server.getProxyRequestsManager().getConnectionsManager().getConnectionProvider(customPool);
-            assertThat(provider, not(nullValue()));
+            assertThat(provider).isNotNull();
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
-            assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));
-            assertThat(maxConnectionsPerHost.size(), is(2));
-            assertTrue(maxConnectionsPerHost.values().stream().allMatch(e -> e == 20));
+            assertThat(maxConnectionsPerHost)
+                    .hasSize(2);
+            assertThat(maxConnectionsPerHost.values()).allMatch(e -> e == 20);
         }
 
         // connection pool selection
@@ -308,20 +301,20 @@ public class ConnectionPoolIT extends UseAdminServer {
             final String hostName = proxyRequest.getRequestHostname();
             final ConnectionPoolConfiguration configuration = connectionsManager.findConnectionPool(hostName);
             final ConnectionProvider provider = connectionsManager.getConnectionProvider(configuration);
-            assertThat(configuration, is(defaultPool));
+            assertThat(configuration).isEqualTo(defaultPool);
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
-            assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));
-            assertThat(maxConnectionsPerHost.size(), is(2));
-            assertTrue(maxConnectionsPerHost.values().stream().allMatch(e -> e == 10));
+            assertThat(maxConnectionsPerHost)
+                    .hasSize(2);
+            assertThat(maxConnectionsPerHost.values()).allMatch(e -> e == 10);
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\n" + HttpHeaderNames.HOST + ": localhostx" + "\r\n\r\n");
-                assertEquals("it <b>works</b> !!", resp.getBodyString());
+                assertThat(resp.getBodyString()).isEqualTo("it <b>works</b> !!");
             }
             Map<String, HttpProxyServer.ConnectionPoolStats> stats = server.getConnectionPoolsStats().get(EndpointKey.make("localhost", wireMockRule.getPort()));
-            assertThat(stats.get("*").getTotalConnections(), is(1));
-            assertThat(stats.get("localhost"), is(nullValue()));
-            assertThat(stats.get("localhosts"), is(nullValue()));
+            assertThat(stats.get("*").getTotalConnections()).isOne();
+            assertThat(stats.get("localhost")).isNull();
+            assertThat(stats.get("localhosts")).isNull();
         }
 
         // provider with defaults
@@ -334,20 +327,20 @@ public class ConnectionPoolIT extends UseAdminServer {
             final String hostName = proxyRequest.getRequestHostname();
             final ConnectionPoolConfiguration configuration = connectionsManager.findConnectionPool(hostName);
             final ConnectionProvider provider = connectionsManager.getConnectionProvider(configuration);
-            assertThat(configuration, is(poolWithDefaults));
+            assertThat(configuration).isEqualTo(poolWithDefaults);
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
-            assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));
-            assertThat(maxConnectionsPerHost.size(), is(2));
-            assertTrue(maxConnectionsPerHost.values().stream().allMatch(e -> e == 10));
+            assertThat(maxConnectionsPerHost)
+                    .hasSize(2);
+            assertThat(maxConnectionsPerHost.values()).allMatch(e -> e == 10);
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\n" + HttpHeaderNames.HOST + ": localhost" + "\r\n\r\n");
-                assertEquals("it <b>works</b> !!", resp.getBodyString());
+                assertThat(resp.getBodyString()).isEqualTo("it <b>works</b> !!");
             }
             Map<String, HttpProxyServer.ConnectionPoolStats> stats = server.getConnectionPoolsStats().get(EndpointKey.make("localhost", wireMockRule.getPort()));
-            assertThat(stats.get("*").getTotalConnections(), is(1));
-            assertThat(stats.get("localhost").getTotalConnections(), is(1));
-            assertThat(stats.get("localhosts"), is(nullValue()));
+            assertThat(stats.get("*").getTotalConnections()).isOne();
+            assertThat(stats.get("localhost").getTotalConnections()).isOne();
+            assertThat(stats.get("localhosts")).isNull();
         }
 
         // custom provider
@@ -360,31 +353,31 @@ public class ConnectionPoolIT extends UseAdminServer {
             final String hostName = proxyRequest.getRequestHostname();
             final ConnectionPoolConfiguration configuration = connectionsManager.findConnectionPool(hostName);
             final ConnectionProvider provider = connectionsManager.getConnectionProvider(configuration);
-            assertThat(configuration, is(customPool));
+            assertThat(configuration).isEqualTo(customPool);
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
-            assertThat(maxConnectionsPerHost, is(notNullValue(Map.class)));
-            assertThat(maxConnectionsPerHost.size(), is(2));
-            assertTrue(maxConnectionsPerHost.values().stream().allMatch(e -> e == 20));
+            assertThat(maxConnectionsPerHost)
+                    .hasSize(2);
+            assertThat(maxConnectionsPerHost.values()).allMatch(e -> e == 20);
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\n" + HttpHeaderNames.HOST + ": localhost3" + "\r\n\r\n");
-                assertEquals("it <b>works</b> !!", resp.getBodyString());
+                assertThat(resp.getBodyString()).isEqualTo("it <b>works</b> !!");
             }
             Map<String, HttpProxyServer.ConnectionPoolStats> stats = server.getConnectionPoolsStats().get(EndpointKey.make("localhost", wireMockRule.getPort()));
-            assertThat(stats.get("*").getTotalConnections(), is(1));
-            assertThat(stats.get("localhost").getTotalConnections(), is(1));
-            assertThat(stats.get("localhosts").getTotalConnections(), is(1));
+            assertThat(stats.get("*").getTotalConnections()).isOne();
+            assertThat(stats.get("localhost").getTotalConnections()).isOne();
+            assertThat(stats.get("localhosts").getTotalConnections()).isOne();
         }
     }
 
     @Test
-    public void testAPIResource() throws Exception {
+    void apiResource() throws Exception {
         configureAndStartServer();
         int port = server.getLocalPort();
 
         try (RawHttpClient client = new RawHttpClient("localhost", port)) {
             String s1 = client.get("/index.html").getBodyString();
-            assertEquals("it <b>works</b> !!", s1);
+            assertThat(s1).isEqualTo("it <b>works</b> !!");
         }
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
@@ -392,27 +385,27 @@ public class ConnectionPoolIT extends UseAdminServer {
             TypeReference<HashMap<String, ConnectionPoolsResource.ConnectionPoolBean>> typeRef = new TypeReference<HashMap<String, ConnectionPoolsResource.ConnectionPoolBean>>() {
             };
             Map<String, ConnectionPoolsResource.ConnectionPoolBean> pools = MAPPER.readValue(response.getBodyString(), typeRef);
-            assertThat(pools.size(), is(4));
+            assertThat(pools).hasSize(4);
 
             // default pool
-            assertThat(pools.get("*"), is(new ConnectionPoolsResource.ConnectionPoolBean(
-                    "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 100_000, 50_000, 500, 50, 5, true,true, 0
-            )));
+            assertThat(pools).containsEntry("*", new ConnectionPoolsResource.ConnectionPoolBean(
+                    "*", "*", 10, 5_000, 10_000, 15_000, 20_000, 100_000, 50_000, 500, 50, 5, true, true, 0
+            ));
 
             // pool with defaults
-            assertThat(pools.get("localhost"), is(new ConnectionPoolsResource.ConnectionPoolBean(
-                    "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, 100_000,50_000, 500, 50, 5, true,true, 1
-            )));
+            assertThat(pools).containsEntry("localhost", new ConnectionPoolsResource.ConnectionPoolBean(
+                    "localhost", "localhost", 10, 5_000, 10_000, 15_000, 20_000, 100_000, 50_000, 500, 50, 5, true, true, 1
+            ));
 
             // disabled custom pool
-            assertThat(pools.get("localhost2"), is(new ConnectionPoolsResource.ConnectionPoolBean(
+            assertThat(pools).containsEntry("localhost2", new ConnectionPoolsResource.ConnectionPoolBean(
                     "localhost2", "localhost2", 10, 5_000, 10_000, 15_000, 20_000, 100_000, 50_000, 500, 50, 5, true, false, 0
-            )));
+            ));
 
             // custom pool
-            assertThat(pools.get("localhosts"), is(new ConnectionPoolsResource.ConnectionPoolBean(
+            assertThat(pools).containsEntry("localhosts", new ConnectionPoolsResource.ConnectionPoolBean(
                     "localhosts", "localhost[0-9]", 20, 21_000, 22_000, 23_000, 24_000, 100_000, 25_000, 250, 25, 2, true, true, 0
-            )));
+            ));
         }
     }
 

@@ -23,7 +23,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -59,7 +59,7 @@ public class ChunkedEncodingRequestsIT {
     public File tmpDir;
 
     @Test
-    public void testSimple() throws Exception {
+    void simple() throws Exception {
 
         wireMockRule.stubFor(
                 post(urlEqualTo("/index.html")).
@@ -82,13 +82,13 @@ public class ChunkedEncodingRequestsIT {
                 String s = client
                         .executeRequest("POST /index.html HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n" + TEST_DATA).toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("it <b>works</b> !!"));
+                assertThat(s).contains("it <b>works</b> !!");
             }
         }
     }
 
     @Test
-    public void testClientAbortsUpload() throws Exception {
+    void clientAbortsUpload() throws Exception {
 
         wireMockRule.stubFor(
                 post(urlEqualTo("/index.html")).
@@ -111,7 +111,7 @@ public class ChunkedEncodingRequestsIT {
                 String s = client
                         .executeRequest("POST /index.html HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n" + TEST_DATA).toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("it <b>works</b> !!"));
+                assertThat(s).contains("it <b>works</b> !!");
 
                 client
                         .sendRequest("POST /index.html HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n" + TEST_DATA_ABORTED);
@@ -122,7 +122,7 @@ public class ChunkedEncodingRequestsIT {
                 String s = client
                         .executeRequest("POST /index.html HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n" + TEST_DATA).toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("it <b>works</b> !!"));
+                assertThat(s).contains("it <b>works</b> !!");
             }
         }
     }

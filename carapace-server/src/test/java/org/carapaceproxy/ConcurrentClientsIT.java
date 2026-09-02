@@ -30,12 +30,11 @@ import java.io.File;
 import java.io.IOException;
 import java.util.function.Function;
 import org.carapaceproxy.core.HttpProxyServer;
-import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.http.client.HttpClient;
@@ -55,8 +54,8 @@ public class ConcurrentClientsIT {
     public File tmpDir;
 
     @ParameterizedTest
-    @CsvSource({"true", "false"})
-    public void testClients(final boolean concurrent) throws ConfigurationNotValidException, InterruptedException, IOException {
+    @ValueSource(booleans = {true, false})
+    void clients(final boolean concurrent) throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)

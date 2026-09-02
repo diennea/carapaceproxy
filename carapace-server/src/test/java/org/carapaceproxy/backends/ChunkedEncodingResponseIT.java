@@ -24,10 +24,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_LENGTH;
 import static io.netty.handler.codec.http.HttpHeaderNames.TRANSFER_ENCODING;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -61,7 +58,7 @@ public class ChunkedEncodingResponseIT {
     public File tmpDir;
 
     @Test
-    public void testSimpleChunkedResponseNoCache() throws Exception {
+    void simpleChunkedResponseNoCache() throws Exception {
         wireMockRule.stubFor(
                 get(urlEqualTo("/index.html")).
                         willReturn(aResponse()
@@ -79,41 +76,41 @@ public class ChunkedEncodingResponseIT {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("""
+                assertThat(s).contains("""
                         12\r
                         it <b>works</b> !!\r
                         0\r
                         \r
-                        """));
-                assertEquals("it <b>works</b> !!", resp.getBodyString());
+                        """);
+                assertThat(resp.getBodyString()).isEqualTo("it <b>works</b> !!");
 
                 resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 System.out.println("s:" + resp);
-                assertTrue(resp.toString().contains("""
+                assertThat(resp.toString()).contains("""
                         12\r
                         it <b>works</b> !!\r
                         0\r
                         \r
-                        """));
-                assertEquals("it <b>works</b> !!", resp.getBodyString());
+                        """);
+                assertThat(resp.getBodyString()).isEqualTo("it <b>works</b> !!");
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("""
+                assertThat(s).contains("""
                         12\r
                         it <b>works</b> !!\r
                         0\r
                         \r
-                        """));
+                        """);
             }
-            assertEquals(0, server.getCache().getCacheSize());
+            assertThat(server.getCache().getCacheSize()).isZero();
         }
     }
 
     @Test
-    public void testSimpleChunkedResponseWithCache() throws Exception {
+    void simpleChunkedResponseWithCache() throws Exception {
         wireMockRule.stubFor(
                 get(urlEqualTo("/index.html")).
                         willReturn(aResponse()
@@ -133,47 +130,47 @@ public class ChunkedEncodingResponseIT {
                         .executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("""
+                assertThat(s).contains("""
                         12\r
                         it <b>works</b> !!\r
                         0\r
                         \r
-                        """));
-                assertEquals("it <b>works</b> !!", resp.getBodyString());
+                        """);
+                assertThat(resp.getBodyString()).isEqualTo("it <b>works</b> !!");
 
                 resp = client
                         .executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 System.out.println("s:" + resp);
-                assertTrue(resp.toString().contains("""
+                assertThat(resp.toString()).contains("""
                         12\r
                         it <b>works</b> !!\r
                         0\r
                         \r
-                        """));
-                assertEquals("it <b>works</b> !!", resp.getBodyString());
+                        """);
+                assertThat(resp.getBodyString()).isEqualTo("it <b>works</b> !!");
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client
                         .executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("""
+                assertThat(s).contains("""
                         12\r
                         it <b>works</b> !!\r
                         0\r
                         \r
-                        """));
+                        """);
             }
-            assertEquals(1, server.getCache().getCacheSize());
-            assertEquals(2, server.getCache().getStats().getHits());
-            assertEquals(1, server.getCache().getStats().getMisses());
+            assertThat(server.getCache().getCacheSize()).isOne();
+            assertThat(server.getCache().getStats().getHits()).isEqualTo(2);
+            assertThat(server.getCache().getStats().getMisses()).isOne();
         }
     }
 
 
     @ParameterizedTest
     @MethodSource("parametersForChunkedHttp10Test")
-    public void testChunkedHttp(final HttpVersion httpVersion, final boolean inCache) throws Exception {
+    void chunkedHttp(final HttpVersion httpVersion, final boolean inCache) throws Exception {
         wireMockRule.stubFor(
                 get(urlEqualTo("/index.html")).
                         willReturn(aResponse()
@@ -202,18 +199,18 @@ public class ChunkedEncodingResponseIT {
                 HttpResponse response = client.execute(request);
 
                 if (Objects.equals(httpVersion, HttpVersion.HTTP_1_0)) {
-                    assertNull(response.getFirstHeader(TRANSFER_ENCODING.toString()));
-                    assertNotNull(response.getFirstHeader(CONTENT_LENGTH.toString()));
+                    assertThat(response.getFirstHeader(TRANSFER_ENCODING.toString())).isNull();
+                    assertThat(response.getFirstHeader(CONTENT_LENGTH.toString())).isNotNull();
                 } else {
-                    assertEquals("chunked", response.getFirstHeader(TRANSFER_ENCODING.toString()).getValue());
-                    assertNull(response.getFirstHeader(CONTENT_LENGTH.toString()));
+                    assertThat(response.getFirstHeader(TRANSFER_ENCODING.toString()).getValue()).isEqualTo("chunked");
+                    assertThat(response.getFirstHeader(CONTENT_LENGTH.toString())).isNull();
                 }
                 if (inCache) {
-                    assertNotNull(response.getFirstHeader("X-cached"));
-                    assertEquals(1, server.getCache().getStats().getHits());
+                    assertThat(response.getFirstHeader("X-cached")).isNotNull();
+                    assertThat(server.getCache().getStats().getHits()).isOne();
                 } else {
-                    assertNull(response.getFirstHeader("X-cached"));
-                    assertEquals(0, server.getCache().getStats().getHits());
+                    assertThat(response.getFirstHeader("X-cached")).isNull();
+                    assertThat(server.getCache().getStats().getHits()).isZero();
                 }
             }
 
@@ -224,9 +221,9 @@ public class ChunkedEncodingResponseIT {
         server.getCache().reloadConfiguration(server.getCurrentConfiguration());
         server.getCache().getStats().resetCacheMetrics();
         server.getCache().clear();
-        assertEquals(0, server.getCache().getCacheSize());
-        assertEquals(0, server.getCache().getStats().getHits());
-        assertEquals(0, server.getCache().getStats().getMisses());
+        assertThat(server.getCache().getCacheSize()).isZero();
+        assertThat(server.getCache().getStats().getHits()).isZero();
+        assertThat(server.getCache().getStats().getMisses()).isZero();
     }
 
     public static Object[] parametersForChunkedHttp10Test() {

@@ -19,16 +19,12 @@
  */
 package org.carapaceproxy.configstore;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
 import static org.carapaceproxy.utils.TestUtils.assertEqualsKey;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.hasItems;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 
@@ -44,7 +40,6 @@ import org.carapaceproxy.api.ConfigResource;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.utils.TestUtils;
-import org.hamcrest.core.IsNull;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -71,7 +66,7 @@ public class ConfigurationStoreIT {
     private static final String d3 = "localhost3";
 
     @AfterEach
-    public void after() {
+    void after() {
         if (store != null) {
             store.close();
         }
@@ -127,39 +122,39 @@ public class ConfigurationStoreIT {
 
         updateConfigStore(props);
 
-        assertThat(store.getInt("property.int.1", 11), is(1));
-        assertThat(store.getInt("property.int.2", 11), is(11)); // empty > default
-        TestUtils.assertThrows(ConfigurationNotValidException.class, () -> store.getInt("property.int.3", 11));
-        assertThat(store.getInt("property.int.11", 11), is(11)); // not exists
+        assertThat(store.getInt("property.int.1", 11)).isOne();
+        assertThat(store.getInt("property.int.2", 11)).isEqualTo(11); // empty > default
+        assertThatThrownBy(() -> store.getInt("property.int.3", 11)).isInstanceOf(ConfigurationNotValidException.class);
+        assertThat(store.getInt("property.int.11", 11)).isEqualTo(11); // not exists
 
-        assertThat(store.getLong("property.long.1", 11), is(1L));
-        assertThat(store.getLong("property.long.2", 11), is(11L)); // empty > default
-        TestUtils.assertThrows(ConfigurationNotValidException.class, () -> store.getLong("property.long.3", 11));
-        assertThat(store.getLong("property.long.11", 11), is(11L)); // not exists
+        assertThat(store.getLong("property.long.1", 11)).isOne();
+        assertThat(store.getLong("property.long.2", 11)).isEqualTo(11L); // empty > default
+        assertThatThrownBy(() -> store.getLong("property.long.3", 11)).isInstanceOf(ConfigurationNotValidException.class);
+        assertThat(store.getLong("property.long.11", 11)).isEqualTo(11L); // not exists
 
-        assertThat(store.getBoolean("property.boolean.1", false), is(true));
-        assertThat(store.getBoolean("property.boolean.2", true), is(false));
-        assertThat(store.getBoolean("property.boolean.3", true), is(false));
-        assertThat(store.getBoolean("property.boolean.4", true), is(true)); // empty > default
-        assertThat(store.getBoolean("property.boolean.ne", true), is(true)); // not exists
+        assertThat(store.getBoolean("property.boolean.1", false)).isTrue();
+        assertThat(store.getBoolean("property.boolean.2", true)).isFalse();
+        assertThat(store.getBoolean("property.boolean.3", true)).isFalse();
+        assertThat(store.getBoolean("property.boolean.4", true)).isTrue(); // empty > default
+        assertThat(store.getBoolean("property.boolean.ne", true)).isTrue(); // not exists
 
-        assertThat(store.getString("property.string.1", "default"), is("a string"));
-        assertThat(store.getString("property.string.2", null), is(IsNull.nullValue())); // empty > default
-        assertThat(store.getString("property.string.3", "default"), is("default")); // not exists
+        assertThat(store.getString("property.string.1", "default")).isEqualTo("a string");
+        assertThat(store.getString("property.string.2", null)).isNull(); // empty > default
+        assertThat(store.getString("property.string.3", "default")).isEqualTo("default"); // not exists
 
-        assertThat(store.getValues("property.array.1", Set.of("default")), hasItems("1", "2", "3", "4"));
-        assertThat(store.getValues("property.array.2", Set.of("default")), hasItems("a1", "a2", "a3", "a4"));
-        assertThat(store.getValues("property.array.3", Set.of("default")), hasItems("default")); // no elements > default
-        assertThat(store.getValues("property.array.4", Set.of("default")), hasItems("default")); // empty > default
-        assertThat(store.getValues("property.array.11", Set.of("default")), hasItems("default")); // not exitst
+        assertThat(store.getValues("property.array.1", Set.of("default"))).contains("1", "2", "3", "4");
+        assertThat(store.getValues("property.array.2", Set.of("default"))).contains("a1", "a2", "a3", "a4");
+        assertThat(store.getValues("property.array.3", Set.of("default"))).contains("default"); // no elements > default
+        assertThat(store.getValues("property.array.4", Set.of("default"))).contains("default"); // empty > default
+        assertThat(store.getValues("property.array.11", Set.of("default"))).contains("default"); // not exitst
 
         String DClassName = Object.class.getName();
-        assertThat(store.getClassname("property.class.1", DClassName), is(className));
-        assertThat(store.getClassname("property.class.2", DClassName), is(className));
-        assertThat(store.getClassname("property.class.3", DClassName), is(DClassName)); // empty > default
-        assertThat(store.getClassname("property.class.nd", DClassName), is(DClassName)); // not defined > default
-        assertThat(store.getClassname("property.class.nd", null), is(IsNull.nullValue())); // not defined > default
-        TestUtils.assertThrows(ConfigurationNotValidException.class, () -> store.getClassname("property.class.4", "DClassName")); // not exists
+        assertThat(store.getClassname("property.class.1", DClassName)).isEqualTo(className);
+        assertThat(store.getClassname("property.class.2", DClassName)).isEqualTo(className);
+        assertThat(store.getClassname("property.class.3", DClassName)).isEqualTo(DClassName); // empty > default
+        assertThat(store.getClassname("property.class.nd", DClassName)).isEqualTo(DClassName); // not defined > default
+        assertThat(store.getClassname("property.class.nd", null)).isNull(); // not defined > default
+        assertThatThrownBy(() -> store.getClassname("property.class.4", "DClassName")).isInstanceOf(ConfigurationNotValidException.class); // not exists
     }
 
     @ParameterizedTest
@@ -169,42 +164,42 @@ public class ConfigurationStoreIT {
 
         // test no properties -> max index -1
         updateConfigStore(new Properties());
-        assertThat(store.findMaxIndexForPrefix("property"), is(-1));
+        assertThat(store.findMaxIndexForPrefix("property")).isEqualTo(-1);
 
         // test single property -> max index == property index
         Properties props = new Properties();
         props.setProperty("property.0.value", "value");
         updateConfigStore(props);
-        assertThat(store.findMaxIndexForPrefix("property"), is(0));
+        assertThat(store.findMaxIndexForPrefix("property")).isZero();
 
         props = new Properties();
         props.setProperty("property.100.value", "value");
         updateConfigStore(props);
-        assertThat(store.findMaxIndexForPrefix("property"), is(100));
+        assertThat(store.findMaxIndexForPrefix("property")).isEqualTo(100);
 
         // test multiple properties -> max index == max property index
         props = new Properties();
         props.setProperty("property.0.value", "value");
         props.setProperty("property.1.value", "value");
         updateConfigStore(props);
-        assertThat(store.findMaxIndexForPrefix("property"), is(1));
+        assertThat(store.findMaxIndexForPrefix("property")).isOne();
 
         props.setProperty("property.100.value", "value");
         updateConfigStore(props);
-        assertThat(store.findMaxIndexForPrefix("property"), is(100));
+        assertThat(store.findMaxIndexForPrefix("property")).isEqualTo(100);
 
         props.setProperty("property2.111.value", "value");
         updateConfigStore(props);
-        assertThat(store.findMaxIndexForPrefix("property"), is(100));
-        assertThat(store.findMaxIndexForPrefix("property2"), is(111));
+        assertThat(store.findMaxIndexForPrefix("property")).isEqualTo(100);
+        assertThat(store.findMaxIndexForPrefix("property2")).isEqualTo(111);
 
         props.setProperty("property.weird.8.9.value", "value");
         updateConfigStore(props);
-        assertThat(store.findMaxIndexForPrefix("property"), is(100));
-        assertThat(store.findMaxIndexForPrefix("property.weird"), is(8));
-        assertThat(store.findMaxIndexForPrefix("property.weird.8"), is(9));
-        assertThat(store.findMaxIndexForPrefix("property.weird.8.9"), is(-1));
-        assertThat(store.findMaxIndexForPrefix("property.weird.8.9.value"), is(-1));
+        assertThat(store.findMaxIndexForPrefix("property")).isEqualTo(100);
+        assertThat(store.findMaxIndexForPrefix("property.weird")).isEqualTo(8);
+        assertThat(store.findMaxIndexForPrefix("property.weird.8")).isEqualTo(9);
+        assertThat(store.findMaxIndexForPrefix("property.weird.8.9")).isEqualTo(-1);
+        assertThat(store.findMaxIndexForPrefix("property.weird.8.9.value")).isEqualTo(-1);
     }
 
     @ParameterizedTest
@@ -219,15 +214,15 @@ public class ConfigurationStoreIT {
         props.setProperty("certificate.1.dynamic", "true");
         updateConfigStore(props);
 
-        assertEquals(type.equals("db") ? 7 : 4, store.asProperties(null).size());
-        assertEquals(1, store.findMaxIndexForPrefix("certificate"));
-        assertEquals(2, store.asProperties("certificate.1").size());
-        assertEquals(true, store.anyPropertyMatches(
+        assertThat(store.asProperties(null)).hasSize(type.equals("db") ? 7 : 4);
+        assertThat(store.findMaxIndexForPrefix("certificate")).isOne();
+        assertThat(store.asProperties("certificate.1")).hasSize(2);
+        assertThat(store.anyPropertyMatches(
                 (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals(d1)
-        ));
-        assertEquals(false, store.anyPropertyMatches(
+        )).isTrue();
+        assertThat(store.anyPropertyMatches(
                 (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals("unknown")
-        ));
+        )).isFalse();
 
         testKeyPairOperations();
         testCertificateOperations();
@@ -289,30 +284,30 @@ public class ConfigurationStoreIT {
         store.saveCertificate(cert2);
 
         // Certificates loading
-        assertEquals(cert1, store.loadCertificateForDomain(d1));
-        assertEquals(cert2, store.loadCertificateForDomain(d2));
+        assertThat(store.loadCertificateForDomain(d1)).isEqualTo(cert1);
+        assertThat(store.loadCertificateForDomain(d2)).isEqualTo(cert2);
 
         // Cert Updating
         cert1.setState(DynamicCertificateState.WAITING);
         cert1.setPendingOrderLocation(URI.create("http://locallhost/updatedorder").toURL());
         cert1.setPendingChallengesData(Map.of(cert1.getDomain(), JSON.parse("{\"challenge\": \"updateddata\"}")));
         store.saveCertificate(cert1);
-        assertEquals(cert1, store.loadCertificateForDomain(d1));
+        assertThat(store.loadCertificateForDomain(d1)).isEqualTo(cert1);
     }
 
     private void testAcmeChallengeTokens() {
         store.saveAcmeChallengeToken("token-id", "token-data");
         store.saveAcmeChallengeToken("token-id2", "token-data2");
-        assertEquals("token-data", store.loadAcmeChallengeToken("token-id"));
-        assertEquals("token-data2", store.loadAcmeChallengeToken("token-id2"));
+        assertThat(store.loadAcmeChallengeToken("token-id")).isEqualTo("token-data");
+        assertThat(store.loadAcmeChallengeToken("token-id2")).isEqualTo("token-data2");
         store.deleteAcmeChallengeToken("token-id");
-        assertNull(store.loadAcmeChallengeToken("token-id"));
+        assertThat(store.loadAcmeChallengeToken("token-id")).isNull();
         store.deleteAcmeChallengeToken("token-id2");
-        assertNull(store.loadAcmeChallengeToken("token-id2"));
+        assertThat(store.loadAcmeChallengeToken("token-id2")).isNull();
     }
 
     @Test
-    public void testCertificatesPersistency() throws ConfigurationNotValidException {
+    void certificatesPersistency() throws Exception {
         Properties props = new Properties();
         props.setProperty("certificate.0.hostname", d1);
         props.setProperty("certificate.0.dynamic", "true");
@@ -325,29 +320,29 @@ public class ConfigurationStoreIT {
         store = new HerdDBConfigurationStore(propertiesConfigurationStore, false, null, tmpDir, NullStatsLogger.INSTANCE);
 
         // Check applied configuration (loaded from empty db NB: passed configuration is ignored)
-        assertEquals("", store.getProperty("certificate.0.hostname", ""));
-        assertEquals("", store.getProperty("certificate.0.dynamic", ""));
-        assertEquals("", store.getProperty("certificate.1.hostname", ""));
-        assertEquals("", store.getProperty("certificate.1.dynamic", ""));
+        assertThat(store.getProperty("certificate.0.hostname", "")).isEmpty();
+        assertThat(store.getProperty("certificate.0.dynamic", "")).isEmpty();
+        assertThat(store.getProperty("certificate.1.hostname", "")).isEmpty();
+        assertThat(store.getProperty("certificate.1.dynamic", "")).isEmpty();
 
         // Apply first configuration
         store.commitConfiguration(propertiesConfigurationStore);
 
         // Check cached applied configuration
-        assertEquals(d1, store.getProperty("certificate.0.hostname", ""));
-        assertEquals("true", store.getProperty("certificate.0.dynamic", ""));
-        assertEquals(d2, store.getProperty("certificate.1.hostname", ""));
-        assertEquals("true", store.getProperty("certificate.1.dynamic", ""));
+        assertThat(store.getProperty("certificate.0.hostname", "")).isEqualTo(d1);
+        assertThat(store.getProperty("certificate.0.dynamic", "")).isEqualTo("true");
+        assertThat(store.getProperty("certificate.1.hostname", "")).isEqualTo(d2);
+        assertThat(store.getProperty("certificate.1.dynamic", "")).isEqualTo("true");
 
-        assertEquals(5, store.asProperties(null).size());
-        assertEquals(1, store.findMaxIndexForPrefix("certificate"));
-        assertEquals(2, store.asProperties("certificate.1").size());
-        assertEquals(true, store.anyPropertyMatches(
+        assertThat(store.asProperties(null)).hasSize(5);
+        assertThat(store.findMaxIndexForPrefix("certificate")).isOne();
+        assertThat(store.asProperties("certificate.1")).hasSize(2);
+        assertThat(store.anyPropertyMatches(
                 (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals(d1)
-        ));
-        assertEquals(false, store.anyPropertyMatches(
+        )).isTrue();
+        assertThat(store.anyPropertyMatches(
                 (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals("unknown")
-        ));
+        )).isFalse();
 
         // New configuration to apply
         props = new Properties();
@@ -374,26 +369,26 @@ public class ConfigurationStoreIT {
 
     private void checkConfiguration() {
         // check new configuration has been applied successfully
-        assertEquals("", store.getProperty("certificate.0.hostname", ""));
-        assertEquals("", store.getProperty("certificate.0.dynamic", ""));
-        assertEquals(d1, store.getProperty("certificate.1.hostname", ""));
-        assertEquals("false", store.getProperty("certificate.1.dynamic", ""));
-        assertEquals(d3, store.getProperty("certificate.3.hostname", ""));
-        assertEquals("true", store.getProperty("certificate.3.dynamic", ""));
+        assertThat(store.getProperty("certificate.0.hostname", "")).isEmpty();
+        assertThat(store.getProperty("certificate.0.dynamic", "")).isEmpty();
+        assertThat(store.getProperty("certificate.1.hostname", "")).isEqualTo(d1);
+        assertThat(store.getProperty("certificate.1.dynamic", "")).isEqualTo("false");
+        assertThat(store.getProperty("certificate.3.hostname", "")).isEqualTo(d3);
+        assertThat(store.getProperty("certificate.3.dynamic", "")).isEqualTo("true");
 
-        assertEquals(4, store.asProperties(null).size());
-        assertEquals(3, store.findMaxIndexForPrefix("certificate"));
-        assertEquals(2, store.asProperties("certificate.1.").size());
-        assertEquals(2, store.asProperties("certificate.3.").size());
-        assertEquals(true, store.anyPropertyMatches(
+        assertThat(store.asProperties(null)).hasSize(4);
+        assertThat(store.findMaxIndexForPrefix("certificate")).isEqualTo(3);
+        assertThat(store.asProperties("certificate.1.")).hasSize(2);
+        assertThat(store.asProperties("certificate.3.")).hasSize(2);
+        assertThat(store.anyPropertyMatches(
                 (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals(d1)
-        ));
-        assertEquals(true, store.anyPropertyMatches(
+        )).isTrue();
+        assertThat(store.anyPropertyMatches(
                 (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals(d3)
-        ));
-        assertEquals(false, store.anyPropertyMatches(
+        )).isTrue();
+        assertThat(store.anyPropertyMatches(
                 (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals("unknown")
-        ));
+        )).isFalse();
     }
 
 
@@ -411,17 +406,17 @@ public class ConfigurationStoreIT {
 
         // round-trip through the same parse path used by rewriteConfiguration and /api/config/apply
         ConfigurationStore reloaded = ConfigResource.buildStore(store.toStringConfiguration());
-        assertEquals(domain, reloaded.getProperty("connectionpool.1.domain", null));
-        assertEquals(matcher, reloaded.getProperty("route.5.match", null));
+        assertThat(reloaded.getProperty("connectionpool.1.domain", null)).isEqualTo(domain);
+        assertThat(reloaded.getProperty("route.5.match", null)).isEqualTo(matcher);
 
         // a second round-trip must be stable too
         ConfigurationStore reloadedTwice = ConfigResource.buildStore(reloaded.toStringConfiguration());
-        assertEquals(domain, reloadedTwice.getProperty("connectionpool.1.domain", null));
-        assertEquals(matcher, reloadedTwice.getProperty("route.5.match", null));
+        assertThat(reloadedTwice.getProperty("connectionpool.1.domain", null)).isEqualTo(domain);
+        assertThat(reloadedTwice.getProperty("route.5.match", null)).isEqualTo(matcher);
     }
 
     @Test
-    public void testCommitConfigurationMasksSecretsInLogs() throws Exception {
+    void commitConfigurationMasksSecretsInLogs() throws Exception {
         this.type = "db";
         final var logAppender = new ListAppender<ILoggingEvent>();
         logAppender.start();
@@ -439,15 +434,16 @@ public class ConfigurationStoreIT {
             updateConfigStore(props);
 
             final var loggedLines = logAppender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
-            assertThat(loggedLines, hasItems(containsString("acme.1.hmac"), containsString("******")));
+            assertThat(loggedLines).anySatisfy(line -> assertThat(line).contains("acme.1.hmac", "******"));
             for (final var line : loggedLines) {
-                assertThat(line, not(containsString(hmac)));
-                assertThat(line, not(containsString(password)));
+                assertThat(line)
+                        .doesNotContain(hmac)
+                        .doesNotContain(password);
             }
 
             // masking applies to the log only: the stored values stay raw, they are needed at use time
-            assertEquals(hmac, store.getProperty("acme.1.hmac", ""));
-            assertEquals(password, store.getProperty("certificate.1.password", ""));
+            assertThat(store.getProperty("acme.1.hmac", "")).isEqualTo(hmac);
+            assertThat(store.getProperty("certificate.1.password", "")).isEqualTo(password);
         } finally {
             logger.detachAppender(logAppender);
         }

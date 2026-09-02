@@ -20,6 +20,7 @@
 package org.carapaceproxy.server.certificates;
 
 import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.DNS_CHALLENGE_WAIT;
@@ -32,9 +33,6 @@ import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERI
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -87,7 +85,7 @@ import org.shredzone.acme4j.Problem;
  *
  * @author paolo.venturi
  */
-public class DynamicCertificatesManagerIT {
+class DynamicCertificatesManagerIT {
 
     static {
         // DynamicCertificatesManager reads the limit into a static final field, so the property must be set
@@ -122,7 +120,7 @@ public class DynamicCertificatesManagerIT {
             "all_ok,true",
             "all_ok,false"
     })
-    public void testCertificateSimpleStateManagement(String runCase, boolean maxedOutTrials) throws Exception {
+    void certificateSimpleStateManagement(String runCase, boolean maxedOutTrials) throws Exception {
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
         Order o = mock(Order.class);
@@ -231,8 +229,8 @@ public class DynamicCertificatesManagerIT {
         assertCertificateState(d0, AVAILABLE, cycleCount, man);
         assertCertificateState(d2, AVAILABLE, 0, man);
         assertCertificateState(d3, AVAILABLE, 0, man);
-        assertNotNull(man.getCertificateForDomain(d2));
-        assertNull(man.getCertificateForDomain(d3)); // empty
+        assertThat(man.getCertificateForDomain(d2)).isNotNull();
+        assertThat(man.getCertificateForDomain(d3)).isNull(); // empty
         man.setStateOfCertificate(d2, WAITING); // has not to be renewed by the manager (saveCounter = 1)
         assertCertificateState(d2, WAITING, 0, man);
 
@@ -251,12 +249,9 @@ public class DynamicCertificatesManagerIT {
             assertCertificateState(d1, ORDERING, expectedCycleCount, man);
         } else if (runCase.startsWith("challenge_status_invalid")) {
             assertCertificateState(d1, REQUEST_FAILED, ++expectedCycleCount, man);
-            assertEquals(
-                    runCase.equals("challenge_status_invalid_with_detail")
-                            ? "CAA record prevents issuance"
-                            : "Challenge response verification failed, status is INVALID",
-                    man.getCertificateDataForDomain(d1).getMessage()
-            );
+            assertThat(man.getCertificateDataForDomain(d1).getMessage()).isEqualTo(runCase.equals("challenge_status_invalid_with_detail")
+                    ? "CAA record prevents issuance"
+                    : "Challenge response verification failed, status is INVALID");
             man.run();
             verify(store, times(++saveCounter)).saveCertificate(any());
             assertCertificateState(d1, maxedOutTrials ? REQUEST_FAILED : WAITING, expectedCycleCount, man);
@@ -317,9 +312,9 @@ public class DynamicCertificatesManagerIT {
     }
 
     private void assertCertificateState(String domain, DynamicCertificateState expectedState, int expectedCycleCount, DynamicCertificatesManager dCMan) {
-        assertEquals(expectedState, dCMan.getStateOfCertificate(domain)); // on db
-        assertEquals(expectedState, dCMan.getCertificateDataForDomain(domain).getState()); // on cache
-        assertEquals(expectedCycleCount, dCMan.getCertificateDataForDomain(domain).getAttemptsCount());
+        assertThat(dCMan.getStateOfCertificate(domain)).isEqualTo(expectedState); // on db
+        assertThat(dCMan.getCertificateDataForDomain(domain).getState()).isEqualTo(expectedState); // on cache
+        assertThat(dCMan.getCertificateDataForDomain(domain).getAttemptsCount()).isEqualTo(expectedCycleCount);
     }
 
     @ParameterizedTest
@@ -328,13 +323,13 @@ public class DynamicCertificatesManagerIT {
     // C) record created and ready -> VERIFYING
     // D) challenge verified -> record deleted
     // E) challenge failed -> record deleted
-    @CsvSource({
+    @ValueSource(strings = {
             "challenge_creation_failed",
             "challenge_check_limit_expired",
             "challenge_failed",
             "challenge_verified",
     })
-    public void testWildcardCertificateStateManagement(String runCase) throws Exception {
+    void wildcardCertificateStateManagement(String runCase) throws Exception {
         final var domain = "*.localhost";
 
         // ACME mocking
@@ -452,13 +447,13 @@ public class DynamicCertificatesManagerIT {
     // C) record created and ready -> VERIFYING
     // D) challenge verified -> record deleted
     // E) challenge failed -> record deleted
-    @CsvSource({
+    @ValueSource(strings = {
             "challenge_creation_failed",
             "challenge_check_limit_expired",
             "challenge_failed",
             "challenge_verified"
     })
-    public void testSanCertificateStateManagement(String runCase) throws Exception {
+    void sanCertificateStateManagement(String runCase) throws Exception {
         final var domain = "*.localhost";
         final var san1 = "test1.localhost";
         final var san2 = "*.localhost2";
@@ -590,10 +585,10 @@ public class DynamicCertificatesManagerIT {
     }
 
     @ParameterizedTest
-    @CsvSource({
+    @ValueSource(strings = {
             "localhost-no-ip-check", "localhost-ip-check-partial", "localhost-ip-check-full"
     })
-    public void testDomainReachabilityCheck(String domainCase) throws Exception {
+    void domainReachabilityCheck(String domainCase) throws Exception {
         final var domain = "localhost";
 
         // ACME mocking
@@ -780,7 +775,7 @@ public class DynamicCertificatesManagerIT {
         if (failureCase.equals("stale")) {
             // failure counted, so the certificate falls back to WAITING and a fresh order
             assertCertificateState(domain, REQUEST_FAILED, 1, man);
-            assertEquals("unknown order", man.getCertificateDataForDomain(domain).getMessage());
+            assertThat(man.getCertificateDataForDomain(domain).getMessage()).isEqualTo("unknown order");
             man.run();
             assertCertificateState(domain, WAITING, 1, man);
         } else {

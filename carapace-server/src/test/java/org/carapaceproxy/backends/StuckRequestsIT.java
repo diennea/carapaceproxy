@@ -23,11 +23,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -47,7 +43,7 @@ import org.carapaceproxy.utils.TestUtils;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class StuckRequestsIT {
 
@@ -58,8 +54,8 @@ public class StuckRequestsIT {
     public File tmpDir;
 
     @ParameterizedTest(name = "test(backend unreachable on stuck request: {0})")
-    @CsvSource({"true", "false"})
-    public void testBackendUnreachableOnStuckRequest(boolean backendsUnreachableOnStuckRequests) throws Exception {
+    @ValueSource(booleans = {true, false})
+    void backendUnreachableOnStuckRequest(boolean backendsUnreachableOnStuckRequests) throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -105,51 +101,51 @@ public class StuckRequestsIT {
             // configure resets all listeners configurations
             server.configureAtBoot(new PropertiesConfigurationStore(properties));
             server.addListener(NetworkListenerConfiguration.withDefault("localhost", 0));
-            assertEquals(100, server.getCurrentConfiguration().getStuckRequestTimeout());
-            assertEquals(backendsUnreachableOnStuckRequests, server.getCurrentConfiguration().isBackendsUnreachableOnStuckRequests());
+            assertThat(server.getCurrentConfiguration().getStuckRequestTimeout()).isEqualTo(100);
+            assertThat(server.getCurrentConfiguration().isBackendsUnreachableOnStuckRequests()).isEqualTo(backendsUnreachableOnStuckRequests);
             server.start();
             int port = server.getLocalPort();
-            assertTrue(port > 0);
+            assertThat(port).isGreaterThan(0);
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertEquals("HTTP/1.1 500 Internal Server Error\r\n", resp.getStatusLine());
-                assertEquals("""
+                assertThat(resp.getStatusLine()).isEqualTo("HTTP/1.1 500 Internal Server Error\r\n");
+                assertThat(resp.getBodyString()).isEqualTo("""
                         <html>
                             <body>
                                 An internal error occurred
                             </body>       \s
                         </html>
-                        """, resp.getBodyString());
+                        """);
             }
 
             TestUtils.waitForCondition(() -> ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get() == 0, 10);
-            assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
-            assertThat((int) ProxyRequestsManager.STUCK_REQUESTS_COUNTER.get() > 0, is(true));
+            assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get()).isZero();
+            assertThat((int) ProxyRequestsManager.STUCK_REQUESTS_COUNTER.get()).isGreaterThan(0);
 
             final BackendHealthStatus.Status expected = backendsUnreachableOnStuckRequests
                     ? BackendHealthStatus.Status.DOWN
                     : BackendHealthStatus.Status.COLD;
-            assertSame(expected, server.getBackendHealthManager().getBackendStatus(key).getStatus());
+            assertThat(server.getBackendHealthManager().getBackendStatus(key).getStatus()).isSameAs(expected);
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /good-index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 if (backendsUnreachableOnStuckRequests) {
-                    assertEquals("HTTP/1.1 503 Service Unavailable\r\n", resp.getStatusLine());
-                    assertEquals("""
+                    assertThat(resp.getStatusLine()).isEqualTo("HTTP/1.1 503 Service Unavailable\r\n");
+                    assertThat(resp.getBodyString()).isEqualTo("""
                             <html>
                                 <body>
                                     Service Unavailable
                                 </body>
                             </html>
-                            """, resp.getBodyString());
+                            """);
                 } else {
-                    assertEquals("HTTP/1.1 200 OK\r\n", resp.getStatusLine());
-                    assertEquals("it <b>works</b> !!", resp.getBodyString());
+                    assertThat(resp.getStatusLine()).isEqualTo("HTTP/1.1 200 OK\r\n");
+                    assertThat(resp.getBodyString()).isEqualTo("it <b>works</b> !!");
                 }
             }
         }

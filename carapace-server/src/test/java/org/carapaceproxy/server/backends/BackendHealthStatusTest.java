@@ -19,7 +19,8 @@
  */
 package org.carapaceproxy.server.backends;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.server.backends.BackendHealthStatus.Status;
 import org.junit.jupiter.api.Test;
@@ -36,17 +37,17 @@ class BackendHealthStatusTest {
     @Test
     void freshStatusIsCold() {
         BackendHealthStatus status = new BackendHealthStatus(KEY, 500);
-        assertEquals(Status.COLD, status.getStatus());
-        assertEquals(0, status.getUnreachableSince());
+        assertThat(status.getStatus()).isEqualTo(Status.COLD);
+        assertThat(status.getUnreachableSince()).isZero();
     }
 
     @Test
     void reportAsUnreachableMovesToDown() {
         BackendHealthStatus status = new BackendHealthStatus(KEY, 500);
         status.reportAsUnreachable(1000, "500 error");
-        assertEquals(Status.DOWN, status.getStatus());
-        assertEquals(1000, status.getUnreachableSince());
-        assertEquals(1000, status.getLastUnreachable());
+        assertThat(status.getStatus()).isEqualTo(Status.DOWN);
+        assertThat(status.getUnreachableSince()).isEqualTo(1000);
+        assertThat(status.getLastUnreachable()).isEqualTo(1000);
     }
 
     @Test
@@ -54,9 +55,9 @@ class BackendHealthStatusTest {
         BackendHealthStatus status = new BackendHealthStatus(KEY, 500);
         status.reportAsUnreachable(1000, "500 error");
         status.reportAsUnreachable(2000, "still down");
-        assertEquals(Status.DOWN, status.getStatus());
-        assertEquals(1000, status.getUnreachableSince()); // preserved, not reset
-        assertEquals(2000, status.getLastUnreachable()); // refreshed
+        assertThat(status.getStatus()).isEqualTo(Status.DOWN);
+        assertThat(status.getUnreachableSince()).isEqualTo(1000); // preserved, not reset
+        assertThat(status.getLastUnreachable()).isEqualTo(2000); // refreshed
     }
 
     @Test
@@ -64,9 +65,9 @@ class BackendHealthStatusTest {
         BackendHealthStatus status = new BackendHealthStatus(KEY, 500);
         status.reportAsUnreachable(1000, "500 error");
         status.reportAsReachable(3000);
-        assertEquals(Status.COLD, status.getStatus());
-        assertEquals(0, status.getUnreachableSince());
-        assertEquals(3000, status.getLastReachable());
+        assertThat(status.getStatus()).isEqualTo(Status.COLD);
+        assertThat(status.getUnreachableSince()).isZero();
+        assertThat(status.getLastReachable()).isEqualTo(3000);
     }
 
     @Test
@@ -75,16 +76,16 @@ class BackendHealthStatusTest {
         // Establish a deterministic lastUnreachable=1000, then come back COLD (DOWN->COLD keeps lastUnreachable).
         status.reportAsUnreachable(1000, "500 error");
         status.reportAsReachable(1001);
-        assertEquals(Status.COLD, status.getStatus());
-        assertEquals(1000, status.getLastUnreachable());
+        assertThat(status.getStatus()).isEqualTo(Status.COLD);
+        assertThat(status.getLastUnreachable()).isEqualTo(1000);
 
         // Strict '>': exactly warmup after lastUnreachable stays COLD.
         status.reportAsReachable(1000 + 500);
-        assertEquals(Status.COLD, status.getStatus());
+        assertThat(status.getStatus()).isEqualTo(Status.COLD);
 
         // One past warmup flips to STABLE.
         status.reportAsReachable(1000 + 500 + 1);
-        assertEquals(Status.STABLE, status.getStatus());
+        assertThat(status.getStatus()).isEqualTo(Status.STABLE);
     }
 
     @Test
@@ -93,10 +94,10 @@ class BackendHealthStatusTest {
         status.reportAsUnreachable(1000, "500 error");
         status.reportAsReachable(1001);
         status.reportAsReachable(1000 + 500 + 1);
-        assertEquals(Status.STABLE, status.getStatus());
+        assertThat(status.getStatus()).isEqualTo(Status.STABLE);
 
         status.reportAsReachable(9999);
-        assertEquals(Status.STABLE, status.getStatus());
+        assertThat(status.getStatus()).isEqualTo(Status.STABLE);
     }
 
     @Test
@@ -106,20 +107,20 @@ class BackendHealthStatusTest {
         BackendHealthStatus status = new BackendHealthStatus(KEY, 500);
         long created = status.getLastUnreachable();
         status.reportAsReachable(created + 500 + 1);
-        assertEquals(Status.STABLE, status.getStatus());
+        assertThat(status.getStatus()).isEqualTo(Status.STABLE);
     }
 
     @Test
     void connectionsIncrementDecrementAndClampAtZero() {
         BackendHealthStatus status = new BackendHealthStatus(KEY, 500);
-        assertEquals(0, status.getConnections());
+        assertThat(status.getConnections()).isZero();
         status.incrementConnections();
         status.incrementConnections();
-        assertEquals(2, status.getConnections());
+        assertThat(status.getConnections()).isEqualTo(2);
         status.decrementConnections();
-        assertEquals(1, status.getConnections());
+        assertThat(status.getConnections()).isOne();
         status.decrementConnections();
         status.decrementConnections(); // already at 0, must clamp
-        assertEquals(0, status.getConnections());
+        assertThat(status.getConnections()).isZero();
     }
 }

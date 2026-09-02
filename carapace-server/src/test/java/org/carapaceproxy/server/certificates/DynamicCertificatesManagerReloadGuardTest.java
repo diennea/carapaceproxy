@@ -19,11 +19,10 @@
  */
 package org.carapaceproxy.server.certificates;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.REQUEST_FAILED;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.hasAnyBindingChange;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
 import java.util.Set;
@@ -35,46 +34,46 @@ import org.junit.jupiter.api.Test;
  * Each test name describes the high-level behaviour driven by the predicate: when it returns
  * {@code false}, the reload skips {@code server.getListeners().reloadCurrentConfiguration()}.
  */
-public class DynamicCertificatesManagerReloadGuardTest {
+class DynamicCertificatesManagerReloadGuardTest {
 
     private static final byte[] KEYSTORE_A = {0x10, 0x11, 0x12};
     private static final byte[] KEYSTORE_B = {0x20, 0x21, 0x22};
 
     @Test
-    public void testReloadSkipsListenerWhenNoCertChanged() {
+    void reloadSkipsListenerWhenNoCertChanged() {
         final CertificateData stable = certWithKeystore("example.com", KEYSTORE_A);
         final Map<String, CertificateData> old = Map.of("example.com", stable);
         final Map<String, CertificateData> fresh = Map.of("example.com", certWithKeystore("example.com", KEYSTORE_A.clone()));
-        assertFalse(hasAnyBindingChange(old, fresh));
+        assertThat(hasAnyBindingChange(old, fresh)).isFalse();
     }
 
     @Test
-    public void testReloadTriggersListenerOnKeystoreChange() {
+    void reloadTriggersListenerOnKeystoreChange() {
         final Map<String, CertificateData> old = Map.of("example.com", certWithKeystore("example.com", KEYSTORE_A));
         final Map<String, CertificateData> fresh = Map.of("example.com", certWithKeystore("example.com", KEYSTORE_B));
-        assertTrue(hasAnyBindingChange(old, fresh));
+        assertThat(hasAnyBindingChange(old, fresh)).isTrue();
     }
 
     @Test
-    public void testReloadTriggersListenerOnDomainAdded() {
+    void reloadTriggersListenerOnDomainAdded() {
         final Map<String, CertificateData> old = Map.of("example.com", certWithKeystore("example.com", KEYSTORE_A));
         final Map<String, CertificateData> fresh = Map.of(
                 "example.com", certWithKeystore("example.com", KEYSTORE_A.clone()),
                 "second.example.com", certWithKeystore("second.example.com", KEYSTORE_B));
-        assertTrue(hasAnyBindingChange(old, fresh));
+        assertThat(hasAnyBindingChange(old, fresh)).isTrue();
     }
 
     @Test
-    public void testReloadTriggersListenerOnDomainRemoved() {
+    void reloadTriggersListenerOnDomainRemoved() {
         final Map<String, CertificateData> old = Map.of(
                 "example.com", certWithKeystore("example.com", KEYSTORE_A),
                 "second.example.com", certWithKeystore("second.example.com", KEYSTORE_B));
         final Map<String, CertificateData> fresh = Map.of("example.com", certWithKeystore("example.com", KEYSTORE_A.clone()));
-        assertTrue(hasAnyBindingChange(old, fresh));
+        assertThat(hasAnyBindingChange(old, fresh)).isTrue();
     }
 
     @Test
-    public void testReloadSkipsListenerWhenOnlyAttemptsCountIncremented() {
+    void reloadSkipsListenerWhenOnlyAttemptsCountIncremented() {
         // Exact staging symptom: a stuck ACME order ticks attemptsCount+message+state every poll
         // while keystoreData stays at its last successful value (or null on a brand-new domain).
         final CertificateData stuckPrev = certWithKeystore("stuck.example.com", null);
@@ -89,16 +88,16 @@ public class DynamicCertificatesManagerReloadGuardTest {
 
         final Map<String, CertificateData> old = Map.of("stuck.example.com", stuckPrev);
         final Map<String, CertificateData> fresh = Map.of("stuck.example.com", stuckTicked);
-        assertFalse(hasAnyBindingChange(old, fresh));
+        assertThat(hasAnyBindingChange(old, fresh)).isFalse();
     }
 
     @Test
-    public void testReloadTriggersListenerOnSanChange() {
+    void reloadTriggersListenerOnSanChange() {
         final CertificateData oldCert = certWithKeystoreAndSans("example.com", KEYSTORE_A, Set.of("alt.example.com"));
         final CertificateData freshCert = certWithKeystoreAndSans("example.com", KEYSTORE_A.clone(), Set.of("other.example.com"));
         final Map<String, CertificateData> old = Map.of("example.com", oldCert);
         final Map<String, CertificateData> fresh = Map.of("example.com", freshCert);
-        assertTrue(hasAnyBindingChange(old, fresh));
+        assertThat(hasAnyBindingChange(old, fresh)).isTrue();
     }
 
     private static CertificateData certWithKeystore(final String domain, final byte[] keystoreData) {

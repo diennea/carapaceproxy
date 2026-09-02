@@ -19,6 +19,8 @@
  */
 package org.carapaceproxy.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.APIUtils.certificateStateToString;
@@ -26,15 +28,6 @@ import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.carapaceproxy.utils.CertificatesTestUtils.uploadCertificate;
 import static org.carapaceproxy.utils.CertificatesUtils.KEYSTORE_PW;
 import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -66,7 +59,6 @@ import org.carapaceproxy.server.mapper.requestmatcher.MatchAllRequestMatcher;
 import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.shredzone.acme4j.util.KeyPairUtils;
@@ -81,23 +73,23 @@ public class StartAPIServerIT extends UseAdminServer {
     public File tmpFolder;
 
     @Test
-    public void test() throws Exception {
+    void test() throws Exception {
         startAdmin();
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/up", credentials);
             String s = resp.getBodyString();
             System.out.println("s:" + s);
-            assertEquals("ok", s);
+            assertThat(s).isEqualTo("ok");
             // API calls cannot be cached by the client (browser)
-            assertTrue(resp.getHeaderLines().contains("Cache-Control: no-cache\r\n"));
+            assertThat(resp.getHeaderLines()).contains("Cache-Control: no-cache\r\n");
             // Allow CORS
-            assertTrue(resp.getHeaderLines().contains("Access-Control-Allow-Origin: *\r\n"));
+            assertThat(resp.getHeaderLines()).contains("Access-Control-Allow-Origin: *\r\n");
         }
     }
 
     @Test
-    public void testUnauthorized() throws Exception {
+    void unauthorized() throws Exception {
         // start server with authentication and user test - test
         Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
 
@@ -108,14 +100,14 @@ public class StartAPIServerIT extends UseAdminServer {
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/up", credentials);
-            assertThat(resp.getBodyString(), containsString(HttpServletResponse.SC_UNAUTHORIZED + ""));
+            assertThat(resp.getBodyString()).contains(HttpServletResponse.SC_UNAUTHORIZED + "");
         }
 
         // ok credentials
         RawHttpClient.BasicAuthCredentials correctCredentials = new RawHttpClient.BasicAuthCredentials("test", "test");
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/up", correctCredentials);
-            assertEquals("ok", resp.getBodyString());
+            assertThat(resp.getBodyString()).isEqualTo("ok");
         }
 
         // Add new user
@@ -125,43 +117,43 @@ public class StartAPIServerIT extends UseAdminServer {
         correctCredentials = new RawHttpClient.BasicAuthCredentials("test2", "test2");
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/up", correctCredentials);
-            assertEquals("ok", resp.getBodyString());
+            assertThat(resp.getBodyString()).isEqualTo("ok");
         }
     }
 
     @Test
-    public void testCache() throws Exception {
+    void cache() throws Exception {
         startAdmin();
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/cache/info", credentials);
             String s = resp.getBodyString();
             System.out.println("s:" + s);
-            assertThat(s, is("{\"result\":\"ok\",\"hits\":0,\"directMemoryUsed\":0,\"misses\":0,\"heapMemoryUsed\":0,\"totalMemoryUsed\":0,\"cachesize\":0}"));
+            assertThat(s).isEqualTo("{\"result\":\"ok\",\"hits\":0,\"directMemoryUsed\":0,\"misses\":0,\"heapMemoryUsed\":0,\"totalMemoryUsed\":0,\"cachesize\":0}");
         }
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/cache/flush", credentials);
             String s = resp.getBodyString();
             System.out.println("s:" + s);
-            assertThat(s, is("{\"result\":\"ok\",\"cachesize\":0}"));
+            assertThat(s).isEqualTo("{\"result\":\"ok\",\"cachesize\":0}");
         }
     }
 
     @Test
-    public void testBackends() throws Exception {
+    void backends() throws Exception {
         startAdmin();
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/backends", credentials);
             String s = resp.getBodyString();
             // no backend configured
-            assertEquals("{}", s);
+            assertThat(s).isEqualTo("{}");
         }
     }
 
     @Test
-    public void testRoutes() throws Exception {
+    void routes() throws Exception {
         Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         properties.put("route.0.id", "id0");
         properties.put("route.0.action", "id-action");
@@ -173,30 +165,32 @@ public class StartAPIServerIT extends UseAdminServer {
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/routes", credentials);
             String s = resp.getBodyString();
-            assertTrue(s.contains("id0"));
-            assertTrue(s.contains("id-action"));
-            assertTrue(s.contains("true"));
-            assertTrue(s.contains(new MatchAllRequestMatcher().getDescription()));
+            assertThat(s)
+                    .contains("id0")
+                    .contains("id-action")
+                    .contains("true")
+                    .contains(new MatchAllRequestMatcher().getDescription());
         }
     }
 
     @Test
-    public void testActions() throws Exception {
+    void actions() throws Exception {
         startAdmin();
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/actions", credentials);
             String s = resp.getBodyString();
-            // Default actions
-            assertTrue(s.contains("\"not-found\",\"type\":\"static\""));
-            assertTrue(s.contains("\"cache-if-possible\",\"type\":\"cache\""));
-            assertTrue(s.contains("\"internal-error\",\"type\":\"static\""));
-            assertTrue(s.contains("\"proxy-all\",\"type\":\"proxy\""));
+            assertThat(s)
+                    // Default actions
+                    .contains("\"not-found\",\"type\":\"static\"")
+                    .contains("\"cache-if-possible\",\"type\":\"cache\"")
+                    .contains("\"internal-error\",\"type\":\"static\"")
+                    .contains("\"proxy-all\",\"type\":\"proxy\"");
         }
     }
 
     @Test
-    public void testDirectors() throws Exception {
+    void directors() throws Exception {
         Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         properties.put("director.1.backends", "*");
         properties.put("director.1.enabled", "false");
@@ -220,16 +214,16 @@ public class StartAPIServerIT extends UseAdminServer {
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/directors", credentials);
             final List<Map<?, ?>> s = new ObjectMapper().readValue(resp.getBody(), new TypeReference<>() {});
-            assertThat(s.size(), is(1));
+            assertThat(s).hasSize(1);
             final var id = s.get(0).get("id");
-            assertThat(id, is("iddirector2"));
+            assertThat(id).isEqualTo("iddirector2");
             final var backends = Set.copyOf((List<?>) s.get(0).get("backends"));
-            assertThat(backends, is(Set.of("localhost:8086", "localhost:8087")));
+            assertThat(backends).isEqualTo(Set.of("localhost:8086", "localhost:8087"));
         }
     }
 
     @Test
-    public void testConfig() throws Exception {
+    void config() throws Exception {
         startAdmin();
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
@@ -242,7 +236,7 @@ public class StartAPIServerIT extends UseAdminServer {
                     + "Authorization: Basic " + credentials.toBase64() + "\r\n"
                     + "\r\n"
                     + body);
-            assertTrue(resp.isOk());
+            assertThat(resp.isOk()).isTrue();
         }
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             String body = "connectionsmanager.maxconnectionsperendpoint=20-BAD-VALUE";
@@ -253,13 +247,13 @@ public class StartAPIServerIT extends UseAdminServer {
                     + "Authorization: Basic " + credentials.toBase64() + "\r\n"
                     + "\r\n"
                     + body);
-            assertTrue(resp.isError());
-            assertTrue(resp.getBodyString().contains("Invalid integer value '20-BAD-VALUE' for parameter 'connectionsmanager.maxconnectionsperendpoint'"));
+            assertThat(resp.isError()).isTrue();
+            assertThat(resp.getBodyString()).contains("Invalid integer value '20-BAD-VALUE' for parameter 'connectionsmanager.maxconnectionsperendpoint'");
         }
     }
 
     @Test
-    public void testListeners() throws Exception {
+    void listeners() throws Exception {
         Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
 
         properties.put("listener.1.host", "localhost");
@@ -275,17 +269,17 @@ public class StartAPIServerIT extends UseAdminServer {
             RawHttpClient.HttpResponse response = client.get("/api/listeners", credentials);
             String json = response.getBodyString();
 
-            assertThat(json, containsString("localhost"));
-            assertThat(json, containsString("1234"));
-
-            assertThat(json, containsString("127.0.0.1"));
-            assertThat(json, containsString("9876"));
+            assertThat(json)
+                    .contains("localhost")
+                    .contains("1234")
+                    .contains("127.0.0.1")
+                    .contains("9876");
         }
 
     }
 
     @Test
-    public void testCertificates() throws Exception {
+    void certificates() throws Exception {
         final String dynDomain = "dynamic.test.tld";
         Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
 
@@ -321,7 +315,7 @@ public class StartAPIServerIT extends UseAdminServer {
         File nowrite = newFolder(tmpDir, "nowrite");
         nowrite.setWritable(false);
         properties.put("dynamiccertificatesmanager.localcertificates.store.path", nowrite.getAbsolutePath());
-        assertThrows(Exception.class, () -> startServer(properties));
+        assertThatThrownBy(() -> startServer(properties)).isInstanceOf(Exception.class);
         nowrite.setWritable(true);
 
         startServer(properties);
@@ -346,32 +340,33 @@ public class StartAPIServerIT extends UseAdminServer {
             RawHttpClient.HttpResponse response = client.get("/api/certificates", credentials);
             String json = response.getBodyString();
 
-            assertThat(json, containsString("localhost"));
-            assertThat(json, containsString("\"mode\":\"static\""));
-            assertThat(json, containsString("\"dynamic\":false"));
-            assertThat(json, containsString("\"status\":\"available\""));
-            assertThat(json, containsString("\"sslCertificateFile\":\"" + mock1.getAbsolutePath() + "\""));
-            assertThat(json, containsString("\"serialNumber\":\"" + serialNumber1 + "\""));
-            assertThat(json, containsString("\"expiringDate\":\"" + expiringDate1 + "\""));
-
-            assertThat(json, containsString("127.0.0.1"));
-            assertThat(json, containsString("\"mode\":\"static\""));
-            assertThat(json, containsString("\"dynamic\":false"));
-            assertThat(json, containsString("\"status\":\"expired\""));
-            assertThat(json, containsString("\"sslCertificateFile\":\"" + mock2.getAbsolutePath() + "\""));
-            assertThat(json, containsString("\"serialNumber\":\"" + serialNumber2 + "\""));
-            assertThat(json, containsString("\"expiringDate\":\"" + expiringDate2 + "\""));
+            assertThat(json)
+                    .contains("localhost")
+                    .contains("\"mode\":\"static\"")
+                    .contains("\"dynamic\":false")
+                    .contains("\"status\":\"available\"")
+                    .contains("\"sslCertificateFile\":\"" + mock1.getAbsolutePath() + "\"")
+                    .contains("\"serialNumber\":\"" + serialNumber1 + "\"")
+                    .contains("\"expiringDate\":\"" + expiringDate1 + "\"")
+                    .contains("127.0.0.1")
+                    .contains("\"mode\":\"static\"")
+                    .contains("\"dynamic\":false")
+                    .contains("\"status\":\"expired\"")
+                    .contains("\"sslCertificateFile\":\"" + mock2.getAbsolutePath() + "\"")
+                    .contains("\"serialNumber\":\"" + serialNumber2 + "\"")
+                    .contains("\"expiringDate\":\"" + expiringDate2 + "\"");
 
             // single cert request to /{certId}
             response = client.get("/api/certificates/127.0.0.1", credentials);
             json = response.getBodyString();
-            assertThat(json, not(containsString("localhost")));
-            assertThat(json, containsString("\"mode\":\"static\""));
-            assertThat(json, containsString("\"dynamic\":false"));
-            assertThat(json, containsString("\"status\":\"expired\""));
-            assertThat(json, containsString("\"sslCertificateFile\":\"" + mock2.getAbsolutePath() + "\""));
-            assertThat(json, containsString("\"serialNumber\":\"" + serialNumber2 + "\""));
-            assertThat(json, containsString("\"expiringDate\":\"" + expiringDate2 + "\""));
+            assertThat(json)
+                    .doesNotContain("localhost")
+                    .contains("\"mode\":\"static\"")
+                    .contains("\"dynamic\":false")
+                    .contains("\"status\":\"expired\"")
+                    .contains("\"sslCertificateFile\":\"" + mock2.getAbsolutePath() + "\"")
+                    .contains("\"serialNumber\":\"" + serialNumber2 + "\"")
+                    .contains("\"expiringDate\":\"" + expiringDate2 + "\"");
         }
 
         // Acme certificate
@@ -381,39 +376,43 @@ public class StartAPIServerIT extends UseAdminServer {
             RawHttpClient.HttpResponse response = client.get("/api/certificates", credentials);
             String json = response.getBodyString();
 
-            assertThat(json, containsString(dynDomain));
-            assertThat(json, containsString("\"mode\":\"acme\""));
-            assertThat(json, containsString("\"dynamic\":true"));
-            assertThat(json, containsString("\"status\":\"waiting\""));
-            assertThat(json, containsString("\"serialNumber\":\"" + serialNumber + "\""));
-            assertThat(json, containsString("\"expiringDate\":\"" + expiringDate + "\""));
+            assertThat(json)
+                    .contains(dynDomain)
+                    .contains("\"mode\":\"acme\"")
+                    .contains("\"dynamic\":true")
+                    .contains("\"status\":\"waiting\"")
+                    .contains("\"serialNumber\":\"" + serialNumber + "\"")
+                    .contains("\"expiringDate\":\"" + expiringDate + "\"");
 
             // single cert request to /{certId}
             response = client.get("/api/certificates/" + dynDomain, credentials);
             json = response.getBodyString();
-            assertThat(json, containsString(dynDomain));
-            assertThat(json, containsString("\"mode\":\"acme\""));
-            assertThat(json, containsString("\"dynamic\":true"));
-            assertThat(json, containsString("\"status\":\"waiting\""));
-            assertThat(json, containsString("\"serialNumber\":\"" + serialNumber + "\""));
-            assertThat(json, containsString("\"expiringDate\":\"" + expiringDate + "\""));
+            assertThat(json)
+                    .contains(dynDomain)
+                    .contains("\"mode\":\"acme\"")
+                    .contains("\"dynamic\":true")
+                    .contains("\"status\":\"waiting\"")
+                    .contains("\"serialNumber\":\"" + serialNumber + "\"")
+                    .contains("\"expiringDate\":\"" + expiringDate + "\"");
 
             // Changing dynamic certificate state
             for (DynamicCertificateState state : DynamicCertificateState.values()) {
                 man.setStateOfCertificate(dynDomain, state);
                 response = client.get("/api/certificates", credentials);
                 json = response.getBodyString();
-                assertThat(json, containsString(dynDomain));
-                assertThat(json, containsString("\"mode\":\"acme\""));
-                assertThat(json, containsString("\"dynamic\":true"));
-                assertThat(json, containsString("\"status\":\"" + certificateStateToString(state) + "\""));
+                assertThat(json)
+                        .contains(dynDomain)
+                        .contains("\"mode\":\"acme\"")
+                        .contains("\"dynamic\":true")
+                        .contains("\"status\":\"" + certificateStateToString(state) + "\"");
 
                 response = client.get("/api/certificates/" + dynDomain, credentials);
                 json = response.getBodyString();
-                assertThat(json, containsString(dynDomain));
-                assertThat(json, containsString("\"mode\":\"acme\""));
-                assertThat(json, containsString("\"dynamic\":true"));
-                assertThat(json, containsString("\"status\":\"" + certificateStateToString(state) + "\""));
+                assertThat(json)
+                        .contains(dynDomain)
+                        .contains("\"mode\":\"acme\"")
+                        .contains("\"dynamic\":true")
+                        .contains("\"status\":\"" + certificateStateToString(state) + "\"");
             }
 
             // Downloading
@@ -423,7 +422,7 @@ public class StartAPIServerIT extends UseAdminServer {
             store.saveCertificate(cert);
             man.setStateOfCertificate(dynDomain, DynamicCertificateState.AVAILABLE);
             response = client.get("/api/certificates/" + dynDomain + "/download", credentials);
-            assertArrayEquals(newKeystore, response.getBody());
+            assertThat(response.getBody()).containsExactly(newKeystore);
         }
 
         // Manual certificate
@@ -435,7 +434,7 @@ public class StartAPIServerIT extends UseAdminServer {
             // Uploading trash-stuff
             RawHttpClient.HttpResponse resp = uploadCertificate(manualDomain, null, "fake-chain".getBytes(), client, credentials);
             String s = resp.getBodyString();
-            assertTrue(s.contains("ERROR"));
+            assertThat(s).contains("ERROR");
 
             // Uploading real certificate
             endUserKeyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
@@ -446,36 +445,38 @@ public class StartAPIServerIT extends UseAdminServer {
             byte[] chain1 = createKeystore(originalChain, endUserKeyPair.getPrivate());
             resp = uploadCertificate(manualDomain, null, chain1, client, credentials);
             s = resp.getBodyString();
-            assertTrue(s.contains("SUCCESS"));
+            assertThat(s).contains("SUCCESS");
 
             int certsCount2 = server.getCurrentConfiguration().getCertificates().size();
-            assertEquals(certsCount + 1, certsCount2);
+            assertThat(certsCount2).isEqualTo(certsCount + 1);
 
             // full list request
             RawHttpClient.HttpResponse response = client.get("/api/certificates", credentials);
             String json = response.getBodyString();
 
-            assertThat(json, containsString(manualDomain));
-            assertThat(json, containsString("\"mode\":\"manual\""));
-            assertThat(json, containsString("\"dynamic\":true"));
-            assertThat(json, containsString("\"status\":\"available\""));
-            assertThat(json, containsString("\"serialNumber\":\"" + serialNumber + "\""));
-            assertThat(json, containsString("\"expiringDate\":\"" + expiringDate + "\""));
+            assertThat(json)
+                    .contains(manualDomain)
+                    .contains("\"mode\":\"manual\"")
+                    .contains("\"dynamic\":true")
+                    .contains("\"status\":\"available\"")
+                    .contains("\"serialNumber\":\"" + serialNumber + "\"")
+                    .contains("\"expiringDate\":\"" + expiringDate + "\"");
 
             // single cert request to /{certId}
             response = client.get("/api/certificates/" + manualDomain, credentials);
             json = response.getBodyString();
-            assertThat(json, containsString(manualDomain));
-            assertThat(json, containsString("\"mode\":\"manual\""));
-            assertThat(json, containsString("\"dynamic\":true"));
-            assertThat(json, containsString("\"status\":\"available\""));
-            assertThat(json, containsString("\"serialNumber\":\"" + serialNumber + "\""));
-            assertThat(json, containsString("\"expiringDate\":\"" + expiringDate + "\""));
+            assertThat(json)
+                    .contains(manualDomain)
+                    .contains("\"mode\":\"manual\"")
+                    .contains("\"dynamic\":true")
+                    .contains("\"status\":\"available\"")
+                    .contains("\"serialNumber\":\"" + serialNumber + "\"")
+                    .contains("\"expiringDate\":\"" + expiringDate + "\"");
 
             // Downloading
             response = client.get("/api/certificates/" + manualDomain + "/download", credentials);
             Certificate[] responseChain = CertificatesUtils.readChainFromKeystore(response.getBody());
-            assertArrayEquals(CertificatesUtils.readChainFromKeystore(chain1), responseChain);
+            assertThat(responseChain).containsExactly(CertificatesUtils.readChainFromKeystore(chain1));
 
             // Certificate updating
             // Uploading
@@ -485,46 +486,48 @@ public class StartAPIServerIT extends UseAdminServer {
             serialNumber = certificate.getSerialNumber().toString(16).toUpperCase();
             expiringDate = certificate.getNotAfter().toString();
             byte[] chain2 = createKeystore(originalChain, endUserKeyPair.getPrivate());
-            assertFalse(Arrays.equals(chain1, chain2));
+            assertThat(Arrays.equals(chain1, chain2)).isFalse();
             resp = uploadCertificate(manualDomain, null, chain2, client, credentials);
             s = resp.getBodyString();
-            assertTrue(s.contains("SUCCESS"));
+            assertThat(s).contains("SUCCESS");
 
             //  check properties (certificate) not duplicated
             int certsCount3 = server.getCurrentConfiguration().getCertificates().size();
-            assertEquals(certsCount2, certsCount3);
+            assertThat(certsCount3).isEqualTo(certsCount2);
 
             // full list request
             response = client.get("/api/certificates", credentials);
             json = response.getBodyString();
 
-            assertThat(json, containsString(manualDomain));
-            assertThat(json, containsString("\"mode\":\"manual\""));
-            assertThat(json, containsString("\"dynamic\":true"));
-            assertThat(json, containsString("\"status\":\"expired\""));
-            assertThat(json, containsString("\"serialNumber\":\"" + serialNumber + "\""));
-            assertThat(json, containsString("\"expiringDate\":\"" + expiringDate + "\""));
+            assertThat(json)
+                    .contains(manualDomain)
+                    .contains("\"mode\":\"manual\"")
+                    .contains("\"dynamic\":true")
+                    .contains("\"status\":\"expired\"")
+                    .contains("\"serialNumber\":\"" + serialNumber + "\"")
+                    .contains("\"expiringDate\":\"" + expiringDate + "\"");
 
             // single cert request to /{certId}
             response = client.get("/api/certificates/" + manualDomain, credentials);
             json = response.getBodyString();
-            assertThat(json, containsString(manualDomain));
-            assertThat(json, containsString("\"mode\":\"manual\""));
-            assertThat(json, containsString("\"dynamic\":true"));
-            assertThat(json, containsString("\"status\":\"expired\""));
-            assertThat(json, containsString("\"serialNumber\":\"" + serialNumber + "\""));
-            assertThat(json, containsString("\"expiringDate\":\"" + expiringDate + "\""));
+            assertThat(json)
+                    .contains(manualDomain)
+                    .contains("\"mode\":\"manual\"")
+                    .contains("\"dynamic\":true")
+                    .contains("\"status\":\"expired\"")
+                    .contains("\"serialNumber\":\"" + serialNumber + "\"")
+                    .contains("\"expiringDate\":\"" + expiringDate + "\"");
 
             // Downloading
             response = client.get("/api/certificates/" + manualDomain + "/download", credentials);
             Certificate[] responseChain2 = CertificatesUtils.readChainFromKeystore(response.getBody());
-            assertArrayEquals(CertificatesUtils.readChainFromKeystore(chain2), responseChain2);
+            assertThat(responseChain2).containsExactly(CertificatesUtils.readChainFromKeystore(chain2));
         }
     }
 
     @SuppressWarnings("deprecation")
     @Test
-    public void testResourcesFilter() throws Exception {
+    void resourcesFilter() throws Exception {
         Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
 
         properties.put("filter.1.type", "match-user-regexp");
@@ -546,18 +549,19 @@ public class StartAPIServerIT extends UseAdminServer {
             RawHttpClient.HttpResponse response = client.get("/api/requestfilters", credentials);
             String json = response.getBodyString();
 
-            assertThat(json, containsString(RegexpMapUserIdFilter.TYPE));
-            assertThat(json, containsString("param_test_session"));
-            assertThat(json, containsString(RegexpMapSessionIdFilter.TYPE));
-            assertThat(json, containsString("param_test_user"));
-            assertThat(json, containsString(XForwardedForRequestFilter.TYPE));
-            assertThat(json, containsString(XTlsProtocolRequestFilter.TYPE));
-            assertThat(json, containsString(XTlsCipherRequestFilter.TYPE));
+            assertThat(json)
+                    .contains(RegexpMapUserIdFilter.TYPE)
+                    .contains("param_test_session")
+                    .contains(RegexpMapSessionIdFilter.TYPE)
+                    .contains("param_test_user")
+                    .contains(XForwardedForRequestFilter.TYPE)
+                    .contains(XTlsProtocolRequestFilter.TYPE)
+                    .contains(XTlsCipherRequestFilter.TYPE);
         }
     }
 
     @Test
-    public void testUserRealm() throws Exception {
+    void userRealm() throws Exception {
         Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
 
         properties.put("userrealm.class", "org.carapaceproxy.utils.TestUserRealm");
@@ -575,13 +579,14 @@ public class StartAPIServerIT extends UseAdminServer {
             RawHttpClient.HttpResponse response = client.get("/api/users/all", c);
             String json = response.getBodyString();
 
-            assertThat(json, containsString("test1"));
-            assertThat(json, containsString("test2"));
+            assertThat(json)
+                    .contains("test1")
+                    .contains("test2");
         }
     }
 
     @Test
-    public void testHttpsApi() throws Exception {
+    void httpsApi() throws Exception {
         String certificate = TestUtils.deployResource("localhost.p12", tmpDir);
 
         Properties properties = new Properties();
@@ -597,7 +602,7 @@ public class StartAPIServerIT extends UseAdminServer {
             RawHttpClient.HttpResponse response = client.get("/api/config", credentials);
             String json = response.getBodyString();
 
-            assertThat(json, containsString("https.admin.sslcertfile=" + certificate));
+            assertThat(json).contains("https.admin.sslcertfile=" + certificate);
         }
 
         IOException exc = null;
@@ -607,12 +612,12 @@ public class StartAPIServerIT extends UseAdminServer {
             exc = ex;
         }
 
-        Assertions.assertNotNull(exc);
-        assertThat(exc.getMessage(), containsString("bad response, does not start with HTTP/1.1"));
+        assertThat(exc).isNotNull();
+        assertThat(exc.getMessage()).contains("bad response, does not start with HTTP/1.1");
     }
 
     @Test
-    public void testHttpAndHttpsApi() throws Exception {
+    void httpAndHttpsApi() throws Exception {
         String certificate = TestUtils.deployResource("localhost.p12", tmpDir);
 
         Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
@@ -626,19 +631,19 @@ public class StartAPIServerIT extends UseAdminServer {
             RawHttpClient.HttpResponse response = client.get("/api/config", credentials);
             String json = response.getBodyString();
 
-            assertThat(json, containsString("https.admin.sslcertfile=" + certificate));
+            assertThat(json).contains("https.admin.sslcertfile=" + certificate);
         }
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761, false)) {
             RawHttpClient.HttpResponse response = client.get("/api/config", credentials);
             String json = response.getBodyString();
 
-            assertThat(json, containsString("https.admin.sslcertfile=" + certificate));
+            assertThat(json).contains("https.admin.sslcertfile=" + certificate);
         }
     }
 
     @Test
-    public void testApiRequestsLogger() throws Exception {
+    void apiRequestsLogger() throws Exception {
         String certificate = TestUtils.deployResource("localhost.p12", tmpDir);
 
         Properties properties = new Properties(HTTP_ADMIN_SERVER_CONFIG);
@@ -665,11 +670,11 @@ public class StartAPIServerIT extends UseAdminServer {
             String line;
             int lineCount = 0;
             while ((line = reader.readLine()) != null) {
-                assertThat(line, containsString("\"GET /api/config HTTP/1.1\" 200"));
+                assertThat(line).contains("\"GET /api/config HTTP/1.1\" 200");
                 lineCount++;
             }
 
-            assertEquals(2, lineCount);
+            assertThat(lineCount).isEqualTo(2);
         }
     }
 

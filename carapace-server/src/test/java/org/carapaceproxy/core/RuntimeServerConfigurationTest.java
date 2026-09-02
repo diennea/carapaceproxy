@@ -19,15 +19,11 @@
  */
 package org.carapaceproxy.core;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.Properties;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
@@ -38,7 +34,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 /**
  * Tests for the {@code acme.<n>.*} provider family and the {@code certificate.<n>.provider} property.
  */
-public class RuntimeServerConfigurationTest {
+class RuntimeServerConfigurationTest {
 
     private static RuntimeServerConfiguration configure(String... keyValues) throws ConfigurationNotValidException {
         final var props = new Properties();
@@ -51,93 +47,91 @@ public class RuntimeServerConfigurationTest {
     }
 
     @Test
-    public void testEmptyConfigurationYieldsValidDefaults() throws Exception {
+    void emptyConfigurationYieldsValidDefaults() throws Exception {
         final var conf = configure();
 
-        assertEquals(8192, conf.getMaxHeaderSize());
-        assertEquals(60000, conf.getIdleTimeout());
-        assertEquals(100000, conf.getMaxLifeTime());
-        assertEquals(300000, conf.getDisposeTimeout());
-        assertEquals(5000, conf.getHealthConnectTimeout());
-        assertEquals(30000L, conf.getWarmupPeriod());
-        assertEquals("yyyy-MM-dd HH:mm:ss.SSS", conf.getAccessLogTimestampFormat());
-        assertTrue(conf.getListeners().isEmpty());
-        assertTrue(conf.getCertificates().isEmpty());
+        assertThat(conf.getMaxHeaderSize()).isEqualTo(8192);
+        assertThat(conf.getIdleTimeout()).isEqualTo(60000);
+        assertThat(conf.getMaxLifeTime()).isEqualTo(100000);
+        assertThat(conf.getDisposeTimeout()).isEqualTo(300000);
+        assertThat(conf.getHealthConnectTimeout()).isEqualTo(5000);
+        assertThat(conf.getWarmupPeriod()).isEqualTo(30000L);
+        assertThat(conf.getAccessLogTimestampFormat()).isEqualTo("yyyy-MM-dd HH:mm:ss.SSS");
+        assertThat(conf.getListeners()).isEmpty();
+        assertThat(conf.getCertificates()).isEmpty();
     }
 
     @ParameterizedTest
     @CsvSource({
-        "connectionsmanager.idletimeout, 0",
-        "connectionsmanager.maxlifetime, 0",
-        "carapace.maxheadersize, 0",
-        "healthmanager.connecttimeout, -1"
+            "connectionsmanager.idletimeout, 0",
+            "connectionsmanager.maxlifetime, 0",
+            "carapace.maxheadersize, 0",
+            "healthmanager.connecttimeout, -1"
     })
-    public void testRejectsNonPositiveNumericConfig(String key, String value) {
-        assertThrows(ConfigurationNotValidException.class, () -> configure(key, value));
+    void rejectsNonPositiveNumericConfig(String key, String value) {
+        assertThatThrownBy(() -> configure(key, value)).isInstanceOf(ConfigurationNotValidException.class);
     }
 
     @Test
-    public void testRejectsNonNumericIntValue() {
-        assertThrows(ConfigurationNotValidException.class,
-                () -> configure("connectionsmanager.disposetimeout", "abc"));
+    void rejectsNonNumericIntValue() {
+        assertThatThrownBy(() -> configure("connectionsmanager.disposetimeout", "abc")).isInstanceOf(ConfigurationNotValidException.class);
     }
 
     @Test
-    public void testRejectsInvalidAccessLogTimestampFormat() {
-        assertThrows(ConfigurationNotValidException.class,
-                () -> configure("accesslog.format.timestamp", "'unterminated"));
+    void rejectsInvalidAccessLogTimestampFormat() {
+        assertThatThrownBy(() -> configure("accesslog.format.timestamp", "'unterminated")).isInstanceOf(ConfigurationNotValidException.class);
     }
 
     @Test
-    public void testRejectsNonWritableLocalCertificatesStorePath() {
-        assertThrows(ConfigurationNotValidException.class, () -> configure(
-                "dynamiccertificatesmanager.localcertificates.store.path", "/nonexistent-carapace-test-dir/certs"));
+    void rejectsNonWritableLocalCertificatesStorePath() {
+        assertThatThrownBy(() -> configure(
+                "dynamiccertificatesmanager.localcertificates.store.path", "/nonexistent-carapace-test-dir/certs")).isInstanceOf(ConfigurationNotValidException.class);
     }
 
     @Test
-    public void testRejectsInvalidCertificateMode() {
-        assertThrows(ConfigurationNotValidException.class, () -> configure(
+    void rejectsInvalidCertificateMode() {
+        assertThatThrownBy(() -> configure(
                 "certificate.0.hostname", "example.com",
-                "certificate.0.mode", "badmode"));
+                "certificate.0.mode", "badmode")).isInstanceOf(ConfigurationNotValidException.class);
     }
 
     @Test
-    public void testRejectsConnectionPoolWithEmptyDomain() {
-        assertThrows(ConfigurationNotValidException.class, () -> configure(
+    void rejectsConnectionPoolWithEmptyDomain() {
+        assertThatThrownBy(() -> configure(
                 "connectionpool.0.id", "p0",
                 "connectionpool.0.enabled", "true",
-                "connectionpool.0.domain", ""));
+                "connectionpool.0.domain", "")).isInstanceOf(ConfigurationNotValidException.class);
     }
 
     @Test
-    public void testRejectsUnknownFilterType() {
-        assertThrows(ConfigurationNotValidException.class, () -> configure("filter.0.type", "badtype"));
+    void rejectsUnknownFilterType() {
+        assertThatThrownBy(() -> configure("filter.0.type", "badtype")).isInstanceOf(ConfigurationNotValidException.class);
     }
 
     @Test
-    public void testRejectsSslListenerWithoutDefaultCertificate() {
-        assertThrows(ConfigurationNotValidException.class, () -> configure(
+    void rejectsSslListenerWithoutDefaultCertificate() {
+        assertThatThrownBy(() -> configure(
                 "listener.0.port", "8080",
-                "listener.0.ssl", "true"));
+                "listener.0.ssl", "true")).isInstanceOf(ConfigurationNotValidException.class);
     }
 
     @Test
-    public void testRejectsInvalidListenerProtocol() {
+    void rejectsInvalidListenerProtocol() {
         // Regression: an unknown protocol used to escape as a raw IllegalArgumentException.
-        assertThrows(ConfigurationNotValidException.class, () -> configure(
+        assertThatThrownBy(() -> configure(
                 "listener.0.port", "8080",
-                "listener.0.protocol", "BADPROTO"));
+                "listener.0.protocol", "BADPROTO")).isInstanceOf(ConfigurationNotValidException.class);
     }
 
     @Test
-    public void testAcceptsValidListenerProtocol() {
-        assertDoesNotThrow(() -> configure(
+    void acceptsValidListenerProtocol() {
+        assertThatCode(() -> configure(
                 "listener.0.port", "8080",
-                "listener.0.protocol", "H2C"));
+                "listener.0.protocol", "H2C")).doesNotThrowAnyException();
     }
 
     @Test
-    public void testConfigureAcmeProviders() throws Exception {
+    void configureAcmeProviders() throws Exception {
         final var config = configure(
                 "acme.1.name", "digicert",
                 "acme.1.url", "https://acme.digicert.com/v2/acme/directory",
@@ -146,144 +140,144 @@ public class RuntimeServerConfigurationTest {
                 "acme.2.name", "pebble",
                 "acme.2.url", "https://localhost:14000/dir"
         );
-        assertEquals(2, config.getAcmeProviders().size());
+        assertThat(config.getAcmeProviders()).hasSize(2);
 
         final var digicert = config.getAcmeProviders().get("digicert");
-        assertEquals("https://acme.digicert.com/v2/acme/directory", digicert.url());
-        assertEquals("my-kid", digicert.kid());
-        assertEquals("my-base64-hmac", digicert.hmac());
-        assertTrue(digicert.hasExternalAccountBinding());
-        assertThat(digicert.toString(), not(containsString(digicert.hmac()))); // the hmac is a secret
+        assertThat(digicert.url()).isEqualTo("https://acme.digicert.com/v2/acme/directory");
+        assertThat(digicert.kid()).isEqualTo("my-kid");
+        assertThat(digicert.hmac()).isEqualTo("my-base64-hmac");
+        assertThat(digicert.hasExternalAccountBinding()).isTrue();
+        assertThat(digicert.toString()).doesNotContain(digicert.hmac()); // the hmac is a secret
 
         final var pebble = config.getAcmeProviders().get("pebble");
-        assertEquals("https://localhost:14000/dir", pebble.url());
-        assertFalse(pebble.hasExternalAccountBinding());
+        assertThat(pebble.url()).isEqualTo("https://localhost:14000/dir");
+        assertThat(pebble.hasExternalAccountBinding()).isFalse();
     }
 
     @Test
-    public void testAcmeProviderWithoutNameIsSkipped() throws Exception {
+    void acmeProviderWithoutNameIsSkipped() throws Exception {
         final var config = configure("acme.1.url", "https://acme.example.com/directory");
-        assertTrue(config.getAcmeProviders().isEmpty());
+        assertThat(config.getAcmeProviders()).isEmpty();
     }
 
     @Test
-    public void testAcmeProviderReservedName() {
-        final var e = assertThrows(ConfigurationNotValidException.class, () -> configure(
+    void acmeProviderReservedName() {
+        final var e = assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> configure(
                 "acme.1.name", DEFAULT_PROVIDER_NAME,
                 "acme.1.url", "https://acme.example.com/directory"
-        ));
-        assertThat(e.getMessage(), containsString("built-in"));
+        )).actual();
+        assertThat(e.getMessage()).contains("built-in");
     }
 
     @Test
-    public void testAcmeProviderInvalidName() {
-        final var e = assertThrows(ConfigurationNotValidException.class, () -> configure(
+    void acmeProviderInvalidName() {
+        final var e = assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> configure(
                 "acme.1.name", "Not A Valid Name!",
                 "acme.1.url", "https://acme.example.com/directory"
-        ));
-        assertThat(e.getMessage(), containsString("acme.1.name"));
+        )).actual();
+        assertThat(e.getMessage()).contains("acme.1.name");
     }
 
     @Test
-    public void testAcmeProviderDuplicateName() {
-        final var e = assertThrows(ConfigurationNotValidException.class, () -> configure(
+    void acmeProviderDuplicateName() {
+        final var e = assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> configure(
                 "acme.1.name", "digicert",
                 "acme.1.url", "https://acme.example.com/directory",
                 "acme.2.name", "digicert",
                 "acme.2.url", "https://acme.example.org/directory"
-        ));
-        assertThat(e.getMessage(), containsString("duplicate"));
+        )).actual();
+        assertThat(e.getMessage()).contains("duplicate");
     }
 
     @Test
-    public void testAcmeProviderMissingUrl() {
-        final var e = assertThrows(ConfigurationNotValidException.class, () -> configure(
+    void acmeProviderMissingUrl() {
+        final var e = assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> configure(
                 "acme.1.name", "digicert"
-        ));
-        assertThat(e.getMessage(), containsString("url"));
+        )).actual();
+        assertThat(e.getMessage()).contains("url");
     }
 
     @Test
-    public void testAcmeProviderAcmeUriAccepted() throws Exception {
+    void acmeProviderAcmeUriAccepted() throws Exception {
         final var config = configure(
                 "acme.1.name", "pebble",
                 "acme.1.url", "acme://pebble"
         );
-        assertEquals("acme://pebble", config.getAcmeProviders().get("pebble").url());
+        assertThat(config.getAcmeProviders().get("pebble").url()).isEqualTo("acme://pebble");
     }
 
     @Test
-    public void testAcmeProviderUnknownAcmeUri() {
-        final var e = assertThrows(ConfigurationNotValidException.class, () -> configure(
+    void acmeProviderUnknownAcmeUri() {
+        final var e = assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> configure(
                 "acme.1.name", "pebble",
                 "acme.1.url", "acme://pebbel" // typo: no such acme4j provider
-        ));
-        assertThat(e.getMessage(), containsString("acme.1.url"));
+        )).actual();
+        assertThat(e.getMessage()).contains("acme.1.url");
     }
 
     @Test
-    public void testAcmeProviderUppercaseSchemeRejected() {
+    void acmeProviderUppercaseSchemeRejected() {
         // acme4j resolves providers by exact scheme match, so accepting HTTPS:// at parse time
         // would only defer the failure to the first login attempt
-        final var e = assertThrows(ConfigurationNotValidException.class, () -> configure(
+        final var e = assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> configure(
                 "acme.1.name", "digicert",
                 "acme.1.url", "HTTPS://acme.example.com/directory"
-        ));
-        assertThat(e.getMessage(), containsString("scheme"));
+        )).actual();
+        assertThat(e.getMessage()).contains("scheme");
     }
 
     @Test
-    public void testAcmeProviderMalformedUrl() {
-        final var e = assertThrows(ConfigurationNotValidException.class, () -> configure(
+    void acmeProviderMalformedUrl() {
+        final var e = assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> configure(
                 "acme.1.name", "digicert",
                 "acme.1.url", "not a valid url"
-        ));
-        assertThat(e.getMessage(), containsString("acme.1.url"));
+        )).actual();
+        assertThat(e.getMessage()).contains("acme.1.url");
     }
 
     @Test
-    public void testAcmeProviderUnsupportedUrlScheme() {
+    void acmeProviderUnsupportedUrlScheme() {
         for (final var url : new String[]{"ftp://acme.example.com/directory", "http://acme.example.com/directory"}) {
-            final var e = assertThrows(ConfigurationNotValidException.class, () -> configure(
+            final var e = assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> configure(
                     "acme.1.name", "digicert",
                     "acme.1.url", url
-            ));
-            assertThat(e.getMessage(), containsString("scheme"));
+            )).actual();
+            assertThat(e.getMessage()).contains("scheme");
         }
     }
 
     @Test
-    public void testAcmeProviderInvalidHmac() {
-        final var e = assertThrows(ConfigurationNotValidException.class, () -> configure(
+    void acmeProviderInvalidHmac() {
+        final var e = assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> configure(
                 "acme.1.name", "digicert",
                 "acme.1.url", "https://acme.example.com/directory",
                 "acme.1.kid", "my-kid",
                 "acme.1.hmac", "not+valid/base64url!"
-        ));
-        assertThat(e.getMessage(), containsString("base64url"));
+        )).actual();
+        assertThat(e.getMessage()).contains("base64url");
     }
 
     @Test
-    public void testAcmeProviderKidWithoutHmac() {
-        final var e = assertThrows(ConfigurationNotValidException.class, () -> configure(
+    void acmeProviderKidWithoutHmac() {
+        final var e = assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> configure(
                 "acme.1.name", "digicert",
                 "acme.1.url", "https://acme.example.com/directory",
                 "acme.1.kid", "my-kid"
-        ));
-        assertThat(e.getMessage(), containsString("hmac"));
+        )).actual();
+        assertThat(e.getMessage()).contains("hmac");
     }
 
     @Test
-    public void testCertificateDefaultProvider() throws Exception {
+    void certificateDefaultProvider() throws Exception {
         final var config = configure(
                 "certificate.0.hostname", "example.com",
                 "certificate.0.mode", "acme"
         );
-        assertEquals(DEFAULT_PROVIDER_NAME, config.getCertificates().get("example.com").getProvider());
+        assertThat(config.getCertificates().get("example.com").getProvider()).isEqualTo(DEFAULT_PROVIDER_NAME);
     }
 
     @Test
-    public void testCertificateWithCustomProvider() throws Exception {
+    void certificateWithCustomProvider() throws Exception {
         final var config = configure(
                 "acme.1.name", "digicert",
                 "acme.1.url", "https://acme.digicert.com/v2/acme/directory",
@@ -291,16 +285,16 @@ public class RuntimeServerConfigurationTest {
                 "certificate.0.mode", "acme",
                 "certificate.0.provider", "digicert"
         );
-        assertEquals("digicert", config.getCertificates().get("example.com").getProvider());
+        assertThat(config.getCertificates().get("example.com").getProvider()).isEqualTo("digicert");
     }
 
     @Test
-    public void testCertificateWithUnknownProvider() {
-        final var e = assertThrows(ConfigurationNotValidException.class, () -> configure(
+    void certificateWithUnknownProvider() {
+        final var e = assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> configure(
                 "certificate.0.hostname", "example.com",
                 "certificate.0.mode", "acme",
                 "certificate.0.provider", "unknown"
-        ));
-        assertThat(e.getMessage(), containsString("certificate.0.provider"));
+        )).actual();
+        assertThat(e.getMessage()).contains("certificate.0.provider");
     }
 }

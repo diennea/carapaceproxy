@@ -6,6 +6,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.Options.DYNAMIC_PORT;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_FORWARDED_STRATEGY;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_KEEP_ALIVE;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_KEEP_ALIVE_COUNT;
@@ -14,8 +15,6 @@ import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAU
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_MAX_KEEP_ALIVE_REQUESTS;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SO_BACKLOG;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import io.netty.channel.group.DefaultChannelGroup;
@@ -26,7 +25,6 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
-import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.junit.jupiter.api.io.TempDir;
@@ -58,7 +56,7 @@ public class Http2IT {
 
     @ParameterizedTest(name = "Client: {0}, Carapace conf: {1}, using cache: {2}")
     @MethodSource("data")
-    public void test(final HttpProtocol protocol, final Set<HttpProtocol> carapaceProtocols, final boolean withCache) throws IOException, ConfigurationNotValidException, InterruptedException {
+    void test(final HttpProtocol protocol, final Set<HttpProtocol> carapaceProtocols, final boolean withCache) throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(HttpResponseStatus.OK.code())
@@ -88,9 +86,9 @@ public class Http2IT {
 
             server.start();
             final var port = server.getLocalPort();
-            assertThat(executeRequest(protocol, port), is(RESPONSE));
+            assertThat(executeRequest(protocol, port)).isEqualTo(RESPONSE);
             if (withCache) {
-                assertThat(executeRequest(protocol, port), is(RESPONSE));
+                assertThat(executeRequest(protocol, port)).isEqualTo(RESPONSE);
             }
         }
     }

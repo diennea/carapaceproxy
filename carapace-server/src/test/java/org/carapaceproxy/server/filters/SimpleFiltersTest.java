@@ -31,10 +31,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-public class SimpleFiltersTest {
+class SimpleFiltersTest {
 
     @Test
-    public void testRegexpMapUserIdFilter() {
+    void regexpMapUserIdFilter() {
 
         Map<String, String> cases = new HashMap<>();
         cases.put("/test?param1=&sSID=H*29gnay4j68mt9c", "H");
@@ -63,7 +63,7 @@ public class SimpleFiltersTest {
     }
 
     @Test
-    public void testRegexpMapSessionIdFilter() {
+    void regexpMapSessionIdFilter() {
 
         Map<String, String> cases = new HashMap<>();
         cases.put("/test?param1=&sSID=H*29gnay4j68mt9c", "H*29gnay4j68mt9c");

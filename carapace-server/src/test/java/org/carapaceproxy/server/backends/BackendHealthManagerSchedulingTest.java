@@ -19,7 +19,7 @@
  */
 package org.carapaceproxy.server.backends;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -43,10 +43,10 @@ import org.junit.jupiter.api.Test;
  *
  * @author paolo
  */
-public class BackendHealthManagerSchedulingTest {
+class BackendHealthManagerSchedulingTest {
 
     @Test
-    public void testBackendHealthManagerExecution() {
+    void backendHealthManagerExecution() {
         RuntimeServerConfiguration config = new RuntimeServerConfiguration();
         ScheduledExecutorService timer = mock(ScheduledExecutorService.class);
         when(timer.scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(mock(ScheduledFuture.class));
@@ -60,13 +60,13 @@ public class BackendHealthManagerSchedulingTest {
         // With new period >0 the manager should run whether started before
         config.setHealthProbePeriod(1);
         man.reloadConfiguration(config, mock(EndpointMapper.class));
-        assertEquals(1, man.getPeriod());
+        assertThat(man.getPeriod()).isOne();
         verify(timer, times(1)).scheduleAtFixedRate(any(Runnable.class), eq(1L), eq(1L), eq(TimeUnit.SECONDS)); // once
 
         man.stop();
         config.setHealthProbePeriod(0);
         man.reloadConfiguration(config, mock(EndpointMapper.class));
-        assertEquals(0, man.getPeriod());
+        assertThat(man.getPeriod()).isZero();
         man.start();
         verify(timer, times(1)).scheduleAtFixedRate(any(Runnable.class), eq(1L), eq(1L), eq(TimeUnit.SECONDS)); // never
         man.stop();
@@ -74,7 +74,7 @@ public class BackendHealthManagerSchedulingTest {
         // With new period >0 the manager should not run because not started before.
         config.setHealthProbePeriod(1);
         man.reloadConfiguration(config, mock(EndpointMapper.class));
-        assertEquals(1, man.getPeriod());
+        assertThat(man.getPeriod()).isOne();
         verify(timer, times(1)).scheduleAtFixedRate(any(Runnable.class), eq(1L), eq(1L), eq(TimeUnit.SECONDS)); // never
 
         man.start();

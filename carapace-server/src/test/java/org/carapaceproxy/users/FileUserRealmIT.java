@@ -19,11 +19,8 @@
  */
 package org.carapaceproxy.users;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.carapaceproxy.core.HttpProxyServer.buildForTests;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -64,7 +61,7 @@ public class FileUserRealmIT {
     }
 
     @Test
-    public void testFileUserRealm() throws Exception {
+    void fileUserRealm() throws Exception {
         try (HttpProxyServer server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), tmpDir)) {
             Properties prop = new Properties();
             prop.setProperty("http.admin.enabled", "true");
@@ -90,21 +87,21 @@ public class FileUserRealmIT {
             UserRealm userRealm = server.getRealm();
             Collection<String> resultUsers = userRealm.listUsers();
 
-            assertThat(resultUsers.size(), is(users.size()));
+            assertThat(resultUsers).hasSize(users.size());
             for (String username : users.keySet()) {
                 String login = userRealm.login(username, users.get(username));
 
-                assertNotNull(login); // login success
-                assertThat(username, is(login));
+                assertThat(login).isNotNull(); // login success
+                assertThat(username).isEqualTo(login);
             }
 
             String wrongLogin = userRealm.login("wrong", "login");
-            assertNull(wrongLogin);
+            assertThat(wrongLogin).isNull();
         }
     }
 
     @Test
-    public void testFileUserRealmRefresh() throws Exception {
+    void fileUserRealmRefresh() throws Exception {
         try (HttpProxyServer server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), tmpDir)) {
             Map<String, String> users = new HashMap<>();
             users.put("test1", "pass1");
@@ -127,7 +124,7 @@ public class FileUserRealmIT {
 
             UserRealm userRealm = server.getRealm();
             Collection<String> resultUsers = userRealm.listUsers();
-            assertThat(resultUsers.size(), is(users.size()));
+            assertThat(resultUsers).hasSize(users.size());
 
             users.put("test2", "pass2");
             users.put("test3", "pass3");
@@ -144,12 +141,12 @@ public class FileUserRealmIT {
 
             userRealm = server.getRealm();
             resultUsers = userRealm.listUsers();
-            assertThat(resultUsers.size(), is(users.size()));
+            assertThat(resultUsers).hasSize(users.size());
         }
     }
 
     @Test
-    public void testFileRelativePath() throws Exception {
+    void fileRelativePath() throws Exception {
         try (HttpProxyServer server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), tmpDir)) {
             Properties prop = new Properties();
             prop.setProperty("http.admin.enabled", "true");
@@ -178,10 +175,10 @@ public class FileUserRealmIT {
             server.startAdminInterface();
 
             UserRealm userRealm = server.getRealm();
-            assertNotNull(userRealm.login("test1", "pass1"));
-            assertNotNull(userRealm.login("test2", "pass2"));
+            assertThat(userRealm.login("test1", "pass1")).isNotNull();
+            assertThat(userRealm.login("test2", "pass2")).isNotNull();
 
-            assertNull(userRealm.login("test1", "wrongpass"));
+            assertThat(userRealm.login("test1", "wrongpass")).isNull();
 
             userPropertiesFile.delete();
         }

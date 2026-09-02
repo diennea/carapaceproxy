@@ -13,7 +13,7 @@ import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-public class XTlsCipherFilterIT extends AbstractXTlsFilterTest {
+class XTlsCipherFilterIT extends AbstractXTlsFilterTest {
 
     private void setupWireMockForCipherFilter(WireMockServer wireMockRule) {
         wireMockRule.stubFor(get(urlEqualTo("/index.html"))
@@ -28,7 +28,7 @@ public class XTlsCipherFilterIT extends AbstractXTlsFilterTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testHttpsWithCipherAndProtocol(boolean http1) throws Exception {
+    void httpsWithCipherAndProtocol(boolean http1) throws Exception {
         WireMockServer wireMockRule = newWireMock(http1);
         wireMockRule.start();
         try {
@@ -45,7 +45,7 @@ public class XTlsCipherFilterIT extends AbstractXTlsFilterTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testHttpsWithProtocolOnly(boolean http1) throws Exception {
+    void httpsWithProtocolOnly(boolean http1) throws Exception {
         WireMockServer wireMockRule = newWireMock(http1);
         wireMockRule.start();
         try {

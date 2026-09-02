@@ -8,6 +8,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 import static com.github.tomakehurst.wiremock.core.Options.DYNAMIC_PORT;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_FORWARDED_STRATEGY;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_KEEP_ALIVE;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_KEEP_ALIVE_COUNT;
@@ -16,10 +17,6 @@ import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAU
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_MAX_KEEP_ALIVE_REQUESTS;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SO_BACKLOG;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import io.netty.channel.group.DefaultChannelGroup;
@@ -32,7 +29,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
-import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.junit.jupiter.api.io.TempDir;
@@ -80,7 +76,7 @@ public class Http2HeadersIT {
      * headers should still get a successful response via Carapace.
      */
     @Test
-    public void testH2CUpgradeRequestSucceeds() throws IOException, ConfigurationNotValidException, InterruptedException {
+    void h2cUpgradeRequestSucceeds() throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(HttpResponseStatus.OK.code())
@@ -106,9 +102,9 @@ public class Http2HeadersIT {
                     .response()
                     .block();
         }
-        assertThat(response, is(notNullValue()));
-        assertThat(response.status(), is(HttpResponseStatus.OK));
-        assertThat(response.version(), is(HttpVersion.valueOf("HTTP/2.0")));
+        assertThat(response).isNotNull();
+        assertThat(response.status()).isEqualTo(HttpResponseStatus.OK);
+        assertThat(response.version()).isEqualTo(HttpVersion.valueOf("HTTP/2.0"));
     }
 
     /**
@@ -119,7 +115,7 @@ public class Http2HeadersIT {
      * connection autonomously, so we verify the absence of Keep-Alive (which Reactor Netty never sets).
      */
     @Test
-    public void testHopByHopHeadersStrippedFromResponse() throws IOException, ConfigurationNotValidException, InterruptedException {
+    void hopByHopHeadersStrippedFromResponse() throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(HttpResponseStatus.OK.code())
@@ -141,12 +137,12 @@ public class Http2HeadersIT {
                     .response()
                     .block();
         }
-        assertThat(response, is(notNullValue()));
-        assertThat(response.status(), is(HttpResponseStatus.OK));
+        assertThat(response).isNotNull();
+        assertThat(response.status()).isEqualTo(HttpResponseStatus.OK);
         // Keep-Alive must be stripped from the backend response before forwarding to the client.
         // Connection is excluded from this check because Reactor Netty's HTTP server manages it
         // autonomously for the client-facing connection.
-        assertThat(response.responseHeaders().get(HttpHeaderNames.KEEP_ALIVE), is(nullValue()));
+        assertThat(response.responseHeaders().get(HttpHeaderNames.KEEP_ALIVE)).isNull();
     }
 
     /**
@@ -158,7 +154,7 @@ public class Http2HeadersIT {
      * for H2C as the backend so Carapace's outbound {@code HttpClient} can negotiate H2.
      */
     @Test
-    public void testHopByHopHeadersStrippedForH2cBackend() throws IOException, ConfigurationNotValidException, InterruptedException {
+    void hopByHopHeadersStrippedForH2cBackend() throws Exception {
         final AtomicReference<HttpHeaders> capturedRequestHeaders = new AtomicReference<>();
         final DisposableServer h2cBackend = HttpServer.create()
                 .host("localhost")
@@ -190,19 +186,19 @@ public class Http2HeadersIT {
             }
             // The request itself must succeed: pre-fix this would 503 once the connection switches to H2
             // and Netty's H2 encoder rejects the forwarded Keep-Alive header.
-            assertThat(response, is(notNullValue()));
-            assertThat(response.status(), is(HttpResponseStatus.OK));
+            assertThat(response).isNotNull();
+            assertThat(response.status()).isEqualTo(HttpResponseStatus.OK);
             // And the backend must never see Keep-Alive — regardless of which protocol the proxy used
             // to talk to it.
-            assertThat(capturedRequestHeaders.get(), is(notNullValue()));
-            assertThat(capturedRequestHeaders.get().get(HttpHeaderNames.KEEP_ALIVE), is(nullValue()));
+            assertThat(capturedRequestHeaders.get()).isNotNull();
+            assertThat(capturedRequestHeaders.get().get(HttpHeaderNames.KEEP_ALIVE)).isNull();
         } finally {
             h2cBackend.disposeNow();
         }
     }
 
     /**
-     * Companion to {@link #testHopByHopHeadersStrippedForH2cBackend}: a chunked ({@code Transfer-Encoding})
+     * Companion to {@link #hopByHopHeadersStrippedForH2cBackend}: a chunked ({@code Transfer-Encoding})
      * request body proxied to the backend. {@code Transfer-Encoding} is connection-specific and forbidden in
      * HTTP/2 (RFC 9113 §8.2.2), yet — unlike {@code Connection}/{@code Keep-Alive} — it is intentionally NOT
      * in the hop-by-hop strip set, because removing it would break HTTP/1.1 chunked proxying (it carries the
@@ -211,7 +207,7 @@ public class Http2HeadersIT {
      * negotiates HTTP/1.1 to the backend here, where forwarding {@code Transfer-Encoding} is correct.)
      */
     @Test
-    public void testChunkedRequestBodyForwardedToH2cBackend() throws IOException, ConfigurationNotValidException, InterruptedException {
+    void chunkedRequestBodyForwardedToH2cBackend() throws Exception {
         final AtomicReference<HttpHeaders> capturedRequestHeaders = new AtomicReference<>();
         final DisposableServer h2cBackend = HttpServer.create()
                 .host("localhost")
@@ -242,10 +238,10 @@ public class Http2HeadersIT {
             }
             // The concern was that a forwarded Transfer-Encoding could trip the encoder (RFC 9113 §8.2.2) and 503;
             // the request must instead complete normally.
-            assertThat(response, is(notNullValue()));
-            assertThat(response.status(), is(HttpResponseStatus.OK));
+            assertThat(response).isNotNull();
+            assertThat(response.status()).isEqualTo(HttpResponseStatus.OK);
             // The chunked request reached the backend — forwarding Transfer-Encoding did not break the hop.
-            assertThat(capturedRequestHeaders.get(), is(notNullValue()));
+            assertThat(capturedRequestHeaders.get()).isNotNull();
         } finally {
             h2cBackend.disposeNow();
         }

@@ -24,21 +24,10 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.fail;
 import static org.carapaceproxy.utils.ApacheHttpUtils.createHttpClientWithDisabledSSLValidation;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.aMapWithSize;
-import static org.hamcrest.Matchers.allOf;
-import static org.hamcrest.Matchers.anEmptyMap;
-import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.hasKey;
-import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.instanceOf;
-import static org.hamcrest.Matchers.is;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -79,7 +68,7 @@ public class ApplyConfigurationIT {
     public File tmpDir;
 
     @BeforeEach
-    public void setupWireMock() {
+    void setupWireMock() {
         wireMockRule.stubFor(get(urlEqualTo("/index.html?redir"))
                 .willReturn(aResponse()
                         .withStatus(HttpStatus.SC_OK)
@@ -91,7 +80,7 @@ public class ApplyConfigurationIT {
     }
 
     @Test
-    public void testChangeListenersConfig() throws Exception {
+    void changeListenersConfig() throws Exception {
         try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"));) {
             server.configureAtBoot(new PropertiesConfigurationStore(propsWithMapper(Map.of(
                     "aws.accesskey", "accesskey",
@@ -177,27 +166,27 @@ public class ApplyConfigurationIT {
             testIt(1423, true, true);
 
             // listener with wrong tls version
-            final IllegalStateException e = assertThrows(IllegalStateException.class, () ->
+            final IllegalStateException e = assertThatExceptionOfType(IllegalStateException.class).isThrownBy(() ->
                     reloadConfiguration(server, propsWithMapperAndCertificate(defaultCertificate, Map.of(
-                    "listener.1.host", "localhost",
-                    "listener.1.port", "1423",
-                    "listener.1.ssl", "true",
-                    "listener.1.sslprotocols", "TLSUNKNOWN"
-            ))));
+                            "listener.1.host", "localhost",
+                            "listener.1.port", "1423",
+                            "listener.1.ssl", "true",
+                            "listener.1.sslprotocols", "TLSUNKNOWN"
+                    )))).actual();
             Throwable cause = e.getCause();
-            assertThat(cause, instanceOf(ConfigurationNotValidException.class));
-            assertThat(cause.getMessage(), containsString("Unsupported SSL Protocols"));
+            assertThat(cause).isInstanceOf(ConfigurationNotValidException.class);
+            assertThat(cause.getMessage()).contains("Unsupported SSL Protocols");
         }
     }
 
     @Test
-    public void testReloadMapper() throws Exception {
+    void reloadMapper() throws Exception {
         try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"));) {
             server.configureAtBoot(new PropertiesConfigurationStore(new Properties()));
             server.start();
 
-            assertThat(server.getMapper(), instanceOf(StandardEndpointMapper.class));
-            assertThat(server.getMapper().getBackends(), is(anEmptyMap()));
+            assertThat(server.getMapper()).isInstanceOf(StandardEndpointMapper.class);
+            assertThat(server.getMapper().getBackends()).isEmpty();
 
             // add backend
             reloadConfiguration(server, props(Map.of(
@@ -206,11 +195,10 @@ public class ApplyConfigurationIT {
                     "backend.1.port", "4213",
                     "backend.1.enabled", "true"
             )));
-            assertThat(server.getMapper(), instanceOf(StandardEndpointMapper.class));
-            assertThat(server.getMapper().getBackends(), allOf(
-                    is(aMapWithSize(1)),
-                    hasKey("foo")
-            ));
+            assertThat(server.getMapper()).isInstanceOf(StandardEndpointMapper.class);
+            assertThat(server.getMapper().getBackends())
+                    .hasSize(1)
+                    .containsKey("foo");
 
             // add second backend
             reloadConfiguration(server, props(Map.of(
@@ -224,12 +212,11 @@ public class ApplyConfigurationIT {
                     "backend.2.enabled", "true"
             )));
 
-            assertThat(server.getMapper(), instanceOf(StandardEndpointMapper.class));
-            assertThat(server.getMapper().getBackends(), allOf(
-                    is(aMapWithSize(2)),
-                    hasKey("foo"),
-                    hasKey("bar")
-            ));
+            assertThat(server.getMapper()).isInstanceOf(StandardEndpointMapper.class);
+            assertThat(server.getMapper().getBackends())
+                    .hasSize(2)
+                    .containsKey("foo")
+                    .containsKey("bar");
 
             // remove first backend
             reloadConfiguration(server, props(Map.of(
@@ -239,11 +226,10 @@ public class ApplyConfigurationIT {
                     "backend.2.enabled", "true"
             )));
 
-            assertThat(server.getMapper(), instanceOf(StandardEndpointMapper.class));
-            assertThat(server.getMapper().getBackends(), allOf(
-                    is(aMapWithSize(1)),
-                    hasKey("bar")
-            ));
+            assertThat(server.getMapper()).isInstanceOf(StandardEndpointMapper.class);
+            assertThat(server.getMapper().getBackends())
+                    .hasSize(1)
+                    .containsKey("bar");
         }
     }
 
@@ -259,7 +245,7 @@ public class ApplyConfigurationIT {
     }
 
     @Test
-    public void testUserRealm() throws Exception {
+    void userRealm() throws Exception {
 
         // Default UserRealm
         try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"))) {
@@ -267,15 +253,15 @@ public class ApplyConfigurationIT {
             server.start();
 
             UserRealm realm = server.getRealm();
-            assertThat(realm, is(instanceOf(SimpleUserRealm.class)));
+            assertThat(realm).isInstanceOf(SimpleUserRealm.class);
 
             // default user with auth always valid
             SimpleUserRealm userRealm = (SimpleUserRealm) server.getRealm();
-            assertThat(userRealm.listUsers(), hasSize(1));
+            assertThat(userRealm.listUsers()).hasSize(1);
 
-            assertNotNull(userRealm.login("test_0", "anypass0"));
-            assertNotNull(userRealm.login("test_1", "anypass1"));
-            assertNotNull(userRealm.login("test_2", "anypass2"));
+            assertThat(userRealm.login("test_0", "anypass0")).isNotNull();
+            assertThat(userRealm.login("test_1", "anypass1")).isNotNull();
+            assertThat(userRealm.login("test_2", "anypass2")).isNotNull();
         }
 
         // TestUserRealm
@@ -288,13 +274,13 @@ public class ApplyConfigurationIT {
             server.start();
 
             UserRealm realm = server.getRealm();
-            assertThat(realm, is(instanceOf(TestUserRealm.class)));
+            assertThat(realm).isInstanceOf(TestUserRealm.class);
 
             TestUserRealm userRealm = (TestUserRealm) server.getRealm();
-            assertThat(userRealm.listUsers(), hasSize(2));
-            assertNotNull(userRealm.login("test1", "pass1"));
-            assertNotNull(userRealm.login("test2", "pass2"));
-            assertNull(userRealm.login("test1", "pass3")); // wrong pass
+            assertThat(userRealm.listUsers()).hasSize(2);
+            assertThat(userRealm.login("test1", "pass1")).isNotNull();
+            assertThat(userRealm.login("test2", "pass2")).isNotNull();
+            assertThat(userRealm.login("test1", "pass3")).isNull(); // wrong pass
 
             // Add new user
             reloadConfiguration(server, props(Map.of(
@@ -305,19 +291,19 @@ public class ApplyConfigurationIT {
             )));
 
             userRealm = (TestUserRealm) server.getRealm(); // realm re-created at each configuration reload
-            assertThat(userRealm.listUsers(), hasSize(3));
-            assertNotNull(userRealm.login("test3", "pass3"));
+            assertThat(userRealm.listUsers()).hasSize(3);
+            assertThat(userRealm.login("test3", "pass3")).isNotNull();
         }
     }
 
     @SuppressWarnings("deprecation")
     @Test
-    public void testChangeFiltersConfiguration() throws Exception {
+    void changeFiltersConfiguration() throws Exception {
         try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"));) {
             server.configureAtBoot(new PropertiesConfigurationStore(props("filter.1.type", "add-x-forwarded-for")));
             server.start();
-            assertThat(server.getFilters(), hasSize(1));
-            assertThat(server.getFilters().get(0), instanceOf(XForwardedForRequestFilter.class));
+            assertThat(server.getFilters()).hasSize(1);
+            assertThat(server.getFilters().get(0)).isInstanceOf(XForwardedForRequestFilter.class);
 
             // add a filter
             reloadConfiguration(server, props(Map.of(
@@ -325,14 +311,14 @@ public class ApplyConfigurationIT {
                     "filter.2.type", "match-user-regexp"
             )));
 
-            assertThat(server.getFilters(), hasSize(2));
-            assertThat(server.getFilters().get(0), is(instanceOf(XForwardedForRequestFilter.class)));
-            assertThat(server.getFilters().get(1), is(instanceOf(RegexpMapUserIdFilter.class)));
+            assertThat(server.getFilters()).hasSize(2);
+            assertThat(server.getFilters().get(0)).isInstanceOf(XForwardedForRequestFilter.class);
+            assertThat(server.getFilters().get(1)).isInstanceOf(RegexpMapUserIdFilter.class);
 
             // remove a filter
             reloadConfiguration(server, props("filter.2.type", "match-user-regexp"));
-            assertThat(server.getFilters(), hasSize(1));
-            assertThat(server.getFilters().get(0), is(instanceOf(RegexpMapUserIdFilter.class)));
+            assertThat(server.getFilters()).hasSize(1);
+            assertThat(server.getFilters().get(0)).isInstanceOf(RegexpMapUserIdFilter.class);
         }
     }
 
@@ -341,15 +327,15 @@ public class ApplyConfigurationIT {
     }
 
     @Test
-    public void testChangeBackendHealthManagerConfiguration() throws Exception {
+    void changeBackendHealthManagerConfiguration() throws Exception {
         try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"));) {
             server.configureAtBoot(new PropertiesConfigurationStore(props("healthmanager.connecttimeout", "9479")));
             server.start();
-            assertEquals(9479, server.getBackendHealthManager().getConnectTimeout());
+            assertThat(server.getBackendHealthManager().getConnectTimeout()).isEqualTo(9479);
 
             // change configuration
             reloadConfiguration(server, props("healthmanager.connecttimeout", "9233"));
-            assertEquals(9233, server.getBackendHealthManager().getConnectTimeout());
+            assertThat(server.getBackendHealthManager().getConnectTimeout()).isEqualTo(9233);
         }
     }
 
@@ -368,7 +354,7 @@ public class ApplyConfigurationIT {
                 final String responseBody = new String(response.getEntity().getContent().readAllBytes(), UTF_8);
 
                 System.out.println("RES FOR: " + url + " -> " + responseBody);
-                assertEquals("it <b>works</b> !!", responseBody);
+                assertThat(responseBody).isEqualTo("it <b>works</b> !!");
 
                 if (!ok && statusCode == HttpStatus.SC_OK) {
                     fail("Expecting an error for port " + port);
