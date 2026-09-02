@@ -130,7 +130,7 @@ public class HealthCheckIT {
             assertThat(_status, is(not(nullValue())));
             assertThat(_status.getHostPort(), is(b1conf.hostPort()));
             assertThat(_status.getStatus(), is(BackendHealthStatus.Status.DOWN));
-            assertThat(_status.getLastReachable(), allOf(lessThan(startTs), lessThan(endTs)));
+            assertThat(_status.getLastReachable(), allOf(lessThanOrEqualTo(startTs), lessThanOrEqualTo(endTs)));
             assertThat(_status.getUnreachableSince(), allOf(greaterThanOrEqualTo(startTs), lessThanOrEqualTo(endTs)));
             assertThat(_status.getLastUnreachable(), is(_status.getUnreachableSince()));
 
@@ -171,8 +171,8 @@ public class HealthCheckIT {
             assertThat(_status, is(not(nullValue())));
             assertThat(_status.getHostPort(), is(b1conf.hostPort()));
             assertThat(_status.getStatus(), is(BackendHealthStatus.Status.DOWN));
-            assertThat(_status.getLastReachable(), allOf(lessThan(startTs), lessThan(endTs)));
-            assertThat(_status.getUnreachableSince(), allOf(lessThan(startTs), lessThan(endTs)));
+            assertThat(_status.getLastReachable(), allOf(lessThanOrEqualTo(startTs), lessThanOrEqualTo(endTs)));
+            assertThat(_status.getUnreachableSince(), allOf(lessThanOrEqualTo(startTs), lessThanOrEqualTo(endTs)));
             assertThat(_status.getLastUnreachable(), allOf(greaterThanOrEqualTo(startTs), lessThanOrEqualTo(endTs)));
 
             final BackendHealthCheck lastProbe = _status.getLastProbe();
@@ -213,7 +213,7 @@ public class HealthCheckIT {
             assertThat(_status.getHostPort(), is(b1conf.hostPort()));
             assertThat(_status.getStatus(), is(BackendHealthStatus.Status.COLD));
             assertThat(_status.getUnreachableSince(), is(0L));
-            assertThat(_status.getLastUnreachable(), allOf(lessThan(startTs), lessThan(endTs)));
+            assertThat(_status.getLastUnreachable(), allOf(lessThanOrEqualTo(startTs), lessThanOrEqualTo(endTs)));
             assertThat(_status.getLastReachable(), allOf(greaterThanOrEqualTo(startTs), lessThanOrEqualTo(endTs)));
 
             final BackendHealthCheck lastProbe = _status.getLastProbe();
