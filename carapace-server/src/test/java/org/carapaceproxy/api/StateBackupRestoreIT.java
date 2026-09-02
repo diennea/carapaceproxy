@@ -19,6 +19,8 @@
  */
 package org.carapaceproxy.api;
 
+import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
+import static net.javacrumbs.jsonunit.assertj.JsonAssertions.json;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
@@ -31,7 +33,6 @@ import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.ByteArrayInputStream;
@@ -51,6 +52,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import net.javacrumbs.jsonunit.core.Option;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.configstore.StoreNotReadyException;
@@ -158,10 +160,8 @@ class StateBackupRestoreIT extends UseAdminServer {
             assertThat(header(backup, "Content-Disposition")).contains("attachment; filename=\"carapace-state-");
             assertThat(header(backup, "Cache-Control")).isEqualTo("no-store");
             final String archive = backup.getBodyString();
-            final JsonNode json = MAPPER.readTree(archive);
-            assertThat(json.get("format").asText()).isEqualTo("carapace-state");
-            assertThat(json.get("formatVersion").asInt()).isOne();
-            assertThat(json.get("acmeAccountKeys").has(DEFAULT_PROVIDER_NAME)).isTrue();
+            assertThatJson(archive).when(Option.IGNORING_EXTRA_FIELDS).isEqualTo(json("{format: 'carapace-state', formatVersion: 1}"));
+            assertThatJson(archive).node("acmeAccountKeys").isObject().containsKey(DEFAULT_PROVIDER_NAME);
             final String originalConfig = client.get("/api/config", credentials).getBodyString();
             final StoreSnapshot originalState = server.getDynamicConfigurationStore().exportState();
 
@@ -173,8 +173,7 @@ class StateBackupRestoreIT extends UseAdminServer {
 
             final HttpResponse resp = restore(client, archive, null);
             assertThat(resp.isOk()).as(resp.getBodyString()).isTrue();
-            final JsonNode result = MAPPER.readTree(resp.getBodyString());
-            assertThat(result.get("ok").asBoolean()).isTrue();
+            assertThatJson(resp.getBodyString()).node("ok").isBoolean().isTrue();
 
             assertThat(client.get("/api/config", credentials).getBodyString()).isEqualTo(originalConfig);
             assertThat(server.getDynamicConfigurationStore().exportState()).isEqualTo(originalState);
@@ -291,12 +290,10 @@ class StateBackupRestoreIT extends UseAdminServer {
         startServer(configuration);
         try (RawHttpClient client = new RawHttpClient("localhost", DEFAULT_ADMIN_PORT)) {
             final String archive = backup(client).getBodyString();
-            final JsonNode config = MAPPER.readTree(archive).get("config");
-            for (final String key : List.of("http.admin.enabled", "http.admin.port", "http.admin.host", "userrealm.class",
-                    "aws.secretkey", "https.admin.sslcertfilepassword")) {
-                assertThat(config.has(key)).as(key).isFalse();
-            }
-            assertThat(config.get("healthmanager.period").asText()).isEqualTo("20");
+            assertThatJson(archive).node("config").isObject()
+                    .doesNotContainKeys("http.admin.enabled", "http.admin.port", "http.admin.host", "userrealm.class",
+                            "aws.secretkey", "https.admin.sslcertfilepassword")
+                    .containsEntry("healthmanager.period", "20");
             assertThat(archive)
                     .doesNotContain("boot secret")
                     .doesNotContain("boot password");
@@ -350,9 +347,8 @@ class StateBackupRestoreIT extends UseAdminServer {
             final HttpResponse resp = restore(client, archive, null);
             assertThat(resp.isOk()).as(resp.getBodyString()).isTrue();
             // file mode: restored in memory only
-            final JsonNode result = MAPPER.readTree(resp.getBodyString());
-            assertThat(result.get("ok").asBoolean()).isTrue();
-            assertThat(result.get("message").asText()).contains("restart");
+            assertThatJson(resp.getBodyString()).node("ok").isBoolean().isTrue();
+            assertThatJson(resp.getBodyString()).node("message").isString().contains("restart");
             assertThat(server.getBackendHealthManager().getPeriod()).isEqualTo(25);
         }
     }
@@ -385,7 +381,7 @@ class StateBackupRestoreIT extends UseAdminServer {
                 assertThat(caFile.delete()).isTrue();
                 final HttpResponse resp = restoring.get(2, TimeUnit.MINUTES);
                 assertThat(resp.getStatusLine()).as(resp.getStatusLine()).contains("500");
-                assertThat(MAPPER.readTree(resp.getBodyString()).get("ok").asBoolean()).isFalse();
+                assertThatJson(resp.getBodyString()).node("ok").isBoolean().isFalse();
                 // its own reload failed too: writes stay refused on this node
                 assertThat(server.isRestoreInProgress()).isTrue();
                 // and stay so after another restore that fails before its commit

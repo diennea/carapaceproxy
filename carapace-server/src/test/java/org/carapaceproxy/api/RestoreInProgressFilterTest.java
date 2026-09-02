@@ -19,7 +19,7 @@
  */
 package org.carapaceproxy.api;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
@@ -93,7 +93,7 @@ class RestoreInProgressFilterTest {
         verify(response).setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
         verify(response).setHeader("Retry-After", String.valueOf(RestoreInProgressFilter.RETRY_AFTER_SECONDS));
         verify(response).setContentType("application/json");
-        assertThat(body).hasToString("{\"message\":\"Restore in progress, try again later\"}");
+        assertThatJson(body.toString()).isEqualTo("{message: 'Restore in progress, try again later'}");
     }
 
     private static void assertPasses(RestoreInProgressFilter filter, String method, String uri) throws Exception {

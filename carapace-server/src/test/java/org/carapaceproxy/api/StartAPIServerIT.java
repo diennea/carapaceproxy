@@ -19,6 +19,8 @@
  */
 package org.carapaceproxy.api;
 
+import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
+import static net.javacrumbs.jsonunit.assertj.JsonAssertions.json;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
@@ -29,8 +31,6 @@ import static org.carapaceproxy.utils.CertificatesTestUtils.uploadCertificate;
 import static org.carapaceproxy.utils.CertificatesUtils.KEYSTORE_PW;
 import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -41,11 +41,9 @@ import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.List;
-import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 import javax.servlet.http.HttpServletResponse;
+import net.javacrumbs.jsonunit.core.Option;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
@@ -130,14 +128,17 @@ public class StartAPIServerIT extends UseAdminServer {
             RawHttpClient.HttpResponse resp = client.get("/api/cache/info", credentials);
             String s = resp.getBodyString();
             System.out.println("s:" + s);
-            assertThat(s).isEqualTo("{\"result\":\"ok\",\"hits\":0,\"directMemoryUsed\":0,\"misses\":0,\"heapMemoryUsed\":0,\"totalMemoryUsed\":0,\"cachesize\":0}");
+            assertThatJson(s).isEqualTo("""
+                    {result: "ok", hits: 0, directMemoryUsed: 0, misses: 0,
+                     heapMemoryUsed: 0, totalMemoryUsed: 0, cachesize: 0}
+                    """);
         }
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/cache/flush", credentials);
             String s = resp.getBodyString();
             System.out.println("s:" + s);
-            assertThat(s).isEqualTo("{\"result\":\"ok\",\"cachesize\":0}");
+            assertThatJson(s).isEqualTo("{result: 'ok', cachesize: 0}");
         }
     }
 
@@ -149,7 +150,7 @@ public class StartAPIServerIT extends UseAdminServer {
             RawHttpClient.HttpResponse resp = client.get("/api/backends", credentials);
             String s = resp.getBodyString();
             // no backend configured
-            assertThat(s).isEqualTo("{}");
+            assertThatJson(s).isEqualTo("{}");
         }
     }
 
@@ -166,11 +167,9 @@ public class StartAPIServerIT extends UseAdminServer {
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/routes", credentials);
             String s = resp.getBodyString();
-            assertThat(s)
-                    .contains("id0")
-                    .contains("id-action")
-                    .contains("true")
-                    .contains(new MatchAllRequestMatcher().getDescription());
+            assertThatJson(s).when(Option.IGNORING_EXTRA_FIELDS).isArray().contains(json("""
+                    {id: "id0", action: "id-action", enabled: true, matcher: "%s"}
+                    """.formatted(new MatchAllRequestMatcher().getDescription())));
         }
     }
 
@@ -181,12 +180,12 @@ public class StartAPIServerIT extends UseAdminServer {
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/actions", credentials);
             String s = resp.getBodyString();
-            assertThat(s)
-                    // Default actions
-                    .contains("\"not-found\",\"type\":\"static\"")
-                    .contains("\"cache-if-possible\",\"type\":\"cache\"")
-                    .contains("\"internal-error\",\"type\":\"static\"")
-                    .contains("\"proxy-all\",\"type\":\"proxy\"");
+            // Default actions
+            assertThatJson(s).when(Option.IGNORING_EXTRA_FIELDS).isArray().contains(
+                    json("{id: 'not-found', type: 'static'}"),
+                    json("{id: 'cache-if-possible', type: 'cache'}"),
+                    json("{id: 'internal-error', type: 'static'}"),
+                    json("{id: 'proxy-all', type: 'proxy'}"));
         }
     }
 
@@ -214,12 +213,14 @@ public class StartAPIServerIT extends UseAdminServer {
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/directors", credentials);
-            final List<Map<?, ?>> s = new ObjectMapper().readValue(resp.getBody(), new TypeReference<>() {});
-            assertThat(s).hasSize(1);
-            final var id = s.get(0).get("id");
-            assertThat(id).isEqualTo("iddirector2");
-            final var backends = Set.copyOf((List<?>) s.get(0).get("backends"));
-            assertThat(backends).isEqualTo(Set.of("localhost:8086", "localhost:8087"));
+            assertThatJson(resp.getBodyString())
+                    .when(Option.IGNORING_EXTRA_FIELDS, Option.IGNORING_ARRAY_ORDER)
+                    .isArray()
+                    .containsExactly(json("""
+                            {
+                              "id": "iddirector2",
+                              "backends": ["localhost:8086", "localhost:8087"]
+                            }"""));
         }
     }
 
@@ -249,7 +250,10 @@ public class StartAPIServerIT extends UseAdminServer {
                     + "\r\n"
                     + body);
             assertThat(resp.isError()).isTrue();
-            assertThat(resp.getBodyString()).contains("Invalid integer value '20-BAD-VALUE' for parameter 'connectionsmanager.maxconnectionsperendpoint'");
+            assertThatJson(resp.getBodyString()).isEqualTo(json("""
+                    {
+                      "message": "Invalid integer value '20-BAD-VALUE' for parameter 'connectionsmanager.maxconnectionsperendpoint'"
+                    }"""));
         }
     }
 
@@ -270,11 +274,13 @@ public class StartAPIServerIT extends UseAdminServer {
             RawHttpClient.HttpResponse response = client.get("/api/listeners", credentials);
             String json = response.getBodyString();
 
-            assertThat(json)
-                    .contains("localhost")
-                    .contains("1234")
-                    .contains("127.0.0.1")
-                    .contains("9876");
+
+            // the map is keyed by "host:port", and only its values were checked before
+            assertThatJson(json).when(Option.IGNORING_EXTRA_FIELDS).isObject()
+                    .containsOnlyKeys("localhost:1234", "127.0.0.1:9876")
+                    .containsValues(
+                            json("{host: 'localhost', port: 1234}"),
+                            json("{host: '127.0.0.1', port: 9876}"));
         }
 
     }
@@ -341,33 +347,25 @@ public class StartAPIServerIT extends UseAdminServer {
             RawHttpClient.HttpResponse response = client.get("/api/certificates", credentials);
             String json = response.getBodyString();
 
-            assertThat(json)
-                    .contains("localhost")
-                    .contains("\"mode\":\"static\"")
-                    .contains("\"dynamic\":false")
-                    .contains("\"status\":\"available\"")
-                    .contains("\"sslCertificateFile\":\"" + mock1.getAbsolutePath() + "\"")
-                    .contains("\"serialNumber\":\"" + serialNumber1 + "\"")
-                    .contains("\"expiringDate\":\"" + expiringDate1 + "\"")
-                    .contains("127.0.0.1")
-                    .contains("\"mode\":\"static\"")
-                    .contains("\"dynamic\":false")
-                    .contains("\"status\":\"expired\"")
-                    .contains("\"sslCertificateFile\":\"" + mock2.getAbsolutePath() + "\"")
-                    .contains("\"serialNumber\":\"" + serialNumber2 + "\"")
-                    .contains("\"expiringDate\":\"" + expiringDate2 + "\"");
+
+            assertThatJson(json).when(Option.IGNORING_EXTRA_FIELDS).node("certificates").isArray().contains(
+                    json("""
+                         {id: "localhost", mode: "static", dynamic: false, status: "available",
+                          sslCertificateFile: "%s", serialNumber: "%s", expiringDate: "%s"}
+                         """.formatted(mock1.getAbsolutePath(), serialNumber1, expiringDate1)),
+                    json("""
+                         {id: "127.0.0.1", mode: "static", dynamic: false, status: "expired",
+                          sslCertificateFile: "%s", serialNumber: "%s", expiringDate: "%s"}
+                         """.formatted(mock2.getAbsolutePath(), serialNumber2, expiringDate2)));
 
             // single cert request to /{certId}
             response = client.get("/api/certificates/127.0.0.1", credentials);
             json = response.getBodyString();
-            assertThat(json)
-                    .doesNotContain("localhost")
-                    .contains("\"mode\":\"static\"")
-                    .contains("\"dynamic\":false")
-                    .contains("\"status\":\"expired\"")
-                    .contains("\"sslCertificateFile\":\"" + mock2.getAbsolutePath() + "\"")
-                    .contains("\"serialNumber\":\"" + serialNumber2 + "\"")
-                    .contains("\"expiringDate\":\"" + expiringDate2 + "\"");
+            assertThatJson(json).when(Option.IGNORING_EXTRA_FIELDS).node("certificates").isArray()
+                    .containsExactly(json("""
+                                          {id: "127.0.0.1", mode: "static", dynamic: false, status: "expired",
+                                           sslCertificateFile: "%s", serialNumber: "%s", expiringDate: "%s"}
+                                          """.formatted(mock2.getAbsolutePath(), serialNumber2, expiringDate2)));
         }
 
         // Acme certificate
@@ -377,43 +375,38 @@ public class StartAPIServerIT extends UseAdminServer {
             RawHttpClient.HttpResponse response = client.get("/api/certificates", credentials);
             String json = response.getBodyString();
 
-            assertThat(json)
-                    .contains(dynDomain)
-                    .contains("\"mode\":\"acme\"")
-                    .contains("\"dynamic\":true")
-                    .contains("\"status\":\"waiting\"")
-                    .contains("\"serialNumber\":\"" + serialNumber + "\"")
-                    .contains("\"expiringDate\":\"" + expiringDate + "\"");
+
+            assertThatJson(json).when(Option.IGNORING_EXTRA_FIELDS).node("certificates").isArray().contains(
+                    json("""
+                         {id: "%s", mode: "acme", dynamic: true, status: "waiting",
+                          serialNumber: "%s", expiringDate: "%s"}
+                         """.formatted(dynDomain, serialNumber, expiringDate)));
 
             // single cert request to /{certId}
             response = client.get("/api/certificates/" + dynDomain, credentials);
             json = response.getBodyString();
-            assertThat(json)
-                    .contains(dynDomain)
-                    .contains("\"mode\":\"acme\"")
-                    .contains("\"dynamic\":true")
-                    .contains("\"status\":\"waiting\"")
-                    .contains("\"serialNumber\":\"" + serialNumber + "\"")
-                    .contains("\"expiringDate\":\"" + expiringDate + "\"");
+            assertThatJson(json).when(Option.IGNORING_EXTRA_FIELDS).node("certificates").isArray().containsExactly(
+                    json("""
+                         {id: "%s", mode: "acme", dynamic: true, status: "waiting",
+                          serialNumber: "%s", expiringDate: "%s"}
+                         """.formatted(dynDomain, serialNumber, expiringDate)));
 
             // Changing dynamic certificate state
             for (DynamicCertificateState state : DynamicCertificateState.values()) {
                 man.setStateOfCertificate(dynDomain, state);
                 response = client.get("/api/certificates", credentials);
                 json = response.getBodyString();
-                assertThat(json)
-                        .contains(dynDomain)
-                        .contains("\"mode\":\"acme\"")
-                        .contains("\"dynamic\":true")
-                        .contains("\"status\":\"" + certificateStateToString(state) + "\"");
+                assertThatJson(json).when(Option.IGNORING_EXTRA_FIELDS).node("certificates").isArray().contains(
+                        json("""
+                             {id: "%s", mode: "acme", dynamic: true, status: "%s"}
+                             """.formatted(dynDomain, certificateStateToString(state))));
 
                 response = client.get("/api/certificates/" + dynDomain, credentials);
                 json = response.getBodyString();
-                assertThat(json)
-                        .contains(dynDomain)
-                        .contains("\"mode\":\"acme\"")
-                        .contains("\"dynamic\":true")
-                        .contains("\"status\":\"" + certificateStateToString(state) + "\"");
+                assertThatJson(json).when(Option.IGNORING_EXTRA_FIELDS).node("certificates").isArray().containsExactly(
+                        json("""
+                             {id: "%s", mode: "acme", dynamic: true, status: "%s"}
+                             """.formatted(dynDomain, certificateStateToString(state))));
             }
 
             // Downloading
@@ -455,24 +448,21 @@ public class StartAPIServerIT extends UseAdminServer {
             RawHttpClient.HttpResponse response = client.get("/api/certificates", credentials);
             String json = response.getBodyString();
 
-            assertThat(json)
-                    .contains(manualDomain)
-                    .contains("\"mode\":\"manual\"")
-                    .contains("\"dynamic\":true")
-                    .contains("\"status\":\"available\"")
-                    .contains("\"serialNumber\":\"" + serialNumber + "\"")
-                    .contains("\"expiringDate\":\"" + expiringDate + "\"");
+
+            assertThatJson(json).when(Option.IGNORING_EXTRA_FIELDS).node("certificates").isArray().contains(
+                    json("""
+                         {id: "%s", mode: "manual", dynamic: true, status: "available",
+                          serialNumber: "%s", expiringDate: "%s"}
+                         """.formatted(manualDomain, serialNumber, expiringDate)));
 
             // single cert request to /{certId}
             response = client.get("/api/certificates/" + manualDomain, credentials);
             json = response.getBodyString();
-            assertThat(json)
-                    .contains(manualDomain)
-                    .contains("\"mode\":\"manual\"")
-                    .contains("\"dynamic\":true")
-                    .contains("\"status\":\"available\"")
-                    .contains("\"serialNumber\":\"" + serialNumber + "\"")
-                    .contains("\"expiringDate\":\"" + expiringDate + "\"");
+            assertThatJson(json).when(Option.IGNORING_EXTRA_FIELDS).node("certificates").isArray().containsExactly(
+                    json("""
+                         {id: "%s", mode: "manual", dynamic: true, status: "available",
+                          serialNumber: "%s", expiringDate: "%s"}
+                         """.formatted(manualDomain, serialNumber, expiringDate)));
 
             // Downloading
             response = client.get("/api/certificates/" + manualDomain + "/download", credentials);
@@ -500,24 +490,21 @@ public class StartAPIServerIT extends UseAdminServer {
             response = client.get("/api/certificates", credentials);
             json = response.getBodyString();
 
-            assertThat(json)
-                    .contains(manualDomain)
-                    .contains("\"mode\":\"manual\"")
-                    .contains("\"dynamic\":true")
-                    .contains("\"status\":\"expired\"")
-                    .contains("\"serialNumber\":\"" + serialNumber + "\"")
-                    .contains("\"expiringDate\":\"" + expiringDate + "\"");
+
+            assertThatJson(json).when(Option.IGNORING_EXTRA_FIELDS).node("certificates").isArray().contains(
+                    json("""
+                         {id: "%s", mode: "manual", dynamic: true, status: "expired",
+                          serialNumber: "%s", expiringDate: "%s"}
+                         """.formatted(manualDomain, serialNumber, expiringDate)));
 
             // single cert request to /{certId}
             response = client.get("/api/certificates/" + manualDomain, credentials);
             json = response.getBodyString();
-            assertThat(json)
-                    .contains(manualDomain)
-                    .contains("\"mode\":\"manual\"")
-                    .contains("\"dynamic\":true")
-                    .contains("\"status\":\"expired\"")
-                    .contains("\"serialNumber\":\"" + serialNumber + "\"")
-                    .contains("\"expiringDate\":\"" + expiringDate + "\"");
+            assertThatJson(json).when(Option.IGNORING_EXTRA_FIELDS).node("certificates").isArray().containsExactly(
+                    json("""
+                         {id: "%s", mode: "manual", dynamic: true, status: "expired",
+                          serialNumber: "%s", expiringDate: "%s"}
+                         """.formatted(manualDomain, serialNumber, expiringDate)));
 
             // Downloading
             response = client.get("/api/certificates/" + manualDomain + "/download", credentials);
@@ -550,14 +537,15 @@ public class StartAPIServerIT extends UseAdminServer {
             RawHttpClient.HttpResponse response = client.get("/api/requestfilters", credentials);
             String json = response.getBodyString();
 
-            assertThat(json)
-                    .contains(RegexpMapUserIdFilter.TYPE)
-                    .contains("param_test_session")
-                    .contains(RegexpMapSessionIdFilter.TYPE)
-                    .contains("param_test_user")
-                    .contains(XForwardedForRequestFilter.TYPE)
-                    .contains(XTlsProtocolRequestFilter.TYPE)
-                    .contains(XTlsCipherRequestFilter.TYPE);
+
+            assertThatJson(json).inPath("$[*].type").isArray().containsExactlyInAnyOrder(
+                    RegexpMapUserIdFilter.TYPE,
+                    RegexpMapSessionIdFilter.TYPE,
+                    XForwardedForRequestFilter.TYPE,
+                    XTlsProtocolRequestFilter.TYPE,
+                    XTlsCipherRequestFilter.TYPE);
+            assertThatJson(json).inPath("$[*].values.parameterName").isArray()
+                    .contains("param_test_user", "param_test_session");
         }
     }
 
@@ -580,9 +568,8 @@ public class StartAPIServerIT extends UseAdminServer {
             RawHttpClient.HttpResponse response = client.get("/api/users/all", c);
             String json = response.getBodyString();
 
-            assertThat(json)
-                    .contains("test1")
-                    .contains("test2");
+
+            assertThatJson(json).isArray().containsExactlyInAnyOrder("test", "test1", "test2");
         }
     }
 
@@ -685,9 +672,8 @@ public class StartAPIServerIT extends UseAdminServer {
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             RawHttpClient.HttpResponse resp = client.get("/api/version", credentials);
-            final Map<?, ?> version = new ObjectMapper().readValue(resp.getBody(), new TypeReference<>() {});
-            assertThat(version.get("version")).isEqualTo(CarapaceVersion.VERSION);
-            assertThat(version.get("commit")).isEqualTo(CarapaceVersion.COMMIT);
+            assertThatJson(resp.getBodyString()).isEqualTo(json("{version: '%s', commit: '%s'}"
+                    .formatted(CarapaceVersion.VERSION, CarapaceVersion.COMMIT)));
         }
     }
 
