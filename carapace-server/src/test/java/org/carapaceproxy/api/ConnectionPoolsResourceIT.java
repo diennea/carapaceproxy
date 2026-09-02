@@ -4,15 +4,15 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
+import static net.javacrumbs.jsonunit.assertj.JsonAssertions.json;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import java.io.File;
 import java.io.IOException;
-import java.util.Map;
+import net.javacrumbs.jsonunit.core.Option;
 import java.util.Properties;
 import java.util.Set;
 import javax.ws.rs.core.Response;
@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 public class ConnectionPoolsResourceIT extends UseAdminServer {
-    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String CONNECTION_POOLS_PATH = "/api/connectionpools";
     private static final String CREATED = String.valueOf(Response.Status.CREATED.getStatusCode());
     private static final String OK = String.valueOf(Response.Status.OK.getStatusCode());
@@ -113,16 +112,13 @@ public class ConnectionPoolsResourceIT extends UseAdminServer {
         configureAndStartServer();
         try (final var client = new RawHttpClient("localhost", 8761)) {
             final var defaultResult = client.get(CONNECTION_POOLS_PATH + "/*", credentials);
-            final var defaultResultBean = MAPPER.readValue(defaultResult.getBodyString(), ConnectionPoolsResource.ConnectionPoolBean.class);
-            assertThat(defaultResultBean.getId()).isEqualTo("*");
-            assertThat(defaultResultBean.getDomain()).isEqualTo("*");
-            assertThat(defaultResultBean.getMaxConnectionsPerEndpoint()).isEqualTo(MAX_CONNECTIONS_PER_ENDPOINT);
+            assertThatJson(defaultResult.getBodyString()).when(Option.IGNORING_EXTRA_FIELDS).isEqualTo(json(
+                    "{id: '*', domain: '*', maxConnectionsPerEndpoint: %d}".formatted(MAX_CONNECTIONS_PER_ENDPOINT)));
 
             final var result = client.get(CONNECTION_POOLS_PATH + "/" + DEFAULT_EXAMPLE_ORG, credentials);
-            final var resultBean = MAPPER.readValue(result.getBodyString(), ConnectionPoolsResource.ConnectionPoolBean.class);
-            assertThat(resultBean.getId()).isEqualTo(DEFAULT_EXAMPLE_ORG);
-            assertThat(resultBean.getDomain()).isEqualTo(DEFAULT_EXAMPLE_ORG);
-            assertThat(resultBean.getMaxConnectionsPerEndpoint()).isEqualTo(MAX_CONNECTIONS_PER_ENDPOINT * 2);
+            assertThatJson(result.getBodyString()).when(Option.IGNORING_EXTRA_FIELDS).isEqualTo(json(
+                    "{id: '%s', domain: '%s', maxConnectionsPerEndpoint: %d}"
+                            .formatted(DEFAULT_EXAMPLE_ORG, DEFAULT_EXAMPLE_ORG, MAX_CONNECTIONS_PER_ENDPOINT * 2)));
         }
     }
 
@@ -132,8 +128,7 @@ public class ConnectionPoolsResourceIT extends UseAdminServer {
 
         try (final var client = new RawHttpClient("localhost", 8761)) {
             final var result = client.get(CONNECTION_POOLS_PATH, credentials);
-            final var resultMap = MAPPER.readValue(result.getBodyString(), new MapTypeReference());
-            assertThat(resultMap.keySet()).isEqualTo(Set.of("*", DEFAULT_EXAMPLE_ORG));
+            assertThatJson(result.getBodyString()).isObject().containsOnlyKeys("*", DEFAULT_EXAMPLE_ORG);
         }
     }
 
@@ -210,8 +205,8 @@ public class ConnectionPoolsResourceIT extends UseAdminServer {
             assertThat(putResponse.getStatusLine()).contains(OK);
 
             final var result = client.get(CONNECTION_POOLS_PATH + "/" + ALTERNATIVE_EXAMPLE_COM, credentials);
-            final var resultBean = MAPPER.readValue(result.getBodyString(), ConnectionPoolsResource.ConnectionPoolBean.class);
-            assertThat(resultBean.getDomain()).isEqualTo(regexDomain);
+            // only the domain matters here; it is a regex, so it is compared as a string and not parsed as JSON
+            assertThatJson(result.getBodyString()).node("domain").isString().isEqualTo(regexDomain);
         }
     }
 
@@ -245,7 +240,5 @@ public class ConnectionPoolsResourceIT extends UseAdminServer {
         return pool;
     }
 
-    private static class MapTypeReference extends TypeReference<Map<String, ConnectionPoolsResource.ConnectionPoolBean>> {
-    }
 
 }

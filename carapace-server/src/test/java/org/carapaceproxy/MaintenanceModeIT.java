@@ -1,5 +1,6 @@
 package org.carapaceproxy;
 
+import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
@@ -173,7 +174,7 @@ public class MaintenanceModeIT extends UseAdminServer {
                 .build();
 
         HttpResponse<String> enableMaintenanceModeResponse = httpClient.send(enableMaintenanceRequest, HttpResponse.BodyHandlers.ofString());
-        assertThat(enableMaintenanceModeResponse.body()).isEqualTo("{\"ok\":true,\"error\":\"\"}");
+        assertThatJson(enableMaintenanceModeResponse.body()).isEqualTo("{ok: true, error: ''}");
 
         HttpResponse<String> response2 = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
@@ -189,7 +190,8 @@ public class MaintenanceModeIT extends UseAdminServer {
                 .build();
 
         HttpResponse<String> disableMaintenanceModeResponse = httpClient.send(disableMaintenanceModeRequest, HttpResponse.BodyHandlers.ofString());
-        assertThat(disableMaintenanceModeResponse.body()).isEqualTo("{\"ok\":false,\"error\":\"\"}");
+        // ok is the maintenance-mode state the call left behind, not whether the call succeeded
+        assertThatJson(disableMaintenanceModeResponse.body()).isEqualTo("{ok: false, error: ''}");
 
         HttpResponse<String> response3 = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         assertThat(response3.body()).isEqualTo("it <b>works</b> !!");
