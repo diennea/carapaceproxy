@@ -97,7 +97,6 @@ public class HealthCheckHttpsIT {
             assertThat(status).isNotNull();
 
             final BackendHealthCheck lastProbe = status.getLastProbe();
-            assertThat(lastProbe).isNotNull();
             assertThat(lastProbe.ok()).as("HTTPS health check with CA must succeed").isTrue();
             assertThat(lastProbe.httpResponse()).isEqualTo("200 OK");
         } finally {

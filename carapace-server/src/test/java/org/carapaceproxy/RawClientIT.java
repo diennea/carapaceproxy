@@ -197,7 +197,6 @@ public class RawClientIT {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir)) {
             server.start();
             int port = server.getLocalPort();
-            assertThat(port).isGreaterThan(0);
 
             List<RawHttpClient> clients = new ArrayList<>();
             for (int i = 0; i < 20; i++) {
@@ -229,7 +228,6 @@ public class RawClientIT {
             try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir)) {
                 server.start();
                 int port = server.getLocalPort();
-                assertThat(port).isGreaterThan(0);
 
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     for (int j = 0; j < 2; j++) {
@@ -257,7 +255,6 @@ public class RawClientIT {
             try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir)) {
                 server.start();
                 int port = server.getLocalPort();
-                assertThat(port).isGreaterThan(0);
 
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     for (int j = 0; j < 2; j++) {
@@ -289,7 +286,6 @@ public class RawClientIT {
                 proxy.getProxyRequestsManager().reloadConfiguration(proxy.getCurrentConfiguration(), mapper.getBackends().values());
                 proxy.start();
                 int port = proxy.getLocalPort();
-                assertThat(port).isGreaterThan(0);
 
                 AtomicBoolean failed = new AtomicBoolean();
                 AtomicBoolean c2go = new AtomicBoolean();
@@ -497,7 +493,6 @@ public class RawClientIT {
             proxy.getProxyRequestsManager().reloadConfiguration(proxy.getCurrentConfiguration(), mapper.getBackends().values());
             proxy.start();
             int port = proxy.getLocalPort();
-            assertThat(port).isGreaterThan(0);
 
             AtomicBoolean failed = new AtomicBoolean();
             AtomicBoolean c2go = new AtomicBoolean();

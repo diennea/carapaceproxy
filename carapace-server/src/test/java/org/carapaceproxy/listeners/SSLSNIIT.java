@@ -157,7 +157,6 @@ public class SSLSNIIT {
 
     private static String chooseCertId(final HttpProxyServer server, final String sniHostname, final String defaultCertificate) {
         final var certificate = chooseCert(server, sniHostname, defaultCertificate);
-        assertThat(certificate).isNotNull();
         return certificate.getId();
     }
 

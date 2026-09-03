@@ -105,7 +105,6 @@ public class StuckRequestsIT {
             assertThat(server.getCurrentConfiguration().isBackendsUnreachableOnStuckRequests()).isEqualTo(backendsUnreachableOnStuckRequests);
             server.start();
             int port = server.getLocalPort();
-            assertThat(port).isGreaterThan(0);
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");

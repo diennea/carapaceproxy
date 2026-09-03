@@ -212,7 +212,6 @@ public class HttpProtocolAndSSLIT {
             assertThat(allBodies)
                     .hasSize(jsFiles + cssFiles);
             for (String body : allBodies) {
-                assertThat(body).isNotNull();
                 assertThat(body).as("Body too small").hasSizeGreaterThan(10_000);
             }
             if (scenario.proxyHttp2()) {

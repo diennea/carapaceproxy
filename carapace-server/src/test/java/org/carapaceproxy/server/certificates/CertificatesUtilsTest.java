@@ -55,7 +55,6 @@ class CertificatesUtilsTest {
                 .hasSameSizeAs(originalChain);
         for (int i = 0; i < decodedChain.length; i++) {
             Certificate decodedCert = decodedChain[i];
-            assertThat(decodedCert).isNotNull();
             assertThat(decodedCert.getEncoded()).isEqualTo(originalChain[i].getEncoded());
         }
         assertThat(compareChains(originalChain, decodedChain)).isTrue();

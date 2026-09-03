@@ -606,7 +606,6 @@ public class StartAPIServerIT extends UseAdminServer {
             exc = ex;
         }
 
-        assertThat(exc).isNotNull();
         assertThat(exc.getMessage()).contains("bad response, does not start with HTTP/1.1");
     }
 

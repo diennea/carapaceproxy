@@ -75,7 +75,6 @@ public class ForwardedStrategyIT {
             server.addListener(getConfiguration(ForwardedStrategies.drop(), Set.of()));
             server.start();
             int port = server.getLocalPort();
-            assertThat(port).isGreaterThan(0);
             try (final var client = new RawHttpClient("localhost", port)) {
                 final var response = requestWithoutHeader(client);
                 assertThat(response).contains(NO_HEADER);
@@ -94,7 +93,6 @@ public class ForwardedStrategyIT {
             server.addListener(getConfiguration(ForwardedStrategies.preserve(), Set.of()));
             server.start();
             int port = server.getLocalPort();
-            assertThat(port).isGreaterThan(0);
             try (final var client = new RawHttpClient("localhost", port)) {
                 final var response = requestWithoutHeader(client);
                 assertThat(response).contains(NO_HEADER);
@@ -113,7 +111,6 @@ public class ForwardedStrategyIT {
             server.addListener(getConfiguration(ForwardedStrategies.rewrite(), Set.of()));
             server.start();
             int port = server.getLocalPort();
-            assertThat(port).isGreaterThan(0);
             try (final var client = new RawHttpClient("localhost", port)) {
                 final var response = requestWithoutHeader(client);
                 assertThat(response).contains(HEADER_REWRITTEN);
@@ -134,7 +131,6 @@ public class ForwardedStrategyIT {
             server.addListener(getConfiguration(ForwardedStrategies.ifTrusted(trustedIps), trustedIps));
             server.start();
             int port = server.getLocalPort();
-            assertThat(port).isGreaterThan(0);
             try (final var client = new RawHttpClient("localhost", port)) {
                 final var response = requestWithoutHeader(client);
                 assertThat(response).contains(NO_HEADER);
@@ -155,7 +151,6 @@ public class ForwardedStrategyIT {
             server.addListener(getConfiguration(ForwardedStrategies.ifTrusted(trustedIps), trustedIps));
             server.start();
             int port = server.getLocalPort();
-            assertThat(port).isGreaterThan(0);
             try (final var client = new RawHttpClient("localhost", port)) {
                 final var response = requestWithoutHeader(client);
                 assertThat(response).contains(HEADER_REWRITTEN);

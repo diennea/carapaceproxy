@@ -102,7 +102,6 @@ public class Http2HeadersIT {
                     .response()
                     .block();
         }
-        assertThat(response).isNotNull();
         assertThat(response.status()).isEqualTo(HttpResponseStatus.OK);
         assertThat(response.version()).isEqualTo(HttpVersion.valueOf("HTTP/2.0"));
     }
@@ -137,7 +136,6 @@ public class Http2HeadersIT {
                     .response()
                     .block();
         }
-        assertThat(response).isNotNull();
         assertThat(response.status()).isEqualTo(HttpResponseStatus.OK);
         // Keep-Alive must be stripped from the backend response before forwarding to the client.
         // Connection is excluded from this check because Reactor Netty's HTTP server manages it
@@ -186,7 +184,6 @@ public class Http2HeadersIT {
             }
             // The request itself must succeed: pre-fix this would 503 once the connection switches to H2
             // and Netty's H2 encoder rejects the forwarded Keep-Alive header.
-            assertThat(response).isNotNull();
             assertThat(response.status()).isEqualTo(HttpResponseStatus.OK);
             // And the backend must never see Keep-Alive — regardless of which protocol the proxy used
             // to talk to it.
@@ -238,7 +235,6 @@ public class Http2HeadersIT {
             }
             // The concern was that a forwarded Transfer-Encoding could trip the encoder (RFC 9113 §8.2.2) and 503;
             // the request must instead complete normally.
-            assertThat(response).isNotNull();
             assertThat(response.status()).isEqualTo(HttpResponseStatus.OK);
             // The chunked request reached the backend — forwarding Transfer-Encoding did not break the hop.
             assertThat(capturedRequestHeaders.get()).isNotNull();
