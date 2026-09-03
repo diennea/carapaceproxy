@@ -26,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
 import java.util.Properties;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
+import org.carapaceproxy.server.config.AcmeProviderConfiguration;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -154,14 +155,13 @@ class RuntimeServerConfigurationTest {
         assertThat(config.getAcmeProviders()).hasSize(2);
 
         final var digicert = config.getAcmeProviders().get("digicert");
-        assertThat(digicert.url()).isEqualTo("https://acme.digicert.com/v2/acme/directory");
-        assertThat(digicert.kid()).isEqualTo("my-kid");
-        assertThat(digicert.hmac()).isEqualTo("my-base64-hmac");
+        assertThat(digicert).isEqualTo(new AcmeProviderConfiguration(
+                "digicert", "https://acme.digicert.com/v2/acme/directory", "my-kid", "my-base64-hmac"));
         assertThat(digicert.hasExternalAccountBinding()).isTrue();
         assertThat(digicert.toString()).doesNotContain(digicert.hmac()); // the hmac is a secret
 
         final var pebble = config.getAcmeProviders().get("pebble");
-        assertThat(pebble.url()).isEqualTo("https://localhost:14000/dir");
+        assertThat(pebble).isEqualTo(new AcmeProviderConfiguration("pebble", "https://localhost:14000/dir", "", ""));
         assertThat(pebble.hasExternalAccountBinding()).isFalse();
     }
 

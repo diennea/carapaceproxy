@@ -32,6 +32,7 @@ import java.util.Map;
 import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.backends.BackendHealthCheck;
+import org.carapaceproxy.server.backends.BackendHealthCheck.Result;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.backends.BackendHealthStatus;
 import org.carapaceproxy.server.config.BackendConfiguration;
@@ -87,12 +88,11 @@ public class HealthCheckIT {
 
             final BackendHealthCheck lastProbe = _status.getLastProbe();
             assertThat(lastProbe).isNotNull();
-            assertThat(lastProbe.path()).isEqualTo("/status.html");
-            assertThat(lastProbe.endTs()).isGreaterThanOrEqualTo(startTs);
-            assertThat(lastProbe.endTs()).isLessThanOrEqualTo(endTs);
-            assertThat(lastProbe.ok()).isTrue();
-            assertThat(lastProbe.httpResponse()).isEqualTo("200 OK");
-            assertThat(lastProbe.httpBody()).isEqualTo("Ok...");
+            assertThat(lastProbe)
+                    .extracting(BackendHealthCheck::path, BackendHealthCheck::result,
+                            BackendHealthCheck::httpResponse, BackendHealthCheck::httpBody)
+                    .containsExactly("/status.html", Result.SUCCESS, "200 OK", "Ok...");
+            assertThat(lastProbe.endTs()).isBetween(startTs, endTs);
         }
         {
             // Backend returns 500, marking it unavailable.
@@ -125,14 +125,11 @@ public class HealthCheckIT {
 
             final BackendHealthCheck lastProbe = _status.getLastProbe();
             assertThat(lastProbe).isNotNull();
-            assertThat(lastProbe.path()).isEqualTo("/status.html");
-            assertThat(lastProbe.endTs()).isGreaterThanOrEqualTo(startTs);
-            assertThat(lastProbe.endTs()).isLessThanOrEqualTo(endTs);
-            assertThat(lastProbe.ok()).isFalse();
-            System.out.println("HTTP MESSAGE: " + lastProbe.httpResponse());
-            System.out.println("STATUS INFO: " + lastProbe.httpBody());
-            assertThat(lastProbe.httpResponse()).isEqualTo("500 Server Error");
-            assertThat(lastProbe.httpBody()).isEqualTo("ERROR");
+            assertThat(lastProbe)
+                    .extracting(BackendHealthCheck::path, BackendHealthCheck::result,
+                            BackendHealthCheck::httpResponse, BackendHealthCheck::httpBody)
+                    .containsExactly("/status.html", Result.FAILURE_STATUS, "500 Server Error", "ERROR");
+            assertThat(lastProbe.endTs()).isBetween(startTs, endTs);
         }
         {
             // Backend remains in error, keeping it unreachable.
@@ -167,14 +164,11 @@ public class HealthCheckIT {
 
             final BackendHealthCheck lastProbe = _status.getLastProbe();
             assertThat(lastProbe).isNotNull();
-            assertThat(lastProbe.path()).isEqualTo("/status.html");
-            assertThat(lastProbe.endTs()).isGreaterThanOrEqualTo(startTs);
-            assertThat(lastProbe.endTs()).isLessThanOrEqualTo(endTs);
-            assertThat(lastProbe.ok()).isFalse();
-            System.out.println("HTTP MESSAGE: " + lastProbe.httpResponse());
-            System.out.println("STATUS INFO: " + lastProbe.httpBody());
-            assertThat(lastProbe.httpResponse()).isEqualTo("500 Server Error");
-            assertThat(lastProbe.httpBody()).isEqualTo("ERROR");
+            assertThat(lastProbe)
+                    .extracting(BackendHealthCheck::path, BackendHealthCheck::result,
+                            BackendHealthCheck::httpResponse, BackendHealthCheck::httpBody)
+                    .containsExactly("/status.html", Result.FAILURE_STATUS, "500 Server Error", "ERROR");
+            assertThat(lastProbe.endTs()).isBetween(startTs, endTs);
         }
         {
             // Backend recovers and returns 201, marking it available again.
@@ -207,14 +201,11 @@ public class HealthCheckIT {
 
             final BackendHealthCheck lastProbe = _status.getLastProbe();
             assertThat(lastProbe).isNotNull();
-            assertThat(lastProbe.path()).isEqualTo("/status.html");
-            assertThat(lastProbe.endTs()).isGreaterThanOrEqualTo(startTs);
-            assertThat(lastProbe.endTs()).isLessThanOrEqualTo(endTs);
-            assertThat(lastProbe.ok()).isTrue();
-            System.out.println("HTTP MESSAGE: " + lastProbe.httpResponse());
-            System.out.println("STATUS INFO: " + lastProbe.httpBody());
-            assertThat(lastProbe.httpResponse()).isEqualTo("201 Created");
-            assertThat(lastProbe.httpBody()).isEqualTo("Ok...");
+            assertThat(lastProbe)
+                    .extracting(BackendHealthCheck::path, BackendHealthCheck::result,
+                            BackendHealthCheck::httpResponse, BackendHealthCheck::httpBody)
+                    .containsExactly("/status.html", Result.SUCCESS, "201 Created", "Ok...");
+            assertThat(lastProbe.endTs()).isBetween(startTs, endTs);
         }
     }
 

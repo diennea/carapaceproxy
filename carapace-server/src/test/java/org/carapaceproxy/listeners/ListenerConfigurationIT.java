@@ -6,11 +6,13 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.EndpointKey;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.ListeningChannel;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
+import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -39,13 +41,18 @@ public class ListenerConfigurationIT {
             {
                 Map<EndpointKey, ListeningChannel> listeners = server.getListeners().getListeningChannels();
 
-                //check default configuration
-                assertThat(listeners.get(listenerKey).getConfig().keepAlive()).isTrue();
-                assertThat(listeners.get(listenerKey).getConfig().soBacklog()).isEqualTo(128);
-                assertThat(listeners.get(listenerKey).getConfig().keepAliveIdle()).isEqualTo(300);
-                assertThat(listeners.get(listenerKey).getConfig().keepAliveInterval()).isEqualTo(60);
-                assertThat(listeners.get(listenerKey).getConfig().keepAliveCount()).isEqualTo(8);
-                assertThat(listeners.get(listenerKey).getConfig().maxKeepAliveRequests()).isEqualTo(1000);
+                // a listener declared with host and port alone must come up on every default: group holds a
+                // live Netty channel group, and the three TLS components are filled in by the properties path
+                final NetworkListenerConfiguration config = listeners.get(listenerKey).getConfig();
+                assertThat(config)
+                        .usingRecursiveComparison()
+                        .ignoringFields("group", "defaultCertificate", "sslCiphers", "sslProtocols")
+                        .isEqualTo(NetworkListenerConfiguration.withDefault("localhost", 8080));
+                assertThat(config)
+                        .extracting(NetworkListenerConfiguration::defaultCertificate,
+                                NetworkListenerConfiguration::sslCiphers,
+                                NetworkListenerConfiguration::sslProtocols)
+                        .containsExactly("*", "", Set.of("TLSv1.2", "TLSv1.3"));
             }
             //disable keepAlive
             {

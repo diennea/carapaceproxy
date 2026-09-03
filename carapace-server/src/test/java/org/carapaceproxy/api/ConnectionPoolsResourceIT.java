@@ -142,20 +142,8 @@ public class ConnectionPoolsResourceIT extends UseAdminServer {
             final var config = server.getCurrentConfiguration();
             assertThat(config.getConnectionPools()).containsOnlyKeys(DEFAULT_EXAMPLE_ORG, ALTERNATIVE_EXAMPLE_COM);
             final var newConnectionPool = config.getConnectionPools().get(ALTERNATIVE_EXAMPLE_COM);
-            assertThat(newConnectionPool.getId()).isEqualTo(ALTERNATIVE_EXAMPLE_COM);
-            assertThat(newConnectionPool.getDomain()).isEqualTo(ALTERNATIVE_EXAMPLE_COM);
-            assertThat(newConnectionPool.getMaxConnectionsPerEndpoint()).isEqualTo(MAX_CONNECTIONS_PER_ENDPOINT * 3);
-            assertThat(newConnectionPool.getBorrowTimeout()).isEqualTo(BORROW_TIMEOUT);
-            assertThat(newConnectionPool.getConnectTimeout()).isEqualTo(CONNECT_TIMEOUT);
-            assertThat(newConnectionPool.getStuckRequestTimeout()).isEqualTo(STUCK_REQUEST_TIMEOUT);
-            assertThat(newConnectionPool.getIdleTimeout()).isEqualTo(IDLE_TIMEOUT);
-            assertThat(newConnectionPool.getMaxLifeTime()).isEqualTo(MAX_LIFE_TIME);
-            assertThat(newConnectionPool.getDisposeTimeout()).isEqualTo(DISPOSE_TIMEOUT);
-            assertThat(newConnectionPool.getKeepaliveIdle()).isEqualTo(KEEPALIVE_IDLE);
-            assertThat(newConnectionPool.getKeepaliveInterval()).isEqualTo(KEEPALIVE_INTERVAL);
-            assertThat(newConnectionPool.getKeepaliveCount()).isEqualTo(KEEPALIVE_COUNT);
-            assertThat(newConnectionPool.isKeepAlive()).isTrue();
-            assertThat(newConnectionPool.isEnabled()).isTrue();
+            // the applied configuration must be exactly the bean that was sent
+            assertThat(newConnectionPool).usingRecursiveComparison().isEqualTo(pool);
         }
     }
 
@@ -170,20 +158,8 @@ public class ConnectionPoolsResourceIT extends UseAdminServer {
             final var config = server.getCurrentConfiguration();
             assertThat(config.getConnectionPools()).containsOnlyKeys(DEFAULT_EXAMPLE_ORG);
             final var newConnectionPool = config.getConnectionPools().get(DEFAULT_EXAMPLE_ORG);
-            assertThat(newConnectionPool.getId()).isEqualTo(DEFAULT_EXAMPLE_ORG);
-            assertThat(newConnectionPool.getDomain()).isEqualTo(ALTERNATIVE_EXAMPLE_COM);
-            assertThat(newConnectionPool.getMaxConnectionsPerEndpoint()).isEqualTo(MAX_CONNECTIONS_PER_ENDPOINT * 3);
-            assertThat(newConnectionPool.getBorrowTimeout()).isEqualTo(BORROW_TIMEOUT);
-            assertThat(newConnectionPool.getConnectTimeout()).isEqualTo(CONNECT_TIMEOUT);
-            assertThat(newConnectionPool.getStuckRequestTimeout()).isEqualTo(STUCK_REQUEST_TIMEOUT);
-            assertThat(newConnectionPool.getIdleTimeout()).isEqualTo(IDLE_TIMEOUT);
-            assertThat(newConnectionPool.getMaxLifeTime()).isEqualTo(MAX_LIFE_TIME);
-            assertThat(newConnectionPool.getDisposeTimeout()).isEqualTo(DISPOSE_TIMEOUT);
-            assertThat(newConnectionPool.getKeepaliveIdle()).isEqualTo(KEEPALIVE_IDLE);
-            assertThat(newConnectionPool.getKeepaliveInterval()).isEqualTo(KEEPALIVE_INTERVAL);
-            assertThat(newConnectionPool.getKeepaliveCount()).isEqualTo(KEEPALIVE_COUNT);
-            assertThat(newConnectionPool.isKeepAlive()).isTrue();
-            assertThat(newConnectionPool.isEnabled()).isTrue();
+            // the applied configuration must be exactly the bean that was sent
+            assertThat(newConnectionPool).usingRecursiveComparison().isEqualTo(pool);
         }
     }
 
