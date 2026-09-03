@@ -87,7 +87,7 @@ public class FileUserRealmIT {
             UserRealm userRealm = server.getRealm();
             Collection<String> resultUsers = userRealm.listUsers();
 
-            assertThat(resultUsers).hasSize(users.size());
+            assertThat(resultUsers).containsExactlyInAnyOrderElementsOf(users.keySet());
             for (String username : users.keySet()) {
                 String login = userRealm.login(username, users.get(username));
 
@@ -124,7 +124,7 @@ public class FileUserRealmIT {
 
             UserRealm userRealm = server.getRealm();
             Collection<String> resultUsers = userRealm.listUsers();
-            assertThat(resultUsers).hasSize(users.size());
+            assertThat(resultUsers).containsExactlyInAnyOrderElementsOf(users.keySet());
 
             users.put("test2", "pass2");
             users.put("test3", "pass3");
@@ -141,7 +141,7 @@ public class FileUserRealmIT {
 
             userRealm = server.getRealm();
             resultUsers = userRealm.listUsers();
-            assertThat(resultUsers).hasSize(users.size());
+            assertThat(resultUsers).containsExactlyInAnyOrderElementsOf(users.keySet());
         }
     }
 

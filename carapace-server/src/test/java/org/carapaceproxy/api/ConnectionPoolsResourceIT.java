@@ -12,7 +12,6 @@ import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import net.javacrumbs.jsonunit.core.Option;
 import java.util.Properties;
-import java.util.Set;
 import javax.ws.rs.core.Response;
 import org.carapaceproxy.utils.HttpTestUtils;
 import org.carapaceproxy.utils.RawHttpClient;
@@ -138,7 +137,7 @@ public class ConnectionPoolsResourceIT extends UseAdminServer {
             final var response = client.post(CONNECTION_POOLS_PATH, null, pool, credentials);
             assertThat(response.getStatusLine()).contains(CREATED);
             final var config = server.getCurrentConfiguration();
-            assertThat(config.getConnectionPools().keySet()).isEqualTo(Set.of(DEFAULT_EXAMPLE_ORG, ALTERNATIVE_EXAMPLE_COM));
+            assertThat(config.getConnectionPools()).containsOnlyKeys(DEFAULT_EXAMPLE_ORG, ALTERNATIVE_EXAMPLE_COM);
             final var newConnectionPool = config.getConnectionPools().get(ALTERNATIVE_EXAMPLE_COM);
             assertThat(newConnectionPool.getId()).isEqualTo(ALTERNATIVE_EXAMPLE_COM);
             assertThat(newConnectionPool.getDomain()).isEqualTo(ALTERNATIVE_EXAMPLE_COM);
@@ -166,7 +165,7 @@ public class ConnectionPoolsResourceIT extends UseAdminServer {
             final var response = client.put(CONNECTION_POOLS_PATH + "/" + DEFAULT_EXAMPLE_ORG, null, pool, credentials);
             assertThat(response.getStatusLine()).contains(OK);
             final var config = server.getCurrentConfiguration();
-            assertThat(config.getConnectionPools().keySet()).isEqualTo(Set.of(DEFAULT_EXAMPLE_ORG));
+            assertThat(config.getConnectionPools()).containsOnlyKeys(DEFAULT_EXAMPLE_ORG);
             final var newConnectionPool = config.getConnectionPools().get(DEFAULT_EXAMPLE_ORG);
             assertThat(newConnectionPool.getId()).isEqualTo(DEFAULT_EXAMPLE_ORG);
             assertThat(newConnectionPool.getDomain()).isEqualTo(ALTERNATIVE_EXAMPLE_COM);

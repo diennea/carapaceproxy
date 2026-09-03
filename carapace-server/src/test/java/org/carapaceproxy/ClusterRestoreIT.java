@@ -237,7 +237,7 @@ public class ClusterRestoreIT {
         Thread.sleep(3_000);
         assertThat(node2.isRestoreInProgress()).isTrue();
         assertThat(node2.getBackendHealthManager().getPeriod()).isEqualTo(30);
-        assertThat(node2.getListeners().getListeningChannels().values().iterator().next()).isSameAs(listening);
+        assertThat(node2.getListeners().getListeningChannels().values()).singleElement().isSameAs(listening);
 
         // the file arrives: the next retry, every 30 seconds, applies the restored state
         TestUtils.deployResource("ca.p12", new File(tmpDir, "node2"));

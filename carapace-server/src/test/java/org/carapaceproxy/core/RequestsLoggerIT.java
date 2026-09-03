@@ -197,8 +197,7 @@ public class RequestsLoggerIT {
             reqLogger.flushAccessLogFile();
 
             List<String> rows1 = readFile(accessLogFilePath);
-            assertThat(rows1).hasSize(1);
-            assertThat(rows1.get(0)).isEqualTo("[2018-10-23 10:10:10.000] [GET thehost /index.html] [uid:uid_1, sid:sid_1, ip:123.123.123.123] "
+            assertThat(rows1).containsExactly("[2018-10-23 10:10:10.000] [GET thehost /index.html] [uid:uid_1, sid:sid_1, ip:123.123.123.123] "
                     + "server=234.234.234.234, act=CACHE, route=routeid_1, backend=host:1111. time t=1012ms b=542ms, protocol=" + HttpVersion.HTTP_1_1);
 
             // Request to log 2. Let's wait 100ms before do the request and check if flush will be done within the
@@ -244,7 +243,7 @@ public class RequestsLoggerIT {
             //reqLogger.flushAccessLogFile();
             List<String> rows3 = readFile(accessLogFilePath);
             assertThat(rows3).hasSize(2);
-            assertThat(rows3.get(1)).isEqualTo("[2018-10-23 11:10:10.000] [POST thehost2 /index2.html] [uid:uid_2, sid:sid_2, ip:111.123.123.123] "
+            assertThat(rows3).element(1).isEqualTo("[2018-10-23 11:10:10.000] [POST thehost2 /index2.html] [uid:uid_2, sid:sid_2, ip:111.123.123.123] "
                     + "server=111.234.234.234, act=PROXY, route=routeid_2, backend=host2:2222. time t=912ms b=142ms, protocol=" + HttpVersion.HTTP_1_1);
         }
 
@@ -289,7 +288,7 @@ public class RequestsLoggerIT {
 
             List<String> rows1 = readFile(accessLogFilePath);
             assertThat(rows1).hasSize(3);
-            assertThat(rows1.get(2)).isEqualTo("[2018-10-23 10:10:10.000] [GET thehost /index.html] [uid:uid_1, sid:sid_1, ip:123.123.123.123] "
+            assertThat(rows1).element(2).isEqualTo("[2018-10-23 10:10:10.000] [GET thehost /index.html] [uid:uid_1, sid:sid_1, ip:123.123.123.123] "
                     + "server=234.234.234.234, act=CACHE, route=routeid_1, backend=host:1111. time t=1012ms b=542ms, protocol=" + HttpVersion.HTTP_1_1);
 
             // This request will be taken in with the new conf
@@ -320,7 +319,7 @@ public class RequestsLoggerIT {
 
             List<String> rows2 = readFile(accessLogFilePath);
             assertThat(rows2).hasSize(4);
-            assertThat(rows2.get(3)).isEqualTo("[2018-10-23 10:10] [GET thehost /index.html]");
+            assertThat(rows2).element(3).isEqualTo("[2018-10-23 10:10] [GET thehost /index.html]");
         }
 
         // Access log writing issues test
@@ -428,8 +427,8 @@ public class RequestsLoggerIT {
             //reqLogger.flushAccessLogFile();
             List<String> rows2 = readFile(accessLogFilePath);
             assertThat(rows2).hasSize(4 + 2);
-            assertThat(rows2.get(4)).isEqualTo("[2018-10-23 11:10] [GET thehost /index1.html]");
-            assertThat(rows2.get(5)).isEqualTo("[2018-10-23 11:10] [GET thehost /index2.html]");
+            assertThat(rows2).element(4).isEqualTo("[2018-10-23 11:10] [GET thehost /index1.html]");
+            assertThat(rows2).element(5).isEqualTo("[2018-10-23 11:10] [GET thehost /index2.html]");
         }
 
         // Closing RequestLogger
@@ -489,7 +488,7 @@ public class RequestsLoggerIT {
 
             List<String> rows1 = readFile(accessLogFilePath);
             assertThat(rows1).hasSize(6 + 1);
-            assertThat(rows1.get(6)).isEqualTo("[2018-10-23 10:10] [GET thehost /index1.html]");
+            assertThat(rows1).element(6).isEqualTo("[2018-10-23 10:10] [GET thehost /index1.html]");
 
             // Second cycle should close the file and return immediatly
             run(reqLogger);
