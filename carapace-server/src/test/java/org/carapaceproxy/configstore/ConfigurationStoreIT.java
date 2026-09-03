@@ -456,8 +456,8 @@ public class ConfigurationStoreIT {
         final var exported = store.exportState();
 
         assertThat(exported.config()).containsEntry("certificate.0.hostname", d1);
-        assertThat(exported.keyPairs().keySet()).hasSameElementsAs(Set.of(d1, d2));
-        assertThat(exported.acmeAccountKeys().keySet()).hasSameElementsAs(Set.of(DEFAULT_PROVIDER_NAME, "customprovider"));
+        assertThat(exported.keyPairs()).containsOnlyKeys(d1, d2);
+        assertThat(exported.acmeAccountKeys()).containsOnlyKeys(DEFAULT_PROVIDER_NAME, "customprovider");
         final var row = exported.certificates().get(d1);
         assertThat(row.subjectAltNames()).containsExactly("www." + d1);
         assertThat(row.state()).isEqualTo("REQUEST_FAILED");

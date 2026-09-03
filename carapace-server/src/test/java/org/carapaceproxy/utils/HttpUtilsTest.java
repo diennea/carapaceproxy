@@ -101,6 +101,6 @@ class HttpUtilsTest {
     void stripHopByHopHeadersEmptyHeaders() {
         final HttpHeaders headers = new DefaultHttpHeaders();
         HttpUtils.stripHopByHopHeaders(headers);
-        assertThat(headers.isEmpty()).isTrue();
+        assertThat(headers).isEmpty();
     }
 }

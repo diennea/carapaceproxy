@@ -110,8 +110,8 @@ class StateArchiveTest {
             logger.detachAppender(logAppender);
         }
         final var warnings = logAppender.list.stream().filter(event -> event.getLevel() == Level.WARN).map(ILoggingEvent::getFormattedMessage).toList();
-        assertThat(warnings.stream().filter(warning -> warning.contains("unused")).count()).isOne();
-        assertThat(warnings.stream().noneMatch(warning -> warning.contains("other") || warning.contains(DEFAULT_PROVIDER_NAME))).isTrue();
+        assertThat(warnings).filteredOn(warning -> warning.contains("unused")).hasSize(1);
+        assertThat(warnings).noneSatisfy(warning -> assertThat(warning).containsAnyOf("other", DEFAULT_PROVIDER_NAME));
     }
 
     @Test
@@ -169,9 +169,7 @@ class StateArchiveTest {
         // documented field order
         final var order = List.of("\"format\"", "\"formatVersion\"", "\"carapaceVersion\"", "\"carapaceCommit\"", "\"createdAt\"",
                 "\"config\"", "\"keyPairs\"", "\"acmeAccountKeys\"", "\"certificates\"");
-        for (int i = 1; i < order.size(); i++) {
-            assertThat(json.indexOf(order.get(i - 1)) < json.indexOf(order.get(i))).as(json).isTrue();
-        }
+        assertThat(json).containsSubsequence(order);
         final var read = read(json);
         assertThat(read).isEqualTo(archive);
         assertThat(read.toSnapshot(CarapaceVersion.VERSION, false)).isEqualTo(SNAPSHOT);

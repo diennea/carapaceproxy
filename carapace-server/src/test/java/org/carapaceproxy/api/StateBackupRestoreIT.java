@@ -258,9 +258,9 @@ class StateBackupRestoreIT extends UseAdminServer {
             assertThat(server.getDynamicConfigurationStore().getProperty("listener.9.port", null)).isEqualTo(String.valueOf(ports[2]));
             // one listener for the same key, two for hosts differing only by case
             final List<NetworkListenerConfiguration> applied = server.getCurrentConfiguration().getListeners();
-            assertThat(applied.stream().filter(listener -> listener.port() == ports[0]).count()).isOne();
-            assertThat(applied.stream().filter(listener -> listener.port() == ports[1]).count()).isOne();
-            assertThat(applied.stream().filter(listener -> listener.port() == ports[2]).count()).isEqualTo(2);
+            assertThat(applied).filteredOn(listener -> listener.port() == ports[0]).hasSize(1);
+            assertThat(applied).filteredOn(listener -> listener.port() == ports[1]).hasSize(1);
+            assertThat(applied).filteredOn(listener -> listener.port() == ports[2]).hasSize(2);
         }
     }
 
@@ -313,11 +313,9 @@ class StateBackupRestoreIT extends UseAdminServer {
             // the warning names the dropped keys, never their values
             final List<String> loggedLines = logAppender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
             assertThat(loggedLines).anySatisfy(arg -> assertThat(arg).contains("[aws.secretkey, db.admin.password]"));
-            for (final String line : loggedLines) {
-                assertThat(line)
-                        .doesNotContain("restored secret")
-                        .doesNotContain("restored password");
-            }
+            assertThat(loggedLines).allSatisfy(line -> assertThat(line)
+                    .doesNotContain("restored secret")
+                    .doesNotContain("restored password"));
             final var stored = server.getDynamicConfigurationStore().exportState().config();
             assertThat(stored)
                     .doesNotContainKey("aws.secretkey")

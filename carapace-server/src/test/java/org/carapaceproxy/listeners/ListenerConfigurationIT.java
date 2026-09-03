@@ -143,8 +143,7 @@ public class ListenerConfigurationIT {
         release.start();
         try (HttpProxyServer server = newServerListeningOn(port)) {
             server.start();
-            assertThat(server.getListeners().getListeningChannels()
-                    .get(new EndpointKey("127.0.0.1", port))).isNotNull();
+            assertThat(server.getListeners().getListeningChannels()).containsKey(new EndpointKey("127.0.0.1", port));
         } finally {
             release.join();
         }

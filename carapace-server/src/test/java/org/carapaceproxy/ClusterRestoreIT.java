@@ -228,7 +228,7 @@ public class ClusterRestoreIT {
                 && node2.getListeners().getListeningChannels().size() == 1, 30);
         final ListeningChannel listening = node2.getListeners().getListeningChannels().values().iterator().next();
         final File fullChain = new File(new File(localStore, DOMAIN), "fullchain.pem");
-        assertThat(fullChain.exists()).isFalse();
+        assertThat(fullChain).doesNotExist();
 
         assertThat(node1.restoreState(archive, null, null).ok()).isTrue();
         assertThat(node1.getBackendHealthManager().getPeriod()).isEqualTo(26);
