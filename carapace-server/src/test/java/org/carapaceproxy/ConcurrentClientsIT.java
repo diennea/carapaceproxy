@@ -52,7 +52,7 @@ public class ConcurrentClientsIT {
     @TempDir
     public File tmpDir;
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "concurrent={0}")
     @ValueSource(booleans = {true, false})
     void clients(final boolean concurrent) throws Exception {
         stubFor(get(urlEqualTo("/index.html"))

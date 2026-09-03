@@ -19,7 +19,6 @@
  */
 package org.carapaceproxy.server.certificates;
 
-import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
@@ -32,8 +31,8 @@ import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERI
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERIFYING;
 import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
+import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
-
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -48,6 +47,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.shredzone.acme4j.Status.INVALID;
 import static org.shredzone.acme4j.Status.VALID;
+
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.net.URI;
@@ -76,6 +76,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.shredzone.acme4j.Certificate;
 import org.shredzone.acme4j.Login;
 import org.shredzone.acme4j.Order;
+import org.shredzone.acme4j.Problem;
 import org.shredzone.acme4j.Session;
 import org.shredzone.acme4j.Status;
 import org.shredzone.acme4j.challenge.Challenge;
@@ -86,7 +87,6 @@ import org.shredzone.acme4j.exception.AcmeException;
 import org.shredzone.acme4j.exception.AcmeNetworkException;
 import org.shredzone.acme4j.toolbox.JSON;
 import org.shredzone.acme4j.util.KeyPairUtils;
-import org.shredzone.acme4j.Problem;
 
 /**
  * Test for DynamicCertificatesManager.
@@ -750,7 +750,7 @@ class DynamicCertificatesManagerIT {
                 .createOrderForDomain(eq(new CertificateData("le.local", null, WAITING).getNames()));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "failureCase={0}")
     @ValueSource(strings = {"stale", "transient", "store"})
     void pendingOrderPollFailure(String failureCase) throws Exception {
         // ACME mocking: the pending order cannot be polled back from the CA
@@ -864,7 +864,7 @@ class DynamicCertificatesManagerIT {
         return store;
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "rateLimit={0}")
     @ValueSource(ints = {0, 2})
     void acmeStepsPerRunAreCapped(int rateLimit) throws Exception {
         final var domains = List.of("localhost1", "localhost2", "localhost3");
@@ -901,7 +901,7 @@ class DynamicCertificatesManagerIT {
         assertCertificateState(domain, VERIFIED, 0, man);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "step={0}, transientFailure={1}")
     @CsvSource({"creation, false", "verification, false", "verification, true"})
     void failedAttemptCleansUpChallenges(String step, boolean transientFailure) throws Exception {
         final var domain = "localhost";

@@ -70,7 +70,7 @@ public class UnreachableBackendIT {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "useCache={0}")
     @ValueSource(booleans = {true, false})
     void withUnreachableBackend(boolean useCache) throws Exception {
 
@@ -168,7 +168,7 @@ public class UnreachableBackendIT {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "useCache={0}")
     @ValueSource(booleans = {true, false})
     void connectionResetByPeer(boolean useCache) throws Exception {
 

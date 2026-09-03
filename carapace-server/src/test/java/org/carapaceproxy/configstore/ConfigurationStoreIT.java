@@ -90,7 +90,7 @@ public class ConfigurationStoreIT {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "type={0}")
     @ValueSource(strings = {"in-memory", "db"})
     void toStringConfigurationPreservesBackslashes(String type) throws Exception {
         this.type = type;
@@ -448,7 +448,7 @@ public class ConfigurationStoreIT {
         assertThat(store.getProperty("certificate.0.hostname", "")).isEmpty();
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "type={0}")
     @ValueSource(strings = {"in-memory", "db"})
     void exportReplaceRoundTrip(String type) throws Exception {
         this.type = type;
@@ -474,7 +474,7 @@ public class ConfigurationStoreIT {
         assertThat(loadAll()).containsExactlyInAnyOrderEntriesOf(original);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "type={0}")
     @ValueSource(strings = {"in-memory", "db"})
     void blankSubjectAltNamesAreNotExported(String type) throws Exception {
         this.type = type;
@@ -488,7 +488,7 @@ public class ConfigurationStoreIT {
         exported.validate();
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "type={0}")
     @ValueSource(strings = {"in-memory", "db"})
     void replaceOverwritesEverything(String type) throws Exception {
         this.type = type;
@@ -515,7 +515,7 @@ public class ConfigurationStoreIT {
         assertThat(toMap(store.asProperties(null))).containsExactlyInAnyOrderEntriesOf(snapshot.config());
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "type={0}")
     @ValueSource(strings = {"in-memory", "db"})
     void failingPreCommitCheckLeavesStateUntouched(String type) throws Exception {
         this.type = type;
