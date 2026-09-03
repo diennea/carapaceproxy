@@ -39,6 +39,7 @@ import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.server.mapper.EndpointMapper;
 import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
+import org.carapaceproxy.utils.SchedulerProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,6 +62,7 @@ public class BackendHealthManager implements Runnable {
     private final ConcurrentHashMap<String, SSLSocketFactory> httpsFactoryCache = new ConcurrentHashMap<>();
     private final File basePath;
     private EndpointMapper mapper;
+    private final SchedulerProvider schedulerProvider;
     private ScheduledExecutorService timer;
     private ScheduledFuture<?> scheduledFuture;
     // can change at runtime
@@ -77,6 +79,21 @@ public class BackendHealthManager implements Runnable {
     }
 
     public BackendHealthManager(final RuntimeServerConfiguration conf, final EndpointMapper mapper, final File basePath) {
+        this(conf, mapper, basePath, Executors::newSingleThreadScheduledExecutor);
+    }
+
+    /**
+     * Builds a manager on a caller-supplied scheduler, so tests can substitute it without mocking
+     * {@link Executors} statically.
+     *
+     * @param conf              the configuration to read the probe period and timeouts from
+     * @param mapper            the mapper whose backends are probed
+     * @param basePath          the base path probe requests are resolved against
+     * @param schedulerProvider supplies the scheduler the periodic probe runs on
+     */
+    BackendHealthManager(final RuntimeServerConfiguration conf, final EndpointMapper mapper, final File basePath,
+                         final SchedulerProvider schedulerProvider) {
+        this.schedulerProvider = schedulerProvider;
         this.mapper = mapper;
         this.connectTimeout = conf.getHealthConnectTimeout();
         this.warmupPeriod = conf.getWarmupPeriod();
@@ -105,7 +122,7 @@ public class BackendHealthManager implements Runnable {
             return;
         }
         if (timer == null) {
-            timer = Executors.newSingleThreadScheduledExecutor();
+            timer = schedulerProvider.get();
         }
         LOG.info("Starting BackendHealthManager, period: {} seconds", period);
         scheduledFuture = timer.scheduleAtFixedRate(this, period, period, TimeUnit.SECONDS);

@@ -14,6 +14,11 @@
 
     <name>Carapace :: Server</name>
 
+    <properties>
+        <!-- Path resolved by the maven-dependency-plugin 'properties' goal below -->
+        <surefire.argline.agent>-javaagent:${org.mockito:mockito-core:jar}</surefire.argline.agent>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.projectreactor</groupId>
@@ -294,22 +299,8 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.powermock</groupId>
-            <artifactId>powermock-module-junit4</artifactId>
-            <version>${libs.powermock}</version>
-            <scope>test</scope>
-            <exclusions>
-                <!-- Clashes with org.hamcrest:hamcrest -->
-                <exclusion>
-                    <groupId>org.hamcrest</groupId>
-                    <artifactId>hamcrest-core</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>org.powermock</groupId>
-            <artifactId>powermock-api-mockito2</artifactId>
-            <version>${libs.powermock}</version>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -392,6 +383,18 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>javacc-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>resolve-test-agent-paths</id>
+                        <goals>
+                            <goal>properties</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

@@ -91,6 +91,8 @@
     <properties>
         <!-- Keeps @{argLine} resolvable when JaCoCo does not run -->
         <argLine></argLine>
+        <!-- Empty by default; carapace-server overrides it to attach the Mockito java agent. -->
+        <surefire.argline.agent></surefire.argline.agent>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <toolchain.java.version>21</toolchain.java.version>
         <maven.compiler.release>${toolchain.java.version}</maven.compiler.release>
@@ -135,8 +137,8 @@
         <libs.junit>4.13.2</libs.junit>
         <libs.junitparams>1.1.1</libs.junitparams>
         <libs.wiremock>3.13.1</libs.wiremock>
-        <libs.powermock>2.0.9</libs.powermock>
-        <libs.objenesis>3.0.1</libs.objenesis>
+        <libs.mockito>5.20.0</libs.mockito>
+        <libs.objenesis>3.3</libs.objenesis>
         <libs.hamcrest>3.0</libs.hamcrest>
     </properties>
 
@@ -295,6 +297,11 @@
                 </exclusions>
             </dependency>
             <dependency>
+                <groupId>org.mockito</groupId>
+                <artifactId>mockito-core</artifactId>
+                <version>${libs.mockito}</version>
+            </dependency>
+            <dependency>
                 <groupId>org.objenesis</groupId>
                 <artifactId>objenesis</artifactId>
                 <version>${libs.objenesis}</version>
@@ -349,6 +356,7 @@
                         <trimStackTrace>false</trimStackTrace>
                         <argLine>
                             @{argLine}
+                            ${surefire.argline.agent}
                             --add-opens java.base/java.io=ALL-UNNAMED
                             --add-opens java.base/java.lang=ALL-UNNAMED
                             --add-opens java.base/java.util=ALL-UNNAMED

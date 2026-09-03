@@ -72,6 +72,7 @@ import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
+import org.carapaceproxy.utils.SchedulerProvider;
 import org.carapaceproxy.utils.CertificatesUtils;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
 import org.shredzone.acme4j.Order;
@@ -116,6 +117,7 @@ public class DynamicCertificatesManager implements Runnable {
 
     private Set<String> domainsCheckerIPAddresses;
 
+    private final SchedulerProvider schedulerProvider;
     private ScheduledExecutorService scheduler;
     private ScheduledFuture<?> scheduledFuture;
     private volatile boolean started; // keep track of start() calling
@@ -127,7 +129,40 @@ public class DynamicCertificatesManager implements Runnable {
     private final HttpProxyServer server;
 
     public DynamicCertificatesManager(HttpProxyServer server) {
+        this(server, () -> Executors.newSingleThreadScheduledExecutor(
+                new ThreadFactoryBuilder().setNameFormat(THREAD_NAME).build()));
+    }
+
+    /**
+     * Builds a manager on a caller-supplied scheduler, so tests can substitute it without mocking
+     * {@link Executors} statically.
+     *
+     * @param server            the proxy server this manager serves certificates for
+     * @param schedulerProvider supplies the scheduler the periodic run is scheduled on
+     */
+    DynamicCertificatesManager(HttpProxyServer server, SchedulerProvider schedulerProvider) {
         this.server = server;
+        this.schedulerProvider = schedulerProvider;
+    }
+
+    /**
+     * Replaces the ACME clients that production builds from configuration, so tests can supply mocks.
+     * Call it after {@link #reloadConfiguration(RuntimeServerConfiguration)}, which rebuilds the map.
+     *
+     * @param acmeClients the clients to use, keyed by provider name
+     */
+    void setAcmeClients(Map<String, ACMEClient> acmeClients) {
+        this.acmeClients = Map.copyOf(acmeClients);
+    }
+
+    /**
+     * Replaces the Route53 client that {@link #initAWSClient(String, String)} builds from credentials,
+     * so tests can supply a mock. Call it after that method, which overwrites the field.
+     *
+     * @param r53Client the client to use for DNS challenges
+     */
+    void setRoute53Client(Route53Client r53Client) {
+        this.r53Client = r53Client;
     }
 
     public void setConfigurationStore(ConfigurationStore configStore) {
@@ -282,7 +317,7 @@ public class DynamicCertificatesManager implements Runnable {
             return;
         }
         if (scheduler == null) {
-            scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setNameFormat(THREAD_NAME).build());
+            scheduler = schedulerProvider.get();
         }
         LOG.info("Starting DynamicCertificatesManager, period: {} seconds{}", period, TESTING_MODE ? " (TESTING_MODE)" : "");
         scheduledFuture = scheduler.scheduleWithFixedDelay(this, 0, period, TimeUnit.SECONDS);
