@@ -64,7 +64,7 @@ public class BigUploadIT {
     @BeforeEach
     public void setUp() throws Exception {
         final TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
-        server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));
+        server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir);
         server.start();
     }
 
@@ -99,12 +99,4 @@ public class BigUploadIT {
                 .verifyComplete();
     }
 
-    private static File newFolder(File root, String... subDirs) throws IOException {
-        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
-        File result = new File(root, subFolder);
-        if (!result.mkdirs()) {
-            throw new IOException("Couldn't create folders " + root);
-        }
-        return result;
-    }
 }

@@ -74,7 +74,7 @@ public class ForwardedStrategyIT {
     @Test
     public void testDropStrategy() throws IOException, ConfigurationNotValidException, InterruptedException {
         final var mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
-        try (final var server = new HttpProxyServer(mapper, newFolder(tmpDir, "junit"))) {
+        try (final var server = new HttpProxyServer(mapper, tmpDir)) {
             server.addListener(getConfiguration(ForwardedStrategies.drop(), Set.of()));
             server.start();
             int port = server.getLocalPort();
@@ -93,7 +93,7 @@ public class ForwardedStrategyIT {
     @Test
     public void testPreserveStrategy() throws IOException, ConfigurationNotValidException, InterruptedException {
         final var mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
-        try (final var server = new HttpProxyServer(mapper, newFolder(tmpDir, "junit"))) {
+        try (final var server = new HttpProxyServer(mapper, tmpDir)) {
             server.addListener(getConfiguration(ForwardedStrategies.preserve(), Set.of()));
             server.start();
             int port = server.getLocalPort();
@@ -112,7 +112,7 @@ public class ForwardedStrategyIT {
     @Test
     public void testRewriteStrategy() throws IOException, ConfigurationNotValidException, InterruptedException {
         final var mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
-        try (final var server = new HttpProxyServer(mapper, newFolder(tmpDir, "junit"))) {
+        try (final var server = new HttpProxyServer(mapper, tmpDir)) {
             server.addListener(getConfiguration(ForwardedStrategies.rewrite(), Set.of()));
             server.start();
             int port = server.getLocalPort();
@@ -132,7 +132,7 @@ public class ForwardedStrategyIT {
     @CsvSource({"true", "false"})
     public void testIfTrustedStrategy(boolean useCidr) throws IOException, ConfigurationNotValidException, InterruptedException {
         final var mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
-        try (final var server = new HttpProxyServer(mapper, newFolder(tmpDir, "junit"))) {
+        try (final var server = new HttpProxyServer(mapper, tmpDir)) {
             final var trustedIps = Set.of(REAL_IP_ADDRESS + (useCidr ? SUBNET : ""));
             server.addListener(getConfiguration(ForwardedStrategies.ifTrusted(trustedIps), trustedIps));
             server.start();
@@ -153,7 +153,7 @@ public class ForwardedStrategyIT {
     @CsvSource({"true", "false"})
     public void testIfNotTrustedStrategy(boolean useCidr) throws IOException, ConfigurationNotValidException, InterruptedException {
         final var mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
-        try (final var server = new HttpProxyServer(mapper, newFolder(tmpDir, "junit"))) {
+        try (final var server = new HttpProxyServer(mapper, tmpDir)) {
             final var trustedIps = Set.of(FORWARDED_IP_ADDRESS + (useCidr ? SUBNET : ""));
             server.addListener(getConfiguration(ForwardedStrategies.ifTrusted(trustedIps), trustedIps));
             server.start();
@@ -209,12 +209,4 @@ public class ForwardedStrategyIT {
                 """).toString();
     }
 
-    private static File newFolder(File root, String... subDirs) throws IOException {
-        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
-        File result = new File(root, subFolder);
-        if (!result.mkdirs()) {
-            throw new IOException("Couldn't create folders " + root);
-        }
-        return result;
-    }
 }

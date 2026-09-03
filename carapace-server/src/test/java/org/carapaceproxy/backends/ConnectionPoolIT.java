@@ -83,7 +83,7 @@ public class ConnectionPoolIT extends UseAdminServer {
         final Properties config = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         config.put("config.type", "database");
         config.put("db.jdbc.url", "jdbc:herddb:localhost");
-        config.put("db.server.base.dir", newFolder(tmpDir, "junit").getAbsolutePath());
+        config.put("db.server.base.dir", tmpDir.getAbsolutePath());
         config.put("aws.accesskey", "accesskey");
         config.put("aws.secretkey", "secretkey");
         config.put("healthmanager.tolerant", "true");
@@ -416,12 +416,4 @@ public class ConnectionPoolIT extends UseAdminServer {
         }
     }
 
-    private static File newFolder(File root, String... subDirs) throws IOException {
-        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
-        File result = new File(root, subFolder);
-        if (!result.mkdirs()) {
-            throw new IOException("Couldn't create folders " + root);
-        }
-        return result;
-    }
 }

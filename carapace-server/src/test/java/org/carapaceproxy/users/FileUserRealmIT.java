@@ -65,7 +65,7 @@ public class FileUserRealmIT {
 
     @Test
     public void testFileUserRealm() throws Exception {
-        try (HttpProxyServer server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), newFolder(tmpDir, "junit"))) {
+        try (HttpProxyServer server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), tmpDir)) {
             Properties prop = new Properties();
             prop.setProperty("http.admin.enabled", "true");
             prop.setProperty("http.admin.port", "8761");
@@ -105,7 +105,7 @@ public class FileUserRealmIT {
 
     @Test
     public void testFileUserRealmRefresh() throws Exception {
-        try (HttpProxyServer server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), newFolder(tmpDir, "junit"))) {
+        try (HttpProxyServer server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), tmpDir)) {
             Map<String, String> users = new HashMap<>();
             users.put("test1", "pass1");
 
@@ -150,7 +150,7 @@ public class FileUserRealmIT {
 
     @Test
     public void testFileRelativePath() throws Exception {
-        try (HttpProxyServer server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), newFolder(tmpDir, "junit"))) {
+        try (HttpProxyServer server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), tmpDir)) {
             Properties prop = new Properties();
             prop.setProperty("http.admin.enabled", "true");
             prop.setProperty("http.admin.port", "8761");
@@ -193,13 +193,5 @@ public class FileUserRealmIT {
         return result;
     }
 
-    private static File newFolder(File root, String... subDirs) throws IOException {
-        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
-        File result = new File(root, subFolder);
-        if (!result.mkdirs()) {
-            throw new IOException("Couldn't create folders " + root);
-        }
-        return result;
-    }
 
 }

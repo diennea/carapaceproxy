@@ -58,7 +58,7 @@ public class ConnectionPoolsResourceIT extends UseAdminServer {
         final Properties config = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         config.put("config.type", "database");
         config.put("db.jdbc.url", "jdbc:herddb:localhost");
-        config.put("db.server.base.dir", newFolder(tmpDir, "junit").getAbsolutePath());
+        config.put("db.server.base.dir", tmpDir.getAbsolutePath());
         config.put("aws.accesskey", "accesskey");
         config.put("aws.secretkey", "secretkey");
         startServer(config);
@@ -249,12 +249,4 @@ public class ConnectionPoolsResourceIT extends UseAdminServer {
     private static class MapTypeReference extends TypeReference<Map<String, ConnectionPoolsResource.ConnectionPoolBean>> {
     }
 
-    private static File newFolder(File root, String... subDirs) throws IOException {
-        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
-        File result = new File(root, subFolder);
-        if (!result.mkdirs()) {
-            throw new IOException("Couldn't create folders " + root);
-        }
-        return result;
-    }
 }

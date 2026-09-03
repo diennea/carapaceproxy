@@ -90,7 +90,7 @@ public class UnreachableBackendIT {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache, false);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir)) {
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -127,7 +127,7 @@ public class UnreachableBackendIT {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache, false);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
-        try (HttpProxyServer server = new HttpProxyServer(mapper, newFolder(tmpDir, "junit"))) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir)) {
             Properties properties = new Properties();
             properties.put("healthmanager.tolerant", "true");
             properties.put("backend.1.id", "backend-a");
@@ -184,7 +184,7 @@ public class UnreachableBackendIT {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", dummyport, useCache, false);
         EndpointKey key = new EndpointKey("localhost", dummyport);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir);) {
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -206,12 +206,4 @@ public class UnreachableBackendIT {
         }
     }
 
-    private static File newFolder(File root, String... subDirs) throws IOException {
-        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
-        File result = new File(root, subFolder);
-        if (!result.mkdirs()) {
-            throw new IOException("Couldn't create folders " + root);
-        }
-        return result;
-    }
 }

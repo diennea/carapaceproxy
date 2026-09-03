@@ -67,7 +67,7 @@ public class Http2IT {
                         .withBody(RESPONSE))
         );
         final var mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), withCache, false);
-        try (final var server = new HttpProxyServer(mapper, newFolder(tmpDir, "junit"))) {
+        try (final var server = new HttpProxyServer(mapper, tmpDir)) {
             server.addListener(new NetworkListenerConfiguration(
                     "localhost",
                     DYNAMIC_PORT,
@@ -106,12 +106,4 @@ public class Http2IT {
                 .blockFirst();
     }
 
-    private static File newFolder(File root, String... subDirs) throws IOException {
-        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
-        File result = new File(root, subFolder);
-        if (!result.mkdirs()) {
-            throw new IOException("Couldn't create folders " + root);
-        }
-        return result;
-    }
 }

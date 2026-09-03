@@ -52,7 +52,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
 
     @Test
     public void testPeerDiscovery() throws Exception {
-        try (TestingServer testingServer = new TestingServer(2229, newFolder(tmpDir, "junit"))) {
+        try (TestingServer testingServer = new TestingServer(2229, tmpDir)) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
                     6000, false /*acl */, peerId1, Collections.EMPTY_MAP, new Properties());
@@ -98,7 +98,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
 
     @Test
     public void testWatchEvent() throws Exception {
-        try (TestingServer testingServer = new TestingServer(2229, newFolder(tmpDir, "junit"));) {
+        try (TestingServer testingServer = new TestingServer(2229, tmpDir);) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
                     6000, false /*acl */, peerId1, Collections.EMPTY_MAP, new Properties());
@@ -234,7 +234,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
 
     @Test
     public void testPeerInfo() throws Exception {
-        try (TestingServer testingServer = new TestingServer(2229, newFolder(tmpDir, "junit"));) {
+        try (TestingServer testingServer = new TestingServer(2229, tmpDir);) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
                     6000, false /*acl */, peerId1, Map.of("name", "peer1"), new Properties());
@@ -279,12 +279,4 @@ public class ZooKeeperGroupMembershipHandlerIT {
         }
     }
 
-    private static File newFolder(File root, String... subDirs) throws IOException {
-        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
-        File result = new File(root, subFolder);
-        if (!result.mkdirs()) {
-            throw new IOException("Couldn't create folders " + root);
-        }
-        return result;
-    }
 }

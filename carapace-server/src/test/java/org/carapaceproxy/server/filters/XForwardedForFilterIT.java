@@ -67,7 +67,7 @@ public class XForwardedForFilterIT {
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir);) {
             server.addRequestFilter(new RequestFilterConfiguration(XForwardedForRequestFilter.TYPE, Collections.emptyMap()));
             server.start();
             int port = server.getLocalPort();
@@ -107,7 +107,7 @@ public class XForwardedForFilterIT {
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir);) {
             server.start();
             int port = server.getLocalPort();
 
@@ -124,13 +124,5 @@ public class XForwardedForFilterIT {
         }
     }
 
-    private static File newFolder(File root, String... subDirs) throws IOException {
-        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
-        File result = new File(root, subFolder);
-        if (!result.mkdirs()) {
-            throw new IOException("Couldn't create folders " + root);
-        }
-        return result;
-    }
 
 }

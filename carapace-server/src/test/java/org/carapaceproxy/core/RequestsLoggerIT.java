@@ -522,7 +522,7 @@ public class RequestsLoggerIT {
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir);) {
             server.getCurrentConfiguration().setAccessLogPath(tmpDir.getAbsolutePath() + "/access.log");
             server.start();
             int port = server.getLocalPort();
@@ -565,7 +565,7 @@ public class RequestsLoggerIT {
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir);) {
             server.getCurrentConfiguration().setAccessLogPath(tmpDir.getAbsolutePath() + "/access.log");
             server.getCurrentConfiguration().setAccessLogMaxSize(1024);
             Path currentAccessLogPath = Paths.get(server.getCurrentConfiguration().getAccessLogPath());
@@ -608,13 +608,5 @@ public class RequestsLoggerIT {
         }
     }
 
-    private static File newFolder(File root, String... subDirs) throws IOException {
-        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
-        File result = new File(root, subFolder);
-        if (!result.mkdirs()) {
-            throw new IOException("Couldn't create folders " + root);
-        }
-        return result;
-    }
 
 }

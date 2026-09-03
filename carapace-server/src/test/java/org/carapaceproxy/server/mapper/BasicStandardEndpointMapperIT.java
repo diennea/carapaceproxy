@@ -122,7 +122,7 @@ public class BasicStandardEndpointMapperIT {
 
             return mapper;
         };
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapperFactory, newFolder(tmpDir, "junit"))) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapperFactory, tmpDir)) {
             server.start();
             int port = server.getLocalPort();
             {
@@ -180,7 +180,7 @@ public class BasicStandardEndpointMapperIT {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"))) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir)) {
 
             Properties configuration = new Properties();
             configuration.put("listener.1.host", "0.0.0.0");
@@ -331,7 +331,7 @@ public class BasicStandardEndpointMapperIT {
         };
         final BackendHealthManager bhMan = mockHealth(backendPort);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapperFactory, newFolder(tmpDir, "junit"))) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapperFactory, tmpDir)) {
             server.setBackendHealthManager(bhMan);
             server.start();
             int port = server.getLocalPort();
@@ -363,7 +363,7 @@ public class BasicStandardEndpointMapperIT {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"))) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir)) {
 
             {
                 Properties configuration = new Properties();
@@ -437,7 +437,7 @@ public class BasicStandardEndpointMapperIT {
 
     @Test
     public void testServeACMEChallengeToken() throws Exception {
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"))) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir)) {
             final String tokenName = "test-token";
             final String tokenData = "test-token-data-content";
             DynamicCertificatesManager dynamicCertificateManager = mock(DynamicCertificatesManager.class);
@@ -517,7 +517,7 @@ public class BasicStandardEndpointMapperIT {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"))) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir)) {
             Properties configuration = new Properties();
             configuration.put("healthmanager.tolerant", "true");
             configuration.put("backend.1.id", "b1");
@@ -643,7 +643,7 @@ public class BasicStandardEndpointMapperIT {
     @Test
     public void testActionRedirect() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"))) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir)) {
             Properties configuration = new Properties();
             configuration.put("listener.1.host", "0.0.0.0");
             configuration.put("listener.1.port", "1425");
@@ -744,12 +744,4 @@ public class BasicStandardEndpointMapperIT {
         return bhMan;
     }
 
-    private static File newFolder(File root, String... subDirs) throws IOException {
-        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
-        File result = new File(root, subFolder);
-        if (!result.mkdirs()) {
-            throw new IOException("Couldn't create folders " + root);
-        }
-        return result;
-    }
 }

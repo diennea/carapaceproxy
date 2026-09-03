@@ -80,7 +80,7 @@ public class StuckRequestsIT {
         final int theport = wireMockRule.getPort();
         EndpointKey key = new EndpointKey("localhost", theport);
 
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"))) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir)) {
             Properties properties = new Properties();
             properties.put("healthmanager.tolerant", "true");
             properties.put("backend.1.id", "backend-a");
@@ -155,12 +155,4 @@ public class StuckRequestsIT {
         }
     }
 
-    private static File newFolder(File root, String... subDirs) throws IOException {
-        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
-        File result = new File(root, subFolder);
-        if (!result.mkdirs()) {
-            throw new IOException("Couldn't create folders " + root);
-        }
-        return result;
-    }
 }
