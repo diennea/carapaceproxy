@@ -78,7 +78,6 @@ public class HealthCheckIT {
             assertStaticBackendConfig(mapper, b1conf.id());
 
             final BackendHealthStatus _status = status.get(b1conf.hostPort());
-            assertThat(_status).isNotNull();
             assertThat(_status.getHostPort()).isEqualTo(b1conf.hostPort());
             assertThat(_status.getStatus()).isEqualTo(BackendHealthStatus.Status.COLD);
             assertThat(_status.getUnreachableSince()).isZero();
@@ -87,7 +86,6 @@ public class HealthCheckIT {
                     .isBetween(startTs, endTs);
 
             final BackendHealthCheck lastProbe = _status.getLastProbe();
-            assertThat(lastProbe).isNotNull();
             assertThat(lastProbe)
                     .extracting(BackendHealthCheck::path, BackendHealthCheck::result,
                             BackendHealthCheck::httpResponse, BackendHealthCheck::httpBody)
@@ -113,18 +111,15 @@ public class HealthCheckIT {
             assertStaticBackendConfig(mapper, b1conf.id());
 
             final BackendHealthStatus _status = status.get(b1conf.hostPort());
-            assertThat(_status).isNotNull();
             assertThat(_status.getHostPort()).isEqualTo(b1conf.hostPort());
             assertThat(_status.getStatus()).isEqualTo(BackendHealthStatus.Status.DOWN);
             assertThat(_status.getLastReachable())
-                    .isLessThanOrEqualTo(startTs)
-                    .isLessThanOrEqualTo(endTs);
+                    .isLessThanOrEqualTo(startTs);
             assertThat(_status.getUnreachableSince())
                     .isBetween(startTs, endTs);
             assertThat(_status.getLastUnreachable()).isEqualTo(_status.getUnreachableSince());
 
             final BackendHealthCheck lastProbe = _status.getLastProbe();
-            assertThat(lastProbe).isNotNull();
             assertThat(lastProbe)
                     .extracting(BackendHealthCheck::path, BackendHealthCheck::result,
                             BackendHealthCheck::httpResponse, BackendHealthCheck::httpBody)
@@ -150,20 +145,16 @@ public class HealthCheckIT {
             assertStaticBackendConfig(mapper, b1conf.id());
 
             final BackendHealthStatus _status = status.get(b1conf.hostPort());
-            assertThat(_status).isNotNull();
             assertThat(_status.getHostPort()).isEqualTo(b1conf.hostPort());
             assertThat(_status.getStatus()).isEqualTo(BackendHealthStatus.Status.DOWN);
             assertThat(_status.getLastReachable())
-                    .isLessThanOrEqualTo(startTs)
-                    .isLessThanOrEqualTo(endTs);
+                    .isLessThanOrEqualTo(startTs);
             assertThat(_status.getUnreachableSince())
-                    .isLessThanOrEqualTo(startTs)
-                    .isLessThanOrEqualTo(endTs);
+                    .isLessThanOrEqualTo(startTs);
             assertThat(_status.getLastUnreachable())
                     .isBetween(startTs, endTs);
 
             final BackendHealthCheck lastProbe = _status.getLastProbe();
-            assertThat(lastProbe).isNotNull();
             assertThat(lastProbe)
                     .extracting(BackendHealthCheck::path, BackendHealthCheck::result,
                             BackendHealthCheck::httpResponse, BackendHealthCheck::httpBody)
@@ -189,18 +180,15 @@ public class HealthCheckIT {
             assertStaticBackendConfig(mapper, b1conf.id());
 
             final BackendHealthStatus _status = status.get(b1conf.hostPort());
-            assertThat(_status).isNotNull();
             assertThat(_status.getHostPort()).isEqualTo(b1conf.hostPort());
             assertThat(_status.getStatus()).isEqualTo(BackendHealthStatus.Status.COLD);
             assertThat(_status.getUnreachableSince()).isZero();
             assertThat(_status.getLastUnreachable())
-                    .isLessThanOrEqualTo(startTs)
-                    .isLessThanOrEqualTo(endTs);
+                    .isLessThanOrEqualTo(startTs);
             assertThat(_status.getLastReachable())
                     .isBetween(startTs, endTs);
 
             final BackendHealthCheck lastProbe = _status.getLastProbe();
-            assertThat(lastProbe).isNotNull();
             assertThat(lastProbe)
                     .extracting(BackendHealthCheck::path, BackendHealthCheck::result,
                             BackendHealthCheck::httpResponse, BackendHealthCheck::httpBody)

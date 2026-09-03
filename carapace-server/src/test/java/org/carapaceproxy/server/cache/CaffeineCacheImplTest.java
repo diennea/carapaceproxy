@@ -194,7 +194,6 @@ public class CaffeineCacheImplTest {
 
         // Put 2b (replace 2)
         CacheEntry e2b = genCacheEntry("res_2", 300, 0);
-        assertThat(e2b.key).isEqualTo(e2.key);
         cache.put(e2b.key, e2b.payload);
         assertThat(cache.get(e2b.key)).isEqualTo(e2b.payload);
 

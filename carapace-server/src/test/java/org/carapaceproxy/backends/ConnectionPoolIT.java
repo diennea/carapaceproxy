@@ -305,7 +305,6 @@ public class ConnectionPoolIT extends UseAdminServer {
         );
         {
             ConnectionProvider provider = server.getProxyRequestsManager().getConnectionsManager().getConnectionProvider(defaultPool);
-            assertThat(provider).isNotNull();
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost)
                     .hasSize(2);
@@ -318,7 +317,6 @@ public class ConnectionPoolIT extends UseAdminServer {
         );
         {
             ConnectionProvider provider = server.getProxyRequestsManager().getConnectionsManager().getConnectionProvider(poolWithDefaults);
-            assertThat(provider).isNotNull();
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost)
                     .hasSize(2);
@@ -331,7 +329,6 @@ public class ConnectionPoolIT extends UseAdminServer {
         );
         {
             ConnectionProvider provider = server.getProxyRequestsManager().getConnectionsManager().getConnectionProvider(customPool);
-            assertThat(provider).isNotNull();
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost)
                     .hasSize(2);

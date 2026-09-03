@@ -190,7 +190,6 @@ public class CertificatesIT extends UseAdminServer {
 
         DynamicCertificatesManager dynCertMan = server.getDynamicCertificatesManager();
         CertificateData data = dynCertMan.getCertificateDataForDomain("localhost");
-        assertThat(data).isNotNull();
         assertThat(data.isManual()).isTrue();
 
         // Request #1: still expected default certificate
@@ -212,7 +211,6 @@ public class CertificatesIT extends UseAdminServer {
             HttpResponse resp = uploadCertificate("localhost", null, chainData, client, credentials);
             assertThat(resp.getBodyString()).contains("SUCCESS");
             data = dynCertMan.getCertificateDataForDomain("localhost");
-            assertThat(data).isNotNull();
             assertThat(data.isManual()).isTrue();
             assertThat(data.getState()).isSameAs(DynamicCertificateState.AVAILABLE);
         }
@@ -237,7 +235,6 @@ public class CertificatesIT extends UseAdminServer {
             HttpResponse resp = uploadCertificate("localhost", null, chainData, client, credentials);
             assertThat(resp.getBodyString()).contains("SUCCESS");
             data = dynCertMan.getCertificateDataForDomain("localhost");
-            assertThat(data).isNotNull();
             assertThat(data.isManual()).isTrue();
             assertThat(data.getState()).isSameAs(DynamicCertificateState.AVAILABLE);
         }
@@ -255,7 +252,6 @@ public class CertificatesIT extends UseAdminServer {
         // this calls "reloadFromDB" > "manual" flag has to be retained even if not stored in db.
         dynCertMan.setStateOfCertificate("localhost", DynamicCertificateState.WAITING);
         data = dynCertMan.getCertificateDataForDomain("localhost");
-        assertThat(data).isNotNull();
         assertThat(data.isManual()).isTrue();
     }
 
@@ -275,7 +271,6 @@ public class CertificatesIT extends UseAdminServer {
                 assertThat(resp.getBodyString()).contains("ERROR: certificate data required");
             } else {
                 CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost");
-                assertThat(data).isNotNull();
                 assertThat(data.isManual()).isFalse();
                 assertThat(dynCertsMan.getStateOfCertificate("localhost")).isEqualTo(DynamicCertificateState.WAITING); // no certificate-data uploaded
             }
@@ -289,7 +284,6 @@ public class CertificatesIT extends UseAdminServer {
             HttpResponse resp = uploadCertificate("localhost", "type=" + type, chainData, client, credentials);
             assertThat(resp.getBodyString()).contains("SUCCESS");
             CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost");
-            assertThat(data).isNotNull();
             assertThat(data.isManual()).isEqualTo(type.equals("manual"));
             assertThat(dynCertsMan.getStateOfCertificate("localhost")).isEqualTo(DynamicCertificateState.AVAILABLE);
 
@@ -318,7 +312,6 @@ public class CertificatesIT extends UseAdminServer {
             HttpResponse resp = uploadCertificate("localhost", "type=" + otherType, chainData, client, credentials);
             assertThat(resp.getBodyString()).contains("SUCCESS");
             CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost");
-            assertThat(data).isNotNull();
             assertThat(data.isManual()).isEqualTo(otherType.equals("manual"));
             assertThat(dynCertsMan.getStateOfCertificate("localhost")).isEqualTo(DynamicCertificateState.AVAILABLE);
 
@@ -335,7 +328,6 @@ public class CertificatesIT extends UseAdminServer {
             if (type.equals("acme")) {
                 assertThat(resp.getBodyString()).contains("SUCCESS");
                 data = dynCertsMan.getCertificateDataForDomain("localhost");
-                assertThat(data).isNotNull();
                 assertThat(data.isManual()).isFalse();
                 assertThat(dynCertsMan.getStateOfCertificate("localhost")).isEqualTo(DynamicCertificateState.WAITING); // no certificate-data uploaded
             }
@@ -359,7 +351,6 @@ public class CertificatesIT extends UseAdminServer {
                 assertThat(resp.getBodyString()).contains("ERROR: param 'daysbeforerenewal' available for type 'acme' only");
             } else {
                 CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost2");
-                assertThat(data).isNotNull();
                 assertThat(data.getDaysBeforeRenewal()).isEqualTo(10);
             }
             // negative value
@@ -372,7 +363,6 @@ public class CertificatesIT extends UseAdminServer {
             // default value
             uploadCertificate("localhost-default", "type=" + type, chainData, client, credentials);
             CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost-default");
-            assertThat(data).isNotNull();
             assertThat(data.getDaysBeforeRenewal()).isEqualTo(type.equals("manual") ? 0 : DEFAULT_DAYS_BEFORE_RENEWAL);
 
             // Update
@@ -381,7 +371,6 @@ public class CertificatesIT extends UseAdminServer {
                 assertThat(resp.getBodyString()).contains("ERROR: param 'daysbeforerenewal' available for type 'acme' only");
             } else {
                 data = dynCertsMan.getCertificateDataForDomain("localhost2");
-                assertThat(data).isNotNull();
                 assertThat(data.getDaysBeforeRenewal()).isEqualTo(45);
             }
             // negative value
@@ -394,13 +383,11 @@ public class CertificatesIT extends UseAdminServer {
             // default value
             uploadCertificate("localhost2", "type=" + type, chainData, client, credentials);
             data = dynCertsMan.getCertificateDataForDomain("localhost2");
-            assertThat(data).isNotNull();
             assertThat(data.getDaysBeforeRenewal()).isEqualTo(type.equals("manual") ? 0 : DEFAULT_DAYS_BEFORE_RENEWAL);
             // changing the type (acme <-> manual)
             String other = type.equals("manual") ? "acme" : "manual";
             uploadCertificate("localhost2", "type=" + other, chainData, client, credentials);
             data = dynCertsMan.getCertificateDataForDomain("localhost2");
-            assertThat(data).isNotNull();
             assertThat(data.getDaysBeforeRenewal()).isEqualTo(other.equals("manual") ? 0 : DEFAULT_DAYS_BEFORE_RENEWAL);
             SSLCertificateConfiguration config = server.getCurrentConfiguration().getCertificates().get("localhost2");
             assertThat(config.getDaysBeforeRenewal()).isEqualTo(other.equals("manual") ? 0 : DEFAULT_DAYS_BEFORE_RENEWAL);
@@ -442,7 +429,6 @@ public class CertificatesIT extends UseAdminServer {
             resp = uploadCertificate("localhost2", "type=acme&provider=custom", chainData, client, credentials);
             assertThat(resp.getBodyString()).contains("SUCCESS");
             CertificateData data = dynCertsMan.getCertificateDataForDomain("localhost2");
-            assertThat(data).isNotNull();
             assertThat(data.getProvider()).isEqualTo("custom");
             assertThat(server.getCurrentConfiguration().getCertificates().get("localhost2").getProvider()).isEqualTo("custom");
             ConfigurationStore store = server.getDynamicConfigurationStore();
@@ -454,7 +440,6 @@ public class CertificatesIT extends UseAdminServer {
             resp = uploadCertificate("localhost2", "type=acme", chainData, client, credentials);
             assertThat(resp.getBodyString()).contains("SUCCESS");
             data = dynCertsMan.getCertificateDataForDomain("localhost2");
-            assertThat(data).isNotNull();
             assertThat(data.getProvider()).isEqualTo(DEFAULT_PROVIDER_NAME);
             assertThat(store.anyPropertyMatches((k, v) -> k.matches("certificate\\.[0-9]+\\.provider"))).isFalse();
         }
@@ -506,7 +491,6 @@ public class CertificatesIT extends UseAdminServer {
             RawHttpClient.HttpResponse resp = uploadCertificate("localhost", null, chainData, client, credentials);
             assertThat(resp.getBodyString()).contains("SUCCESS");
             CertificateData data = dynCertMan.getCertificateDataForDomain("localhost");
-            assertThat(data).isNotNull();
             assertThat(data.isManual()).isTrue();
             assertThat(data.getState()).isSameAs(DynamicCertificateState.AVAILABLE);
         }
@@ -563,7 +547,6 @@ public class CertificatesIT extends UseAdminServer {
             HttpResponse resp = uploadCertificate("localhost", "type=acme&daysbeforerenewal=45", chainData, client, credentials);
             assertThat(resp.getBodyString()).contains("SUCCESS");
             CertificateData data = dcMan.getCertificateDataForDomain("localhost");
-            assertThat(data).isNotNull();
             assertThat(data.getState()).isEqualTo(DynamicCertificateState.AVAILABLE);
             assertThat(data.getDaysBeforeRenewal()).isEqualTo(45);
             assertThat(data.isManual()).isFalse();
@@ -603,7 +586,6 @@ public class CertificatesIT extends UseAdminServer {
         // Renew
         dcMan.run();
         CertificateData updated = dcMan.getCertificateDataForDomain("localhost");
-        assertThat(updated).isNotNull();
         assertThat(updated.getState()).isEqualTo(DynamicCertificateState.AVAILABLE);
         assertThat(updated.getDaysBeforeRenewal()).isEqualTo(45);
         assertThat(updated.isManual()).isFalse();
@@ -667,7 +649,6 @@ public class CertificatesIT extends UseAdminServer {
             HttpResponse resp = uploadCertificate("localhost", "type=acme&daysbeforerenewal=45", chainData, client, credentials);
             assertThat(resp.getBodyString()).contains("SUCCESS");
             CertificateData data = dcMan.getCertificateDataForDomain("localhost");
-            assertThat(data).isNotNull();
             assertThat(data.getState()).isEqualTo(DynamicCertificateState.AVAILABLE);
             assertThat(data.getDaysBeforeRenewal()).isEqualTo(45);
             assertThat(data.isManual()).isFalse();
@@ -710,7 +691,6 @@ public class CertificatesIT extends UseAdminServer {
         server.getCurrentConfiguration().setLocalCertificatesStorePeersIds(Set.of("peerPippo")); // storing enabled on fake peer only
         dcMan.run();
         CertificateData updated = dcMan.getCertificateDataForDomain("localhost");
-        assertThat(updated).isNotNull();
         assertThat(updated.getState()).isEqualTo(DynamicCertificateState.AVAILABLE);
         assertThat(updated.getDaysBeforeRenewal()).isEqualTo(45);
         assertThat(updated.isManual()).isFalse();
@@ -784,7 +764,6 @@ public class CertificatesIT extends UseAdminServer {
         when(_cert.getCertificateChain()).thenReturn(renewed);
         dcMan.run();
         updated = dcMan.getCertificateDataForDomain("localhost");
-        assertThat(updated).isNotNull();
         assertThat(updated.getState()).isEqualTo(DynamicCertificateState.AVAILABLE);
         assertThat(updated.getDaysBeforeRenewal()).isEqualTo(45);
         assertThat(updated.isManual()).isFalse();
@@ -842,7 +821,6 @@ public class CertificatesIT extends UseAdminServer {
             HttpResponse resp = uploadCertificate("localhost2", "type=acme&daysbeforerenewal=45", chainData, client, credentials);
             assertThat(resp.getBodyString()).contains("SUCCESS");
             CertificateData data = dcMan.getCertificateDataForDomain("localhost2");
-            assertThat(data).isNotNull();
             assertThat(data.getState()).isEqualTo(DynamicCertificateState.AVAILABLE);
             assertThat(data.getDaysBeforeRenewal()).isEqualTo(45);
             assertThat(data.isManual()).isFalse();
@@ -867,7 +845,6 @@ public class CertificatesIT extends UseAdminServer {
         dcMan.setAcmeClients(Map.of(DEFAULT_PROVIDER_NAME, ac));
         dcMan.run();
         updated = dcMan.getCertificateDataForDomain("localhost2");
-        assertThat(updated).isNotNull();
         assertThat(updated.getState()).isEqualTo(DynamicCertificateState.AVAILABLE);
         assertThat(updated.getDaysBeforeRenewal()).isEqualTo(45);
         assertThat(updated.isManual()).isFalse();
