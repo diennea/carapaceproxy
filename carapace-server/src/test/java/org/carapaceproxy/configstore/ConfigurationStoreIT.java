@@ -88,7 +88,7 @@ public class ConfigurationStoreIT {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "type={0}")
     @ValueSource(strings = {"db"})
     void test(String type) throws Exception {
         this.type = type;
@@ -160,7 +160,7 @@ public class ConfigurationStoreIT {
                 .hasMessageContaining("for parameter 'property.class.4'"); // not exists
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "type={0}")
     @ValueSource(strings = {"db"})
     void propertiesIndex(String type) throws Exception {
         this.type = type;
@@ -205,7 +205,7 @@ public class ConfigurationStoreIT {
         assertThat(store.findMaxIndexForPrefix("property.weird.8.9.value")).isEqualTo(-1);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "type={0}")
     @ValueSource(strings = {"db"})
     void certiticatesConfigurationStore(String type) throws Exception {
         this.type = type;
@@ -395,7 +395,7 @@ public class ConfigurationStoreIT {
     }
 
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "type={0}")
     @ValueSource(strings = {"in-memory", "db"})
     void toStringConfigurationPreservesBackslashes(String type) throws Exception {
         this.type = type;

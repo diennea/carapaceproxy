@@ -26,7 +26,7 @@ class XTlsCipherFilterIT extends AbstractXTlsFilterTest {
                 .willReturn(aResponse().withStatus(200).withBody("it <b>absent</b> !!")));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "http1={0}")
     @ValueSource(booleans = {true, false})
     void httpsWithCipherAndProtocol(boolean http1) throws Exception {
         WireMockServer wireMockRule = newWireMock(http1);
@@ -43,7 +43,7 @@ class XTlsCipherFilterIT extends AbstractXTlsFilterTest {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "http1={0}")
     @ValueSource(booleans = {true, false})
     void httpsWithProtocolOnly(boolean http1) throws Exception {
         WireMockServer wireMockRule = newWireMock(http1);

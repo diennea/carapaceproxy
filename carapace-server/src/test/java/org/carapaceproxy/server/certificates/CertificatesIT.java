@@ -259,7 +259,7 @@ public class CertificatesIT extends UseAdminServer {
         assertThat(data.isManual()).isTrue();
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "type={0}")
     @ValueSource(strings = {"acme", "manual"})
     void uploadTypedCertificate(String type) throws Exception {
         configureAndStartServer();
@@ -342,7 +342,7 @@ public class CertificatesIT extends UseAdminServer {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "type={0}")
     @ValueSource(strings = {"acme", "manual"})
     void uploadTypedCertificatesWithDaysBeforeRenewal(String type) throws Exception {
         configureAndStartServer();

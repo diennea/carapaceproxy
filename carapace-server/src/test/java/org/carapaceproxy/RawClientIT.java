@@ -587,7 +587,7 @@ public class RawClientIT {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "scheme={0}")
     @ValueSource(strings = {"http", "https"})
     void closedProxy(String scheme) throws Exception {
         TestUtils.deployResource("localhost.p12", tmpDir);

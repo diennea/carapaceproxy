@@ -168,7 +168,7 @@ public class ChunkedEncodingResponseIT {
     }
 
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "httpVersion={0}, inCache={1}")
     @MethodSource("parametersForChunkedHttp10Test")
     void chunkedHttp(final HttpVersion httpVersion, final boolean inCache) throws Exception {
         wireMockRule.stubFor(

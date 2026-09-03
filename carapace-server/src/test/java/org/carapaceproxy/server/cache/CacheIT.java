@@ -205,7 +205,7 @@ public class CacheIT {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "cacheDisabledForSecureRequestsWithoutPublic={0}")
     @ValueSource(booleans = {true, false})
     void serveFromCacheSsl(boolean cacheDisabledForSecureRequestsWithoutPublic) throws Exception {
         TestUtils.deployResource("localhost.p12", tmpDir);
@@ -434,7 +434,7 @@ public class CacheIT {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "connectionClose={0}")
     @ValueSource(booleans = {false, true})
     void serveFromCacheChunked(boolean connectionClose) throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
@@ -568,7 +568,7 @@ public class CacheIT {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "headerName={0}, headerValue={1}")
     @MethodSource("noCacheHeaderCases")
     void noCacheResponse(String headerName, String headerValue) throws Exception {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
@@ -651,7 +651,7 @@ public class CacheIT {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "headerName={0}, headerValue={1}")
     @MethodSource("noCacheHeaderCases")
     void noCacheRequest(String headerName, String headerValue) throws Exception {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);

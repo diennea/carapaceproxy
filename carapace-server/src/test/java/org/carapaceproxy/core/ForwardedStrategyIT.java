@@ -125,7 +125,7 @@ public class ForwardedStrategyIT {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "useCidr={0}")
     @ValueSource(booleans = {true, false})
     void ifTrustedStrategy(boolean useCidr) throws Exception {
         final var mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
@@ -146,7 +146,7 @@ public class ForwardedStrategyIT {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "useCidr={0}")
     @ValueSource(booleans = {true, false})
     void ifNotTrustedStrategy(boolean useCidr) throws Exception {
         final var mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());

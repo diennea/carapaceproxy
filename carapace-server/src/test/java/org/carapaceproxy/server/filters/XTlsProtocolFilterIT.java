@@ -24,7 +24,7 @@ class XTlsProtocolFilterIT extends AbstractXTlsFilterTest {
                 .willReturn(aResponse().withStatus(200).withBody("it <b>absent</b> !!")));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "http1={0}")
     @ValueSource(booleans = {true, false})
     void httpsWithFilter(boolean http1) throws Exception {
         WireMockServer wireMockRule = newWireMock(http1);
@@ -40,7 +40,7 @@ class XTlsProtocolFilterIT extends AbstractXTlsFilterTest {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "http1={0}")
     @ValueSource(booleans = {true, false})
     void httpsWithoutFilter(boolean http1) throws Exception {
         WireMockServer wireMockRule = newWireMock(http1);
@@ -58,7 +58,7 @@ class XTlsProtocolFilterIT extends AbstractXTlsFilterTest {
     // Plaintext filter behaviour (!isSecure() -> no header) is covered by the unit
     // XTlsProtocolRequestFilterTest; only the HTTPS cases that need a real TLS handshake stay here.
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "http1={0}")
     @ValueSource(booleans = {true, false})
     void httpWithoutFilter(boolean http1) throws Exception {
         WireMockServer wireMockRule = newWireMock(http1);

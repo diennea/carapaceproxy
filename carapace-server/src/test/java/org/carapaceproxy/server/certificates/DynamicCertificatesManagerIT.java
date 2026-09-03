@@ -730,7 +730,7 @@ class DynamicCertificatesManagerIT {
                 .createOrderForDomain(eq(new CertificateData("le.local", null, WAITING).getNames()));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "failureCase={0}")
     @ValueSource(strings = {"stale", "transient", "store"})
     void pendingOrderPollFailure(String failureCase) throws Exception {
         // ACME mocking: the pending order cannot be polled back from the CA
