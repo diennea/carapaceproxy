@@ -114,18 +114,20 @@ public class CacheIT {
 
             List<Map<String, Object>> inspect = server.getCache().inspectCache();
             System.out.println("inspect: " + inspect);
-            assertThat(inspect).hasSize(1);
-            assertThat(inspect.getFirst()).containsEntry("method", "GET");
-            assertThat(inspect.getFirst()).containsEntry("scheme", "http");
-            assertThat(inspect.getFirst()).containsEntry("host", "localhost");
-            assertThat(inspect.getFirst()).containsEntry("uri", "/index.html");
-            assertThat(inspect.getFirst()).containsEntry("cacheKey", "http | GET | localhost | /index.html");
-            // A chunk lands either in a heap or in a direct buffer, never in both, so only the sum is nonzero.
-            assertThat((long) inspect.getFirst().get("heapSize") + (long) inspect.getFirst().get("directSize")).isPositive();
-            assertThat((long) inspect.getFirst().get("totalSize")).isPositive();
-            assertThat((long) inspect.getFirst().get("creationTs")).isGreaterThanOrEqualTo(startTs);
-            assertThat((long) inspect.getFirst().get("expiresTs")).isGreaterThanOrEqualTo(startTs + ContentsCache.DEFAULT_TTL);
-            assertThat(inspect.getFirst()).containsEntry("hits", 2);
+            assertThat(inspect).singleElement().satisfies(entry -> {
+                assertThat(entry).containsAllEntriesOf(Map.of(
+                        "method", "GET",
+                        "scheme", "http",
+                        "host", "localhost",
+                        "uri", "/index.html",
+                        "cacheKey", "http | GET | localhost | /index.html",
+                        "hits", 2));
+                // A chunk lands either in a heap or in a direct buffer, never in both, so only the sum is nonzero.
+                assertThat((long) entry.get("heapSize") + (long) entry.get("directSize")).isPositive();
+                assertThat((long) entry.get("totalSize")).isPositive();
+                assertThat((long) entry.get("creationTs")).isGreaterThanOrEqualTo(startTs);
+                assertThat((long) entry.get("expiresTs")).isGreaterThanOrEqualTo(startTs + ContentsCache.DEFAULT_TTL);
+            });
         }
     }
 

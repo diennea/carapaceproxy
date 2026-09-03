@@ -111,8 +111,8 @@ class PropertiesConfigurationStoreTest {
         assertThat(store.getString("property.string.2", null)).isNull(); // empty > default
         assertThat(store.getString("property.string.3", "default")).isEqualTo("default"); // not exists
 
-        assertThat(store.getValues("property.array.1", Set.of("default"))).containsAll(List.of("1", "2", "3", "4"));
-        assertThat(store.getValues("property.array.2", Set.of("default"))).containsAll(List.of("a1", "a2", "a3", "a4"));
+        assertThat(store.getValues("property.array.1", Set.of("default"))).containsExactlyInAnyOrder("1", "2", "3", "4");
+        assertThat(store.getValues("property.array.2", Set.of("default"))).containsExactlyInAnyOrder("a1", "a2", "a3", "a4");
         assertThat(store.getValues("property.array.3", Set.of("default"))).contains("default"); // no elements > default
         assertThat(store.getValues("property.array.4", Set.of("default"))).contains("default"); // empty > default
         assertThat(store.getValues("property.array.11", Set.of("default"))).contains("default"); // not exists

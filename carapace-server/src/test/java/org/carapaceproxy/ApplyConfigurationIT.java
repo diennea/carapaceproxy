@@ -302,8 +302,7 @@ public class ApplyConfigurationIT {
         try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"));) {
             server.configureAtBoot(new PropertiesConfigurationStore(props("filter.1.type", "add-x-forwarded-for")));
             server.start();
-            assertThat(server.getFilters()).hasSize(1);
-            assertThat(server.getFilters().get(0)).isInstanceOf(XForwardedForRequestFilter.class);
+            assertThat(server.getFilters()).hasExactlyElementsOfTypes(XForwardedForRequestFilter.class);
 
             // add a filter
             reloadConfiguration(server, props(Map.of(
@@ -311,14 +310,11 @@ public class ApplyConfigurationIT {
                     "filter.2.type", "match-user-regexp"
             )));
 
-            assertThat(server.getFilters()).hasSize(2);
-            assertThat(server.getFilters().get(0)).isInstanceOf(XForwardedForRequestFilter.class);
-            assertThat(server.getFilters().get(1)).isInstanceOf(RegexpMapUserIdFilter.class);
+            assertThat(server.getFilters()).hasExactlyElementsOfTypes(XForwardedForRequestFilter.class, RegexpMapUserIdFilter.class);
 
             // remove a filter
             reloadConfiguration(server, props("filter.2.type", "match-user-regexp"));
-            assertThat(server.getFilters()).hasSize(1);
-            assertThat(server.getFilters().get(0)).isInstanceOf(RegexpMapUserIdFilter.class);
+            assertThat(server.getFilters()).hasExactlyElementsOfTypes(RegexpMapUserIdFilter.class);
         }
     }
 

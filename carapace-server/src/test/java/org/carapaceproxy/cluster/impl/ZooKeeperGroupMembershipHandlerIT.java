@@ -139,7 +139,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
                 assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1);
                 assertThat(((int) dataRes2.get("number"))).isOne();
                 assertThat(dataRes2).containsEntry("string", "mystring");
-                assertThat(((List<Integer>) dataRes2.get("list"))).containsAll(List.of(1, 2));
+                assertThat(((List<Integer>) dataRes2.get("list"))).containsExactly(1, 2);
                 assertThat(((Map<String, Object>) dataRes2.get("obj"))).containsEntry("number", 1);
                 assertThat(((Map<String, Object>) dataRes2.get("obj"))).containsEntry("string", "s");
                 eventFired2.set(0);
@@ -187,7 +187,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
                     assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1);
                     assertThat(((int) dataRes2.get("number"))).isOne();
                     assertThat(dataRes2).containsEntry("string", "mystring");
-                    assertThat(((List<String>) dataRes2.get("list"))).containsAll(List.of("1", "2"));
+                    assertThat(((List<String>) dataRes2.get("list"))).containsExactly("1", "2");
                     assertThat(((Map<String, Object>) dataRes2.get("obj"))).containsEntry("number", 1);
                     assertThat(((Map<String, Object>) dataRes2.get("obj"))).containsEntry("string", "s");
                     eventFired2.set(0);
@@ -195,7 +195,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
                     assertThat(eventFired3.get()).isGreaterThanOrEqualTo(1);
                     assertThat(((int) dataRes3.get("number"))).isOne();
                     assertThat(dataRes3).containsEntry("string", "mystring");
-                    assertThat((List<?>) dataRes3.get("list")).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST).containsAll(List.of("1", "2"));
+                    assertThat((List<?>) dataRes3.get("list")).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST).containsExactly("1", "2");
                     assertThat(((Map<String, Object>) dataRes3.get("obj"))).containsEntry("number", 1);
                     assertThat(((Map<String, Object>) dataRes3.get("obj"))).containsEntry("string", "s");
                     eventFired3.set(0);
@@ -217,7 +217,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
                     assertThat(eventFired2.get()).isGreaterThan(0);
                     assertThat(((int) dataRes2.get("number"))).isOne();
                     assertThat(dataRes2).containsEntry("string", "mystring");
-                    assertThat(((List<Integer>) dataRes2.get("list"))).containsAll(List.of(1, 2));
+                    assertThat(((List<Integer>) dataRes2.get("list"))).containsExactly(1, 2);
                     assertThat(((Map<String, Object>) dataRes2.get("obj"))).containsEntry("number", 1);
                     assertThat(((Map<String, Object>) dataRes2.get("obj"))).containsEntry("string", "s");
                     // self events are not fired

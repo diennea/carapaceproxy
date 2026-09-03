@@ -312,9 +312,9 @@ public class ConnectionPoolIT extends UseAdminServer {
                 assertThat(resp.getBodyString()).isEqualTo("it <b>works</b> !!");
             }
             Map<String, HttpProxyServer.ConnectionPoolStats> stats = server.getConnectionPoolsStats().get(EndpointKey.make("localhost", wireMockRule.getPort()));
-            assertThat(stats.get("*").getTotalConnections()).isOne();
-            assertThat(stats.get("localhost")).isNull();
-            assertThat(stats.get("localhosts")).isNull();
+            assertThat(stats).hasEntrySatisfying("*", it -> assertThat(it.getTotalConnections()).isOne());
+            assertThat(stats).doesNotContainKey("localhost");
+            assertThat(stats).doesNotContainKey("localhosts");
         }
 
         // provider with defaults
@@ -338,9 +338,9 @@ public class ConnectionPoolIT extends UseAdminServer {
                 assertThat(resp.getBodyString()).isEqualTo("it <b>works</b> !!");
             }
             Map<String, HttpProxyServer.ConnectionPoolStats> stats = server.getConnectionPoolsStats().get(EndpointKey.make("localhost", wireMockRule.getPort()));
-            assertThat(stats.get("*").getTotalConnections()).isOne();
-            assertThat(stats.get("localhost").getTotalConnections()).isOne();
-            assertThat(stats.get("localhosts")).isNull();
+            assertThat(stats).hasEntrySatisfying("*", it -> assertThat(it.getTotalConnections()).isOne());
+            assertThat(stats).hasEntrySatisfying("localhost", it -> assertThat(it.getTotalConnections()).isOne());
+            assertThat(stats).doesNotContainKey("localhosts");
         }
 
         // custom provider
@@ -364,9 +364,9 @@ public class ConnectionPoolIT extends UseAdminServer {
                 assertThat(resp.getBodyString()).isEqualTo("it <b>works</b> !!");
             }
             Map<String, HttpProxyServer.ConnectionPoolStats> stats = server.getConnectionPoolsStats().get(EndpointKey.make("localhost", wireMockRule.getPort()));
-            assertThat(stats.get("*").getTotalConnections()).isOne();
-            assertThat(stats.get("localhost").getTotalConnections()).isOne();
-            assertThat(stats.get("localhosts").getTotalConnections()).isOne();
+            assertThat(stats).hasEntrySatisfying("*", it -> assertThat(it.getTotalConnections()).isOne());
+            assertThat(stats).hasEntrySatisfying("localhost", it -> assertThat(it.getTotalConnections()).isOne());
+            assertThat(stats).hasEntrySatisfying("localhosts", it -> assertThat(it.getTotalConnections()).isOne());
         }
     }
 

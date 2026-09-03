@@ -199,10 +199,11 @@ public class CaffeineCacheImplTest {
         assertThat(cache.get(e2b.key)).isEqualTo(e2b.payload);
 
         runEviction(cache, 1);
-        assertThat(evictedResources).hasSize(1);
-        assertThat(evictedResources.get(0).key).isEqualTo(e2.key);
-        assertThat(evictedResources.get(0).payload).isEqualTo(e2.payload);
-        assertThat(evictedResources.get(0).removalCause).isEqualTo(RemovalCause.REPLACED);
+        assertThat(evictedResources).singleElement().satisfies(it -> {
+            assertThat(it.key).isEqualTo(e2.key);
+            assertThat(it.payload).isEqualTo(e2.payload);
+            assertThat(it.removalCause).isEqualTo(RemovalCause.REPLACED);
+        });
         evictedResources.clear();
 
         assertThat(cache.getSize()).isEqualTo(2);
@@ -219,10 +220,11 @@ public class CaffeineCacheImplTest {
         assertThat(cache.get(e1.key)).isNull();
 
         runEviction(cache, 1);
-        assertThat(evictedResources).hasSize(1);
-        assertThat(evictedResources.get(0).key).isEqualTo(e1.key);
-        assertThat(evictedResources.get(0).payload).isEqualTo(e1.payload);
-        assertThat(evictedResources.get(0).removalCause).isEqualTo(RemovalCause.EXPLICIT);
+        assertThat(evictedResources).singleElement().satisfies(it -> {
+            assertThat(it.key).isEqualTo(e1.key);
+            assertThat(it.payload).isEqualTo(e1.payload);
+            assertThat(it.removalCause).isEqualTo(RemovalCause.EXPLICIT);
+        });
         evictedResources.clear();
 
         assertThat(cache.getSize()).isOne();
@@ -239,10 +241,11 @@ public class CaffeineCacheImplTest {
         assertThat(cache.get(e2.key)).isNull();
 
         runEviction(cache, 1);
-        assertThat(evictedResources).hasSize(1);
-        assertThat(evictedResources.get(0).key).isEqualTo(e2b.key);
-        assertThat(evictedResources.get(0).payload).isEqualTo(e2b.payload);
-        assertThat(evictedResources.get(0).removalCause).isEqualTo(RemovalCause.EXPLICIT);
+        assertThat(evictedResources).singleElement().satisfies(it -> {
+            assertThat(it.key).isEqualTo(e2b.key);
+            assertThat(it.payload).isEqualTo(e2b.payload);
+            assertThat(it.removalCause).isEqualTo(RemovalCause.EXPLICIT);
+        });
         evictedResources.clear();
 
         assertThat(cache.getSize()).isZero();
@@ -345,9 +348,10 @@ public class CaffeineCacheImplTest {
         // Only the first entry should be removed
         Thread.sleep(1000);
         runEviction(cache, 1);
-        assertThat(evictedResources).hasSize(1);
-        assertThat(evictedResources.get(0)).isEqualTo(entries.get(0));
-        assertThat(evictedResources.get(0).removalCause).isEqualTo(RemovalCause.EXPIRED);
+        assertThat(evictedResources).singleElement().satisfies(it -> {
+            assertThat(it).isEqualTo(entries.get(0));
+            assertThat(it.removalCause).isEqualTo(RemovalCause.EXPIRED);
+        });
         evictedResources.clear();
         entries.remove(0);
 
