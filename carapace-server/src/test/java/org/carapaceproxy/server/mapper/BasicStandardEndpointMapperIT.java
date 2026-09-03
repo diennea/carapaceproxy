@@ -25,17 +25,20 @@ import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.carapaceproxy.core.ProxyRequest.PROPERTY_URI;
 import static org.carapaceproxy.core.StaticContentsManager.CLASSPATH_RESOURCE;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.matches;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -57,9 +60,9 @@ import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.config.SafeBackendSelector;
 import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 /**
  *
@@ -67,11 +70,11 @@ import org.junit.rules.TemporaryFolder;
  */
 public class BasicStandardEndpointMapperIT {
 
-    @Rule
-    public WireMockRule backend = new WireMockRule(0);
+    @RegisterExtension
+    public WireMockExtension backend = WireMockExtension.newInstance().configureStaticDsl(true).options(WireMockConfiguration.options().port(0)).build();
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     @Test
     public void test() throws Exception {
@@ -93,7 +96,7 @@ public class BasicStandardEndpointMapperIT {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        int backendPort = backend.port();
+        int backendPort = backend.getPort();
         final EndpointMapper.Factory mapperFactory = parent -> {
             StandardEndpointMapper mapper = new StandardEndpointMapper(parent, SafeBackendSelector::new);
 
@@ -119,7 +122,7 @@ public class BasicStandardEndpointMapperIT {
 
             return mapper;
         };
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapperFactory, tmpDir.newFolder())) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapperFactory, tmpDir)) {
             server.start();
             int port = server.getLocalPort();
             {
@@ -177,7 +180,7 @@ public class BasicStandardEndpointMapperIT {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir)) {
 
             Properties configuration = new Properties();
             configuration.put("listener.1.host", "0.0.0.0");
@@ -187,7 +190,7 @@ public class BasicStandardEndpointMapperIT {
 
             configuration.put("backend.1.id", "backend");
             configuration.put("backend.1.host", "localhost");
-            configuration.put("backend.1.port", String.valueOf(backend.port()));
+            configuration.put("backend.1.port", String.valueOf(backend.getPort()));
             configuration.put("backend.1.enabled", "true");
 
             configuration.put("director.1.id", "director");
@@ -197,7 +200,7 @@ public class BasicStandardEndpointMapperIT {
             // unreachable backend -> expected service unavailable
             configuration.put("backend.2.id", "backend-down");
             configuration.put("backend.2.host", "localhost-down");
-            configuration.put("backend.2.port", String.valueOf(backend.port()));
+            configuration.put("backend.2.port", String.valueOf(backend.getPort()));
             configuration.put("backend.2.enabled", "true");
 
             configuration.put("director.2.id", "director-down");
@@ -260,15 +263,7 @@ public class BasicStandardEndpointMapperIT {
 
             PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
 
-            BackendHealthManager bhMan = mock(BackendHealthManager.class);
-            final EndpointKey alive = EndpointKey.make("localhost:" + backend.port());
-            final BackendHealthStatus mockAliveStatus = mock(BackendHealthStatus.class);
-            when(mockAliveStatus.getStatus()).thenReturn(BackendHealthStatus.Status.STABLE);
-            when(bhMan.getBackendStatus(eq(alive))).thenReturn(mockAliveStatus);
-            final EndpointKey down = EndpointKey.make("localhost-down:" + backend.port());
-            final BackendHealthStatus mockDownStatus = mock(BackendHealthStatus.class);
-            when(mockDownStatus.getStatus()).thenReturn(BackendHealthStatus.Status.DOWN);
-            when(bhMan.getBackendStatus(eq(down))).thenReturn(mockDownStatus); // simulate unreachable backend -> expected 500 error
+            final BackendHealthManager bhMan = mockHealth(backend.getPort());
             server.setBackendHealthManager(bhMan);
             server.configureAtBoot(config);
             server.start();
@@ -319,7 +314,7 @@ public class BasicStandardEndpointMapperIT {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        int backendPort = backend.port();
+        int backendPort = backend.getPort();
 
         final EndpointMapper.Factory mapperFactory = parent -> {
             StandardEndpointMapper mapper = new StandardEndpointMapper(parent, SafeBackendSelector::new);
@@ -334,17 +329,9 @@ public class BasicStandardEndpointMapperIT {
             mapper.addRoute(new RouteConfiguration("route-default", "cache", true, new RegexpRequestMatcher(PROPERTY_URI, ".*html")));
             return mapper;
         };
-        BackendHealthManager bhMan = mock(BackendHealthManager.class);
-        final EndpointKey alive = EndpointKey.make("localhost:" + backendPort);
-        final BackendHealthStatus mockAliveStatus = mock(BackendHealthStatus.class);
-        when(mockAliveStatus.getStatus()).thenReturn(BackendHealthStatus.Status.STABLE);
-        when(bhMan.getBackendStatus(eq(alive))).thenReturn(mockAliveStatus);
-        final EndpointKey down = EndpointKey.make("localhost-down:" + backendPort);
-        final BackendHealthStatus mockDownStatus = mock(BackendHealthStatus.class);
-        when(mockDownStatus.getStatus()).thenReturn(BackendHealthStatus.Status.DOWN);
-        when(bhMan.getBackendStatus(eq(down))).thenReturn(mockDownStatus); // simulate unreachable backend -> expected 500 error
+        final BackendHealthManager bhMan = mockHealth(backendPort);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapperFactory, tmpDir.newFolder())) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapperFactory, tmpDir)) {
             server.setBackendHealthManager(bhMan);
             server.start();
             int port = server.getLocalPort();
@@ -376,14 +363,14 @@ public class BasicStandardEndpointMapperIT {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir)) {
 
             {
                 Properties configuration = new Properties();
                 configuration.put("healthmanager.tolerant", "true");
                 configuration.put("backend.1.id", "foo");
                 configuration.put("backend.1.host", "localhost");
-                configuration.put("backend.1.port", String.valueOf(backend.port()));
+                configuration.put("backend.1.port", String.valueOf(backend.getPort()));
                 configuration.put("backend.1.enabled", "true");
 
                 configuration.put("director.1.id", "*");
@@ -450,7 +437,7 @@ public class BasicStandardEndpointMapperIT {
 
     @Test
     public void testServeACMEChallengeToken() throws Exception {
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir)) {
             final String tokenName = "test-token";
             final String tokenData = "test-token-data-content";
             DynamicCertificatesManager dynamicCertificateManager = mock(DynamicCertificatesManager.class);
@@ -460,7 +447,7 @@ public class BasicStandardEndpointMapperIT {
             Properties configuration = new Properties();
             configuration.put("backend.1.id", "foo");
             configuration.put("backend.1.host", "localhost");
-            configuration.put("backend.1.port", String.valueOf(backend.port()));
+            configuration.put("backend.1.port", String.valueOf(backend.getPort()));
             configuration.put("backend.1.enabled", "true");
 
             configuration.put("director.1.id", "*");
@@ -530,16 +517,16 @@ public class BasicStandardEndpointMapperIT {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir)) {
             Properties configuration = new Properties();
             configuration.put("healthmanager.tolerant", "true");
             configuration.put("backend.1.id", "b1");
             configuration.put("backend.1.host", "localhost");
-            configuration.put("backend.1.port", String.valueOf(backend.port()));
+            configuration.put("backend.1.port", String.valueOf(backend.getPort()));
             configuration.put("backend.1.enabled", "true");
             configuration.put("backend.2.id", "b2");
             configuration.put("backend.2.host", "localhost");
-            configuration.put("backend.2.port", String.valueOf(backend.port()));
+            configuration.put("backend.2.port", String.valueOf(backend.getPort()));
             configuration.put("backend.2.enabled", "true");
 
             configuration.put("director.1.id", "d1");
@@ -656,7 +643,7 @@ public class BasicStandardEndpointMapperIT {
     @Test
     public void testActionRedirect() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir)) {
             Properties configuration = new Properties();
             configuration.put("listener.1.host", "0.0.0.0");
             configuration.put("listener.1.port", "1425");
@@ -745,4 +732,16 @@ public class BasicStandardEndpointMapperIT {
             }
         }
     }
+
+    private static BackendHealthManager mockHealth(final int backendPort) {
+        final BackendHealthManager bhMan = mock(BackendHealthManager.class);
+        final BackendHealthStatus aliveStatus = mock(BackendHealthStatus.class);
+        when(aliveStatus.getStatus()).thenReturn(BackendHealthStatus.Status.STABLE);
+        when(bhMan.getBackendStatus(eq(EndpointKey.make("localhost:" + backendPort)))).thenReturn(aliveStatus);
+        final BackendHealthStatus downStatus = mock(BackendHealthStatus.class);
+        when(downStatus.getStatus()).thenReturn(BackendHealthStatus.Status.DOWN);
+        when(bhMan.getBackendStatus(eq(EndpointKey.make("localhost-down:" + backendPort)))).thenReturn(downStatus); // unreachable backend -> expected 500 error
+        return bhMan;
+    }
+
 }

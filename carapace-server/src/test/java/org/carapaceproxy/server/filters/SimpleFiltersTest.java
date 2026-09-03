@@ -23,7 +23,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchAllRequestMatcher;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;

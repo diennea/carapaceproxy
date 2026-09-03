@@ -17,7 +17,7 @@
  under the License.
 
  */
-package org.carapaceproxy.server.backends;
+package org.carapaceproxy.server.certificates;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,12 +28,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import java.io.File;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
-import org.carapaceproxy.server.mapper.EndpointMapper;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -43,41 +42,42 @@ import org.junit.jupiter.api.Test;
  *
  * @author paolo
  */
-public class BackendHealthManagerSchedulingTest {
+class DynamicCertificatesManagerSchedulingTest {
 
     @Test
-    public void testBackendHealthManagerExecution() {
+    void dynamicCertificatesManagerExecution() throws Exception {
         RuntimeServerConfiguration config = new RuntimeServerConfiguration();
-        ScheduledExecutorService timer = mock(ScheduledExecutorService.class);
-        when(timer.scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(mock(ScheduledFuture.class));
-        BackendHealthManager man = new BackendHealthManager(config, mock(EndpointMapper.class), new File("."), () -> timer);
+        ScheduledExecutorService scheduler = mock(ScheduledExecutorService.class);
+        when(scheduler.scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(mock(ScheduledFuture.class));
+        DynamicCertificatesManager man = new DynamicCertificatesManager(null, () -> scheduler);
+        man.setConfigurationStore(mock(ConfigurationStore.class));
 
         // With period 0 the manager never starts
         man.setPeriod(0);
         man.start();
-        verify(timer, never()).scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)); // never called
+        verify(scheduler, never()).scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)); // never called
 
         // With new period >0 the manager should run whether started before
-        config.setHealthProbePeriod(1);
-        man.reloadConfiguration(config, mock(EndpointMapper.class));
+        config.setDynamicCertificatesManagerPeriod(1);
+        man.reloadConfiguration(config);
         assertEquals(1, man.getPeriod());
-        verify(timer, times(1)).scheduleAtFixedRate(any(Runnable.class), eq(1L), eq(1L), eq(TimeUnit.SECONDS)); // once
+        verify(scheduler, times(1)).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)); // once
 
         man.stop();
-        config.setHealthProbePeriod(0);
-        man.reloadConfiguration(config, mock(EndpointMapper.class));
+        config.setDynamicCertificatesManagerPeriod(0);
+        man.reloadConfiguration(config);
         assertEquals(0, man.getPeriod());
         man.start();
-        verify(timer, times(1)).scheduleAtFixedRate(any(Runnable.class), eq(1L), eq(1L), eq(TimeUnit.SECONDS)); // never
+        verify(scheduler, times(1)).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)); // never
         man.stop();
 
         // With new period >0 the manager should not run because not started before.
-        config.setHealthProbePeriod(1);
-        man.reloadConfiguration(config, mock(EndpointMapper.class));
+        config.setDynamicCertificatesManagerPeriod(1);
+        man.reloadConfiguration(config);
         assertEquals(1, man.getPeriod());
-        verify(timer, times(1)).scheduleAtFixedRate(any(Runnable.class), eq(1L), eq(1L), eq(TimeUnit.SECONDS)); // never
+        verify(scheduler, times(1)).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)); // never
 
         man.start();
-        verify(timer, times(2)).scheduleAtFixedRate(any(Runnable.class), eq(1L), eq(1L), eq(TimeUnit.SECONDS)); // once
+        verify(scheduler, times(2)).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)); // once
     }
 }

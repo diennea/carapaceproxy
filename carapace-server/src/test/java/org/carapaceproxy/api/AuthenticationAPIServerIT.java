@@ -25,11 +25,12 @@ import javax.servlet.http.HttpServletResponse;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.RawHttpClient.BasicAuthCredentials;
 import org.carapaceproxy.utils.RawHttpClient.HttpResponse;
+import org.junit.jupiter.api.Test;
+
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import org.junit.Test;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  *

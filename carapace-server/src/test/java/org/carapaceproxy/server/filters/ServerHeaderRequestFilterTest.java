@@ -2,7 +2,7 @@ package org.carapaceproxy.server.filters;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
@@ -12,7 +12,7 @@ import java.util.Map;
 import org.carapaceproxy.core.ProxyRequest;
 import org.carapaceproxy.core.RequestFilter;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class ServerHeaderRequestFilterTest {
 

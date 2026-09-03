@@ -27,7 +27,7 @@ import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import com.github.tomakehurst.wiremock.WireMockServer;
 import java.io.File;
 import java.util.Map;
 import org.carapaceproxy.core.EndpointKey;
@@ -38,9 +38,9 @@ import org.carapaceproxy.server.backends.BackendHealthStatus;
 import org.carapaceproxy.server.config.BackendConfiguration;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 /**
  * HTTPS health-check tests:
@@ -49,12 +49,12 @@ import org.junit.rules.TemporaryFolder;
  */
 public class HealthCheckHttpsIT {
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     @Test
     public void httpsProbe_withPrivateCA_succeeds() throws Exception {
-        final String backendKeystoreAbsolutePath = TestUtils.deployResource("ca.p12", tmpDir.getRoot());
+        final String backendKeystoreAbsolutePath = TestUtils.deployResource("ca.p12", tmpDir);
 
         final WireMockConfiguration wm = options()
                 .dynamicPort()
@@ -64,7 +64,7 @@ public class HealthCheckHttpsIT {
                 .keystorePassword("changeit")
                 .keyManagerPassword("changeit");
 
-        final WireMockRule httpsBackend = new WireMockRule(wm);
+        final WireMockServer httpsBackend = new WireMockServer(wm);
         httpsBackend.start();
         try {
             final String path = "/health";
@@ -90,7 +90,7 @@ public class HealthCheckHttpsIT {
             final EndpointMapper mapper = new TestEndpointMapper(bconf, false);
 
             final RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
-            final BackendHealthManager hman = new BackendHealthManager(conf, mapper, tmpDir.getRoot());
+            final BackendHealthManager hman = new BackendHealthManager(conf, mapper, tmpDir);
 
             hman.run();
 
@@ -109,7 +109,7 @@ public class HealthCheckHttpsIT {
 
     @Test
     public void httpsProbe_withoutCA_againstPrivateCert_fails() throws Exception {
-        final String backendKeystoreAbsolutePath = TestUtils.deployResource("ca.p12", tmpDir.getRoot());
+        final String backendKeystoreAbsolutePath = TestUtils.deployResource("ca.p12", tmpDir);
 
         final WireMockConfiguration wm = options()
                 .dynamicPort()
@@ -119,7 +119,7 @@ public class HealthCheckHttpsIT {
                 .keystorePassword("changeit")
                 .keyManagerPassword("changeit");
 
-        final WireMockRule httpsBackend = new WireMockRule(wm);
+        final WireMockServer httpsBackend = new WireMockServer(wm);
         httpsBackend.start();
         try {
             final String path = "/health";
@@ -144,7 +144,7 @@ public class HealthCheckHttpsIT {
             final EndpointMapper mapper = new TestEndpointMapper(bconf, false);
 
             final RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
-            final BackendHealthManager hman = new BackendHealthManager(conf, mapper, tmpDir.getRoot());
+            final BackendHealthManager hman = new BackendHealthManager(conf, mapper, tmpDir);
 
             hman.run();
 

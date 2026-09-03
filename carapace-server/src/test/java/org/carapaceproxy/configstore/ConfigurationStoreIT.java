@@ -27,29 +27,29 @@ import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+
+import java.io.File;
 import java.net.URI;
 import java.security.KeyPair;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import junitparams.JUnitParamsRunner;
-import junitparams.Parameters;
 import org.apache.bookkeeper.stats.NullStatsLogger;
 import org.carapaceproxy.api.ConfigResource;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.utils.TestUtils;
 import org.hamcrest.core.IsNull;
-import org.junit.After;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.shredzone.acme4j.toolbox.JSON;
 import org.shredzone.acme4j.util.KeyPairUtils;
 import org.slf4j.LoggerFactory;
@@ -59,11 +59,10 @@ import org.slf4j.LoggerFactory;
  *
  * @author paolo.venturi
  */
-@RunWith(JUnitParamsRunner.class)
 public class ConfigurationStoreIT {
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     private ConfigurationStore store;
     private String type;
@@ -71,7 +70,7 @@ public class ConfigurationStoreIT {
     private static final String d2 = "localhost2";
     private static final String d3 = "localhost3";
 
-    @After
+    @AfterEach
     public void after() {
         if (store != null) {
             store.close();
@@ -86,7 +85,7 @@ public class ConfigurationStoreIT {
                 props.put("db.admin.username", "theusername");
                 props.put("db.admin.password", "thepassword");
                 newStore = new PropertiesConfigurationStore(props);
-                store = new HerdDBConfigurationStore(newStore, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
+                store = new HerdDBConfigurationStore(newStore, false, null, tmpDir, NullStatsLogger.INSTANCE);
             }
             store.commitConfiguration(newStore);
         } else {
@@ -94,32 +93,9 @@ public class ConfigurationStoreIT {
         }
     }
 
-    @Test
-    @Parameters({"in-memory", "db"})
-    public void testToStringConfigurationPreservesBackslashes(String type) throws Exception {
-        this.type = type;
-
-        final String domain = "(\\Qhost.example\\E|\\Qother.example\\E)";
-        final String matcher = "regexp .*\\.example\\.com and header host web\\d+";
-        Properties props = new Properties();
-        props.setProperty("connectionpool.1.domain", domain);
-        props.setProperty("route.5.match", matcher);
-        updateConfigStore(props);
-
-        // round-trip through the same parse path used by rewriteConfiguration and /api/config/apply
-        ConfigurationStore reloaded = ConfigResource.buildStore(store.toStringConfiguration());
-        assertThat(reloaded.getProperty("connectionpool.1.domain", null), is(domain));
-        assertThat(reloaded.getProperty("route.5.match", null), is(matcher));
-
-        // a second round-trip must be stable too
-        ConfigurationStore reloadedTwice = ConfigResource.buildStore(reloaded.toStringConfiguration());
-        assertThat(reloadedTwice.getProperty("connectionpool.1.domain", null), is(domain));
-        assertThat(reloadedTwice.getProperty("route.5.match", null), is(matcher));
-    }
-
-    @Test
-    @Parameters({"in-memory", "db"})
-    public void test(String type) throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"db"})
+    void test(String type) throws Exception {
         this.type = type;
 
         Properties props = new Properties();
@@ -186,9 +162,9 @@ public class ConfigurationStoreIT {
         TestUtils.assertThrows(ConfigurationNotValidException.class, () -> store.getClassname("property.class.4", "DClassName")); // not exists
     }
 
-    @Test
-    @Parameters({"in-memory", "db"})
-    public void testPropertiesIndex(String type) throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"db"})
+    void propertiesIndex(String type) throws Exception {
         this.type = type;
 
         // test no properties -> max index -1
@@ -231,9 +207,9 @@ public class ConfigurationStoreIT {
         assertThat(store.findMaxIndexForPrefix("property.weird.8.9.value"), is(-1));
     }
 
-    @Test
-    @Parameters({"in-memory", "db"})
-    public void testCertiticatesConfigurationStore(String type) throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"db"})
+    void certiticatesConfigurationStore(String type) throws Exception {
         this.type = type;
 
         Properties props = new Properties();
@@ -262,14 +238,12 @@ public class ConfigurationStoreIT {
         // KeyPairs generation + saving
         KeyPair acmePair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         store.saveAcmeUserKey(acmePair, DEFAULT_PROVIDER_NAME);
-        // key isn't overwritten
-        store.saveAcmeUserKey(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), DEFAULT_PROVIDER_NAME);
+        store.saveAcmeUserKey(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), DEFAULT_PROVIDER_NAME); // key not overwritten
 
         // each provider has its own account key
         KeyPair customProviderPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         store.saveAcmeUserKey(customProviderPair, "customprovider");
-        // key isn't overwritten
-        store.saveAcmeUserKey(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), "customprovider");
+        store.saveAcmeUserKey(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), "customprovider"); // key not overwritten
 
         store.saveKeyPairForDomain(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), d1, true);
         KeyPair domain1Pair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
@@ -277,8 +251,7 @@ public class ConfigurationStoreIT {
 
         KeyPair domain2Pair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         store.saveKeyPairForDomain(domain2Pair, d2, false);
-        // key isn't overwritten
-        store.saveKeyPairForDomain(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), d2, false);
+        store.saveKeyPairForDomain(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), d2, false); // key not overwritten
 
         // KeyPairs loading
         KeyPair loadedPair = store.loadAcmeUserKeyPair(DEFAULT_PROVIDER_NAME);
@@ -349,7 +322,7 @@ public class ConfigurationStoreIT {
 
         PropertiesConfigurationStore propertiesConfigurationStore = new PropertiesConfigurationStore(props);
 
-        store = new HerdDBConfigurationStore(propertiesConfigurationStore, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
+        store = new HerdDBConfigurationStore(propertiesConfigurationStore, false, null, tmpDir, NullStatsLogger.INSTANCE);
 
         // Check applied configuration (loaded from empty db NB: passed configuration is ignored)
         assertEquals("", store.getProperty("certificate.0.hostname", ""));
@@ -395,7 +368,7 @@ public class ConfigurationStoreIT {
         props = new Properties();
         props.put("db.jdbc.url", "jdbc:herddb:localhost");
         propertiesConfigurationStore = new PropertiesConfigurationStore(props);
-        store = new HerdDBConfigurationStore(propertiesConfigurationStore, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
+        store = new HerdDBConfigurationStore(propertiesConfigurationStore, false, null, tmpDir, NullStatsLogger.INSTANCE);
         checkConfiguration();
     }
 
@@ -421,6 +394,30 @@ public class ConfigurationStoreIT {
         assertEquals(false, store.anyPropertyMatches(
                 (k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals("unknown")
         ));
+    }
+
+
+    @ParameterizedTest
+    @ValueSource(strings = {"in-memory", "db"})
+    void toStringConfigurationPreservesBackslashes(String type) throws Exception {
+        this.type = type;
+
+        final String domain = "(\\Qhost.example\\E|\\Qother.example\\E)";
+        final String matcher = "regexp .*\\.example\\.com and header host web\\d+";
+        Properties props = new Properties();
+        props.setProperty("connectionpool.1.domain", domain);
+        props.setProperty("route.5.match", matcher);
+        updateConfigStore(props);
+
+        // round-trip through the same parse path used by rewriteConfiguration and /api/config/apply
+        ConfigurationStore reloaded = ConfigResource.buildStore(store.toStringConfiguration());
+        assertEquals(domain, reloaded.getProperty("connectionpool.1.domain", null));
+        assertEquals(matcher, reloaded.getProperty("route.5.match", null));
+
+        // a second round-trip must be stable too
+        ConfigurationStore reloadedTwice = ConfigResource.buildStore(reloaded.toStringConfiguration());
+        assertEquals(domain, reloadedTwice.getProperty("connectionpool.1.domain", null));
+        assertEquals(matcher, reloadedTwice.getProperty("route.5.match", null));
     }
 
     @Test

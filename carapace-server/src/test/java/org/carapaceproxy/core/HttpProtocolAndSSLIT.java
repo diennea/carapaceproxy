@@ -5,16 +5,18 @@ import static com.github.tomakehurst.wiremock.client.WireMock.okForContentType;
 import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.runners.Parameterized.Parameters;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import com.github.tomakehurst.wiremock.WireMockServer;
 import io.netty.handler.ssl.ApplicationProtocolConfig;
 import io.netty.handler.ssl.ApplicationProtocolNames;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -29,56 +31,27 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.KeyStoreRule;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.ClassRule;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import reactor.core.publisher.Flux;
 import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.resources.ConnectionProvider;
 
-@RunWith(Parameterized.class)
 public class HttpProtocolAndSSLIT {
 
     private static final String RESPONSE = "Response from backend";
     private static final String BIG_PAYLOAD = "X".repeat(500_000);
 
-    @ClassRule(order = 0)
-    public static TemporaryFolder temporaryFolder = new TemporaryFolder();
-    @ClassRule(order = 1)
-    public static KeyStoreRule carapaceKeyStore = new KeyStoreRule(temporaryFolder);
-    @ClassRule(order = 2)
-    public static KeyStoreRule backendKeyStore = new KeyStoreRule(temporaryFolder);
+    @TempDir
+    public static File temporaryFolder;
+    @RegisterExtension
+    public static KeyStoreRule carapaceKeyStore = new KeyStoreRule();
+    @RegisterExtension
+    public static KeyStoreRule backendKeyStore = new KeyStoreRule();
 
-    private final Scenario scenario;
-    private final AtomicReference<String> channelIdRef = new AtomicReference<>();
-    private final AtomicBoolean allSameConnection = new AtomicBoolean(true);
-
-    @Rule(order = 3)
-    public WireMockRule backendRule;
-
-    public HttpProtocolAndSSLIT(final Scenario scenario) {
-        this.scenario = scenario;
-        final WireMockConfiguration cfg = WireMockConfiguration.options();
-        if (scenario.proxyToBackendTls) {
-            cfg.dynamicHttpsPort()
-                    .keystoreType(backendKeyStore.getKeyStore().getType())
-                    .keystorePath(backendKeyStore.getKeyStoreFile().getAbsolutePath())
-                    .keystorePassword(new String(backendKeyStore.getKeyStorePassword()))
-                    .httpDisabled(true)
-                    .http2TlsDisabled(this.scenario.backendHttp11());
-        } else {
-            cfg.dynamicPort()
-                    .httpDisabled(false)
-                    .http2PlainDisabled(this.scenario.backendHttp11());
-        }
-        this.backendRule = new WireMockRule(cfg);
-    }
-
-    @Parameters(name = "{0}")
     public static Collection<Object[]> scenarios() {
         final Set<EnumSet<HttpProtocol>> clearTextOptions = Set.of(
                 EnumSet.of(HttpProtocol.HTTP11),
@@ -132,8 +105,25 @@ public class HttpProtocolAndSSLIT {
         return scenarios.stream().map(s -> new Object[]{s}).toList();
     }
 
-    @Test
-    public void testMatrixCase() throws Exception {
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("scenarios")
+    public void testMatrixCase(final Scenario scenario) throws Exception {
+        final AtomicReference<String> channelIdRef = new AtomicReference<>();
+        final AtomicBoolean allSameConnection = new AtomicBoolean(true);
+        final WireMockConfiguration cfg = WireMockConfiguration.options();
+        if (scenario.proxyToBackendTls) {
+            cfg.dynamicHttpsPort()
+                    .keystoreType(backendKeyStore.getKeyStore().getType())
+                    .keystorePath(backendKeyStore.getKeyStoreFile().getAbsolutePath())
+                    .keystorePassword(new String(backendKeyStore.getKeyStorePassword()))
+                    .httpDisabled(true)
+                    .http2TlsDisabled(scenario.backendHttp11());
+        } else {
+            cfg.dynamicPort()
+                    .httpDisabled(false)
+                    .http2PlainDisabled(scenario.backendHttp11());
+        }
+        final WireMockServer backendRule = new WireMockServer(cfg);
         backendRule.start();
 
         backendRule.stubFor(get(urlEqualTo("/tomcatstatus/up"))
@@ -158,8 +148,8 @@ public class HttpProtocolAndSSLIT {
         final int backendPort = scenario.proxyToBackendTls ? backendRule.httpsPort() : backendRule.port();
         final int carapaceProxyPort = TestUtils.getFreePort();
 
-        final TestEndpointMapper endpointMapper = getMapper(backendPort);
-        try (final HttpProxyServer server = new HttpProxyServer(endpointMapper, temporaryFolder.newFolder())) {
+        final TestEndpointMapper endpointMapper = getMapper(scenario, backendPort);
+        try (final HttpProxyServer server = new HttpProxyServer(endpointMapper, newFolder(temporaryFolder, "junit"))) {
             final NetworkListenerConfiguration listenerConfiguration;
             if (scenario.clientToProxyTls) {
                 final SSLCertificateConfiguration certificateConfiguration = new SSLCertificateConfiguration(
@@ -186,7 +176,7 @@ public class HttpProtocolAndSSLIT {
             server.addListener(listenerConfiguration);
             server.start();
 
-            final HttpClient client = buildClient(carapaceProxyPort);
+            final HttpClient client = buildClient(scenario, carapaceProxyPort, channelIdRef, allSameConnection);
 
             final String scheme = scenario.clientToProxyTls ? "https" : "http";
             final String baseUri = scheme + "://localhost:" + carapaceProxyPort;
@@ -225,12 +215,12 @@ public class HttpProtocolAndSSLIT {
             assertEquals(jsFiles + cssFiles, allBodies.size());
             for (String body : allBodies) {
                 assertNotNull(body);
-                assertTrue("Body too small", body.length() > 10_000);
+                assertTrue(body.length() > 10_000, "Body too small");
             }
             if (scenario.proxyHttp2()) {
                 assertTrue(
-                        "HTTP/2 requests must be multiplexed over a single TCP connection " + channelIdRef.get(),
-                        allSameConnection.get()
+                        allSameConnection.get(),
+                        "HTTP/2 requests must be multiplexed over a single TCP connection " + channelIdRef.get()
                 );
             }
         } finally {
@@ -238,7 +228,7 @@ public class HttpProtocolAndSSLIT {
         }
     }
 
-    private TestEndpointMapper getMapper(final int backendPort) {
+    private TestEndpointMapper getMapper(final Scenario scenario, final int backendPort) {
         final BackendConfiguration backendConfiguration = new BackendConfiguration(
                 "wiremock",
                 new EndpointKey("localhost", backendPort),
@@ -252,7 +242,7 @@ public class HttpProtocolAndSSLIT {
         return new TestEndpointMapper(backendConfiguration, false);
     }
 
-    private HttpClient buildClient(final int proxyPort) throws Exception {
+    private HttpClient buildClient(final Scenario scenario, final int proxyPort, final AtomicReference<String> channelIdRef, final AtomicBoolean allSameConnection) throws Exception {
         final ConnectionProvider provider = ConnectionProvider.builder("client-single-conn")
                 .maxConnections(1)
                 .pendingAcquireMaxCount(100)
@@ -318,5 +308,14 @@ public class HttpProtocolAndSSLIT {
                     ? proxyProtocols.contains(HttpProtocol.H2)
                     : proxyProtocols.contains(HttpProtocol.H2C);
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

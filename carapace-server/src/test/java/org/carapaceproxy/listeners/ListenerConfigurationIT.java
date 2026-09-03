@@ -1,8 +1,11 @@
 package org.carapaceproxy.listeners;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.File;
+import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
@@ -11,18 +14,17 @@ import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.ListeningChannel;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 public class ListenerConfigurationIT {
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     @Test
     public void testListenerKeepAliveConfiguration() throws Exception {
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir)) {
 
             {
                 Properties configuration = new Properties();
@@ -131,4 +133,5 @@ public class ListenerConfigurationIT {
         PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
         server.applyDynamicConfigurationFromAPI(config);
     }
+
 }

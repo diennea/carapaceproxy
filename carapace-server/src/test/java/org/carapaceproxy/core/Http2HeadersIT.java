@@ -1,9 +1,11 @@
 package org.carapaceproxy.core;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 import static com.github.tomakehurst.wiremock.core.Options.DYNAMIC_PORT;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_FORWARDED_STRATEGY;
@@ -18,22 +20,24 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.concurrent.DefaultEventExecutor;
+import java.io.File;
 import java.io.IOException;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.ByteBufFlux;
@@ -45,11 +49,11 @@ import reactor.netty.http.server.HttpServer;
 
 public class Http2HeadersIT {
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(options().dynamicPort());
+    @RegisterExtension
+    public WireMockExtension wireMockRule = WireMockExtension.newInstance().configureStaticDsl(true).options(options().dynamicPort()).build();
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     private NetworkListenerConfiguration newH2CListenerConfiguration() {
         return new NetworkListenerConfiguration(
@@ -84,9 +88,9 @@ public class Http2HeadersIT {
                         .withHeader("Content-Length", String.valueOf("it <b>works</b> !!".length()))
                         .withBody("it <b>works</b> !!"))
         );
-        final var mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        final var mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
         final HttpClientResponse response;
-        try (final var server = new HttpProxyServer(mapper, tmpDir.newFolder())) {
+        try (final var server = new HttpProxyServer(mapper, tmpDir)) {
             server.addListener(newH2CListenerConfiguration());
             server.start();
             final var port = server.getLocalPort();
@@ -124,9 +128,9 @@ public class Http2HeadersIT {
                         .withHeader("Keep-Alive", "timeout=5, max=100")
                         .withBody("ok"))
         );
-        final var mapper = new TestEndpointMapper("localhost", wireMockRule.port());
+        final var mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
         final HttpClientResponse response;
-        try (final var server = new HttpProxyServer(mapper, tmpDir.newFolder())) {
+        try (final var server = new HttpProxyServer(mapper, tmpDir)) {
             server.addListener(newH2CListenerConfiguration());
             server.start();
             final var port = server.getLocalPort();
@@ -169,7 +173,7 @@ public class Http2HeadersIT {
         try {
             final var mapper = new TestEndpointMapper("localhost", h2cBackend.port());
             final HttpClientResponse response;
-            try (final var server = new HttpProxyServer(mapper, tmpDir.newFolder())) {
+            try (final var server = new HttpProxyServer(mapper, tmpDir)) {
                 server.addListener(newH2CListenerConfiguration());
                 server.start();
                 final var port = server.getLocalPort();
@@ -222,7 +226,7 @@ public class Http2HeadersIT {
         try {
             final var mapper = new TestEndpointMapper("localhost", h2cBackend.port());
             final HttpClientResponse response;
-            try (final var server = new HttpProxyServer(mapper, tmpDir.newFolder())) {
+            try (final var server = new HttpProxyServer(mapper, tmpDir)) {
                 server.addListener(newH2CListenerConfiguration());
                 server.start();
                 final var port = server.getLocalPort();
@@ -246,4 +250,5 @@ public class Http2HeadersIT {
             h2cBackend.disposeNow();
         }
     }
+
 }

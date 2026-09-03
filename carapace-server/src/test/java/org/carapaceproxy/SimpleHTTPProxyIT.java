@@ -27,14 +27,18 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_FORWARDED_STRATEGY;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 import static reactor.netty.http.HttpProtocol.HTTP11;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.util.concurrent.DefaultEventExecutor;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
@@ -47,9 +51,9 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.HttpTestUtils;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 /**
  *
@@ -57,19 +61,19 @@ import org.junit.rules.TemporaryFolder;
  */
 public class SimpleHTTPProxyIT {
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
+    @RegisterExtension
+    public WireMockExtension wireMockRule = WireMockExtension.newInstance().configureStaticDsl(true).options(WireMockConfiguration.options().port(0)).build();
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     @Test
     public void test() throws Exception {
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.getPort());
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir);) {
             server.start();
             int port = server.getLocalPort();
 
@@ -88,8 +92,8 @@ public class SimpleHTTPProxyIT {
 
         HttpTestUtils.overrideJvmWideHttpsVerifier();
 
-        String certificate = TestUtils.deployResource("ia.p12", tmpDir.getRoot());
-        String caCertificate = TestUtils.deployResource("ca.p12", tmpDir.getRoot());
+        String certificate = TestUtils.deployResource("ia.p12", tmpDir);
+        String caCertificate = TestUtils.deployResource("ca.p12", tmpDir);
 
         stubFor(get(urlEqualTo("/index.html?redir"))
                 .willReturn(aResponse()
@@ -97,10 +101,10 @@ public class SimpleHTTPProxyIT {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
-        EndpointKey key = new EndpointKey("localhost", wireMockRule.port());
+        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
+        EndpointKey key = new EndpointKey("localhost", wireMockRule.getPort());
 
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());) {
+        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir);) {
             server.addCertificate(new SSLCertificateConfiguration("localhost", null, certificate, "changeit", STATIC));
             server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "localhost", DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11), new DefaultChannelGroup(new DefaultEventExecutor())));
             server.start();
@@ -131,7 +135,7 @@ public class SimpleHTTPProxyIT {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", badPort);
         EndpointKey key = new EndpointKey("localhost", badPort);
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir);) {
             server.start();
             int port = server.getLocalPort();
 
@@ -140,4 +144,5 @@ public class SimpleHTTPProxyIT {
             assertEquals(503, result.responseCode);
         }
     }
+
 }

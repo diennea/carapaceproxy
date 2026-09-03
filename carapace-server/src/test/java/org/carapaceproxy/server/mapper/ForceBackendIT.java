@@ -25,8 +25,12 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.carapaceproxy.core.ProxyRequest.PROPERTY_URI;
-import static org.junit.Assert.assertEquals;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import java.io.File;
+import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
@@ -39,9 +43,9 @@ import org.carapaceproxy.server.config.DirectorConfiguration;
 import org.carapaceproxy.server.config.RouteConfiguration;
 import org.carapaceproxy.server.config.SafeBackendSelector;
 import org.carapaceproxy.server.mapper.requestmatcher.RegexpRequestMatcher;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 /**
  *
@@ -49,11 +53,11 @@ import org.junit.rules.TemporaryFolder;
  */
 public class ForceBackendIT {
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
-    @Rule
-    public WireMockRule backend1 = new WireMockRule(0);
+    @RegisterExtension
+    public WireMockExtension backend1 = WireMockExtension.newInstance().configureStaticDsl(true).options(WireMockConfiguration.options().port(0)).build();
 
     @Test
     public void test() throws Exception {
@@ -69,7 +73,7 @@ public class ForceBackendIT {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        int backendPort = backend1.port();
+        int backendPort = backend1.getPort();
 
         final EndpointMapper.Factory mapperFactory = parent -> {
             StandardEndpointMapper mapper = new StandardEndpointMapper(parent, SafeBackendSelector::new);
@@ -91,7 +95,7 @@ public class ForceBackendIT {
             return mapper;
         };
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapperFactory, tmpDir.newFolder())) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapperFactory, tmpDir)) {
             server.start();
             int port = server.getLocalPort();
             {
@@ -107,4 +111,5 @@ public class ForceBackendIT {
 
         }
     }
+
 }

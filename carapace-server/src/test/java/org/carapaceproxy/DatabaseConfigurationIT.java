@@ -20,16 +20,22 @@ package org.carapaceproxy;
 
  */
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
+
+import java.io.File;
+import java.io.IOException;
 import java.util.Properties;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
+import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;
+import org.carapaceproxy.server.filters.XForwardedForRequestFilter;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  *
@@ -37,19 +43,19 @@ import org.junit.rules.TemporaryFolder;
  */
 public class DatabaseConfigurationIT {
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     @Test
     public void testBootWithDatabaseStore() throws Exception {
 
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"))) {
 
             Properties configuration = new Properties();
 
             configuration.put("config.type", "database");
             configuration.put("db.jdbc.url", "jdbc:herddb:localhost");
-            configuration.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
+            configuration.put("db.server.base.dir", newFolder(tmpDir, "junit").getAbsolutePath());
             server.configureAtBoot(new PropertiesConfigurationStore(configuration));
 
             server.start();
@@ -58,4 +64,84 @@ public class DatabaseConfigurationIT {
         }
 
     }
+
+    /**
+     * Dynamic filter configuration must survive a reboot of a HerdDB-backed server: filters added
+     * through the dynamic-config API are persisted to the database and rebuilt at the next boot.
+     * Restored from testChangeFiltersConfiguration, disabled since it was written: it never ran,
+     * because it missed {@code config.type=database} and used a fresh db dir per reboot.
+     */
+    @SuppressWarnings("deprecation")
+    @Test
+    void filtersConfigurationSurvivesReboot() throws Exception {
+        // A single, shared HerdDB data dir reused across every reboot, so configuration persists.
+        final String dbDir = newFolder(tmpDir, "herddb").getAbsolutePath();
+
+        // Boot #1: add filters through the HerdDB-backed dynamic store.
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"))) {
+            server.configureAtBoot(new PropertiesConfigurationStore(dbBootConfig(dbDir)));
+            server.start();
+            assertInstanceOf(HerdDBConfigurationStore.class, server.getDynamicConfigurationStore());
+
+            server.applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(
+                    filters("filter.1.type", XForwardedForRequestFilter.TYPE)));
+            assertEquals(1, server.getFilters().size());
+            assertInstanceOf(XForwardedForRequestFilter.class, server.getFilters().get(0));
+
+            server.applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(filters(
+                    "filter.1.type", XForwardedForRequestFilter.TYPE,
+                    "filter.2.type", RegexpMapUserIdFilter.TYPE)));
+            assertEquals(2, server.getFilters().size());
+            assertInstanceOf(XForwardedForRequestFilter.class, server.getFilters().get(0));
+            assertInstanceOf(RegexpMapUserIdFilter.class, server.getFilters().get(1));
+        }
+
+        // Boot #2: the two filters must have persisted; then reduce to a single filter.
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"))) {
+            server.configureAtBoot(new PropertiesConfigurationStore(dbBootConfig(dbDir)));
+            assertEquals(2, server.getFilters().size());
+            assertInstanceOf(XForwardedForRequestFilter.class, server.getFilters().get(0));
+            assertInstanceOf(RegexpMapUserIdFilter.class, server.getFilters().get(1));
+
+            server.start();
+
+            server.applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(
+                    filters("filter.1.type", RegexpMapUserIdFilter.TYPE)));
+            assertEquals(1, server.getFilters().size());
+            assertInstanceOf(RegexpMapUserIdFilter.class, server.getFilters().get(0));
+        }
+
+        // Boot #3: the single remaining filter must have persisted.
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"))) {
+            server.configureAtBoot(new PropertiesConfigurationStore(dbBootConfig(dbDir)));
+            assertEquals(1, server.getFilters().size());
+            assertInstanceOf(RegexpMapUserIdFilter.class, server.getFilters().get(0));
+        }
+    }
+
+    private static Properties dbBootConfig(String dbDir) {
+        Properties c = new Properties();
+        c.put("config.type", "database");
+        c.put("db.jdbc.url", "jdbc:herddb:localhost");
+        c.put("db.server.base.dir", dbDir);
+        return c;
+    }
+
+    private static Properties filters(String... keyValues) {
+        Properties c = new Properties();
+        for (int i = 0; i < keyValues.length; i += 2) {
+            c.put(keyValues[i], keyValues[i + 1]);
+        }
+        return c;
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
+    }
+
 }

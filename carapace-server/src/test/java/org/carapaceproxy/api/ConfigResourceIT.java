@@ -21,12 +21,15 @@ package org.carapaceproxy.api;
 
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.File;
+import java.io.IOException;
 import java.util.Properties;
 import org.carapaceproxy.utils.RawHttpClient;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 /**
  * Tests around {@link ConfigResource} while using configuration on database
@@ -45,7 +48,7 @@ public class ConfigResourceIT extends UseAdminServer {
         Properties configuration = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         configuration.put("config.type", "database");
         configuration.put("db.jdbc.url", "jdbc:herddb:localhost");
-        configuration.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
+        configuration.put("db.server.base.dir", tmpDir.getAbsolutePath());
         configuration.put("dynamiccertificatesmanager.period", 25); // will be ignore due to db-mode
         startServer(configuration);
 
@@ -111,7 +114,7 @@ public class ConfigResourceIT extends UseAdminServer {
 
         configuration.put("config.type", "database");
         configuration.put("db.jdbc.url", "jdbc:herddb:localhost");
-        configuration.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
+        configuration.put("db.server.base.dir", tmpDir.getAbsolutePath());
         startServer(configuration);
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
@@ -155,5 +158,6 @@ public class ConfigResourceIT extends UseAdminServer {
         assertEquals(9000, server.getCurrentConfiguration().getConnectTimeout());
         assertEquals(30, server.getBackendHealthManager().getPeriod());
     }
+
 
 }

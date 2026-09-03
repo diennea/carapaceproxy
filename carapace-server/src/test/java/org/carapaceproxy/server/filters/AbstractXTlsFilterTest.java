@@ -2,8 +2,9 @@ package org.carapaceproxy.server.filters;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -20,47 +21,44 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.KeyStoreRule;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.junit.ClassRule;
-import org.junit.Rule;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
 import reactor.netty.http.HttpProtocol;
 
 public abstract class AbstractXTlsFilterTest {
 
     public static final String TLS_PROTOCOL = "TLSv1.2";
 
-    protected final boolean http1;
+    @TempDir
+    public static File tmpDir;
 
-    @ClassRule(order = 0)
-    public static TemporaryFolder tmpDir = new TemporaryFolder();
+    @RegisterExtension
+    public static KeyStoreRule carapaceKeyStore = new KeyStoreRule();
 
-    @ClassRule(order = 1)
-    public static KeyStoreRule carapaceKeyStore = new KeyStoreRule(tmpDir);
+    @RegisterExtension
+    public static KeyStoreRule backendKeyStore = new KeyStoreRule();
 
-    @ClassRule(order = 2)
-    public static KeyStoreRule backendKeyStore = new KeyStoreRule(tmpDir);
+    @BeforeAll
+    public static void setupDefaultSslContext() throws GeneralSecurityException {
+        SSLContext sslContext = SSLContext.getInstance(TLS_PROTOCOL);
+        sslContext.init(null, carapaceKeyStore.getTrustManagerFactory().getTrustManagers(), null);
+        SSLContext.setDefault(sslContext);
+    }
 
-    @Rule(order = 3)
-    public WireMockRule wireMockRule;
-
-    protected AbstractXTlsFilterTest(boolean http1) throws GeneralSecurityException {
-        this.http1 = http1;
-        this.wireMockRule = new WireMockRule(WireMockConfiguration.options()
+    // Per-test WireMock backend; parameterized tests can't feed a @Rule, so each test owns the lifecycle.
+    protected WireMockServer newWireMock(boolean http1) {
+        return new WireMockServer(WireMockConfiguration.options()
                 .dynamicPort()
                 .dynamicHttpsPort()
                 .http2TlsDisabled(http1)
                 .http2PlainDisabled(http1)
                 .keystoreType(backendKeyStore.getKeyStore().getType())
                 .keystorePath(backendKeyStore.getKeyStoreFile().getAbsolutePath())
-                .keystorePassword(new String(backendKeyStore.getKeyStorePassword()))
-        );
-
-        SSLContext sslContext = SSLContext.getInstance(TLS_PROTOCOL);
-        sslContext.init(null, carapaceKeyStore.getTrustManagerFactory().getTrustManagers(), null);
-        SSLContext.setDefault(sslContext);
+                .keystorePassword(new String(backendKeyStore.getKeyStorePassword())));
     }
 
-    protected HttpProxyServer startServer(boolean ssl, RequestFilterConfiguration... filters)
+    protected HttpProxyServer startServer(WireMockServer wireMockRule, boolean http1, boolean ssl, RequestFilterConfiguration... filters)
             throws InterruptedException, ConfigurationNotValidException, IOException {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port());
         final String certificate = carapaceKeyStore.getKeyStoreFile().getAbsolutePath();
@@ -76,7 +74,7 @@ public abstract class AbstractXTlsFilterTest {
                 ? NetworkListenerConfiguration.withDefaultSsl("0.0.0.0", 0, "*", protocols)
                 : NetworkListenerConfiguration.withoutSsl("localhost", 0, protocols);
 
-        HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir.newFolder());
+        HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir);
         if (ssl) {
             server.addCertificate(new SSLCertificateConfiguration(
                     "*", null, certificate, password, SSLCertificateConfiguration.CertificateMode.STATIC));
@@ -91,7 +89,7 @@ public abstract class AbstractXTlsFilterTest {
         return server;
     }
 
-    protected void assertResponseContains(int port, boolean ssl, String expected) throws IOException, InterruptedException {
+    protected void assertResponseContains(boolean http1, int port, boolean ssl, String expected) throws IOException, InterruptedException {
         if (http1) {
             try (var client = new RawHttpClient("localhost", port, ssl, null, new String[]{TLS_PROTOCOL}, null, 10_000)) {
                 String response = client.executeRequest("""
@@ -112,4 +110,5 @@ public abstract class AbstractXTlsFilterTest {
             }
         }
     }
+
 }
