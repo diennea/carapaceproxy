@@ -24,8 +24,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.fail;
 import static org.carapaceproxy.core.ProxyRequest.PROPERTY_URI;
 import static org.carapaceproxy.core.StaticContentsManager.CLASSPATH_RESOURCE;
 import static org.mockito.ArgumentMatchers.eq;
@@ -409,14 +409,11 @@ public class BasicStandardEndpointMapperIT {
                 String s = IOUtils.toString(URI.create(url), StandardCharsets.UTF_8);
                 assertThat(s).isEqualTo("it <b>works</b> !!");
             }
-            // resource not esists > Not Found
-            try {
-                String url = "http://localhost:" + server.getLocalPort() + "/not-exists.html";
-                String s = IOUtils.toString(URI.create(url), StandardCharsets.UTF_8);
-                fail("Expected Not Found, received " + s + " instead");
-            } catch (Exception ex) {
-                assertThat(ex).isInstanceOf(FileNotFoundException.class);
-            }
+            // resource does not exist > Not Found
+            final String missing = "http://localhost:" + server.getLocalPort() + "/not-exists.html";
+            assertThatExceptionOfType(FileNotFoundException.class)
+                    .isThrownBy(() -> IOUtils.toString(URI.create(missing), StandardCharsets.UTF_8))
+                    .withMessageContaining("/not-exists.html");
         }
     }
 
@@ -471,13 +468,10 @@ public class BasicStandardEndpointMapperIT {
             assertThat(s).isEqualTo(tokenData);
 
             // Test not existent token
-            try {
-                url = "http://localhost:" + server.getLocalPort() + "/.well-known/acme-challenge/not-existent-token";
-                IOUtils.toString(URI.create(url), StandardCharsets.UTF_8);
-                fail("");
-            } catch (Throwable t) {
-                assertThat(t).isInstanceOf(FileNotFoundException.class);
-            }
+            final String missingToken = "http://localhost:" + server.getLocalPort() + "/.well-known/acme-challenge/not-existent-token";
+            assertThatExceptionOfType(FileNotFoundException.class)
+                    .isThrownBy(() -> IOUtils.toString(URI.create(missingToken), StandardCharsets.UTF_8))
+                    .withMessageContaining("not-existent-token");
 
         }
     }

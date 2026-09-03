@@ -26,14 +26,12 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
-import static org.assertj.core.api.Assertions.fail;
 import static org.carapaceproxy.utils.ApacheHttpUtils.createHttpClientWithDisabledSSLValidation;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import java.io.File;
 import java.io.IOException;
-import java.net.URI;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -105,8 +103,8 @@ public class ApplyConfigurationIT {
                     "listener.2.port", "1426"
             )));
 
-            testIt(1423, true);
-            testIt(1426, true);
+            assertServes(1423, false);
+            assertServes(1426, false);
 
             // restart listener 1
             reloadConfiguration(server, propsWithMapper(Map.of(
@@ -116,8 +114,8 @@ public class ApplyConfigurationIT {
                     "listener.2.port", "1426"
             )));
 
-            testIt(1425, true);
-            testIt(1426, true);
+            assertServes(1425, false);
+            assertServes(1426, false);
 
             // stop listener 2
             reloadConfiguration(server, propsWithMapper(Map.of(
@@ -125,8 +123,8 @@ public class ApplyConfigurationIT {
                     "listener.1.port", "1425"
             )));
 
-            testIt(1425, true);
-            testIt(1426, false);
+            assertServes(1425, false);
+            assertRefused(1426);
 
             // restart listener 2
             reloadConfiguration(server, propsWithMapper(Map.of(
@@ -136,14 +134,14 @@ public class ApplyConfigurationIT {
                     "listener.2.port", "1426"
             )));
 
-            testIt(1425, true);
-            testIt(1426, true);
+            assertServes(1425, false);
+            assertServes(1426, false);
 
             // no more listeners
             reloadConfiguration(server, propsWithMapper(Map.of()));
 
-            testIt(1425, false);
-            testIt(1426, false);
+            assertRefused(1425);
+            assertRefused(1426);
 
             // listener with correct tls version
             String defaultCertificate = TestUtils.deployResource("ia.p12", tmpDir);
@@ -159,8 +157,8 @@ public class ApplyConfigurationIT {
             )));
 
             // Expecting valid HTTPS connection
-            testIt(1423, true, true);
-            testIt(1426, true, true);
+            assertServes(1423, true);
+            assertServes(1426, true);
 
             // listener with default tls version
             reloadConfiguration(server, propsWithMapperAndCertificate(defaultCertificate, Map.of(
@@ -170,7 +168,7 @@ public class ApplyConfigurationIT {
             )));
 
             // Expecting valid HTTPS connection
-            testIt(1423, true, true);
+            assertServes(1423, true);
 
             // listener with wrong tls version
             final IllegalStateException e = assertThatExceptionOfType(IllegalStateException.class).isThrownBy(() ->
@@ -427,31 +425,32 @@ public class ApplyConfigurationIT {
         }
     }
 
-    private void testIt(int port, boolean ok) throws Exception {
-        testIt(port, false, ok);
+    /**
+     * Asserts that the listener on the given port serves the static index page.
+     *
+     * @param port  the listener port
+     * @param https whether to connect over TLS
+     * @throws Exception if the request cannot be sent or its body read
+     */
+    private void assertServes(int port, boolean https) throws Exception {
+        final String url = (https ? "https" : "http") + "://localhost:" + port + "/index.html?redir";
+        try (CloseableHttpClient client = createHttpClientWithDisabledSSLValidation();
+             CloseableHttpResponse response = client.execute(new HttpGet(url))) {
+            assertThat(response.getStatusLine().getStatusCode()).as(url).isEqualTo(HttpStatus.SC_OK);
+            assertThat(new String(response.getEntity().getContent().readAllBytes(), UTF_8)).as(url).isEqualTo("it <b>works</b> !!");
+        }
     }
 
-    private void testIt(int port, final boolean https, boolean ok) throws Exception {
-        try (final CloseableHttpClient client = createHttpClientWithDisabledSSLValidation()) {
-            final String protocol = https ? "https" : "http";
-            final String url = protocol + "://localhost:" + port + "/index.html?redir";
-
-            final HttpGet request = new HttpGet(new URI(url));
-            try (final CloseableHttpResponse response = client.execute(request)) {
-                final int statusCode = response.getStatusLine().getStatusCode();
-                final String responseBody = new String(response.getEntity().getContent().readAllBytes(), UTF_8);
-
-                System.out.println("RES FOR: " + url + " -> " + responseBody);
-                assertThat(responseBody).isEqualTo("it <b>works</b> !!");
-
-                if (!ok && statusCode == HttpStatus.SC_OK) {
-                    fail("Expecting an error for port " + port);
-                }
-            }
-        } catch (IOException err) {
-            if (ok) {
-                fail("unexpected error " + err + " for port " + port);
-            }
+    /**
+     * Asserts that no listener accepts HTTP requests on the given port.
+     *
+     * @param port the port of a listener that has been removed or never configured
+     * @throws Exception if the HTTP client cannot be created
+     */
+    private void assertRefused(int port) throws Exception {
+        final String url = "http://localhost:" + port + "/index.html?redir";
+        try (CloseableHttpClient client = createHttpClientWithDisabledSSLValidation()) {
+            assertThatExceptionOfType(IOException.class).as(url).isThrownBy(() -> client.execute(new HttpGet(url)).close());
         }
     }
 
