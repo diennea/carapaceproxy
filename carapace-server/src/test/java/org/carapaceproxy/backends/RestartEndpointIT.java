@@ -98,7 +98,7 @@ public class RestartEndpointIT {
                 wireMockRule.stop();
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 System.out.println("statusline:" + resp.getStatusLine());
-                assertThat(resp.getStatusLine()).isEqualTo("HTTP/1.1 503 Service Unavailable\r\n");
+                assertThat(resp.getStatusLine()).startsWith("HTTP/1.1 503");
                 assertThat(resp.getHeaderLines()).contains("cache-control: no-cache\r\n", "connection: keep-alive\r\n");
             }
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -138,7 +138,7 @@ public class RestartEndpointIT {
 
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 System.out.println("statusline:" + resp.getStatusLine());
-                assertThat(resp.getStatusLine()).isEqualTo("HTTP/1.1 503 Service Unavailable\r\n");
+                assertThat(resp.getStatusLine()).startsWith("HTTP/1.1 503");
                 assertThat(resp.getHeaderLines()).contains("cache-control: no-cache\r\n", "connection: keep-alive\r\n");
             }
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {

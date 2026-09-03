@@ -31,9 +31,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.ByteBufFlux;
@@ -219,13 +219,13 @@ public class Http2HeadersIT {
                 final var client = HttpClient.create().protocol(HttpProtocol.HTTP11);
                 final var uri = "http://localhost:" + server.getLocalPort() + "/index.html";
                 for (int i = 0; i < 3; i++) {
-                    assertThat(client.get().uri(uri).responseSingle((resp, body) -> body.asString().map(b -> resp.status())).block()).isEqualTo(HttpResponseStatus.OK);
+                    assertThat(statusOf(client, uri)).isEqualTo(HttpResponseStatus.OK);
                 }
                 assertThat(clientAddresses).hasSize(1);
                 assertThat(lastVersion.get()).isEqualTo(HttpVersion.valueOf("HTTP/2.0"));
 
                 server.getProxyRequestsManager().reloadConfiguration(server.getCurrentConfiguration(), mapper.getBackends().values());
-                assertThat(client.get().uri(uri).responseSingle((resp, body) -> body.asString().map(b -> resp.status())).block()).isEqualTo(HttpResponseStatus.OK);
+                assertThat(statusOf(client, uri)).isEqualTo(HttpResponseStatus.OK);
                 assertThat(clientAddresses).hasSize(2);
             }
         } finally {
@@ -258,7 +258,7 @@ public class Http2HeadersIT {
                 final var client = HttpClient.create().protocol(HttpProtocol.HTTP11);
                 final var uri = "http://localhost:" + server.getLocalPort() + "/index.html";
                 for (int i = 0; i < 3; i++) {
-                    assertThat(client.get().uri(uri).responseSingle((resp, body) -> body.asString().map(b -> resp.status())).block()).isEqualTo(HttpResponseStatus.OK);
+                    assertThat(statusOf(client, uri)).isEqualTo(HttpResponseStatus.OK);
                 }
                 assertThat(clientAddresses).hasSize(1);
                 assertThat(lastVersion.get()).isEqualTo(HttpVersion.HTTP_1_1);
@@ -266,6 +266,17 @@ public class Http2HeadersIT {
         } finally {
             http11Backend.disposeNow();
         }
+    }
+
+    /**
+     * The status of a GET, read after the whole body so that the backend connection goes back to the pool.
+     *
+     * @param client the client sending the request
+     * @param uri    the request URI
+     * @return the response status
+     */
+    private static HttpResponseStatus statusOf(HttpClient client, String uri) {
+        return client.get().uri(uri).responseSingle((resp, body) -> body.asString().map(b -> resp.status())).block();
     }
 
     /**

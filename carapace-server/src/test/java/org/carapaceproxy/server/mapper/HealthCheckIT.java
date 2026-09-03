@@ -85,12 +85,7 @@ public class HealthCheckIT {
             assertThat(_status.getLastReachable())
                     .isBetween(startTs, endTs);
 
-            final BackendHealthCheck lastProbe = _status.getLastProbe();
-            assertThat(lastProbe)
-                    .extracting(BackendHealthCheck::path, BackendHealthCheck::result,
-                            BackendHealthCheck::httpResponse, BackendHealthCheck::httpBody)
-                    .containsExactly("/status.html", Result.SUCCESS, "200 OK", "Ok...");
-            assertThat(lastProbe.endTs()).isBetween(startTs, endTs);
+            assertLastProbe(_status, Result.SUCCESS, "200 OK", "Ok...", startTs, endTs);
         }
         {
             // Backend returns 500, marking it unavailable.
@@ -119,12 +114,7 @@ public class HealthCheckIT {
                     .isBetween(startTs, endTs);
             assertThat(_status.getLastUnreachable()).isEqualTo(_status.getUnreachableSince());
 
-            final BackendHealthCheck lastProbe = _status.getLastProbe();
-            assertThat(lastProbe)
-                    .extracting(BackendHealthCheck::path, BackendHealthCheck::result,
-                            BackendHealthCheck::httpResponse, BackendHealthCheck::httpBody)
-                    .containsExactly("/status.html", Result.FAILURE_STATUS, "500 Server Error", "ERROR");
-            assertThat(lastProbe.endTs()).isBetween(startTs, endTs);
+            assertLastProbe(_status, Result.FAILURE_STATUS, "500 Server Error", "ERROR", startTs, endTs);
         }
         {
             // Backend remains in error, keeping it unreachable.
@@ -154,12 +144,7 @@ public class HealthCheckIT {
             assertThat(_status.getLastUnreachable())
                     .isBetween(startTs, endTs);
 
-            final BackendHealthCheck lastProbe = _status.getLastProbe();
-            assertThat(lastProbe)
-                    .extracting(BackendHealthCheck::path, BackendHealthCheck::result,
-                            BackendHealthCheck::httpResponse, BackendHealthCheck::httpBody)
-                    .containsExactly("/status.html", Result.FAILURE_STATUS, "500 Server Error", "ERROR");
-            assertThat(lastProbe.endTs()).isBetween(startTs, endTs);
+            assertLastProbe(_status, Result.FAILURE_STATUS, "500 Server Error", "ERROR", startTs, endTs);
         }
         {
             // Backend recovers and returns 201, marking it available again.
@@ -188,12 +173,7 @@ public class HealthCheckIT {
             assertThat(_status.getLastReachable())
                     .isBetween(startTs, endTs);
 
-            final BackendHealthCheck lastProbe = _status.getLastProbe();
-            assertThat(lastProbe)
-                    .extracting(BackendHealthCheck::path, BackendHealthCheck::result,
-                            BackendHealthCheck::httpResponse, BackendHealthCheck::httpBody)
-                    .containsExactly("/status.html", Result.SUCCESS, "201 Created", "Ok...");
-            assertThat(lastProbe.endTs()).isBetween(startTs, endTs);
+            assertLastProbe(_status, Result.SUCCESS, "201 Created", "Ok...", startTs, endTs);
         }
     }
 
@@ -204,4 +184,17 @@ public class HealthCheckIT {
         assertThat(bconf.port()).isEqualTo(wireMockRule.getPort());
         assertThat(bconf.probePath()).isEqualTo("/status.html");
     }
+
+    /** Every probe in this test hits /status.html; only the outcome and the response differ. */
+    private static void assertLastProbe(final BackendHealthStatus status, final Result result,
+                                        final String httpResponse, final String httpBody,
+                                        final long startTs, final long endTs) {
+        final BackendHealthCheck lastProbe = status.getLastProbe();
+        assertThat(lastProbe)
+                .extracting(BackendHealthCheck::path, BackendHealthCheck::result,
+                        BackendHealthCheck::httpResponse, BackendHealthCheck::httpBody)
+                .containsExactly("/status.html", result, httpResponse, httpBody);
+        assertThat(lastProbe.endTs()).isBetween(startTs, endTs);
+    }
+
 }

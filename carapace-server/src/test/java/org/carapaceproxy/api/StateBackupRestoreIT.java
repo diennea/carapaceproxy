@@ -122,12 +122,22 @@ class StateBackupRestoreIT extends UseAdminServer {
     }
 
     /**
+     * A write refused while a restore runs: 503, and when to come back.
+     *
+     * @param resp the response to the refused write
+     */
+    private static void assertTryAgainLater(HttpResponse resp) {
+        assertThat(resp.getStatusLine()).startsWith("HTTP/1.1 503");
+        assertThat(header(resp, "Retry-After")).isEqualTo(String.valueOf(RestoreInProgressFilter.RETRY_AFTER_SECONDS));
+    }
+
+    /**
      * Refused restores must leave the store untouched.
      */
     private void assertRefused(RawHttpClient client, String archive, String params, String messagePart) throws Exception {
         final StoreSnapshot before = server.getDynamicConfigurationStore().exportState();
         final HttpResponse resp = restore(client, archive, params);
-        assertThat(resp.getStatusLine()).as(resp.getStatusLine()).contains("422");
+        assertThat(resp.getStatusLine()).startsWith("HTTP/1.1 422");
         assertThat(resp.getBodyString()).contains(messagePart);
         assertThat(server.getDynamicConfigurationStore().exportState()).isEqualTo(before);
     }
@@ -332,12 +342,10 @@ class StateBackupRestoreIT extends UseAdminServer {
             final String archive = edit(backup(client).getBodyString(), json -> ((ObjectNode) json.get("config")).put("healthmanager.period", "25"));
             try (GroupMembershipHandler.RestoreSignal signal = server.getGroupMembershipHandler().raiseRestoreSignal()) {
                 final HttpResponse write = client.post("/api/config/apply", null, "healthmanager.period=25", credentials);
-                assertThat(write.getStatusLine()).as(write.getStatusLine()).contains("503");
-                assertThat(header(write, "Retry-After")).isEqualTo(String.valueOf(RestoreInProgressFilter.RETRY_AFTER_SECONDS));
+                assertTryAgainLater(write);
                 // the restore passes the filter, then finds the signal taken
                 final HttpResponse second = restore(client, archive, null);
-                assertThat(second.getStatusLine()).as(second.getStatusLine()).contains("503");
-                assertThat(header(second, "Retry-After")).isEqualTo(String.valueOf(RestoreInProgressFilter.RETRY_AFTER_SECONDS));
+                assertTryAgainLater(second);
                 // reads and backups pass
                 assertThat(client.get("/api/config", credentials).isOk()).isTrue();
                 backup(client);
@@ -378,18 +386,18 @@ class StateBackupRestoreIT extends UseAdminServer {
                 TestUtils.waitForCondition(server::isRestoreInProgress, 10);
                 assertThat(caFile.delete()).isTrue();
                 final HttpResponse resp = restoring.get(2, TimeUnit.MINUTES);
-                assertThat(resp.getStatusLine()).as(resp.getStatusLine()).contains("500");
+                assertThat(resp.getStatusLine()).startsWith("HTTP/1.1 500");
                 assertThatJson(resp.getBodyString()).node("ok").isBoolean().isFalse();
                 // its own reload failed too: writes stay refused on this node
                 assertThat(server.isRestoreInProgress()).isTrue();
                 // and stay so after another restore that fails before its commit
                 try (GroupMembershipHandler.RestoreSignal busySignal = server.getGroupMembershipHandler().raiseRestoreSignal()) {
                     final HttpResponse second = restore(client, archive, null);
-                    assertThat(second.getStatusLine()).as(second.getStatusLine()).contains("503");
+                    assertThat(second.getStatusLine()).startsWith("HTTP/1.1 503");
                 }
                 assertThat(server.isRestoreInProgress()).isTrue();
                 final HttpResponse write = client.post("/api/config/apply", null, "healthmanager.period=25", credentials);
-                assertThat(write.getStatusLine()).as(write.getStatusLine()).contains("503");
+                assertThat(write.getStatusLine()).startsWith("HTTP/1.1 503");
             }
             // a restore that applies clears the flag, through a reload of the stored state
             assertThat(restore(client, archive, null).isOk()).isTrue();
@@ -466,7 +474,7 @@ class StateBackupRestoreIT extends UseAdminServer {
                 polling.set(false);
                 poller.join();
             }
-            assertThat(resp.getStatusLine()).as(resp.getStatusLine()).contains("503");
+            assertThat(resp.getStatusLine()).startsWith("HTTP/1.1 503");
             assertThat(resp.getBodyString()).contains("replica down");
             assertThat(signalSeen.get()).isFalse();
             assertThat(server.isRestoreInProgress()).isFalse();

@@ -77,7 +77,7 @@ class AuthenticationAPIServerIT extends UseAdminServer {
                         + "Host: localhost\r\n"
                         + "Authorization: " + authorization + "\r\n"
                         + "Connection: close\r\n\r\n");
-                assertThat(resp.getStatusLine()).as(authorization).contains("401");
+                assertThat(resp.getStatusLine()).as(authorization).startsWith("HTTP/1.1 401");
             }
         }
     }
