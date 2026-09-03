@@ -19,9 +19,9 @@
  */
 package org.carapaceproxy.api;
 
-import static java.util.List.of;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.entry;
 import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
 
 import ch.qos.logback.classic.Level;
@@ -154,10 +154,8 @@ class StateArchiveTest {
         final var snapshot = archive.toSnapshot("2.1.4", false);
         assertThat(snapshot.keyPairs()).isEmpty();
         assertThat(snapshot.acmeAccountKeys()).isEmpty();
-        final var row = archive.certificates().get("d.test");
-        assertThat(row.state()).isEqualTo("WAITING");
-        assertThat(row.subjectAltNames()).containsExactlyElementsOf(of());
-        assertThat(row.attemptCount()).isZero();
+        assertThat(archive.certificates())
+                .containsOnly(entry("d.test", new CertificateRow(List.of(), null, "WAITING", null, null, 0, null)));
     }
 
     @Test

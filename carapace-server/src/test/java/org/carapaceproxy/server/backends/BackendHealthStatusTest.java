@@ -22,6 +22,7 @@ package org.carapaceproxy.server.backends;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.carapaceproxy.core.EndpointKey;
+import org.carapaceproxy.server.backends.BackendHealthStatus.Snapshot;
 import org.carapaceproxy.server.backends.BackendHealthStatus.Status;
 import org.junit.jupiter.api.Test;
 
@@ -37,17 +38,18 @@ class BackendHealthStatusTest {
     @Test
     void freshStatusIsCold() {
         BackendHealthStatus status = new BackendHealthStatus(KEY, 500);
-        assertThat(status.getStatus()).isEqualTo(Status.COLD);
-        assertThat(status.getUnreachableSince()).isZero();
+        assertThat(status.snapshot())
+                .extracting(Snapshot::status, Snapshot::unreachableSince)
+                .containsExactly(Status.COLD, 0L);
     }
 
     @Test
     void reportAsUnreachableMovesToDown() {
         BackendHealthStatus status = new BackendHealthStatus(KEY, 500);
         status.reportAsUnreachable(1000, "500 error");
-        assertThat(status.getStatus()).isEqualTo(Status.DOWN);
-        assertThat(status.getUnreachableSince()).isEqualTo(1000);
-        assertThat(status.getLastUnreachable()).isEqualTo(1000);
+        assertThat(status.snapshot())
+                .extracting(Snapshot::status, Snapshot::unreachableSince, Snapshot::lastUnreachable)
+                .containsExactly(Status.DOWN, 1000L, 1000L);
     }
 
     @Test
@@ -55,9 +57,9 @@ class BackendHealthStatusTest {
         BackendHealthStatus status = new BackendHealthStatus(KEY, 500);
         status.reportAsUnreachable(1000, "500 error");
         status.reportAsUnreachable(2000, "still down");
-        assertThat(status.getStatus()).isEqualTo(Status.DOWN);
-        assertThat(status.getUnreachableSince()).isEqualTo(1000); // preserved, not reset
-        assertThat(status.getLastUnreachable()).isEqualTo(2000); // refreshed
+        assertThat(status.snapshot())
+                .extracting(Snapshot::status, Snapshot::unreachableSince, Snapshot::lastUnreachable)
+                .containsExactly(Status.DOWN, 1000L, 2000L); // unreachableSince preserved, lastUnreachable refreshed
     }
 
     @Test
@@ -65,9 +67,8 @@ class BackendHealthStatusTest {
         BackendHealthStatus status = new BackendHealthStatus(KEY, 500);
         status.reportAsUnreachable(1000, "500 error");
         status.reportAsReachable(3000);
-        assertThat(status.getStatus()).isEqualTo(Status.COLD);
-        assertThat(status.getUnreachableSince()).isZero();
-        assertThat(status.getLastReachable()).isEqualTo(3000);
+        // every field is deterministic here, so the whole snapshot can be compared
+        assertThat(status.snapshot()).isEqualTo(new Snapshot(Status.COLD, 0, 1000, 3000));
     }
 
     @Test

@@ -484,9 +484,7 @@ public class CertificatesIT extends UseAdminServer {
 
         // the overwritten row was restored, so the failed update cannot go live
         CertificateData restored = store.loadCertificateForDomain("localhost2");
-        assertThat(restored.getChain()).isEqualTo(previous.getChain());
-        assertThat(restored.getState()).isEqualTo(previous.getState());
-        assertThat(restored.getProvider()).isEqualTo(previous.getProvider());
+        assertThat(restored).usingRecursiveComparison().isEqualTo(previous);
     }
 
     @Test
