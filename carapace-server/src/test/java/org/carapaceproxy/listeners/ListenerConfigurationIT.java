@@ -27,7 +27,7 @@ public class ListenerConfigurationIT {
 
     @Test
     public void testListenerKeepAliveConfiguration() throws Exception {
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"))) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir)) {
 
             {
                 Properties configuration = new Properties();
@@ -167,7 +167,7 @@ public class ListenerConfigurationIT {
     }
 
     private HttpProxyServer newServerListeningOn(int port) throws Exception {
-        HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"));
+        HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir);
         Properties configuration = new Properties();
         configuration.put("listener.1.host", "127.0.0.1");
         configuration.put("listener.1.port", String.valueOf(port));
@@ -182,12 +182,4 @@ public class ListenerConfigurationIT {
         server.applyDynamicConfigurationFromAPI(config);
     }
 
-    private static File newFolder(File root, String... subDirs) throws IOException {
-        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
-        File result = new File(root, subFolder);
-        if (!result.mkdirs()) {
-            throw new IOException("Couldn't create folders " + root);
-        }
-        return result;
-    }
 }

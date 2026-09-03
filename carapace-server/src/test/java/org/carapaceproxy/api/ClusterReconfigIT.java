@@ -23,8 +23,6 @@ import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PRO
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.Properties;
 import org.apache.curator.test.TestingServer;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
@@ -36,7 +34,7 @@ public class ClusterReconfigIT extends UseAdminServer {
 
     @Test
     public void testReconfigInClusterMode() throws Exception {
-        try (TestingServer testingServer = new TestingServer(2229, newFolder(tmpDir, "junit"));) {
+        try (TestingServer testingServer = new TestingServer(2229, tmpDir);) {
             testingServer.start();
             Properties configuration = new Properties(HTTP_ADMIN_SERVER_CONFIG);
 
@@ -93,12 +91,4 @@ public class ClusterReconfigIT extends UseAdminServer {
         }
     }
 
-    private static File newFolder(File root, String... subDirs) throws IOException {
-        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
-        File result = new File(root, subFolder);
-        if (!result.mkdirs()) {
-            throw new IOException("Couldn't create folders " + root);
-        }
-        return result;
-    }
 }

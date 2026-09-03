@@ -29,7 +29,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import java.io.File;
-import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import org.apache.commons.io.IOUtils;
@@ -65,7 +64,7 @@ public class MultiListeningEndpointIT {
         int port2 = 1235;
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
 
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", port, mapper, newFolder(tmpDir, "junit"));) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", port, mapper, tmpDir);) {
             server.addListener(NetworkListenerConfiguration.withDefault("localhost", port2));
             server.start();
 
@@ -86,12 +85,4 @@ public class MultiListeningEndpointIT {
 
     }
 
-    private static File newFolder(File root, String... subDirs) throws IOException {
-        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
-        File result = new File(root, subFolder);
-        if (!result.mkdirs()) {
-            throw new IOException("Couldn't create folders " + root);
-        }
-        return result;
-    }
 }

@@ -40,7 +40,6 @@ import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
@@ -92,7 +91,7 @@ public class ConnectionPoolIT extends UseAdminServer {
         final Properties config = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         config.put("config.type", "database");
         config.put("db.jdbc.url", "jdbc:herddb:localhost");
-        config.put("db.server.base.dir", newFolder(tmpDir, "junit").getAbsolutePath());
+        config.put("db.server.base.dir", tmpDir.getAbsolutePath());
         config.put("aws.accesskey", "accesskey");
         config.put("aws.secretkey", "secretkey");
         config.put("healthmanager.tolerant", "true");
@@ -467,12 +466,4 @@ public class ConnectionPoolIT extends UseAdminServer {
         }
     }
 
-    private static File newFolder(File root, String... subDirs) throws IOException {
-        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
-        File result = new File(root, subFolder);
-        if (!result.mkdirs()) {
-            throw new IOException("Couldn't create folders " + root);
-        }
-        return result;
-    }
 }

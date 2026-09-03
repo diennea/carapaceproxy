@@ -91,7 +91,7 @@ public class Http2HeadersIT {
         );
         final var mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
         final HttpClientResponse response;
-        try (final var server = new HttpProxyServer(mapper, newFolder(tmpDir, "junit"))) {
+        try (final var server = new HttpProxyServer(mapper, tmpDir)) {
             server.addListener(newH2CListenerConfiguration());
             server.start();
             final var port = server.getLocalPort();
@@ -131,7 +131,7 @@ public class Http2HeadersIT {
         );
         final var mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
         final HttpClientResponse response;
-        try (final var server = new HttpProxyServer(mapper, newFolder(tmpDir, "junit"))) {
+        try (final var server = new HttpProxyServer(mapper, tmpDir)) {
             server.addListener(newH2CListenerConfiguration());
             server.start();
             final var port = server.getLocalPort();
@@ -174,7 +174,7 @@ public class Http2HeadersIT {
         try {
             final var mapper = new TestEndpointMapper("localhost", h2cBackend.port());
             final HttpClientResponse response;
-            try (final var server = new HttpProxyServer(mapper, newFolder(tmpDir, "junit"))) {
+            try (final var server = new HttpProxyServer(mapper, tmpDir)) {
                 server.addListener(newH2CListenerConfiguration());
                 server.start();
                 final var port = server.getLocalPort();
@@ -221,7 +221,7 @@ public class Http2HeadersIT {
                 .bindNow();
         try {
             final var mapper = new TestEndpointMapper("localhost", h2cBackend.port());
-            try (final var server = new HttpProxyServer(mapper, newFolder(tmpDir, "junit"))) {
+            try (final var server = new HttpProxyServer(mapper, tmpDir)) {
                 server.addListener(newH2CListenerConfiguration());
                 server.start();
                 final var client = HttpClient.create().protocol(HttpProtocol.HTTP11);
@@ -260,7 +260,7 @@ public class Http2HeadersIT {
                 .bindNow();
         try {
             final var mapper = new TestEndpointMapper("localhost", http11Backend.port());
-            try (final var server = new HttpProxyServer(mapper, newFolder(tmpDir, "junit"))) {
+            try (final var server = new HttpProxyServer(mapper, tmpDir)) {
                 server.addListener(newH2CListenerConfiguration());
                 server.start();
                 final var client = HttpClient.create().protocol(HttpProtocol.HTTP11);
@@ -301,7 +301,7 @@ public class Http2HeadersIT {
         try {
             final var mapper = new TestEndpointMapper("localhost", h2cBackend.port());
             final HttpClientResponse response;
-            try (final var server = new HttpProxyServer(mapper, newFolder(tmpDir, "junit"))) {
+            try (final var server = new HttpProxyServer(mapper, tmpDir)) {
                 server.addListener(newH2CListenerConfiguration());
                 server.start();
                 final var port = server.getLocalPort();
@@ -326,12 +326,4 @@ public class Http2HeadersIT {
         }
     }
 
-    private static File newFolder(File root, String... subDirs) throws IOException {
-        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
-        File result = new File(root, subFolder);
-        if (!result.mkdirs()) {
-            throw new IOException("Couldn't create folders " + root);
-        }
-        return result;
-    }
 }

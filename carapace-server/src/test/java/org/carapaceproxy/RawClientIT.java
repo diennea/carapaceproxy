@@ -154,7 +154,7 @@ public class RawClientIT {
                         .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir)) {
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -200,7 +200,7 @@ public class RawClientIT {
                         .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir)) {
             server.start();
             int port = server.getLocalPort();
             assertTrue(port > 0);
@@ -232,7 +232,7 @@ public class RawClientIT {
             int httpServerPort = httpServer.start();
 
             TestEndpointMapper mapper = new TestEndpointMapper("localhost", httpServerPort);
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir)) {
                 server.start();
                 int port = server.getLocalPort();
                 assertTrue(port > 0);
@@ -260,7 +260,7 @@ public class RawClientIT {
         try (httpServer) {
             int httpServerPort = httpServer.start();
             TestEndpointMapper mapper = new TestEndpointMapper("localhost", httpServerPort);
-            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
+            try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir)) {
                 server.start();
                 int port = server.getLocalPort();
                 assertTrue(port > 0);
@@ -288,7 +288,7 @@ public class RawClientIT {
 
             ExecutorService ex = Executors.newFixedThreadPool(2);
             List<Future<?>> futures = new ArrayList<>();
-            try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
+            try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir)) {
                 ConnectionPoolConfiguration defaultConnectionPool = proxy.getCurrentConfiguration().getDefaultConnectionPool();
                 defaultConnectionPool.setMaxConnectionsPerEndpoint(1);
                 proxy.getCurrentConfiguration().setClientsIdleTimeoutSeconds(300);
@@ -496,7 +496,7 @@ public class RawClientIT {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
         ExecutorService ex = Executors.newFixedThreadPool(2);
         List<Future<?>> futures = new ArrayList<>();
-        try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
+        try (HttpProxyServer proxy = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir)) {
             ConnectionPoolConfiguration defaultConnectionPool = proxy.getCurrentConfiguration().getDefaultConnectionPool();
             defaultConnectionPool.setMaxConnectionsPerEndpoint(1);
             proxy.getCurrentConfiguration().setClientsIdleTimeoutSeconds(10);
@@ -582,7 +582,7 @@ public class RawClientIT {
                         .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir)) {
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -673,7 +673,7 @@ public class RawClientIT {
                         .withBody("it <b>works</b> !!")));
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
-        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"))) {
+        try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir)) {
             server.start();
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -703,12 +703,4 @@ public class RawClientIT {
         assertThat(headerCookie.values().getFirst(), is("requestCookie=requestValue; requestCookie2=requestValue2"));
     }
 
-    private static File newFolder(File root, String... subDirs) throws IOException {
-        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
-        File result = new File(root, subFolder);
-        if (!result.mkdirs()) {
-            throw new IOException("Couldn't create folders " + root);
-        }
-        return result;
-    }
 }

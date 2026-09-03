@@ -74,7 +74,7 @@ public abstract class AbstractXTlsFilterTest {
                 ? NetworkListenerConfiguration.withDefaultSsl("0.0.0.0", 0, "*", protocols)
                 : NetworkListenerConfiguration.withoutSsl("localhost", 0, protocols);
 
-        HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, newFolder(tmpDir, "junit"));
+        HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir);
         if (ssl) {
             server.addCertificate(new SSLCertificateConfiguration(
                     "*", null, certificate, password, SSLCertificateConfiguration.CertificateMode.STATIC));
@@ -111,12 +111,4 @@ public abstract class AbstractXTlsFilterTest {
         }
     }
 
-    private static File newFolder(File root, String... subDirs) throws IOException {
-        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
-        File result = new File(root, subFolder);
-        if (!result.mkdirs()) {
-            throw new IOException("Couldn't create folders " + root);
-        }
-        return result;
-    }
 }

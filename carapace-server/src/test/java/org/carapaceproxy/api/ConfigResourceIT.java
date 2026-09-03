@@ -25,8 +25,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.Properties;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.junit.jupiter.api.Test;
@@ -48,7 +46,7 @@ public class ConfigResourceIT extends UseAdminServer {
         Properties configuration = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         configuration.put("config.type", "database");
         configuration.put("db.jdbc.url", "jdbc:herddb:localhost");
-        configuration.put("db.server.base.dir", newFolder(tmpDir, "junit").getAbsolutePath());
+        configuration.put("db.server.base.dir", tmpDir.getAbsolutePath());
         configuration.put("dynamiccertificatesmanager.period", 25); // will be ignore due to db-mode
         startServer(configuration);
 
@@ -114,7 +112,7 @@ public class ConfigResourceIT extends UseAdminServer {
 
         configuration.put("config.type", "database");
         configuration.put("db.jdbc.url", "jdbc:herddb:localhost");
-        configuration.put("db.server.base.dir", newFolder(tmpDir, "junit").getAbsolutePath());
+        configuration.put("db.server.base.dir", tmpDir.getAbsolutePath());
         startServer(configuration);
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
@@ -159,13 +157,5 @@ public class ConfigResourceIT extends UseAdminServer {
         assertEquals(30, server.getBackendHealthManager().getPeriod());
     }
 
-    private static File newFolder(File root, String... subDirs) throws IOException {
-        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
-        File result = new File(root, subFolder);
-        if (!result.mkdirs()) {
-            throw new IOException("Couldn't create folders " + root);
-        }
-        return result;
-    }
 
 }
