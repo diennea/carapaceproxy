@@ -1,0 +1,841 @@
+/*
+ * Licensed to Diennea S.r.l. under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. Diennea S.r.l. licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
+ */
+package org.carapaceproxy.server.certificates;
+
+import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeCertificateChain;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.AVAILABLE;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.DNS_CHALLENGE_WAIT;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.DOMAIN_UNREACHABLE;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.EXPIRED;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.ORDERING;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.REQUEST_FAILED;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERIFIED;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.VERIFYING;
+import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAITING;
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
+import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
+import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.shredzone.acme4j.Status.INVALID;
+import static org.shredzone.acme4j.Status.VALID;
+import java.io.IOException;
+import java.net.URI;
+import java.security.KeyPair;
+import java.security.cert.X509Certificate;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import junitparams.JUnitParamsRunner;
+import junitparams.Parameters;
+import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
+import org.carapaceproxy.configstore.CertificateData;
+import org.carapaceproxy.configstore.ConfigurationStore;
+import org.carapaceproxy.configstore.ConfigurationStoreException;
+import org.carapaceproxy.configstore.PropertiesConfigurationStore;
+import org.carapaceproxy.core.HttpProxyServer;
+import org.carapaceproxy.core.Listeners;
+import org.carapaceproxy.core.RuntimeServerConfiguration;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.shredzone.acme4j.Certificate;
+import org.shredzone.acme4j.Login;
+import org.shredzone.acme4j.Order;
+import org.shredzone.acme4j.Session;
+import org.shredzone.acme4j.Status;
+import org.shredzone.acme4j.challenge.Dns01Challenge;
+import org.shredzone.acme4j.challenge.Http01Challenge;
+import org.shredzone.acme4j.connector.Connection;
+import org.shredzone.acme4j.Problem;
+import org.shredzone.acme4j.exception.AcmeException;
+import org.shredzone.acme4j.exception.AcmeNetworkException;
+import org.shredzone.acme4j.toolbox.JSON;
+import org.shredzone.acme4j.util.KeyPairUtils;
+
+/**
+ * Test for DynamicCertificatesManager.
+ *
+ * @author paolo.venturi
+ */
+@RunWith(JUnitParamsRunner.class)
+public class DynamicCertificatesManagerIT {
+
+    static {
+        // DynamicCertificatesManager reads the limit into a static final field, so the property must be set
+        // before whatever test method happens to run first loads that class.
+        // No effect on other test classes: surefire runs each one in its own JVM (reuseForks=false).
+        System.setProperty("carapace.acme.dnschallengereachabilitycheck.limit", "2");
+    }
+
+    protected static final int MAX_ATTEMPTS = 7;
+
+    /**
+     * Reconfiguring the execution period from an initial value of '0' to > 0. Because of the zero period the manager
+     * never starts and when reconfigured with period > 0 it still won't run unless it was started before (#33).
+     * Relocated from ManagersExecutionTest so the scheduler injection can stay package-private.
+     */
+    @Test
+    public void testDynamicCertificatesManagerExecution() throws ConfigurationNotValidException {
+        RuntimeServerConfiguration config = new RuntimeServerConfiguration();
+        ScheduledExecutorService scheduler = mock(ScheduledExecutorService.class);
+        when(scheduler.scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(mock(ScheduledFuture.class));
+        DynamicCertificatesManager man = new DynamicCertificatesManager(null, () -> scheduler);
+        man.setConfigurationStore(mock(ConfigurationStore.class));
+
+        // With period 0 the manager never starts
+        man.setPeriod(0);
+        man.start();
+        verify(scheduler, never()).scheduleWithFixedDelay(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class)); // never called
+
+        // With new period >0 the manager should run whether started before
+        config.setDynamicCertificatesManagerPeriod(1);
+        man.reloadConfiguration(config);
+        assertEquals(1, man.getPeriod());
+        verify(scheduler, times(1)).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)); // once
+
+        man.stop();
+        config.setDynamicCertificatesManagerPeriod(0);
+        man.reloadConfiguration(config);
+        assertEquals(0, man.getPeriod());
+        man.start();
+        verify(scheduler, times(1)).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)); // never
+        man.stop();
+
+        // With new period >0 the manager should not run because not started before.
+        config.setDynamicCertificatesManagerPeriod(1);
+        man.reloadConfiguration(config);
+        assertEquals(1, man.getPeriod());
+        verify(scheduler, times(1)).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)); // never
+
+        man.start();
+        verify(scheduler, times(2)).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)); // once
+    }
+
+    @Test
+    @Parameters({
+        "challenge_null,true",
+        "challenge_null,false",
+        "challenge_status_invalid,true",
+        "challenge_status_invalid,false",
+        "challenge_status_invalid_with_detail,true",
+        "challenge_status_invalid_with_detail,false",
+        "order_already_valid,true",
+        "order_already_valid,false",
+        "order_finalization_error,true",
+        "order_finalization_error,false",
+        "order_response_error,true",
+        "order_response_error,false",
+        "available_to_expired,true",
+        "available_to_expired,false",
+        "all_ok,true",
+        "all_ok,false"
+    })
+    public void testCertificateSimpleStateManagement(String runCase, boolean maxedOutTrials) throws Exception {
+        // ACME mocking
+        ACMEClient ac = mock(ACMEClient.class);
+        Order o = mock(Order.class);
+        when(o.getLocation()).thenReturn(URI.create("https://localhost/index").toURL());
+        if (runCase.equals("order_already_valid")) {
+            when(o.getStatus()).thenReturn(Status.VALID);
+        }
+        Login login = mock(Login.class);
+        when(login.bindOrder(any())).thenReturn(o);
+        when(ac.getLogin()).thenReturn(login);
+        when(ac.createOrderForDomain(any())).thenReturn(o);
+        Http01Challenge c = mock(Http01Challenge.class);
+        when(c.getToken()).thenReturn("");
+        when(c.getJSON()).thenReturn(JSON.parse(runCase.equals("challenge_status_invalid_with_detail")
+                ? """
+                  {
+                      "url": "https://localhost/index",
+                      "type": "http-01",
+                      "token": "mytoken",
+                      "error": {
+                          "detail": "CAA record prevents issuance"
+                      }
+                  }"""
+                : """
+                  {
+                      "url": "https://localhost/index",
+                      "type": "http-01",
+                      "token": "mytoken"
+                  }"""
+        ));
+        when(c.getAuthorization()).thenReturn("");
+        when(c.getError()).thenReturn(Optional.empty());
+        if (runCase.equals("challenge_status_invalid_with_detail")) {
+            final var problem = mock(Problem.class);
+            when(problem.getDetail()).thenReturn(Optional.of("CAA record prevents issuance"));
+            when(c.getError()).thenReturn(Optional.of(problem));
+        }
+        when(ac.getChallengesForOrder(any())).thenReturn(runCase.equals("challenge_null") ? Collections.emptyMap() : Map.of("domain", c));
+        when(ac.checkResponseForChallenge(any())).thenReturn(runCase.startsWith("challenge_status_invalid") ? INVALID : VALID);
+        when(ac.checkResponseForOrder(any())).thenReturn(runCase.equals("order_response_error") ? INVALID : VALID);
+        if (runCase.equals("order_already_valid") || runCase.equals("order_finalization_error")) {
+            doThrow(AcmeException.class).when(ac).orderCertificate(any(), any());
+        }
+
+        KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        Certificate cert = mock(Certificate.class);
+        X509Certificate _cert = (X509Certificate) generateSampleChain(keyPair, runCase.equals("available_to_expired"))[0];
+        when(cert.getCertificateChain()).thenReturn(List.of(_cert));
+        when(ac.fetchCertificateForOrder(any())).thenReturn(cert);
+
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        when(parent.getListeners()).thenReturn(mock(Listeners.class));
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
+
+        // Store mocking
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        String chain = base64EncodeCertificateChain(generateSampleChain(keyPair, false), keyPair.getPrivate());
+        when(store.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
+
+        // yet available certificate
+        final var cycleCount = maxedOutTrials ? MAX_ATTEMPTS : 0; // next error will fail
+        String d0 = "localhost0";
+        CertificateData cd0 = new CertificateData(d0, chain, AVAILABLE);
+        cd0.setAttemptsCount(cycleCount);
+        when(store.loadCertificateForDomain(eq(d0))).thenReturn(cd0);
+        // certificate to order
+        String d1 = "localhost1";
+        CertificateData cd1 = new CertificateData(d1, null, WAITING);
+        cd1.setAttemptsCount(cycleCount);
+        when(store.loadCertificateForDomain(eq(d1))).thenReturn(cd1);
+        man.setConfigurationStore(store);
+        // manual certificate
+        String d2 = "manual";
+        CertificateData cd2 = new CertificateData(d2, chain, AVAILABLE);
+        when(store.loadCertificateForDomain(eq(d2))).thenReturn(cd2);
+        // empty manual certificate
+        String d3 = "emptymanual";
+        CertificateData cd3 = new CertificateData(d3, null, AVAILABLE);
+        when(store.loadCertificateForDomain(eq(d3))).thenReturn(cd3);
+
+        man.setConfigurationStore(store);
+
+        // Manager setup
+        Properties props = new Properties();
+        props.setProperty("certificate.0.hostname", d0);
+        props.setProperty("certificate.0.mode", "acme");
+        props.setProperty("certificate.0.daysbeforerenewal", "0");
+        props.setProperty("certificate.1.hostname", d1);
+        props.setProperty("certificate.1.mode", "acme");
+        props.setProperty("certificate.1.daysbeforerenewal", "0");
+        props.setProperty("certificate.2.hostname", d2);
+        props.setProperty("certificate.2.mode", "manual");
+        props.setProperty("certificate.2.daysbeforerenewal", "0");
+        props.setProperty("certificate.3.hostname", d3);
+        props.setProperty("certificate.3.mode", "manual");
+        props.setProperty("certificate.3.daysbeforerenewal", "0");
+        props.setProperty("dynamiccertificatesmanager.errors.maxattempts", String.valueOf(MAX_ATTEMPTS));
+        ConfigurationStore configStore = new PropertiesConfigurationStore(props);
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(configStore);
+        when(parent.getCurrentConfiguration()).thenReturn(conf);
+        man.reloadConfiguration(conf);
+        injectAcmeClients(man, Map.of(DEFAULT_PROVIDER_NAME, ac));
+
+        assertCertificateState(d0, AVAILABLE, cycleCount, man);
+        assertCertificateState(d2, AVAILABLE, 0, man);
+        assertCertificateState(d3, AVAILABLE, 0, man);
+        assertNotNull(man.getCertificateForDomain(d2));
+        assertNull(man.getCertificateForDomain(d3)); // empty
+        man.setStateOfCertificate(d2, WAITING); // has not to be renewed by the manager (saveCounter = 1)
+        assertCertificateState(d2, WAITING, 0, man);
+
+        int expectedCycleCount = cycleCount;
+        int saveCounter = 1; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
+
+        // WAITING
+        assertCertificateState(d1, WAITING, cycleCount, man);
+        man.run();
+        verify(store, times(++saveCounter)).saveCertificate(any());
+        assertCertificateState(d1, runCase.equals("challenge_null") ? VERIFIED : VERIFYING, expectedCycleCount, man);
+
+        man.run();
+        verify(store, times(++saveCounter)).saveCertificate(any());
+        if (runCase.equals("challenge_null")) { // VERIFIED
+            assertCertificateState(d1, ORDERING, expectedCycleCount, man);
+        } else if (runCase.startsWith("challenge_status_invalid")) {
+            assertCertificateState(d1, REQUEST_FAILED, ++expectedCycleCount, man);
+            assertEquals(
+                    runCase.equals("challenge_status_invalid_with_detail")
+                            ? "CAA record prevents issuance"
+                            : "Challenge response verification failed, status is INVALID",
+                    man.getCertificateDataForDomain(d1).getMessage()
+            );
+            man.run();
+            verify(store, times(++saveCounter)).saveCertificate(any());
+            assertCertificateState(d1, maxedOutTrials ? REQUEST_FAILED : WAITING, expectedCycleCount, man);
+            return;
+        } else { // VERIFYING
+            assertCertificateState(d1, VERIFIED, expectedCycleCount, man);
+            man.run();
+            verify(store, times(++saveCounter)).saveCertificate(any());
+            if (runCase.equals("order_finalization_error")) {
+                assertCertificateState(d1, REQUEST_FAILED, ++expectedCycleCount, man);
+                man.run();
+                verify(store, times(++saveCounter)).saveCertificate(any());
+                assertCertificateState(d1, maxedOutTrials ? REQUEST_FAILED : WAITING, expectedCycleCount, man);
+                return;
+            } else {
+                assertCertificateState(d1, ORDERING, expectedCycleCount, man);
+            }
+        }
+        // ORDERING
+        man.run();
+        verify(store, times(++saveCounter)).saveCertificate(any());
+        switch (runCase) {
+            case "challenge_null", "order_already_valid", "available_to_expired", "all_ok" -> expectedCycleCount = 0;
+            case "order_response_error" -> expectedCycleCount++;
+        }
+        assertCertificateState(
+                d1,
+                runCase.equals("order_response_error") ? REQUEST_FAILED : AVAILABLE,
+                expectedCycleCount,
+                man
+        );
+        man.run();
+        if (runCase.equals("order_response_error")) { // REQUEST_FAILED
+            verify(store, times(++saveCounter)).saveCertificate(any());
+            assertCertificateState(d1, maxedOutTrials ? REQUEST_FAILED : WAITING, expectedCycleCount, man);
+        } else { // AVAILABLE
+            DynamicCertificateState state = man.getStateOfCertificate(d1);
+            saveCounter += AVAILABLE.equals(state) ? 0 : 1; // only with state AVAILABLE the certificate hasn't to be saved.
+            verify(store, times(saveCounter)).saveCertificate(any());
+            assertCertificateState(
+                    d1,
+                    runCase.equals("available_to_expired") ? EXPIRED : AVAILABLE,
+                    expectedCycleCount,
+                    man
+            );
+
+            man.run();
+            state = man.getStateOfCertificate(d1);
+            saveCounter += AVAILABLE.equals(state) ? 0 : 1; // only with state AVAILABLE the certificate hasn't to be saved.
+            verify(store, times(saveCounter)).saveCertificate(any());
+            assertCertificateState(
+                    d1,
+                    runCase.equals("available_to_expired") ? WAITING : AVAILABLE,
+                    expectedCycleCount,
+                    man
+            );
+        }
+    }
+
+    // must run after reloadConfiguration, which rebuilds the client map
+    private static void injectAcmeClients(DynamicCertificatesManager man, Map<String, ACMEClient> clients) {
+        man.setAcmeClients(clients);
+    }
+
+    private void assertCertificateState(String domain, DynamicCertificateState expectedState, int expectedCycleCount, DynamicCertificatesManager dCMan) {
+        assertEquals(expectedState, dCMan.getStateOfCertificate(domain)); // on db
+        assertEquals(expectedState, dCMan.getCertificateDataForDomain(domain).getState()); // on cache
+        assertEquals(expectedCycleCount, dCMan.getCertificateDataForDomain(domain).getAttemptsCount());
+    }
+
+    @Test
+    // A) record not created -> request failed
+    // B) record created but not ready -> request failed after LIMIT attempts
+    // C) record created and ready -> VERIFYING
+    // D) challenge verified -> record deleted
+    // E) challenge failed -> record deleted
+    @Parameters({
+        "challenge_creation_failed",
+        "challenge_check_limit_expired",
+        "challenge_failed",
+        "challenge_verified",
+    })
+    public void testWildcardCertificateStateManagement(String runCase) throws Exception {
+        final var domain = "*.localhost";
+
+        // ACME mocking
+        ACMEClient ac = mock(ACMEClient.class);
+        Order o = mock(Order.class);
+        when(o.getLocation()).thenReturn(URI.create("https://localhost/index").toURL());
+        Login login = mock(Login.class);
+        when(login.bindOrder(any())).thenReturn(o);
+        when(ac.getLogin()).thenReturn(login);
+        when(ac.createOrderForDomain(any())).thenReturn(o);
+        Session session = mock(Session.class);
+        Connection conn = mock(Connection.class);
+        when(conn.readJsonResponse()).thenReturn(JSON.parse(
+                "{\"url\": \"https://localhost/index\", \"type\": \"dns-01\"}"
+        ));
+        when(session.connect()).thenReturn(conn);
+        when(login.getSession()).thenReturn(session);
+        when(login.getPublicKey()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE).getPublic());
+
+        Dns01Challenge c = mock(Dns01Challenge.class);
+        when(c.getDigest()).thenReturn("");
+        when(c.getJSON()).thenReturn(JSON.parse(
+                "{\"url\": \"https://localhost/index\", \"type\": \"dns-01\", \"token\": \"mytoken\"}"
+        ));
+        when(c.getError()).thenReturn(Optional.empty());
+        when(ac.getChallengesForOrder(any())).thenReturn(Map.of(domain, c));
+        when(ac.checkResponseForChallenge(any())).thenReturn(runCase.equals("challenge_failed") ? INVALID : VALID);
+
+        KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        Certificate cert = mock(Certificate.class);
+        X509Certificate _cert = (X509Certificate) generateSampleChain(keyPair, false)[0];
+        when(cert.getCertificateChain()).thenReturn(Collections.singletonList(_cert));
+        when(ac.fetchCertificateForOrder(any())).thenReturn(cert);
+
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        when(parent.getListeners()).thenReturn(mock(Listeners.class));
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
+
+        // Route53Cliente mocking
+        man.initAWSClient("access", "secret");
+        Route53Client r53Client = mock(Route53Client.class);
+        when(r53Client.createDnsChallengeForDomain(any(), any())).thenReturn(!runCase.startsWith("challenge_creation_failed"));
+        when(r53Client.isDnsChallengeForDomainAvailable(any(), any())).thenReturn(
+                !(runCase.equals("challenge_creation_failed_n_reboot") || runCase.equals("challenge_check_limit_expired"))
+        );
+        man.setRoute53Client(r53Client);
+
+        // Store mocking
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        when(store.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
+
+        // certificate to order
+        CertificateData cd1 = new CertificateData(domain, null, WAITING);
+        when(store.loadCertificateForDomain(eq(domain))).thenReturn(cd1);
+        man.setConfigurationStore(store);
+
+        // Manager setup
+        Properties props = new Properties();
+        props.setProperty("certificate.1.hostname", domain);
+        props.setProperty("certificate.1.mode", "acme");
+        props.setProperty("certificate.1.daysbeforerenewal", "0");
+        props.setProperty("dynamiccertificatesmanager.domainschecker.ipaddresses", "127.0.0.1, 0:0:0:0:0:0:0:1");
+        ConfigurationStore configStore = new PropertiesConfigurationStore(props);
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(configStore);
+        when(parent.getCurrentConfiguration()).thenReturn(conf);
+        man.reloadConfiguration(conf);
+        injectAcmeClients(man, Map.of(DEFAULT_PROVIDER_NAME, ac));
+
+        int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
+
+        // WAITING
+        assertCertificateState(domain, WAITING, 0, man);
+        man.run();
+        verify(store, times(++saveCounter)).saveCertificate(any());
+        if (runCase.equals("challenge_creation_failed")) {
+            // WAITING
+            assertCertificateState(domain, REQUEST_FAILED, 1, man);
+        } else {
+            // DNS_CHALLENGE_WAIT
+            assertCertificateState(domain, DNS_CHALLENGE_WAIT, 0, man);
+            man.run();
+            verify(store, times(++saveCounter)).saveCertificate(any());
+            if (runCase.equals("challenge_check_limit_expired")) {
+                assertCertificateState(domain, DNS_CHALLENGE_WAIT, 0, man);
+                man.run();
+                verify(store, times(++saveCounter)).saveCertificate(any());
+                assertCertificateState(domain, REQUEST_FAILED, 1, man);
+                // check dns-challenge-record deleted
+                verify(r53Client, times(1)).deleteDnsChallengeForDomain(any(), any());
+            } else {
+                // VERIFYING
+                assertCertificateState(domain, VERIFYING, 0, man);
+                man.run();
+                verify(store, times(++saveCounter)).saveCertificate(any());
+                if (runCase.equals("challenge_failed")) {
+                    // REQUEST_FAILED
+                    assertCertificateState(domain, REQUEST_FAILED, 1, man);
+                    // check dns-challenge-record deleted
+                    verify(r53Client, times(1)).deleteDnsChallengeForDomain(any(), any());
+                } else if (runCase.equals("challenge_verified")) {
+                    // VERIFIED
+                    assertCertificateState(domain, VERIFIED, 0, man);
+                    // check dns-challenge-record deleted
+                    verify(r53Client, times(1)).deleteDnsChallengeForDomain(any(), any());
+                }
+            }
+        }
+    }
+
+    @Test
+    // A) record not created -> request failed
+    // B) record created but not ready -> request failed after LIMIT attempts
+    // C) record created and ready -> VERIFYING
+    // D) challenge verified -> record deleted
+    // E) challenge failed -> record deleted
+    @Parameters({
+            "challenge_creation_failed",
+            "challenge_check_limit_expired",
+            "challenge_failed",
+            "challenge_verified"
+    })
+    public void testSanCertificateStateManagement(String runCase) throws Exception {
+        final var domain = "*.localhost";
+        final var san1 = "test1.localhost";
+        final var san2 = "*.localhost2";
+
+        // ACME mocking
+        ACMEClient ac = mock(ACMEClient.class);
+        Order o = mock(Order.class);
+        when(o.getLocation()).thenReturn(URI.create("https://localhost/index").toURL());
+        Login login = mock(Login.class);
+        when(login.bindOrder(any())).thenReturn(o);
+        when(ac.getLogin()).thenReturn(login);
+        when(ac.createOrderForDomain(any())).thenReturn(o);
+        Session session = mock(Session.class);
+        Connection conn = mock(Connection.class);
+        when(conn.readJsonResponse()).thenReturn(JSON.parse(
+                "{\"url\": \"https://localhost/index\", \"type\": \"dns-01\"}"
+        ));
+        when(session.connect()).thenReturn(conn);
+        when(login.getSession()).thenReturn(session);
+        when(login.getPublicKey()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE).getPublic());
+
+        // challenges
+        when(ac.checkResponseForChallenge(any())).thenReturn(runCase.equals("challenge_failed")? INVALID : VALID);
+        Dns01Challenge dns01Challenge = mock(Dns01Challenge.class);
+        when(dns01Challenge.getDigest()).thenReturn("");
+        when(dns01Challenge.getJSON()).thenReturn(JSON.parse(
+                "{\"url\": \"https://localhost/index\", \"type\": \"dns-01\", \"token\": \"mytoken\"}"
+        ));
+        when(dns01Challenge.getError()).thenReturn(Optional.empty());
+        Http01Challenge http01Challenge = mock(Http01Challenge.class);
+        when(http01Challenge.getToken()).thenReturn("");
+        when(http01Challenge.getJSON()).thenReturn(JSON.parse(
+                "{\"url\": \"https://localhost/index\", \"type\": \"http-01\", \"token\": \"mytoken\"}"
+        ));
+        when(http01Challenge.getAuthorization()).thenReturn("");
+        when(http01Challenge.getError()).thenReturn(Optional.empty());
+        when(ac.getChallengesForOrder(any())).thenReturn(Map.of(
+                domain, dns01Challenge,
+                san1, http01Challenge,
+                san2, dns01Challenge
+        ));
+
+        KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        Certificate cert = mock(Certificate.class);
+        X509Certificate _cert = (X509Certificate) generateSampleChain(keyPair, false)[0];
+        when(cert.getCertificateChain()).thenReturn(Collections.singletonList(_cert));
+        when(ac.fetchCertificateForOrder(any())).thenReturn(cert);
+
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        when(parent.getListeners()).thenReturn(mock(Listeners.class));
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
+
+        // Route53Cliente mocking
+        man.initAWSClient("access", "secret");
+        Route53Client r53Client = mock(Route53Client.class);
+        when(r53Client.createDnsChallengeForDomain(any(), any())).thenReturn(!runCase.startsWith("challenge_creation_failed"));
+        when(r53Client.isDnsChallengeForDomainAvailable(any(), any())).thenReturn(
+                !(runCase.equals("challenge_creation_failed_n_reboot") || runCase.equals("challenge_check_limit_expired"))
+        );
+        man.setRoute53Client(r53Client);
+
+        // Store mocking
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        when(store.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
+
+        // certificate to order
+        CertificateData cd1 = new CertificateData(domain, null, WAITING);
+        when(store.loadCertificateForDomain(eq(domain))).thenReturn(cd1);
+        man.setConfigurationStore(store);
+
+        // Manager setup
+        Properties props = new Properties();
+        props.setProperty("certificate.1.hostname", domain);
+        props.setProperty("certificate.1.san", san1 + "," + san2);
+        props.setProperty("certificate.1.mode", "acme");
+        props.setProperty("certificate.1.daysbeforerenewal", "0");
+        props.setProperty("dynamiccertificatesmanager.domainschecker.ipaddresses", "127.0.0.1, 0:0:0:0:0:0:0:1");
+        ConfigurationStore configStore = new PropertiesConfigurationStore(props);
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(configStore);
+        when(parent.getCurrentConfiguration()).thenReturn(conf);
+        man.reloadConfiguration(conf);
+        injectAcmeClients(man, Map.of(DEFAULT_PROVIDER_NAME, ac));
+
+        int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
+
+        // WAITING
+        assertCertificateState(domain, WAITING, 0, man);
+        man.run();
+        verify(store, times(++saveCounter)).saveCertificate(any());
+        if (runCase.equals("challenge_creation_failed")) {
+            // WAITING
+            assertCertificateState(domain, REQUEST_FAILED, 1, man);
+            verify(r53Client, atLeastOnce()).deleteDnsChallengeForDomain(any(), any());
+            verify(store, times(1)).deleteAcmeChallengeToken(any());
+        } else {
+            // DNS_CHALLENGE_WAIT
+            assertCertificateState(domain, DNS_CHALLENGE_WAIT, 0, man);
+            man.run();
+            verify(store, times(++saveCounter)).saveCertificate(any());
+            if (runCase.equals("challenge_check_limit_expired")) {
+                assertCertificateState(domain, DNS_CHALLENGE_WAIT, 0, man);
+                man.run();
+                verify(store, times(++saveCounter)).saveCertificate(any());
+                assertCertificateState(domain, REQUEST_FAILED, 2, man);
+                verify(r53Client, times(2)).deleteDnsChallengeForDomain(any(), any());
+                verify(store, times(1)).deleteAcmeChallengeToken(any());
+            } else {
+                // VERIFYING
+                assertCertificateState(domain, VERIFYING, 0, man);
+                man.run();
+                verify(store, times(++saveCounter)).saveCertificate(any());
+                if (runCase.equals("challenge_failed")) {
+                    // REQUEST_FAILED
+                    assertCertificateState(domain, REQUEST_FAILED, 3, man);
+                    // check dns-challenge-record deleted
+                    verify(r53Client, times(2)).deleteDnsChallengeForDomain(any(), any());
+                    verify(store, times(1)).deleteAcmeChallengeToken(any());
+                } else if (runCase.equals("challenge_verified")) {
+                    // VERIFIED
+                    assertCertificateState(domain, VERIFIED, 0, man);
+                    // check dns-challenge-record deleted
+                    verify(r53Client, times(2)).deleteDnsChallengeForDomain(any(), any());
+                    verify(store, times(1)).deleteAcmeChallengeToken(any());
+                }
+            }
+        }
+    }
+
+    @Test
+    @Parameters({
+        "localhost-no-ip-check", "localhost-ip-check-partial", "localhost-ip-check-full"
+    })
+    public void testDomainReachabilityCheck(String domainCase) throws Exception {
+        final var domain = "localhost";
+
+        // ACME mocking
+        ACMEClient ac = mock(ACMEClient.class);
+        Order o = mock(Order.class);
+        when(o.getLocation()).thenReturn(URI.create("https://localhost/index").toURL());
+        Login login = mock(Login.class);
+        when(login.bindOrder(any())).thenReturn(o);
+        when(ac.getLogin()).thenReturn(login);
+        when(ac.createOrderForDomain(any())).thenReturn(o);
+        Session session = mock(Session.class);
+        when(session.connect()).thenReturn(mock(Connection.class));
+        when(login.getSession()).thenReturn(session);
+        when(login.getPublicKey()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE).getPublic());
+
+        Http01Challenge c = mock(Http01Challenge.class);
+        when(c.getToken()).thenReturn("");
+        when(c.getJSON()).thenReturn(JSON.parse(
+                "{\"url\": \"https://localhost/index\", \"type\": \"http-01\", \"token\": \"mytoken\"}"
+        ));
+        when(c.getAuthorization()).thenReturn("");
+        when(ac.getChallengesForOrder(any())).thenReturn(Map.of("domain", c));
+        when(ac.checkResponseForChallenge(any())).thenReturn(VALID);
+
+        KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        Certificate cert = mock(Certificate.class);
+        X509Certificate _cert = (X509Certificate) generateSampleChain(keyPair, false)[0];
+        when(cert.getCertificateChain()).thenReturn(List.of(_cert));
+        when(ac.fetchCertificateForOrder(any())).thenReturn(cert);
+
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        when(parent.getListeners()).thenReturn(mock(Listeners.class));
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
+
+        // Store mocking
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        when(store.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
+
+        // certificate to order
+        CertificateData cd1 = new CertificateData(domain, null, WAITING);
+        when(store.loadCertificateForDomain(eq(domain))).thenReturn(cd1);
+        man.setConfigurationStore(store);
+
+        // Properties setup
+        Properties props = new Properties();
+        props.setProperty("certificate.1.hostname", domain);
+        props.setProperty("certificate.1.mode", "acme");
+        if (domainCase.equals("localhost-ip-check-partial")) {
+            props.setProperty("dynamiccertificatesmanager.domainschecker.ipaddresses", "127.0.0.1");
+        }
+        if (domainCase.equals("localhost-ip-check-full")) {
+            props.setProperty("dynamiccertificatesmanager.domainschecker.ipaddresses", "127.0.0.1, 0:0:0:0:0:0:0:1");
+        }
+        ConfigurationStore configStore = new PropertiesConfigurationStore(props);
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(configStore);
+        when(parent.getCurrentConfiguration()).thenReturn(conf);
+        man.reloadConfiguration(conf);
+        injectAcmeClients(man, Map.of(DEFAULT_PROVIDER_NAME, ac));
+
+        int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
+
+        // WAITING
+        assertCertificateState(domain, WAITING, 0, man);
+        man.run(); // checking domain
+        verify(store, times(++saveCounter)).saveCertificate(any());
+        if (domainCase.equals("localhost-ip-check-partial")) {
+            assertCertificateState(domain, DOMAIN_UNREACHABLE, 1, man);
+            man.run();
+            verify(store, times(++saveCounter)).saveCertificate(any());
+            assertCertificateState(domain, DOMAIN_UNREACHABLE, 2, man);
+        } else {
+            assertCertificateState(domain, VERIFYING, 0, man);
+            man.run();
+            verify(store, times(++saveCounter)).saveCertificate(any());
+            assertCertificateState(domain, VERIFIED, 0, man);
+        }
+    }
+
+    @Test
+    public void testCertificateProviderRouting() throws Exception {
+        // one mocked ACME client per provider
+        ACMEClient letsencryptClient = mock(ACMEClient.class);
+        ACMEClient customClient = mock(ACMEClient.class);
+        Order o = mock(Order.class);
+        when(o.getLocation()).thenReturn(URI.create("https://localhost/index").toURL());
+        for (ACMEClient ac : List.of(letsencryptClient, customClient)) {
+            Login login = mock(Login.class);
+            when(login.bindOrder(any())).thenReturn(o);
+            when(ac.getLogin()).thenReturn(login);
+            when(ac.createOrderForDomain(any())).thenReturn(o);
+            when(ac.getChallengesForOrder(any())).thenReturn(Collections.emptyMap());
+        }
+
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        when(parent.getListeners()).thenReturn(mock(Listeners.class));
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
+
+        // Store mocking
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        when(store.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
+        when(store.loadCertificateForDomain(eq("le.local"))).thenReturn(new CertificateData("le.local", null, WAITING));
+        when(store.loadCertificateForDomain(eq("custom.local")))
+                .thenReturn(new CertificateData("custom.local", null, WAITING));
+        man.setConfigurationStore(store);
+
+        // Manager setup: one certificate on the default provider, one on the custom one
+        Properties props = new Properties();
+        props.setProperty("acme.1.name", "custom");
+        props.setProperty("acme.1.url", "https://acme.example.com/directory");
+        props.setProperty("certificate.0.hostname", "le.local");
+        props.setProperty("certificate.0.mode", "acme");
+        props.setProperty("certificate.1.hostname", "custom.local");
+        props.setProperty("certificate.1.mode", "acme");
+        props.setProperty("certificate.1.provider", "custom");
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(new PropertiesConfigurationStore(props));
+        when(parent.getCurrentConfiguration()).thenReturn(conf);
+        man.reloadConfiguration(conf);
+        injectAcmeClients(man, Map.of(
+                DEFAULT_PROVIDER_NAME, letsencryptClient,
+                "custom", customClient
+        ));
+
+        man.run(); // both certificates WAITING > order created on each provider's client
+
+        verify(letsencryptClient, times(1))
+                .createOrderForDomain(eq(new CertificateData("le.local", null, WAITING).getNames()));
+        verify(customClient, times(1))
+                .createOrderForDomain(eq(new CertificateData("custom.local", null, WAITING).getNames()));
+        // routing is exclusive: neither client sees the other provider's certificate
+        verify(letsencryptClient, never())
+                .createOrderForDomain(eq(new CertificateData("custom.local", null, WAITING).getNames()));
+        verify(customClient, never())
+                .createOrderForDomain(eq(new CertificateData("le.local", null, WAITING).getNames()));
+    }
+
+    @Test
+    @Parameters({"stale", "transient", "store"})
+    public void testPendingOrderPollFailure(String failureCase) throws Exception {
+        // ACME mocking: the pending order cannot be polled back from the CA
+        ACMEClient ac = mock(ACMEClient.class);
+        Login login = mock(Login.class);
+        Order order = mock(Order.class);
+        when(login.bindOrder(any())).thenReturn(order);
+        when(ac.getLogin()).thenReturn(login);
+        doThrow(switch (failureCase) {
+            case "transient" -> new AcmeNetworkException(new IOException("connection reset"));
+            case "store" -> new ConfigurationStoreException(new IOException("db down"));
+            // e.g., the order belongs to a different CA after a provider change
+            default -> new AcmeException("unknown order");
+        }).when(ac).checkResponseForOrder(any());
+
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        when(parent.getListeners()).thenReturn(mock(Listeners.class));
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
+
+        // Store mocking
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        String domain = "localhost";
+        CertificateData cd = new CertificateData(domain, null, ORDERING);
+        cd.setPendingOrderLocation(URI.create("https://old-ca.example.com/order/1").toURL());
+        when(store.loadCertificateForDomain(eq(domain))).thenReturn(cd);
+        man.setConfigurationStore(store);
+
+        // Manager setup
+        Properties props = new Properties();
+        props.setProperty("certificate.1.hostname", domain);
+        props.setProperty("certificate.1.mode", "acme");
+        props.setProperty("dynamiccertificatesmanager.errors.maxattempts", String.valueOf(MAX_ATTEMPTS));
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(new PropertiesConfigurationStore(props));
+        when(parent.getCurrentConfiguration()).thenReturn(conf);
+        man.reloadConfiguration(conf);
+        injectAcmeClients(man, Map.of(DEFAULT_PROVIDER_NAME, ac));
+
+        man.run();
+
+        if (failureCase.equals("stale")) {
+            // failure counted, so the certificate falls back to WAITING and a fresh order
+            assertCertificateState(domain, REQUEST_FAILED, 1, man);
+            assertEquals("unknown order", man.getCertificateDataForDomain(domain).getMessage());
+            man.run();
+            assertCertificateState(domain, WAITING, 1, man);
+        } else {
+            // transient ACME and store failures alike: state untouched and nothing persisted, retried at the next cycle
+            assertCertificateState(domain, ORDERING, 0, man);
+            verify(store, never()).saveCertificate(any());
+        }
+    }
+
+
+}
