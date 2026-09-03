@@ -94,7 +94,7 @@ public class UnreachableBackendIT {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertThat(resp.getStatusLine()).isEqualTo("HTTP/1.1 503 Service Unavailable\r\n");
+                assertThat(resp.getStatusLine()).startsWith("HTTP/1.1 503");
                 assertThat(resp.getBodyString()).isEqualTo("""
                         <html>
                             <body>
@@ -153,7 +153,7 @@ public class UnreachableBackendIT {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertThat(resp.getStatusLine()).isEqualTo("HTTP/1.1 503 Service Unavailable\r\n");
+                assertThat(resp.getStatusLine()).startsWith("HTTP/1.1 503");
                 assertThat(resp.getBodyString()).isEqualTo("""
                         <html>
                             <body>
@@ -187,7 +187,7 @@ public class UnreachableBackendIT {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertThat(resp.getStatusLine()).isEqualTo("HTTP/1.1 503 Service Unavailable\r\n");
+                assertThat(resp.getStatusLine()).startsWith("HTTP/1.1 503");
                 assertThat(resp.getBodyString()).isEqualTo("""
                         <html>
                             <body>

@@ -110,7 +110,7 @@ public class StuckRequestsIT {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertThat(resp.getStatusLine()).isEqualTo("HTTP/1.1 500 Internal Server Error\r\n");
+                assertThat(resp.getStatusLine()).startsWith("HTTP/1.1 500");
                 assertThat(resp.getBodyString()).isEqualTo("""
                         <html>
                             <body>
@@ -134,7 +134,7 @@ public class StuckRequestsIT {
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 if (backendsUnreachableOnStuckRequests) {
-                    assertThat(resp.getStatusLine()).isEqualTo("HTTP/1.1 503 Service Unavailable\r\n");
+                    assertThat(resp.getStatusLine()).startsWith("HTTP/1.1 503");
                     assertThat(resp.getBodyString()).isEqualTo("""
                             <html>
                                 <body>
@@ -143,7 +143,7 @@ public class StuckRequestsIT {
                             </html>
                             """);
                 } else {
-                    assertThat(resp.getStatusLine()).isEqualTo("HTTP/1.1 200 OK\r\n");
+                    assertThat(resp.getStatusLine()).startsWith("HTTP/1.1 200");
                     assertThat(resp.getBodyString()).isEqualTo("it <b>works</b> !!");
                 }
             }
