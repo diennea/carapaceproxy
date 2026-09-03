@@ -60,9 +60,9 @@ import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUserRealm;
 import org.carapaceproxy.utils.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * @author enrico.olivelli
@@ -265,7 +265,8 @@ public class ApplyConfigurationIT {
         // no realm configured while the admin API is enabled: the server refuses to boot
         try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, newFolder(tmpDir, "junit"))) {
             assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> server.configureAtBoot(
-                    new PropertiesConfigurationStore(props("http.admin.enabled", "true"))));
+                    new PropertiesConfigurationStore(props("http.admin.enabled", "true"))))
+                    .withMessageContaining("userrealm.class is required when the admin API is enabled");
         }
 
         // SimpleUserRealm: the development stub, which has to be asked for explicitly
@@ -412,7 +413,8 @@ public class ApplyConfigurationIT {
                 final CertificateData unknownProvider = new CertificateData("a.example", null, DynamicCertificateState.REQUEST_FAILED);
                 unknownProvider.setProvider("ghost");
                 armed.set(true);
-                assertThatExceptionOfType(IllegalStateException.class).isThrownBy(() -> server.updateDynamicCertificateForDomain(unknownProvider));
+                assertThatExceptionOfType(IllegalStateException.class).isThrownBy(() -> server.updateDynamicCertificateForDomain(unknownProvider))
+                        .withMessageContaining("no such ACME provider");
                 assertThat(server.getDynamicConfigurationStore().loadCertificateForDomain("a.example").getState()).isEqualTo(DynamicCertificateState.REQUEST_FAILED);
             } finally {
                 Optional.ofNullable(signal.getAndSet(null)).ifPresent(GroupMembershipHandler.RestoreSignal::close);

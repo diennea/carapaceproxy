@@ -479,7 +479,8 @@ public class CertificatesIT extends UseAdminServer {
         // unknown provider bypassing the API pre-validation: the configuration apply fails
         CertificateData update = new CertificateData("localhost2", null, DynamicCertificateState.WAITING);
         update.setProvider("ghost");
-        assertThatThrownBy(() -> server.updateDynamicCertificateForDomain(update)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> server.updateDynamicCertificateForDomain(update)).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Invalid value 'ghost' for certificate.2.provider: no such ACME provider");
 
         // the overwritten row was restored, so the failed update cannot go live
         CertificateData restored = store.loadCertificateForDomain("localhost2");

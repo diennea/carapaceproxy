@@ -69,30 +69,36 @@ class RuntimeServerConfigurationTest {
             "healthmanager.connecttimeout, -1"
     })
     void rejectsNonPositiveNumericConfig(String key, String value) {
-        assertThatThrownBy(() -> configure(key, value)).isInstanceOf(ConfigurationNotValidException.class);
+        assertThatThrownBy(() -> configure(key, value)).isInstanceOf(ConfigurationNotValidException.class)
+                .hasMessageContaining("Invalid value '" + value + "' for " + key);
     }
 
     @Test
     void rejectsNonNumericIntValue() {
-        assertThatThrownBy(() -> configure("connectionsmanager.disposetimeout", "abc")).isInstanceOf(ConfigurationNotValidException.class);
+        assertThatThrownBy(() -> configure("connectionsmanager.disposetimeout", "abc")).isInstanceOf(ConfigurationNotValidException.class)
+                .hasMessageContaining("Invalid integer value 'abc' for parameter 'connectionsmanager.disposetimeout'");
     }
 
     @Test
     void rejectsInvalidAccessLogTimestampFormat() {
-        assertThatThrownBy(() -> configure("accesslog.format.timestamp", "'unterminated")).isInstanceOf(ConfigurationNotValidException.class);
+        assertThatThrownBy(() -> configure("accesslog.format.timestamp", "'unterminated")).isInstanceOf(ConfigurationNotValidException.class)
+                .hasMessageContaining("accesslog.format.timestamp")
+                .hasMessageContaining("Unterminated quote");
     }
 
     @Test
     void rejectsNonWritableLocalCertificatesStorePath() {
         assertThatThrownBy(() -> configure(
-                "dynamiccertificatesmanager.localcertificates.store.path", "/nonexistent-carapace-test-dir/certs")).isInstanceOf(ConfigurationNotValidException.class);
+                "dynamiccertificatesmanager.localcertificates.store.path", "/nonexistent-carapace-test-dir/certs")).isInstanceOf(ConfigurationNotValidException.class)
+                .hasMessageContaining("Cannot write local certificates to path");
     }
 
     @Test
     void rejectsInvalidCertificateMode() {
         assertThatThrownBy(() -> configure(
                 "certificate.0.hostname", "example.com",
-                "certificate.0.mode", "badmode")).isInstanceOf(ConfigurationNotValidException.class);
+                "certificate.0.mode", "badmode")).isInstanceOf(ConfigurationNotValidException.class)
+                .hasMessageContaining("Invalid value of 'badmode' for certificate.0.mode");
     }
 
     @Test
@@ -100,19 +106,23 @@ class RuntimeServerConfigurationTest {
         assertThatThrownBy(() -> configure(
                 "connectionpool.0.id", "p0",
                 "connectionpool.0.enabled", "true",
-                "connectionpool.0.domain", "")).isInstanceOf(ConfigurationNotValidException.class);
+                "connectionpool.0.domain", "")).isInstanceOf(ConfigurationNotValidException.class)
+                .hasMessageContaining("domain cannot be empty");
     }
 
     @Test
     void rejectsUnknownFilterType() {
-        assertThatThrownBy(() -> configure("filter.0.type", "badtype")).isInstanceOf(ConfigurationNotValidException.class);
+        assertThatThrownBy(() -> configure("filter.0.type", "badtype")).isInstanceOf(ConfigurationNotValidException.class)
+                .hasMessageContaining("bad filter type 'badtype'");
     }
 
     @Test
     void rejectsSslListenerWithoutDefaultCertificate() {
         assertThatThrownBy(() -> configure(
                 "listener.0.port", "8080",
-                "listener.0.ssl", "true")).isInstanceOf(ConfigurationNotValidException.class);
+                "listener.0.ssl", "true")).isInstanceOf(ConfigurationNotValidException.class)
+                .hasMessageContaining("ssl=true")
+                .hasMessageContaining("not configured");
     }
 
     @Test
@@ -120,7 +130,8 @@ class RuntimeServerConfigurationTest {
         // Regression: an unknown protocol used to escape as a raw IllegalArgumentException.
         assertThatThrownBy(() -> configure(
                 "listener.0.port", "8080",
-                "listener.0.protocol", "BADPROTO")).isInstanceOf(ConfigurationNotValidException.class);
+                "listener.0.protocol", "BADPROTO")).isInstanceOf(ConfigurationNotValidException.class)
+                .hasMessageContaining("Invalid value for listener.0.protocol, supported: HTTP11, H2, H2C");
     }
 
     @Test

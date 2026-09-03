@@ -76,16 +76,21 @@ class StateArchiveTest {
         assertAccepted("2.1.4", "dev", false);
         assertAccepted("dev", "2.1.4", false);
         assertAccepted("not a version", "dev", false);
-        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> archive(null).toSnapshot("2.1.4", false));
-        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> archive("not a version").toSnapshot("2.1.4", true));
+        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> archive(null).toSnapshot("2.1.4", false))
+                .withMessage("The archive has no valid carapaceVersion: null");
+        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> archive("not a version").toSnapshot("2.1.4", true))
+                .withMessage("The archive has no valid carapaceVersion: not a version");
         // too long to be a version number: not read as 2.1.123456789
-        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> archive("2.1.1234567890").toSnapshot("2.1.4", false));
+        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> archive("2.1.1234567890").toSnapshot("2.1.4", false))
+                .withMessage("The archive has no valid carapaceVersion: 2.1.1234567890");
 
         final var err = assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> archive("2.3.0").toSnapshot("2.1.4", false)).actual();
         assertThat(err.getMessage()).contains("2.3.0");
         assertThat(err.getMessage()).contains("acceptNewerVersion");
-        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> archive("2.1.5-SNAPSHOT").toSnapshot("2.1.4", false));
-        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> archive("10.0.0").toSnapshot("9.9.9", false));
+        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> archive("2.1.5-SNAPSHOT").toSnapshot("2.1.4", false))
+                .withMessageContaining("comes from Carapace 2.1.5-SNAPSHOT, newer than the running 2.1.4");
+        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> archive("10.0.0").toSnapshot("9.9.9", false))
+                .withMessageContaining("comes from Carapace 10.0.0, newer than the running 9.9.9");
     }
 
     @Test
@@ -113,19 +118,26 @@ class StateArchiveTest {
     void formatChecks() {
         final var version2 = assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> read("{\"format\":\"carapace-state\",\"formatVersion\":2,\"config\":{\"a\":\"b\"}}")).actual();
         assertThat(version2.getMessage()).contains("formatVersion 2");
-        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> read("{\"format\":\"carapace-state\",\"config\":{\"a\":\"b\"}}"));
-        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> read("{\"format\":\"other\",\"formatVersion\":1}"));
-        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> read("{\"formatVersion\":1}"));
-        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> read("not json"));
-        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> read(""));
-        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> read("null"));
+        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> read("{\"format\":\"carapace-state\",\"config\":{\"a\":\"b\"}}"))
+                .withMessageContaining("Unsupported archive formatVersion 0");
+        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> read("{\"format\":\"other\",\"formatVersion\":1}"))
+                .withMessage("Invalid archive: format is not \"carapace-state\"");
+        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> read("{\"formatVersion\":1}"))
+                .withMessage("Invalid archive: format is not \"carapace-state\"");
+        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> read("not json"))
+                .withMessageStartingWith("Invalid archive: malformed JSON");
+        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> read(""))
+                .withMessageStartingWith("Invalid archive: malformed JSON");
+        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> read("null"))
+                .withMessage("Invalid archive: format is not \"carapace-state\"");
         final var duplicate = assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> read("{\"format\":\"carapace-state\",\"formatVersion\":1,\"config\":{\"a\":\"b\",\"a\":\"c\"}}")).actual();
         assertThat(duplicate.getMessage()).contains("line 1, column");
         // the parser would quote the token: an unquoted key must not reach the message, nor the logs
         final var leak = assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> read("{\"format\":\"carapace-state\",\"formatVersion\":1,\"keyPairs\":{\"d.test\":{\"privateKey\":MIIEvQIBADANBg}}}")).actual();
         assertThat(leak.getMessage()).doesNotContain("MIIEvQ");
         assertThat(leak.getMessage()).contains("line 1, column");
-        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> read("{\"format\":\"carapace-state\",\"formatVersion\":1,\"config\":{\"a\":\"b\"}}SECRET"));
+        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> read("{\"format\":\"carapace-state\",\"formatVersion\":1,\"config\":{\"a\":\"b\"}}SECRET"))
+                .withMessageStartingWith("Invalid archive: malformed JSON");
         final var missing = assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> read("{\"format\":\"carapace-state\",\"formatVersion\":1,\"config\":{\"a\":\"b\"},\"keyPairs\":{},\"acmeAccountKeys\":{}}")).actual();
         assertThat(missing.getMessage()).contains("certificates");
         final var tooBig = assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> StateArchive.read(new ByteArrayInputStream(new byte[StateArchive.MAX_ARCHIVE_BYTES + 1]))).actual();

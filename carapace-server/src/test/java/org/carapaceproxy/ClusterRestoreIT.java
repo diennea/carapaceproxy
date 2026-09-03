@@ -135,11 +135,13 @@ public class ClusterRestoreIT {
             client.start();
             // a listed peer whose information cannot be read
             client.create().forPath("/proxy/peers/ghost", "not json".getBytes(StandardCharsets.UTF_8));
-            assertThatExceptionOfType(StoreNotReadyException.class).isThrownBy(() -> node1.restoreState(archive, null, null));
+            assertThatExceptionOfType(StoreNotReadyException.class).isThrownBy(() -> node1.restoreState(archive, null, null))
+                    .withMessageContaining("Cannot read the version of peer ghost");
             client.delete().forPath("/proxy/peers/ghost");
             // a list without this node, as read when ZooKeeper does not answer
             client.delete().forPath("/proxy/peers/node1");
-            assertThatExceptionOfType(StoreNotReadyException.class).isThrownBy(() -> node1.restoreState(archive, null, null));
+            assertThatExceptionOfType(StoreNotReadyException.class).isThrownBy(() -> node1.restoreState(archive, null, null))
+                    .withMessageContaining("Cannot read the list of the peers");
         }
         assertThat(node1.isRestoreInProgress()).isFalse();
         assertThat(node1.getBackendHealthManager().getPeriod()).isEqualTo(period);

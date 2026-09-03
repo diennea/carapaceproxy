@@ -309,11 +309,14 @@ public class ZooKeeperGroupMembershipHandlerIT {
                 GroupMembershipHandler.RestoreSignal signal = peer1.raiseRestoreSignal();
                 signal.ensureHeld();
                 TestUtils.waitForCondition(() -> peer1.isRestoreInProgress() && peer2.isRestoreInProgress(), 10);
-                assertThatExceptionOfType(ConfigurationChangeInProgressException.class).isThrownBy(peer2::raiseRestoreSignal);
-                assertThatExceptionOfType(ConfigurationChangeInProgressException.class).isThrownBy(peer1::raiseRestoreSignal);
+                assertThatExceptionOfType(ConfigurationChangeInProgressException.class).isThrownBy(peer2::raiseRestoreSignal)
+                        .withMessageContaining("another restore is in progress");
+                assertThatExceptionOfType(ConfigurationChangeInProgressException.class).isThrownBy(peer1::raiseRestoreSignal)
+                        .withMessageContaining("another restore is in progress");
 
                 signal.close();
-                assertThatExceptionOfType(IllegalStateException.class).isThrownBy(signal::ensureHeld);
+                assertThatExceptionOfType(IllegalStateException.class).isThrownBy(signal::ensureHeld)
+                        .withMessage("Restore signal lost by peer " + peerId1);
                 // the creator applied the restore itself: only the other peer reloads, before its flag drops
                 TestUtils.waitForCondition(() -> !peer1.isRestoreInProgress() && !peer2.isRestoreInProgress(), 10);
                 assertThat(reloads1.get()).isZero();

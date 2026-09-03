@@ -60,7 +60,8 @@ class RestoreInProgressFilterTest {
         GroupMembershipHandler.RestoreSignal signal = handler.raiseRestoreSignal();
         try {
             signal.ensureHeld();
-            assertThatExceptionOfType(ConfigurationChangeInProgressException.class).isThrownBy(handler::raiseRestoreSignal);
+            assertThatExceptionOfType(ConfigurationChangeInProgressException.class).isThrownBy(handler::raiseRestoreSignal)
+                    .withMessage("another restore is in progress, try again later");
             assertRefused(filter, "POST", "/api/config/apply");
             assertRefused(filter, "DELETE", "/api/certificates/a.example");
             assertRefused(filter, "PUT", "/api/connectionpools/p");
@@ -70,7 +71,8 @@ class RestoreInProgressFilterTest {
         } finally {
             signal.close();
         }
-        assertThatExceptionOfType(IllegalStateException.class).isThrownBy(signal::ensureHeld);
+        assertThatExceptionOfType(IllegalStateException.class).isThrownBy(signal::ensureHeld)
+                .withMessage("Restore signal already cleared");
         assertPasses(filter, "POST", "/api/config/apply");
 
         // a stale handle never clears a newer signal

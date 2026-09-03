@@ -148,12 +148,14 @@ public class ConfigurationStoreIT {
 
         assertThat(store.getInt("property.int.1", 11)).isOne();
         assertThat(store.getInt("property.int.2", 11)).isEqualTo(11); // empty > default
-        assertThatThrownBy(() -> store.getInt("property.int.3", 11)).isInstanceOf(ConfigurationNotValidException.class);
+        assertThatThrownBy(() -> store.getInt("property.int.3", 11)).isInstanceOf(ConfigurationNotValidException.class)
+                .hasMessageContaining("for parameter 'property.int.3'");
         assertThat(store.getInt("property.int.11", 11)).isEqualTo(11); // not exists
 
         assertThat(store.getLong("property.long.1", 11)).isOne();
         assertThat(store.getLong("property.long.2", 11)).isEqualTo(11L); // empty > default
-        assertThatThrownBy(() -> store.getLong("property.long.3", 11)).isInstanceOf(ConfigurationNotValidException.class);
+        assertThatThrownBy(() -> store.getLong("property.long.3", 11)).isInstanceOf(ConfigurationNotValidException.class)
+                .hasMessageContaining("for parameter 'property.long.3'");
         assertThat(store.getLong("property.long.11", 11)).isEqualTo(11L); // not exists
 
         assertThat(store.getBoolean("property.boolean.1", false)).isTrue();
@@ -178,7 +180,8 @@ public class ConfigurationStoreIT {
         assertThat(store.getClassname("property.class.3", DClassName)).isEqualTo(DClassName); // empty > default
         assertThat(store.getClassname("property.class.nd", DClassName)).isEqualTo(DClassName); // not defined > default
         assertThat(store.getClassname("property.class.nd", null)).isNull(); // not defined > default
-        assertThatThrownBy(() -> store.getClassname("property.class.4", "DClassName")).isInstanceOf(ConfigurationNotValidException.class); // not exists
+        assertThatThrownBy(() -> store.getClassname("property.class.4", "DClassName")).isInstanceOf(ConfigurationNotValidException.class)
+                .hasMessageContaining("for parameter 'property.class.4'"); // not exists
     }
 
     @Test
@@ -426,7 +429,8 @@ public class ConfigurationStoreIT {
         props.setProperty("db.tablespace", "carapace test");
         PropertiesConfigurationStore staticConfiguration = new PropertiesConfigurationStore(props);
 
-        assertThatExceptionOfType(ConfigurationStoreException.class).isThrownBy(() -> openStore(staticConfiguration));
+        assertThatExceptionOfType(ConfigurationStoreException.class).isThrownBy(() -> openStore(staticConfiguration))
+                .withMessageContaining("Invalid db.tablespace \"carapace test\"");
     }
 
     @Test
