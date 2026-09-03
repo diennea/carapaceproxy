@@ -61,12 +61,12 @@ class AuthenticationAPIServerIT extends UseAdminServer {
 
     private void assertHeaderNotContains(HttpResponse resp, String header) {
         List<String> lines = resp.getHeaderLines();
-        assertThat(lines).noneMatch(h -> h.contains(header));
+        assertThat(lines).noneSatisfy(h -> assertThat(h).contains(header));
     }
 
     private void assertHeaderContains(HttpResponse resp, String header) {
         List<String> lines = resp.getHeaderLines();
-        assertThat(lines).anyMatch(h -> h.contains(header));
+        assertThat(lines).anySatisfy(h -> assertThat(h).contains(header));
     }
 
 }

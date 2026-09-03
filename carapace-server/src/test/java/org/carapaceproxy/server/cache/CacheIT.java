@@ -87,7 +87,7 @@ public class CacheIT {
                 System.out.println("s:" + s);
                 assertThat(s).contains("it <b>works</b> !!");
                 resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
-                assertThat(resp.getHeaderLines()).noneMatch(h -> h.contains("X-Cached"));
+                assertThat(resp.getHeaderLines()).noneSatisfy(h -> assertThat(h).contains("X-Cached"));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -96,7 +96,7 @@ public class CacheIT {
                     String s = resp.toString();
                     System.out.println("s:" + s);
                     assertThat(s).contains("it <b>works</b> !!");
-                    assertThat(resp.getHeaderLines()).anyMatch(h -> h.contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
 
                 {
@@ -104,7 +104,7 @@ public class CacheIT {
                     String s = resp.toString();
                     System.out.println("s:" + s);
                     assertThat(s).contains("it <b>works</b> !!");
-                    assertThat(resp.getHeaderLines()).anyMatch(h -> h.contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
             }
 
@@ -152,7 +152,7 @@ public class CacheIT {
                 System.out.println("s:" + s);
                 assertThat(s).contains("it <b>works</b> !!");
                 resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
-                assertThat(resp.getHeaderLines()).noneMatch(h -> h.contains("X-Cached"));
+                assertThat(resp.getHeaderLines()).noneSatisfy(h -> assertThat(h).contains("X-Cached"));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -162,7 +162,7 @@ public class CacheIT {
                     String s = resp.toString();
                     System.out.println("s:" + s);
                     assertThat(s).contains("it <b>works</b> !!");
-                    assertThat(resp.getHeaderLines()).noneMatch(h -> h.contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).noneSatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
 
                 {
@@ -170,7 +170,7 @@ public class CacheIT {
                     String s = resp.toString();
                     System.out.println("s:" + s);
                     assertThat(s).contains("it <b>works</b> !!");
-                    assertThat(resp.getHeaderLines()).anyMatch(h -> h.contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
             }
 
@@ -239,7 +239,7 @@ public class CacheIT {
                     System.out.println("s:" + s);
                     assertThat(s).contains("it <b>works</b> !!");
                     resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
-                    assertThat(resp.getHeaderLines()).noneMatch(h -> h.contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).noneSatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
                 {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
@@ -265,14 +265,14 @@ public class CacheIT {
                     String s = resp.toString();
                     System.out.println("s:" + s);
                     assertThat(s).contains("it <b>works</b> !!");
-                    assertThat(resp.getHeaderLines()).noneMatch(h -> h.contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).noneSatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
                 {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: public\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
                     assertThat(s).contains("it <b>works</b> !!");
-                    assertThat(resp.getHeaderLines()).anyMatch(h -> h.contains("X-Cached")); // cached due to cache-control: public header presence in second request
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("X-Cached")); // cached due to cache-control: public header presence in second request
                 }
             }
             assertThat(server.getCache().getCacheSize()).isOne();
@@ -289,14 +289,14 @@ public class CacheIT {
                     String s = resp.toString();
                     System.out.println("s:" + s);
                     assertThat(s).contains("it <b>works</b> !!");
-                    assertThat(resp.getHeaderLines()).noneMatch(h -> h.contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).noneSatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
                 {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: puBlIc, max-age = 3600\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
                     assertThat(s).contains("it <b>works</b> !!");
-                    assertThat(resp.getHeaderLines()).anyMatch(h -> h.contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
             }
             assertThat(server.getCache().getCacheSize()).isOne();
@@ -313,14 +313,14 @@ public class CacheIT {
                     String s = resp.toString();
                     System.out.println("s:" + s);
                     assertThat(s).contains("it <b>works</b> !!");
-                    assertThat(resp.getHeaderLines()).noneMatch(h -> h.contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).noneSatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
                 {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nCache-Control: public, max-age = 0\r\n\r\n");
                     String s = resp.toString();
                     System.out.println("s:" + s);
                     assertThat(s).contains("it <b>works</b> !!");
-                    assertThat(resp.getHeaderLines()).noneMatch(h -> h.contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).noneSatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
             }
             assertThat(server.getCache().getCacheSize()).isZero();
@@ -358,7 +358,7 @@ public class CacheIT {
                 System.out.println("s:" + s);
                 assertThat(s).contains("it <b>works</b> !!");
                 resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
-                assertThat(resp.getHeaderLines()).noneMatch(h -> h.contains("X-Cached"));
+                assertThat(resp.getHeaderLines()).noneSatisfy(h -> assertThat(h).contains("X-Cached"));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", httpPort)) {
@@ -367,7 +367,7 @@ public class CacheIT {
                     String s = resp.toString();
                     System.out.println("s:" + s);
                     assertThat(s).contains("it <b>works</b> !!");
-                    assertThat(resp.getHeaderLines()).anyMatch(h -> h.contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
             }
 
@@ -378,7 +378,7 @@ public class CacheIT {
                     System.out.println("s:" + s);
                     assertThat(s).contains("it <b>works</b> !!");
                     resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
-                    assertThat(resp.getHeaderLines()).noneMatch(h -> h.contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).noneSatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
                 {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
@@ -386,7 +386,7 @@ public class CacheIT {
                     System.out.println("s:" + s);
                     assertThat(s).contains("it <b>works</b> !!");
                     resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
-                    assertThat(resp.getHeaderLines()).anyMatch(h -> h.contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
             }
 
@@ -399,7 +399,7 @@ public class CacheIT {
                     System.out.println("s:" + s);
                     assertThat(s).contains("it <b>works</b> !!");
                     resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
-                    assertThat(resp.getHeaderLines()).noneMatch(h -> h.contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).noneSatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
                 {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
@@ -407,7 +407,7 @@ public class CacheIT {
                     System.out.println("s:" + s);
                     assertThat(s).contains("it <b>works</b> !!");
                     resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
-                    assertThat(resp.getHeaderLines()).anyMatch(h -> h.contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
             }
 
@@ -417,7 +417,7 @@ public class CacheIT {
                 System.out.println("s:" + s);
                 assertThat(s).contains("it <b>works</b> !!");
                 resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
-                assertThat(resp.getHeaderLines()).noneMatch(h -> h.contains("X-Cached"));
+                assertThat(resp.getHeaderLines()).noneSatisfy(h -> assertThat(h).contains("X-Cached"));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", httpPort)) {
@@ -426,7 +426,7 @@ public class CacheIT {
                     String s = resp.toString();
                     System.out.println("s:" + s);
                     assertThat(s).contains("it <b>works</b> !!");
-                    assertThat(resp.getHeaderLines()).anyMatch(h -> h.contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
             }
         }
@@ -462,7 +462,7 @@ public class CacheIT {
                         \r
                         """);
                 resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
-                assertThat(resp.getHeaderLines()).noneMatch(h -> h.contains("X-Cached"));
+                assertThat(resp.getHeaderLines()).noneSatisfy(h -> assertThat(h).contains("X-Cached"));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -476,7 +476,7 @@ public class CacheIT {
                             0\r
                             \r
                             """);
-                    assertThat(resp.getHeaderLines()).anyMatch(h -> h.contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
                 {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
@@ -488,7 +488,7 @@ public class CacheIT {
                             0\r
                             \r
                             """);
-                    assertThat(resp.getHeaderLines()).anyMatch(h -> h.contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
             }
 
@@ -671,14 +671,14 @@ public class CacheIT {
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertThat(s).contains("it <b>works</b> !!");
-                assertThat(resp.getHeaderLines()).noneMatch(h -> h.contains("X-Cached"));
+                assertThat(resp.getHeaderLines()).noneSatisfy(h -> assertThat(h).contains("X-Cached"));
             }
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n" + headerName + ": " + headerValue + "\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
                 assertThat(s).contains("it <b>works</b> !!");
-                assertThat(resp.getHeaderLines()).noneMatch(h -> h.contains("X-Cached"));
+                assertThat(resp.getHeaderLines()).noneSatisfy(h -> assertThat(h).contains("X-Cached"));
             }
 
             EndpointStats epstats = server.getProxyRequestsManager().getEndpointStats(key);

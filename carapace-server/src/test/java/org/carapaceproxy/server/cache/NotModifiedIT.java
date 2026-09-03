@@ -71,7 +71,7 @@ public class NotModifiedIT {
                 assertThat(s).contains("it <b>works</b> !!");
                 resp.getHeaderLines().forEach(h ->
                     System.out.println("HEADER LINE :" + h));
-                assertThat(resp.getHeaderLines()).noneMatch(h -> h.contains("X-Cached"));
+                assertThat(resp.getHeaderLines()).noneSatisfy(h -> assertThat(h).contains("X-Cached"));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -83,9 +83,9 @@ public class NotModifiedIT {
                     assertThat(resp.getStatusLine().trim()).isEqualTo("HTTP/1.1 304 Not Modified");
                     resp.getHeaderLines().forEach(h ->
                         System.out.println("HEADER LINE :" + h));
-                    assertThat(resp.getHeaderLines()).anyMatch(h -> h.contains("X-Cached"));
-                    assertThat(resp.getHeaderLines()).anyMatch(h -> h.contains("expires"));
-                    assertThat(resp.getHeaderLines()).anyMatch(h -> h.contains("last-modified"));
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("expires"));
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("last-modified"));
                     assertThat(resp.getBodyString()).isEmpty();
                 }
             }

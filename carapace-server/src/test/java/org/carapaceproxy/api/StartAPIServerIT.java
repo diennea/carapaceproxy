@@ -41,7 +41,6 @@ import java.nio.file.Files;
 import java.security.KeyPair;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -484,7 +483,7 @@ public class StartAPIServerIT extends UseAdminServer {
             serialNumber = certificate.getSerialNumber().toString(16).toUpperCase();
             expiringDate = certificate.getNotAfter().toString();
             byte[] chain2 = createKeystore(originalChain, endUserKeyPair.getPrivate());
-            assertThat(Arrays.equals(chain1, chain2)).isFalse();
+            assertThat(chain1).isNotEqualTo(chain2);
             resp = uploadCertificate(manualDomain, null, chain2, client, credentials);
             s = resp.getBodyString();
             assertThat(s).contains("SUCCESS");

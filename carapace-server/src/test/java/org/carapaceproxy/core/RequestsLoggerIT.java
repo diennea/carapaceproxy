@@ -521,7 +521,7 @@ public class RequestsLoggerIT {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
                 assertThat(s).contains("it <b>works</b> !!");
-                assertThat(resp.getHeaderLines()).noneMatch(h -> h.contains("X-Cached"));
+                assertThat(resp.getHeaderLines()).noneSatisfy(h -> assertThat(h).contains("X-Cached"));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -529,14 +529,14 @@ public class RequestsLoggerIT {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                     String s = resp.toString();
                     assertThat(s).contains("it <b>works</b> !!");
-                    assertThat(resp.getHeaderLines()).anyMatch(h -> h.contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
 
                 {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                     String s = resp.toString();
                     assertThat(s).contains("it <b>works</b> !!");
-                    assertThat(resp.getHeaderLines()).anyMatch(h -> h.contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
             }
         }

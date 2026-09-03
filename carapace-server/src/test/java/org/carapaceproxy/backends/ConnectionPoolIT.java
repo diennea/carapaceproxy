@@ -259,7 +259,7 @@ public class ConnectionPoolIT extends UseAdminServer {
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost)
                     .hasSize(2);
-            assertThat(maxConnectionsPerHost.values()).allMatch(e -> e == 10);
+            assertThat(maxConnectionsPerHost.values()).containsOnly(10);
         }
 
         // pool with defaults
@@ -272,7 +272,7 @@ public class ConnectionPoolIT extends UseAdminServer {
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost)
                     .hasSize(2);
-            assertThat(maxConnectionsPerHost.values()).allMatch(e -> e == 10);
+            assertThat(maxConnectionsPerHost.values()).containsOnly(10);
         }
 
         // custom pool
@@ -285,7 +285,7 @@ public class ConnectionPoolIT extends UseAdminServer {
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost)
                     .hasSize(2);
-            assertThat(maxConnectionsPerHost.values()).allMatch(e -> e == 20);
+            assertThat(maxConnectionsPerHost.values()).containsOnly(20);
         }
 
         // connection pool selection
@@ -305,7 +305,7 @@ public class ConnectionPoolIT extends UseAdminServer {
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost)
                     .hasSize(2);
-            assertThat(maxConnectionsPerHost.values()).allMatch(e -> e == 10);
+            assertThat(maxConnectionsPerHost.values()).containsOnly(10);
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\n" + HttpHeaderNames.HOST + ": localhostx" + "\r\n\r\n");
@@ -331,7 +331,7 @@ public class ConnectionPoolIT extends UseAdminServer {
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost)
                     .hasSize(2);
-            assertThat(maxConnectionsPerHost.values()).allMatch(e -> e == 10);
+            assertThat(maxConnectionsPerHost.values()).containsOnly(10);
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\n" + HttpHeaderNames.HOST + ": localhost" + "\r\n\r\n");
@@ -357,7 +357,7 @@ public class ConnectionPoolIT extends UseAdminServer {
             Map<SocketAddress, Integer> maxConnectionsPerHost = provider.maxConnectionsPerHost();
             assertThat(maxConnectionsPerHost)
                     .hasSize(2);
-            assertThat(maxConnectionsPerHost.values()).allMatch(e -> e == 20);
+            assertThat(maxConnectionsPerHost.values()).containsOnly(20);
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\n" + HttpHeaderNames.HOST + ": localhost3" + "\r\n\r\n");
