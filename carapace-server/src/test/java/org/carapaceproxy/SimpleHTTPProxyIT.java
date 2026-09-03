@@ -81,7 +81,8 @@ public class SimpleHTTPProxyIT {
             assertThatThrownBy(() -> {
                 String s = IOUtils.toString(URI.create("http://localhost:" + port + "/index.html?not-found"), StandardCharsets.UTF_8);
                 System.out.println("s:" + s);
-            }).isInstanceOf(FileNotFoundException.class);
+            }).isInstanceOf(FileNotFoundException.class)
+                    .hasMessageContaining("/index.html?not-found");
         }
     }
 
@@ -112,7 +113,8 @@ public class SimpleHTTPProxyIT {
             assertThatThrownBy(() -> {
                 String s = IOUtils.toString(URI.create("https://localhost:" + port + "/index.html?not-found"), StandardCharsets.UTF_8);
                 System.out.println("s:" + s);
-            }).isInstanceOf(FileNotFoundException.class);
+            }).isInstanceOf(FileNotFoundException.class)
+                    .hasMessageContaining("/index.html?not-found");
 
             // proxy
             {

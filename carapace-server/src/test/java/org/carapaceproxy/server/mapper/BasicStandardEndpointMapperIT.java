@@ -140,7 +140,8 @@ public class BasicStandardEndpointMapperIT {
                 assertThat(s).isEqualTo("it <b>works</b> !!");
             }
 
-            assertThatThrownBy(() -> IOUtils.toString(URI.create("http://localhost:" + port + "/notfound.html"), StandardCharsets.UTF_8)).isInstanceOf(FileNotFoundException.class);
+            assertThatThrownBy(() -> IOUtils.toString(URI.create("http://localhost:" + port + "/notfound.html"), StandardCharsets.UTF_8)).isInstanceOf(FileNotFoundException.class)
+                    .hasMessageContaining("/notfound.html");
 
             {
                 String staticContent = IOUtils.toString(URI.create("http://localhost:" + port + "/static.html"), StandardCharsets.UTF_8);
@@ -151,9 +152,11 @@ public class BasicStandardEndpointMapperIT {
                 assertThat(staticContent).isEqualTo("Test static page");
             }
 
-            assertThatThrownBy(() -> IOUtils.toString(URI.create("http://localhost:" + port + "/error.html"), StandardCharsets.UTF_8)).isInstanceOf(IOException.class);
+            assertThatThrownBy(() -> IOUtils.toString(URI.create("http://localhost:" + port + "/error.html"), StandardCharsets.UTF_8)).isInstanceOf(IOException.class)
+                    .hasMessageContaining("/error.html");
 
-            assertThatThrownBy(() -> IOUtils.toString(URI.create("http://localhost:" + port + "/notmapped.html"), StandardCharsets.UTF_8)).isInstanceOf(FileNotFoundException.class);
+            assertThatThrownBy(() -> IOUtils.toString(URI.create("http://localhost:" + port + "/notmapped.html"), StandardCharsets.UTF_8)).isInstanceOf(FileNotFoundException.class)
+                    .hasMessageContaining("/notmapped.html");
         }
     }
 
@@ -331,7 +334,8 @@ public class BasicStandardEndpointMapperIT {
                 assertThat(s).isEqualTo("it <b>works</b> !!");
             }
             // down.html (request to unreachable backend) has NOT to match to route-deafult BUT get internal-error
-            assertThatThrownBy(() -> IOUtils.toString(URI.create("http://localhost:" + port + "/down.html"), StandardCharsets.UTF_8)).isInstanceOf(IOException.class);
+            assertThatThrownBy(() -> IOUtils.toString(URI.create("http://localhost:" + port + "/down.html"), StandardCharsets.UTF_8)).isInstanceOf(IOException.class)
+                    .hasMessageContaining("/down.html");
         }
     }
 

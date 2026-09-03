@@ -53,6 +53,7 @@ import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.filters.RegexpMapSessionIdFilter;
 import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;
 import org.carapaceproxy.server.filters.XForwardedForRequestFilter;
@@ -326,7 +327,9 @@ public class StartAPIServerIT extends UseAdminServer {
         File nowrite = newFolder(tmpDir, "nowrite");
         nowrite.setWritable(false);
         properties.put("dynamiccertificatesmanager.localcertificates.store.path", nowrite.getAbsolutePath());
-        assertThatThrownBy(() -> startServer(properties)).isInstanceOf(Exception.class);
+        assertThatThrownBy(() -> startServer(properties))
+                .hasCauseInstanceOf(ConfigurationNotValidException.class)
+                .hasMessageContaining("Cannot write local certificates to path");
         nowrite.setWritable(true);
 
         startServer(properties);
