@@ -19,11 +19,7 @@
  */
 package org.carapaceproxy.server.cache;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import io.netty.buffer.Unpooled;
@@ -53,7 +49,7 @@ public class CaffeineCacheImplTest {
     private final Logger logger = LoggerFactory.getLogger(CaffeineCacheImplTest.class);
 
     @AfterEach
-    public void afterEach() {
+    void afterEach() {
         stats.resetCacheMetrics();
     }
 
@@ -160,110 +156,112 @@ public class CaffeineCacheImplTest {
         } else {
             cache.evict();
             Thread.sleep(1000);
-            assertThat(evictedResources.size(), is(0));
+            assertThat(evictedResources).isEmpty();
         }
     }
 
     @Test
-    public void simpleTest() throws Exception {
+    void simpleTest() throws Exception {
         initializeCache(0);
 
         // Put 1
         CacheEntry e1 = genCacheEntry("res_1", 100, 0);
         cache.put(e1.key, e1.payload);
-        assertThat(cache.get(e1.key), is(e1.payload));
+        assertThat(cache.get(e1.key)).isEqualTo(e1.payload);
 
-        assertThat(cache.getSize(), is(1));
-        assertThat(cache.getMemSize(), is(e1.getMemUsage()));
+        assertThat(cache.getSize()).isOne();
+        assertThat(cache.getMemSize()).isEqualTo(e1.getMemUsage());
 
-        assertThat(stats.getDirectMemoryUsed(), is(equalTo(e1.payload.getDirectSize())));
-        assertThat(stats.getHeapMemoryUsed(), is(e1.payload.getHeapSize()));
-        assertThat(stats.getTotalMemoryUsed(), is(e1.getMemUsage()));
-        assertThat(stats.getHits(), is(1L));
-        assertThat(stats.getMisses(), is(0L));
+        assertThat(stats.getDirectMemoryUsed()).isEqualTo(e1.payload.getDirectSize());
+        assertThat(stats.getHeapMemoryUsed()).isEqualTo(e1.payload.getHeapSize());
+        assertThat(stats.getTotalMemoryUsed()).isEqualTo(e1.getMemUsage());
+        assertThat(stats.getHits()).isOne();
+        assertThat(stats.getMisses()).isZero();
 
         // Put 2
         CacheEntry e2 = genCacheEntry("res_2", 200, 0);
         cache.put(e2.key, e2.payload);
-        assertThat(cache.get(e2.key), is(e2.payload));
+        assertThat(cache.get(e2.key)).isEqualTo(e2.payload);
 
-        assertThat(cache.getSize(), is(2));
-        assertThat(cache.getMemSize(), is(e1.getMemUsage() + e2.getMemUsage()));
+        assertThat(cache.getSize()).isEqualTo(2);
+        assertThat(cache.getMemSize()).isEqualTo(e1.getMemUsage() + e2.getMemUsage());
 
-        assertThat(stats.getDirectMemoryUsed(), is(e1.payload.getDirectSize() + e2.payload.getDirectSize()));
-        assertThat(stats.getHeapMemoryUsed(), is(e1.payload.getHeapSize() + e2.payload.getHeapSize()));
-        assertThat(stats.getTotalMemoryUsed(), is(e1.getMemUsage() + e2.getMemUsage()));
-        assertThat(stats.getHits(), is(2L));
-        assertThat(stats.getMisses(), is(0L));
+        assertThat(stats.getDirectMemoryUsed()).isEqualTo(e1.payload.getDirectSize() + e2.payload.getDirectSize());
+        assertThat(stats.getHeapMemoryUsed()).isEqualTo(e1.payload.getHeapSize() + e2.payload.getHeapSize());
+        assertThat(stats.getTotalMemoryUsed()).isEqualTo(e1.getMemUsage() + e2.getMemUsage());
+        assertThat(stats.getHits()).isEqualTo(2L);
+        assertThat(stats.getMisses()).isZero();
 
         // Put 2b (replace 2)
         CacheEntry e2b = genCacheEntry("res_2", 300, 0);
-        assertThat(e2b.key, equalTo(e2.key));
         cache.put(e2b.key, e2b.payload);
-        assertThat(cache.get(e2b.key), is(e2b.payload));
+        assertThat(cache.get(e2b.key)).isEqualTo(e2b.payload);
 
         runEviction(cache, 1);
-        assertThat(evictedResources.size(), is(1));
-        assertThat(evictedResources.get(0).key, is(e2.key));
-        assertThat(evictedResources.get(0).payload, is(e2.payload));
-        assertThat(evictedResources.get(0).removalCause, is(RemovalCause.REPLACED));
+        assertThat(evictedResources).singleElement().satisfies(it -> {
+            assertThat(it.key).isEqualTo(e2.key);
+            assertThat(it.payload).isEqualTo(e2.payload);
+            assertThat(it.removalCause).isEqualTo(RemovalCause.REPLACED);
+        });
         evictedResources.clear();
 
-        assertThat(cache.getSize(), is(2));
-        assertThat(cache.getMemSize(), is(e1.getMemUsage() + e2b.getMemUsage()));
+        assertThat(cache.getSize()).isEqualTo(2);
+        assertThat(cache.getMemSize()).isEqualTo(e1.getMemUsage() + e2b.getMemUsage());
 
-        assertThat(stats.getDirectMemoryUsed(), is(e1.payload.getDirectSize() + e2b.payload.getDirectSize()));
-        assertThat(stats.getHeapMemoryUsed(), is(e1.payload.getHeapSize() + e2b.payload.getHeapSize()));
-        assertThat(stats.getTotalMemoryUsed(), is(e1.getMemUsage() + e2b.getMemUsage()));
-        assertThat(stats.getHits(), is(3L));
-        assertThat(stats.getMisses(), is(0L));
+        assertThat(stats.getDirectMemoryUsed()).isEqualTo(e1.payload.getDirectSize() + e2b.payload.getDirectSize());
+        assertThat(stats.getHeapMemoryUsed()).isEqualTo(e1.payload.getHeapSize() + e2b.payload.getHeapSize());
+        assertThat(stats.getTotalMemoryUsed()).isEqualTo(e1.getMemUsage() + e2b.getMemUsage());
+        assertThat(stats.getHits()).isEqualTo(3L);
+        assertThat(stats.getMisses()).isZero();
 
         // Remove 1
         cache.remove(e1.key);
-        assertThat(cache.get(e1.key), is(nullValue()));
+        assertThat(cache.get(e1.key)).isNull();
 
         runEviction(cache, 1);
-        assertThat(evictedResources.size(), is(1));
-        assertThat(evictedResources.get(0).key, is(e1.key));
-        assertThat(evictedResources.get(0).payload, is(e1.payload));
-        assertThat(evictedResources.get(0).removalCause, is(RemovalCause.EXPLICIT));
+        assertThat(evictedResources).singleElement().satisfies(it -> {
+            assertThat(it.key).isEqualTo(e1.key);
+            assertThat(it.payload).isEqualTo(e1.payload);
+            assertThat(it.removalCause).isEqualTo(RemovalCause.EXPLICIT);
+        });
         evictedResources.clear();
 
-        assertThat(cache.getSize(), is(1));
-        assertThat(cache.getMemSize(), is(e2b.getMemUsage()));
+        assertThat(cache.getSize()).isOne();
+        assertThat(cache.getMemSize()).isEqualTo(e2b.getMemUsage());
 
-        assertThat(stats.getDirectMemoryUsed(), is(e2b.payload.getDirectSize()));
-        assertThat(stats.getHeapMemoryUsed(), is(e2b.payload.getHeapSize()));
-        assertThat(stats.getTotalMemoryUsed(), is(e2b.getMemUsage()));
-        assertThat(stats.getHits(), is(3L));
-        assertThat(stats.getMisses(), is(1L));
+        assertThat(stats.getDirectMemoryUsed()).isEqualTo(e2b.payload.getDirectSize());
+        assertThat(stats.getHeapMemoryUsed()).isEqualTo(e2b.payload.getHeapSize());
+        assertThat(stats.getTotalMemoryUsed()).isEqualTo(e2b.getMemUsage());
+        assertThat(stats.getHits()).isEqualTo(3L);
+        assertThat(stats.getMisses()).isOne();
 
         // Remove 2
         cache.remove(e2.key);
-        assertThat(cache.get(e2.key), is(nullValue()));
+        assertThat(cache.get(e2.key)).isNull();
 
         runEviction(cache, 1);
-        assertThat(evictedResources.size(), is(1));
-        assertThat(evictedResources.get(0).key, is(e2b.key));
-        assertThat(evictedResources.get(0).payload, is(e2b.payload));
-        assertThat(evictedResources.get(0).removalCause, is(RemovalCause.EXPLICIT));
+        assertThat(evictedResources).singleElement().satisfies(it -> {
+            assertThat(it.key).isEqualTo(e2b.key);
+            assertThat(it.payload).isEqualTo(e2b.payload);
+            assertThat(it.removalCause).isEqualTo(RemovalCause.EXPLICIT);
+        });
         evictedResources.clear();
 
-        assertThat(cache.getSize(), is(0));
-        assertThat(cache.getMemSize(), is(0L));
+        assertThat(cache.getSize()).isZero();
+        assertThat(cache.getMemSize()).isZero();
 
-        assertThat(stats.getDirectMemoryUsed(), is(0L));
-        assertThat(stats.getHeapMemoryUsed(), is(0L));
-        assertThat(stats.getTotalMemoryUsed(), is(0L));
-        assertThat(stats.getHits(), is(3L));
-        assertThat(stats.getMisses(), is(2L));
+        assertThat(stats.getDirectMemoryUsed()).isZero();
+        assertThat(stats.getHeapMemoryUsed()).isZero();
+        assertThat(stats.getTotalMemoryUsed()).isZero();
+        assertThat(stats.getHits()).isEqualTo(3L);
+        assertThat(stats.getMisses()).isEqualTo(2L);
 
         // Close
         cache.close();
     }
 
     @Test
-    public void testMaxSize() throws Exception {
+    void maxSize() throws Exception {
         final int maxSize = 1000;
         initializeCache(maxSize);
 
@@ -278,12 +276,12 @@ public class CaffeineCacheImplTest {
             System.out.println("Adding element " + e.key.uri + " of size=" + e.getMemUsage());
             entries.add(e);
             cache.put(e.key, e.payload);
-            assertThat(cache.get(e.key), is(e.payload));
+            assertThat(cache.get(e.key)).isEqualTo(e.payload);
             System.out.println(" > cache.memSize=" + cache.getMemSize());
             totSize += e.getMemUsage();
             // In the last insertion cache.getMemSize() will exceed the maximum
             if (totSize <= maxSize) {
-                assertThat(cache.getMemSize(), equalTo(totSize));
+                assertThat(cache.getMemSize()).isEqualTo(totSize);
             } else {
                 ok = true;
             }
@@ -293,7 +291,7 @@ public class CaffeineCacheImplTest {
 
         // Now we should have put in our cache much elements as it can contain + 1. The first one should be evicted.
         runEviction(cache, 1);
-        assertThat(evictedResources.size(), is(1));
+        assertThat(evictedResources).hasSize(1);
 
         // Doesn't work. It currently seems that the eviction process always evitcts the last entered key, which is
         // undoubtedly a serious issue
@@ -307,18 +305,18 @@ public class CaffeineCacheImplTest {
 //        }
 //        entries.remove(0);
         CacheEntry evictedEntry = evictedResources.get(0);
-        assertTrue(entries.remove(evictedEntry));
+        assertThat(entries.remove(evictedEntry)).isTrue();
 
-        assertThat((int) cache.getMemSize(), equalTo(entries.stream().mapToInt(e -> (int) e.getMemUsage()).sum()));
-        assertThat((int) cache.getSize(), is(entries.size()));
+        assertThat((int) cache.getMemSize()).isEqualTo(entries.stream().mapToInt(e -> (int) e.getMemUsage()).sum());
+        assertThat((int) cache.getSize()).isEqualTo(entries.size());
 
-        assertThat((int) stats.getDirectMemoryUsed(), is(entries.stream().mapToInt(e -> (int) e.payload.directSize).sum()));
-        assertThat((int) stats.getHeapMemoryUsed(), is(entries.stream().mapToInt(e -> (int) e.payload.heapSize).sum()));
-        assertThat((int) stats.getTotalMemoryUsed(), is(entries.stream().mapToInt(e -> (int) e.getMemUsage()).sum()));
+        assertThat((int) stats.getDirectMemoryUsed()).isEqualTo(entries.stream().mapToInt(e -> (int) e.payload.directSize).sum());
+        assertThat((int) stats.getHeapMemoryUsed()).isEqualTo(entries.stream().mapToInt(e -> (int) e.payload.heapSize).sum());
+        assertThat((int) stats.getTotalMemoryUsed()).isEqualTo(entries.stream().mapToInt(e -> (int) e.getMemUsage()).sum());
     }
 
     @Test
-    public void testExipiration() throws Exception {
+    void exipiration() throws Exception {
         initializeCache(0);
 
         List<CacheEntry> entries = new ArrayList<>();
@@ -328,11 +326,11 @@ public class CaffeineCacheImplTest {
             System.out.println("Adding element " + e.key.uri + " with expireTs=" + new java.sql.Timestamp(expireTs));
             entries.add(e);
             cache.put(e.key, e.payload);
-            assertThat(cache.get(e.key), is(e.payload));
+            assertThat(cache.get(e.key)).isEqualTo(e.payload);
 
             expireTs += 10000;
         }
-        assertThat((int) cache.getSize(), is(10));
+        assertThat((int) cache.getSize()).isEqualTo(10);
 
         // No entries should be removed
         Executors.newSingleThreadExecutor().execute(() -> {
@@ -344,18 +342,19 @@ public class CaffeineCacheImplTest {
             }
         });
         runEviction(cache, 0);
-        assertThat(evictedResources.size(), is(0));
+        assertThat(evictedResources).isEmpty();
 
         // Only the first entry should be removed
         Thread.sleep(1000);
         runEviction(cache, 1);
-        assertThat(evictedResources.size(), is(1));
-        assertThat(evictedResources.get(0), equalTo(entries.get(0)));
-        assertThat(evictedResources.get(0).removalCause, equalTo(RemovalCause.EXPIRED));
+        assertThat(evictedResources).singleElement().satisfies(it -> {
+            assertThat(it).isEqualTo(entries.get(0));
+            assertThat(it.removalCause).isEqualTo(RemovalCause.EXPIRED);
+        });
         evictedResources.clear();
         entries.remove(0);
 
-        assertThat((int) cache.getSize(), is(10 - 1));
+        assertThat((int) cache.getSize()).isEqualTo(10 - 1);
 
     }
 

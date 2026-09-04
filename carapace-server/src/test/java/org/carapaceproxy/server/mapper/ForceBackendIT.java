@@ -24,8 +24,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.carapaceproxy.core.ProxyRequest.PROPERTY_URI;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -60,7 +60,7 @@ public class ForceBackendIT {
     public WireMockExtension backend1 = WireMockExtension.newInstance().configureStaticDsl(true).options(WireMockConfiguration.options().port(0)).build();
 
     @Test
-    public void test() throws Exception {
+    void test() throws Exception {
         stubFor(get(urlEqualTo("/index.html?thedirector=director-2"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -81,8 +81,8 @@ public class ForceBackendIT {
             properties.put("mapper.forcedirector.parameter", "thedirector");
             properties.put("mapper.forcebackend.parameter", "thebackend");
             mapper.configure(new PropertiesConfigurationStore(properties));
-            assertEquals("thedirector", mapper.getForceDirectorParameter());
-            assertEquals("thebackend", mapper.getForceBackendParameter());
+            assertThat(mapper.getForceDirectorParameter()).isEqualTo("thedirector");
+            assertThat(mapper.getForceBackendParameter()).isEqualTo("thebackend");
 
             mapper.addBackend(new BackendConfiguration("backend-a", "localhost", backendPort, "/", -1));
             mapper.addBackend(new BackendConfiguration("backend-b", "localhost", backendPort, "/", -1));
@@ -101,12 +101,12 @@ public class ForceBackendIT {
             {
                 // proxy on director 2
                 String s = IOUtils.toString(URI.create("http://localhost:" + port + "/index.html?thedirector=director-2"), StandardCharsets.UTF_8);
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
             }
             {
                 // proxy on backend 2
                 String s = IOUtils.toString(URI.create("http://localhost:" + port + "/index.html?thebackend=backend-b"), StandardCharsets.UTF_8);
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
             }
 
         }

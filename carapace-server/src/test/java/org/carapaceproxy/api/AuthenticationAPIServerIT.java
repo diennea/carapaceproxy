@@ -27,19 +27,16 @@ import org.carapaceproxy.utils.RawHttpClient.BasicAuthCredentials;
 import org.carapaceproxy.utils.RawHttpClient.HttpResponse;
 import org.junit.jupiter.api.Test;
 
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  *
  * @author enrico.olivelli
  */
-public class AuthenticationAPIServerIT extends UseAdminServer {
+class AuthenticationAPIServerIT extends UseAdminServer {
 
     @Test
-    public void testUnauthorizedRequests() throws Exception {
+    void unauthorizedRequests() throws Exception {
         Properties prop = new Properties(HTTP_ADMIN_SERVER_CONFIG);
 
         prop.put("userrealm.class", "org.carapaceproxy.utils.TestUserRealm");
@@ -58,18 +55,18 @@ public class AuthenticationAPIServerIT extends UseAdminServer {
             BasicAuthCredentials credentials = new BasicAuthCredentials("wrongtest1", "wrongtest1"); // not valid credentials
             HttpResponse resp = client.get("/api/up", credentials);
             assertHeaderContains(resp, "WWW-Authenticate");
-            assertThat(resp.getBodyString(), containsString(HttpServletResponse.SC_UNAUTHORIZED + ""));
+            assertThat(resp.getBodyString()).contains(HttpServletResponse.SC_UNAUTHORIZED + "");
         }
     }
 
     private void assertHeaderNotContains(HttpResponse resp, String header) {
         List<String> lines = resp.getHeaderLines();
-        assertFalse(lines.stream().anyMatch(h -> h.contains(header)));
+        assertThat(lines).noneSatisfy(h -> assertThat(h).contains(header));
     }
 
     private void assertHeaderContains(HttpResponse resp, String header) {
         List<String> lines = resp.getHeaderLines();
-        assertTrue(lines.stream().anyMatch(h -> h.contains(header)));
+        assertThat(lines).anySatisfy(h -> assertThat(h).contains(header));
     }
 
 }

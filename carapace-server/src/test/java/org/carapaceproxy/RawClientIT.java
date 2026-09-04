@@ -29,15 +29,12 @@ import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlMatching;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_FORWARDED_STRATEGY;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 import static org.carapaceproxy.utils.RawHttpClient.consumeHttpResponseInput;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static reactor.netty.http.HttpProtocol.HTTP11;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
@@ -108,7 +105,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -129,7 +126,7 @@ public class RawClientIT {
     private String testName;
 
     @BeforeEach
-    public void dumpTestName(TestInfo testInfo) {
+    void dumpTestName(TestInfo testInfo) {
         Optional<Method> testMethod = testInfo.getTestMethod();
         if (testMethod.isPresent()) {
             this.testName = testMethod.get().getName();
@@ -138,12 +135,12 @@ public class RawClientIT {
     }
 
     @AfterEach
-    public void dumpTestNameEnd() {
+    void dumpTestNameEnd() {
         LOG.info("End {}", testName);
     }
 
     @Test
-    public void clientsKeepAliveSimpleTest() throws Exception {
+    void clientsKeepAliveSimpleTest() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -160,14 +157,12 @@ public class RawClientIT {
 
                 String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").getBodyString();
                 System.out.println("s:" + s);
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
 
-                try {
+                assertThatThrownBy(() -> {
                     String s2 = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").getBodyString();
                     System.out.println("response2: " + s2);
-                    fail();
-                } catch (IOException ok) {
-                }
+                }).isInstanceOf(IOException.class);
 
             }
 
@@ -175,7 +170,7 @@ public class RawClientIT {
 
                 String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
                 System.out.println("s3:" + s);
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
 
                 // this is needed for Travis, that runs with 1 vCPU!
                 // without this sleep the connection pool is not able to reuse the connection (this appears to the
@@ -184,13 +179,13 @@ public class RawClientIT {
 
                 String s2 = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
                 System.out.println("s4:" + s2);
-                assertEquals("it <b>works</b> !!", s2);
+                assertThat(s2).isEqualTo("it <b>works</b> !!");
             }
         }
     }
 
     @Test
-    public void testManyInflightRequests() throws Exception {
+    void manyInflightRequests() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -202,7 +197,6 @@ public class RawClientIT {
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir)) {
             server.start();
             int port = server.getLocalPort();
-            assertTrue(port > 0);
 
             List<RawHttpClient> clients = new ArrayList<>();
             for (int i = 0; i < 20; i++) {
@@ -218,7 +212,7 @@ public class RawClientIT {
     }
 
     @Test
-    public void testKeepAliveTimeout() throws Exception {
+    void keepAliveTimeout() throws Exception {
         final RawHttpServer httpServer = new RawHttpServer(new HttpServlet() {
             public void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
                 response.setContentType("text/html");
@@ -234,7 +228,6 @@ public class RawClientIT {
             try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir)) {
                 server.start();
                 int port = server.getLocalPort();
-                assertTrue(port > 0);
 
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     for (int j = 0; j < 2; j++) {
@@ -251,7 +244,7 @@ public class RawClientIT {
     }
 
     @Test
-    public void testEmptyDataFromServer() throws Exception {
+    void emptyDataFromServer() throws Exception {
         final RawHttpServer httpServer = new RawHttpServer(new HttpServlet() {
             public void doGet(HttpServletRequest request, HttpServletResponse response) {
             }
@@ -262,7 +255,6 @@ public class RawClientIT {
             try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir)) {
                 server.start();
                 int port = server.getLocalPort();
-                assertTrue(port > 0);
 
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     for (int j = 0; j < 2; j++) {
@@ -278,7 +270,7 @@ public class RawClientIT {
     }
 
     @Test
-    public void testServerRequestContinue() throws Exception {
+    void serverRequestContinue() throws Exception {
         AtomicBoolean responseEnabled = new AtomicBoolean();
         final int dummyServerPort = 8086;
         try (DummyServer server = new DummyServer("localhost", dummyServerPort, responseEnabled)) {
@@ -294,7 +286,6 @@ public class RawClientIT {
                 proxy.getProxyRequestsManager().reloadConfiguration(proxy.getCurrentConfiguration(), mapper.getBackends().values());
                 proxy.start();
                 int port = proxy.getLocalPort();
-                assertTrue(port > 0);
 
                 AtomicBoolean failed = new AtomicBoolean();
                 AtomicBoolean c2go = new AtomicBoolean();
@@ -372,7 +363,7 @@ public class RawClientIT {
                     ex.shutdown();
                     ex.awaitTermination(1, TimeUnit.MINUTES);
                 }
-                assertThat(failed.get(), is(false));
+                assertThat(failed.get()).isFalse();
             }
         }
     }
@@ -477,7 +468,7 @@ public class RawClientIT {
     }
 
     @Test
-    public void testMultiClientTimeout() throws Exception {
+    void multiClientTimeout() throws Exception {
         stubFor(post(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -502,7 +493,6 @@ public class RawClientIT {
             proxy.getProxyRequestsManager().reloadConfiguration(proxy.getCurrentConfiguration(), mapper.getBackends().values());
             proxy.start();
             int port = proxy.getLocalPort();
-            assertTrue(port > 0);
 
             AtomicBoolean failed = new AtomicBoolean();
             AtomicBoolean c2go = new AtomicBoolean();
@@ -567,12 +557,12 @@ public class RawClientIT {
                 ex.shutdown();
                 ex.awaitTermination(1, TimeUnit.MINUTES);
             }
-            assertThat(failed.get(), is(false));
+            assertThat(failed.get()).isFalse();
         }
     }
 
     @Test
-    public void testInvalidUriChars() throws Exception {
+    void invalidUriChars() throws Exception {
         stubFor(get(UrlPattern.ANY)
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -587,14 +577,14 @@ public class RawClientIT {
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client.executeRequest("GET /index[1].html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").getBodyString();
                 System.out.println("s:" + s);
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
             }
         }
     }
 
-    @ParameterizedTest
-    @CsvSource({"http", "https"})
-    public void testClosedProxy(String scheme) throws Exception {
+    @ParameterizedTest(name = "scheme={0}")
+    @ValueSource(strings = {"http", "https"})
+    void closedProxy(String scheme) throws Exception {
         TestUtils.deployResource("localhost.p12", tmpDir);
 
         // Proxy requests have to use "localhost:port" as endpoint instead of the one in the url (ex yahoo.com)
@@ -616,9 +606,9 @@ public class RawClientIT {
                                 .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                                 .withBody("it <b>works</b> !!")));
                 String s = client.executeRequest("GET " + scheme + "://yahoo.com/index.html?p1=v1&p2=https://localhost/index.html?p=1 HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
                 s = client.get("/index.html?p1=v1&p2=https://localhost/index.html?p=1").getBodyString();
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
 
                 stubFor(get("/index.html")
                         .willReturn(aResponse()
@@ -627,9 +617,9 @@ public class RawClientIT {
                                 .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                                 .withBody("it <b>works</b> !!")));
                 s = client.executeRequest("GET " + scheme + "://yahoo.com/index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
                 s = client.get("/index.html").getBodyString();
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
 
                 stubFor(get("/?p1=v1&p2=https://localhost/index.html?p=1")
                         .withQueryParams(Map.of("p1", equalTo("v1"), "p2", equalTo("https://localhost/index.html?p=1")))
@@ -639,13 +629,13 @@ public class RawClientIT {
                                 .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                                 .withBody("it <b>works</b> !!")));
                 s = client.executeRequest("GET " + scheme + "://yahoo.com/?p1=v1&p2=https://localhost/index.html?p=1 HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
                 s = client.get("/?p1=v1&p2=https://localhost/index.html?p=1").getBodyString();
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
                 s = client.executeRequest("GET " + scheme + "://yahoo.com?p1=v1&p2=https://localhost/index.html?p=1 HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
                 s = client.get("?p1=v1&p2=https://localhost/index.html?p=1").getBodyString();
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
 
                 stubFor(get("/")
                         .willReturn(aResponse()
@@ -654,17 +644,17 @@ public class RawClientIT {
                                 .withHeader("Content-Length", "it <b>works</b> !!".length() + "")
                                 .withBody("it <b>works</b> !!")));
                 s = client.executeRequest("GET " + scheme + "://yahoo.com/ HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
                 s = client.get("/").getBodyString();
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
                 s = client.executeRequest("GET " + scheme + "://yahoo.com HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString();
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
             }
         }
     }
 
     @Test
-    public void testCookies() throws Exception {
+    void cookies() throws Exception {
         stubFor(get("/index.html")
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -682,14 +672,14 @@ public class RawClientIT {
                         + "\r\n" + HttpHeaderNames.COOKIE + ": requestCookie=requestValue; requestCookie2=requestValue2"
                         + "\r\nConnection: close\r\n\r\n"
                 );
-                assertEquals("it <b>works</b> !!", resp.getBodyString());
+                assertThat(resp.getBodyString()).isEqualTo("it <b>works</b> !!");
 
                 // cookies from server
                 List<String> headerSetCookie = resp.getHeaderLines().stream()
                         .filter(h -> h.toLowerCase().contains("set-cookie"))
                         .toList();
-                assertThat(headerSetCookie.size(), is(1));
-                assertThat(headerSetCookie.getFirst(), is("set-cookie: responseCookie=responseValue; responseCookie2=responseValue2\r\n"));
+                assertThat(headerSetCookie).hasSize(1);
+                assertThat(headerSetCookie).first().isEqualTo("set-cookie: responseCookie=responseValue; responseCookie2=responseValue2\r\n");
             }
         }
 
@@ -698,8 +688,8 @@ public class RawClientIT {
                 .getFirst()
                 .getHeaders()
                 .getHeader(HttpHeaderNames.COOKIE.toString());
-        assertThat(headerCookie.values().size(), is(1));
-        assertThat(headerCookie.values().getFirst(), is("requestCookie=requestValue; requestCookie2=requestValue2"));
+        assertThat(headerCookie.values()).hasSize(1);
+        assertThat(headerCookie.values()).first().isEqualTo("requestCookie=requestValue; requestCookie2=requestValue2");
     }
 
 }

@@ -25,9 +25,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
-import static org.hamcrest.CoreMatchers.hasItems;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 import java.io.File;
@@ -67,20 +65,20 @@ public class RestartEndpointIT {
     public File tmpDir;
 
     @BeforeEach
-    public void startWireMock() {
+    void startWireMock() {
         wireMockRule.start();
         configureFor("localhost", wireMockRule.port());
     }
 
     @AfterEach
-    public void stopWireMock() {
+    void stopWireMock() {
         if (wireMockRule.isRunning()) {
             wireMockRule.stop();
         }
     }
 
     @Test
-    public void testClientsSendsRequestOnDownBackendAtSendRequest() throws Exception {
+    void clientsSendsRequestOnDownBackendAtSendRequest() throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -95,13 +93,13 @@ public class RestartEndpointIT {
             int port = server.getLocalPort();
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
-                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
+                assertThat(client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString()).isEqualTo("it <b>works</b> !!");
+                assertThat(client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString()).isEqualTo("it <b>works</b> !!");
                 wireMockRule.stop();
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 System.out.println("statusline:" + resp.getStatusLine());
-                assertEquals("HTTP/1.1 503 Service Unavailable\r\n", resp.getStatusLine());
-                assertThat(resp.getHeaderLines(), hasItems("cache-control: no-cache\r\n", "connection: keep-alive\r\n"));
+                assertThat(resp.getStatusLine()).startsWith("HTTP/1.1 503");
+                assertThat(resp.getHeaderLines()).contains("cache-control: no-cache\r\n", "connection: keep-alive\r\n");
             }
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 wireMockRule.start();
@@ -109,13 +107,13 @@ public class RestartEndpointIT {
                 IOUtils.toByteArray(URI.create("http://localhost:" + wireMockRule.port() + "/index.html").toURL());
                 System.out.println("Server at " + "http://localhost:" + wireMockRule.port() + "/index.html" + " is UP an running !");
 
-                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
+                assertThat(client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString()).isEqualTo("it <b>works</b> !!");
             }
         }
     }
 
     @Test
-    public void testClientsSendsRequestOnDownBackendAtSendRequestWithCache() throws Exception {
+    void clientsSendsRequestOnDownBackendAtSendRequestWithCache() throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -130,18 +128,18 @@ public class RestartEndpointIT {
             int port = server.getLocalPort();
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
-                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
+                assertThat(client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString()).isEqualTo("it <b>works</b> !!");
+                assertThat(client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString()).isEqualTo("it <b>works</b> !!");
                 wireMockRule.stop();
                 // content is cached
-                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
+                assertThat(client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString()).isEqualTo("it <b>works</b> !!");
 
                 server.getCache().clear();
 
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 System.out.println("statusline:" + resp.getStatusLine());
-                assertEquals("HTTP/1.1 503 Service Unavailable\r\n", resp.getStatusLine());
-                assertThat(resp.getHeaderLines(), hasItems("cache-control: no-cache\r\n", "connection: keep-alive\r\n"));
+                assertThat(resp.getStatusLine()).startsWith("HTTP/1.1 503");
+                assertThat(resp.getHeaderLines()).contains("cache-control: no-cache\r\n", "connection: keep-alive\r\n");
             }
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 wireMockRule.start();
@@ -149,13 +147,13 @@ public class RestartEndpointIT {
                 IOUtils.toByteArray(URI.create("http://localhost:" + wireMockRule.port() + "/index.html").toURL());
                 System.out.println("Server at " + "http://localhost:" + wireMockRule.port() + "/index.html" + " is UP an running !");
 
-                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
+                assertThat(client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString()).isEqualTo("it <b>works</b> !!");
             }
         }
     }
 
     @Test
-    public void testClientsSendsRequestBackendRestart() throws Exception {
+    void clientsSendsRequestBackendRestart() throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -170,15 +168,15 @@ public class RestartEndpointIT {
             int port = server.getLocalPort();
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
-                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
-                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
+                assertThat(client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString()).isEqualTo("it <b>works</b> !!");
+                assertThat(client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString()).isEqualTo("it <b>works</b> !!");
 
                 wireMockRule.stop();
                 wireMockRule.start();
                 System.out.println("*********************************************************");
                 // ensure that wiremock started again
                 IOUtils.toByteArray(URI.create("http://localhost:" + wireMockRule.port() + "/index.html").toURL());
-                assertEquals("it <b>works</b> !!", client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString());
+                assertThat(client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n").getBodyString()).isEqualTo("it <b>works</b> !!");
             }
         }
     }

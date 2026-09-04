@@ -23,14 +23,11 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.carapaceproxy.core.ProxyRequest.PROPERTY_URI;
 import static org.carapaceproxy.core.StaticContentsManager.CLASSPATH_RESOURCE;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.matches;
 import static org.mockito.Mockito.mock;
@@ -77,7 +74,7 @@ public class BasicStandardEndpointMapperIT {
     public File tmpDir;
 
     @Test
-    public void test() throws Exception {
+    void test() throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -128,52 +125,43 @@ public class BasicStandardEndpointMapperIT {
             {
                 // proxy on director 1
                 String s = IOUtils.toString(URI.create("http://localhost:" + port + "/index.html"), StandardCharsets.UTF_8);
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
             }
 
             {
                 // cache on director 2
                 String s = IOUtils.toString(URI.create("http://localhost:" + port + "/index2.html"), StandardCharsets.UTF_8);
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
             }
 
             {
                 // director "all"
                 String s = IOUtils.toString(URI.create("http://localhost:" + port + "/index3.html"), StandardCharsets.UTF_8);
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
             }
 
-            try {
-                IOUtils.toString(URI.create("http://localhost:" + port + "/notfound.html"), StandardCharsets.UTF_8);
-                fail("expected 404");
-            } catch (FileNotFoundException ok) {
-            }
+            assertThatThrownBy(() -> IOUtils.toString(URI.create("http://localhost:" + port + "/notfound.html"), StandardCharsets.UTF_8)).isInstanceOf(FileNotFoundException.class)
+                    .hasMessageContaining("/notfound.html");
 
             {
                 String staticContent = IOUtils.toString(URI.create("http://localhost:" + port + "/static.html"), StandardCharsets.UTF_8);
-                assertEquals("Test static page", staticContent);
+                assertThat(staticContent).isEqualTo("Test static page");
             }
             {
                 String staticContent = IOUtils.toString(URI.create("http://localhost:" + port + "/static.html"), StandardCharsets.UTF_8);
-                assertEquals("Test static page", staticContent);
+                assertThat(staticContent).isEqualTo("Test static page");
             }
 
-            try {
-                IOUtils.toString(URI.create("http://localhost:" + port + "/error.html"), StandardCharsets.UTF_8);
-                fail("expected 500");
-            } catch (IOException ok) {
-            }
+            assertThatThrownBy(() -> IOUtils.toString(URI.create("http://localhost:" + port + "/error.html"), StandardCharsets.UTF_8)).isInstanceOf(IOException.class)
+                    .hasMessageContaining("/error.html");
 
-            try {
-                IOUtils.toString(URI.create("http://localhost:" + port + "/notmapped.html"), StandardCharsets.UTF_8);
-                fail("expected 404");
-            } catch (FileNotFoundException ok) {
-            }
+            assertThatThrownBy(() -> IOUtils.toString(URI.create("http://localhost:" + port + "/notmapped.html"), StandardCharsets.UTF_8)).isInstanceOf(FileNotFoundException.class)
+                    .hasMessageContaining("/notmapped.html");
         }
     }
 
     @Test
-    public void testRouteErrors() throws Exception {
+    void routeErrors() throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -274,28 +262,28 @@ public class BasicStandardEndpointMapperIT {
             {
                 HttpURLConnection conn = (HttpURLConnection) URI.create("http://localhost:" + server.getLocalPort() + "/custom-error.html").toURL().openConnection();
                 System.out.println("response core " +  conn.getResponseCode());
-                assertEquals("h-custom-error-value; h-custom-error-value2;h-custom-error-value3", conn.getHeaderField("h-custom-error"));
-                assertEquals(555, conn.getResponseCode());
+                assertThat(conn.getHeaderField("h-custom-error")).isEqualTo("h-custom-error-value; h-custom-error-value2;h-custom-error-value3");
+                assertThat(conn.getResponseCode()).isEqualTo(555);
             }
 
             // working one
             {
                 HttpURLConnection conn = (HttpURLConnection) URI.create("http://localhost:" + server.getLocalPort() + "/index.html").toURL().openConnection();
-                assertEquals("h-working-one-value; h-working-one-value2;h-working-one-value3", conn.getHeaderField("h-working-one"));
-                assertEquals(200, conn.getResponseCode());
+                assertThat(conn.getHeaderField("h-working-one")).isEqualTo("h-working-one-value; h-working-one-value2;h-working-one-value3");
+                assertThat(conn.getResponseCode()).isEqualTo(200);
             }
 
             // global-custom error (Not Found)
             {
                 HttpURLConnection conn = (HttpURLConnection) URI.create("http://localhost:" + server.getLocalPort() + "/index2.html").toURL().openConnection();
-                assertEquals("h-custom-global-error-value; h-custom-global-error-value2;h-custom-global-error-value3", conn.getHeaderField("h-custom-global-error"));
-                assertEquals(444, conn.getResponseCode());
+                assertThat(conn.getHeaderField("h-custom-global-error")).isEqualTo("h-custom-global-error-value; h-custom-global-error-value2;h-custom-global-error-value3");
+                assertThat(conn.getResponseCode()).isEqualTo(444);
             }
         }
     }
 
     @Test
-    public void testDefaultRoute() throws Exception {
+    void defaultRoute() throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -338,24 +326,21 @@ public class BasicStandardEndpointMapperIT {
             // index.html matches with route
             {
                 String s = IOUtils.toString(URI.create("http://localhost:" + port + "/index.html"), StandardCharsets.UTF_8);
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
             }
             // notmapped.html matches with route-default
             {
                 String s = IOUtils.toString(URI.create("http://localhost:" + port + "/notmapped.html"), StandardCharsets.UTF_8);
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
             }
             // down.html (request to unreachable backend) has NOT to match to route-deafult BUT get internal-error
-            try {
-                IOUtils.toString(URI.create("http://localhost:" + port + "/down.html"), StandardCharsets.UTF_8);
-                fail("expected 500");
-            } catch (IOException ok) {
-            }
+            assertThatThrownBy(() -> IOUtils.toString(URI.create("http://localhost:" + port + "/down.html"), StandardCharsets.UTF_8)).isInstanceOf(IOException.class)
+                    .hasMessageContaining("/down.html");
         }
     }
 
     @Test
-    public void testAlwaysServeStaticContent() throws Exception {
+    void alwaysServeStaticContent() throws Exception {
 
         stubFor(get(urlEqualTo("/seconda.html"))
                 .willReturn(aResponse()
@@ -416,27 +401,24 @@ public class BasicStandardEndpointMapperIT {
             {
                 String url = "http://localhost:" + server.getLocalPort() + "/index.html";
                 String s = IOUtils.toString(URI.create(url), StandardCharsets.UTF_8);
-                assertEquals("Test static page", s);
+                assertThat(s).isEqualTo("Test static page");
             }
             {
 
                 String url = "http://localhost:" + server.getLocalPort() + "/seconda.html";
                 String s = IOUtils.toString(URI.create(url), StandardCharsets.UTF_8);
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
             }
-            // resource not esists > Not Found
-            try {
-                String url = "http://localhost:" + server.getLocalPort() + "/not-exists.html";
-                String s = IOUtils.toString(URI.create(url), StandardCharsets.UTF_8);
-                fail("Expected Not Found, received " + s + " instead");
-            } catch (Exception ex) {
-                assertTrue(ex instanceof FileNotFoundException);
-            }
+            // resource does not exist > Not Found
+            final String missing = "http://localhost:" + server.getLocalPort() + "/not-exists.html";
+            assertThatExceptionOfType(FileNotFoundException.class)
+                    .isThrownBy(() -> IOUtils.toString(URI.create(missing), StandardCharsets.UTF_8))
+                    .withMessageContaining("/not-exists.html");
         }
     }
 
     @Test
-    public void testServeACMEChallengeToken() throws Exception {
+    void serveACMEChallengeToken() throws Exception {
         try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir)) {
             final String tokenName = "test-token";
             final String tokenData = "test-token-data-content";
@@ -483,22 +465,19 @@ public class BasicStandardEndpointMapperIT {
             // Test existent token
             String url = "http://localhost:" + server.getLocalPort() + "/.well-known/acme-challenge/" + tokenName;
             String s = IOUtils.toString(URI.create(url), StandardCharsets.UTF_8);
-            assertEquals(tokenData, s);
+            assertThat(s).isEqualTo(tokenData);
 
             // Test not existent token
-            try {
-                url = "http://localhost:" + server.getLocalPort() + "/.well-known/acme-challenge/not-existent-token";
-                IOUtils.toString(URI.create(url), StandardCharsets.UTF_8);
-                fail();
-            } catch (Throwable t) {
-                assertTrue(t instanceof FileNotFoundException);
-            }
+            final String missingToken = "http://localhost:" + server.getLocalPort() + "/.well-known/acme-challenge/not-existent-token";
+            assertThatExceptionOfType(FileNotFoundException.class)
+                    .isThrownBy(() -> IOUtils.toString(URI.create(missingToken), StandardCharsets.UTF_8))
+                    .withMessageContaining("not-existent-token");
 
         }
     }
 
     @Test
-    public void testCustomAndDebuggingHeaders() throws Exception {
+    void customAndDebuggingHeaders() throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -607,41 +586,41 @@ public class BasicStandardEndpointMapperIT {
             int port = server.getLocalPort();
             {
                 URLConnection conn = URI.create("http://localhost:" + port + "/index.html").toURL().openConnection();
-                assertEquals("header-1-value; header-1-value2;header-1-value3", conn.getHeaderField("custom-header-1"));
-                assertEquals("header-2-value", conn.getHeaderField("custom-header-2"));
+                assertThat(conn.getHeaderField("custom-header-1")).isEqualTo("header-1-value; header-1-value2;header-1-value3");
+                assertThat(conn.getHeaderField("custom-header-2")).isEqualTo("header-2-value");
                 // header mode-set
-                assertEquals("text/custom-text", conn.getHeaderField("Content-Type"));
-                assertFalse(conn.getHeaderFields().toString().contains("text/html"));
+                assertThat(conn.getHeaderField("Content-Type")).isEqualTo("text/custom-text");
+                assertThat(conn.getHeaderFields().toString()).doesNotContain("text/html");
                 // header mode-remove: for this action doesn't exist
-                assertNull(conn.getHeaderField("Transfer-Encoding"));
+                assertThat(conn.getHeaderField("Transfer-Encoding")).isNull();
 
                 // debugging header "Routing-Path"
-                assertEquals("r1;addHeaders;d1;b1", conn.getHeaderField("DebugHeaderCustomName"));
+                assertThat(conn.getHeaderField("DebugHeaderCustomName")).isEqualTo("r1;addHeaders;d1;b1");
             }
             {
                 URLConnection conn = URI.create("http://localhost:" + port + "/index2.html").toURL().openConnection();
-                assertNull(conn.getHeaderField("custom-header-1"));
-                assertEquals("header-2-value", conn.getHeaderField("custom-header-2"));
+                assertThat(conn.getHeaderField("custom-header-1")).isNull();
+                assertThat(conn.getHeaderField("custom-header-2")).isEqualTo("header-2-value");
                 // in this action is text/html as normal
-                assertTrue(conn.getHeaderFields().toString().contains("text/html"));
+                assertThat(conn.getHeaderFields().toString()).contains("text/html");
                 // custom-header-3 values have been merged (default mode-add)
-                assertTrue(conn.getHeaderFields().toString().contains("header-4-overridden-value"));
-                assertTrue(conn.getHeaderFields().toString().contains("header-3-overridden-value"));
+                assertThat(conn.getHeaderFields().toString()).contains("header-4-overridden-value");
+                assertThat(conn.getHeaderFields().toString()).contains("header-3-overridden-value");
                 // in this action still exists
-                assertNotNull(conn.getHeaderField("Transfer-Encoding"));
+                assertThat(conn.getHeaderField("Transfer-Encoding")).isNotNull();
 
                 // debugging header "Routing-Path"
-                assertEquals("r2;addHeader2;d2;b2", conn.getHeaderField("DebugHeaderCustomName"));
+                assertThat(conn.getHeaderField("DebugHeaderCustomName")).isEqualTo("r2;addHeader2;d2;b2");
             }
             {
                 URLConnection conn = URI.create("http://localhost:" + port + "/index3.html").toURL().openConnection();
-                assertEquals("header-1-value; header-1-value2;header-1-value3", conn.getHeaderField("custom-header-1"));
+                assertThat(conn.getHeaderField("custom-header-1")).isEqualTo("header-1-value; header-1-value2;header-1-value3");
             }
         }
     }
 
     @Test
-    public void testActionRedirect() throws Exception {
+    void actionRedirect() throws Exception {
 
         try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir)) {
             Properties configuration = new Properties();
@@ -706,29 +685,29 @@ public class BasicStandardEndpointMapperIT {
                 // redirect to same host/uri but with https (default port)
                 HttpURLConnection conn = (HttpURLConnection) URI.create("http://localhost:" + port + "/index.html").toURL().openConnection();
                 conn.setInstanceFollowRedirects(false);
-                assertEquals("https://localhost/index.html", conn.getHeaderField("Location"));
-                assertTrue(conn.getHeaderFields().toString().contains("301 Moved Permanently"));
+                assertThat(conn.getHeaderField("Location")).isEqualTo("https://localhost/index.html");
+                assertThat(conn.getHeaderFields().toString()).contains("301 Moved Permanently");
             }
             {
                 // redirect to absolute host:port/uri
                 HttpURLConnection conn = (HttpURLConnection) URI.create("http://localhost:" + port + "/index2.html").toURL().openConnection();
                 conn.setInstanceFollowRedirects(false);
-                assertEquals("http://foo/index0.html", conn.getHeaderField("Location"));
-                assertTrue(conn.getHeaderFields().toString().contains("302 Found"));
+                assertThat(conn.getHeaderField("Location")).isEqualTo("http://foo/index0.html");
+                assertThat(conn.getHeaderFields().toString()).contains("302 Found");
             }
             {
                 // relative redirect (same host:port, different uri)
                 HttpURLConnection conn = (HttpURLConnection) URI.create("http://localhost:" + port + "/index3.html").toURL().openConnection();
                 conn.setInstanceFollowRedirects(false);
-                assertEquals("http://localhost:" + port + "/index0.html", conn.getHeaderField("Location"));
-                assertTrue(conn.getHeaderFields().toString().contains("303 See Other"));
+                assertThat(conn.getHeaderField("Location")).isEqualTo("http://localhost:" + port + "/index0.html");
+                assertThat(conn.getHeaderFields().toString()).contains("303 See Other");
             }
             {
                 // redirect custom
                 HttpURLConnection conn = (HttpURLConnection) URI.create("http://localhost:" + port + "/index4.html").toURL().openConnection();
                 conn.setInstanceFollowRedirects(false);
-                assertEquals("https://192.0.0.1:1234/indexX.html", conn.getHeaderField("Location"));
-                assertTrue(conn.getHeaderFields().toString().contains("307 Temporary Redirect"));
+                assertThat(conn.getHeaderField("Location")).isEqualTo("https://192.0.0.1:1234/indexX.html");
+                assertThat(conn.getHeaderFields().toString()).contains("307 Temporary Redirect");
             }
         }
     }

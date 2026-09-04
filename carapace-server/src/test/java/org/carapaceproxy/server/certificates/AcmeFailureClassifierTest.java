@@ -19,8 +19,7 @@
  */
 package org.carapaceproxy.server.certificates;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 import java.io.IOException;
 import java.net.URI;
 import java.util.List;
@@ -35,44 +34,44 @@ import org.shredzone.acme4j.exception.AcmeRateLimitedException;
 import org.shredzone.acme4j.exception.AcmeServerException;
 import org.shredzone.acme4j.toolbox.JSON;
 
-public class AcmeFailureClassifierTest {
+class AcmeFailureClassifierTest {
 
     @Test
-    public void testRejections() throws Exception {
+    void rejections() throws Exception {
         // the persisted state is unusable, retrying it won't help
-        assertFalse(AcmeFailureClassifier.isTransient(new AcmeException("unknown order")));
-        assertFalse(AcmeFailureClassifier.isTransient(new AcmeProtocolException("malformed CA response")));
-        assertFalse(AcmeFailureClassifier.isTransient(new AcmeLazyLoadingException(
-                Order.class, URI.create("https://localhost/order").toURL(), new AcmeException("unknown order"))));
-        assertFalse(AcmeFailureClassifier.isTransient(
-                new AcmeServerException(problemOfType("urn:ietf:params:acme:error:unauthorized"))));
+        assertThat(AcmeFailureClassifier.isTransient(new AcmeException("unknown order"))).isFalse();
+        assertThat(AcmeFailureClassifier.isTransient(new AcmeProtocolException("malformed CA response"))).isFalse();
+        assertThat(AcmeFailureClassifier.isTransient(new AcmeLazyLoadingException(
+                Order.class, URI.create("https://localhost/order").toURL(), new AcmeException("unknown order")))).isFalse();
+        assertThat(AcmeFailureClassifier.isTransient(
+                new AcmeServerException(problemOfType("urn:ietf:params:acme:error:unauthorized")))).isFalse();
     }
 
     @Test
-    public void testTransientFailures() throws Exception {
+    void transientFailures() throws Exception {
         // worth retrying in the same state
-        assertTrue(AcmeFailureClassifier.isTransient(new AcmeNetworkException(new IOException("io"))));
-        assertTrue(AcmeFailureClassifier.isTransient(new AcmeRateLimitedException(
-                problemOfType("urn:ietf:params:acme:error:rateLimited"), null, List.of())));
-        assertTrue(AcmeFailureClassifier.isTransient(
-                new AcmeServerException(problemOfType("urn:ietf:params:acme:error:serverInternal"))));
-        assertTrue(AcmeFailureClassifier.isTransient(
-                new AcmeServerException(problemOfType("urn:ietf:params:acme:error:badNonce"))));
+        assertThat(AcmeFailureClassifier.isTransient(new AcmeNetworkException(new IOException("io")))).isTrue();
+        assertThat(AcmeFailureClassifier.isTransient(new AcmeRateLimitedException(
+                problemOfType("urn:ietf:params:acme:error:rateLimited"), null, List.of()))).isTrue();
+        assertThat(AcmeFailureClassifier.isTransient(
+                new AcmeServerException(problemOfType("urn:ietf:params:acme:error:serverInternal")))).isTrue();
+        assertThat(AcmeFailureClassifier.isTransient(
+                new AcmeServerException(problemOfType("urn:ietf:params:acme:error:badNonce")))).isTrue();
         // a 5xx without a problem document, e.g., from a load balancer
-        assertTrue(AcmeFailureClassifier.isTransient(new AcmeException("HTTP 503")));
+        assertThat(AcmeFailureClassifier.isTransient(new AcmeException("HTTP 503"))).isTrue();
         // unwrapping a lazily-loaded resource failure preserves the transient classification
-        assertTrue(AcmeFailureClassifier.isTransient(new AcmeLazyLoadingException(
+        assertThat(AcmeFailureClassifier.isTransient(new AcmeLazyLoadingException(
                 Order.class,
                 URI.create("https://localhost/order").toURL(),
-                new AcmeNetworkException(new IOException("connection reset")))));
+                new AcmeNetworkException(new IOException("connection reset"))))).isTrue();
         // a message-less failure must not blow up the message match
-        assertFalse(AcmeFailureClassifier.isTransient(new AcmeException((String) null)));
+        assertThat(AcmeFailureClassifier.isTransient(new AcmeException((String) null))).isFalse();
     }
 
     @Test
-    public void testNonAcmeFailures() {
+    void nonAcmeFailures() {
         // an unexpected local failure must be counted too, or it would retry invisibly forever
-        assertFalse(AcmeFailureClassifier.isTransient(new IllegalStateException("boom")));
+        assertThat(AcmeFailureClassifier.isTransient(new IllegalStateException("boom"))).isFalse();
     }
 
     private static Problem problemOfType(String type) throws Exception {

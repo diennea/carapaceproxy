@@ -5,9 +5,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.okForContentType;
 import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.WireMockServer;
@@ -107,7 +105,7 @@ public class HttpProtocolAndSSLIT {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("scenarios")
-    public void testMatrixCase(final Scenario scenario) throws Exception {
+    void matrixCase(final Scenario scenario) throws Exception {
         final AtomicReference<String> channelIdRef = new AtomicReference<>();
         final AtomicBoolean allSameConnection = new AtomicBoolean(true);
         final WireMockConfiguration cfg = WireMockConfiguration.options();
@@ -188,7 +186,7 @@ public class HttpProtocolAndSSLIT {
                     .aggregate()
                     .asString()
                     .block();
-            assertEquals(RESPONSE, htmlBody);
+            assertThat(htmlBody).isEqualTo(RESPONSE);
 
             final int jsFiles = 5;
             final int cssFiles = 5;
@@ -211,17 +209,13 @@ public class HttpProtocolAndSSLIT {
                     .collectList()
                     .block();
 
-            assertNotNull(allBodies);
-            assertEquals(jsFiles + cssFiles, allBodies.size());
+            assertThat(allBodies)
+                    .hasSize(jsFiles + cssFiles);
             for (String body : allBodies) {
-                assertNotNull(body);
-                assertTrue(body.length() > 10_000, "Body too small");
+                assertThat(body).as("Body too small").hasSizeGreaterThan(10_000);
             }
             if (scenario.proxyHttp2()) {
-                assertTrue(
-                        allSameConnection.get(),
-                        "HTTP/2 requests must be multiplexed over a single TCP connection " + channelIdRef.get()
-                );
+                assertThat(allSameConnection.get()).as("HTTP/2 requests must be multiplexed over a single TCP connection " + channelIdRef.get()).isTrue();
             }
         } finally {
             backendRule.stop();

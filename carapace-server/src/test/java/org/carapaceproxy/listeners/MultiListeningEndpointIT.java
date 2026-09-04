@@ -24,7 +24,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -53,7 +53,7 @@ public class MultiListeningEndpointIT {
     public File tmpDir;
 
     @Test
-    public void test() throws Exception {
+    void test() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html?redir"))
                 .willReturn(aResponse()
@@ -73,13 +73,13 @@ public class MultiListeningEndpointIT {
             {
                 String s = IOUtils.toString(URI.create("http://localhost:" + port + "/index.html?redir"), StandardCharsets.UTF_8);
                 System.out.println("s:" + s);
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
             }
 
             {
                 String s = IOUtils.toString(URI.create("http://localhost:" + port2 + "/index.html?redir"), StandardCharsets.UTF_8);
                 System.out.println("s:" + s);
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
             }
 
         }

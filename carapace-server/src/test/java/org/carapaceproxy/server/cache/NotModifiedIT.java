@@ -24,9 +24,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -49,7 +47,7 @@ public class NotModifiedIT {
     public File tmpDir;
 
     @Test
-    public void testServeFromCacheAnswer304() throws Exception {
+    void serveFromCacheAnswer304() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -70,10 +68,10 @@ public class NotModifiedIT {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("it <b>works</b> !!"));
+                assertThat(s).contains("it <b>works</b> !!");
                 resp.getHeaderLines().forEach(h ->
                     System.out.println("HEADER LINE :" + h));
-                assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                assertThat(resp.getHeaderLines()).noneSatisfy(h -> assertThat(h).contains("X-Cached"));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -82,19 +80,19 @@ public class NotModifiedIT {
                             + "Host: localhost\r\n"
                             + "If-Modified-Since: " + HttpUtils.formatDateHeader(new java.util.Date(System.currentTimeMillis())) + "\r\n"
                             + "\r\n");
-                    assertEquals("HTTP/1.1 304 Not Modified", resp.getStatusLine().trim());
+                    assertThat(resp.getStatusLine().trim()).isEqualTo("HTTP/1.1 304 Not Modified");
                     resp.getHeaderLines().forEach(h ->
                         System.out.println("HEADER LINE :" + h));
-                    assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
-                    assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("expires")));
-                    assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("last-modified")));
-                    assertTrue(resp.getBodyString().isEmpty());
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("X-Cached"));
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("expires"));
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("last-modified"));
+                    assertThat(resp.getBodyString()).isEmpty();
                 }
             }
 
-            assertEquals(1, server.getCache().getCacheSize());
-            assertEquals(1, server.getCache().getStats().getHits());
-            assertEquals(1, server.getCache().getStats().getMisses());
+            assertThat(server.getCache().getCacheSize()).isOne();
+            assertThat(server.getCache().getStats().getHits()).isOne();
+            assertThat(server.getCache().getStats().getMisses()).isOne();
         }
     }
 

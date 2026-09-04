@@ -158,6 +158,11 @@
                     <artifactId>commons-logging</artifactId>
                     <groupId>commons-logging</groupId>
                 </exclusion>
+                <!-- A test mock, pulled at compile scope, whose bundled json-path shadows the real one: see #485 -->
+                <exclusion>
+                    <groupId>org.herddb</groupId>
+                    <artifactId>herddb-mock</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -297,8 +302,13 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.hamcrest</groupId>
-            <artifactId>hamcrest</artifactId>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>net.javacrumbs.json-unit</groupId>
+            <artifactId>json-unit-assertj</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

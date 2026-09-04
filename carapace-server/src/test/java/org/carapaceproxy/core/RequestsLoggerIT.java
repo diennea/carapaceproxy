@@ -23,10 +23,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -72,7 +69,7 @@ public class RequestsLoggerIT {
     public File tmpDir;
 
     @BeforeEach
-    public void before() {
+    void before() {
         accessLogFilePath = tmpDir.getAbsolutePath() + "/access.log";
     }
 
@@ -145,7 +142,7 @@ public class RequestsLoggerIT {
     }
 
     @Test
-    public void test() throws Exception {
+    void test() throws Exception {
 
         final int FLUSH_WAIT_TIME = 150;
 
@@ -157,17 +154,17 @@ public class RequestsLoggerIT {
         reqLogger.setVerbose(DEBUG);
         reqLogger.setBreakRunForTests(true);
 
-        assertThat((new File(accessLogFilePath)).isFile(), is(false));
+        assertThat((new File(accessLogFilePath)).isFile()).isFalse();
 
         // Wait without a request to log
         {
             long startts = System.currentTimeMillis();
             run(reqLogger);
-            assertTrue((System.currentTimeMillis() - startts) >= FLUSH_WAIT_TIME);
+            assertThat(System.currentTimeMillis() - startts).isGreaterThanOrEqualTo(FLUSH_WAIT_TIME);
         }
 
-        assertThat((new File(accessLogFilePath)).isFile(), is(true));
-        assertThat(readFile(accessLogFilePath).size(), is(0));
+        assertThat((new File(accessLogFilePath)).isFile()).isTrue();
+        assertThat(readFile(accessLogFilePath)).isEmpty();
 
         {
             // Request to log 1
@@ -195,15 +192,13 @@ public class RequestsLoggerIT {
 
             long startts = System.currentTimeMillis();
             run(reqLogger);
-            assertTrue((System.currentTimeMillis() - startts) < FLUSH_WAIT_TIME);
+            assertThat(System.currentTimeMillis() - startts).isLessThan(FLUSH_WAIT_TIME);
 
             reqLogger.flushAccessLogFile();
 
             List<String> rows1 = readFile(accessLogFilePath);
-            assertThat(rows1.size(), is(1));
-            assertThat(rows1.get(0), is(
-                    "[2018-10-23 10:10:10.000] [GET thehost /index.html] [uid:uid_1, sid:sid_1, ip:123.123.123.123] "
-                    + "server=234.234.234.234, act=CACHE, route=routeid_1, backend=host:1111. time t=1012ms b=542ms, protocol=" + HttpVersion.HTTP_1_1));
+            assertThat(rows1).containsExactly("[2018-10-23 10:10:10.000] [GET thehost /index.html] [uid:uid_1, sid:sid_1, ip:123.123.123.123] "
+                    + "server=234.234.234.234, act=CACHE, route=routeid_1, backend=host:1111. time t=1012ms b=542ms, protocol=" + HttpVersion.HTTP_1_1);
 
             // Request to log 2. Let's wait 100ms before do the request and check if flush will be done within the
             // initial FLUSH_WAIT_TIME ms timeframe
@@ -232,25 +227,24 @@ public class RequestsLoggerIT {
             reqLogger.logRequest(createMockRequestHandler(r2));
 
             run(reqLogger);
-            assertTrue((System.currentTimeMillis() - startts) < FLUSH_WAIT_TIME);
+            assertThat(System.currentTimeMillis() - startts).isLessThan(FLUSH_WAIT_TIME);
 
             // No flush here. The new line should not have been flushed yet
             //reqLogger.flushAccessLogFile();
             List<String> rows2 = readFile(accessLogFilePath);
-            assertThat(rows2.size(), is(1));
+            assertThat(rows2).hasSize(1);
 
             // This run will wait until flush time is over and than flush
             long startts2 = System.currentTimeMillis();
             run(reqLogger);
-            assertTrue((System.currentTimeMillis() - startts) >= FLUSH_WAIT_TIME);
-            assertTrue((System.currentTimeMillis() - startts2) < FLUSH_WAIT_TIME); // should discount the splept 100ms
+            assertThat(System.currentTimeMillis() - startts).isGreaterThanOrEqualTo(FLUSH_WAIT_TIME);
+            assertThat(System.currentTimeMillis() - startts2).isLessThan(FLUSH_WAIT_TIME); // should discount the splept 100ms
 
             //reqLogger.flushAccessLogFile();
             List<String> rows3 = readFile(accessLogFilePath);
-            assertThat(rows3.size(), is(2));
-            assertThat(rows3.get(1), is(
-                    "[2018-10-23 11:10:10.000] [POST thehost2 /index2.html] [uid:uid_2, sid:sid_2, ip:111.123.123.123] "
-                    + "server=111.234.234.234, act=PROXY, route=routeid_2, backend=host2:2222. time t=912ms b=142ms, protocol=" + HttpVersion.HTTP_1_1));
+            assertThat(rows3).hasSize(2);
+            assertThat(rows3).element(1).isEqualTo("[2018-10-23 11:10:10.000] [POST thehost2 /index2.html] [uid:uid_2, sid:sid_2, ip:111.123.123.123] "
+                    + "server=111.234.234.234, act=PROXY, route=routeid_2, backend=host2:2222. time t=912ms b=142ms, protocol=" + HttpVersion.HTTP_1_1);
         }
 
         // Hot configuration reload
@@ -288,15 +282,14 @@ public class RequestsLoggerIT {
 
             long startts = System.currentTimeMillis();
             run(reqLogger);
-            assertTrue((System.currentTimeMillis() - startts) < FLUSH_WAIT_TIME);
+            assertThat(System.currentTimeMillis() - startts).isLessThan(FLUSH_WAIT_TIME);
 
             reqLogger.flushAccessLogFile();
 
             List<String> rows1 = readFile(accessLogFilePath);
-            assertThat(rows1.size(), is(3));
-            assertThat(rows1.get(2), is(
-                    "[2018-10-23 10:10:10.000] [GET thehost /index.html] [uid:uid_1, sid:sid_1, ip:123.123.123.123] "
-                    + "server=234.234.234.234, act=CACHE, route=routeid_1, backend=host:1111. time t=1012ms b=542ms, protocol=" + HttpVersion.HTTP_1_1));
+            assertThat(rows1).hasSize(3);
+            assertThat(rows1).element(2).isEqualTo("[2018-10-23 10:10:10.000] [GET thehost /index.html] [uid:uid_1, sid:sid_1, ip:123.123.123.123] "
+                    + "server=234.234.234.234, act=CACHE, route=routeid_1, backend=host:1111. time t=1012ms b=542ms, protocol=" + HttpVersion.HTTP_1_1);
 
             // This request will be taken in with the new conf
             MockProxyRequest r2 = new MockProxyRequest();
@@ -320,14 +313,13 @@ public class RequestsLoggerIT {
             reqLogger.logRequest(createMockRequestHandler(r2));
 
             run(reqLogger);
-            assertTrue((System.currentTimeMillis() - startts) < FLUSH_WAIT_TIME);
+            assertThat(System.currentTimeMillis() - startts).isLessThan(FLUSH_WAIT_TIME);
 
             reqLogger.flushAccessLogFile();
 
             List<String> rows2 = readFile(accessLogFilePath);
-            assertThat(rows2.size(), is(4));
-            assertThat(rows2.get(3), is(
-                    "[2018-10-23 10:10] [GET thehost /index.html]"));
+            assertThat(rows2).hasSize(4);
+            assertThat(rows2).element(3).isEqualTo("[2018-10-23 10:10] [GET thehost /index.html]");
         }
 
         // Access log writing issues test
@@ -367,11 +359,11 @@ public class RequestsLoggerIT {
             // This run will try to create the new file but it will fail and wait WAIT_TIME_BETWEEN_FAILURES
             long startts = System.currentTimeMillis();
             run(reqLogger);
-            assertTrue((System.currentTimeMillis() - startts) >= WAIT_TIME_BETWEEN_FAILURES);
+            assertThat(System.currentTimeMillis() - startts).isGreaterThanOrEqualTo(WAIT_TIME_BETWEEN_FAILURES);
 
             // reqLogger.flushAccessLogFile();
             List<String> rows1 = readFile(accessLogFilePath);
-            assertThat(rows1.size(), is(4));
+            assertThat(rows1).hasSize(4);
 
             // Other 2 requests. Only r1 and r2 will be retained (max queue capacity = 2). r3 should be discarded
             MockProxyRequest r2 = new MockProxyRequest();
@@ -430,15 +422,13 @@ public class RequestsLoggerIT {
             run(reqLogger); // r1
             run(reqLogger); // r2
             run(reqLogger); // r3 should be missing, it will wait for flush times
-            assertTrue((System.currentTimeMillis() - startts2) >= FLUSH_WAIT_TIME - (startts2 - startts)); // needs a little more tolerance
+            assertThat(System.currentTimeMillis() - startts2).isGreaterThanOrEqualTo(FLUSH_WAIT_TIME - (startts2 - startts)); // needs a little more tolerance
 
             //reqLogger.flushAccessLogFile();
             List<String> rows2 = readFile(accessLogFilePath);
-            assertThat(rows2.size(), is(4 + 2));
-            assertThat(rows2.get(4), is(
-                    "[2018-10-23 11:10] [GET thehost /index1.html]"));
-            assertThat(rows2.get(5), is(
-                    "[2018-10-23 11:10] [GET thehost /index2.html]"));
+            assertThat(rows2).hasSize(4 + 2);
+            assertThat(rows2).element(4).isEqualTo("[2018-10-23 11:10] [GET thehost /index1.html]");
+            assertThat(rows2).element(5).isEqualTo("[2018-10-23 11:10] [GET thehost /index2.html]");
         }
 
         // Closing RequestLogger
@@ -492,27 +482,26 @@ public class RequestsLoggerIT {
             // First cycle will write r1
             long startts = System.currentTimeMillis();
             run(reqLogger);
-            assertTrue((System.currentTimeMillis() - startts) < FLUSH_WAIT_TIME);
+            assertThat(System.currentTimeMillis() - startts).isLessThan(FLUSH_WAIT_TIME);
 
             reqLogger.flushAccessLogFile();
 
             List<String> rows1 = readFile(accessLogFilePath);
-            assertThat(rows1.size(), is(6 + 1));
-            assertThat(rows1.get(6), is(
-                    "[2018-10-23 10:10] [GET thehost /index1.html]"));
+            assertThat(rows1).hasSize(6 + 1);
+            assertThat(rows1).element(6).isEqualTo("[2018-10-23 10:10] [GET thehost /index1.html]");
 
             // Second cycle should close the file and return immediatly
             run(reqLogger);
-            assertTrue((System.currentTimeMillis() - startts) < FLUSH_WAIT_TIME);
+            assertThat(System.currentTimeMillis() - startts).isLessThan(FLUSH_WAIT_TIME);
 
             List<String> rows2 = readFile(accessLogFilePath);
-            assertThat(rows2.size(), is(7));
+            assertThat(rows2).hasSize(7);
         }
 
     }
 
     @Test
-    public void testWithServer() throws Exception {
+    void withServer() throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -530,23 +519,23 @@ public class RequestsLoggerIT {
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
-                assertTrue(s.contains("it <b>works</b> !!"));
-                assertFalse(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                assertThat(s).contains("it <b>works</b> !!");
+                assertThat(resp.getHeaderLines()).noneSatisfy(h -> assertThat(h).contains("X-Cached"));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                     String s = resp.toString();
-                    assertTrue(s.contains("it <b>works</b> !!"));
-                    assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                    assertThat(s).contains("it <b>works</b> !!");
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
 
                 {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                     String s = resp.toString();
-                    assertTrue(s.contains("it <b>works</b> !!"));
-                    assertTrue(resp.getHeaderLines().stream().anyMatch(h -> h.contains("X-Cached")));
+                    assertThat(s).contains("it <b>works</b> !!");
+                    assertThat(resp.getHeaderLines()).anySatisfy(h -> assertThat(h).contains("X-Cached"));
                 }
             }
         }
@@ -555,7 +544,7 @@ public class RequestsLoggerIT {
     }
 
     @Test
-    public void testAccessLogRotation() throws Exception {
+    void accessLogRotation() throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -577,33 +566,33 @@ public class RequestsLoggerIT {
                     try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                         RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                         String s = resp.toString();
-                        assertTrue(s.contains("it <b>works</b> !!"));
+                        assertThat(s).contains("it <b>works</b> !!");
                     }
 
                     try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                         {
                             RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                             String s = resp.toString();
-                            assertTrue(s.contains("it <b>works</b> !!"));
+                            assertThat(s).contains("it <b>works</b> !!");
                         }
 
                         {
                             RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                             String s = resp.toString();
-                            assertTrue(s.contains("it <b>works</b> !!"));
+                            assertThat(s).contains("it <b>works</b> !!");
                         }
                     }
                 }
                 Thread.sleep(3000);
                 //check if gzip file exist
                 File[] f = new File(tmpDir.getAbsolutePath()).listFiles((dir, name) -> name.startsWith("access") && name.contains(".gzip"));
-                assertTrue(f.length == 1);
+                assertThat(f).hasSize(1);
                 try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                     String s = resp.toString();
-                    assertTrue(s.contains("it <b>works</b> !!"));
+                    assertThat(s).contains("it <b>works</b> !!");
                 }
-                assertTrue(logFileChannel.size() > 0);
+                assertThat(logFileChannel.size()).isGreaterThan(0);
             }
         }
     }

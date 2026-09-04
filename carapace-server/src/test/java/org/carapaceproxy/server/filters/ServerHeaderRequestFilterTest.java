@@ -1,8 +1,6 @@
 package org.carapaceproxy.server.filters;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
@@ -14,10 +12,10 @@ import org.carapaceproxy.core.RequestFilter;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.junit.jupiter.api.Test;
 
-public class ServerHeaderRequestFilterTest {
+class ServerHeaderRequestFilterTest {
 
     @Test
-    public void testFactoryFallbackUsesDefaultWhenValueMissing() throws Exception {
+    void factoryFallbackUsesDefaultWhenValueMissing() throws Exception {
         Map<String, String> cfg = new HashMap<>(); // no 'value' key
         RequestFilterConfiguration rfc = new RequestFilterConfiguration(ServerHeaderRequestFilter.TYPE, cfg);
         RequestFilter filter = RequestFilterFactory.buildRequestFilter(rfc);
@@ -27,11 +25,11 @@ public class ServerHeaderRequestFilterTest {
 
         filter.apply(request);
 
-        assertThat(headers.get(HttpHeaderNames.SERVER), is(ServerHeaderRequestFilter.DEFAULT_SERVER));
+        assertThat(headers.get(HttpHeaderNames.SERVER)).isEqualTo(ServerHeaderRequestFilter.DEFAULT_SERVER);
     }
 
     @Test
-    public void testFactoryUsesProvidedValueToOverride() throws Exception {
+    void factoryUsesProvidedValueToOverride() throws Exception {
         Map<String, String> cfg = new HashMap<>();
         cfg.put("value", "MyServer/1.0");
         RequestFilterConfiguration rfc = new RequestFilterConfiguration(ServerHeaderRequestFilter.TYPE, cfg);
@@ -43,11 +41,11 @@ public class ServerHeaderRequestFilterTest {
 
         filter.apply(request);
 
-        assertThat(headers.get(HttpHeaderNames.SERVER), is("MyServer/1.0"));
+        assertThat(headers.get(HttpHeaderNames.SERVER)).isEqualTo("MyServer/1.0");
     }
 
     @Test
-    public void testFactoryEmptyValueRemovesHeader() throws Exception {
+    void factoryEmptyValueRemovesHeader() throws Exception {
         Map<String, String> cfg = new HashMap<>();
         cfg.put("value", "");
         RequestFilterConfiguration rfc = new RequestFilterConfiguration(ServerHeaderRequestFilter.TYPE, cfg);
@@ -60,7 +58,7 @@ public class ServerHeaderRequestFilterTest {
 
         filter.apply(request);
 
-        assertTrue(headers.getAll(HttpHeaderNames.SERVER).isEmpty());
+        assertThat(headers.getAll(HttpHeaderNames.SERVER)).isEmpty();
     }
 }
 

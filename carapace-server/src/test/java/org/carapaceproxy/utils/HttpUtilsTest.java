@@ -1,17 +1,16 @@
 package org.carapaceproxy.utils;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
 import org.junit.jupiter.api.Test;
 
-public class HttpUtilsTest {
+class HttpUtilsTest {
 
     @Test
-    public void testStripHopByHopHeaders_standardHeaders() {
+    void stripHopByHopHeadersStandardHeaders() {
         final HttpHeaders headers = new DefaultHttpHeaders();
         headers.add(HttpHeaderNames.HOST, "example.com");
         headers.add(HttpHeaderNames.CONTENT_TYPE, "text/html");
@@ -28,27 +27,27 @@ public class HttpUtilsTest {
         HttpUtils.stripHopByHopHeaders(headers);
 
         // End-to-end headers must be preserved
-        assertThat(headers.get(HttpHeaderNames.HOST), is("example.com"));
-        assertThat(headers.get(HttpHeaderNames.CONTENT_TYPE), is("text/html"));
+        assertThat(headers.get(HttpHeaderNames.HOST)).isEqualTo("example.com");
+        assertThat(headers.get(HttpHeaderNames.CONTENT_TYPE)).isEqualTo("text/html");
 
         // Hop-by-hop headers must be stripped
-        assertThat(headers.get(HttpHeaderNames.CONNECTION), is(nullValue()));
-        assertThat(headers.get(HttpHeaderNames.KEEP_ALIVE), is(nullValue()));
-        assertThat(headers.get(HttpHeaderNames.UPGRADE), is(nullValue()));
-        assertThat(headers.get(HttpHeaderNames.TE), is(nullValue()));
-        assertThat(headers.get(HttpHeaderNames.TRAILER), is(nullValue()));
-        assertThat(headers.get(HttpHeaderNames.PROXY_AUTHENTICATE), is(nullValue()));
-        assertThat(headers.get(HttpHeaderNames.PROXY_AUTHORIZATION), is(nullValue()));
-        assertThat(headers.get("proxy-connection"), is(nullValue()));
+        assertThat(headers.get(HttpHeaderNames.CONNECTION)).isNull();
+        assertThat(headers.get(HttpHeaderNames.KEEP_ALIVE)).isNull();
+        assertThat(headers.get(HttpHeaderNames.UPGRADE)).isNull();
+        assertThat(headers.get(HttpHeaderNames.TE)).isNull();
+        assertThat(headers.get(HttpHeaderNames.TRAILER)).isNull();
+        assertThat(headers.get(HttpHeaderNames.PROXY_AUTHENTICATE)).isNull();
+        assertThat(headers.get(HttpHeaderNames.PROXY_AUTHORIZATION)).isNull();
+        assertThat(headers.get("proxy-connection")).isNull();
 
         // Transfer-Encoding is intentionally NOT stripped by stripHopByHopHeaders:
         // Reactor Netty's HTTP/2 codec enforces its removal at the wire level (RFC 9113 §8.2.2),
         // and stripping it here would break HTTP/1.1 chunked proxying.
-        assertThat(headers.get(HttpHeaderNames.TRANSFER_ENCODING), is("chunked"));
+        assertThat(headers.get(HttpHeaderNames.TRANSFER_ENCODING)).isEqualTo("chunked");
     }
 
     @Test
-    public void testStripHopByHopHeaders_dynamicNomination() {
+    void stripHopByHopHeadersDynamicNomination() {
         // RFC 7230 §6.1: any header listed in the Connection header value is also hop-by-hop
         final HttpHeaders headers = new DefaultHttpHeaders();
         headers.add(HttpHeaderNames.HOST, "example.com");
@@ -58,15 +57,15 @@ public class HttpUtilsTest {
 
         HttpUtils.stripHopByHopHeaders(headers);
 
-        assertThat(headers.get(HttpHeaderNames.HOST), is("example.com"));
+        assertThat(headers.get(HttpHeaderNames.HOST)).isEqualTo("example.com");
         // Both the Connection header itself and the dynamically nominated headers must be stripped
-        assertThat(headers.get(HttpHeaderNames.CONNECTION), is(nullValue()));
-        assertThat(headers.get("x-custom-connection-option"), is(nullValue()));
-        assertThat(headers.get("another-option"), is(nullValue()));
+        assertThat(headers.get(HttpHeaderNames.CONNECTION)).isNull();
+        assertThat(headers.get("x-custom-connection-option")).isNull();
+        assertThat(headers.get("another-option")).isNull();
     }
 
     @Test
-    public void testStripHopByHopHeaders_multipleConnectionValues() {
+    void stripHopByHopHeadersMultipleConnectionValues() {
         // Connection header may have multiple values across multiple header entries
         final HttpHeaders headers = new DefaultHttpHeaders(false);  // false = allow duplicate header names
         headers.add(HttpHeaderNames.HOST, "example.com");
@@ -77,14 +76,14 @@ public class HttpUtilsTest {
 
         HttpUtils.stripHopByHopHeaders(headers);
 
-        assertThat(headers.get(HttpHeaderNames.HOST), is("example.com"));
-        assertThat(headers.get(HttpHeaderNames.CONNECTION), is(nullValue()));
-        assertThat(headers.get("opt-a"), is(nullValue()));
-        assertThat(headers.get("opt-b"), is(nullValue()));
+        assertThat(headers.get(HttpHeaderNames.HOST)).isEqualTo("example.com");
+        assertThat(headers.get(HttpHeaderNames.CONNECTION)).isNull();
+        assertThat(headers.get("opt-a")).isNull();
+        assertThat(headers.get("opt-b")).isNull();
     }
 
     @Test
-    public void testStripHopByHopHeaders_noHopByHopHeaders() {
+    void stripHopByHopHeadersNoHopByHopHeaders() {
         // Headers with no hop-by-hop headers are left unchanged
         final HttpHeaders headers = new DefaultHttpHeaders();
         headers.add(HttpHeaderNames.HOST, "example.com");
@@ -93,15 +92,15 @@ public class HttpUtilsTest {
 
         HttpUtils.stripHopByHopHeaders(headers);
 
-        assertThat(headers.get(HttpHeaderNames.HOST), is("example.com"));
-        assertThat(headers.get(HttpHeaderNames.CONTENT_TYPE), is("application/json"));
-        assertThat(headers.get(HttpHeaderNames.CONTENT_LENGTH), is("42"));
+        assertThat(headers.get(HttpHeaderNames.HOST)).isEqualTo("example.com");
+        assertThat(headers.get(HttpHeaderNames.CONTENT_TYPE)).isEqualTo("application/json");
+        assertThat(headers.get(HttpHeaderNames.CONTENT_LENGTH)).isEqualTo("42");
     }
 
     @Test
-    public void testStripHopByHopHeaders_emptyHeaders() {
+    void stripHopByHopHeadersEmptyHeaders() {
         final HttpHeaders headers = new DefaultHttpHeaders();
         HttpUtils.stripHopByHopHeaders(headers);
-        assertThat(headers.isEmpty(), is(true));
+        assertThat(headers).isEmpty();
     }
 }

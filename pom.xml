@@ -150,7 +150,8 @@
         <libs.wiremock>3.13.1</libs.wiremock>
         <libs.mockito>5.20.0</libs.mockito>
         <libs.objenesis>3.3</libs.objenesis>
-        <libs.hamcrest>3.0</libs.hamcrest>
+        <libs.assertj>3.27.7</libs.assertj>
+        <libs.jsonunit>6.2.0</libs.jsonunit>
     </properties>
 
     <dependencyManagement>
@@ -291,9 +292,14 @@
             </dependency>
             <!-- Individual test dependencies -->
             <dependency>
-                <groupId>org.hamcrest</groupId>
-                <artifactId>hamcrest</artifactId>
-                <version>${libs.hamcrest}</version>
+                <groupId>org.assertj</groupId>
+                <artifactId>assertj-core</artifactId>
+                <version>${libs.assertj}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.javacrumbs.json-unit</groupId>
+                <artifactId>json-unit-assertj</artifactId>
+                <version>${libs.jsonunit}</version>
             </dependency>
             <dependency>
                 <groupId>org.junit</groupId>
@@ -525,9 +531,6 @@
                                         <!-- Excluding unnecessary annotations that are bundled in multiple versions by libraries -->
                                         <exclude>com.google.errorprone</exclude>
                                         <exclude>com.google.code.findbugs</exclude>
-                                        <!-- Clashes with org.hamcrest:hamcrest -->
-                                        <exclude>org.hamcrest:hamcrest-core</exclude>
-                                        <exclude>org.hamcrest:hamcrest-library</exclude>
                                         <!-- We want only SLF4J as logging APIs and Logback as logging backend -->
                                         <exclude>ch.qos.reload4j:*</exclude>
                                         <exclude>commons-logging:commons-logging</exclude>

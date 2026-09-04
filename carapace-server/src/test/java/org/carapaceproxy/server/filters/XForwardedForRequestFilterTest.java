@@ -19,11 +19,9 @@
  */
 package org.carapaceproxy.server.filters;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import java.util.List;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
 import java.net.InetSocketAddress;
 import org.carapaceproxy.core.ProxyRequest;
@@ -43,7 +41,7 @@ class XForwardedForRequestFilterTest {
 
         new XForwardedForRequestFilter(new MatchAllRequestMatcher()).apply(request);
 
-        assertEquals("127.0.0.1", headers.get(HEADER));
+        assertThat(headers.get(HEADER)).isEqualTo("127.0.0.1");
     }
 
     @Test
@@ -56,7 +54,7 @@ class XForwardedForRequestFilterTest {
 
         new XForwardedForRequestFilter(new MatchAllRequestMatcher()).apply(request);
 
-        assertEquals(List.of("127.0.0.1"), headers.getAll(HEADER));
+        assertThat(headers.getAll(HEADER)).containsExactly("127.0.0.1");
     }
 
     @Test
@@ -69,6 +67,6 @@ class XForwardedForRequestFilterTest {
 
         new XForwardedForRequestFilter(new MatchAllRequestMatcher()).apply(request);
 
-        assertEquals(List.of("1.2.3.4"), headers.getAll(HEADER));
+        assertThat(headers.getAll(HEADER)).containsExactly("1.2.3.4");
     }
 }

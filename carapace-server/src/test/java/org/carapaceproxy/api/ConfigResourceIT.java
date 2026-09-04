@@ -19,11 +19,7 @@
  */
 package org.carapaceproxy.api;
 
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.File;
 import java.io.IOException;
@@ -36,15 +32,15 @@ import org.junit.jupiter.api.Test;
  *
  * @author enrico.olivelli
  */
-public class ConfigResourceIT extends UseAdminServer {
+class ConfigResourceIT extends UseAdminServer {
 
-    @Test
     // 0) Dumping of start-up configuration
     // 1) applying of dynamic configuration
     // 2) dumping of the current configuration
     // 3) updating+applying dumped configuration
     // 4) dumping updated configuration
-    public void testDynamicConfigurationDumpingAndApplying() throws Exception {
+    @Test
+    void dynamicConfigurationDumpingAndApplying() throws Exception {
         Properties configuration = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         configuration.put("config.type", "database");
         configuration.put("db.jdbc.url", "jdbc:herddb:localhost");
@@ -58,7 +54,7 @@ public class ConfigResourceIT extends UseAdminServer {
             RawHttpClient.HttpResponse resp = client.get("/api/config", credentials);
             dumpedToReApply = resp.getBodyString();
             System.out.println("CONFIG:" + dumpedToReApply);
-            assertFalse(dumpedToReApply.contains("dynamiccertificatesmanager"));
+            assertThat(dumpedToReApply).doesNotContain("dynamiccertificatesmanager");
 
             // 1) Applying
             String body = "dynamiccertificatesmanager.period=45\n"
@@ -75,13 +71,13 @@ public class ConfigResourceIT extends UseAdminServer {
                     + "Authorization: Basic " + credentials.toBase64() + "\r\n"
                     + "\r\n"
                     + body);
-            assertTrue(resp.isOk());
+            assertThat(resp.isOk()).isTrue();
 
             // 2) Dumping + check
             resp = client.get("/api/config", credentials);
             dumpedToReApply = resp.getBodyString();
             System.out.println("CONFIG:" + dumpedToReApply);
-            assertThat(dumpedToReApply, containsString(body));
+            assertThat(dumpedToReApply).contains(body);
 
             // 3) Update config file + re-Applying
             dumpedToReApply = dumpedToReApply.replace("dynamiccertificatesmanager.period=45", "dynamiccertificatesmanager.period=30");
@@ -98,18 +94,18 @@ public class ConfigResourceIT extends UseAdminServer {
                     + "Authorization: Basic " + credentials.toBase64() + "\r\n"
                     + "\r\n"
                     + dumpedToReApply);
-            assertTrue(resp.isOk());
+            assertThat(resp.isOk()).isTrue();
 
             // 4) Dumping + check
             resp = client.get("/api/config", credentials);
             System.out.println("CONFIG:" + resp.getBodyString());
-            assertThat(resp.getBodyString(), containsString(dumpedToReApply));
+            assertThat(resp.getBodyString()).contains(dumpedToReApply);
         }
         stopServer();
     }
 
     @Test
-    public void testReconfig() throws Exception {
+    void reconfig() throws Exception {
         Properties configuration = new Properties(HTTP_ADMIN_SERVER_CONFIG);
 
         configuration.put("config.type", "database");
@@ -127,15 +123,15 @@ public class ConfigResourceIT extends UseAdminServer {
                     + "Authorization: Basic " + credentials.toBase64() + "\r\n"
                     + "\r\n"
                     + body);
-            assertTrue(resp.isOk());
+            assertThat(resp.isOk()).isTrue();
         }
 
         // restart, same "static" configuration
         stopServer();
         buildNewServer();
         startServer(configuration);
-        assertEquals(8000, server.getCurrentConfiguration().getConnectTimeout());
-        assertEquals(25, server.getBackendHealthManager().getPeriod());
+        assertThat(server.getCurrentConfiguration().getConnectTimeout()).isEqualTo(8000);
+        assertThat(server.getBackendHealthManager().getPeriod()).isEqualTo(25);
 
         try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
             String body = "connectionsmanager.connecttimeout=9000\n"
@@ -147,16 +143,16 @@ public class ConfigResourceIT extends UseAdminServer {
                     + "Authorization: Basic " + credentials.toBase64() + "\r\n"
                     + "\r\n"
                     + body);
-            assertTrue(resp.isOk());
+            assertThat(resp.isOk()).isTrue();
         }
-        assertEquals(9000, server.getCurrentConfiguration().getConnectTimeout());
-        assertEquals(30, server.getBackendHealthManager().getPeriod());
+        assertThat(server.getCurrentConfiguration().getConnectTimeout()).isEqualTo(9000);
+        assertThat(server.getBackendHealthManager().getPeriod()).isEqualTo(30);
         // restart, same "static" confguration
         stopServer();
         buildNewServer();
         startServer(configuration);
-        assertEquals(9000, server.getCurrentConfiguration().getConnectTimeout());
-        assertEquals(30, server.getBackendHealthManager().getPeriod());
+        assertThat(server.getCurrentConfiguration().getConnectTimeout()).isEqualTo(9000);
+        assertThat(server.getBackendHealthManager().getPeriod()).isEqualTo(30);
     }
 
 

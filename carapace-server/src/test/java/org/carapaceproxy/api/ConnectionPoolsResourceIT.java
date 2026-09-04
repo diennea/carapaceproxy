@@ -4,16 +4,15 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
+import static net.javacrumbs.jsonunit.assertj.JsonAssertions.json;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import java.io.File;
 import java.io.IOException;
-import java.util.Map;
+import net.javacrumbs.jsonunit.core.Option;
 import java.util.Properties;
 import java.util.Set;
 import javax.ws.rs.core.Response;
@@ -24,7 +23,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 public class ConnectionPoolsResourceIT extends UseAdminServer {
-    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String CONNECTION_POOLS_PATH = "/api/connectionpools";
     private static final String CREATED = String.valueOf(Response.Status.CREATED.getStatusCode());
     private static final String OK = String.valueOf(Response.Status.OK.getStatusCode());
@@ -110,120 +108,92 @@ public class ConnectionPoolsResourceIT extends UseAdminServer {
     }
 
     @Test
-    public void testGetSingle() throws Exception {
+    void getSingle() throws Exception {
         configureAndStartServer();
         try (final var client = new RawHttpClient("localhost", 8761)) {
             final var defaultResult = client.get(CONNECTION_POOLS_PATH + "/*", credentials);
-            final var defaultResultBean = MAPPER.readValue(defaultResult.getBodyString(), ConnectionPoolsResource.ConnectionPoolBean.class);
-            assertThat(defaultResultBean.getId(), is("*"));
-            assertThat(defaultResultBean.getDomain(), is("*"));
-            assertThat(defaultResultBean.getMaxConnectionsPerEndpoint(), is(MAX_CONNECTIONS_PER_ENDPOINT));
+            assertThatJson(defaultResult.getBodyString()).when(Option.IGNORING_EXTRA_FIELDS).isEqualTo(json(
+                    "{id: '*', domain: '*', maxConnectionsPerEndpoint: %d}".formatted(MAX_CONNECTIONS_PER_ENDPOINT)));
 
             final var result = client.get(CONNECTION_POOLS_PATH + "/" + DEFAULT_EXAMPLE_ORG, credentials);
-            final var resultBean = MAPPER.readValue(result.getBodyString(), ConnectionPoolsResource.ConnectionPoolBean.class);
-            assertThat(resultBean.getId(), is(DEFAULT_EXAMPLE_ORG));
-            assertThat(resultBean.getDomain(), is(DEFAULT_EXAMPLE_ORG));
-            assertThat(resultBean.getMaxConnectionsPerEndpoint(), is(MAX_CONNECTIONS_PER_ENDPOINT * 2));
+            assertThatJson(result.getBodyString()).when(Option.IGNORING_EXTRA_FIELDS).isEqualTo(json(
+                    "{id: '%s', domain: '%s', maxConnectionsPerEndpoint: %d}"
+                            .formatted(DEFAULT_EXAMPLE_ORG, DEFAULT_EXAMPLE_ORG, MAX_CONNECTIONS_PER_ENDPOINT * 2)));
         }
     }
 
     @Test
-    public void testGetAll() throws Exception {
+    void getAll() throws Exception {
         configureAndStartServer();
 
         try (final var client = new RawHttpClient("localhost", 8761)) {
             final var result = client.get(CONNECTION_POOLS_PATH, credentials);
-            final var resultMap = MAPPER.readValue(result.getBodyString(), new MapTypeReference());
-            assertThat(resultMap.keySet(), is(Set.of("*", DEFAULT_EXAMPLE_ORG)));
+            assertThatJson(result.getBodyString()).isObject().containsOnlyKeys("*", DEFAULT_EXAMPLE_ORG);
         }
     }
 
     @Test
-    public void testPostNewConnectionPool() throws Exception {
+    void postNewConnectionPool() throws Exception {
         configureAndStartServer();
         try (final var client = new RawHttpClient("localhost", 8761)) {
             final var pool = buildConnectionPoolBean();
             final var response = client.post(CONNECTION_POOLS_PATH, null, pool, credentials);
-            assertThat(response.getStatusLine(), containsString(CREATED));
+            assertThat(response.getStatusLine()).contains(CREATED);
             final var config = server.getCurrentConfiguration();
-            assertThat(config.getConnectionPools().keySet(), is(Set.of(DEFAULT_EXAMPLE_ORG, ALTERNATIVE_EXAMPLE_COM)));
+            assertThat(config.getConnectionPools()).containsOnlyKeys(DEFAULT_EXAMPLE_ORG, ALTERNATIVE_EXAMPLE_COM);
             final var newConnectionPool = config.getConnectionPools().get(ALTERNATIVE_EXAMPLE_COM);
-            assertThat(newConnectionPool.getId(), is(ALTERNATIVE_EXAMPLE_COM));
-            assertThat(newConnectionPool.getDomain(), is(ALTERNATIVE_EXAMPLE_COM));
-            assertThat(newConnectionPool.getMaxConnectionsPerEndpoint(), is(MAX_CONNECTIONS_PER_ENDPOINT * 3));
-            assertThat(newConnectionPool.getBorrowTimeout(), is(BORROW_TIMEOUT));
-            assertThat(newConnectionPool.getConnectTimeout(), is(CONNECT_TIMEOUT));
-            assertThat(newConnectionPool.getStuckRequestTimeout(), is(STUCK_REQUEST_TIMEOUT));
-            assertThat(newConnectionPool.getIdleTimeout(), is(IDLE_TIMEOUT));
-            assertThat(newConnectionPool.getMaxLifeTime(), is(MAX_LIFE_TIME));
-            assertThat(newConnectionPool.getDisposeTimeout(), is(DISPOSE_TIMEOUT));
-            assertThat(newConnectionPool.getKeepaliveIdle(), is(KEEPALIVE_IDLE));
-            assertThat(newConnectionPool.getKeepaliveInterval(), is(KEEPALIVE_INTERVAL));
-            assertThat(newConnectionPool.getKeepaliveCount(), is(KEEPALIVE_COUNT));
-            assertThat(newConnectionPool.isKeepAlive(), is(true));
-            assertThat(newConnectionPool.isEnabled(), is(true));
+            // the applied configuration must be exactly the bean that was sent
+            assertThat(newConnectionPool).usingRecursiveComparison().isEqualTo(pool);
         }
     }
 
     @Test
-    public void testPutConnectionPoolModifications() throws Exception {
+    void putConnectionPoolModifications() throws Exception {
         configureAndStartServer();
         try (final var client = new RawHttpClient("localhost", 8761)) {
             final var pool = buildConnectionPoolBean();
             pool.setId(DEFAULT_EXAMPLE_ORG);
             final var response = client.put(CONNECTION_POOLS_PATH + "/" + DEFAULT_EXAMPLE_ORG, null, pool, credentials);
-            assertThat(response.getStatusLine(), containsString(OK));
+            assertThat(response.getStatusLine()).contains(OK);
             final var config = server.getCurrentConfiguration();
-            assertThat(config.getConnectionPools().keySet(), is(Set.of(DEFAULT_EXAMPLE_ORG)));
+            assertThat(config.getConnectionPools()).containsOnlyKeys(DEFAULT_EXAMPLE_ORG);
             final var newConnectionPool = config.getConnectionPools().get(DEFAULT_EXAMPLE_ORG);
-            assertThat(newConnectionPool.getId(), is(DEFAULT_EXAMPLE_ORG));
-            assertThat(newConnectionPool.getDomain(), is(ALTERNATIVE_EXAMPLE_COM));
-            assertThat(newConnectionPool.getMaxConnectionsPerEndpoint(), is(MAX_CONNECTIONS_PER_ENDPOINT * 3));
-            assertThat(newConnectionPool.getBorrowTimeout(), is(BORROW_TIMEOUT));
-            assertThat(newConnectionPool.getConnectTimeout(), is(CONNECT_TIMEOUT));
-            assertThat(newConnectionPool.getStuckRequestTimeout(), is(STUCK_REQUEST_TIMEOUT));
-            assertThat(newConnectionPool.getIdleTimeout(), is(IDLE_TIMEOUT));
-            assertThat(newConnectionPool.getMaxLifeTime(), is(MAX_LIFE_TIME));
-            assertThat(newConnectionPool.getDisposeTimeout(), is(DISPOSE_TIMEOUT));
-            assertThat(newConnectionPool.getKeepaliveIdle(), is(KEEPALIVE_IDLE));
-            assertThat(newConnectionPool.getKeepaliveInterval(), is(KEEPALIVE_INTERVAL));
-            assertThat(newConnectionPool.getKeepaliveCount(), is(KEEPALIVE_COUNT));
-            assertThat(newConnectionPool.isKeepAlive(), is(true));
-            assertThat(newConnectionPool.isEnabled(), is(true));
+            // the applied configuration must be exactly the bean that was sent
+            assertThat(newConnectionPool).usingRecursiveComparison().isEqualTo(pool);
         }
     }
 
     @Test
-    public void testRegexDomainSurvivesSubsequentSaves() throws Exception {
+    void regexDomainSurvivesSubsequentSaves() throws Exception {
         configureAndStartServer();
         final var regexDomain = "(\\Qhost.example\\E|\\Qother.example\\E)";
         try (final var client = new RawHttpClient("localhost", 8761)) {
             final var pool = buildConnectionPoolBean();
             pool.setDomain(regexDomain);
             final var response = client.post(CONNECTION_POOLS_PATH, null, pool, credentials);
-            assertThat(response.getStatusLine(), containsString(CREATED));
-            assertThat(server.getCurrentConfiguration().getConnectionPools().get(ALTERNATIVE_EXAMPLE_COM).getDomain(), is(regexDomain));
+            assertThat(response.getStatusLine()).contains(CREATED);
+            assertThat(server.getCurrentConfiguration().getConnectionPools().get(ALTERNATIVE_EXAMPLE_COM).getDomain()).isEqualTo(regexDomain);
 
             // any further save re-serializes the whole configuration: the regex pool must not lose its backslashes
             final var otherPool = buildConnectionPoolBean();
             otherPool.setId(DEFAULT_EXAMPLE_ORG);
             final var putResponse = client.put(CONNECTION_POOLS_PATH + "/" + DEFAULT_EXAMPLE_ORG, null, otherPool, credentials);
-            assertThat(putResponse.getStatusLine(), containsString(OK));
+            assertThat(putResponse.getStatusLine()).contains(OK);
 
             final var result = client.get(CONNECTION_POOLS_PATH + "/" + ALTERNATIVE_EXAMPLE_COM, credentials);
-            final var resultBean = MAPPER.readValue(result.getBodyString(), ConnectionPoolsResource.ConnectionPoolBean.class);
-            assertThat(resultBean.getDomain(), is(regexDomain));
+            // only the domain matters here; it is a regex, so it is compared as a string and not parsed as JSON
+            assertThatJson(result.getBodyString()).node("domain").isString().isEqualTo(regexDomain);
         }
     }
 
     @Test
-    public void testDelete() throws Exception {
+    void delete() throws Exception {
         configureAndStartServer();
         try (final var client = new RawHttpClient("localhost", 8761)) {
             final var response = client.delete(CONNECTION_POOLS_PATH + "/" + DEFAULT_EXAMPLE_ORG, credentials);
-            assertThat(response.getStatusLine(), containsString(OK));
+            assertThat(response.getStatusLine()).contains(OK);
             final var config = server.getCurrentConfiguration();
-            assertThat(config.getConnectionPools().isEmpty(), is(true));
+            assertThat(config.getConnectionPools()).isEmpty();
         }
     }
 
@@ -246,7 +216,5 @@ public class ConnectionPoolsResourceIT extends UseAdminServer {
         return pool;
     }
 
-    private static class MapTypeReference extends TypeReference<Map<String, ConnectionPoolsResource.ConnectionPoolBean>> {
-    }
 
 }

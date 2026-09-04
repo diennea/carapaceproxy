@@ -26,7 +26,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -56,7 +56,7 @@ public class XForwardedForFilterIT {
     public File tmpDir;
 
     @Test
-    public void testXForwardedForFilter() throws Exception {
+    void xForwardedForFilter() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
                 .withHeader("X-Forwarded-For", equalTo("127.0.0.1"))
@@ -75,19 +75,19 @@ public class XForwardedForFilterIT {
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("it <b>works</b> !!"));
+                assertThat(s).contains("it <b>works</b> !!");
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nX-Forwarded-For: 1.2.3.4\r\nConnection: close\r\n\r\n").toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("it <b>works</b> !!"));
+                assertThat(s).contains("it <b>works</b> !!");
             }
         }
     }
 
     @Test
-    public void testNoXForwardedForFilter() throws Exception {
+    void noXForwardedForFilter() throws Exception {
 
         stubFor(
                 get(urlEqualTo("/index.html"))
@@ -114,12 +114,12 @@ public class XForwardedForFilterIT {
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nX-Forwarded-For: 1.2.3.4\r\nConnection: close\r\n\r\n").toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("it <b>works</b> !!"));
+                assertThat(s).contains("it <b>works</b> !!");
             }
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 String s = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("No X-Forwarded-For"));
+                assertThat(s).contains("No X-Forwarded-For");
             }
         }
     }

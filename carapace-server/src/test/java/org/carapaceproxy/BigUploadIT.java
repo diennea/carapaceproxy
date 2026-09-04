@@ -23,8 +23,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -62,21 +61,21 @@ public class BigUploadIT {
     private HttpProxyServer server;
 
     @BeforeEach
-    public void setUp() throws Exception {
+    void setUp() throws Exception {
         final TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
         server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir);
         server.start();
     }
 
     @AfterEach
-    public void tearDown() {
+    void tearDown() {
         if (server != null) {
             server.close();
         }
     }
 
     @Test
-    public void testProxyReturns503OnBackendConnectionDrop() {
+    void proxyReturns503OnBackendConnectionDrop() {
         wireMockRule.stubFor(post(urlEqualTo("/index.html"))
                 // backend server abruptly closes the connection while the client is sending a large upload
                 .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER).withFixedDelay(2000)));
@@ -93,8 +92,8 @@ public class BigUploadIT {
                 .assertNext(tuple -> {
                     final HttpClientResponse response = tuple.getT1();
                     final String body = tuple.getT2();
-                    assertEquals(503, response.status().code());
-                    assertTrue(body.contains("Service Unavailable"));
+                    assertThat(response.status().code()).isEqualTo(503);
+                    assertThat(body).contains("Service Unavailable");
                 })
                 .verifyComplete();
     }

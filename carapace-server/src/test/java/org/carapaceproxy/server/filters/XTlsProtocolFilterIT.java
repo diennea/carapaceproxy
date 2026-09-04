@@ -12,7 +12,7 @@ import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-public class XTlsProtocolFilterIT extends AbstractXTlsFilterTest {
+class XTlsProtocolFilterIT extends AbstractXTlsFilterTest {
 
     private void setupWireMockForProtocolFilter(WireMockServer wireMockRule) {
         wireMockRule.stubFor(get(urlEqualTo("/index.html"))
@@ -24,9 +24,9 @@ public class XTlsProtocolFilterIT extends AbstractXTlsFilterTest {
                 .willReturn(aResponse().withStatus(200).withBody("it <b>absent</b> !!")));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "http1={0}")
     @ValueSource(booleans = {true, false})
-    public void testHttpsWithFilter(boolean http1) throws Exception {
+    void httpsWithFilter(boolean http1) throws Exception {
         WireMockServer wireMockRule = newWireMock(http1);
         wireMockRule.start();
         try {
@@ -40,9 +40,9 @@ public class XTlsProtocolFilterIT extends AbstractXTlsFilterTest {
         }
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "http1={0}")
     @ValueSource(booleans = {true, false})
-    public void testHttpsWithoutFilter(boolean http1) throws Exception {
+    void httpsWithoutFilter(boolean http1) throws Exception {
         WireMockServer wireMockRule = newWireMock(http1);
         wireMockRule.start();
         try {
@@ -58,9 +58,9 @@ public class XTlsProtocolFilterIT extends AbstractXTlsFilterTest {
     // Plaintext filter behaviour (!isSecure() -> no header) is covered by the unit
     // XTlsProtocolRequestFilterTest; only the HTTPS cases that need a real TLS handshake stay here.
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "http1={0}")
     @ValueSource(booleans = {true, false})
-    public void testHttpWithoutFilter(boolean http1) throws Exception {
+    void httpWithoutFilter(boolean http1) throws Exception {
         WireMockServer wireMockRule = newWireMock(http1);
         wireMockRule.start();
         try {

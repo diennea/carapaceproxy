@@ -19,7 +19,7 @@
  */
 package org.carapaceproxy.server.certificates;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -60,13 +60,13 @@ class DynamicCertificatesManagerSchedulingTest {
         // With new period >0 the manager should run whether started before
         config.setDynamicCertificatesManagerPeriod(1);
         man.reloadConfiguration(config);
-        assertEquals(1, man.getPeriod());
+        assertThat(man.getPeriod()).isOne();
         verify(scheduler, times(1)).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)); // once
 
         man.stop();
         config.setDynamicCertificatesManagerPeriod(0);
         man.reloadConfiguration(config);
-        assertEquals(0, man.getPeriod());
+        assertThat(man.getPeriod()).isZero();
         man.start();
         verify(scheduler, times(1)).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)); // never
         man.stop();
@@ -74,7 +74,7 @@ class DynamicCertificatesManagerSchedulingTest {
         // With new period >0 the manager should not run because not started before.
         config.setDynamicCertificatesManagerPeriod(1);
         man.reloadConfiguration(config);
-        assertEquals(1, man.getPeriod());
+        assertThat(man.getPeriod()).isOne();
         verify(scheduler, times(1)).scheduleWithFixedDelay(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)); // never
 
         man.start();

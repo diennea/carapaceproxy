@@ -1,7 +1,7 @@
 package org.carapaceproxy.server.filters;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import java.io.File;
@@ -98,7 +98,7 @@ public abstract class AbstractXTlsFilterTest {
                         Connection: close\r
                         \r
                         """).toString();
-                assertThat(response, containsString(expected));
+                assertThat(response).contains(expected);
             }
         } else {
             try (HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_2).build()) {
@@ -106,7 +106,7 @@ public abstract class AbstractXTlsFilterTest {
                         HttpRequest.newBuilder().uri(URI.create((ssl ? "https" : "http") + "://localhost:" + port + "/index.html")).GET().build(),
                         HttpResponse.BodyHandlers.ofString()
                 );
-                assertThat(response.body(), containsString(expected));
+                assertThat(response.body()).contains(expected);
             }
         }
     }

@@ -19,17 +19,15 @@
  */
 package org.carapaceproxy.listeners;
 
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_FORWARDED_STRATEGY;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static reactor.netty.http.HttpProtocol.HTTP11;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
@@ -62,7 +60,7 @@ public class SSLSNIIT {
     public File tmpDir;
 
     @Test
-    public void testSelectCertWithoutSNI() throws Exception {
+    void selectCertWithoutSNI() throws Exception {
 
         String nonLocalhost = InetAddress.getLocalHost().getCanonicalHostName();
 
@@ -85,7 +83,7 @@ public class SSLSNIIT {
 
             try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-                assertTrue(resp.toString().contains("it <b>works</b> !!"));
+                assertThat(resp.toString()).contains("it <b>works</b> !!");
                 X509Certificate cert = (X509Certificate) client.getSSLSocket().getSession().getPeerCertificates()[0];
                 System.out.println("acert2: " + cert.getSerialNumber());
             }
@@ -93,7 +91,7 @@ public class SSLSNIIT {
     }
 
     @Test
-    public void testChooseCertificate() throws Exception {
+    void chooseCertificate() throws Exception {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir)) {
@@ -106,38 +104,38 @@ public class SSLSNIIT {
 
 
             // client requests bad SNI, bad default in listener
-            assertNull(chooseCert(server, "no", "no-default"));
+            assertThat(chooseCert(server, "no", "no-default")).isNull();
 
-            assertEquals("*.qatest.pexample.it", chooseCertId(server, "test2.qatest.pexample.it", "no-default"));
+            assertThat(chooseCertId(server, "test2.qatest.pexample.it", "no-default")).isEqualTo("*.qatest.pexample.it");
             // client requests SNI, bad default in listener
-            assertEquals("other", chooseCertId(server, "other", "no-default"));
+            assertThat(chooseCertId(server, "other", "no-default")).isEqualTo("other");
 
-            assertEquals("www.example.com", chooseCertId(server, "unkn-other", "www.example.com"));
+            assertThat(chooseCertId(server, "unkn-other", "www.example.com")).isEqualTo("www.example.com");
             // client without SNI
-            assertEquals("www.example.com", chooseCertId(server, null, "www.example.com"));
+            assertThat(chooseCertId(server, null, "www.example.com")).isEqualTo("www.example.com");
             // exact match
-            assertEquals("www.example.com", chooseCertId(server, "www.example.com", "no-default"));
+            assertThat(chooseCertId(server, "www.example.com", "no-default")).isEqualTo("www.example.com");
             // wildcard
-            assertEquals("*.example.com", chooseCertId(server, "test.example.com", "no-default"));
+            assertThat(chooseCertId(server, "test.example.com", "no-default")).isEqualTo("*.example.com");
             // san
-            assertEquals("*.example.com", chooseCertId(server, "example.com", "no-default"));
-            assertEquals("*.example.com", chooseCertId(server, "test.example2.com", "no-default"));
+            assertThat(chooseCertId(server, "example.com", "no-default")).isEqualTo("*.example.com");
+            assertThat(chooseCertId(server, "test.example2.com", "no-default")).isEqualTo("*.example.com");
 
             // full wildcard
             server.addCertificate(new SSLCertificateConfiguration("*", null, "cert", "pwd", STATIC));
             // full wildcard has not to hide more specific wildcard one
-            assertEquals("*.example.com", chooseCertId(server, "test.example.com", "no-default"));
+            assertThat(chooseCertId(server, "test.example.com", "no-default")).isEqualTo("*.example.com");
             // san
-            assertEquals("*.example.com", chooseCertId(server, "example.com", "no-default"));
-            assertEquals("*.example.com", chooseCertId(server, "test.example2.com", "no-default"));
+            assertThat(chooseCertId(server, "example.com", "no-default")).isEqualTo("*.example.com");
+            assertThat(chooseCertId(server, "test.example2.com", "no-default")).isEqualTo("*.example.com");
 
             // more specific wildcard
             server.addCertificate(new SSLCertificateConfiguration("*.test.example.com", null, "cert", "pwd", STATIC));
             // more specific wildcard has to hide less specific one (*.example.com)
-            assertEquals("*.test.example.com", chooseCertId(server, "pippo.test.example.com", "no-default"));
+            assertThat(chooseCertId(server, "pippo.test.example.com", "no-default")).isEqualTo("*.test.example.com");
             // san
-            assertEquals("*.example.com", chooseCertId(server, "example.com", "no-default"));
-            assertEquals("*.example.com", chooseCertId(server, "test.example2.com", "no-default"));
+            assertThat(chooseCertId(server, "example.com", "no-default")).isEqualTo("*.example.com");
+            assertThat(chooseCertId(server, "test.example2.com", "no-default")).isEqualTo("*.example.com");
         }
 
         try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir)) {
@@ -145,11 +143,11 @@ public class SSLSNIIT {
             // full wildcard
             server.addCertificate(new SSLCertificateConfiguration("*", null, "cert", "pwd", STATIC));
 
-            assertEquals("*", chooseCertId(server, null, "www.example.com"));
-            assertEquals("*", chooseCertId(server, "www.example.com", null));
-            assertEquals("*", chooseCertId(server, null, null));
-            assertEquals("*", chooseCertId(server, "", null));
-            assertEquals("*", chooseCertId(server, null, ""));
+            assertThat(chooseCertId(server, null, "www.example.com")).isEqualTo("*");
+            assertThat(chooseCertId(server, "www.example.com", null)).isEqualTo("*");
+            assertThat(chooseCertId(server, null, null)).isEqualTo("*");
+            assertThat(chooseCertId(server, "", null)).isEqualTo("*");
+            assertThat(chooseCertId(server, null, "")).isEqualTo("*");
         }
     }
 
@@ -159,12 +157,11 @@ public class SSLSNIIT {
 
     private static String chooseCertId(final HttpProxyServer server, final String sniHostname, final String defaultCertificate) {
         final var certificate = chooseCert(server, sniHostname, defaultCertificate);
-        assertNotNull(certificate);
         return certificate.getId();
     }
 
     @Test
-    public void testTLSVersion() throws Exception {
+    void tlsVersion() throws Exception {
         String nonLocalhost = InetAddress.getLocalHost().getCanonicalHostName();
         String certificate = TestUtils.deployResource("localhost.p12", tmpDir);
         stubFor(get(urlEqualTo("/index.html"))
@@ -185,9 +182,9 @@ public class SSLSNIIT {
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-                assertTrue(resp.toString().contains("it <b>works</b> !!"));
+                assertThat(resp.toString()).contains("it <b>works</b> !!");
                 SSLSession session = client.getSSLSocket().getSession();
-                assertEquals("TLSv1.3", session.getProtocol());
+                assertThat(session.getProtocol()).isEqualTo("TLSv1.3");
             }
         }
 
@@ -201,9 +198,9 @@ public class SSLSNIIT {
                 int port = server.getLocalPort();
                 try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
                     RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-                    assertTrue(resp.toString().contains("it <b>works</b> !!"));
+                    assertThat(resp.toString()).contains("it <b>works</b> !!");
                     SSLSession session = client.getSSLSocket().getSession();
-                    assertEquals(proto, session.getProtocol());
+                    assertThat(session.getProtocol()).isEqualTo(proto);
                 }
             }
         }
@@ -216,14 +213,14 @@ public class SSLSNIIT {
             int port = server.getLocalPort();
             try (RawHttpClient client = new RawHttpClient(nonLocalhost, port, true, nonLocalhost)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-                assertTrue(resp.toString().contains("it <b>works</b> !!"));
+                assertThat(resp.toString()).contains("it <b>works</b> !!");
                 SSLSession session = client.getSSLSocket().getSession();
-                assertTrue(DEFAULT_SSL_PROTOCOLS.contains(session.getProtocol()));
+                assertThat(DEFAULT_SSL_PROTOCOLS).contains(session.getProtocol());
             }
         }
 
         // wrong ssl protocol version checking
-        TestUtils.assertThrows(ConfigurationNotValidException.class, () -> {
+        assertThatExceptionOfType(ConfigurationNotValidException.class).isThrownBy(() -> {
             try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir)) {
                 server.addCertificate(new SSLCertificateConfiguration(nonLocalhost, null, certificate, "testproxy", STATIC));
                 server.addListener(new NetworkListenerConfiguration(nonLocalhost, 0, true, null, nonLocalhost, Set.of("TLSvWRONG"),

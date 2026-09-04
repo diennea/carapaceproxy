@@ -22,10 +22,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import java.io.File;
@@ -53,7 +51,7 @@ public class HealthCheckHttpsIT {
     public File tmpDir;
 
     @Test
-    public void httpsProbe_withPrivateCA_succeeds() throws Exception {
+    void httpsProbe_withPrivateCA_succeeds() throws Exception {
         final String backendKeystoreAbsolutePath = TestUtils.deployResource("ca.p12", tmpDir);
 
         final WireMockConfiguration wm = options()
@@ -96,19 +94,18 @@ public class HealthCheckHttpsIT {
 
             final Map<EndpointKey, BackendHealthStatus> snapshot = hman.getBackendsSnapshot();
             final BackendHealthStatus status = snapshot.get(bconf.hostPort());
-            assertThat(status, is(not(nullValue())));
+            assertThat(status).isNotNull();
 
             final BackendHealthCheck lastProbe = status.getLastProbe();
-            assertThat(lastProbe, is(not(nullValue())));
-            assertThat("HTTPS health check with CA must succeed", lastProbe.ok(), is(true));
-            assertThat(lastProbe.httpResponse(), is("200 OK"));
+            assertThat(lastProbe.ok()).as("HTTPS health check with CA must succeed").isTrue();
+            assertThat(lastProbe.httpResponse()).isEqualTo("200 OK");
         } finally {
             httpsBackend.stop();
         }
     }
 
     @Test
-    public void httpsProbe_withoutCA_againstPrivateCert_fails() throws Exception {
+    void httpsProbe_withoutCA_againstPrivateCert_fails() throws Exception {
         final String backendKeystoreAbsolutePath = TestUtils.deployResource("ca.p12", tmpDir);
 
         final WireMockConfiguration wm = options()
@@ -150,12 +147,12 @@ public class HealthCheckHttpsIT {
 
             final Map<EndpointKey, BackendHealthStatus> snapshot = hman.getBackendsSnapshot();
             final BackendHealthStatus status = snapshot.get(bconf.hostPort());
-            assertThat(status, is(not(nullValue())));
+            assertThat(status).isNotNull();
 
             final BackendHealthCheck lastProbe = status.getLastProbe();
-            assertThat(lastProbe, is(not(nullValue())));
+            assertThat(lastProbe).isNotNull();
             // With private CA and no truststore configured, probe should fail at connection/trust layer
-            assertThat("HTTPS health check without CA must fail", lastProbe.ok(), is(false));
+            assertThat(lastProbe.ok()).as("HTTPS health check without CA must fail").isFalse();
         } finally {
             httpsBackend.stop();
         }
