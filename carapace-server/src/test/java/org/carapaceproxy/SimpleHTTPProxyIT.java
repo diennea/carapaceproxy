@@ -35,12 +35,10 @@ import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.util.concurrent.DefaultEventExecutor;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import java.util.Set;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.core.EndpointKey;
@@ -48,6 +46,7 @@ import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.HttpTestUtils;
+import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
 import org.junit.jupiter.api.io.TempDir;
@@ -136,9 +135,9 @@ public class SimpleHTTPProxyIT {
             server.start();
             int port = server.getLocalPort();
 
-            HttpTestUtils.ResourceInfos result = HttpTestUtils.downloadFromUrl(URI.create("http://localhost:" + port + "/index.html").toURL(),
-                    new ByteArrayOutputStream(), Collections.singletonMap("return_errors", "true"));
-            assertThat(result.responseCode).isEqualTo(503);
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                assertThat(client.get("/index.html").getStatusLine()).startsWith("HTTP/1.1 503");
+            }
         }
     }
 
