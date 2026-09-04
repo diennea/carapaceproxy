@@ -28,7 +28,6 @@ import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.KeyStoreRule;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -144,8 +143,6 @@ public class HttpProtocolAndSSLIT {
                                 + ".lorem-css { content: \"" + BIG_PAYLOAD + "\"; }\n")));
 
         final int backendPort = scenario.proxyToBackendTls ? backendRule.httpsPort() : backendRule.port();
-        final int carapaceProxyPort = TestUtils.getFreePort();
-
         final TestEndpointMapper endpointMapper = getMapper(scenario, backendPort);
         try (final HttpProxyServer server = new HttpProxyServer(endpointMapper, newFolder(temporaryFolder, "junit"))) {
             final NetworkListenerConfiguration listenerConfiguration;
@@ -160,19 +157,20 @@ public class HttpProtocolAndSSLIT {
                 server.addCertificate(certificateConfiguration);
                 listenerConfiguration = NetworkListenerConfiguration.withDefaultSsl(
                         "localhost",
-                        carapaceProxyPort,
+                        0, // bind on an ephemeral port and read it back, so no other process can take it first
                         certificateConfiguration.getId(),
                         scenario.proxyProtocols
                 );
             } else {
                 listenerConfiguration = NetworkListenerConfiguration.withoutSsl(
                         "localhost",
-                        carapaceProxyPort,
+                        0,
                         scenario.proxyProtocols
                 );
             }
             server.addListener(listenerConfiguration);
             server.start();
+            final int carapaceProxyPort = server.getLocalPort();
 
             final HttpClient client = buildClient(scenario, carapaceProxyPort, channelIdRef, allSameConnection);
 

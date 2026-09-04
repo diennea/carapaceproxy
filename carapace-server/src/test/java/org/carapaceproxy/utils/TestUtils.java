@@ -19,7 +19,6 @@
  */
 package org.carapaceproxy.utils;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
 import java.io.File;
@@ -86,11 +85,17 @@ public class TestUtils {
         }
     }
 
-    public static int getFreePort() throws IOException {
-        try (ServerSocket s = new ServerSocket(0);) {
-            System.out.println("Got free ephemeral port " + s.getLocalPort());
-            assertThat(s.getLocalPort()).isPositive();
-            return s.getLocalPort();
+    /**
+     * Binds an ephemeral port and releases it at once, so the number is known to be unused right now.
+     * Nothing stops another process from taking it before the caller does: whoever can bind port 0 and
+     * read the port back should do that instead, and this is only for a port that must stay closed.
+     *
+     * @return a port number nobody was listening on a moment ago
+     * @throws IOException if no port could be bound
+     */
+    public static int getUnusedPort() throws IOException {
+        try (ServerSocket socket = new ServerSocket(0)) {
+            return socket.getLocalPort();
         }
     }
 

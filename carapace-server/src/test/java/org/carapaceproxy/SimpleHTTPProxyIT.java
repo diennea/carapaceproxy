@@ -127,7 +127,7 @@ public class SimpleHTTPProxyIT {
     @Test
     void endpointDown() throws Exception {
 
-        int badPort = TestUtils.getFreePort();
+        int badPort = TestUtils.getUnusedPort();
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", badPort);
         EndpointKey key = new EndpointKey("localhost", badPort);

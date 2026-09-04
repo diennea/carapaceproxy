@@ -124,7 +124,7 @@ public class MetricsEndpointsIT extends UseAdminServer {
                         .withHeader("Content-Type", "text/html")
                         .withBody("it <b>works</b> !!")));
 
-        final int listenerPort = TestUtils.getFreePort();
+        final int listenerPort = TestUtils.getUnusedPort();
         final Properties config = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         startServer(config);
 
