@@ -24,7 +24,6 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
-import static org.carapaceproxy.utils.TestUtils.assertEqualsKey;
 
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
@@ -275,20 +274,20 @@ public class ConfigurationStoreIT {
 
         // KeyPairs loading
         KeyPair loadedPair = store.loadAcmeUserKeyPair(DEFAULT_PROVIDER_NAME);
-        assertEqualsKey(acmePair.getPrivate(), loadedPair.getPrivate());
-        assertEqualsKey(acmePair.getPublic(), loadedPair.getPublic());
+        assertThat(loadedPair.getPrivate().getEncoded()).isEqualTo(acmePair.getPrivate().getEncoded());
+        assertThat(loadedPair.getPublic().getEncoded()).isEqualTo(acmePair.getPublic().getEncoded());
 
         loadedPair = store.loadAcmeUserKeyPair("customprovider");
-        assertEqualsKey(customProviderPair.getPrivate(), loadedPair.getPrivate());
-        assertEqualsKey(customProviderPair.getPublic(), loadedPair.getPublic());
+        assertThat(loadedPair.getPrivate().getEncoded()).isEqualTo(customProviderPair.getPrivate().getEncoded());
+        assertThat(loadedPair.getPublic().getEncoded()).isEqualTo(customProviderPair.getPublic().getEncoded());
 
         loadedPair = store.loadKeyPairForDomain(d1);
-        assertEqualsKey(domain1Pair.getPrivate(), loadedPair.getPrivate());
-        assertEqualsKey(domain1Pair.getPublic(), loadedPair.getPublic());
+        assertThat(loadedPair.getPrivate().getEncoded()).isEqualTo(domain1Pair.getPrivate().getEncoded());
+        assertThat(loadedPair.getPublic().getEncoded()).isEqualTo(domain1Pair.getPublic().getEncoded());
 
         loadedPair = store.loadKeyPairForDomain(d2);
-        assertEqualsKey(domain2Pair.getPrivate(), loadedPair.getPrivate());
-        assertEqualsKey(domain2Pair.getPublic(), loadedPair.getPublic());
+        assertThat(loadedPair.getPrivate().getEncoded()).isEqualTo(domain2Pair.getPrivate().getEncoded());
+        assertThat(loadedPair.getPublic().getEncoded()).isEqualTo(domain2Pair.getPublic().getEncoded());
     }
 
     private void testCertificateOperations() throws Exception {

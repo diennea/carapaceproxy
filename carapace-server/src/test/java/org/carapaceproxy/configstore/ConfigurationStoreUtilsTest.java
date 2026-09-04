@@ -33,7 +33,6 @@ import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64Encode
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeKey;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
-import static org.carapaceproxy.utils.TestUtils.assertEqualsKey;
 
 import org.shredzone.acme4j.util.KeyPairUtils;
 
@@ -54,8 +53,8 @@ class ConfigurationStoreUtilsTest {
         String _publicKey = base64EncodeKey(publicKey);
         System.out.println("Size of publicKey: " + _publicKey.length());
 
-        assertEqualsKey(privateKey, base64DecodePrivateKey(_privateKey));
-        assertEqualsKey(publicKey, base64DecodePublicKey(_publicKey));
+        assertThat(base64DecodePrivateKey(_privateKey).getEncoded()).isEqualTo(privateKey.getEncoded());
+        assertThat(base64DecodePublicKey(_publicKey).getEncoded()).isEqualTo(publicKey.getEncoded());
     }
 
     @Test

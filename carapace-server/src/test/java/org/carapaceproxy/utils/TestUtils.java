@@ -28,7 +28,6 @@ import java.io.InputStream;
 import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.Key;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
@@ -117,9 +116,5 @@ public class TestUtils {
             }
         }
         throw new IOException("no free port available in [" + MIN_PORT + ", " + MAX_PORT + ")");
-    }
-
-    public static void assertEqualsKey(Key key1, Key key2) {
-        assertThat(key2.getEncoded()).isEqualTo(key1.getEncoded());
     }
 }
