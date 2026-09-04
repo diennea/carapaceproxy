@@ -19,8 +19,10 @@
  */
 package org.carapaceproxy.cluster.impl;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.awaitility.Awaitility.await;
 
 import java.io.File;
 import java.lang.reflect.Field;
@@ -131,8 +133,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
                 });
 
                 peer1.fireEvent("foo", null);
-                TestUtils.waitForCondition(() -> eventFired2.get() >= 1, 100);
-                assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1);
+                await().atMost(100, SECONDS).untilAsserted(() -> assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1));
                 assertThat(dataRes2).isEmpty();
                 eventFired2.set(0);
 
@@ -142,8 +143,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
                         "list", List.of(1, 2),
                         "obj", new DummyObject(1, "s")
                 ));
-                TestUtils.waitForCondition(() -> eventFired2.get() >= 1, 100);
-                assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1);
+                await().atMost(100, SECONDS).untilAsserted(() -> assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1));
                 assertThat(((int) dataRes2.get("number"))).isOne();
                 assertThat(dataRes2).containsEntry("string", "mystring");
                 assertThat(((List<Integer>) dataRes2.get("list"))).containsExactly(1, 2);
@@ -174,12 +174,12 @@ public class ZooKeeperGroupMembershipHandlerIT {
                     });
 
                     peer1.fireEvent("foo", null);
-                    TestUtils.waitForCondition(() -> (eventFired2.get() >= 1
-                                && eventFired3.get() >= 1), 100);
-                    assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1);
+                    await().atMost(100, SECONDS).untilAsserted(() -> {
+                        assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1);
+                        assertThat(eventFired3.get()).isGreaterThanOrEqualTo(1);
+                    });
                     assertThat(dataRes2).isEmpty();
                     eventFired2.set(0);
-                    assertThat(eventFired3.get()).isGreaterThanOrEqualTo(1);
                     assertThat(dataRes3).isEmpty();
                     eventFired3.set(0);
 
@@ -189,9 +189,10 @@ public class ZooKeeperGroupMembershipHandlerIT {
                             "list", List.of("1", "2"),
                             "obj", new DummyObject(1, "s")
                     ));
-                    TestUtils.waitForCondition(() -> (eventFired2.get() >= 1
-                                && eventFired3.get() >= 1), 100);
-                    assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1);
+                    await().atMost(100, SECONDS).untilAsserted(() -> {
+                        assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1);
+                        assertThat(eventFired3.get()).isGreaterThanOrEqualTo(1);
+                    });
                     assertThat(((int) dataRes2.get("number"))).isOne();
                     assertThat(dataRes2).containsEntry("string", "mystring");
                     assertThat(((List<String>) dataRes2.get("list"))).containsExactly("1", "2");
@@ -308,7 +309,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
 
                 GroupMembershipHandler.RestoreSignal signal = peer1.raiseRestoreSignal();
                 signal.ensureHeld();
-                TestUtils.waitForCondition(() -> peer1.isRestoreInProgress() && peer2.isRestoreInProgress(), 10);
+                await().atMost(10, SECONDS).until(() -> peer1.isRestoreInProgress() && peer2.isRestoreInProgress());
                 assertThatExceptionOfType(ConfigurationChangeInProgressException.class).isThrownBy(peer2::raiseRestoreSignal)
                         .withMessageContaining("another restore is in progress");
                 assertThatExceptionOfType(ConfigurationChangeInProgressException.class).isThrownBy(peer1::raiseRestoreSignal)
@@ -318,7 +319,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
                 assertThatExceptionOfType(IllegalStateException.class).isThrownBy(signal::ensureHeld)
                         .withMessage("Restore signal lost by peer " + peerId1);
                 // the creator applied the restore itself: only the other peer reloads, before its flag drops
-                TestUtils.waitForCondition(() -> !peer1.isRestoreInProgress() && !peer2.isRestoreInProgress(), 10);
+                await().atMost(10, SECONDS).until(() -> !peer1.isRestoreInProgress() && !peer2.isRestoreInProgress());
                 assertThat(reloads1.get()).isZero();
                 assertThat(reloads2.get()).isOne();
                 assertThat(flagOnAtCallback.get()).isTrue();
@@ -329,35 +330,29 @@ public class ZooKeeperGroupMembershipHandlerIT {
                 try (GroupMembershipHandler.RestoreSignal second = peer1.raiseRestoreSignal()) {
                     second.ensureHeld();
                     // back to back, the other peer may never see the first signal: only the last one must reach it
-                    TestUtils.waitForCondition(peer2::isRestoreInProgress, 10);
+                    await().atMost(10, SECONDS).until(peer2::isRestoreInProgress);
                 }
-                TestUtils.waitForCondition(() -> reloads2.get() > reloadsBefore && !peer2.isRestoreInProgress(), 10);
+                await().atMost(10, SECONDS).until(() -> reloads2.get() > reloadsBefore && !peer2.isRestoreInProgress());
                 assertThat(reloads1.get()).isZero();
 
                 // the signal goes with the session of the node that raised it
                 final int reloadsBeforeExpiry = reloads2.get();
                 final GroupMembershipHandler.RestoreSignal lost = peer1.raiseRestoreSignal();
-                TestUtils.waitForCondition(peer2::isRestoreInProgress, 10);
+                await().atMost(10, SECONDS).until(peer2::isRestoreInProgress);
                 KillSession.kill(zooKeeperOf(peer1));
-                TestUtils.waitForCondition(() -> reloads2.get() > reloadsBeforeExpiry && !peer2.isRestoreInProgress(), 30);
+                await().atMost(30, SECONDS).until(() -> reloads2.get() > reloadsBeforeExpiry && !peer2.isRestoreInProgress());
                 // the client learns about the expiry asynchronously
-                TestUtils.waitForCondition(() -> {
-                    try {
-                        lost.ensureHeld();
-                        return false;
-                    } catch (IllegalStateException expected) {
-                        return true;
-                    }
-                }, 30);
+                await().atMost(30, SECONDS).untilAsserted(() ->
+                        assertThatExceptionOfType(IllegalStateException.class).isThrownBy(lost::ensureHeld));
                 assertThat(reloads1.get()).isZero();
 
                 // the signal is free again; the stale handle of the first node never clears it
                 try (GroupMembershipHandler.RestoreSignal other = peer2.raiseRestoreSignal()) {
-                    TestUtils.waitForCondition(peer1::isRestoreInProgress, 10);
+                    await().atMost(10, SECONDS).until(peer1::isRestoreInProgress);
                     lost.close();
                     other.ensureHeld();
                 }
-                TestUtils.waitForCondition(() -> reloads1.get() == 1 && !peer1.isRestoreInProgress(), 10);
+                await().atMost(10, SECONDS).until(() -> reloads1.get() == 1 && !peer1.isRestoreInProgress());
                 // and its node can restore again
                 peer1.raiseRestoreSignal().close();
             }

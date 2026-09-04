@@ -24,7 +24,9 @@ import static com.github.tomakehurst.wiremock.client.WireMock.configureFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.carapaceproxy.server.backends.BackendHealthStatus.Status.COLD;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
@@ -41,7 +43,6 @@ import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
@@ -103,7 +104,7 @@ public class UnreachableBackendIT {
                         """);
             }
             assertThat(server.getBackendHealthManager().getBackendStatus(key).getStatus()).isSameAs(BackendHealthStatus.Status.DOWN);
-            TestUtils.waitForCondition(() -> ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get() == 0, 10);
+            await().atMost(10, SECONDS).untilAsserted(() -> assertThat(ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get()).isZero());
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get()).isZero();
         }
     }
@@ -162,7 +163,7 @@ public class UnreachableBackendIT {
                         """);
             }
             assertThat(server.getBackendHealthManager().getBackendStatus(key).getStatus()).isSameAs(COLD); // no troubles for new connections
-            TestUtils.waitForCondition(() -> ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get() == 0, 10);
+            await().atMost(10, SECONDS).untilAsserted(() -> assertThat(ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get()).isZero());
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get()).isZero();
         }
     }
@@ -196,7 +197,7 @@ public class UnreachableBackendIT {
                         """);
             }
             assertThat(server.getBackendHealthManager().getBackendStatus(key).getStatus()).isSameAs(COLD); // no troubles for new connections
-            TestUtils.waitForCondition(() -> ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get() == 0, 10);
+            await().atMost(10, SECONDS).untilAsserted(() -> assertThat(ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get()).isZero());
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get()).isZero();
         }
     }

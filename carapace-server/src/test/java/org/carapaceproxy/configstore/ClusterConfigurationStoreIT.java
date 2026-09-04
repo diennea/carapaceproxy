@@ -19,7 +19,9 @@
  */
 package org.carapaceproxy.configstore;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import java.io.File;
 import java.io.IOException;
@@ -114,14 +116,7 @@ public class ClusterConfigurationStoreIT {
             assertThat(expectedReplicaCount(zooKeeper, TABLESPACE)).isEqualTo(REPLICATION_FACTOR);
 
             // both replicas up: writable, once the follower has reported its state
-            TestUtils.waitForCondition(() -> {
-                try {
-                    store.checkWritable();
-                    return true;
-                } catch (StoreNotReadyException notYet) {
-                    return false;
-                }
-            }, 30);
+            await().atMost(30, SECONDS).ignoreException(StoreNotReadyException.class).untilAsserted(store::checkWritable);
             store.checkAnswering();
         }
     }

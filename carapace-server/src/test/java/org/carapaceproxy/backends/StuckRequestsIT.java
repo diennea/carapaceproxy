@@ -23,7 +23,9 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -38,7 +40,6 @@ import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import org.carapaceproxy.utils.RawHttpClient;
-import org.carapaceproxy.utils.TestUtils;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -119,7 +120,7 @@ public class StuckRequestsIT {
                         """);
             }
 
-            TestUtils.waitForCondition(() -> ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get() == 0, 10);
+            await().atMost(10, SECONDS).untilAsserted(() -> assertThat(ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get()).isZero());
             assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get()).isZero();
             assertThat((int) ProxyRequestsManager.STUCK_REQUESTS_COUNTER.get()).isGreaterThan(0);
 

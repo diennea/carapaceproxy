@@ -31,9 +31,10 @@ import javax.security.auth.login.Configuration;
 import org.apache.curator.test.InstanceSpec;
 import org.apache.curator.test.TestingServer;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
-import org.carapaceproxy.utils.TestUtils;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -116,14 +117,12 @@ public class ZookKeeperACLIT {
                 });
 
                 peer1.fireEvent("foo", null);
-                TestUtils.waitForCondition(() -> eventFired2.get() >= 1, 100);
-                assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1);
+                await().atMost(100, SECONDS).untilAsserted(() -> assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1));
                 assertThat(dataRes2).isEmpty();
                 eventFired2.set(0);
 
                 peer1.fireEvent("foo", Map.of("data", "mydata"));
-                TestUtils.waitForCondition(() -> eventFired2.get() >= 1, 100);
-                assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1);
+                await().atMost(100, SECONDS).untilAsserted(() -> assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1));
                 assertThat(dataRes2).containsEntry("data", "mydata");
                 eventFired2.set(0);
                 dataRes2.clear();
@@ -148,23 +147,23 @@ public class ZookKeeperACLIT {
                     });
 
                     peer1.fireEvent("foo", null);
-                    TestUtils.waitForCondition(() -> (eventFired2.get() >= 1
-                                && eventFired3.get() >= 1), 100);
-                    assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1);
+                    await().atMost(100, SECONDS).untilAsserted(() -> {
+                        assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1);
+                        assertThat(eventFired3.get()).isGreaterThanOrEqualTo(1);
+                    });
                     assertThat(dataRes2).isEmpty();
                     eventFired2.set(0);
-                    assertThat(eventFired3.get()).isGreaterThanOrEqualTo(1);
                     assertThat(dataRes3).isEmpty();
                     eventFired3.set(0);
 
                     peer1.fireEvent("foo", Map.of("data", "mydata"));
-                    TestUtils.waitForCondition(() -> (eventFired2.get() >= 1
-                                && eventFired3.get() >= 1), 100);
-                    assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1);
+                    await().atMost(100, SECONDS).untilAsserted(() -> {
+                        assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1);
+                        assertThat(eventFired3.get()).isGreaterThanOrEqualTo(1);
+                    });
                     assertThat(dataRes2).containsEntry("data", "mydata");
                     eventFired2.set(0);
                     dataRes2.clear();
-                    assertThat(eventFired3.get()).isGreaterThanOrEqualTo(1);
                     assertThat(dataRes3).containsEntry("data", "mydata");
                     eventFired3.set(0);
                     dataRes3.clear();

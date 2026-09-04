@@ -19,8 +19,6 @@
  */
 package org.carapaceproxy.utils;
 
-import static org.assertj.core.api.Assertions.fail;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -28,7 +26,6 @@ import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Set;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -44,41 +41,16 @@ public class TestUtils {
     private static final int MAX_PORT_ATTEMPTS = 50;
     private static final Set<Integer> HANDED_OUT_PORTS = ConcurrentHashMap.newKeySet();
 
-    private static final int WAIT_FOR_CONDITION_DEFAULT_WAIT_SECONDS = 20;
-
-    public static void waitForCondition(Callable<Boolean> condition, int seconds) throws Exception {
-        waitForCondition(condition, null, seconds);
-    }
-
-    public static void waitForCondition(Callable<Boolean> condition) throws Exception {
-        waitForCondition(condition, null, WAIT_FOR_CONDITION_DEFAULT_WAIT_SECONDS);
-    }
-
-    public static void waitForCondition(Callable<Boolean> condition, Callable<Void> callback, int seconds) throws Exception {
-        try {
-            long _start = System.currentTimeMillis();
-            long millis = seconds * 1000;
-            while (System.currentTimeMillis() - _start <= millis) {
-                if (condition.call()) {
-                    return;
-                }
-                if (callback != null) {
-                    callback.call();
-                }
-                Thread.sleep(100);
-            }
-        } catch (InterruptedException ee) {
-            fail("test interrupted!");
-            return;
-        } catch (Exception ee) {
-            fail("error while evalutaing condition:" + ee);
-            return;
-        }
-        fail("condition not met in time!");
-    }
-
+    /**
+     * Copies a classpath resource into the given directory, keeping its name.
+     *
+     * @param resource the resource to read from the context classloader
+     * @param tmpDir   the directory to copy it into
+     * @return the absolute path of the copy
+     * @throws IOException if the resource cannot be read or written
+     */
     public static String deployResource(String resource, File tmpDir) throws IOException {
-        try (InputStream in = Thread.currentThread().getContextClassLoader().getResourceAsStream(resource);) {
+        try (InputStream in = Thread.currentThread().getContextClassLoader().getResourceAsStream(resource)) {
             Path path = new File(tmpDir, resource).toPath();
             Files.copy(in, path);
             return path.toAbsolutePath().toString();

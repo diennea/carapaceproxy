@@ -19,10 +19,12 @@
  */
 package org.carapaceproxy.api;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static net.javacrumbs.jsonunit.assertj.JsonAssertions.json;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.awaitility.Awaitility.await;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
@@ -383,7 +385,7 @@ class StateBackupRestoreIT extends UseAdminServer {
                     }
                 });
                 // the restore waits a few seconds after raising its signal, well after its checks
-                TestUtils.waitForCondition(server::isRestoreInProgress, 10);
+                await().atMost(10, SECONDS).until(server::isRestoreInProgress);
                 assertThat(caFile.delete()).isTrue();
                 final HttpResponse resp = restoring.get(2, TimeUnit.MINUTES);
                 assertThat(resp.getStatusLine()).startsWith("HTTP/1.1 500");
@@ -401,7 +403,7 @@ class StateBackupRestoreIT extends UseAdminServer {
             }
             // a restore that applies clears the flag, through a reload of the stored state
             assertThat(restore(client, archive, null).isOk()).isTrue();
-            TestUtils.waitForCondition(() -> !server.isRestoreInProgress(), 30);
+            await().atMost(30, SECONDS).until(() -> !server.isRestoreInProgress());
         }
     }
 
@@ -423,7 +425,7 @@ class StateBackupRestoreIT extends UseAdminServer {
             assertRefused(client, edit(archive, json -> ((ObjectNode) json.get("config"))
                     .put("listener.9.port", "1234")
                     .put("listener.9.forwarded", "preserve")), null, "preserve");
-            TestUtils.waitForCondition(() -> !server.isRestoreInProgress(), 30);
+            await().atMost(30, SECONDS).until(() -> !server.isRestoreInProgress());
             assertThat(server.getBackendHealthManager().getPeriod()).isEqualTo(period);
         }
     }

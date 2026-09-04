@@ -19,8 +19,10 @@
  */
 package org.carapaceproxy;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.awaitility.Awaitility.await;
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChainData;
 
@@ -117,7 +119,7 @@ public class ClusterRestoreIT {
         node2 = startNode("node2", Files.createDirectory(tmpDir.toPath().resolve("node2")).toFile(), TestUtils.getFreeNonEphemeralPort() - port);
         // one cluster for both scenarios: the first leaves no file nor retry behind
         writeRefusedWhileThePeerWaitsToReload();
-        TestUtils.waitForCondition(() -> !node1.isRestoreInProgress() && !node2.isRestoreInProgress(), 30);
+        await().atMost(30, SECONDS).until(() -> !node1.isRestoreInProgress() && !node2.isRestoreInProgress());
         try (CuratorFramework client = CuratorFrameworkFactory.newClient(zooKeeper.getConnectString(), new RetryOneTime(100))) {
             client.start();
             assertThat(client.checkExists().forPath("/proxy/restore-in-progress")).isNull();
@@ -149,7 +151,7 @@ public class ClusterRestoreIT {
 
     private void writeRefusedWhileThePeerWaitsToReload() throws Exception {
         apply(node1, Map.of("healthmanager.period", "20"));
-        TestUtils.waitForCondition(() -> node2.getBackendHealthManager().getPeriod() == 20, 30);
+        await().atMost(30, SECONDS).until(() -> node2.getBackendHealthManager().getPeriod() == 20);
         final StoreSnapshot archive = withConfig(node1.backupState(), "healthmanager.period", "25");
 
         // a write on the peer that holds its configuration lock until released
@@ -182,14 +184,14 @@ public class ClusterRestoreIT {
             assertThat(entered.await(30, TimeUnit.SECONDS)).isTrue();
             assertThat(node1.restoreState(archive, null, null).ok()).isTrue();
             // the signal is gone: the reload on the peer waits for the lock held by the write
-            TestUtils.waitForCondition(ClusterRestoreIT::reloadWaitsForTheLock, 30);
+            await().atMost(30, SECONDS).until(ClusterRestoreIT::reloadWaitsForTheLock);
         } finally {
             release.countDown();
         }
         // the write is refused at its commit, after the reload was asked
         final ExecutionException refused = assertThatExceptionOfType(ExecutionException.class).isThrownBy(write::get).actual();
         assertThat(refused.getCause().getCause()).isInstanceOf(RestoreInProgressException.class);
-        TestUtils.waitForCondition(() -> !node2.isRestoreInProgress() && node2.getBackendHealthManager().getPeriod() == 25, 30);
+        await().atMost(30, SECONDS).until(() -> !node2.isRestoreInProgress() && node2.getBackendHealthManager().getPeriod() == 25);
     }
 
     private void peerMissingABackendCaReloadsOnceItArrives(int port) throws Exception {
@@ -203,7 +205,7 @@ public class ClusterRestoreIT {
                 // only the other peer writes the local certificate files
                 "dynamiccertificatesmanager.localcertificates.store.path", localStore.getAbsolutePath(),
                 "dynamiccertificatesmanager.localcertificates.peers.ids", "node2"));
-        TestUtils.waitForCondition(() -> node2.getBackendHealthManager().getPeriod() == 21, 30);
+        await().atMost(30, SECONDS).until(() -> node2.getBackendHealthManager().getPeriod() == 21);
         node1.updateDynamicCertificateForDomain(new CertificateData(DOMAIN, Base64.getEncoder().encodeToString(generateSampleChainData()),
                 DynamicCertificateState.AVAILABLE));
         node1.getDynamicConfigurationStore().saveKeyPairForDomain(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), DOMAIN, false);
@@ -224,15 +226,15 @@ public class ClusterRestoreIT {
         changed.put("healthmanager.period", "30");
         apply(node1, changed);
         // the configuration is swapped in last, after the listeners
-        TestUtils.waitForCondition(() -> node2.getCurrentConfiguration().getHealthProbePeriod() == 30
-                && node2.getListeners().getListeningChannels().size() == 1, 30);
+        await().atMost(30, SECONDS).until(() -> node2.getCurrentConfiguration().getHealthProbePeriod() == 30
+                && node2.getListeners().getListeningChannels().size() == 1);
         final ListeningChannel listening = node2.getListeners().getListeningChannels().values().iterator().next();
         final File fullChain = new File(new File(localStore, DOMAIN), "fullchain.pem");
         assertThat(fullChain).doesNotExist();
 
         assertThat(node1.restoreState(archive, null, null).ok()).isTrue();
         assertThat(node1.getBackendHealthManager().getPeriod()).isEqualTo(26);
-        TestUtils.waitForCondition(() -> !node1.isRestoreInProgress(), 30);
+        await().atMost(30, SECONDS).until(() -> !node1.isRestoreInProgress());
         // the apply would load the CA after restarting every listener: the peer checks first and touches nothing
         Thread.sleep(3_000);
         assertThat(node2.isRestoreInProgress()).isTrue();
@@ -241,7 +243,7 @@ public class ClusterRestoreIT {
 
         // the file arrives: the next retry, every 30 seconds, applies the restored state
         TestUtils.deployResource("ca.p12", new File(tmpDir, "node2"));
-        TestUtils.waitForCondition(() -> !node2.isRestoreInProgress() && node2.getBackendHealthManager().getPeriod() == 26, 90);
+        await().atMost(90, SECONDS).until(() -> !node2.isRestoreInProgress() && node2.getBackendHealthManager().getPeriod() == 26);
         assertThat(node2.getDynamicCertificatesManager().getCertificateDataForDomain(DOMAIN).getChain()).isEqualTo(backedUpChain);
         // the local files are rewritten after the reload, with the restored chain
         assertThat(fullChain).exists();

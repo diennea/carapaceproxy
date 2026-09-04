@@ -19,11 +19,13 @@
  */
 package org.carapaceproxy.server.cache;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -33,7 +35,6 @@ import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.HttpUtils;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -313,10 +314,10 @@ public class CacheExpireIT {
             assertThat(server.getCache().getCacheSize()).isOne();
             assertThat(server.getCache().getStats().getHits()).isZero();
             assertThat(server.getCache().getStats().getMisses()).isOne();
-            TestUtils.waitForCondition(() -> {
+            await().atMost(10, SECONDS).untilAsserted(() -> {
                 server.getCache().getInnerCache().evict();
-                return server.getCache().getCacheSize() == 0;
-            }, 10);
+                assertThat(server.getCache().getCacheSize()).isZero();
+            });
         }
     }
 

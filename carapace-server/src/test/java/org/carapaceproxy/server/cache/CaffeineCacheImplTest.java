@@ -19,7 +19,9 @@
  */
 package org.carapaceproxy.server.cache;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import io.netty.buffer.Unpooled;
@@ -30,7 +32,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import org.carapaceproxy.server.cache.ContentsCache.CachedContent;
 import org.carapaceproxy.server.cache.ContentsCache.ContentKey;
-import org.carapaceproxy.utils.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -149,10 +150,10 @@ public class CaffeineCacheImplTest {
         }
 
         if (expectedEvictions > 0) {
-            TestUtils.waitForCondition(() -> evictedResources.size() >= expectedEvictions, () -> {
+            await().atMost(10, SECONDS).untilAsserted(() -> {
                 cache.evict();
-                return null;
-            }, 10);
+                assertThat(evictedResources).hasSizeGreaterThanOrEqualTo(expectedEvictions);
+            });
         } else {
             cache.evict();
             Thread.sleep(1000);

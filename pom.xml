@@ -160,6 +160,7 @@
         <libs.objenesis>3.3</libs.objenesis>
         <libs.assertj>3.27.7</libs.assertj>
         <libs.jsonunit>6.2.0</libs.jsonunit>
+        <libs.awaitility>4.3.0</libs.awaitility>
     </properties>
 
     <dependencyManagement>
@@ -315,6 +316,11 @@
                 <groupId>net.javacrumbs.json-unit</groupId>
                 <artifactId>json-unit-assertj</artifactId>
                 <version>${libs.jsonunit}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.awaitility</groupId>
+                <artifactId>awaitility</artifactId>
+                <version>${libs.awaitility}</version>
             </dependency>
             <dependency>
                 <groupId>org.junit</groupId>

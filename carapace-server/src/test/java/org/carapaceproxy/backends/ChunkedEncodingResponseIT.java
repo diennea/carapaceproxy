@@ -24,7 +24,9 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_LENGTH;
 import static io.netty.handler.codec.http.HttpHeaderNames.TRANSFER_ENCODING;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -38,7 +40,6 @@ import org.apache.http.impl.client.HttpClients;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -190,7 +191,7 @@ public class ChunkedEncodingResponseIT {
                     HttpGet request = new HttpGet("http://localhost:" + port + "/index.html");
                     request.setProtocolVersion(httpVersion);
                     client.execute(request);
-                    TestUtils.waitForCondition(() -> server.getCache().getCacheSize() > 0, 10);
+                    await().atMost(10, SECONDS).untilAsserted(() -> assertThat(server.getCache().getCacheSize()).isPositive());
                 }
 
                 HttpGet request = new HttpGet("http://localhost:" + port + "/index.html");
