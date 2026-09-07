@@ -364,9 +364,11 @@ public class DynamicCertificatesManager implements Runnable {
                 LOG.warn("Restore in progress: certificates lifecycle pass interrupted before {}", domain);
                 break;
             }
+            CertificateData cert = null;
             try {
                 // this has to be always fetch from db!
-                CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, cached.getSubjectAltNames(), false, cached.getDaysBeforeRenewal());
+                cert = loadOrCreateDynamicCertificateForDomain(
+                        domain, cached.getSubjectAltNames(), false, cached.getDaysBeforeRenewal());
                 if (rateLimit > 0 && isAcmeStep(cert)) {
                     if (++requestedAcmeSteps > rateLimit) {
                         continue; // untouched, so the next run finds it in the same state
@@ -384,6 +386,16 @@ public class DynamicCertificatesManager implements Runnable {
             } catch (AcmeException | IOException | GeneralSecurityException | RuntimeException ex) {
                 // RuntimeException on purpose: an escaped one cancels the scheduled task, killing the whole loop
                 LOG.error("Error while handling dynamic certificate for domain {}", domain, ex);
+                if (cert != null && !AcmeFailureClassifier.isTransient(ex)) {
+                    cert.error(ex.getMessage() != null ? ex.getMessage() : ex.toString());
+                    try {
+                        store.saveCertificate(cert);
+                        flushCache = true;
+                    } catch (RuntimeException storeEx) {
+                        // same rationale as above: a db hiccup must not cancel the scheduled task
+                        LOG.error("Error while saving failed certificate for domain {}", domain, storeEx);
+                    }
+                }
             }
         }
         if (requestedAcmeSteps > rateLimit) {
@@ -429,14 +441,8 @@ public class DynamicCertificatesManager implements Runnable {
                 Order pendingOrder = acmeClient.getLogin().bindOrder(cert.getPendingOrderLocation());
                 // if the order is already valid, we have to skip finalization
                 if (pendingOrder.getStatus() != Status.VALID) {
-                    try {
-                        KeyPair keys = loadOrCreateKeyPairForDomain(domain);
-                        acmeClient.orderCertificate(pendingOrder, keys);
-                    } catch (AcmeException ex) { // order finalization failed
-                        LOG.error("Certificate order finalization for domain {} FAILED.", domain, ex);
-                        cert.error(ex.getMessage());
-                        return true;
-                    }
+                    KeyPair keys = loadOrCreateKeyPairForDomain(domain);
+                    acmeClient.orderCertificate(pendingOrder, keys);
                 }
                 cert.step(ORDERING);
             }
