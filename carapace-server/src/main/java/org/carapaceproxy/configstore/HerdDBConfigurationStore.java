@@ -27,7 +27,11 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import herddb.client.ClientConfiguration;
+import herddb.client.ClientSideMetadataProviderException;
+import herddb.client.HDBException;
+import herddb.jdbc.HerdDBConnection;
 import herddb.jdbc.HerdDBEmbeddedDataSource;
+import herddb.model.TableSpace;
 import herddb.security.SimpleSingleUserManager;
 import herddb.server.ServerConfiguration;
 import java.io.File;
@@ -156,8 +160,59 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
 
     public HerdDBConfigurationStore(ConfigurationStore staticConfiguration,
                                     boolean cluster, String zkAddress, File baseDir, StatsLogger statsLogger) {
+        String tableSpace = staticConfiguration.getProperty("db.tablespace", TableSpace.DEFAULT);
+        if (!tableSpace.matches("[A-Za-z0-9_]+")) {
+            throw new ConfigurationStoreException(new IllegalArgumentException("Invalid db.tablespace \"" + tableSpace + "\": only letters, digits and underscore are allowed"));
+        }
         this.datasource = buildDatasource(staticConfiguration, cluster, zkAddress, baseDir, statsLogger);
+        if (!TableSpace.DEFAULT.equals(tableSpace)) {
+            // a standalone node cannot replicate, whatever replication.factor says
+            int replicationFactor = cluster ? Integer.parseInt(staticConfiguration.getProperty("replication.factor", "1")) : 1;
+            ensureTableSpace(tableSpace, replicationFactor);
+            // from now on every connection borrowed from the datasource targets the custom tablespace
+            datasource.setDefaultSchema(tableSpace);
+        }
         loadCurrentConfiguration();
+    }
+
+    /**
+     * Makes sure that the given tablespace exists and is up, creating it if needed.
+     * The connection still targets the default tablespace, the only one HerdDB creates on its own.
+     *
+     * @param tableSpace        the tablespace name
+     * @param replicationFactor the expected replica count used when creating the tablespace
+     * @throws ConfigurationStoreException if the tablespace cannot be created or does not become available in time
+     */
+    private void ensureTableSpace(String tableSpace, int replicationFactor) {
+        try (Connection con = datasource.getConnection()) {
+            if (!tableSpaceExists(con, tableSpace)) {
+                LOG.log(Level.INFO, "Creating tablespace {0} with expectedreplicacount={1}", new Object[]{tableSpace, replicationFactor});
+                try (PreparedStatement ps = con.prepareStatement("CREATE TABLESPACE '" + tableSpace + "','expectedreplicacount:" + replicationFactor + "'")) {
+                    ps.executeUpdate();
+                } catch (SQLException err) {
+                    // another node of the cluster may have created it in the meantime
+                    if (!tableSpaceExists(con, tableSpace)) {
+                        throw err;
+                    }
+                }
+            }
+            boolean up = con.unwrap(HerdDBConnection.class).getConnection().waitForTableSpace(tableSpace, TIMEOUT_WAIT_FOR_TABLE_SPACE);
+            if (!up) {
+                throw new SQLException("Tablespace " + tableSpace + " not available after " + TIMEOUT_WAIT_FOR_TABLE_SPACE + " ms");
+            }
+        } catch (SQLException | HDBException | ClientSideMetadataProviderException err) {
+            LOG.log(Level.SEVERE, "Error while preparing tablespace " + tableSpace, err);
+            throw new ConfigurationStoreException(err);
+        }
+    }
+
+    private static boolean tableSpaceExists(Connection con, String tableSpace) throws SQLException {
+        try (PreparedStatement ps = con.prepareStatement("SELECT tablespace_name FROM systablespaces WHERE tablespace_name=?")) {
+            ps.setString(1, tableSpace);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        }
     }
 
     @Override
@@ -207,7 +262,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         HerdDBEmbeddedDataSource ds = new HerdDBEmbeddedDataSource(props);
         ds.setStatsLogger(statsLogger);
         if (cluster) {
-            ds.setWaitForTableSpace("herd");
+            ds.setWaitForTableSpace(TableSpace.DEFAULT);
             ds.setWaitForTableSpaceTimeout(TIMEOUT_WAIT_FOR_TABLE_SPACE);
             ds.setStartServer(true);
         }

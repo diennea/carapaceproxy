@@ -357,6 +357,28 @@ public class ConfigurationStoreTest {
         checkConfiguration();
     }
 
+    @Test
+    public void testCustomTablespace() throws ConfigurationNotValidException {
+        Properties props = new Properties();
+        props.setProperty("db.tablespace", "carapace_test");
+        props.setProperty("certificate.0.hostname", d1);
+        PropertiesConfigurationStore propertiesConfigurationStore = new PropertiesConfigurationStore(props);
+
+        store = new HerdDBConfigurationStore(propertiesConfigurationStore, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
+        store.commitConfiguration(propertiesConfigurationStore);
+        assertEquals(d1, store.getProperty("certificate.0.hostname", ""));
+        store.close();
+
+        // the tablespace already exists: only reopened, data still there
+        store = new HerdDBConfigurationStore(propertiesConfigurationStore, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
+        assertEquals(d1, store.getProperty("certificate.0.hostname", ""));
+        store.close();
+
+        // the default tablespace never saw that configuration
+        store = new HerdDBConfigurationStore(new PropertiesConfigurationStore(new Properties()), false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
+        assertEquals("", store.getProperty("certificate.0.hostname", ""));
+    }
+
     private void checkConfiguration() {
         // check new configuration has been applied successfully
         assertEquals("", store.getProperty("certificate.0.hostname", ""));
