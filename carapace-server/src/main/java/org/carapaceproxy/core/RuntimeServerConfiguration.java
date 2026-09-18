@@ -359,8 +359,7 @@ public class RuntimeServerConfiguration {
                 );
             }
             try {
-                // acme4j accepts both https directory URLs and acme: provider URIs (e.g. acme://pebble)
-                // acme4j resolves providers by exact scheme match, so no case-insensitive comparison here
+                // acme4j takes https directory URLs and acme: URIs (e.g. acme://pebble), matching the scheme exactly
                 final var scheme = new URI(url).getScheme();
                 if (!"https".equals(scheme) && !"acme".equals(scheme)) {
                     throw new ConfigurationNotValidException(
@@ -426,7 +425,7 @@ public class RuntimeServerConfiguration {
                     this.addCertificate(config);
                 } catch (IllegalArgumentException e) {
                     throw new ConfigurationNotValidException(
-                            "Invalid value of '" + mode + "' for " + prefix + "mode. Supperted ones: static, acme, manual"
+                            "Invalid value of '" + mode + "' for " + prefix + "mode. Supported ones: static, acme, manual"
                     );
                 }
             }
