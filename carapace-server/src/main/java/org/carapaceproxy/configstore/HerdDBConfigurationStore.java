@@ -27,8 +27,13 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import herddb.client.ClientConfiguration;
+import herddb.client.ClientSideMetadataProviderException;
+import herddb.client.HDBConnection;
+import herddb.client.HDBException;
 import herddb.jdbc.BasicHerdDBDataSource;
+import herddb.jdbc.HerdDBConnection;
 import herddb.jdbc.HerdDBEmbeddedDataSource;
+import herddb.model.TableSpace;
 import herddb.security.SimpleSingleUserManager;
 import herddb.server.ServerConfiguration;
 import java.io.File;
@@ -49,9 +54,11 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.utils.StringUtils;
 import org.shredzone.acme4j.toolbox.JSON;
 import org.slf4j.Logger;
@@ -129,6 +136,13 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     private static final String DELETE_FROM_ACME_CHALLENGE_TOKENS_TABLE =
             "DELETE FROM " + ACME_CHALLENGE_TOKENS_TABLE_NAME + " WHERE id=?";
 
+    private static final String TABLESPACE_PROPERTY = "db.tablespace";
+    private static final Pattern VALID_TABLESPACE_NAME = Pattern.compile("[A-Za-z0-9_]+");
+    // CREATE TABLESPACE takes no bind parameter, hence the interpolation of the already validated name
+    private static final String CREATE_TABLESPACE = "CREATE TABLESPACE '%s','expectedreplicacount:%d'";
+    private static final String SELECT_FROM_TABLESPACES_TABLE =
+            "SELECT tablespace_name FROM systablespaces WHERE tablespace_name=?";
+
     private static final Logger LOG = LoggerFactory.getLogger(HerdDBConfigurationStore.class);
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -138,8 +152,85 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
 
     public HerdDBConfigurationStore(ConfigurationStore staticConfiguration,
                                     boolean cluster, String zkAddress, File baseDir, StatsLogger statsLogger) {
+        String tableSpace = staticConfiguration.getProperty(TABLESPACE_PROPERTY, TableSpace.DEFAULT).trim();
+        if (!VALID_TABLESPACE_NAME.matcher(tableSpace).matches()) {
+            throw new ConfigurationStoreException(new IllegalArgumentException(
+                    "Invalid " + TABLESPACE_PROPERTY + " \"" + tableSpace + "\": "
+                    + "only letters, digits and underscore are allowed"
+            ));
+        }
         this.datasource = buildDatasource(staticConfiguration, cluster, zkAddress, baseDir, statsLogger);
-        loadCurrentConfiguration();
+        try {
+            // HerdDB lowercases the name to look it up, so the default tablespace answers to any spelling
+            if (!TableSpace.DEFAULT.equalsIgnoreCase(tableSpace)) {
+                // a standalone node cannot replicate, whatever replication.factor says
+                ensureTableSpace(tableSpace, cluster ? replicationFactor(staticConfiguration) : 1);
+                datasource.setDefaultSchema(tableSpace);
+            }
+            loadCurrentConfiguration();
+        } catch (RuntimeException err) {
+            try {
+                datasource.close();
+            } catch (RuntimeException closeErr) {
+                err.addSuppressed(closeErr);
+            }
+            throw err;
+        }
+    }
+
+    /**
+     * Reads the expected replica count for the cluster.
+     *
+     * @param staticConfiguration the static configuration
+     * @return the value of {@code replication.factor}, 1 by default
+     * @throws ConfigurationStoreException if the value is not a number
+     */
+    private static int replicationFactor(ConfigurationStore staticConfiguration) {
+        try {
+            return staticConfiguration.getInt("replication.factor", 1);
+        } catch (ConfigurationNotValidException err) {
+            throw new ConfigurationStoreException(err);
+        }
+    }
+
+    /**
+     * Makes sure that the given tablespace exists and is up, creating it if needed.
+     * <br>
+     * The connection used here still targets the default tablespace, the only one HerdDB creates on its own.
+     *
+     * @param tableSpace  the tablespace name, already validated
+     * @param replication the expected replica count used when creating the tablespace
+     * @throws ConfigurationStoreException if the tablespace cannot be created or does not become available in time
+     */
+    private void ensureTableSpace(String tableSpace, int replication) {
+        try (Connection con = datasource.getConnection()) {
+            try (PreparedStatement ps = con.prepareStatement(CREATE_TABLESPACE.formatted(tableSpace, replication))) {
+                ps.executeUpdate();
+                LOG.info("Created tablespace {} with expectedreplicacount={}", tableSpace, replication);
+            } catch (SQLException err) {
+                // it may already be there, from a previous boot or from another node
+                boolean exists = false;
+                try (PreparedStatement ps = con.prepareStatement(SELECT_FROM_TABLESPACES_TABLE)) {
+                    ps.setString(1, tableSpace);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        exists = rs.next();
+                    }
+                } catch (SQLException lookupErr) {
+                    err.addSuppressed(lookupErr);
+                }
+                if (!exists) {
+                    throw err;
+                }
+            }
+            final HDBConnection hdbConnection = con.unwrap(HerdDBConnection.class).getConnection();
+            if (!hdbConnection.waitForTableSpace(tableSpace, TABLESPACE_TIMEOUT)) {
+                throw new SQLException("Tablespace " + tableSpace
+                        + " not available after " + TABLESPACE_TIMEOUT + " ms");
+            }
+        } catch (SQLException | HDBException | ClientSideMetadataProviderException err) {
+            LOG.error("Error while preparing tablespace {}", tableSpace, err);
+            throw new ConfigurationStoreException(err);
+        }
     }
 
     @Override
@@ -166,7 +257,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         Properties props = new Properties();
 
         if (cluster) {
-            int replicationFactor = Integer.parseInt(staticConfiguration.getProperty("replication.factor", "1"));
+            int replicationFactor = replicationFactor(staticConfiguration);
             props.setProperty(ServerConfiguration.PROPERTY_MODE, ServerConfiguration.PROPERTY_MODE_CLUSTER);
             props.setProperty(ServerConfiguration.PROPERTY_ZOOKEEPER_ADDRESS, zkAddress);
             props.setProperty(ServerConfiguration.PROPERTY_BOOKKEEPER_START, "true");
@@ -189,7 +280,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         HerdDBEmbeddedDataSource ds = new HerdDBEmbeddedDataSource(props);
         ds.setStatsLogger(statsLogger);
         if (cluster) {
-            ds.setWaitForTableSpace("herd");
+            ds.setWaitForTableSpace(TableSpace.DEFAULT);
             ds.setWaitForTableSpaceTimeout(TABLESPACE_TIMEOUT);
             ds.setStartServer(true);
         }
