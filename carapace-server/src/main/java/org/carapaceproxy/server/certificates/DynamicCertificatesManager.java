@@ -50,6 +50,7 @@ import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -283,19 +284,17 @@ public class DynamicCertificatesManager implements Runnable {
 
     private void certificatesLifecycle() {
         var flushCache = false;
-        List<CertificateData> _certificates = certificates.entrySet().stream()
-                .filter(e -> !e.getValue().isManual())
-                .sorted(Entry.comparingByKey())
-                .map(Entry::getValue)
+        final var rateLimit = getConfig().getDynamicCertificatesManagerRateLimit();
+        final var scheduled = certificates.values().stream()
+                .filter(not(CertificateData::isManual))
+                .sorted(Comparator.comparing(CertificateData::getDomain))
                 .toList();
-        final int rateLimit = getConfig().getDynamicCertificatesManagerRateLimit();
         int acmeSteps = 0;
-        for (CertificateData data : _certificates) {
-            var updateCertificate = true;
-            final var domain = data.getDomain();
+        for (final CertificateData cached : scheduled) {
+            final var domain = cached.getDomain();
             try {
                 // this has to be always fetch from db!
-                CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, data.getSubjectAltNames(), false, data.getDaysBeforeRenewal());
+                CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, cached.getSubjectAltNames(), false, cached.getDaysBeforeRenewal());
                 if (isAcmeStep(cert)) {
                     // domains are sorted, so the first N take the slots and the window slides as they become AVAILABLE
                     if (rateLimit > 0 && acmeSteps >= rateLimit) {
@@ -304,75 +303,7 @@ public class DynamicCertificatesManager implements Runnable {
                     }
                     acmeSteps++;
                 }
-                switch (cert.getState()) {
-                    // certificate waiting to be issues/renew
-                    case WAITING -> startCertificateProcessing(domain, cert);
-                    // certificate domain reported as unreachable for issuing/renewing
-                    case DOMAIN_UNREACHABLE -> {
-                        if (cert.getAttemptsCount() <= getConfig().getMaxAttempts()) {
-                            startCertificateProcessing(domain, cert);
-                        }
-                    }
-                    // waiting for dns propagation for all dns challenges
-                    case DNS_CHALLENGE_WAIT -> checkDnsChallengesReachabilityForCertificate(cert);
-                    // challenges verification by LE pending
-                    case VERIFYING -> checkChallengesResponsesForCertificate(cert);
-                    // challenge succeeded
-                    case VERIFIED -> {
-                        LOG.info("Certificate for domain {} VERIFIED.", domain);
-                        Order pendingOrder = acmeClient.getLogin().bindOrder(cert.getPendingOrderLocation());
-                        // if the order is already valid, we have to skip finalization
-                        if (pendingOrder.getStatus() != Status.VALID) {
-                            try {
-                                KeyPair keys = loadOrCreateKeyPairForDomain(domain);
-                                acmeClient.orderCertificate(pendingOrder, keys);
-                            } catch (AcmeException ex) { // order finalization failed
-                                LOG.error("Certificate order finalization for domain {} FAILED.", domain, ex);
-                                cert.error(ex.getMessage());
-                                break;
-                            }
-                        }
-                        cert.step(ORDERING);
-                    }
-                    // certificate ordering
-                    case ORDERING -> {
-                        LOG.info("ORDERING certificate for domain {}.", domain);
-                        Order order = acmeClient.getLogin().bindOrder(cert.getPendingOrderLocation());
-                        Status status = acmeClient.checkResponseForOrder(order);
-                        if (status == Status.VALID) {
-                            List<X509Certificate> certificateChain = acmeClient.fetchCertificateForOrder(order).getCertificateChain();
-                            PrivateKey key = loadOrCreateKeyPairForDomain(domain).getPrivate();
-                            String chain = base64EncodeCertificateChain(certificateChain.toArray(new Certificate[0]), key);
-                            cert.setChain(chain);
-                            cert.success(AVAILABLE);
-                            LOG.info("Certificate issuing for domain: {} SUCCEED. Certificate AVAILABLE.", domain);
-                        } else if (status == Status.INVALID) {
-                            cert.error("Order status for certificate is " + status);
-                        }
-                    }
-                    // challenge/order failed
-                    case REQUEST_FAILED -> {
-                        if (cert.getAttemptsCount() <= getConfig().getMaxAttempts()){
-                            LOG.info("Certificate issuing for domain: {} current status is FAILED, setting status=WAITING again.", domain);
-                            cert.step(WAITING);
-                        }
-                    }
-                    // certificate saved/available/not expired
-                    case AVAILABLE -> {
-                        if (isCertificateExpired(cert.getExpiringDate(), cert.getDaysBeforeRenewal())) {
-                            cert.step(EXPIRED);
-                        } else {
-                            updateCertificate = false;
-                        }
-                    }
-                    // certificate expired
-                    case EXPIRED -> {
-                        LOG.info("Certificate for domain: {} EXPIRED.", domain);
-                        cert.step(WAITING);
-                    }
-                    default -> throw new IllegalStateException();
-                }
-                if (updateCertificate) {
+                if (advance(domain, cert)) {
                     LOG.info("Save certificate request status for domain {}", domain);
                     store.saveCertificate(cert);
                     flushCache = true;
@@ -387,6 +318,87 @@ public class DynamicCertificatesManager implements Runnable {
             // already running inside the mutex via certificatesLifecycle's caller, so skip the dispatcher.
             reloadCertificatesFromDBInternal();
         }
+    }
+
+    /**
+     * Advance the certificate by one step of its lifecycle.
+     *
+     * @param domain the domain the certificate is issued for
+     * @param cert the certificate as just loaded from the store
+     * @return true if the certificate has to be saved
+     * @throws AcmeException if the CA rejects one of the calls the step makes
+     * @throws IOException if the certificate signing request cannot be built
+     * @throws GeneralSecurityException if the issued chain cannot be read or encoded
+     */
+    private boolean advance(final String domain, final CertificateData cert)
+            throws AcmeException, IOException, GeneralSecurityException {
+        switch (cert.getState()) {
+            // certificate waiting to be issued/renewed
+            case WAITING -> startCertificateProcessing(domain, cert);
+            // certificate domain reported as unreachable for issuing/renewing
+            case DOMAIN_UNREACHABLE -> {
+                if (cert.getAttemptsCount() <= getConfig().getMaxAttempts()) {
+                    startCertificateProcessing(domain, cert);
+                }
+            }
+            // waiting for dns propagation for all dns challenges
+            case DNS_CHALLENGE_WAIT -> checkDnsChallengesReachabilityForCertificate(cert);
+            // challenges verification by the CA pending
+            case VERIFYING -> checkChallengesResponsesForCertificate(cert);
+            // challenge succeeded
+            case VERIFIED -> {
+                LOG.info("Certificate for domain {} VERIFIED.", domain);
+                Order pendingOrder = acmeClient.getLogin().bindOrder(cert.getPendingOrderLocation());
+                // if the order is already valid, we have to skip finalization
+                if (pendingOrder.getStatus() != Status.VALID) {
+                    try {
+                        KeyPair keys = loadOrCreateKeyPairForDomain(domain);
+                        acmeClient.orderCertificate(pendingOrder, keys);
+                    } catch (AcmeException ex) { // order finalization failed
+                        LOG.error("Certificate order finalization for domain {} FAILED.", domain, ex);
+                        cert.error(ex.getMessage());
+                        return true;
+                    }
+                }
+                cert.step(ORDERING);
+            }
+            // certificate ordering
+            case ORDERING -> {
+                LOG.info("ORDERING certificate for domain {}.", domain);
+                Order order = acmeClient.getLogin().bindOrder(cert.getPendingOrderLocation());
+                Status status = acmeClient.checkResponseForOrder(order);
+                if (status == Status.VALID) {
+                    List<X509Certificate> certificateChain = acmeClient.fetchCertificateForOrder(order).getCertificateChain();
+                    PrivateKey key = loadOrCreateKeyPairForDomain(domain).getPrivate();
+                    String chain = base64EncodeCertificateChain(certificateChain.toArray(new Certificate[0]), key);
+                    cert.setChain(chain);
+                    cert.success(AVAILABLE);
+                    LOG.info("Certificate issuing for domain: {} SUCCEED. Certificate AVAILABLE.", domain);
+                } else if (status == Status.INVALID) {
+                    cert.error("Order status for certificate is " + status);
+                }
+            }
+            // challenge/order failed
+            case REQUEST_FAILED -> {
+                if (cert.getAttemptsCount() <= getConfig().getMaxAttempts()){
+                    LOG.info("Certificate issuing for domain: {} current status is FAILED, setting status=WAITING again.", domain);
+                    cert.step(WAITING);
+                }
+            }
+            // certificate saved/available/not expired
+            case AVAILABLE -> {
+                if (!isCertificateExpired(cert.getExpiringDate(), cert.getDaysBeforeRenewal())) {
+                    return false;
+                }
+                cert.step(EXPIRED);
+            }
+            // certificate expired
+            case EXPIRED -> {
+                LOG.info("Certificate for domain: {} EXPIRED.", domain);
+                cert.step(WAITING);
+            }
+        }
+        return true;
     }
 
     private void startCertificateProcessing(final String domain, final CertificateData cert) throws AcmeException {
@@ -431,6 +443,7 @@ public class DynamicCertificatesManager implements Runnable {
      * <ul>
      *     <li>{@link DynamicCertificateState#DNS_CHALLENGE_WAIT} whether there is at least a wildcard domain;</li>
      *     <li>{@link DynamicCertificateState#REQUEST_FAILED} whether there is at least a dns challenge record that cannot be created;</li>
+     *     <li>{@link DynamicCertificateState#VERIFIED} whether the CA asks for no challenge at all;</li>
      *     <li>{@link DynamicCertificateState#VERIFYING} otherwise</li>
      * </ul>
      */
