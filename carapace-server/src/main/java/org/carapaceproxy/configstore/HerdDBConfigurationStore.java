@@ -28,6 +28,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import herddb.client.ClientConfiguration;
 import herddb.client.ClientSideMetadataProviderException;
+import herddb.client.HDBConnection;
 import herddb.client.HDBException;
 import herddb.jdbc.HerdDBConnection;
 import herddb.jdbc.HerdDBEmbeddedDataSource;
@@ -52,11 +53,13 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
+import java.util.regex.Pattern;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.utils.StringUtils;
 import org.shredzone.acme4j.toolbox.JSON;
 
@@ -151,6 +154,13 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             DELETE from %s WHERE id=?
             """.formatted(ACME_CHALLENGE_TOKENS_TABLE_NAME);
 
+    private static final String TABLESPACE_PROPERTY = "db.tablespace";
+    private static final Pattern VALID_TABLESPACE_NAME = Pattern.compile("[A-Za-z0-9_]+");
+    // CREATE TABLESPACE takes no bind parameter, hence the interpolation of the already validated name
+    private static final String CREATE_TABLESPACE = "CREATE TABLESPACE '%s','expectedreplicacount:%d'";
+    private static final String SELECT_FROM_TABLESPACES_TABLE =
+            "SELECT tablespace_name FROM systablespaces WHERE tablespace_name=?";
+
     private static final Logger LOG = Logger.getLogger(HerdDBConfigurationStore.class.getName());
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -160,58 +170,84 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
 
     public HerdDBConfigurationStore(ConfigurationStore staticConfiguration,
                                     boolean cluster, String zkAddress, File baseDir, StatsLogger statsLogger) {
-        String tableSpace = staticConfiguration.getProperty("db.tablespace", TableSpace.DEFAULT);
-        if (!tableSpace.matches("[A-Za-z0-9_]+")) {
-            throw new ConfigurationStoreException(new IllegalArgumentException("Invalid db.tablespace \"" + tableSpace + "\": only letters, digits and underscore are allowed"));
+        String tableSpace = staticConfiguration.getProperty(TABLESPACE_PROPERTY, TableSpace.DEFAULT).trim();
+        if (!VALID_TABLESPACE_NAME.matcher(tableSpace).matches()) {
+            throw new ConfigurationStoreException(new IllegalArgumentException(
+                    "Invalid " + TABLESPACE_PROPERTY + " \"" + tableSpace + "\": "
+                    + "only letters, digits and underscore are allowed"
+            ));
         }
         this.datasource = buildDatasource(staticConfiguration, cluster, zkAddress, baseDir, statsLogger);
-        if (!TableSpace.DEFAULT.equals(tableSpace)) {
-            // a standalone node cannot replicate, whatever replication.factor says
-            int replicationFactor = cluster ? Integer.parseInt(staticConfiguration.getProperty("replication.factor", "1")) : 1;
-            ensureTableSpace(tableSpace, replicationFactor);
-            // from now on every connection borrowed from the datasource targets the custom tablespace
-            datasource.setDefaultSchema(tableSpace);
+        try {
+            // HerdDB lowercases the name to look it up, so the default tablespace answers to any spelling
+            if (!TableSpace.DEFAULT.equalsIgnoreCase(tableSpace)) {
+                // a standalone node cannot replicate, whatever replication.factor says
+                ensureTableSpace(tableSpace, cluster ? replicationFactor(staticConfiguration) : 1);
+                datasource.setDefaultSchema(tableSpace);
+            }
+            loadCurrentConfiguration();
+        } catch (RuntimeException err) {
+            try {
+                datasource.close();
+            } catch (RuntimeException closeErr) {
+                err.addSuppressed(closeErr);
+            }
+            throw err;
         }
-        loadCurrentConfiguration();
     }
 
     /**
-     * Makes sure that the given tablespace exists and is up, creating it if needed.
-     * The connection still targets the default tablespace, the only one HerdDB creates on its own.
+     * Reads the expected replica count for the cluster.
      *
-     * @param tableSpace        the tablespace name
-     * @param replicationFactor the expected replica count used when creating the tablespace
-     * @throws ConfigurationStoreException if the tablespace cannot be created or does not become available in time
+     * @param staticConfiguration the static configuration
+     * @return the value of {@code replication.factor}, 1 by default
+     * @throws ConfigurationStoreException if the value is not a number
      */
-    private void ensureTableSpace(String tableSpace, int replicationFactor) {
-        try (Connection con = datasource.getConnection()) {
-            if (!tableSpaceExists(con, tableSpace)) {
-                LOG.log(Level.INFO, "Creating tablespace {0} with expectedreplicacount={1}", new Object[]{tableSpace, replicationFactor});
-                try (PreparedStatement ps = con.prepareStatement("CREATE TABLESPACE '" + tableSpace + "','expectedreplicacount:" + replicationFactor + "'")) {
-                    ps.executeUpdate();
-                } catch (SQLException err) {
-                    // another node of the cluster may have created it in the meantime
-                    if (!tableSpaceExists(con, tableSpace)) {
-                        throw err;
-                    }
-                }
-            }
-            boolean up = con.unwrap(HerdDBConnection.class).getConnection().waitForTableSpace(tableSpace, TIMEOUT_WAIT_FOR_TABLE_SPACE);
-            if (!up) {
-                throw new SQLException("Tablespace " + tableSpace + " not available after " + TIMEOUT_WAIT_FOR_TABLE_SPACE + " ms");
-            }
-        } catch (SQLException | HDBException | ClientSideMetadataProviderException err) {
-            LOG.log(Level.SEVERE, "Error while preparing tablespace " + tableSpace, err);
+    private static int replicationFactor(ConfigurationStore staticConfiguration) {
+        try {
+            return staticConfiguration.getInt("replication.factor", 1);
+        } catch (ConfigurationNotValidException err) {
             throw new ConfigurationStoreException(err);
         }
     }
 
-    private static boolean tableSpaceExists(Connection con, String tableSpace) throws SQLException {
-        try (PreparedStatement ps = con.prepareStatement("SELECT tablespace_name FROM systablespaces WHERE tablespace_name=?")) {
-            ps.setString(1, tableSpace);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next();
+    /**
+     * Makes sure that the given tablespace exists and is up, creating it if needed.
+     * <br>
+     * The connection used here still targets the default tablespace, the only one HerdDB creates on its own.
+     *
+     * @param tableSpace  the tablespace name, already validated
+     * @param replication the expected replica count used when creating the tablespace
+     * @throws ConfigurationStoreException if the tablespace cannot be created or does not become available in time
+     */
+    private void ensureTableSpace(String tableSpace, int replication) {
+        try (Connection con = datasource.getConnection()) {
+            try (PreparedStatement ps = con.prepareStatement(CREATE_TABLESPACE.formatted(tableSpace, replication))) {
+                ps.executeUpdate();
+                LOG.log(Level.INFO, "Created tablespace {0} with expectedreplicacount={1}", new Object[]{tableSpace, replication});
+            } catch (SQLException err) {
+                // it may already be there, from a previous boot or from another node
+                boolean exists = false;
+                try (PreparedStatement ps = con.prepareStatement(SELECT_FROM_TABLESPACES_TABLE)) {
+                    ps.setString(1, tableSpace);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        exists = rs.next();
+                    }
+                } catch (SQLException lookupErr) {
+                    err.addSuppressed(lookupErr);
+                }
+                if (!exists) {
+                    throw err;
+                }
             }
+            final HDBConnection hdbConnection = con.unwrap(HerdDBConnection.class).getConnection();
+            if (!hdbConnection.waitForTableSpace(tableSpace, TIMEOUT_WAIT_FOR_TABLE_SPACE)) {
+                throw new SQLException("Tablespace " + tableSpace
+                        + " not available after " + TIMEOUT_WAIT_FOR_TABLE_SPACE + " ms");
+            }
+        } catch (SQLException | HDBException | ClientSideMetadataProviderException err) {
+            LOG.log(Level.SEVERE, "Error while preparing tablespace " + tableSpace, err);
+            throw new ConfigurationStoreException(err);
         }
     }
 
@@ -239,7 +275,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         Properties props = new Properties();
 
         if (cluster) {
-            int replicationFactor = Integer.parseInt(staticConfiguration.getProperty("replication.factor", "1"));
+            int replicationFactor = replicationFactor(staticConfiguration);
             props.setProperty(ServerConfiguration.PROPERTY_MODE, ServerConfiguration.PROPERTY_MODE_CLUSTER);
             props.setProperty(ServerConfiguration.PROPERTY_ZOOKEEPER_ADDRESS, zkAddress);
             props.setProperty(ServerConfiguration.PROPERTY_BOOKKEEPER_START, "true");

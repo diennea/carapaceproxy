@@ -21,11 +21,13 @@ package org.carapaceproxy.configstore;
 
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.TestUtils.assertEqualsKey;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import java.net.URL;
 import java.security.KeyPair;
 import java.util.Collections;
@@ -358,25 +360,54 @@ public class ConfigurationStoreTest {
     }
 
     @Test
-    public void testCustomTablespace() throws ConfigurationNotValidException {
+    public void testCustomTablespace() {
         Properties props = new Properties();
         props.setProperty("db.tablespace", "carapace_test");
         props.setProperty("certificate.0.hostname", d1);
-        PropertiesConfigurationStore propertiesConfigurationStore = new PropertiesConfigurationStore(props);
+        PropertiesConfigurationStore staticConfiguration = new PropertiesConfigurationStore(props);
 
-        store = new HerdDBConfigurationStore(propertiesConfigurationStore, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
-        store.commitConfiguration(propertiesConfigurationStore);
+        store = openStore(staticConfiguration);
+        store.commitConfiguration(staticConfiguration);
         assertEquals(d1, store.getProperty("certificate.0.hostname", ""));
         store.close();
 
-        // the tablespace already exists: only reopened, data still there
-        store = new HerdDBConfigurationStore(propertiesConfigurationStore, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
+        store = openStore(staticConfiguration);
         assertEquals(d1, store.getProperty("certificate.0.hostname", ""));
         store.close();
 
         // the default tablespace never saw that configuration
-        store = new HerdDBConfigurationStore(new PropertiesConfigurationStore(new Properties()), false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
+        store = openStore(new PropertiesConfigurationStore(new Properties()));
         assertEquals("", store.getProperty("certificate.0.hostname", ""));
+    }
+
+    @Test
+    public void testInvalidTablespaceName() {
+        Properties props = new Properties();
+        props.setProperty("db.tablespace", "carapace test");
+        PropertiesConfigurationStore staticConfiguration = new PropertiesConfigurationStore(props);
+
+        assertThrows(ConfigurationStoreException.class, () -> openStore(staticConfiguration));
+    }
+
+    @Test
+    public void testDatasourceClosedWhenBootFails() {
+        Properties props = new Properties();
+        // valid for us, too long for the metadata file HerdDB writes per tablespace
+        String tableSpace = "a".repeat(300);
+        props.setProperty("db.tablespace", tableSpace);
+
+        ConfigurationStoreException err = assertThrows(
+                ConfigurationStoreException.class, () -> openStore(new PropertiesConfigurationStore(props))
+        );
+        assertThat(err.getCause().getMessage(), containsString(tableSpace));
+
+        // the embedded server has been released
+        store = openStore(new PropertiesConfigurationStore(new Properties()));
+        assertEquals("", store.getProperty("certificate.0.hostname", ""));
+    }
+
+    private HerdDBConfigurationStore openStore(ConfigurationStore staticConfiguration) {
+        return new HerdDBConfigurationStore(staticConfiguration, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
     }
 
     private void checkConfiguration() {
