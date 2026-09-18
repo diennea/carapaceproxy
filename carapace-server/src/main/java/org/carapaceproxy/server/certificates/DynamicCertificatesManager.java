@@ -91,7 +91,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  *
- * Manager for SSL certificates issued via ACME and Let's Encrypt
+ * Manager for SSL certificates issued via ACME, by Let's Encrypt or any other configured provider
  *
  * @author paolo.venturi
  */
@@ -347,8 +347,7 @@ public class DynamicCertificatesManager implements Runnable {
                 // a store failure is infra-transient: retried at the next cycle, not counted as a CA rejection
                 LOG.error("Store failure while handling dynamic certificate for domain {}", domain, ex);
             } catch (AcmeException | IOException | GeneralSecurityException | RuntimeException ex) {
-                // RuntimeException included on purpose, as an escaped one would silently cancel the scheduled task;
-                // this would kill the renewal loop for every certificate
+                // RuntimeException on purpose: an escaped one cancels the scheduled task, killing the whole loop
                 LOG.error("Error while handling dynamic certificate for domain {}", domain, ex);
                 if (cert != null && !AcmeFailureClassifier.isTransient(ex)) {
                     cert.error(ex.getMessage() != null ? ex.getMessage() : ex.toString());
@@ -387,7 +386,7 @@ public class DynamicCertificatesManager implements Runnable {
     private boolean advance(final String domain, final CertificateData cert)
             throws AcmeException, IOException, GeneralSecurityException {
         switch (cert.getState()) {
-            // certificate waiting to be issues/renew
+            // certificate waiting to be issued/renewed
             case WAITING -> startCertificateProcessing(domain, cert);
             // certificate domain reported as unreachable for issuing/renewing
             case DOMAIN_UNREACHABLE -> {
@@ -508,12 +507,18 @@ public class DynamicCertificatesManager implements Runnable {
     }
 
     /**
+     * Create the ACME order of the certificate and trigger the challenges its authorizations ask for.
+     * <p>
      * At the end, we can expect the following states:
      * <ul>
      *     <li>{@link DynamicCertificateState#DNS_CHALLENGE_WAIT} whether there is at least a wildcard domain;</li>
      *     <li>{@link DynamicCertificateState#REQUEST_FAILED} whether there is at least a dns challenge record that cannot be created;</li>
+     *     <li>{@link DynamicCertificateState#VERIFIED} whether the CA asks for no challenge at all;</li>
      *     <li>{@link DynamicCertificateState#VERIFYING} otherwise</li>
      * </ul>
+     *
+     * @param cert the certificate to order
+     * @throws AcmeException if the CA rejects the order or one of the challenges
      */
     private void createOrderAndChallengesForCertificate(CertificateData cert) throws AcmeException {
         final var acmeClient = acmeClientFor(cert);
@@ -776,16 +781,10 @@ public class DynamicCertificatesManager implements Runnable {
     }
 
     /**
-     * Dispatcher entry point: serialises reloads across the scheduler thread, ZK callbacks,
-     * and the admin REST path through {@link GroupMembershipHandler#executeInMutex}, which
-     * is reentrant per-thread in both standalone and cluster modes.
+     * Serialise the reload across the scheduler thread, the ZooKeeper callbacks and the admin REST path.
      * <p>
-     * Falls back to a direct call when {@link #groupMembershipHandler} has not been attached
-     * yet (test runs, local-only setups), matching the null-guard pattern used elsewhere in
-     * this class (e.g. {@link #run()} and {@link #setStateOfCertificate}).
-     * <p>
-     * Callers already running inside the mutex (e.g. {@link #certificatesLifecycle()})
-     * should invoke {@link #reloadCertificatesFromDBInternal()} directly instead.
+     * Callers already holding the mutex, like {@link #certificatesLifecycle()}, use
+     * {@link #reloadCertificatesFromDBInternal()} instead.
      */
     private void reloadCertificatesFromDB() {
         if (groupMembershipHandler != null) {
@@ -802,7 +801,7 @@ public class DynamicCertificatesManager implements Runnable {
             for (Entry<String, CertificateData> entry : certificates.entrySet()) {
                 String domain = entry.getKey();
                 CertificateData cert = entry.getValue();
-                // "wildcard", "manual", "daysBeforeRenewal" and "provider" are not stored in db: re-set from config
+                // "manual", "daysBeforeRenewal" and "provider" are not stored in db: re-set from config
                 CertificateData freshCert = loadOrCreateDynamicCertificateForDomain(
                         domain, cert.getSubjectAltNames(), cert.isManual(),
                         cert.getDaysBeforeRenewal(), cert.getProvider());
