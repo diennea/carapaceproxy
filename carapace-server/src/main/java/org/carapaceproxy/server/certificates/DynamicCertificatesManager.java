@@ -47,9 +47,11 @@ import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -112,6 +114,7 @@ public class DynamicCertificatesManager implements Runnable {
     private String awsAccessKey;
     private String awsSecretKey;
     private final Map<String, Integer> dnsChallengeReachabilityChecks = new ConcurrentHashMap<>();
+    private volatile String lastServedDomain;
 
     private Set<String> domainsCheckerIPAddresses;
 
@@ -285,10 +288,10 @@ public class DynamicCertificatesManager implements Runnable {
     private void certificatesLifecycle() {
         var flushCache = false;
         final var rateLimit = getConfig().getDynamicCertificatesManagerRateLimit();
-        final var scheduled = certificates.values().stream()
+        final var scheduled = rotateFromLastServedDomain(certificates.values().stream()
                 .filter(not(CertificateData::isManual))
                 .sorted(Comparator.comparing(CertificateData::getDomain))
-                .toList();
+                .toList());
         var requestedAcmeSteps = 0;
         for (final CertificateData cached : scheduled) {
             final var domain = cached.getDomain();
@@ -299,6 +302,7 @@ public class DynamicCertificatesManager implements Runnable {
                     if (++requestedAcmeSteps > rateLimit) {
                         continue; // untouched, so the next run finds it in the same state
                     }
+                    lastServedDomain = domain;
                 }
                 if (advance(domain, cert)) {
                     LOG.info("Save certificate request status for domain {}", domain);
@@ -400,6 +404,25 @@ public class DynamicCertificatesManager implements Runnable {
             }
         }
         return true;
+    }
+
+    /**
+     * Rotate the certificates onto the domain following the last one served, so the tail is not starved.
+     *
+     * @param sorted the certificates of this run, sorted by domain
+     * @return the certificates in the order they have to be processed
+     */
+    private List<CertificateData> rotateFromLastServedDomain(final List<CertificateData> sorted) {
+        final var cursor = lastServedDomain;
+        if (cursor == null) {
+            return sorted;
+        }
+        final var from = (int) sorted.stream()
+                .takeWhile(cert -> cert.getDomain().compareTo(cursor) <= 0)
+                .count();
+        final var rotated = new ArrayList<>(sorted);
+        Collections.rotate(rotated, -from);
+        return rotated;
     }
 
     private void startCertificateProcessing(final String domain, final CertificateData cert) throws AcmeException {
