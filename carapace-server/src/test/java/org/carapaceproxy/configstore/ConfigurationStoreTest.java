@@ -29,6 +29,7 @@ import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import java.net.URI;
@@ -397,6 +398,57 @@ public class ConfigurationStoreTest {
         propertiesConfigurationStore = new PropertiesConfigurationStore(props);
         store = new HerdDBConfigurationStore(propertiesConfigurationStore, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
         checkConfiguration();
+    }
+
+    @Test
+    public void testCustomTablespace() {
+        Properties props = new Properties();
+        props.setProperty("db.tablespace", "carapace_test");
+        props.setProperty("certificate.0.hostname", d1);
+        PropertiesConfigurationStore staticConfiguration = new PropertiesConfigurationStore(props);
+
+        store = openStore(staticConfiguration);
+        store.commitConfiguration(staticConfiguration);
+        assertEquals(d1, store.getProperty("certificate.0.hostname", ""));
+        store.close();
+
+        store = openStore(staticConfiguration);
+        assertEquals(d1, store.getProperty("certificate.0.hostname", ""));
+        store.close();
+
+        // the default tablespace never saw that configuration
+        store = openStore(new PropertiesConfigurationStore(new Properties()));
+        assertEquals("", store.getProperty("certificate.0.hostname", ""));
+    }
+
+    @Test
+    public void testInvalidTablespaceName() {
+        Properties props = new Properties();
+        props.setProperty("db.tablespace", "carapace test");
+        PropertiesConfigurationStore staticConfiguration = new PropertiesConfigurationStore(props);
+
+        assertThrows(ConfigurationStoreException.class, () -> openStore(staticConfiguration));
+    }
+
+    @Test
+    public void testDatasourceClosedWhenBootFails() {
+        Properties props = new Properties();
+        // valid for us, too long for the metadata file HerdDB writes per tablespace
+        String tableSpace = "a".repeat(300);
+        props.setProperty("db.tablespace", tableSpace);
+
+        ConfigurationStoreException err = assertThrows(
+                ConfigurationStoreException.class, () -> openStore(new PropertiesConfigurationStore(props))
+        );
+        assertThat(err.getCause().getMessage(), containsString(tableSpace));
+
+        // the embedded server has been released
+        store = openStore(new PropertiesConfigurationStore(new Properties()));
+        assertEquals("", store.getProperty("certificate.0.hostname", ""));
+    }
+
+    private HerdDBConfigurationStore openStore(ConfigurationStore staticConfiguration) {
+        return new HerdDBConfigurationStore(staticConfiguration, false, null, tmpDir.getRoot(), NullStatsLogger.INSTANCE);
     }
 
     private void checkConfiguration() {
