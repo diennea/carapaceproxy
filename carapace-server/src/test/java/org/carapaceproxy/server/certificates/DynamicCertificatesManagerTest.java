@@ -924,4 +924,23 @@ public class DynamicCertificatesManagerTest {
         assertCertificateState(waiting, WAITING, 0, man);
         verify(store, times(3)).saveCertificate(any());
     }
+
+    @Test
+    public void testCappedRunsRotateOverTheDomains() throws Exception {
+        final var domains = List.of("localhost1", "localhost2", "localhost3");
+        final var props = acmeCertificates(domains);
+        props.setProperty("dynamiccertificatesmanager.ratelimit", "2");
+        final var man = buildManager(waitingCertificatesStore(domains), httpChallengeClient(), null, props);
+
+        man.run();
+        assertCertificateState("localhost1", VERIFYING, 0, man);
+        assertCertificateState("localhost2", VERIFYING, 0, man);
+        assertCertificateState("localhost3", WAITING, 0, man);
+
+        // the run restarts after the last domain served
+        man.run();
+        assertCertificateState("localhost3", VERIFYING, 0, man);
+        assertCertificateState("localhost1", VERIFIED, 0, man);
+        assertCertificateState("localhost2", VERIFYING, 0, man);
+    }
 }
