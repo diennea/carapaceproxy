@@ -214,4 +214,11 @@ public class RuntimeServerConfigurationTest {
         ));
         assertThat(e.getMessage(), containsString("certificate.0.provider"));
     }
+
+    @Test
+    public void testNegativeAcmeRateLimit() {
+        final var e = assertThrows(ConfigurationNotValidException.class,
+                () -> configure("dynamiccertificatesmanager.ratelimit", "-1"));
+        assertThat(e.getMessage(), containsString("dynamiccertificatesmanager.ratelimit"));
+    }
 }
