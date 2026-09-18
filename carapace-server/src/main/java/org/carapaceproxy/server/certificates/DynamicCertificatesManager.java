@@ -289,19 +289,16 @@ public class DynamicCertificatesManager implements Runnable {
                 .filter(not(CertificateData::isManual))
                 .sorted(Comparator.comparing(CertificateData::getDomain))
                 .toList();
-        int acmeSteps = 0;
+        var requestedAcmeSteps = 0;
         for (final CertificateData cached : scheduled) {
             final var domain = cached.getDomain();
             try {
                 // this has to be always fetch from db!
                 CertificateData cert = loadOrCreateDynamicCertificateForDomain(domain, cached.getSubjectAltNames(), false, cached.getDaysBeforeRenewal());
-                if (isAcmeStep(cert)) {
-                    // domains are sorted, so the first N take the slots and the window slides as they become AVAILABLE
-                    if (rateLimit > 0 && acmeSteps >= rateLimit) {
-                        LOG.debug("Rate limit of {} ACME steps per run reached, domain {} postponed to next run", rateLimit, domain);
-                        continue;
+                if (rateLimit > 0 && isAcmeStep(cert)) {
+                    if (++requestedAcmeSteps > rateLimit) {
+                        continue; // untouched, so the next run finds it in the same state
                     }
-                    acmeSteps++;
                 }
                 if (advance(domain, cert)) {
                     LOG.info("Save certificate request status for domain {}", domain);
@@ -311,6 +308,10 @@ public class DynamicCertificatesManager implements Runnable {
             } catch (AcmeException | IOException | GeneralSecurityException | IllegalStateException ex) {
                 LOG.error("Error while handling dynamic certificate for domain {}", domain, ex);
             }
+        }
+        if (requestedAcmeSteps > rateLimit) {
+            LOG.info("Reached the limit of {} ACME steps per run, {} certificates postponed to the next run",
+                    rateLimit, requestedAcmeSteps - rateLimit);
         }
         if (flushCache) {
             groupMembershipHandler.fireEvent(EVENT_CERTIFICATES_STATE_CHANGED, null);
@@ -629,16 +630,16 @@ public class DynamicCertificatesManager implements Runnable {
     }
 
     /**
-     * Tell whether the next lifecycle step of the certificate contacts the ACME server.
+     * Tell whether the next lifecycle step of a certificate may reach the ACME server.
      *
-     * @param cert the certificate as loaded from the store
-     * @return true if the step performs an ACME call (new order, challenge check, finalization, order check)
+     * @param cert the certificate as just loaded from the store
+     * @return true if the step may contact the CA, conservatively so for WAITING and DOMAIN_UNREACHABLE
      */
     private boolean isAcmeStep(final CertificateData cert) {
         return switch (cert.getState()) {
-            case WAITING, VERIFYING, VERIFIED, ORDERING -> true;
+            case WAITING, DNS_CHALLENGE_WAIT, VERIFYING, VERIFIED, ORDERING -> true;
             case DOMAIN_UNREACHABLE -> cert.getAttemptsCount() <= getConfig().getMaxAttempts();
-            default -> false;
+            case REQUEST_FAILED, AVAILABLE, EXPIRED -> false;
         };
     }
 

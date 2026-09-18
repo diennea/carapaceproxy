@@ -81,6 +81,7 @@ public class RuntimeServerConfiguration {
 
     private static final Logger LOG = LoggerFactory.getLogger(RuntimeServerConfiguration.class);
     private static final int DEFAULT_PROBE_PERIOD = 0;
+    private static final int DEFAULT_ACME_RATE_LIMIT = 300;
     public static final long DEFAULT_WARMUP_PERIOD = Duration.ofSeconds(30).toMillis();
 
     private final Map<EndpointKey, NetworkListenerConfiguration> listeners = new LinkedHashMap<>();
@@ -142,7 +143,7 @@ public class RuntimeServerConfiguration {
     private String localCertificatesStorePath;
     private Set<String> localCertificatesStorePeersIds;
     private int maxAttempts = DEFAULT_MAX_CONNECTIONS_PER_ENDPOINT;
-    private int dynamicCertificatesManagerRateLimit = 300;
+    private int dynamicCertificatesManagerRateLimit = DEFAULT_ACME_RATE_LIMIT;
     private Set<String> alwaysCachedExtensions = Set.of("png", "gif", "jpg", "jpeg", "js", "css", "woff2", "webp");
 
     public RuntimeServerConfiguration() {
@@ -308,8 +309,13 @@ public class RuntimeServerConfiguration {
 
         maxAttempts = properties.getInt("dynamiccertificatesmanager.errors.maxattempts", maxAttempts);
         LOG.info("dynamiccertificatesmanager.errors.maxattempts={}", maxAttempts);
-        dynamicCertificatesManagerRateLimit = properties.getInt("dynamiccertificatesmanager.ratelimit", dynamicCertificatesManagerRateLimit);
+        dynamicCertificatesManagerRateLimit =
+                properties.getInt("dynamiccertificatesmanager.ratelimit", dynamicCertificatesManagerRateLimit);
         LOG.info("dynamiccertificatesmanager.ratelimit={}", dynamicCertificatesManagerRateLimit);
+        if (dynamicCertificatesManagerRateLimit < 0) {
+            throw new ConfigurationNotValidException("Invalid value '" + dynamicCertificatesManagerRateLimit
+                    + "' for dynamiccertificatesmanager.ratelimit. The limit cannot be negative");
+        }
 
         alwaysCachedExtensions = properties.getValues("cache.cachealways", alwaysCachedExtensions);
         LOG.info("cache.cachealways={}", alwaysCachedExtensions);
