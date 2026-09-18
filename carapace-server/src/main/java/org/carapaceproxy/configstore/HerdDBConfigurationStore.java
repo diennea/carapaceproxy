@@ -71,88 +71,66 @@ import org.shredzone.acme4j.toolbox.JSON;
 @SuppressFBWarnings(value = "OBL_UNSATISFIED_OBLIGATION", justification = "https://github.com/spotbugs/spotbugs/issues/432")
 public class HerdDBConfigurationStore implements ConfigurationStore {
 
-    private static final int TIMEOUT_WAIT_FOR_TABLE_SPACE = Integer.getInteger("herd.waitfortablespace.timeout", 1000 * 60 * 5); // default 5 min
+    private static final int TABLESPACE_TIMEOUT = Integer.getInteger("herd.waitfortablespace.timeout", 1000 * 60 * 5);
 
     public static final String ACME_USER_KEY = "_acmeuserkey";
 
-    // Main table
     private static final String CONFIG_TABLE_NAME = "proxy_config";
-    private static final String CREATE_CONFIG_TABLE = """
-            CREATE TABLE %s(pname string primary key, pvalue string)
-            """.formatted(CONFIG_TABLE_NAME);
-    private static final String SELECT_ALL_FROM_CONFIG_TABLE = """
-            SELECT pname, pvalue from %s
-            """.formatted(CONFIG_TABLE_NAME);
-    private static final String UPDATE_CONFIG_TABLE = """
-            UPDATE %s set pvalue=? WHERE pname=?
-            """.formatted(CONFIG_TABLE_NAME);
-    private static final String DELETE_FROM_CONFIG_TABLE = """
-            DELETE FROM %s WHERE pname=?
-            """.formatted(CONFIG_TABLE_NAME);
-    private static final String INSERT_INTO_CONFIG_TABLE = """
-            INSERT INTO %s(pname, pvalue) values (?, ?)
-            """.formatted(CONFIG_TABLE_NAME);
+    private static final String CREATE_CONFIG_TABLE =
+            "CREATE TABLE " + CONFIG_TABLE_NAME + "(pname string primary key, pvalue string)";
+    private static final String SELECT_ALL_FROM_CONFIG_TABLE =
+            "SELECT pname, pvalue FROM " + CONFIG_TABLE_NAME;
+    private static final String UPDATE_CONFIG_TABLE =
+            "UPDATE " + CONFIG_TABLE_NAME + " SET pvalue=? WHERE pname=?";
+    private static final String DELETE_FROM_CONFIG_TABLE =
+            "DELETE FROM " + CONFIG_TABLE_NAME + " WHERE pname=?";
+    private static final String INSERT_INTO_CONFIG_TABLE =
+            "INSERT INTO " + CONFIG_TABLE_NAME + "(pname, pvalue) VALUES (?, ?)";
 
-    // Table for KeyPairs
     private static final String KEYPAIR_TABLE_NAME = "keypairs";
-    private static final String CREATE_KEYPAIR_TABLE = """
-            CREATE TABLE %s(domain string primary key, privateKey string, publicKey string)
-            """.formatted(KEYPAIR_TABLE_NAME);
-    private static final String SELECT_FROM_KEYPAIR_TABLE = """
-            SELECT privateKey, publicKey FROM %s WHERE domain=?
-            """.formatted(KEYPAIR_TABLE_NAME);
-    private static final String UPDATE_KEYPAIR_TABLE = """
-            UPDATE %s SET privateKey=?, publicKey=? WHERE domain=?
-            """.formatted(KEYPAIR_TABLE_NAME);
-    private static final String INSERT_INTO_KEYPAIR_TABLE = """
-            INSERT INTO %s(domain, privateKey, publicKey) values (?, ?, ?)
-            """.formatted(KEYPAIR_TABLE_NAME);
+    private static final String CREATE_KEYPAIR_TABLE =
+            "CREATE TABLE " + KEYPAIR_TABLE_NAME + "(domain string primary key, privateKey string, publicKey string)";
+    private static final String SELECT_FROM_KEYPAIR_TABLE =
+            "SELECT privateKey, publicKey FROM " + KEYPAIR_TABLE_NAME + " WHERE domain=?";
+    private static final String UPDATE_KEYPAIR_TABLE =
+            "UPDATE " + KEYPAIR_TABLE_NAME + " SET privateKey=?, publicKey=? WHERE domain=?";
+    private static final String INSERT_INTO_KEYPAIR_TABLE =
+            "INSERT INTO " + KEYPAIR_TABLE_NAME + "(domain, privateKey, publicKey) VALUES (?, ?, ?)";
 
-    // Table for ACME Certificates
     private static final String DIGITAL_CERTIFICATES_TABLE_NAME = "digital_certificates";
-    private static final String CREATE_DIGITAL_CERTIFICATES_TABLE = """
-            CREATE TABLE %s (
-                domain string primary key,
-                subjectAltNames string,
-                chain string,
-                state string,
-                pendingOrder string,
-                pendingChallenges string,
-                attemptCount int,
-                message string
-            )""".formatted(DIGITAL_CERTIFICATES_TABLE_NAME);
-    private static final String SELECT_FROM_DIGITAL_CERTIFICATES_TABLE = """
-            SELECT domain, subjectAltNames, chain, state, pendingOrder, pendingChallenges, attemptCount, message
-            FROM %s
-            WHERE domain=?
-            """.formatted(DIGITAL_CERTIFICATES_TABLE_NAME);
-    private static final String UPDATE_DIGITAL_CERTIFICATES_TABLE = """
-            UPDATE %s
-            SET subjectAltNames=?, chain=?, state=?, pendingOrder=?, pendingChallenges=?, attemptCount=?, message=?
-            WHERE domain=?
-            """.formatted(DIGITAL_CERTIFICATES_TABLE_NAME);
-    private static final String INSERT_INTO_DIGITAL_CERTIFICATES_TABLE = """
-            INSERT INTO %s(domain, subjectAltNames, chain, state, pendingOrder, pendingChallenges, attemptCount, message)
-            values (?, ?, ?, ?, ?, ?, ?, ?)
-            """.formatted(DIGITAL_CERTIFICATES_TABLE_NAME);
-    private static final String REMOVE_DIGITAL_CERTIFICATES_TABLE = """
-            DELETE FROM %s WHERE domain=?
-            """.formatted(DIGITAL_CERTIFICATES_TABLE_NAME);
+    private static final String CREATE_DIGITAL_CERTIFICATES_TABLE =
+            "CREATE TABLE " + DIGITAL_CERTIFICATES_TABLE_NAME + "("
+            + "domain string primary key, "
+            + "subjectAltNames string, "
+            + "chain string, "
+            + "state string, "
+            + "pendingOrder string, "
+            + "pendingChallenges string, "
+            + "attemptCount int, "
+            + "message string)";
+    private static final String SELECT_FROM_DIGITAL_CERTIFICATES_TABLE =
+            "SELECT domain, subjectAltNames, chain, state, pendingOrder, pendingChallenges, attemptCount, message"
+            + " FROM " + DIGITAL_CERTIFICATES_TABLE_NAME + " WHERE domain=?";
+    private static final String UPDATE_DIGITAL_CERTIFICATES_TABLE =
+            "UPDATE " + DIGITAL_CERTIFICATES_TABLE_NAME
+            + " SET subjectAltNames=?, chain=?, state=?, pendingOrder=?, pendingChallenges=?, attemptCount=?, message=?"
+            + " WHERE domain=?";
+    private static final String INSERT_INTO_DIGITAL_CERTIFICATES_TABLE =
+            "INSERT INTO " + DIGITAL_CERTIFICATES_TABLE_NAME
+            + "(domain, subjectAltNames, chain, state, pendingOrder, pendingChallenges, attemptCount, message)"
+            + " VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+    private static final String REMOVE_DIGITAL_CERTIFICATES_TABLE =
+            "DELETE FROM " + DIGITAL_CERTIFICATES_TABLE_NAME + " WHERE domain=?";
 
-    // Table for ACME challenge tokens
     private static final String ACME_CHALLENGE_TOKENS_TABLE_NAME = "acme_challenge_tokens";
-    private static final String CREATE_ACME_CHALLENGE_TOKENS_TABLE = """
-            CREATE TABLE %s(id string primary key, data string)
-            """.formatted(ACME_CHALLENGE_TOKENS_TABLE_NAME);
-    private static final String SELECT_FROM_ACME_CHALLENGE_TOKENS_TABLE = """
-            SELECT data from %s WHERE id=?
-            """.formatted(ACME_CHALLENGE_TOKENS_TABLE_NAME);
-    private static final String INSERT_INTO_ACME_CHALLENGE_TOKENS_TABLE = """
-            INSERT INTO %s(id, data) values (?, ?)
-            """.formatted(ACME_CHALLENGE_TOKENS_TABLE_NAME);
-    private static final String DELETE_FROM_ACME_CHALLENGE_TOKENS_TABLE = """
-            DELETE from %s WHERE id=?
-            """.formatted(ACME_CHALLENGE_TOKENS_TABLE_NAME);
+    private static final String CREATE_ACME_CHALLENGE_TOKENS_TABLE =
+            "CREATE TABLE " + ACME_CHALLENGE_TOKENS_TABLE_NAME + "(id string primary key, data string)";
+    private static final String SELECT_FROM_ACME_CHALLENGE_TOKENS_TABLE =
+            "SELECT data FROM " + ACME_CHALLENGE_TOKENS_TABLE_NAME + " WHERE id=?";
+    private static final String INSERT_INTO_ACME_CHALLENGE_TOKENS_TABLE =
+            "INSERT INTO " + ACME_CHALLENGE_TOKENS_TABLE_NAME + "(id, data) VALUES (?, ?)";
+    private static final String DELETE_FROM_ACME_CHALLENGE_TOKENS_TABLE =
+            "DELETE FROM " + ACME_CHALLENGE_TOKENS_TABLE_NAME + " WHERE id=?";
 
     private static final String TABLESPACE_PROPERTY = "db.tablespace";
     private static final Pattern VALID_TABLESPACE_NAME = Pattern.compile("[A-Za-z0-9_]+");
@@ -241,9 +219,9 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 }
             }
             final HDBConnection hdbConnection = con.unwrap(HerdDBConnection.class).getConnection();
-            if (!hdbConnection.waitForTableSpace(tableSpace, TIMEOUT_WAIT_FOR_TABLE_SPACE)) {
+            if (!hdbConnection.waitForTableSpace(tableSpace, TABLESPACE_TIMEOUT)) {
                 throw new SQLException("Tablespace " + tableSpace
-                        + " not available after " + TIMEOUT_WAIT_FOR_TABLE_SPACE + " ms");
+                        + " not available after " + TABLESPACE_TIMEOUT + " ms");
             }
         } catch (SQLException | HDBException | ClientSideMetadataProviderException err) {
             LOG.log(Level.SEVERE, "Error while preparing tablespace " + tableSpace, err);
@@ -299,7 +277,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         ds.setStatsLogger(statsLogger);
         if (cluster) {
             ds.setWaitForTableSpace(TableSpace.DEFAULT);
-            ds.setWaitForTableSpaceTimeout(TIMEOUT_WAIT_FOR_TABLE_SPACE);
+            ds.setWaitForTableSpaceTimeout(TABLESPACE_TIMEOUT);
             ds.setStartServer(true);
         }
 
