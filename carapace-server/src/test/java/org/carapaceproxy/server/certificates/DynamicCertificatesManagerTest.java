@@ -86,6 +86,13 @@ import org.shredzone.acme4j.Problem;
 @RunWith(JUnitParamsRunner.class)
 public class DynamicCertificatesManagerTest {
 
+    static {
+        // DynamicCertificatesManager reads the limit into a static final field, so the property must be set
+        // before whatever test method happens to run first loads that class.
+        // No effect on other test classes: surefire runs each one in its own JVM (reuseForks=false).
+        System.setProperty("carapace.acme.dnschallengereachabilitycheck.limit", "2");
+    }
+
     protected static final int MAX_ATTEMPTS = 7;
 
     @Test
@@ -307,10 +314,28 @@ public class DynamicCertificatesManagerTest {
         assertEquals(expectedCycleCount, dCMan.getCertificateDataForDomain(domain).getAttemptsCount());
     }
 
-    @Test
-    @Parameters({"0", "2"})
-    public void testRateLimitPerRun(int rateLimit) throws Exception {
-        // ACME mocking
+    // the ACME client is injected before reloadConfiguration, which only builds one when the field is still null
+    private static DynamicCertificatesManager buildManager(
+            ConfigurationStore store, ACMEClient ac, Route53Client r53Client, Properties props
+    ) throws Exception {
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        when(parent.getListeners()).thenReturn(mock(Listeners.class));
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
+        man.setConfigurationStore(store);
+        Whitebox.setInternalState(man, ac);
+        if (r53Client != null) {
+            man.initAWSClient("access", "secret");
+            Whitebox.setInternalState(man, r53Client);
+        }
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(new PropertiesConfigurationStore(props));
+        when(parent.getCurrentConfiguration()).thenReturn(conf);
+        man.reloadConfiguration(conf);
+        return man;
+    }
+
+    private static ACMEClient httpChallengeClient() throws Exception {
         ACMEClient ac = mock(ACMEClient.class);
         Order o = mock(Order.class);
         when(o.getLocation()).thenReturn(URI.create("https://localhost/index").toURL());
@@ -320,55 +345,107 @@ public class DynamicCertificatesManagerTest {
         when(ac.createOrderForDomain(any())).thenReturn(o);
         Http01Challenge c = mock(Http01Challenge.class);
         when(c.getToken()).thenReturn("");
-        when(c.getJSON()).thenReturn(JSON.parse("""
-                  {
-                      "url": "https://localhost/index",
-                      "type": "http-01",
-                      "token": "mytoken"
-                  }"""));
+        when(c.getJSON()).thenReturn(JSON.parse(
+                "{\"url\": \"https://localhost/index\", \"type\": \"http-01\", \"token\": \"mytoken\"}"
+        ));
         when(c.getAuthorization()).thenReturn("");
-        when(c.getError()).thenReturn(Optional.empty());
         when(ac.getChallengesForOrder(any())).thenReturn(Map.of("domain", c));
         when(ac.checkResponseForChallenge(any())).thenReturn(VALID);
+        return ac;
+    }
 
-        HttpProxyServer parent = mock(HttpProxyServer.class);
-        when(parent.getListeners()).thenReturn(mock(Listeners.class));
-        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
-        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
-        Whitebox.setInternalState(man, ac);
+    private static Properties acmeCertificates(List<String> domains) {
+        final var props = new Properties();
+        for (int i = 0; i < domains.size(); i++) {
+            props.setProperty("certificate." + i + ".hostname", domains.get(i));
+            props.setProperty("certificate." + i + ".mode", "acme");
+            props.setProperty("certificate." + i + ".daysbeforerenewal", "0");
+        }
+        return props;
+    }
 
-        // Store mocking: three certificates waiting to be ordered
+    private static ConfigurationStore waitingCertificatesStore(List<String> domains) {
         ConfigurationStore store = mock(ConfigurationStore.class);
         when(store.loadKeyPairForDomain(anyString())).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE));
-        Properties props = new Properties();
-        String[] domains = {"localhost1", "localhost2", "localhost3"};
-        for (int i = 0; i < domains.length; i++) {
-            when(store.loadCertificateForDomain(eq(domains[i]))).thenReturn(new CertificateData(domains[i], null, WAITING));
-            props.setProperty("certificate." + i + ".hostname", domains[i]);
-            props.setProperty("certificate." + i + ".mode", "acme");
+        for (final var domain : domains) {
+            when(store.loadCertificateForDomain(eq(domain))).thenReturn(new CertificateData(domain, null, WAITING));
         }
-        man.setConfigurationStore(store);
+        return store;
+    }
 
-        // Manager setup
+    @Test
+    @Parameters({"0", "2"})
+    public void testAcmeStepsPerRunAreCapped(int rateLimit) throws Exception {
+        final var domains = List.of("localhost1", "localhost2", "localhost3");
+        final var props = acmeCertificates(domains);
         props.setProperty("dynamiccertificatesmanager.ratelimit", String.valueOf(rateLimit));
-        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
-        conf.configure(new PropertiesConfigurationStore(props));
-        when(parent.getCurrentConfiguration()).thenReturn(conf);
-        man.reloadConfiguration(conf);
+        final var store = waitingCertificatesStore(domains);
+        final var man = buildManager(store, httpChallengeClient(), null, props);
 
-        // first run: the first two domains (alphabetical order) take the slots, the third is postponed
+        final var capped = rateLimit > 0;
         man.run();
         assertCertificateState("localhost1", VERIFYING, 0, man);
         assertCertificateState("localhost2", VERIFYING, 0, man);
-        assertCertificateState("localhost3", rateLimit == 0 ? VERIFYING : WAITING, 0, man);
-        verify(store, times(rateLimit == 0 ? 3 : 2)).saveCertificate(any());
+        assertCertificateState("localhost3", capped ? WAITING : VERIFYING, 0, man);
+        verify(store, times(capped ? 2 : 3)).saveCertificate(any());
+    }
 
-        // second run: the two in-flight certificates still take the slots, the third is postponed again
+    @Test
+    // the wildcard certificate spends the cap on a DNS challenge, the other three steps stay local
+    public void testOnlyStepsReachingTheCaSpendTheCap() throws Exception {
+        final var wildcard = "*.localhost";
+        final var available = "available.localhost";
+        final var failed = "failed.localhost";
+        final var unreachable = "unreachable.localhost";
+        final var waiting = "waiting.localhost";
+        final var challengeJson = "{\"url\": \"https://localhost/index\", \"type\": \"dns-01\", \"token\": \"mytoken\"}";
+
+        // ACME mocking
+        ACMEClient ac = mock(ACMEClient.class);
+        Login login = mock(Login.class);
+        Session session = mock(Session.class);
+        Connection conn = mock(Connection.class);
+        when(conn.readJsonResponse()).thenReturn(JSON.parse(challengeJson));
+        when(session.connect()).thenReturn(conn);
+        when(login.getSession()).thenReturn(session);
+        when(login.getKeyPair()).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE));
+        when(ac.getLogin()).thenReturn(login);
+
+        Route53Client r53Client = mock(Route53Client.class);
+        when(r53Client.isDnsChallengeForDomainAvailable(any(), any())).thenReturn(true);
+
+        // Store mocking
+        KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        when(store.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
+        when(store.loadCertificateForDomain(eq(wildcard))).thenReturn(new CertificateData(
+                wildcard, null, null, DNS_CHALLENGE_WAIT, null, Map.of(wildcard, JSON.parse(challengeJson))
+        ));
+        when(store.loadCertificateForDomain(eq(available))).thenReturn(new CertificateData(
+                available,
+                base64EncodeCertificateChain(generateSampleChain(keyPair, false), keyPair.getPrivate()),
+                AVAILABLE
+        ));
+        when(store.loadCertificateForDomain(eq(failed))).thenReturn(new CertificateData(failed, null, REQUEST_FAILED));
+        // out of attempts: its step gives up before reaching the CA
+        final var unreachableCert = new CertificateData(unreachable, null, DOMAIN_UNREACHABLE);
+        unreachableCert.setAttemptsCount(MAX_ATTEMPTS + 1);
+        when(store.loadCertificateForDomain(eq(unreachable))).thenReturn(unreachableCert);
+        when(store.loadCertificateForDomain(eq(waiting))).thenReturn(new CertificateData(waiting, null, WAITING));
+
+        final var props = acmeCertificates(List.of(wildcard, available, failed, unreachable, waiting));
+        props.setProperty("dynamiccertificatesmanager.errors.maxattempts", String.valueOf(MAX_ATTEMPTS));
+        props.setProperty("dynamiccertificatesmanager.ratelimit", "1");
+        final var man = buildManager(store, ac, r53Client, props);
+
         man.run();
-        assertCertificateState("localhost1", VERIFIED, 0, man);
-        assertCertificateState("localhost2", VERIFIED, 0, man);
-        assertCertificateState("localhost3", rateLimit == 0 ? VERIFIED : WAITING, 0, man);
-        verify(store, times(rateLimit == 0 ? 6 : 4)).saveCertificate(any());
+        assertCertificateState(wildcard, VERIFYING, 0, man);
+        assertCertificateState(available, AVAILABLE, 0, man);
+        assertCertificateState(failed, WAITING, 0, man);
+        assertCertificateState(unreachable, DOMAIN_UNREACHABLE, MAX_ATTEMPTS + 1, man);
+        // the cap was already spent by the wildcard
+        assertCertificateState(waiting, WAITING, 0, man);
+        verify(store, times(3)).saveCertificate(any());
     }
 
     @Test
@@ -385,7 +462,6 @@ public class DynamicCertificatesManagerTest {
     })
     public void testWildcardCertificateStateManagement(String runCase) throws Exception {
         final var domain = "*.localhost";
-        System.setProperty("carapace.acme.dnschallengereachabilitycheck.limit", "2");
 
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
@@ -512,8 +588,6 @@ public class DynamicCertificatesManagerTest {
         final var domain = "*.localhost";
         final var san1 = "test1.localhost";
         final var san2 = "*.localhost2";
-        System.setProperty("carapace.acme.dnschallengereachabilitycheck.limit", "2");
-
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
         Order o = mock(Order.class);
