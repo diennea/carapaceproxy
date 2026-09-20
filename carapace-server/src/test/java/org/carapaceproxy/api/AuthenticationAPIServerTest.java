@@ -19,6 +19,8 @@
  */
 package org.carapaceproxy.api;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import java.util.Properties;
 import javax.servlet.http.HttpServletResponse;
@@ -58,6 +60,27 @@ public class AuthenticationAPIServerTest extends UseAdminServer {
             HttpResponse resp = client.get("/api/up", credentials);
             assertHeaderContains(resp, "WWW-Authenticate");
             assertThat(resp.getBodyString(), containsString(HttpServletResponse.SC_UNAUTHORIZED + ""));
+        }
+    }
+
+    @Test
+    public void testMalformedAuthorizationHeaders() throws Exception {
+        Properties prop = new Properties(HTTP_ADMIN_SERVER_CONFIG);
+
+        prop.put("userrealm.class", "org.carapaceproxy.utils.TestUserRealm");
+        prop.put("user.test1", "pass1");
+
+        startServer(prop);
+
+        String validToken = Base64.getEncoder().encodeToString("test1:pass1".getBytes(StandardCharsets.UTF_8));
+        for (String authorization : List.of("Bearer " + validToken, "Basic", "Basic $$$", "Basic " + validToken + " extra")) {
+            try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+                HttpResponse resp = client.executeRequest("GET /api/up HTTP/1.1\r\n"
+                        + "Host: localhost\r\n"
+                        + "Authorization: " + authorization + "\r\n"
+                        + "Connection: close\r\n\r\n");
+                assertThat(authorization, resp.getStatusLine(), containsString("401"));
+            }
         }
     }
 

@@ -20,7 +20,6 @@
 package org.carapaceproxy.api;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.StringTokenizer;
@@ -47,7 +46,6 @@ public class AuthAPIRequestsFilter implements Filter {
     private static final String HEADER_BASIC = "Basic";
 
     private static final String MESSAGE_INVALID_CREDENTIALS = "Bad credentials";
-    private static final String MESSAGE_INVALID_TOKEN_NOTSUPPORTED = "Invalid authentication token charset";
     private static final String MESSAGE_INVALID_TOKEN = "Invalid authentication token";
 
     private HttpProxyServer server;
@@ -65,38 +63,38 @@ public class AuthAPIRequestsFilter implements Filter {
         }
 
         StringTokenizer tokenizer = new StringTokenizer(authorizationHeader);
-        if (tokenizer.hasMoreTokens()) {
-            String basic = tokenizer.nextToken();
-            if (basic.equalsIgnoreCase(HEADER_BASIC)) {
-                try {
-                    String authBase64 = tokenizer.nextToken().trim();
-                    String credentials = new String(Base64.getDecoder().decode(authBase64), StandardCharsets.UTF_8);
-                    int position = credentials.indexOf(":");
-                    if (position < 0) {
-                        UNAUTHORIZED(response, MESSAGE_INVALID_TOKEN);
-                        return;
-                    }
-                    String currentUser = null;
-                    if (server != null) {
-                        UserRealm userRealm = (UserRealm) server.getRealm();
-                        String username = credentials.substring(0, position).trim();
-                        String password = credentials.substring(position + 1).trim();
-
-                        currentUser = userRealm.login(username, password);
-                    }
-                    if (currentUser == null) {
-                        UNAUTHORIZED(response, MESSAGE_INVALID_CREDENTIALS);
-                        return;
-                    }
-
-                    chain.doFilter(servletRequest, servletResponse);
-                } catch (UnsupportedEncodingException e) {
-                    UNAUTHORIZED(response, MESSAGE_INVALID_TOKEN_NOTSUPPORTED);
-                }
-            }
-        } else {
+        if (tokenizer.countTokens() != 2 || !tokenizer.nextToken().equalsIgnoreCase(HEADER_BASIC)) {
             UNAUTHORIZED(response, MESSAGE_INVALID_TOKEN);
+            return;
         }
+
+        String credentials;
+        try {
+            credentials = new String(Base64.getDecoder().decode(tokenizer.nextToken().trim()), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            UNAUTHORIZED(response, MESSAGE_INVALID_TOKEN);
+            return;
+        }
+        int position = credentials.indexOf(":");
+        if (position < 0) {
+            UNAUTHORIZED(response, MESSAGE_INVALID_TOKEN);
+            return;
+        }
+
+        UserRealm userRealm = server == null ? null : server.getRealm();
+        if (userRealm == null) {
+            UNAUTHORIZED(response, MESSAGE_INVALID_CREDENTIALS);
+            return;
+        }
+        String currentUser = userRealm.login(
+                credentials.substring(0, position).trim(),
+                credentials.substring(position + 1).trim());
+        if (currentUser == null) {
+            UNAUTHORIZED(response, MESSAGE_INVALID_CREDENTIALS);
+            return;
+        }
+
+        chain.doFilter(servletRequest, servletResponse);
     }
 
     @Override
