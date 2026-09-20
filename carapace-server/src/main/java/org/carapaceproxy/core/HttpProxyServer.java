@@ -97,6 +97,7 @@ import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.server.mapper.EndpointMapper;
+import org.carapaceproxy.user.FileUserRealm;
 import org.carapaceproxy.user.SimpleUserRealm;
 import org.carapaceproxy.user.UserRealm;
 import org.eclipse.jetty.security.ConstraintMapping;
@@ -292,6 +293,10 @@ public class HttpProxyServer implements AutoCloseable {
 
         if (adminServerHttpPort < 0 && adminServerHttpsPort < 0) {
             throw new RuntimeException("To enable admin interface at least one between http and https port must be set");
+        }
+
+        if (realm instanceof SimpleUserRealm) { // a subclass is a stub too
+            LOG.log(Level.WARNING, "userrealm.class={0}: the admin API accepts any credentials", userRealmClassname);
         }
 
         adminserver = new Server();
@@ -511,6 +516,9 @@ public class HttpProxyServer implements AutoCloseable {
     }
 
     private static UserRealm buildRealm(String userRealmClassname, ConfigurationStore properties) throws ConfigurationNotValidException {
+        if (userRealmClassname == null) {
+            return null; // no admin API to protect: a missing realm is rejected at boot
+        }
         try {
             UserRealm res = (UserRealm) Class.forName(userRealmClassname).getConstructor().newInstance();
             res.configure(properties);
@@ -581,7 +589,12 @@ public class HttpProxyServer implements AutoCloseable {
         adminAccessLogPath = properties.getString("admin.accesslog.path", adminAccessLogPath);
         adminAccessLogTimezone = properties.getString("admin.accesslog.format.timezone", adminAccessLogTimezone);
         adminLogRetentionDays = properties.getInt("admin.accesslog.retention.days", adminLogRetentionDays);
-        userRealmClassname = properties.getClassname("userrealm.class", SimpleUserRealm.class.getName());
+        userRealmClassname = properties.getClassname("userrealm.class", null);
+        if (adminServerEnabled && userRealmClassname == null) {
+            throw new ConfigurationNotValidException("userrealm.class is required when the admin API is enabled; "
+                    + "use " + FileUserRealm.class.getName() + " to authenticate against a users file, "
+                    + "or see the Admin authentication section of the README for the other realms");
+        }
 
         LOG.log(Level.INFO, "http.admin.enabled={0}", adminServerEnabled);
         LOG.log(Level.INFO, "http.admin.port={0}", adminServerHttpPort);

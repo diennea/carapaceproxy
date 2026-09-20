@@ -30,6 +30,10 @@ mvn clean install -DskipTests -Pproduction
 cd carapace-server/target
 unzip *.zip
 cd carapace-server-${CARAPACE_V}
+
+# development setup: the stub realm accepts the credentials used below
+printf '\nuserrealm.class=org.carapaceproxy.user.SimpleUserRealm\n' >> conf/server.properties
+
 ./bin/service server start
 
 timeout 22 sh -c 'until nc -z $0 $1; do sleep 1; done' localhost 8001

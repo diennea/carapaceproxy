@@ -43,6 +43,7 @@ import org.carapaceproxy.utils.TestUserRealm;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import org.junit.BeforeClass;
@@ -287,9 +288,26 @@ public class ApplyConfigurationTest {
     @Test
     public void testUserRealm() throws Exception {
 
-        // Default UserRealm
+        // no realm configured: the admin API is disabled here, so the server boots without one
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+            server.configureAtBoot(new PropertiesConfigurationStore(new Properties()));
+            server.start();
+
+            assertNull(server.getRealm());
+        }
+
+        // no realm configured while the admin API is enabled: the server refuses to boot
         try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
             Properties configuration = new Properties();
+            configuration.put("http.admin.enabled", "true");
+            assertThrows(ConfigurationNotValidException.class,
+                    () -> server.configureAtBoot(new PropertiesConfigurationStore(configuration)));
+        }
+
+        // SimpleUserRealm: the development stub, which has to be asked for explicitly
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+            Properties configuration = new Properties();
+            configuration.put("userrealm.class", SimpleUserRealm.class.getName());
             server.configureAtBoot(new PropertiesConfigurationStore(configuration));
             server.start();
 
