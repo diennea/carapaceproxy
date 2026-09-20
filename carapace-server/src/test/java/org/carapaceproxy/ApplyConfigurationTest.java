@@ -259,9 +259,24 @@ public class ApplyConfigurationTest {
     @Test
     public void testUserRealm() throws Exception {
 
-        // Default UserRealm
+        // no realm configured: the admin API is disabled here, so the server boots without one
         try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
             server.configureAtBoot(new PropertiesConfigurationStore(new Properties()));
+            server.start();
+
+            assertNull(server.getRealm());
+        }
+
+        // no realm configured while the admin API is enabled: the server refuses to boot
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
+            assertThrows(ConfigurationNotValidException.class, () -> server.configureAtBoot(
+                    new PropertiesConfigurationStore(props("http.admin.enabled", "true"))));
+        }
+
+        // SimpleUserRealm: the development stub, which has to be asked for explicitly
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
+            server.configureAtBoot(new PropertiesConfigurationStore(
+                    props("userrealm.class", SimpleUserRealm.class.getName())));
             server.start();
 
             UserRealm realm = server.getRealm();
