@@ -14,7 +14,7 @@ EXPOSE $LISTENER_HTTPS_PORT
 
 RUN apt-get update \
      && apt-get -y dist-upgrade \
-     && apt-get -y install --no-install-recommends openjdk-17-jdk-headless netcat dnsutils less curl unzip \
+     && apt-get -y install --no-install-recommends openjdk-21-jdk-headless netcat dnsutils less curl unzip \
      && apt-get -y --purge autoremove \
      && apt-get autoclean \
      && apt-get clean \
