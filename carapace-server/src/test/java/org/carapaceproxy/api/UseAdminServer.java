@@ -27,6 +27,7 @@ import java.util.Properties;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
+import org.carapaceproxy.user.SimpleUserRealm;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.junit.After;
@@ -79,6 +80,7 @@ public class UseAdminServer {
         }
 
         fixAccessLogFileConfiguration(properties);
+        fixUserRealmConfiguration(properties);
 
         if (server != null) {
             server.configureAtBoot(new PropertiesConfigurationStore(properties));
@@ -98,6 +100,18 @@ public class UseAdminServer {
             fixAccessLogFileConfiguration(configuration);
             PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
             server.applyDynamicConfigurationFromAPI(config);
+        }
+    }
+
+    /**
+     * The admin API refuses to start without a user realm: tests that are not about authentication get the
+     * stub realm, which accepts the credentials they send.
+     *
+     * @param properties the configuration the server is about to boot with
+     */
+    private void fixUserRealmConfiguration(Properties properties) {
+        if (!properties.containsKey("userrealm.class")) {
+            properties.put("userrealm.class", SimpleUserRealm.class.getName());
         }
     }
 

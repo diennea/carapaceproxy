@@ -13,6 +13,7 @@ services:
       CARAPACE_mode: cluster
       CARAPACE_zkAddress: zookeeper:2181
       CARAPACE_peer.id: test
+      CARAPACE_userrealm.class: org.carapaceproxy.user.SimpleUserRealm
     depends_on:
       - zookeeper
     ports:
