@@ -92,7 +92,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <toolchain.java.version>21</toolchain.java.version>
         <maven.compiler.release>${toolchain.java.version}</maven.compiler.release>
-        <javacc-maven-plugin.version>3.0.1</javacc-maven-plugin.version>
+        <javacc-maven-plugin.version>3.2.0</javacc-maven-plugin.version>
 
         <libs.projectreactor>2024.0.6</libs.projectreactor>
         <libs.netty>4.1.121.Final</libs.netty>
