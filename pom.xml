@@ -227,6 +227,7 @@
                 <version>${libs.logback}</version>
             </dependency>
             <dependency>
+                <!-- Transitive from the AWS SDK and HerdDB, pinned to keep one version across the tree -->
                 <groupId>commons-codec</groupId>
                 <artifactId>commons-codec</artifactId>
                 <version>${libs.commons.codec}</version>

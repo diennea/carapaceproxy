@@ -47,7 +47,6 @@ import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
-import org.apache.commons.codec.binary.Base64;
 
 /**
  * HTTPs utilities
@@ -484,17 +483,6 @@ public class HttpTestUtils {
         }
         if (con.getConnectTimeout() <= 0) {
             con.setConnectTimeout(60 * 1000); // 1 min
-        }
-    }
-
-    public static void setBasicCredentials(String httpProxyUsername, String httpProxyPassword, URLConnection con) {
-
-        if (httpProxyUsername != null && httpProxyUsername.length() > 0) {
-            String pHeader = "Authorization";
-            String sstr = httpProxyUsername + ":" + httpProxyPassword;
-
-            String secret = "Basic " + Base64.encodeBase64String(sstr.getBytes(StandardCharsets.UTF_8));
-            con.addRequestProperty(pHeader, secret);
         }
     }
 
