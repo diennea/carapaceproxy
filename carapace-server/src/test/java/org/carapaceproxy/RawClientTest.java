@@ -50,12 +50,13 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.epoll.Epoll;
-import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.epoll.EpollIoHandler;
 import io.netty.channel.epoll.EpollServerSocketChannel;
 import io.netty.channel.group.DefaultChannelGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
@@ -380,11 +381,11 @@ public class RawClientTest {
 
         public DummyServer(String host, int port, AtomicBoolean responseEnabled) throws InterruptedException {
             if (Epoll.isAvailable()) {
-                bossGroup = new EpollEventLoopGroup();
-                workerGroup = new EpollEventLoopGroup();
+                bossGroup = new MultiThreadIoEventLoopGroup(EpollIoHandler.newFactory());
+                workerGroup = new MultiThreadIoEventLoopGroup(EpollIoHandler.newFactory());
             } else { // For windows devs
-                bossGroup = new NioEventLoopGroup();
-                workerGroup = new NioEventLoopGroup();
+                bossGroup = new MultiThreadIoEventLoopGroup(NioIoHandler.newFactory());
+                workerGroup = new MultiThreadIoEventLoopGroup(NioIoHandler.newFactory());
             }
             ServerBootstrap b = new ServerBootstrap();
             b.group(bossGroup, workerGroup)
