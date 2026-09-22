@@ -71,6 +71,17 @@ public class TrustStoreManager {
         loadTrustStore();
     }
 
+    /**
+     * Builds the TLS context Carapace uses to talk to the backends.
+     * <p>
+     * A backend certificate must be valid for the host configured for that backend: one reached
+     * by IP needs an IP SAN, or the handshake fails.
+     *
+     * @param trustManager the trust manager to use, or {@code null} to keep the JDK default
+     * @return the context, with ALPN set for HTTP/2 and HTTP/1.1
+     * @throws SSLException if the context cannot be built
+     * @see SslContextBuilder#endpointIdentificationAlgorithm(String)
+     */
     private SslContext buildClientSslContext(final TrustManagerFactory trustManager) throws SSLException {
         final SslContextBuilder builder = SslContextBuilder.forClient();
         if (trustManager != null) {
