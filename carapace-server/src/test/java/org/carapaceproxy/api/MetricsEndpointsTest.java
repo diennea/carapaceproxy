@@ -76,16 +76,12 @@ public class MetricsEndpointsTest extends UseAdminServer {
     /**
      * Every metric {@code /micrometrics} exposes: those Reactor Netty publishes into the Micrometer
      * registry, renamed for Prometheus.
+     * <p>
+     * The adaptive allocator, the one {@code bin/setenv.sh} selects, only reports used heap and direct
+     * memory: the arena, chunk and cache gauges the pooled one publishes are not here. Running with
+     * {@code -Dio.netty.allocator.type=pooled} brings them back and fails this test.
      */
     private static final Set<String> EXPECTED_MICROMETRICS = Set.of(
-            "reactor_netty_bytebuf_allocator_active_direct_memory",
-            "reactor_netty_bytebuf_allocator_active_heap_memory",
-            "reactor_netty_bytebuf_allocator_chunk_size",
-            "reactor_netty_bytebuf_allocator_direct_arenas",
-            "reactor_netty_bytebuf_allocator_heap_arenas",
-            "reactor_netty_bytebuf_allocator_normal_cache_size",
-            "reactor_netty_bytebuf_allocator_small_cache_size",
-            "reactor_netty_bytebuf_allocator_threadlocal_caches",
             "reactor_netty_bytebuf_allocator_used_direct_memory",
             "reactor_netty_bytebuf_allocator_used_heap_memory",
             "reactor_netty_connection_provider_active_connections",

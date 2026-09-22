@@ -97,8 +97,9 @@
         <javacc-maven-plugin.version>3.2.1</javacc-maven-plugin.version>
         <libs.javacc>7.0.13</libs.javacc>
 
-        <libs.projectreactor>2024.0.18</libs.projectreactor>
-        <libs.netty>4.1.137.Final</libs.netty>
+        <libs.projectreactor>2025.0.7</libs.projectreactor>
+        <libs.netty>4.2.17.Final</libs.netty>
+        <libs.jspecify>1.0.1</libs.jspecify>
         <libs.acme4j>5.1.0</libs.acme4j>
         <libs.bouncycastle>1.85</libs.bouncycastle>
         <libs.awssdk>2.45.1</libs.awssdk>
@@ -206,6 +207,12 @@
                 <groupId>org.apache.httpcomponents</groupId>
                 <artifactId>httpcore</artifactId>
                 <version>${libs.httpcore}</version>
+            </dependency>
+            <dependency>
+                <!-- Transitive from Reactor and Micrometer, pinned to keep one version across the tree -->
+                <groupId>org.jspecify</groupId>
+                <artifactId>jspecify</artifactId>
+                <version>${libs.jspecify}</version>
             </dependency>
             <dependency>
                 <groupId>org.checkerframework</groupId>
