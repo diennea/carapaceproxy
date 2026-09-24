@@ -450,6 +450,17 @@
                     <version>3.3.1</version>
                 </plugin>
                 <plugin>
+                    <groupId>io.github.git-commit-id</groupId>
+                    <artifactId>git-commit-id-maven-plugin</artifactId>
+                    <version>10.0.1</version>
+                    <configuration>
+                        <offline>true</offline>
+                        <!-- A source archive without .git must still build; consumers fall back to "unknown" -->
+                        <failOnNoGitDirectory>false</failOnNoGitDirectory>
+                        <failOnUnableToExtractRepoInfo>false</failOnUnableToExtractRepoInfo>
+                    </configuration>
+                </plugin>
+                <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-jar-plugin</artifactId>
                     <version>3.4.2</version>
