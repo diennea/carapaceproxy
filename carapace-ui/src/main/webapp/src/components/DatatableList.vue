@@ -83,6 +83,10 @@ export default {
                 if (value) {
                     return compareTimestamp(a[key], b[key]);
                 }
+                if (this.fields.some(el => el.key === key && el.isVersion === true)) {
+                    // numeric-aware, so that 2.10.0 sorts after 2.9.0
+                    return a[key].localeCompare(b[key], undefined, { numeric: true });
+                }
                 return a[key] < b[key] ? -1 : a[key] > b[key] ? 1 : 0;
             },
             filter: null,
