@@ -36,6 +36,7 @@ import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
+import org.carapaceproxy.utils.CarapaceVersion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -175,6 +176,7 @@ public class ServerMain implements AutoCloseable {
      * @throws Exception                      If the component fails to start for some other reasons
      */
     public void start() throws Exception {
+        LOG.info("Starting Carapace {} ({})", CarapaceVersion.VERSION, CarapaceVersion.COMMIT);
         pidFileLocker.lock();
         server = new HttpProxyServer(StandardEndpointMapper::new, basePath);
         server.configureAtBoot(configuration);
