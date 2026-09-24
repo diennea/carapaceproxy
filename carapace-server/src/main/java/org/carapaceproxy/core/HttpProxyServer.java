@@ -22,6 +22,8 @@ package org.carapaceproxy.core;
 import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_HOST;
 import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_HTTPS_PORT;
 import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_ADMIN_SERVER_PORT;
+import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_COMMIT;
+import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_VERSION;
 import static org.carapaceproxy.server.filters.RequestFilterFactory.buildRequestFilter;
 import static org.glassfish.jersey.servlet.ServletProperties.JAXRS_APPLICATION_CLASS;
 import static reactor.netty.Metrics.ACTIVE_CONNECTIONS;
@@ -99,6 +101,7 @@ import org.carapaceproxy.server.mapper.EndpointMapper;
 import org.carapaceproxy.user.FileUserRealm;
 import org.carapaceproxy.user.SimpleUserRealm;
 import org.carapaceproxy.user.UserRealm;
+import org.carapaceproxy.utils.CarapaceVersion;
 import org.eclipse.jetty.security.ConstraintMapping;
 import org.eclipse.jetty.security.ConstraintSecurityHandler;
 import org.eclipse.jetty.server.Handler;
@@ -859,6 +862,8 @@ public class HttpProxyServer implements AutoCloseable {
             peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HOST, adminAdvertisedServerHost);
             peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_PORT, adminServerHttpPort + "");
             peerInfo.put(PROPERTY_PEER_ADMIN_SERVER_HTTPS_PORT, adminServerHttpsPort + "");
+            peerInfo.put(PROPERTY_PEER_VERSION, CarapaceVersion.VERSION);
+            peerInfo.put(PROPERTY_PEER_COMMIT, CarapaceVersion.COMMIT);
             this.groupMembershipHandler = new ZooKeeperGroupMembershipHandler(zkAddress, zkTimeout, zkSecure, peerId, peerInfo, zkProperties);
         } else {
             this.groupMembershipHandler = new NullGroupMembershipHandler();
