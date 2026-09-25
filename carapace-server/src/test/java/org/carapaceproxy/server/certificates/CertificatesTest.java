@@ -92,7 +92,6 @@ import org.carapaceproxy.utils.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.powermock.reflect.Whitebox;
 import org.shredzone.acme4j.Login;
 import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.util.KeyPairUtils;
@@ -606,8 +605,7 @@ public class CertificatesTest extends UseAdminServer {
         List<X509Certificate> renewed = Arrays.asList((X509Certificate[]) generateSampleChain(keyPair, false));
         when(_cert.getCertificateChain()).thenReturn(renewed);
         when(ac.fetchCertificateForOrder(any())).thenReturn(_cert);
-        // by-name, because there are other map fields
-        Whitebox.setInternalState(dcMan, "acmeClients", Map.of(DEFAULT_PROVIDER_NAME, ac));
+        dcMan.setAcmeClients(Map.of(DEFAULT_PROVIDER_NAME, ac));
 
         // Renew
         dcMan.run();
@@ -711,8 +709,7 @@ public class CertificatesTest extends UseAdminServer {
         List<X509Certificate> renewed = Arrays.asList((X509Certificate[]) generateSampleChain(keyPair, false));
         when(_cert.getCertificateChain()).thenReturn(renewed);
         when(ac.fetchCertificateForOrder(any())).thenReturn(_cert);
-        // by-name, because there are other map fields
-        Whitebox.setInternalState(dcMan, "acmeClients", Map.of(DEFAULT_PROVIDER_NAME, ac));
+        dcMan.setAcmeClients(Map.of(DEFAULT_PROVIDER_NAME, ac));
 
         // Renew
         File certsDir = tmpDir.newFolder("certs");
@@ -874,7 +871,7 @@ public class CertificatesTest extends UseAdminServer {
 
         server.getCurrentConfiguration().setLocalCertificatesStorePath(certsDir.getAbsolutePath());
         // the certificate upload above reloaded the configuration, rebuilding the ACME clients: re-inject the mock
-        Whitebox.setInternalState(dcMan, "acmeClients", Map.of(DEFAULT_PROVIDER_NAME, ac));
+        dcMan.setAcmeClients(Map.of(DEFAULT_PROVIDER_NAME, ac));
         dcMan.run();
         updated = dcMan.getCertificateDataForDomain("localhost2");
         assertNotNull(updated);
