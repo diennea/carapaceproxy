@@ -243,7 +243,7 @@ public class DynamicCertificatesManagerTest {
         assertCertificateState(d2, WAITING, 0, man);
 
         int expectedCycleCount = cycleCount;
-        int saveCounter = 1; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
+        int saveCounter = 1; // every run saves the certificate, unless it is AVAILABLE or out of attempts
 
         // WAITING
         assertCertificateState(d1, WAITING, cycleCount, man);
@@ -264,7 +264,7 @@ public class DynamicCertificatesManagerTest {
                     man.getCertificateDataForDomain(d1).getMessage()
             );
             man.run();
-            verify(store, times(++saveCounter)).saveCertificate(any());
+            verify(store, times(maxedOutTrials ? saveCounter : ++saveCounter)).saveCertificate(any());
             assertCertificateState(d1, maxedOutTrials ? REQUEST_FAILED : WAITING, expectedCycleCount, man);
             return;
         } else { // VERIFYING
@@ -274,7 +274,7 @@ public class DynamicCertificatesManagerTest {
             if (runCase.equals("order_finalization_error")) {
                 assertCertificateState(d1, REQUEST_FAILED, ++expectedCycleCount, man);
                 man.run();
-                verify(store, times(++saveCounter)).saveCertificate(any());
+                verify(store, times(maxedOutTrials ? saveCounter : ++saveCounter)).saveCertificate(any());
                 assertCertificateState(d1, maxedOutTrials ? REQUEST_FAILED : WAITING, expectedCycleCount, man);
                 return;
             } else {
@@ -296,7 +296,7 @@ public class DynamicCertificatesManagerTest {
         );
         man.run();
         if (runCase.equals("order_response_error")) { // REQUEST_FAILED
-            verify(store, times(++saveCounter)).saveCertificate(any());
+            verify(store, times(maxedOutTrials ? saveCounter : ++saveCounter)).saveCertificate(any());
             assertCertificateState(d1, maxedOutTrials ? REQUEST_FAILED : WAITING, expectedCycleCount, man);
         } else { // AVAILABLE
             DynamicCertificateState state = man.getStateOfCertificate(d1);
@@ -459,7 +459,8 @@ public class DynamicCertificatesManagerTest {
         assertCertificateState(unreachable, DOMAIN_UNREACHABLE, MAX_ATTEMPTS + 1, man);
         // the cap was already spent by the wildcard
         assertCertificateState(waiting, WAITING, 0, man);
-        verify(store, times(3)).saveCertificate(any());
+        // the out-of-attempts certificate is not saved again
+        verify(store, times(2)).saveCertificate(any());
     }
 
     @Test
