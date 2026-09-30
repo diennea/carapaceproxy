@@ -47,6 +47,10 @@ public class ConnectionsManager implements AutoCloseable {
                 builder.forRemoteHost(InetSocketAddress.createUnresolved(be.host(), be.port()), spec -> {
                     spec.maxConnections(connectionPool.getMaxConnectionsPerEndpoint());
                     spec.pendingAcquireTimeout(Duration.ofMillis(connectionPool.getBorrowTimeout()));
+                    if (connectionPool.getBorrowTimeout() > 0) {
+                        // queued acquires are bounded by the borrow timeout, not by the default 2 * maxConnections
+                        spec.pendingAcquireMaxCount(-1);
+                    }
                     spec.maxIdleTime(Duration.ofMillis(connectionPool.getIdleTimeout()));
                     spec.maxLifeTime(Duration.ofMillis(connectionPool.getMaxLifeTime()));
                     spec.evictInBackground(Duration.ofMillis(connectionPool.getIdleTimeout() * 2L));
