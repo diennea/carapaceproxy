@@ -337,6 +337,10 @@ public class ConfigurationStoreTest {
         store.saveAcmeChallengeToken("token-id2", "token-data2");
         assertEquals("token-data", store.loadAcmeChallengeToken("token-id"));
         assertEquals("token-data2", store.loadAcmeChallengeToken("token-id2"));
+        // the CA hands back the token of a still-pending authorization on reorder
+        store.saveAcmeChallengeToken("token-id", "token-data-new");
+        assertEquals("token-data-new", store.loadAcmeChallengeToken("token-id"));
+        assertEquals("token-data2", store.loadAcmeChallengeToken("token-id2"));
         store.deleteAcmeChallengeToken("token-id");
         assertNull(store.loadAcmeChallengeToken("token-id"));
         store.deleteAcmeChallengeToken("token-id2");
