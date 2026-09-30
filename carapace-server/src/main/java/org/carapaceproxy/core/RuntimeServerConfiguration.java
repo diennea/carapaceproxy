@@ -82,6 +82,7 @@ public class RuntimeServerConfiguration {
     private static final Logger LOG = LoggerFactory.getLogger(RuntimeServerConfiguration.class);
     private static final int DEFAULT_PROBE_PERIOD = 0;
     private static final int DEFAULT_ACME_RATE_LIMIT = 300;
+    private static final int DEFAULT_ACME_MAX_ATTEMPTS = 10;
     public static final long DEFAULT_WARMUP_PERIOD = Duration.ofSeconds(30).toMillis();
 
     private final Map<EndpointKey, NetworkListenerConfiguration> listeners = new LinkedHashMap<>();
@@ -142,7 +143,7 @@ public class RuntimeServerConfiguration {
     private boolean http10BackwardCompatibilityEnabled = false;
     private String localCertificatesStorePath;
     private Set<String> localCertificatesStorePeersIds;
-    private int maxAttempts = DEFAULT_MAX_CONNECTIONS_PER_ENDPOINT;
+    private int maxAttempts = DEFAULT_ACME_MAX_ATTEMPTS;
     private int dynamicCertificatesManagerRateLimit = DEFAULT_ACME_RATE_LIMIT;
     private Set<String> alwaysCachedExtensions = Set.of("png", "gif", "jpg", "jpeg", "js", "css", "woff2", "webp");
 
