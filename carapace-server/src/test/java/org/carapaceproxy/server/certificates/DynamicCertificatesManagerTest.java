@@ -120,6 +120,8 @@ public class DynamicCertificatesManagerTest {
         "order_already_valid,false",
         "order_finalization_error,true",
         "order_finalization_error,false",
+        "order_finalization_transient,true",
+        "order_finalization_transient,false",
         "order_response_error,true",
         "order_response_error,false",
         "available_to_expired,true",
@@ -170,6 +172,10 @@ public class DynamicCertificatesManagerTest {
         when(ac.checkResponseForOrder(any())).thenReturn(runCase.equals("order_response_error") ? INVALID : VALID);
         if (runCase.equals("order_already_valid") || runCase.equals("order_finalization_error")) {
             doThrow(AcmeException.class).when(ac).orderCertificate(any(), any());
+        }
+        if (runCase.equals("order_finalization_transient")) {
+            doThrow(new AcmeNetworkException(new IOException("connection reset"))).doNothing()
+                    .when(ac).orderCertificate(any(), any());
         }
 
         KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
@@ -269,6 +275,11 @@ public class DynamicCertificatesManagerTest {
         } else { // VERIFYING
             assertCertificateState(d1, VERIFIED, expectedCycleCount, man);
             man.run();
+            if (runCase.equals("order_finalization_transient")) { // not saved: the next run finalizes the same order
+                verify(store, times(saveCounter)).saveCertificate(any());
+                assertCertificateState(d1, VERIFIED, expectedCycleCount, man);
+                man.run();
+            }
             verify(store, times(++saveCounter)).saveCertificate(any());
             if (runCase.equals("order_finalization_error")) {
                 assertCertificateState(d1, REQUEST_FAILED, ++expectedCycleCount, man);
@@ -284,7 +295,8 @@ public class DynamicCertificatesManagerTest {
         man.run();
         verify(store, times(++saveCounter)).saveCertificate(any());
         switch (runCase) {
-            case "challenge_null", "order_already_valid", "available_to_expired", "all_ok" -> expectedCycleCount = 0;
+            case "challenge_null", "order_already_valid", "available_to_expired", "all_ok",
+                    "order_finalization_transient" -> expectedCycleCount = 0;
             case "order_response_error" -> expectedCycleCount++;
         }
         assertCertificateState(
@@ -873,6 +885,26 @@ public class DynamicCertificatesManagerTest {
         assertCertificateState("localhost2", VERIFYING, 0, man);
         assertCertificateState("localhost3", capped ? WAITING : VERIFYING, 0, man);
         verify(store, times(capped ? 2 : 3)).saveCertificate(any());
+    }
+
+    @Test
+    public void testLifecycleSurvivesReloadFailure() throws Exception {
+        final var domain = "localhost";
+        final var store = waitingCertificatesStore(List.of(domain));
+        final var man = buildManager(store, httpChallengeClient(), null, acmeCertificates(List.of(domain)));
+        // the lifecycle load succeeds, the reload after the save fails: it must not escape run()
+        final var cert = new CertificateData(domain, null, WAITING);
+        when(store.loadCertificateForDomain(eq(domain)))
+                .thenReturn(cert)
+                .thenThrow(new ConfigurationStoreException(new IOException("db down")))
+                .thenReturn(cert);
+
+        man.run();
+        verify(store, times(1)).saveCertificate(argThat(c -> c.getState() == VERIFYING));
+
+        man.run(); // the failed reload must not stop the next run
+        verify(store, times(2)).saveCertificate(any());
+        assertCertificateState(domain, VERIFIED, 0, man);
     }
 
     @Test
