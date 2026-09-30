@@ -417,6 +417,26 @@ public class DynamicCertificatesManagerTest {
     }
 
     @Test
+    public void testLifecycleSurvivesReloadFailure() throws Exception {
+        final var domain = "localhost";
+        final var store = waitingCertificatesStore(List.of(domain));
+        final var man = buildManager(store, httpChallengeClient(), null, acmeCertificates(List.of(domain)));
+        // the lifecycle load succeeds, the reload after the save fails: it must not escape run()
+        final var cert = new CertificateData(domain, null, WAITING);
+        when(store.loadCertificateForDomain(eq(domain)))
+                .thenReturn(cert)
+                .thenThrow(new ConfigurationStoreException(new IOException("db down")))
+                .thenReturn(cert);
+
+        man.run();
+        verify(store, times(1)).saveCertificate(argThat(c -> c.getState() == VERIFYING));
+
+        man.run(); // the failed reload must not stop the next run
+        verify(store, times(2)).saveCertificate(any());
+        assertCertificateState(domain, VERIFIED, 0, man);
+    }
+
+    @Test
     // the wildcard certificate spends the cap on a DNS challenge, the other three steps stay local
     public void testOnlyStepsReachingTheCaSpendTheCap() throws Exception {
         final var wildcard = "*.localhost";
