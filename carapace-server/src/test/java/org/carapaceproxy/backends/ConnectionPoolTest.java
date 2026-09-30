@@ -21,6 +21,7 @@ package org.carapaceproxy.backends;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -43,9 +44,17 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.Socket;
 import java.net.SocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import org.carapaceproxy.api.ConnectionPoolsResource;
 import org.carapaceproxy.api.UseAdminServer;
 import org.carapaceproxy.core.ConnectionsManager;
@@ -157,6 +166,48 @@ public class ConnectionPoolTest extends UseAdminServer {
         config.put("connectionpool.3.enabled", "true");
 
         changeDynamicConfiguration(config);
+    }
+
+    @Test
+    public void testAcquiresWaitForBorrowTimeoutWhenPoolIsBusy() throws Exception {
+        stubFor(post(urlEqualTo("/slow.html")).willReturn(aResponse()
+                .withStatus(200)
+                .withFixedDelay(1_000)
+                .withBody("ok")));
+
+        final Properties config = new Properties(HTTP_ADMIN_SERVER_CONFIG);
+        startServer(config);
+        config.put("listener.1.host", "localhost");
+        config.put("listener.1.port", "8086");
+        config.put("listener.1.enabled", "true");
+        config.put("backend.1.id", "localhost");
+        config.put("backend.1.enabled", "true");
+        config.put("backend.1.host", "localhost");
+        config.put("backend.1.port", String.valueOf(wireMockRule.port()));
+        config.put("director.1.id", "*");
+        config.put("director.1.backends", "localhost");
+        config.put("director.1.enabled", "true");
+        config.put("route.100.id", "default");
+        config.put("route.100.enabled", "true");
+        config.put("route.100.match", "all");
+        config.put("route.100.action", "proxy-all");
+        // one connection: past the default queue of 2 * maxConnections, acquires used to be rejected at once
+        config.put("connectionsmanager.maxconnectionsperendpoint", "1");
+        config.put("connectionsmanager.borrowtimeout", "30000");
+        changeDynamicConfiguration(config);
+
+        // a body keeps the request on HTTP/1.1, whose pool is shared across requests
+        final HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
+        final HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:8086/slow.html"))
+                .POST(HttpRequest.BodyPublishers.ofString("body"))
+                .build();
+        final List<CompletableFuture<HttpResponse<String>>> responses = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            responses.add(client.sendAsync(request, HttpResponse.BodyHandlers.ofString()));
+        }
+        for (final CompletableFuture<HttpResponse<String>> response : responses) {
+            assertEquals(200, response.get(30, TimeUnit.SECONDS).statusCode());
+        }
     }
 
     @Test
