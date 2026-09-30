@@ -309,11 +309,18 @@ public class DynamicCertificatesManager implements Runnable {
         }
     }
 
+    /**
+     * Runs one pass of the certificates lifecycle; nothing may escape, as it would cancel the scheduled task.
+     */
     @Override
     public void run() {
         if (groupMembershipHandler != null) {
-            // Only one node of the cluster executes this
-            groupMembershipHandler.executeInMutex(THREAD_NAME, period > 0 ? period : 1, this::renewalPass);
+            try {
+                // Only one node of the cluster executes this
+                groupMembershipHandler.executeInMutex(THREAD_NAME, period > 0 ? period : 1, this::renewalPass);
+            } catch (Throwable t) {
+                LOG.error("Unexpected error in the dynamic certificates lifecycle", t);
+            }
         }
     }
 
