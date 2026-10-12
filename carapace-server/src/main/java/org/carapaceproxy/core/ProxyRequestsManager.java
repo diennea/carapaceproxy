@@ -96,6 +96,9 @@ public class ProxyRequestsManager implements AutoCloseable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ProxyRequestsManager.class);
     private static final String DEFAULT_KEY = "*";
+    private static final List<HttpProtocol> TLS_PROTOCOLS = List.of(HttpProtocol.H2, HttpProtocol.HTTP11);
+    private static final List<HttpProtocol> HTTP11_PROTOCOLS = List.of(HttpProtocol.HTTP11);
+    private static final List<HttpProtocol> H2C_PROTOCOLS = List.of(HttpProtocol.H2C, HttpProtocol.HTTP11);
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS");
 
     private final HttpProxyServer parent;
@@ -103,6 +106,31 @@ public class ProxyRequestsManager implements AutoCloseable {
     private final ConnectionsManager connectionsManager = new ConnectionsManager();
 
     private volatile Map<String, SslContext> clientSslContexts = new ConcurrentHashMap<>();
+    /**
+     * Backend clients, reused across requests; a client per request would build a new HTTP/2 pool each time.
+     * Replaced as a whole on reload, as its keys refer to the connection providers of one configuration.
+     */
+    private volatile Map<ForwarderKey, HttpClient> forwarders = new ConcurrentHashMap<>();
+
+    /**
+     * Everything a backend client is built from.
+     *
+     * @param endpoint       the backend endpoint
+     * @param provider       the connection provider, of the pool chosen for the request
+     * @param protocols      the protocols to offer the backend
+     * @param sslContext     the client SSL context, or null for a plaintext backend
+     * @param compress       whether request compression is enabled
+     * @param maxHeaderSize  the max size of the response headers
+     */
+    private record ForwarderKey(
+            EndpointKey endpoint,
+            ConnectionProvider provider,
+            List<HttpProtocol> protocols,
+            SslContext sslContext,
+            boolean compress,
+            int maxHeaderSize
+    ) {
+    }
 
     public ProxyRequestsManager(HttpProxyServer parent) {
         this.parent = parent;
@@ -199,6 +227,7 @@ public class ProxyRequestsManager implements AutoCloseable {
         }
         this.clientSslContexts = newContexts;
         connectionsManager.reloadConfiguration(newConfiguration, newEndpoints);
+        this.forwarders = new ConcurrentHashMap<>();
     }
 
     @Override
@@ -420,10 +449,21 @@ public class ProxyRequestsManager implements AutoCloseable {
             }
             LOGGER.debug("Max connections for {}: {}", connectionId, connectionProvider.maxConnectionsPerHost());
         }
-        HttpClient forwarder = getClient(connectionProvider, request)
+        final BackendConfiguration backend = parent.getBackendConfiguration(key);
+        final RuntimeServerConfiguration configuration = parent.getCurrentConfiguration();
+        final ForwarderKey forwarderKey = new ForwarderKey(
+                key,
+                connectionProvider,
+                getClientProtocols(backend.ssl(), request),
+                backend.ssl() ? getClientSslContext(backend) : null,
+                configuration.isRequestCompressionEnabled(),
+                configuration.getMaxHeaderSize()
+        );
+        // the cached client must not capture the request: only what the key determines
+        final HttpClient forwarder = forwarders.computeIfAbsent(forwarderKey, k -> getClient(k)
                 .followRedirect(false) // the client is the one that should follow the redirect, not the proxy
                 .runOn(parent.getEventLoopGroup())
-                .compress(parent.getCurrentConfiguration().isRequestCompressionEnabled())
+                .compress(k.compress())
                 .responseTimeout(Duration.ofMillis(connectionConfig.getStuckRequestTimeout()))
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
                 // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
@@ -437,7 +477,7 @@ public class ProxyRequestsManager implements AutoCloseable {
                 .option(Epoll.isAvailable()
                         ? EpollChannelOption.TCP_KEEPCNT
                         : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), connectionConfig.getKeepaliveCount())
-                .httpResponseDecoder(option -> option.maxHeaderSize(parent.getCurrentConfiguration().getMaxHeaderSize()))
+                .httpResponseDecoder(option -> option.maxHeaderSize(k.maxHeaderSize()))
                 .doOnRequest((req, conn) -> {
                     if (LOGGER.isDebugEnabled()) {
                         LOGGER.debug(
@@ -458,7 +498,7 @@ public class ProxyRequestsManager implements AutoCloseable {
                                 "Finished sending request for  Using client id {}_{} Uri {} Timestamp {} Backend {}:{}",
                                 key,
                                 connectionId,
-                                request.getUri(),
+                                req.resourceUrl(),
                                 DATE_TIME_FORMATTER.format(LocalDateTime.now()),
                                 key.host(),
                                 key.port()
@@ -466,7 +506,7 @@ public class ProxyRequestsManager implements AutoCloseable {
                     }
                 }).doAfterResponseSuccess((resp, conn) -> {
                     endpointStats.getLastActivity().set(System.currentTimeMillis());
-                });
+                }));
 
         AtomicBoolean cacheable = new AtomicBoolean(cache);
         final ContentsCache.ContentReceiver cacheReceiver = cacheable.get() ? parent.getCache().createCacheReceiver(request) : null;
@@ -590,42 +630,49 @@ public class ProxyRequestsManager implements AutoCloseable {
      * For example, HTTP/2 over TLS (H2) is used for HTTPS connections, while HTTP/2 cleartext (H2C)
      * is used for HTTP connections.
      *
-     * @param connectionProvider the connection provider to use
-     * @param request            the request object
+     * @param key what the client is built from
      * @return a configured HttpClient
      */
-    private HttpClient getClient(final ConnectionProvider connectionProvider, final ProxyRequest request) {
-        final EndpointKey endpoint = EndpointKey.make(request.getAction().getHost(), request.getAction().getPort());
-        final BackendConfiguration backend = parent.getBackendConfiguration(endpoint);
-        final boolean secure = backend.ssl();
-        final HttpClient httpClient = HttpClient.create(connectionProvider)
-                .host(endpoint.host())
-                .port(endpoint.port())
-                .protocol(getClientProtocols(secure, request));
-        if (secure) {
-            final String caCertificatePath = backend.caCertificatePath();
-            final SslContext sslContext;
-            if (!StringUtils.isBlank(caCertificatePath) && clientSslContexts.containsKey(caCertificatePath)) {
-                sslContext = clientSslContexts.get(caCertificatePath);
-            } else {
-                sslContext = clientSslContexts.get(DEFAULT_KEY);
-            }
-            final SslContext finalSslContext = sslContext;
-            return httpClient.secure(spec -> spec.sslContext(finalSslContext));
+    private static HttpClient getClient(final ForwarderKey key) {
+        final HttpClient httpClient = HttpClient.create(key.provider())
+                .host(key.endpoint().host())
+                .port(key.endpoint().port())
+                .protocol(key.protocols().toArray(HttpProtocol[]::new));
+        if (key.sslContext() != null) {
+            return httpClient.secure(spec -> spec.sslContext(key.sslContext()));
         }
         return httpClient;
     }
 
-    private HttpProtocol[] getClientProtocols(final boolean secure, final ProxyRequest request) {
+    /**
+     * Choose the client SSL context for a secure backend.
+     *
+     * @param backend the backend
+     * @return the context built from the backend CA certificate, or the default one
+     */
+    private SslContext getClientSslContext(final BackendConfiguration backend) {
+        final String caCertificatePath = backend.caCertificatePath();
+        return clientSslContexts.getOrDefault(
+                StringUtils.isBlank(caCertificatePath) ? DEFAULT_KEY : caCertificatePath, clientSslContexts.get(DEFAULT_KEY));
+    }
+
+    /**
+     * Choose the protocols to offer a backend.
+     *
+     * @param secure  whether the backend uses TLS
+     * @param request the request to forward
+     * @return the protocols, as shared constants usable in a cache key
+     */
+    private static List<HttpProtocol> getClientProtocols(final boolean secure, final ProxyRequest request) {
         if (secure) {
             // ALPN handles negotiation safely
-            return new HttpProtocol[]{HttpProtocol.H2, HttpProtocol.HTTP11};
+            return TLS_PROTOCOLS;
         }
         if (HttpUtils.mayHaveBody(request.getRequestHeaders())) {
             // H2C uses "Upgrade" header; RFC 7540 forbids "Upgrade: h2c" if the request has a body.
-            return new HttpProtocol[]{HttpProtocol.HTTP11};
+            return HTTP11_PROTOCOLS;
         }
-        return new HttpProtocol[]{HttpProtocol.H2C, HttpProtocol.HTTP11};
+        return H2C_PROTOCOLS;
     }
 
     private boolean aggregateChunksForLegacyHttp(ProxyRequest request) {

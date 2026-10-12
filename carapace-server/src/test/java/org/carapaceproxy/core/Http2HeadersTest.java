@@ -28,7 +28,9 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.concurrent.DefaultEventExecutor;
 import java.io.IOException;
+import java.net.SocketAddress;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -234,6 +236,80 @@ public class Http2HeadersTest {
             assertThat(capturedRequestHeaders.get().get(HttpHeaderNames.KEEP_ALIVE), is(nullValue()));
         } finally {
             h2cBackend.disposeNow();
+        }
+    }
+
+    /**
+     * The backend client is reused across requests, so they share the backend connection until a reload.
+     */
+    @Test
+    public void testBackendConnectionReusedUntilReload() throws IOException, ConfigurationNotValidException, InterruptedException {
+        final Set<SocketAddress> clientAddresses = ConcurrentHashMap.newKeySet();
+        final AtomicReference<HttpVersion> lastVersion = new AtomicReference<>();
+        final DisposableServer h2cBackend = HttpServer.create()
+                .host("localhost")
+                .port(0)
+                .protocol(HttpProtocol.H2C, HttpProtocol.HTTP11)
+                .route(routes -> routes.get("/index.html", (req, resp) -> {
+                    clientAddresses.add(req.remoteAddress());
+                    lastVersion.set(req.version());
+                    return resp.status(HttpResponseStatus.OK).sendString(Mono.just("ok"));
+                }))
+                .bindNow();
+        try {
+            final var mapper = new TestEndpointMapper("localhost", h2cBackend.port());
+            try (final var server = new HttpProxyServer(mapper, tmpDir.newFolder())) {
+                server.addListener(newH2CListenerConfiguration());
+                server.start();
+                final var client = HttpClient.create().protocol(HttpProtocol.HTTP11);
+                final var uri = "http://localhost:" + server.getLocalPort() + "/index.html";
+                for (int i = 0; i < 3; i++) {
+                    assertThat(client.get().uri(uri).responseSingle((resp, body) -> body.asString().map(b -> resp.status())).block(), is(HttpResponseStatus.OK));
+                }
+                assertThat(clientAddresses.size(), is(1));
+                assertThat(lastVersion.get(), is(HttpVersion.valueOf("HTTP/2.0")));
+
+                server.getProxyRequestsManager().reloadConfiguration(server.getCurrentConfiguration(), mapper.getBackends().values());
+                assertThat(client.get().uri(uri).responseSingle((resp, body) -> body.asString().map(b -> resp.status())).block(), is(HttpResponseStatus.OK));
+                assertThat(clientAddresses.size(), is(2));
+            }
+        } finally {
+            h2cBackend.disposeNow();
+        }
+    }
+
+    /**
+     * A backend that refuses the h2c upgrade still gets one shared connection, not one per request.
+     */
+    @Test
+    public void testHttp11BackendConnectionReused() throws IOException, ConfigurationNotValidException, InterruptedException {
+        final Set<SocketAddress> clientAddresses = ConcurrentHashMap.newKeySet();
+        final AtomicReference<HttpVersion> lastVersion = new AtomicReference<>();
+        final DisposableServer http11Backend = HttpServer.create()
+                .host("localhost")
+                .port(0)
+                .protocol(HttpProtocol.HTTP11)
+                .route(routes -> routes.get("/index.html", (req, resp) -> {
+                    clientAddresses.add(req.remoteAddress());
+                    lastVersion.set(req.version());
+                    return resp.status(HttpResponseStatus.OK).sendString(Mono.just("ok"));
+                }))
+                .bindNow();
+        try {
+            final var mapper = new TestEndpointMapper("localhost", http11Backend.port());
+            try (final var server = new HttpProxyServer(mapper, tmpDir.newFolder())) {
+                server.addListener(newH2CListenerConfiguration());
+                server.start();
+                final var client = HttpClient.create().protocol(HttpProtocol.HTTP11);
+                final var uri = "http://localhost:" + server.getLocalPort() + "/index.html";
+                for (int i = 0; i < 3; i++) {
+                    assertThat(client.get().uri(uri).responseSingle((resp, body) -> body.asString().map(b -> resp.status())).block(), is(HttpResponseStatus.OK));
+                }
+                assertThat(clientAddresses.size(), is(1));
+                assertThat(lastVersion.get(), is(HttpVersion.HTTP_1_1));
+            }
+        } finally {
+            http11Backend.disposeNow();
         }
     }
 
