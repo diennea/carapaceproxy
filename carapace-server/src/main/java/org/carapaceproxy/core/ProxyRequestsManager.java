@@ -99,6 +99,16 @@ public class ProxyRequestsManager implements AutoCloseable {
     private static final List<HttpProtocol> TLS_PROTOCOLS = List.of(HttpProtocol.H2, HttpProtocol.HTTP11);
     private static final List<HttpProtocol> HTTP11_PROTOCOLS = List.of(HttpProtocol.HTTP11);
     private static final List<HttpProtocol> H2C_PROTOCOLS = List.of(HttpProtocol.H2C, HttpProtocol.HTTP11);
+    // constants: the options are part of the pool key, and a new NioChannelOption never equals the previous one
+    private static final ChannelOption<Integer> TCP_KEEPIDLE = Epoll.isAvailable()
+            ? EpollChannelOption.TCP_KEEPIDLE
+            : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE);
+    private static final ChannelOption<Integer> TCP_KEEPINTVL = Epoll.isAvailable()
+            ? EpollChannelOption.TCP_KEEPINTVL
+            : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL);
+    private static final ChannelOption<Integer> TCP_KEEPCNT = Epoll.isAvailable()
+            ? EpollChannelOption.TCP_KEEPCNT
+            : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT);
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss.SSS");
 
     private final HttpProxyServer parent;
@@ -468,15 +478,9 @@ public class ProxyRequestsManager implements AutoCloseable {
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionConfig.getConnectTimeout())
                 // Enables TCP keepalive: TCP starts sending keepalive probes when a connection is idle for some time.
                 .option(ChannelOption.SO_KEEPALIVE, connectionConfig.isKeepAlive())
-                .option(Epoll.isAvailable()
-                        ? EpollChannelOption.TCP_KEEPIDLE
-                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPIDLE), connectionConfig.getKeepaliveIdle())
-                .option(Epoll.isAvailable()
-                        ? EpollChannelOption.TCP_KEEPINTVL
-                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPINTERVAL), connectionConfig.getKeepaliveInterval())
-                .option(Epoll.isAvailable()
-                        ? EpollChannelOption.TCP_KEEPCNT
-                        : NioChannelOption.of(ExtendedSocketOptions.TCP_KEEPCOUNT), connectionConfig.getKeepaliveCount())
+                .option(TCP_KEEPIDLE, connectionConfig.getKeepaliveIdle())
+                .option(TCP_KEEPINTVL, connectionConfig.getKeepaliveInterval())
+                .option(TCP_KEEPCNT, connectionConfig.getKeepaliveCount())
                 .httpResponseDecoder(option -> option.maxHeaderSize(k.maxHeaderSize()))
                 .doOnRequest((req, conn) -> {
                     if (LOGGER.isDebugEnabled()) {
