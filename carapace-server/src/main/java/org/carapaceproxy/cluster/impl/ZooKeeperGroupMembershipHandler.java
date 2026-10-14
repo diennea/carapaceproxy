@@ -44,6 +44,7 @@ import org.apache.curator.framework.recipes.cache.PathChildrenCache;
 import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent;
 import org.apache.curator.framework.recipes.cache.PathChildrenCacheListener;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
+import org.apache.curator.framework.recipes.nodes.PersistentNode;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.curator.utils.ZookeeperFactory;
 import org.apache.zookeeper.CreateMode;
@@ -76,8 +77,10 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final CuratorFramework client;
+    private final int zkTimeout;
     private final String peerId; // of the local one
     private final Map<String, String> peerInfo; // of the local one
+    private PersistentNode peerNode; // re-creates /proxy/peers/<peerId> after a session expiry
     private final CopyOnWriteArrayList<PathChildrenCache> watchedEvents = new CopyOnWriteArrayList<>();
     private final ConcurrentHashMap<String, InterProcessMutex> mutexes = new ConcurrentHashMap<>();
     private final ExecutorService callbacksExecutor = Executors.newSingleThreadExecutor();
@@ -131,6 +134,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
             Thread.currentThread().interrupt();
             throw new RuntimeException(ex);
         }
+        this.zkTimeout = zkTimeout;
         this.peerId = peerId;
         this.peerInfo = peerInfo;
     }
@@ -141,16 +145,14 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
             client.start();
             client.blockUntilConnected();
             {
-                Stat exists = client.checkExists().creatingParentsIfNeeded()
-                        .forPath("/proxy/peers/" + peerId);
-                if (exists == null) {
-                    client.create()
-                            .creatingParentsIfNeeded()
-                            .withMode(CreateMode.EPHEMERAL) // auto delete on close
-                            .forPath("/proxy/peers/" + peerId);
+                final String path = "/proxy/peers/" + peerId;
+                // parents stay PERSISTENT; PersistentNode would create them as CONTAINER
+                client.checkExists().creatingParentsIfNeeded().forPath(path);
+                peerNode = new PersistentNode(client, CreateMode.EPHEMERAL, false, path, MAPPER.writeValueAsBytes(peerInfo), false);
+                peerNode.start();
+                if (!peerNode.waitForInitialCreate(zkTimeout, TimeUnit.MILLISECONDS)) {
+                    throw new IllegalStateException("Peer " + peerId + " not registered on ZooKeeper within " + zkTimeout + " ms");
                 }
-                // Setting up local peer info
-                storeLocalPeerInfo(peerInfo);
             }
             {
                 final String path = "/proxy/events";
@@ -171,9 +173,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     @Override
     public void storeLocalPeerInfo(Map<String, String> info) {
         try {
-            String path = "/proxy/peers/" + peerId;
-            byte[] data = MAPPER.writeValueAsBytes(info);
-            client.setData().forPath(path, data);
+            peerNode.setData(MAPPER.writeValueAsBytes(info)); // async; the data survives a node re-creation
         } catch (Exception ex) {
             LOG.log(Level.SEVERE, "Cannot store info for peer " + peerId, ex);
         }
@@ -283,6 +283,13 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
 
     @Override
     public void stop() {
+        if (peerNode != null) {
+            try {
+                peerNode.close(); // explicit delete, before the session goes away
+            } catch (Exception ex) {
+                LOG.log(Level.WARNING, "Cannot unregister peer " + peerId, ex);
+            }
+        }
         client.close();
         callbacksExecutor.shutdown();
     }
