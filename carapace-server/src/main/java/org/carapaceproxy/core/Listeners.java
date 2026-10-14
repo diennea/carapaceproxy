@@ -62,6 +62,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -75,6 +76,7 @@ import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.CarapaceLogger;
 import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
+import reactor.netty.ChannelBindException;
 import reactor.netty.DisposableServer;
 import reactor.netty.FutureMono;
 import reactor.netty.NettyPipeline;
@@ -314,7 +316,19 @@ public class Listeners {
         httpServer.warmup().block();
 
         // Listener startup
-        DisposableServer channel = httpServer.bindNow(); // blocking
+        // with the NIO transport the JDK frees the old port only after closeFuture completes, on the selector thread
+        DisposableServer channel;
+        for (long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1); ; ) {
+            try {
+                channel = httpServer.bindNow(); // blocking
+                break;
+            } catch (ChannelBindException e) {
+                if (System.nanoTime() >= deadline) {
+                    throw e;
+                }
+                Thread.sleep(10);
+            }
+        }
         listeningChannel.setChannel(channel);
         listeningChannels.put(hostPort, listeningChannel);
         LOG.log(Level.INFO, "started listener at {0}: {1}", new Object[]{hostPort, channel});
