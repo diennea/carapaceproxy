@@ -20,8 +20,12 @@ package org.carapaceproxy;
 
  */
 import java.io.File;
+import java.sql.Connection;
+import java.sql.Statement;
+import javax.sql.DataSource;
 import org.carapaceproxy.core.HttpProxyServer;
 import java.util.Properties;
+import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;
@@ -29,11 +33,14 @@ import org.carapaceproxy.server.filters.XForwardedForRequestFilter;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.powermock.reflect.Whitebox;
 
 /**
  *
@@ -61,6 +68,52 @@ public class DatabaseConfigurationTest {
 
         }
 
+    }
+
+    @Test
+    public void testWritesAndEventsReadTheStoreNotTheCache() throws Exception {
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+            Properties configuration = new Properties();
+            configuration.put("config.type", "database");
+            configuration.put("db.jdbc.url", "jdbc:herddb:localhost");
+            configuration.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
+            server.configureAtBoot(new PropertiesConfigurationStore(configuration));
+            server.start();
+
+            Properties initial = new Properties();
+            initial.put("test.changed", "old");
+            initial.put("test.removed", "x");
+            server.applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(initial));
+
+            // another peer commits behind this node's cache
+            commitAsAnotherPeer(server,
+                    "UPDATE proxy_config SET pvalue='new' WHERE pname='test.changed'",
+                    "DELETE FROM proxy_config WHERE pname='test.removed'",
+                    "INSERT INTO proxy_config(pname, pvalue) VALUES ('test.added', 'peer')");
+
+            server.updateMaintenanceMode(true);
+
+            ConfigurationStore store = server.getDynamicConfigurationStore();
+            store.reload();
+            assertEquals("new", store.getString("test.changed", null));
+            assertNull(store.getString("test.removed", null));
+            assertEquals("peer", store.getString("test.added", null));
+            assertEquals("true", store.getString("carapace.maintenancemode.enabled", null));
+
+            // then an event from that peer
+            commitAsAnotherPeer(server, "UPDATE proxy_config SET pvalue='false' WHERE pname='carapace.maintenancemode.enabled'");
+            server.reloadConfigurationFromStore();
+            assertFalse(server.getCurrentConfiguration().isMaintenanceModeEnabled());
+        }
+    }
+
+    private static void commitAsAnotherPeer(HttpProxyServer server, String... statements) throws Exception {
+        DataSource datasource = Whitebox.getInternalState(server.getDynamicConfigurationStore(), "datasource");
+        try (Connection con = datasource.getConnection(); Statement st = con.createStatement()) {
+            for (String sql : statements) {
+                st.executeUpdate(sql);
+            }
+        }
     }
 
     @SuppressWarnings("deprecation")
