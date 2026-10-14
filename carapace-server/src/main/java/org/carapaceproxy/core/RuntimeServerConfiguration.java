@@ -326,7 +326,15 @@ public class RuntimeServerConfiguration {
             final var prefix = "listener." + i + ".";
             final var port = properties.getInt(prefix + "port", 0);
             if (port > 0) {
-                this.addListener(new NetworkListenerConfiguration(
+                final var forwarded = properties.getString(prefix + "forwarded", DEFAULT_FORWARDED_STRATEGY);
+                final var trustedIps = properties.getValues(prefix + "trustedips", Set.<String>of());
+                try {
+                    // parsed only when the listener boots: refuse it here, before anything is applied or stored
+                    ForwardedStrategy.of(forwarded, trustedIps);
+                } catch (IllegalArgumentException err) {
+                    throw new ConfigurationNotValidException("Invalid value '" + forwarded + "' for " + prefix + "forwarded: " + err.getMessage());
+                }
+                final var listener = new NetworkListenerConfiguration(
                         properties.getString(prefix + "host", "0.0.0.0"),
                         port,
                         properties.getBoolean(prefix + "ssl", false),
@@ -339,9 +347,14 @@ public class RuntimeServerConfiguration {
                         properties.getInt(prefix + "keepaliveinterval", keepaliveInterval),
                         properties.getInt(prefix + "keepalivecount", keepaliveCount),
                         properties.getInt(prefix + "maxkeepaliverequests", maxKeepAliveRequests),
-                        properties.getString(prefix + "forwarded", DEFAULT_FORWARDED_STRATEGY),
-                        properties.getValues(prefix + "trustedips", Set.of())
-                ));
+                        forwarded,
+                        trustedIps
+                );
+                // a second entry would fail its bind: refuse it, as it is surely a mistake
+                if (getListener(listener.getKey()) != null) {
+                    throw new ConfigurationNotValidException("Listener " + listener.getHost() + ":" + listener.getPort() + " configured more than once");
+                }
+                this.addListener(listener);
             }
         }
     }

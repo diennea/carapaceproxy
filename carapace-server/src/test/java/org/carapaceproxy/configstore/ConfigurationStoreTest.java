@@ -395,6 +395,12 @@ public class ConfigurationStoreTest {
     }
 
     @Test
+    public void testStandaloneStoreAlwaysAnswers() throws Exception {
+        store = openStore(new PropertiesConfigurationStore(new Properties()));
+        store.checkAnswering();
+    }
+
+    @Test
     public void testInvalidTablespaceName() {
         Properties props = new Properties();
         props.setProperty("db.tablespace", "carapace test");
