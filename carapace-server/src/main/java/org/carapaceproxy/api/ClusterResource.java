@@ -19,9 +19,9 @@
  */
 package org.carapaceproxy.api;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import javax.servlet.ServletContext;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -87,12 +87,10 @@ public class ClusterResource {
     @GET
     @Path("peers")
     public List<PeerBean> getAll() {
-        final List<PeerBean> peers = new ArrayList();
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         GroupMembershipHandler handler = server.getGroupMembershipHandler();
-        handler.getPeers().forEach(p-> peers.add(getPeer(p, handler)));
-
-        return peers;
+        // a peer can leave between the listing and the read of its info
+        return handler.getPeers().stream().map(p -> getPeer(p, handler)).filter(Objects::nonNull).toList();
     }
 
     @GET

@@ -31,6 +31,7 @@ import java.util.logging.Logger;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
+import org.carapaceproxy.utils.CarapaceVersion;
 
 /**
  * @autor enrico.olivelli
@@ -154,6 +155,7 @@ public class ServerMain implements AutoCloseable {
     }
 
     public void start() throws Exception {
+        LOG.log(Level.INFO, "Starting Carapace {0} ({1})", new Object[]{CarapaceVersion.VERSION, CarapaceVersion.COMMIT});
         pidFileLocker.lock();
 
         server = new HttpProxyServer(null, basePath);
