@@ -34,7 +34,9 @@ import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
@@ -54,6 +56,7 @@ import java.util.Map;
 import java.util.Properties;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
+import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
@@ -546,6 +549,34 @@ public class DynamicCertificatesManagerTest {
                 }
             }
         }
+    }
+
+    @Test
+    public void testSetStateFiresEventWhenLocalReloadFails() throws Exception {
+        final var domain = "localhost";
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        Listeners listeners = mock(Listeners.class);
+        when(parent.getListeners()).thenReturn(listeners);
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        GroupMembershipHandler group = mock(GroupMembershipHandler.class);
+        when(group.acquireStoreWriteLock(anyLong(), any())).thenReturn(mock(GroupMembershipHandler.StoreWriteLock.class));
+        man.attachGroupMembershipHandler(group);
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        when(store.loadKeyPairForDomain(anyString())).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE));
+        when(store.loadCertificateForDomain(eq(domain))).thenReturn(new CertificateData(domain, null, WAITING));
+        man.setConfigurationStore(store);
+        Properties props = new Properties();
+        props.setProperty("certificate.1.hostname", domain);
+        props.setProperty("certificate.1.mode", "acme");
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(new PropertiesConfigurationStore(props));
+        when(parent.getCurrentConfiguration()).thenReturn(conf);
+        man.reloadConfiguration(conf);
+
+        doThrow(new IllegalStateException("bind failed")).when(listeners).reloadCurrentConfiguration();
+        assertTrue(man.setStateOfCertificate(domain, WAITING));
+        verify(store).saveCertificate(any());
+        verify(group).fireEvent(anyString(), eq(null));
     }
 
     @Test

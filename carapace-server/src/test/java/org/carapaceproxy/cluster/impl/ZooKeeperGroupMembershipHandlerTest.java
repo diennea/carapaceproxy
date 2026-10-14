@@ -25,6 +25,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.test.KillSession;
@@ -34,7 +38,9 @@ import org.apache.zookeeper.data.Stat;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import java.util.HashMap;
 import lombok.AllArgsConstructor;
@@ -307,6 +313,89 @@ public class ZooKeeperGroupMembershipHandlerTest {
                 }, 30);
                 assertEquals(Arrays.asList(peerId1, peerId2), peer2.getPeers());
                 assertEquals(Map.of("k", "v"), peer2.loadInfoForPeer(peerId1));
+            }
+        }
+    }
+
+    @Test
+    public void testStoreWriteLock() throws Exception {
+        try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder())) {
+            testingServer.start();
+            try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
+                    6000, false /*acl */, peerId1, Collections.EMPTY_MAP, new Properties());
+                    ZooKeeperGroupMembershipHandler peer2 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
+                            6000, false /*acl */, peerId2, Collections.EMPTY_MAP, new Properties())) {
+                peer1.start();
+                peer2.start();
+
+                try (GroupMembershipHandler.StoreWriteLock lock1 = peer1.acquireStoreWriteLock(1, TimeUnit.SECONDS)) {
+                    lock1.ensureHeld();
+                    // reentrancy is per handler, so the same thread still waits on peer2
+                    assertThrows(TimeoutException.class, () -> peer2.acquireStoreWriteLock(1, TimeUnit.SECONDS));
+                    try (GroupMembershipHandler.StoreWriteLock nested = peer1.acquireStoreWriteLock(1, TimeUnit.SECONDS)) {
+                        nested.ensureHeld();
+                    }
+                    lock1.ensureHeld();
+                    assertThrows(TimeoutException.class, () -> peer2.acquireStoreWriteLock(1, TimeUnit.SECONDS));
+                }
+
+                try (GroupMembershipHandler.StoreWriteLock lock2 = peer2.acquireStoreWriteLock(1, TimeUnit.SECONDS)) {
+                    lock2.ensureHeld();
+                    KillSession.kill(zooKeeperOf(peer2));
+                    // the client learns about the expiry asynchronously
+                    TestUtils.waitForCondition(() -> {
+                        try {
+                            lock2.ensureHeld();
+                            return false;
+                        } catch (IllegalStateException expected) {
+                            return true;
+                        }
+                    }, 30);
+                    assertThrows(IllegalStateException.class, lock2::ensureHeld);
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testExecuteInMutexKeepsTheInterrupt() throws Exception {
+        try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder())) {
+            testingServer.start();
+            try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
+                    6000, false /*acl */, peerId1, Collections.EMPTY_MAP, new Properties());
+                    ZooKeeperGroupMembershipHandler peer2 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
+                            6000, false /*acl */, peerId2, Collections.EMPTY_MAP, new Properties())) {
+                peer1.start();
+                peer2.start();
+                final CountDownLatch held = new CountDownLatch(1);
+                final CountDownLatch release = new CountDownLatch(1);
+                final Thread holder = new Thread(() -> peer1.executeInMutex("m", 10, () -> {
+                    held.countDown();
+                    try {
+                        release.await();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }));
+                holder.start();
+                assertTrue(held.await(10, TimeUnit.SECONDS));
+
+                final AtomicBoolean ran = new AtomicBoolean();
+                final AtomicBoolean interrupted = new AtomicBoolean();
+                final Thread waiter = new Thread(() -> {
+                    peer2.executeInMutex("m", 30, () -> ran.set(true));
+                    interrupted.set(Thread.currentThread().isInterrupted());
+                });
+                waiter.start();
+                Thread.sleep(500); // let it block on the mutex
+                waiter.interrupt();
+                waiter.join(10_000);
+                release.countDown();
+                holder.join(10_000);
+
+                assertFalse(waiter.isAlive());
+                assertTrue(interrupted.get());
+                assertFalse(ran.get());
             }
         }
     }

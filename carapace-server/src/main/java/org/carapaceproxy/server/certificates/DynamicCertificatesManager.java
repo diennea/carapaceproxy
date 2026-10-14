@@ -60,6 +60,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -70,6 +71,7 @@ import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
+import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.CertificatesUtils;
@@ -583,20 +585,38 @@ public class DynamicCertificatesManager implements Runnable {
         return null;
     }
 
-    @VisibleForTesting
-    public void setStateOfCertificate(String id, DynamicCertificateState state) {
-        if (certificates.containsKey(id)) {
-            CertificateData cert = store.loadCertificateForDomain(id);
-            if (cert != null) {
-                cert.success(state);
-                store.saveCertificate(cert);
-                // remember that events are not delivered to the local JVM
-                reloadCertificatesFromDB();
-                if (groupMembershipHandler != null) {
-                    groupMembershipHandler.fireEvent(EVENT_CERTIFICATES_STATE_CHANGED, null);
-                }
-            }
+    /**
+     * Force the state of a dynamic certificate, under the cluster store write lock.
+     *
+     * @param id    the domain of the certificate
+     * @param state the new state
+     * @return false if the domain is unknown or has no stored certificate
+     * @throws ConfigurationChangeInProgressException if the store write lock is not acquired in time
+     * @throws InterruptedException                 if interrupted while waiting for the lock
+     */
+    public boolean setStateOfCertificate(String id, DynamicCertificateState state) throws ConfigurationChangeInProgressException, InterruptedException {
+        if (!certificates.containsKey(id)) {
+            return false;
         }
+        try (var lock = groupMembershipHandler.acquireStoreWriteLock(HttpProxyServer.STORE_WRITE_LOCK_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+            CertificateData cert = store.loadCertificateForDomain(id);
+            if (cert == null) {
+                return false;
+            }
+            cert.success(state);
+            store.saveCertificate(cert);
+            // remember that events are not delivered to the local JVM
+            try {
+                reloadCertificatesFromDB();
+            } catch (RuntimeException e) {
+                // the store is already committed: the peers must still get the event
+                LOG.log(Level.SEVERE, "Reset of certificate " + id + " saved, local reload failed", e);
+            }
+        } catch (TimeoutException e) {
+            throw new ConfigurationChangeInProgressException("configuration store is busy, try again later");
+        }
+        groupMembershipHandler.fireEvent(EVENT_CERTIFICATES_STATE_CHANGED, null);
+        return true;
     }
 
     private RuntimeServerConfiguration getConfig() {
