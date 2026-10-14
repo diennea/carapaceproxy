@@ -107,6 +107,26 @@ public class DatabaseConfigurationTest {
         }
     }
 
+    @Test
+    public void testStartReloadsARestoreCommittedSinceTheBootLoad() throws Exception {
+        try (HttpProxyServer server = new HttpProxyServer(null, tmpDir.newFolder())) {
+            Properties configuration = new Properties();
+            configuration.put("config.type", "database");
+            configuration.put("db.jdbc.url", "jdbc:herddb:localhost");
+            configuration.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
+            server.configureAtBoot(new PropertiesConfigurationStore(configuration));
+
+            // a restore by another peer lands after the boot load, before the watch is registered
+            commitAsAnotherPeer(server,
+                    "DELETE FROM proxy_config WHERE pname='carapace.maintenancemode.enabled'",
+                    "INSERT INTO proxy_config(pname, pvalue) VALUES ('carapace.maintenancemode.enabled', 'true')",
+                    "INSERT INTO state_generation(id, generation) VALUES ('state', 'x')");
+
+            server.start();
+            assertTrue(server.getCurrentConfiguration().isMaintenanceModeEnabled());
+        }
+    }
+
     private static void commitAsAnotherPeer(HttpProxyServer server, String... statements) throws Exception {
         DataSource datasource = Whitebox.getInternalState(server.getDynamicConfigurationStore(), "datasource");
         try (Connection con = datasource.getConnection(); Statement st = con.createStatement()) {

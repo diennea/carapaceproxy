@@ -241,4 +241,27 @@ public interface ConfigurationStore extends AutoCloseable {
      */
     default void checkWritable() throws ConfigurationNotValidException {
     }
+
+    /**
+     * Tells which generation of the state the cached configuration was loaded from.
+     * <br>
+     * A generation is a random token that changes on every {@link #replaceState(StoreSnapshot, Runnable)}; it is
+     * only ever compared for equality, with {@link #readStateGeneration()}.
+     *
+     * @return the generation read together with the cached configuration, {@code null} if the store has none
+     */
+    default String getLoadedStateGeneration() {
+        return null;
+    }
+
+    /**
+     * Reads the current generation of the state from the storage, bypassing the cache.
+     *
+     * @return the stored generation, {@code null} if the store has none or the state was never replaced
+     * @throws ConfigurationStoreException if the store cannot be read
+     * @see #getLoadedStateGeneration()
+     */
+    default String readStateGeneration() {
+        return null;
+    }
 }
