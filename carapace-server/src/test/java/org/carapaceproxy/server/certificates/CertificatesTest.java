@@ -789,6 +789,7 @@ public class CertificatesTest extends UseAdminServer {
         when(_cert.getCertificateChain()).thenReturn(renewed);
 
         server.getCurrentConfiguration().setLocalCertificatesStorePath(certsDir.getAbsolutePath());
+        Whitebox.setInternalState(dcMan, ac); // the upload reloaded the manager, which rebuilt the client
         dcMan.run();
         updated = dcMan.getCertificateDataForDomain("localhost2");
         assertNotNull(updated);
