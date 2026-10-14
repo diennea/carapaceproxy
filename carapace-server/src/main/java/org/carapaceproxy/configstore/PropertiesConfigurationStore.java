@@ -19,7 +19,11 @@
  */
 package org.carapaceproxy.configstore;
 
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.security.KeyPair;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Spliterator;
@@ -37,29 +41,42 @@ import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
  */
 public class PropertiesConfigurationStore implements ConfigurationStore {
 
-    private final Properties properties;
-    private final ConcurrentHashMap<String, CertificateData> certificates = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, KeyPair> domainsKeyPair = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, String> acmeChallengeTokens = new ConcurrentHashMap<>();
-    private KeyPair acmeUserKey;
+    /**
+     * Everything the store holds, swapped as a whole by {@link #replaceState(StoreSnapshot, Runnable)}.
+     *
+     * @param properties          the configuration properties
+     * @param certificates        the certificates, by domain
+     * @param domainsKeyPair      the key pairs, by domain
+     * @param acmeUserKey         the ACME account key, may be {@code null}
+     * @param acmeChallengeTokens the ACME challenge tokens, by id
+     */
+    private record State(
+            Properties properties,
+            Map<String, CertificateData> certificates,
+            Map<String, KeyPair> domainsKeyPair,
+            KeyPair acmeUserKey,
+            Map<String, String> acmeChallengeTokens) {
+    }
+
+    private volatile State state;
 
     public PropertiesConfigurationStore(Properties properties) {
-        this.properties = properties;
+        this.state = new State(properties, new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), null, new ConcurrentHashMap<>());
     }
 
     @Override
     public String getProperty(String key, String defaultValue) {
-        return properties.getProperty(key, defaultValue);
+        return state.properties().getProperty(key, defaultValue);
     }
 
     @Override
     public void forEach(BiConsumer<String, String> consumer) {
-        properties.forEach((k, v) -> consumer.accept(k.toString(), v.toString()));
+        state.properties().forEach((k, v) -> consumer.accept(k.toString(), v.toString()));
     }
 
     @Override
     public void forEach(String prefix, BiConsumer<String, String> consumer) {
-        properties.forEach((k, v) -> {
+        state.properties().forEach((k, v) -> {
             if (k.toString().startsWith(prefix)) {
                 consumer.accept(k.toString().substring(prefix.length()), v.toString());
             }
@@ -68,13 +85,14 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
 
     @Override
     public KeyPair loadAcmeUserKeyPair() {
-        return acmeUserKey;
+        return state.acmeUserKey();
     }
 
     @Override
-    public boolean saveAcmeUserKey(KeyPair pair) {
-        if (acmeUserKey == null) {
-            acmeUserKey = pair;
+    public synchronized boolean saveAcmeUserKey(KeyPair pair) {
+        final var current = state;
+        if (current.acmeUserKey() == null) {
+            state = new State(current.properties(), current.certificates(), current.domainsKeyPair(), pair, current.acmeChallengeTokens());
             return true;
         }
         return false;
@@ -82,11 +100,12 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
 
     @Override
     public KeyPair loadKeyPairForDomain(String domain) {
-        return domainsKeyPair.get(domain);
+        return state.domainsKeyPair().get(domain);
     }
 
     @Override
     public boolean saveKeyPairForDomain(KeyPair pair, String domain, boolean update) {
+        final var domainsKeyPair = state.domainsKeyPair();
         if (update || !domainsKeyPair.containsKey(domain)) {
             domainsKeyPair.put(domain, pair);
             return true;
@@ -96,23 +115,24 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
 
     @Override
     public CertificateData loadCertificateForDomain(String domain) {
-        return certificates.get(domain);
+        return state.certificates().get(domain);
     }
 
     @Override
     public void saveCertificate(CertificateData cert) {
-        certificates.put(cert.getDomain(), cert);
+        state.certificates().put(cert.getDomain(), cert);
     }
 
     @Override
     public void removeCertificate(final String certId) {
-        this.certificates.remove(certId);
+        state.certificates().remove(certId);
         // certificate entries are keyed by hostname, they have no id property
         this.removePropertiesAtId("certificate", "hostname", certId);
     }
 
     private void removePropertiesAtId(final String prefix, final String key, final String id) {
         findPropertyPrefix(prefix, key, id).ifPresent(indexedPrefix -> {
+            final var properties = state.properties();
             final var iterator = properties.propertyNames().asIterator();
             final var spliterator = Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED);
             final var propertyNames = StreamSupport
@@ -143,7 +163,7 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
         final var max = findMaxIndexForPrefix(prefix);
         for (int index = 0; index <= max; index++) {
             String indexedPrefix = prefix + "." + index + ".";
-            if (id.equals(properties.getProperty(indexedPrefix + key))) {
+            if (id.equals(state.properties().getProperty(indexedPrefix + key))) {
                 return Optional.of(indexedPrefix);
             }
         }
@@ -156,17 +176,76 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
 
     @Override
     public void saveAcmeChallengeToken(String id, String data) {
-        acmeChallengeTokens.put(id, data);
+        state.acmeChallengeTokens().put(id, data);
     }
 
     @Override
     public String loadAcmeChallengeToken(String id) {
-        return acmeChallengeTokens.get(id);
+        return state.acmeChallengeTokens().get(id);
     }
 
     @Override
     public void deleteAcmeChallengeToken(String id) {
-        acmeChallengeTokens.remove(id);
+        state.acmeChallengeTokens().remove(id);
+    }
+
+    @Override
+    public StoreSnapshot exportState() {
+        final var current = state;
+        final Map<String, String> config = new HashMap<>();
+        current.properties().forEach((k, v) -> config.put(k.toString(), v.toString()));
+        final Map<String, StoreSnapshot.EncodedKeyPair> keyPairs = new HashMap<>();
+        current.domainsKeyPair().forEach((domain, pair) -> keyPairs.put(domain, encode(pair)));
+        final Map<String, StoreSnapshot.EncodedKeyPair> acmeAccountKeys = current.acmeUserKey() == null
+                ? Map.of()
+                : Map.of(StoreSnapshot.LETSENCRYPT, encode(current.acmeUserKey()));
+        final Map<String, StoreSnapshot.CertificateRow> certificates = new HashMap<>();
+        try {
+            for (var entry : current.certificates().entrySet()) {
+                certificates.put(entry.getKey(), ConfigurationStoreUtils.toCertificateRow(entry.getValue()));
+            }
+        } catch (IOException err) {
+            throw new ConfigurationStoreException(err);
+        }
+        return new StoreSnapshot(config, keyPairs, acmeAccountKeys, certificates);
+    }
+
+    @Override
+    public synchronized void replaceState(StoreSnapshot snapshot, Runnable preCommitCheck) {
+        // decode everything first, so that a bad value leaves the current state untouched
+        final var properties = new Properties();
+        properties.putAll(snapshot.config());
+        final Map<String, CertificateData> certificates = new ConcurrentHashMap<>();
+        final Map<String, KeyPair> domainsKeyPair = new ConcurrentHashMap<>();
+        final KeyPair acmeUserKey;
+        try {
+            for (var entry : snapshot.certificates().entrySet()) {
+                certificates.put(entry.getKey(), ConfigurationStoreUtils.toCertificateData(entry.getKey(), entry.getValue()));
+            }
+            for (var entry : snapshot.keyPairs().entrySet()) {
+                domainsKeyPair.put(entry.getKey(), decode(entry.getValue()));
+            }
+            final var acmeKey = snapshot.acmeAccountKeys().get(StoreSnapshot.LETSENCRYPT);
+            acmeUserKey = acmeKey == null ? null : decode(acmeKey);
+        } catch (IOException | GeneralSecurityException err) {
+            throw new ConfigurationStoreException(err);
+        }
+        preCommitCheck.run();
+        state = new State(properties, certificates, domainsKeyPair, acmeUserKey, state.acmeChallengeTokens());
+    }
+
+    private static StoreSnapshot.EncodedKeyPair encode(KeyPair pair) {
+        return new StoreSnapshot.EncodedKeyPair(
+                ConfigurationStoreUtils.base64EncodeKey(pair.getPrivate()),
+                ConfigurationStoreUtils.base64EncodeKey(pair.getPublic())
+        );
+    }
+
+    private static KeyPair decode(StoreSnapshot.EncodedKeyPair pair) throws GeneralSecurityException {
+        return new KeyPair(
+                ConfigurationStoreUtils.base64DecodePublicKey(pair.publicKey()),
+                ConfigurationStoreUtils.base64DecodePrivateKey(pair.privateKey())
+        );
     }
 
     public void addConnectionPool(final ConnectionPoolConfiguration connectionPool) {
@@ -175,6 +254,7 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
 
     private void saveConnectionPool(final ConnectionPoolConfiguration connectionPool, final int index) {
         final var prefix = "connectionpool." + index + ".";
+        final var properties = state.properties();
         properties.setProperty(prefix + "id", connectionPool.getId());
         properties.setProperty(prefix + "domain", connectionPool.getDomain());
         properties.setProperty(prefix + "maxconnectionsperendpoint", String.valueOf(connectionPool.getMaxConnectionsPerEndpoint()));
@@ -195,7 +275,7 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
         final var max = findMaxIndexForPrefix("connectionpool");
         for (int index = 0; index <= max; index++) {
             final var prefix = "connectionpool." + index + ".";
-            final var id = properties.getProperty(prefix + "id", null);
+            final var id = state.properties().getProperty(prefix + "id", null);
             if (connectionPool.getId().equals(id)) {
                 saveConnectionPool(connectionPool, index);
                 return;

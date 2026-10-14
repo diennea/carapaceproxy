@@ -21,6 +21,7 @@ package org.carapaceproxy.configstore;
 
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.TestUtils.assertEqualsKey;
+import static org.carapaceproxy.utils.TestUtils.expectThrows;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
@@ -28,9 +29,14 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
+import herddb.jdbc.HerdDBEmbeddedDataSource;
+import herddb.server.ServerConfiguration;
+import java.io.IOException;
 import java.net.URL;
 import java.security.KeyPair;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -360,7 +366,7 @@ public class ConfigurationStoreTest {
     }
 
     @Test
-    public void testCustomTablespace() {
+    public void testCustomTablespace() throws Exception {
         Properties props = new Properties();
         props.setProperty("db.tablespace", "carapace_test");
         props.setProperty("certificate.0.hostname", d1);
@@ -373,11 +379,17 @@ public class ConfigurationStoreTest {
 
         store = openStore(staticConfiguration);
         assertEquals(d1, store.getProperty("certificate.0.hostname", ""));
+        final var snapshot = otherSnapshot();
+        store.replaceState(snapshot, () -> {});
         store.close();
 
-        // the default tablespace never saw that configuration
+        store = openStore(staticConfiguration);
+        assertEquals(snapshot, store.exportState());
+        store.close();
+
+        // the default tablespace never saw that configuration nor the snapshot
         store = openStore(new PropertiesConfigurationStore(new Properties()));
-        assertEquals("", store.getProperty("certificate.0.hostname", ""));
+        assertEquals(new StoreSnapshot(null, null, null, null), store.exportState());
     }
 
     @Test
@@ -404,6 +416,223 @@ public class ConfigurationStoreTest {
         // the embedded server has been released
         store = openStore(new PropertiesConfigurationStore(new Properties()));
         assertEquals("", store.getProperty("certificate.0.hostname", ""));
+    }
+
+    @Test
+    @Parameters({"in-memory", "db"})
+    public void testExportReplaceRoundTrip(String type) throws Exception {
+        this.type = type;
+        populateStore();
+        final var exported = store.exportState();
+
+        assertEquals(d1, exported.config().get("certificate.0.hostname"));
+        assertEquals(Set.of(d1, d2), exported.keyPairs().keySet());
+        assertEquals(Set.of(StoreSnapshot.LETSENCRYPT), exported.acmeAccountKeys().keySet());
+        final var row = exported.certificates().get(d1);
+        assertEquals(List.of("www." + d1), row.subjectAltNames());
+        assertEquals("REQUEST_FAILED", row.state());
+        assertEquals("http://localhost/order", row.pendingOrder());
+        assertEquals(3, row.attemptCount());
+        assertEquals("failure", row.message());
+
+        final var original = loadAll();
+        store.close();
+        store = openEmptyStore();
+        store.replaceState(exported, () -> {});
+
+        assertEquals(exported, store.exportState());
+        assertEquals(original, loadAll());
+    }
+
+    @Test
+    @Parameters({"in-memory", "db"})
+    public void testBlankSubjectAltNamesAreNotExported(String type) throws Exception {
+        this.type = type;
+        final var props = new Properties();
+        props.setProperty("certificate.0.hostname", d1);
+        updateConfigStore(props);
+        store.saveCertificate(new CertificateData(d1, Set.of("", " y." + d1 + ",x." + d1), null, DynamicCertificateState.WAITING, null, null));
+
+        final var exported = store.exportState();
+        assertEquals(List.of("x." + d1, "y." + d1), exported.certificates().get(d1).subjectAltNames());
+        exported.validate();
+    }
+
+    @Test
+    public void testBlankSubjectAltNamesAlreadyStoredAreNotExported() throws Exception {
+        this.type = "db";
+        final var config = new Properties();
+        config.setProperty("certificate.0.hostname", d1);
+        updateConfigStore(config);
+        store.saveCertificate(new CertificateData(d1, Set.of("x." + d1), null, DynamicCertificateState.WAITING, null, null));
+        store.close();
+        store = null;
+
+        // a row saved before blank names were dropped on save
+        final var props = new Properties();
+        props.setProperty(ServerConfiguration.PROPERTY_BASEDIR, tmpDir.getRoot().getAbsolutePath());
+        try (var datasource = new HerdDBEmbeddedDataSource(props);
+             var con = datasource.getConnection();
+             var ps = con.prepareStatement("UPDATE digital_certificates SET subjectAltNames=? WHERE domain=?")) {
+            ps.setString(1, ",x." + d1);
+            ps.setString(2, d1);
+            assertEquals(1, ps.executeUpdate());
+        }
+
+        store = openStore(new PropertiesConfigurationStore(new Properties()));
+        final var exported = store.exportState();
+        assertEquals(List.of("x." + d1), exported.certificates().get(d1).subjectAltNames());
+        exported.validate();
+    }
+
+    @Test
+    @Parameters({"in-memory", "db"})
+    public void testReplaceOverwritesEverything(String type) throws Exception {
+        this.type = type;
+        populateStore();
+        store.saveAcmeChallengeToken("token-id", "token-data");
+
+        final var snapshot = otherSnapshot();
+        store.replaceState(snapshot, () -> {});
+
+        assertEquals(snapshot, store.exportState());
+        assertEquals(snapshot.config(), toMap(store.asProperties(null)));
+        assertNull(store.loadKeyPairForDomain(d1));
+        assertNull(store.loadCertificateForDomain(d1));
+        assertEquals(snapshot.acmeAccountKeys().get(StoreSnapshot.LETSENCRYPT).privateKey(),
+                ConfigurationStoreUtils.base64EncodeKey(store.loadAcmeUserKeyPair().getPrivate()));
+        assertEquals(snapshot.keyPairs().get(d3).privateKey(),
+                ConfigurationStoreUtils.base64EncodeKey(store.loadKeyPairForDomain(d3).getPrivate()));
+        assertEquals(DynamicCertificateState.AVAILABLE, store.loadCertificateForDomain(d3).getState());
+        // tokens are not part of the state
+        assertEquals("token-data", store.loadAcmeChallengeToken("token-id"));
+
+        store.reload();
+        assertEquals(snapshot, store.exportState());
+        assertEquals(snapshot.config(), toMap(store.asProperties(null)));
+    }
+
+    @Test
+    @Parameters({"in-memory", "db"})
+    public void testFailingPreCommitCheckLeavesStateUntouched(String type) throws Exception {
+        this.type = type;
+        populateStore();
+        final var before = store.exportState();
+        final var loadedBefore = loadAll();
+
+        final var err = expectThrows(IllegalStateException.class,
+                () -> store.replaceState(otherSnapshot(), () -> {
+                    throw new IllegalStateException("lost the lock");
+                }));
+        assertEquals("lost the lock", err.getMessage());
+
+        assertEquals(before, store.exportState());
+        assertEquals(loadedBefore, loadAll());
+        store.reload();
+        assertEquals(before, store.exportState());
+        assertEquals(loadedBefore, loadAll());
+    }
+
+    @Test
+    public void testNullConfigValueFailsBeforeCommit() throws Exception {
+        this.type = "db";
+        populateStore();
+        final var before = store.exportState();
+        final var loadedBefore = loadAll();
+        final var other = otherSnapshot();
+        final Map<String, String> config = new HashMap<>(other.config());
+        config.put("null.property", null);
+        final var snapshot = new StoreSnapshot(config, other.keyPairs(), other.acmeAccountKeys(), other.certificates());
+
+        assertThrows(NullPointerException.class, () -> store.replaceState(snapshot, () -> {}));
+
+        assertEquals(before, store.exportState());
+        assertEquals(loadedBefore, loadAll());
+        store.reload();
+        assertEquals(before, store.exportState());
+        assertEquals(loadedBefore, loadAll());
+    }
+
+    private void populateStore() throws Exception {
+        Properties props = new Properties();
+        props.setProperty("certificate.0.hostname", d1);
+        props.setProperty("certificate.0.dynamic", "true");
+        props.setProperty("certificate.1.hostname", d2);
+        props.setProperty("certificate.1.dynamic", "true");
+        updateConfigStore(props);
+
+        store.saveAcmeUserKey(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE));
+        store.saveKeyPairForDomain(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), d1, false);
+        store.saveKeyPairForDomain(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), d2, false);
+        store.saveCertificate(new CertificateData(
+                d1,
+                Set.of("www." + d1),
+                "encodedChain1",
+                DynamicCertificateState.REQUEST_FAILED,
+                new URL("http://localhost/order"),
+                Map.of(d1, JSON.parse("{\"challenge\": \"data\"}")),
+                3,
+                "failure"
+        ));
+        store.saveCertificate(new CertificateData(d2, "encodedChain2", DynamicCertificateState.AVAILABLE));
+    }
+
+    private StoreSnapshot otherSnapshot() throws IOException {
+        final var domainPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        final var acmePair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        return new StoreSnapshot(
+                Map.of("some.property", "value", "certificate.0.hostname", d3),
+                Map.of(d3, encode(domainPair)),
+                Map.of(StoreSnapshot.LETSENCRYPT, encode(acmePair)),
+                Map.of(d3, new StoreSnapshot.CertificateRow(
+                        List.of("a." + d3, "b." + d3),
+                        "encodedChain3",
+                        "AVAILABLE",
+                        "http://localhost/order3",
+                        ConfigurationStoreUtils.formatChallengesData(Map.of(d3, JSON.parse("{\"challenge\": \"data3\"}"))),
+                        1,
+                        "message"
+                ))
+        );
+    }
+
+    private static StoreSnapshot.EncodedKeyPair encode(KeyPair pair) {
+        return new StoreSnapshot.EncodedKeyPair(
+                ConfigurationStoreUtils.base64EncodeKey(pair.getPrivate()),
+                ConfigurationStoreUtils.base64EncodeKey(pair.getPublic())
+        );
+    }
+
+    /**
+     * Reads the state through the regular accessors, so that the round trip is checked on what the server sees.
+     */
+    private Map<String, Object> loadAll() {
+        final var acmeKey = store.loadAcmeUserKeyPair();
+        return Map.of(
+                "config", toMap(store.asProperties(null)),
+                "acme", acmeKey == null ? "" : ConfigurationStoreUtils.base64EncodeKey(acmeKey.getPrivate()),
+                "key1", ConfigurationStoreUtils.base64EncodeKey(store.loadKeyPairForDomain(d1).getPrivate()),
+                "key2", ConfigurationStoreUtils.base64EncodeKey(store.loadKeyPairForDomain(d2).getPublic()),
+                "cert1", store.loadCertificateForDomain(d1),
+                "cert1.sans", store.loadCertificateForDomain(d1).getSubjectAltNames(),
+                "cert1.challenges", String.valueOf(store.loadCertificateForDomain(d1).getPendingChallengesData()),
+                "cert2", store.loadCertificateForDomain(d2)
+        );
+    }
+
+    private static Map<String, String> toMap(Properties properties) {
+        final Map<String, String> map = new HashMap<>();
+        properties.forEach((k, v) -> map.put(k.toString(), v.toString()));
+        return map;
+    }
+
+    private ConfigurationStore openEmptyStore() throws IOException {
+        if (type.equals("db")) {
+            Properties props = new Properties();
+            props.put("db.jdbc.url", "jdbc:herddb:localhost");
+            return new HerdDBConfigurationStore(new PropertiesConfigurationStore(props), false, null, tmpDir.newFolder(), NullStatsLogger.INSTANCE);
+        }
+        return new PropertiesConfigurationStore(new Properties());
     }
 
     private HerdDBConfigurationStore openStore(ConfigurationStore staticConfiguration) {
