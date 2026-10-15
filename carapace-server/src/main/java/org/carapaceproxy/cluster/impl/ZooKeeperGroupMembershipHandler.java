@@ -122,18 +122,6 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
                 .retryPolicy(new ExponentialBackoffRetry(1000, 2))
                 .ensembleProvider(new FixedEnsembleProvider(zkAddress, true))
                 .build();
-        LOG.info("Waiting for ZK client connection to be established");
-        try {
-            boolean ok = client.blockUntilConnected(zkTimeout, TimeUnit.MILLISECONDS);
-            if (!ok) {
-                LOG.error("First connection to ZK cannot be established");
-            } else {
-                LOG.error("First connection to ZK established with success");
-            }
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException(ex);
-        }
         this.zkTimeout = zkTimeout;
         this.peerId = peerId;
         this.peerInfo = peerInfo;
