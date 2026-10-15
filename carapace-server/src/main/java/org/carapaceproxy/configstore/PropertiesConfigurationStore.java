@@ -109,11 +109,12 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
     @Override
     public void removeCertificate(final String certId) {
         this.certificates.remove(certId);
-        this.removePropertiesAtId("certificate", certId);
+        // certificate entries are keyed by hostname, they have no id property
+        this.removePropertiesAtId("certificate", "hostname", certId);
     }
 
-    private void removePropertiesAtId(final String prefix, final String id) {
-        findPropertyPrefix(prefix, id).ifPresent(indexedPrefix -> {
+    private void removePropertiesAtId(final String prefix, final String key, final String id) {
+        findPropertyPrefix(prefix, key, id).ifPresent(indexedPrefix -> {
             final var iterator = properties.propertyNames().asIterator();
             final var spliterator = Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED);
             final var propertyNames = StreamSupport
@@ -129,21 +130,22 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
     }
 
     /**
-     * Search for a property with the format {@code <prefix>.<some-number>.id} that matches the provided ID.
+     * Search for a property with the format {@code <prefix>.<some-number>.<key>} that matches the provided ID.
      * If found, it is returned to the caller; if not, an empty option will be the result.
      * <br>
      * Please note that if many IDs are present that would match, only <b>the first</b> will be returned,
      * as there should have been only one anyway...
      *
      * @param prefix the prefix to look for
+     * @param key    the property that identifies an entry, e.g. {@code id} or {@code hostname}
      * @param id     the ID to look for inside the prefix
      * @return the result of the search
      */
-    private Optional<String> findPropertyPrefix(final String prefix, final String id) {
+    private Optional<String> findPropertyPrefix(final String prefix, final String key, final String id) {
         final var max = findMaxIndexForPrefix(prefix);
         for (int index = 0; index <= max; index++) {
             String indexedPrefix = prefix + "." + index + ".";
-            if (id.equals(properties.getProperty(indexedPrefix + "id"))) {
+            if (id.equals(properties.getProperty(indexedPrefix + key))) {
                 return Optional.of(indexedPrefix);
             }
         }
@@ -204,6 +206,6 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
     }
 
     public void deleteConnectionPool(final String id) {
-        this.removePropertiesAtId("connectionpool", id);
+        this.removePropertiesAtId("connectionpool", "id", id);
     }
 }
