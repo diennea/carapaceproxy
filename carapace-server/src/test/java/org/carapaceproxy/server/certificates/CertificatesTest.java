@@ -914,6 +914,9 @@ public class CertificatesTest extends UseAdminServer {
             assertThat(getCertificateIndicesWithHostname(server.getDynamicConfigurationStore(), "test.domain.tld"), is(Set.of()));
             assertFalse(client.get("/api/config", credentials).getBodyString().contains("hostname=test.domain.tld"));
             assertFalse(client.get("/api/certificates", credentials).getBodyString().contains("\"test.domain.tld\""));
+
+            resp = client.delete("/api/certificates/test.domain.tld", credentials);
+            assertTrue(resp.getStatusLine(), resp.getStatusLine().contains("404"));
         }
     }
 

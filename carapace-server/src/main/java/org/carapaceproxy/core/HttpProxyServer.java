@@ -49,6 +49,7 @@ import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollEventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.codec.http.HttpMethod;
+import io.prometheus.client.Counter;
 import io.prometheus.client.exporter.MetricsServlet;
 import java.io.File;
 import java.io.FileInputStream;
@@ -102,6 +103,7 @@ import org.carapaceproxy.user.FileUserRealm;
 import org.carapaceproxy.user.SimpleUserRealm;
 import org.carapaceproxy.user.UserRealm;
 import org.carapaceproxy.utils.CarapaceVersion;
+import org.carapaceproxy.utils.PrometheusUtils;
 import org.eclipse.jetty.security.ConstraintMapping;
 import org.eclipse.jetty.security.ConstraintSecurityHandler;
 import org.eclipse.jetty.server.Handler;
@@ -132,6 +134,10 @@ import org.slf4j.LoggerFactory;
 public class HttpProxyServer implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(HttpProxyServer.class);
+
+    private static final Counter CONFIGURATION_RELOAD_FAILURES_COUNTER = PrometheusUtils.createCounter(
+            "configuration", "reload_failures_total", "failed reloads of the configuration from the store"
+    ).register();
 
     @Getter
     private final Listeners listeners;
@@ -823,6 +829,8 @@ public class HttpProxyServer implements AutoCloseable {
                 throw new ConfigurationChangeInProgressException("configuration store is busy, try again later");
             }
             try {
+                // nobody else can commit now, so the base and the keys to delete are computed on fresh data
+                dynamicConfigurationStore.reload();
                 write.run();
             } finally {
                 configurationLock.unlock();
@@ -830,6 +838,28 @@ public class HttpProxyServer implements AutoCloseable {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw e;
+        }
+    }
+
+    /**
+     * Reload the dynamic configuration from the store and apply it, waiting for {@link #configurationLock}.
+     * Used when another peer changed the store; it never takes the cluster store write lock.
+     * A failure is logged and counted, not thrown.
+     */
+    public void reloadConfigurationFromStore() {
+        // blocking: callers run on background threads, and a dropped reload leaves this node stale
+        configurationLock.lock();
+        try {
+            dynamicConfigurationStore.reload();
+            applyDynamicConfiguration(null, true);
+        } catch (Exception err) {
+            if (err instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            LOG.error("Cannot reload the configuration from the store", err);
+            CONFIGURATION_RELOAD_FAILURES_COUNTER.inc();
+        } finally {
+            configurationLock.unlock();
         }
     }
 
@@ -957,22 +987,13 @@ public class HttpProxyServer implements AutoCloseable {
         @Override
         public void eventFired(String eventId, Map<String, Object> data) {
             LOG.info("Configuration changed");
-            try {
-                dynamicConfigurationStore.reload();
-                applyDynamicConfiguration(null, true);
-            } catch (Throwable err) {
-                LOG.error("Cannot apply new configuration", err);
-            }
+            reloadConfigurationFromStore();
         }
 
         @Override
         public void reconnected() {
             LOG.info("Configuration listener - reloading configuration after ZK reconnection");
-            try {
-                applyDynamicConfiguration(null, true);
-            } catch (Throwable err) {
-                LOG.error("Cannot apply new configuration", err);
-            }
+            reloadConfigurationFromStore();
         }
 
     }
