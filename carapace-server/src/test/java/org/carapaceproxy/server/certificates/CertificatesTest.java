@@ -1001,6 +1001,9 @@ public class CertificatesTest extends UseAdminServer {
 
             resp = client.delete("/api/certificates/test.domain.tld", credentials);
             assertTrue(resp.getStatusLine(), resp.getStatusLine().contains("404"));
+
+            resp = client.post("/api/certificates/test.domain.tld/reset", null, null, credentials);
+            assertTrue(resp.getStatusLine(), resp.getStatusLine().contains("404"));
         }
     }
 

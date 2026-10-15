@@ -38,6 +38,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import org.apache.bookkeeper.stats.NullStatsLogger;
 import org.apache.curator.test.TestingServer;
+import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.carapaceproxy.utils.TestUtils;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -125,6 +127,16 @@ public class ClusterConfigurationStoreTest {
             File nodeDir = tmpDir.newFolder();
             store = openStore(zooKeeper, staticConfiguration, nodeDir);
             assertEquals(REPLICATION_FACTOR, expectedReplicaCount(zooKeeper, TABLESPACE));
+
+            // both replicas up: writable, once the follower has reported its state
+            TestUtils.waitForCondition(() -> {
+                try {
+                    store.checkWritable();
+                    return true;
+                } catch (ConfigurationNotValidException notYet) {
+                    return false;
+                }
+            }, 30);
         }
     }
 
