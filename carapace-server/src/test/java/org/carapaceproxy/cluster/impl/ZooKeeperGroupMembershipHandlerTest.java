@@ -19,13 +19,18 @@
  */
 package org.carapaceproxy.cluster.impl;
 
+import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.test.KillSession;
 import org.apache.curator.test.TestingServer;
+import org.apache.zookeeper.ZooKeeper;
+import org.apache.zookeeper.data.Stat;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertEquals;
@@ -255,32 +260,60 @@ public class ZooKeeperGroupMembershipHandlerTest {
                     info = peer1.loadInfoForPeer(peerId2);
                     assertEquals("peer2", info.get("name"));
 
+                    // storeLocalPeerInfo is asynchronous
                     peer1.storeLocalPeerInfo(Map.of("name", "newpeer1", "address", "localhost"));
-                    info = peer1.loadInfoForPeer(peerId1);
-                    assertEquals("newpeer1", info.get("name"));
-                    assertEquals("localhost", info.get("address"));
+                    TestUtils.waitForCondition(() -> Map.of("name", "newpeer1", "address", "localhost").equals(peer1.loadInfoForPeer(peerId1)), 10);
 
                     peer1.storeLocalPeerInfo(Collections.EMPTY_MAP);
-                    info = peer1.loadInfoForPeer(peerId1);
-                    assertTrue(info.isEmpty());
+                    TestUtils.waitForCondition(() -> Collections.EMPTY_MAP.equals(peer1.loadInfoForPeer(peerId1)), 10);
                     peer1.storeLocalPeerInfo(Map.of("port", "8080"));
-                    info = peer1.loadInfoForPeer(peerId1);
-                    assertNull(info.get("name"));
+                    TestUtils.waitForCondition(() -> Map.of("port", "8080").equals(peer1.loadInfoForPeer(peerId1)), 10);
                     peer1.storeLocalPeerInfo(null); // discarded
-                    info = peer1.loadInfoForPeer(peerId1);
-                    assertNull(info);
+                    TestUtils.waitForCondition(() -> peer1.loadInfoForPeer(peerId1) == null, 10);
                 }
 
                 // OP on peer2
                 {
                     peer2.storeLocalPeerInfo(Map.of("name", "peer2", "address", "localhost:8080"));
-                    Map<String, String> info = peer2.loadInfoForPeer(peerId2);
-                    assertEquals("peer2", info.get("name"));
-                    assertEquals("localhost:8080", info.get("address"));
-                    info = peer2.loadInfoForPeer(peerId1);
+                    TestUtils.waitForCondition(() -> Map.of("name", "peer2", "address", "localhost:8080").equals(peer2.loadInfoForPeer(peerId2)), 10);
+                    Map<String, String> info = peer2.loadInfoForPeer(peerId1);
                     assertNull(info);
                 }
             }
         }
+    }
+
+    @Test
+    public void testPeerReappearsAfterSessionExpiry() throws Exception {
+        try (TestingServer testingServer = new TestingServer(2229, tmpDir.newFolder())) {
+            testingServer.start();
+            try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
+                    6000, false /*acl */, peerId1, Map.of("k", "v"), new Properties());
+                    ZooKeeperGroupMembershipHandler peer2 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
+                            6000, false /*acl */, peerId2, Collections.EMPTY_MAP, new Properties())) {
+                peer1.start();
+                peer2.start();
+                assertEquals(Arrays.asList(peerId1, peerId2), peer2.getPeers());
+                ZooKeeper zk2 = zooKeeperOf(peer2);
+                long oldOwner = zk2.exists("/proxy/peers/" + peerId1, false).getEphemeralOwner();
+
+                // server-side expiry: Curator reconnects with a new session
+                KillSession.kill(zooKeeperOf(peer1));
+
+                // the node may reappear before peer2 sees it vanish, so check the owner instead
+                TestUtils.waitForCondition(() -> {
+                    Stat stat = zk2.exists("/proxy/peers/" + peerId1, false);
+                    return stat != null && stat.getEphemeralOwner() != oldOwner;
+                }, 30);
+                assertEquals(Arrays.asList(peerId1, peerId2), peer2.getPeers());
+                assertEquals(Map.of("k", "v"), peer2.loadInfoForPeer(peerId1));
+            }
+        }
+    }
+
+    private static ZooKeeper zooKeeperOf(ZooKeeperGroupMembershipHandler handler) throws Exception {
+        Field client = ZooKeeperGroupMembershipHandler.class.getDeclaredField("client");
+        client.setAccessible(true);
+        return ((CuratorFramework) client.get(handler)).getZookeeperClient().getZooKeeper();
     }
 }
