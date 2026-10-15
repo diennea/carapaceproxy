@@ -21,6 +21,11 @@ package org.carapaceproxy.configstore;
 
 import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
 import static org.carapaceproxy.utils.CertificatesUtils.readChainFromKeystore;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
+import java.net.URI;
 import java.security.GeneralSecurityException;
 import java.security.Key;
 import java.security.KeyFactory;
@@ -30,8 +35,16 @@ import java.security.cert.Certificate;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.carapaceproxy.server.certificates.DynamicCertificateState;
+import org.carapaceproxy.utils.StringUtils;
+import org.shredzone.acme4j.toolbox.JSON;
 
 public final class ConfigurationStoreUtils {
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private ConfigurationStoreUtils() {
     }
@@ -68,6 +81,78 @@ public final class ConfigurationStoreUtils {
         }
         byte[] data = Base64.getDecoder().decode(chain);
         return readChainFromKeystore(data);
+    }
+
+    /**
+     * Parses the pending ACME challenges as stored.
+     *
+     * @param challengesData the JSON object of challenge JSON texts, by domain
+     * @return the challenges by domain, {@code null} if the text is blank
+     * @throws JsonProcessingException if the text is not a JSON object of strings
+     */
+    public static Map<String, JSON> parseChallengesData(String challengesData) throws JsonProcessingException {
+        if (StringUtils.isBlank(challengesData)) {
+            return null;
+        }
+        final var map = MAPPER.readValue(challengesData, new TypeReference<Map<String, String>>() {});
+        return map.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> JSON.parse(e.getValue())));
+    }
+
+    /**
+     * Formats the pending ACME challenges to be stored.
+     *
+     * @param challengesData the challenges by domain, may be {@code null}
+     * @return the JSON text, {@code null} if there is no challenge
+     * @throws JsonProcessingException if the challenges cannot be written
+     */
+    public static String formatChallengesData(Map<String, JSON> challengesData) throws JsonProcessingException {
+        if (challengesData == null || challengesData.isEmpty()) {
+            return null;
+        }
+        return MAPPER.writeValueAsString(challengesData.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().toString()))
+        );
+    }
+
+    /**
+     * Builds a certificate from its stored row, the way the stores read it.
+     *
+     * @param domain the domain of the certificate
+     * @param row    the stored row
+     * @return the certificate
+     * @throws IOException              if the pending order or the pending challenges cannot be parsed
+     * @throws IllegalArgumentException if the state is unknown
+     */
+    public static CertificateData toCertificateData(String domain, StoreSnapshot.CertificateRow row) throws IOException {
+        return new CertificateData(
+                domain,
+                Set.copyOf(row.subjectAltNames()),
+                row.chain(),
+                DynamicCertificateState.fromStorableFormat(row.state()),
+                row.pendingOrder() != null ? URI.create(row.pendingOrder()).toURL() : null,
+                parseChallengesData(row.pendingChallenges()),
+                row.attemptCount(),
+                row.message()
+        );
+    }
+
+    /**
+     * Turns a certificate into its stored row.
+     *
+     * @param cert the certificate
+     * @return the row, with the subject alternative names sorted
+     * @throws JsonProcessingException if the pending challenges cannot be written
+     */
+    public static StoreSnapshot.CertificateRow toCertificateRow(CertificateData cert) throws JsonProcessingException {
+        return new StoreSnapshot.CertificateRow(
+                cert.getSubjectAltNames() == null ? null : cert.getSubjectAltNames().stream().sorted().toList(),
+                cert.getChain(),
+                cert.getState().toStorableFormat(),
+                cert.getPendingOrderLocation() != null ? cert.getPendingOrderLocation().toString() : null,
+                formatChallengesData(cert.getPendingChallengesData()),
+                cert.getAttemptsCount(),
+                cert.getMessage()
+        );
     }
 
 }
