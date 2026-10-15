@@ -21,6 +21,8 @@ package org.carapaceproxy.cluster;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Handle group membership: peer discovery and configuration changes.
@@ -68,6 +70,19 @@ public interface GroupMembershipHandler {
     void executeInMutex(String lockId, int acquireTimeout, Runnable runnable);
 
     /**
+     * Acquire the lock that serialises every write to the shared configuration store across the cluster.
+     * Unlike {@link #executeInMutex(String, int, Runnable)} it fails explicitly.
+     * The lock is reentrant for the calling thread; release it with {@link StoreWriteLock#close()} on the same thread.
+     *
+     * @param timeout how long to wait for the lock
+     * @param unit    the unit of {@code timeout}
+     * @return the held lock
+     * @throws TimeoutException     if the lock is not acquired within the timeout
+     * @throws InterruptedException if the thread is interrupted while waiting
+     */
+    StoreWriteLock acquireStoreWriteLock(long timeout, TimeUnit unit) throws TimeoutException, InterruptedException;
+
+    /**
      *
      * @return id of the local peer.
      */
@@ -102,6 +117,25 @@ public interface GroupMembershipHandler {
      * @return properties of the peer
      */
     Map<String, String> loadInfoForPeer(String id);
+
+    /**
+     * A held store write lock, see {@link #acquireStoreWriteLock(long, TimeUnit)}.
+     */
+    interface StoreWriteLock extends AutoCloseable {
+
+        /**
+         * Check that the lock is still held by the current thread, for instance right before a commit.
+         *
+         * @throws IllegalStateException if the lock can no longer be trusted (e.g. the ZooKeeper session was lost)
+         */
+        void ensureHeld();
+
+        /**
+         * Release the lock. Store failures, like a lost ZooKeeper session, are logged, never thrown.
+         */
+        @Override
+        void close();
+    }
 
     interface EventCallback {
 

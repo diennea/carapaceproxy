@@ -63,6 +63,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import org.bouncycastle.util.io.pem.PemObject;
 import org.bouncycastle.util.io.pem.PemWriter;
@@ -71,6 +72,7 @@ import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
+import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.CertificatesUtils;
@@ -632,20 +634,39 @@ public class DynamicCertificatesManager implements Runnable {
         return null;
     }
 
-    @VisibleForTesting
-    public void setStateOfCertificate(String id, DynamicCertificateState state) {
-        if (certificates.containsKey(id)) {
-            CertificateData cert = store.loadCertificateForDomain(id);
-            if (cert != null) {
-                cert.success(state);
-                store.saveCertificate(cert);
-                // remember that events are not delivered to the local JVM
-                reloadCertificatesFromDB();
-                if (groupMembershipHandler != null) {
-                    groupMembershipHandler.fireEvent(EVENT_CERTIFICATES_STATE_CHANGED, null);
-                }
-            }
+    /**
+     * Force the state of a dynamic certificate, under the cluster store write lock.
+     *
+     * @param id    the domain of the certificate
+     * @param state the new state
+     * @return false if the domain is unknown or has no stored certificate
+     * @throws ConfigurationChangeInProgressException if the store write lock is not acquired in time
+     * @throws InterruptedException                 if interrupted while waiting for the lock
+     */
+    public boolean setStateOfCertificate(String id, DynamicCertificateState state) throws ConfigurationChangeInProgressException, InterruptedException {
+        if (!certificates.containsKey(id)) {
+            return false;
         }
+        try (var lock = groupMembershipHandler.acquireStoreWriteLock(HttpProxyServer.STORE_WRITE_LOCK_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+            CertificateData cert = store.loadCertificateForDomain(id);
+            if (cert == null) {
+                return false;
+            }
+            cert.success(state);
+            store.saveCertificate(cert);
+            // events are not delivered to the local JVM; not under the renewal mutex: the map is rebuilt
+            // from the store (synchronized), so a running pass cannot be hurt and must not hang or skip the reset;
+            // the reset is already saved, so a failed local reload must not stop the event to the peers
+            try {
+                reloadCertificatesFromDBInternal();
+            } catch (RuntimeException e) {
+                LOG.error("Reset of certificate {} saved, local reload failed", id, e);
+            }
+        } catch (TimeoutException e) {
+            throw new ConfigurationChangeInProgressException("configuration store is busy, try again later");
+        }
+        groupMembershipHandler.fireEvent(EVENT_CERTIFICATES_STATE_CHANGED, null);
+        return true;
     }
 
     private RuntimeServerConfiguration getConfig() {
@@ -731,13 +752,12 @@ public class DynamicCertificatesManager implements Runnable {
     }
 
     /**
-     * Dispatcher entry point: serialises reloads across the scheduler thread, ZK callbacks,
-     * and the admin REST path through {@link GroupMembershipHandler#executeInMutex}, which
-     * is reentrant per-thread in both standalone and cluster modes.
+     * Dispatcher entry point: serialises the reloads of the ZK callbacks with the renewal pass
+     * through {@link GroupMembershipHandler#executeInMutex}, which is reentrant per-thread in
+     * both standalone and cluster modes.
      * <p>
      * Falls back to a direct call when {@link #groupMembershipHandler} has not been attached
-     * yet (test runs, local-only setups), matching the null-guard pattern used elsewhere in
-     * this class (e.g. {@link #run()} and {@link #setStateOfCertificate}).
+     * yet (test runs, local-only setups), matching the null-guard pattern of {@link #run()}.
      * <p>
      * Callers already running inside the mutex (e.g. {@link #certificatesLifecycle()})
      * should invoke {@link #reloadCertificatesFromDBInternal()} directly instead.
@@ -750,7 +770,8 @@ public class DynamicCertificatesManager implements Runnable {
         }
     }
 
-    private void reloadCertificatesFromDBInternal() {
+    // synchronized like reloadConfiguration, so that a stale reload never overwrites a newer map
+    private synchronized void reloadCertificatesFromDBInternal() {
         LOG.info("Reloading certificates from db");
         try {
             Map<String, CertificateData> newCertificates = new ConcurrentHashMap<>();

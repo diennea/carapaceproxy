@@ -64,6 +64,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.ReentrantLock;
 import javax.servlet.DispatcherType;
 import lombok.Data;
@@ -203,6 +205,11 @@ public class HttpProxyServer implements AutoCloseable {
     private final EventLoopGroup eventLoopGroup;
 
     /**
+     * How long a writer waits for the cluster store write lock and for {@link #configurationLock}.
+     */
+    public static final int STORE_WRITE_LOCK_TIMEOUT_SECONDS = 60;
+
+    /**
      * Guards concurrent configuration changes
      */
     private final ReentrantLock configurationLock = new ReentrantLock();
@@ -280,11 +287,23 @@ public class HttpProxyServer implements AutoCloseable {
         this.eventLoopGroup = Epoll.isAvailable() ? new EpollEventLoopGroup() : new NioEventLoopGroup();
     }
 
+    /**
+     * Apply a change to the current dynamic configuration, read under the write locks.
+     *
+     * @param function the change to apply
+     * @throws ConfigurationNotValidException       if the current configuration cannot be read
+     * @throws InterruptedException                 if interrupted while waiting for the locks
+     * @throws ConfigurationChangeInProgressException if the locks are not acquired in time
+     * @throws IllegalStateException                if the changed configuration is not valid; nothing is written
+     */
     public void rewriteConfiguration(final ConfigurationConsumer function) throws ConfigurationNotValidException, InterruptedException, ConfigurationChangeInProgressException {
-        final String currentConfiguration = getDynamicConfigurationStore().toStringConfiguration();
-        final PropertiesConfigurationStore configurationStore = ConfigResource.buildStore(currentConfiguration);
-        function.accept(configurationStore);
-        applyDynamicConfigurationFromAPI(configurationStore);
+        underWriteLocks(() -> {
+            final String currentConfiguration = getDynamicConfigurationStore().toStringConfiguration();
+            final PropertiesConfigurationStore configurationStore = ConfigResource.buildStore(currentConfiguration);
+            function.accept(configurationStore);
+            applyDynamicConfiguration(configurationStore, false);
+        });
+        fireConfigurationChange();
     }
 
     public int getLocalPort() {
@@ -672,31 +691,50 @@ public class HttpProxyServer implements AutoCloseable {
         return newConfiguration;
     }
 
+    /**
+     * Store a dynamic certificate and add or update its entry in the configuration, under the write locks.
+     *
+     * @param cert the certificate to store
+     * @throws Exception if the locks are not acquired in time or the certificate cannot be stored or applied
+     */
     public void updateDynamicCertificateForDomain(CertificateData cert) throws Exception {
-        // Certificate saving on db
-        dynamicConfigurationStore.saveCertificate(cert);
+        underWriteLocks(() -> {
+            // Certificate saving on db
+            dynamicConfigurationStore.saveCertificate(cert);
 
-        // Configuration updating
-        Properties props = dynamicConfigurationStore.asProperties(null);
-        boolean newCertificate = !dynamicConfigurationStore.anyPropertyMatches((k, v) -> {
-            if (k.matches("certificate\\.[0-9]+\\.hostname") && v.equals(cert.getDomain())) {
-                performCertificateUpdate(props, k, cert); // updating existing certificate
-                return true;
+            // Configuration updating
+            Properties props = dynamicConfigurationStore.asProperties(null);
+            boolean newCertificate = !dynamicConfigurationStore.anyPropertyMatches((k, v) -> {
+                if (k.matches("certificate\\.[0-9]+\\.hostname") && v.equals(cert.getDomain())) {
+                    performCertificateUpdate(props, k, cert); // updating existing certificate
+                    return true;
+                }
+                return false;
+            });
+            if (newCertificate) {
+                performCertificateCreate(props, cert);
             }
-            return false;
-        });
-        if (newCertificate) {
-            performCertificateCreate(props, cert);
-        }
 
-        // Configuration reloading
-        applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(props));
+            // Configuration reloading
+            applyDynamicConfiguration(new PropertiesConfigurationStore(props), false);
+        });
+        fireConfigurationChange();
     }
 
+    /**
+     * Enable or disable the maintenance mode, under the write locks.
+     *
+     * @param value whether the maintenance mode is enabled
+     * @throws ConfigurationChangeInProgressException if the locks are not acquired in time
+     * @throws InterruptedException                 if interrupted while waiting for the locks
+     */
     public void updateMaintenanceMode(boolean value) throws ConfigurationChangeInProgressException, InterruptedException {
-        Properties props = dynamicConfigurationStore.asProperties(null);
-        props.setProperty("carapace.maintenancemode.enabled", String.valueOf(value));
-        applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(props));
+        underWriteLocks(() -> {
+            Properties props = dynamicConfigurationStore.asProperties(null);
+            props.setProperty("carapace.maintenancemode.enabled", String.valueOf(value));
+            applyDynamicConfiguration(new PropertiesConfigurationStore(props), false);
+        });
+        fireConfigurationChange();
     }
 
     private void performCertificateUpdate(Properties props, String key, CertificateData cert) {
@@ -732,16 +770,67 @@ public class HttpProxyServer implements AutoCloseable {
     /**
      * Apply a new configuration. The configuration MUST be valid
      *
-     * @param newConfigurationStore
-     * @throws InterruptedException
-     * @throws org.carapaceproxy.server.config.ConfigurationChangeInProgressException
+     * @param newConfigurationStore the configuration to apply and commit
+     * @throws InterruptedException                 if interrupted while waiting for the locks
+     * @throws ConfigurationChangeInProgressException if the locks are not acquired in time
      * @see #buildValidConfiguration(org.carapaceproxy.configstore.ConfigurationStore)
      */
     public void applyDynamicConfigurationFromAPI(ConfigurationStore newConfigurationStore) throws InterruptedException, ConfigurationChangeInProgressException {
-        applyDynamicConfiguration(newConfigurationStore, false);
+        underWriteLocks(() -> applyDynamicConfiguration(newConfigurationStore, false));
+        fireConfigurationChange();
+    }
 
-        // this will trigger a reload on other peers
+    /**
+     * Trigger a reload on the other peers. Call it after the write locks are released, once per write.
+     */
+    private void fireConfigurationChange() {
         groupMembershipHandler.fireEvent("configurationChange", null);
+    }
+
+    /**
+     * A write to the configuration store, run by {@link #underWriteLocks(StoreWrite)}.
+     *
+     * @param <E> the checked exception thrown by the write
+     */
+    @FunctionalInterface
+    private interface StoreWrite<E extends Exception> {
+
+        void run() throws E, InterruptedException, ConfigurationChangeInProgressException;
+    }
+
+    /**
+     * Run a write holding the cluster store write lock and then {@link #configurationLock}, in this order.
+     * Both are reentrant, so a write may call another write on the same thread.
+     *
+     * @param write the write to run
+     * @param <E>   the checked exception thrown by the write
+     * @throws E                                    if the write fails
+     * @throws InterruptedException                 if interrupted while waiting for the locks
+     * @throws ConfigurationChangeInProgressException if a lock is not acquired within {@link #STORE_WRITE_LOCK_TIMEOUT_SECONDS}
+     */
+    private <E extends Exception> void underWriteLocks(StoreWrite<E> write) throws E, InterruptedException, ConfigurationChangeInProgressException {
+        final GroupMembershipHandler.StoreWriteLock storeWriteLock;
+        try {
+            storeWriteLock = groupMembershipHandler.acquireStoreWriteLock(STORE_WRITE_LOCK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            throw new ConfigurationChangeInProgressException("configuration store is busy, try again later");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw e;
+        }
+        try (storeWriteLock) {
+            if (!configurationLock.tryLock(STORE_WRITE_LOCK_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                throw new ConfigurationChangeInProgressException("configuration store is busy, try again later");
+            }
+            try {
+                write.run();
+            } finally {
+                configurationLock.unlock();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw e;
+        }
     }
 
     private void applyDynamicConfiguration(ConfigurationStore newConfigurationStore, boolean atBoot) throws InterruptedException, ConfigurationChangeInProgressException {
