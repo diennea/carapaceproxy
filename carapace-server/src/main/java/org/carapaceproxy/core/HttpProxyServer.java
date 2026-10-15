@@ -479,6 +479,10 @@ public class HttpProxyServer implements AutoCloseable {
             ocspStaplingManager.start();
             cacheByteBufMemoryUsageMetric.start();
             groupMembershipHandler.watchEvent("configurationChange", new ConfigurationChangeCallback());
+            // the watch is live now: a restore committed since the boot load is caught here, a later one by the event
+            if (!Objects.equals(dynamicConfigurationStore.readStateGeneration(), dynamicConfigurationStore.getLoadedStateGeneration())) {
+                reloadConfigurationFromStore();
+            }
         } catch (RuntimeException err) {
             close();
             throw err;
@@ -910,6 +914,8 @@ public class HttpProxyServer implements AutoCloseable {
             this.realm = newRealm;
             this.mapper = newMapper;
             this.currentConfiguration = newConfiguration;
+            // only now: a failure above leaves the state stale, so that the renewal pass asks for the reload again
+            this.dynamicCertificatesManager.stateApplied(dynamicConfigurationStore.getLoadedStateGeneration());
         } catch (ConfigurationNotValidException err) {
             // impossible to have a non valid configuration here
             throw new IllegalStateException(err);

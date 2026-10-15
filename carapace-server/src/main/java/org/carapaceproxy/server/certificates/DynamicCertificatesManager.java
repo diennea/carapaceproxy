@@ -57,13 +57,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import org.bouncycastle.util.io.pem.PemObject;
 import org.bouncycastle.util.io.pem.PemWriter;
@@ -76,6 +79,7 @@ import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.CertificatesUtils;
+import org.carapaceproxy.utils.StringUtils;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
 import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.Problem;
@@ -111,6 +115,9 @@ public class DynamicCertificatesManager implements Runnable {
     private static final String EVENT_CERTIFICATES_REQUEST_STORE = "certificates_request_store";
 
     private volatile Map<String, CertificateData> certificates = new ConcurrentHashMap<>();
+    // the store state generation the server last applied in full, see stateApplied
+    private volatile String stateGeneration;
+    private final AtomicBoolean reloadPending = new AtomicBoolean();
     private volatile ACMEClient acmeClient; // Let's Encrypt client
     private Route53Client r53Client;
     private String awsAccessKey;
@@ -171,15 +178,35 @@ public class DynamicCertificatesManager implements Runnable {
         }
     }
 
+    /**
+     * Records the store state generation of the configuration the server has just applied in full.
+     * <br>
+     * Called only once every subsystem reloaded: until then a peer whose apply failed after a restore keeps seeing
+     * the state as stale, and the renewal pass asks for another reload instead of renewing on a half-applied state.
+     *
+     * @param generation the generation of the applied state, {@code null} if the store was never replaced
+     */
+    public void stateApplied(String generation) {
+        stateGeneration = generation;
+    }
+
     public synchronized void reloadConfiguration(RuntimeServerConfiguration configuration) throws ConfigurationNotValidException {
         if (store == null) {
             throw new DynamicCertificatesManagerException("ConfigurationStore not set.");
         }
         keyPairsSize = configuration.getKeyPairsSize();
+        final String newGeneration = store.getLoadedStateGeneration();
+        // after a restore, here or on another peer: the files of an AVAILABLE certificate may hold another chain now;
+        // at boot a restored store rewrites them once, in case this node was down during the restore
+        final boolean restored = !Objects.equals(stateGeneration, newGeneration);
         // rebuilt every time: a restore can replace the account key
         acmeClient = new ACMEClient(loadOrCreateAcmeUserKeyPair(), TESTING_MODE);
         domainsCheckerIPAddresses = configuration.getDomainsCheckerIPAddresses();
         loadCertificates(configuration.getCertificates());
+        if (restored) {
+            // the server swaps in this configuration only after the reload: getConfig() would give the old store path
+            storeLocalCertificates(certificates.values(), null, configuration);
+        }
         period = configuration.getDynamicCertificatesManagerPeriod();
         if (scheduledFuture != null) {
             scheduledFuture.cancel(true);
@@ -282,11 +309,27 @@ public class DynamicCertificatesManager implements Runnable {
     public void run() {
         if (groupMembershipHandler != null) {
             // Only one node of the cluster executes this
-            groupMembershipHandler.executeInMutex(THREAD_NAME, period > 0 ? period : 1, this::certificatesLifecycle);
+            try {
+                groupMembershipHandler.executeInMutex(THREAD_NAME, period > 0 ? period : 1, this::certificatesLifecycle);
+            } catch (RuntimeException err) {
+                // the executor would cancel every later run
+                LOG.error("Certificates lifecycle pass failed", err);
+            }
         }
     }
 
     private void certificatesLifecycle() {
+        final String storedGeneration = store.readStateGeneration();
+        if (storedGeneration != null && !storedGeneration.equals(stateGeneration)) {
+            LOG.warn("Store state generation {} differs from the loaded one {}: skipping the renewal and reloading",
+                    storedGeneration, stateGeneration);
+            // not inline: the reload cancels this very task, and the stale map must not be written back meanwhile
+            // one at a time: a reload stuck on the configuration lock must not pile up more of them
+            if (reloadPending.compareAndSet(false, true)) {
+                CompletableFuture.runAsync(server::reloadConfigurationFromStore).whenComplete((result, error) -> reloadPending.set(false));
+            }
+            return;
+        }
         var flushCache = false;
         final var rateLimit = getConfig().getDynamicCertificatesManagerRateLimit();
         final var scheduled = rotateFromLastServedDomain(certificates.values().stream()
@@ -739,7 +782,7 @@ public class DynamicCertificatesManager implements Runnable {
                                 .map(String.class::cast)
                                 .map(DynamicCertificatesManager.this::getCertificateDataForDomain)
                                 .collect(Collectors.toList());
-                storeLocalCertificates(_certificates, null);
+                storeLocalCertificates(_certificates, null, getConfig());
             } catch (Exception err) {
                 LOG.error("Failed to store certificates. Cause: {0}", err);
             }
@@ -791,7 +834,7 @@ public class DynamicCertificatesManager implements Runnable {
                 LOG.debug("No certificate binding change detected; skipping listener reload");
             }
             // storing certificates on local path
-            storeLocalCertificates(newCertificates.values(), oldCertificates);
+            storeLocalCertificates(newCertificates.values(), oldCertificates, getConfig());
         } catch (GeneralSecurityException | MalformedURLException | InterruptedException | ConfigurationNotValidException e) {
             throw new DynamicCertificatesManagerException("Unable to load dynamic certificates from db.", e);
         }
@@ -810,28 +853,38 @@ public class DynamicCertificatesManager implements Runnable {
         return false;
     }
 
-    private void storeLocalCertificates(Collection<CertificateData> newCertificates, Map<String, CertificateData> oldCertificates) {
-        if (getConfig().getLocalCertificatesStorePath() == null
-                || (!getConfig().getLocalCertificatesStorePeersIds().isEmpty()
-                && !getConfig().getLocalCertificatesStorePeersIds().contains(server.getPeerId()))) {
+    private void storeLocalCertificates(Collection<CertificateData> newCertificates, Map<String, CertificateData> oldCertificates, RuntimeServerConfiguration config) {
+        if (config.getLocalCertificatesStorePath() == null
+                || (!config.getLocalCertificatesStorePeersIds().isEmpty()
+                && !config.getLocalCertificatesStorePeersIds().contains(server.getPeerId()))) {
             return;
         }
 
         newCertificates.stream().filter(cert -> {
             CertificateData oldCert = oldCertificates != null ? oldCertificates.get(cert.getDomain()) : null;
-            return cert != null && !cert.isManual() && (oldCert == null || (cert.getState() == AVAILABLE && oldCert.getState() != AVAILABLE));
+            // no chain yet: nothing to write
+            return cert != null && !cert.isManual() && !StringUtils.isBlank(cert.getChain()) && (oldCert == null || (cert.getState() == AVAILABLE && oldCert.getState() != AVAILABLE));
         }).forEach(cert -> {
             final var domainDir = CertificatesUtils.removeWildcard(cert.getDomain());
-            var parent = new File(getConfig().getLocalCertificatesStorePath(), domainDir);
+            var parent = new File(config.getLocalCertificatesStorePath(), domainDir);
             parent.mkdirs();
             LOG.info("Store certificate {} to local path {}", cert.getDomain(), parent.getAbsolutePath());
+            // loaded before opening any file: a failure must leave the previous files of the domain untouched
+            final PrivateKey key;
+            try {
+                key = loadOrCreateKeyPairForDomain(cert.getDomain()).getPrivate();
+            } catch (RuntimeException ex) {
+                // a store failure must not abort the reload: the other domains still get their files
+                LOG.error("Failed to load privatekey for certificate domain {}, local files in {} left untouched",
+                        cert.getDomain(), parent.getAbsolutePath(), ex);
+                return;
+            }
             try (var fos = new FileOutputStream(new File(parent, "privatekey.pem"));
                     var osw = new OutputStreamWriter(fos);
                     var writer = new PemWriter(osw)) {
-                var key = loadOrCreateKeyPairForDomain(cert.getDomain()).getPrivate();
                 writer.writeObject(new PemObject("", key.getEncoded()));
             } catch (IOException ex) {
-                LOG.error("Failed to save privatekey for certificate domain {} to local path {}", cert.getDomain(), parent.getAbsolutePath());
+                LOG.error("Failed to save privatekey for certificate domain {} to local path {}", cert.getDomain(), parent.getAbsolutePath(), ex);
             }
             try (var fos = new FileOutputStream(new File(parent, "chain.pem"));
                     var fos2 = new FileOutputStream(new File(parent, "fullchain.pem"));
@@ -866,6 +919,6 @@ public class DynamicCertificatesManager implements Runnable {
                         .map(this::getCertificateDataForDomain)
                         .collect(Collectors.toList());
 
-        storeLocalCertificates(_certificates, null);
+        storeLocalCertificates(_certificates, null, getConfig());
     }
 }

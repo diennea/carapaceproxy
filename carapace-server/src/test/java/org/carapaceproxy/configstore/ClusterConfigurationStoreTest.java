@@ -20,6 +20,8 @@
 package org.carapaceproxy.configstore;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import java.io.File;
 import java.io.IOException;
@@ -28,6 +30,8 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -121,6 +125,34 @@ public class ClusterConfigurationStoreTest {
             File nodeDir = tmpDir.newFolder();
             store = openStore(zooKeeper, staticConfiguration, nodeDir);
             assertEquals(REPLICATION_FACTOR, expectedReplicaCount(zooKeeper, TABLESPACE));
+        }
+    }
+
+    @Test
+    public void testReplaceStateSeenByPeer() throws Exception {
+        File zooKeeperDir = tmpDir.newFolder();
+        try (TestingServer zooKeeper = new TestingServer(freePort(), zooKeeperDir)) {
+            store = openStore(zooKeeper, new PropertiesConfigurationStore(nodeProperties()), tmpDir.newFolder());
+            peer = openStore(zooKeeper, new PropertiesConfigurationStore(nodeProperties()), tmpDir.newFolder());
+
+            final var exported = store.exportState();
+            final Map<String, String> config = new HashMap<>(exported.config());
+            config.put("some.property", "value");
+            final var snapshot = new StoreSnapshot(config, exported.keyPairs(), exported.acmeAccountKeys(), exported.certificates());
+            store.replaceState(snapshot, () -> {});
+            final var generation = store.getLoadedStateGeneration();
+            assertNotNull(generation);
+
+            // the peer sees the new generation on storage before its cache catches up
+            assertEquals(generation, peer.readStateGeneration());
+            assertNotEquals(generation, peer.getLoadedStateGeneration());
+            assertEquals("", peer.getProperty("some.property", ""));
+
+            peer.reload();
+            assertEquals(snapshot, peer.exportState());
+            assertEquals("value", peer.getProperty("some.property", ""));
+            assertEquals(generation, peer.getLoadedStateGeneration());
+            assertEquals(generation, peer.readStateGeneration());
         }
     }
 
