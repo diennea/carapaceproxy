@@ -171,6 +171,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 ensureTableSpace(tableSpace, cluster ? replicationFactor(staticConfiguration) : 1);
                 datasource.setDefaultSchema(tableSpace);
             }
+            createTables();
             loadCurrentConfiguration();
         } catch (RuntimeException err) {
             try {
@@ -311,8 +312,12 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         });
     }
 
-    private Set<String> loadCurrentConfiguration() {
-        Set<String> loaded = new HashSet<>();
+    /**
+     * Creates the tables that do not exist yet, once at boot: {@link #reload()} runs before every write.
+     *
+     * @throws ConfigurationStoreException if no connection is available
+     */
+    private void createTables() {
         try (Connection con = datasource.getConnection()) {
             List<String> tablesDDL = Arrays.asList(
                     CREATE_CONFIG_TABLE,
@@ -328,7 +333,15 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                     LOG.debug("Could not create table {}", tableDDL, err);
                 }
             });
+        } catch (SQLException err) {
+            LOG.error("Error while creating the tables", err);
+            throw new ConfigurationStoreException(err);
+        }
+    }
 
+    private Set<String> loadCurrentConfiguration() {
+        Set<String> loaded = new HashSet<>();
+        try (Connection con = datasource.getConnection()) {
             try (PreparedStatement ps = con.prepareStatement(SELECT_ALL_FROM_CONFIG_TABLE); ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     String pname = rs.getString(1);

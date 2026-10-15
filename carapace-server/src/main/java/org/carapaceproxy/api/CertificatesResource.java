@@ -293,12 +293,14 @@ public class CertificatesResource {
     @Path("{certId}")
     public Response deleteCertificate(@PathParam("certId") final String certId) {
         final var server = (HttpProxyServer) context.getAttribute("server");
-        final var certificates = server.getCurrentConfiguration().getCertificates();
-        if (!certificates.containsKey(certId)) {
-            throw new WebApplicationException(Response.Status.NOT_FOUND);
-        }
         try {
-            server.rewriteConfiguration(it -> it.removeCertificate(certId));
+            server.rewriteConfiguration(it -> {
+                // checked on the reloaded store: a peer that missed an event would answer 404 for a live certificate
+                if (!it.anyPropertyMatches((k, v) -> k.matches("certificate\\.[0-9]+\\.hostname") && v.equals(certId))) {
+                    throw new WebApplicationException(Response.Status.NOT_FOUND);
+                }
+                it.removeCertificate(certId);
+            });
             return SimpleResponse.ok();
         } catch (ConfigurationChangeInProgressException | InterruptedException | ConfigurationNotValidException e) {
             return SimpleResponse.error(e);
