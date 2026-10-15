@@ -34,6 +34,7 @@ import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -173,7 +174,6 @@ public class DynamicCertificatesManagerTest {
         when(parent.getListeners()).thenReturn(mock(Listeners.class));
         DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
-        Whitebox.setInternalState(man, ac);
 
         // Store mocking
         ConfigurationStore store = mock(ConfigurationStore.class);
@@ -223,6 +223,7 @@ public class DynamicCertificatesManagerTest {
         conf.configure(configStore);
         when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
+        Whitebox.setInternalState(man, ac);
 
         assertCertificateState(d0, AVAILABLE, cycleCount, man);
         assertCertificateState(d2, AVAILABLE, 0, man);
@@ -381,7 +382,7 @@ public class DynamicCertificatesManagerTest {
         assertEquals(expectedCycleCount, dCMan.getCertificateDataForDomain(domain).getAttemptsCount());
     }
 
-    // the ACME client is injected before reloadConfiguration, which only builds one when the field is still null
+    // the ACME client is injected after reloadConfiguration, which builds a new one every time
     private static DynamicCertificatesManager buildManager(
             ConfigurationStore store, ACMEClient ac, Route53Client r53Client, Properties props
     ) throws Exception {
@@ -390,7 +391,6 @@ public class DynamicCertificatesManagerTest {
         DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
         man.setConfigurationStore(store);
-        Whitebox.setInternalState(man, ac);
         if (r53Client != null) {
             man.initAWSClient("access", "secret");
             Whitebox.setInternalState(man, r53Client);
@@ -399,6 +399,7 @@ public class DynamicCertificatesManagerTest {
         conf.configure(new PropertiesConfigurationStore(props));
         when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
+        Whitebox.setInternalState(man, ac);
         return man;
     }
 
@@ -585,7 +586,6 @@ public class DynamicCertificatesManagerTest {
         when(parent.getListeners()).thenReturn(mock(Listeners.class));
         DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
-        Whitebox.setInternalState(man, ac);
 
         // Route53Cliente mocking
         man.initAWSClient("access", "secret");
@@ -616,6 +616,7 @@ public class DynamicCertificatesManagerTest {
         conf.configure(configStore);
         when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
+        Whitebox.setInternalState(man, ac);
 
         int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
 
@@ -722,7 +723,6 @@ public class DynamicCertificatesManagerTest {
         when(parent.getListeners()).thenReturn(mock(Listeners.class));
         DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
-        Whitebox.setInternalState(man, ac);
 
         // Route53Cliente mocking
         man.initAWSClient("access", "secret");
@@ -754,6 +754,7 @@ public class DynamicCertificatesManagerTest {
         conf.configure(configStore);
         when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
+        Whitebox.setInternalState(man, ac);
 
         int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
 
@@ -839,7 +840,6 @@ public class DynamicCertificatesManagerTest {
         when(parent.getListeners()).thenReturn(mock(Listeners.class));
         DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
-        Whitebox.setInternalState(man, ac);
 
         // Store mocking
         ConfigurationStore store = mock(ConfigurationStore.class);
@@ -865,6 +865,7 @@ public class DynamicCertificatesManagerTest {
         conf.configure(configStore);
         when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
+        Whitebox.setInternalState(man, ac);
 
         int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
 
@@ -885,4 +886,27 @@ public class DynamicCertificatesManagerTest {
         }
     }
 
+    @Test
+    public void testAcmeClientRebuiltOnReload() throws Exception {
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        KeyPair backupKey = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        KeyPair restoredKey = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        when(store.loadAcmeUserKeyPair()).thenReturn(backupKey);
+        man.setConfigurationStore(store);
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(new PropertiesConfigurationStore(new Properties()));
+
+        man.reloadConfiguration(conf);
+        ACMEClient before = Whitebox.getInternalState(man, ACMEClient.class);
+        assertSame(backupKey, Whitebox.getInternalState(before, KeyPair.class));
+
+        // a restore replaced the account key in the store
+        when(store.loadAcmeUserKeyPair()).thenReturn(restoredKey);
+        man.reloadConfiguration(conf);
+        ACMEClient after = Whitebox.getInternalState(man, ACMEClient.class);
+        assertSame(restoredKey, Whitebox.getInternalState(after, KeyPair.class));
+    }
 }

@@ -66,8 +66,12 @@ public class ACMEClient {
     private final boolean testingModeOn;
     private final KeyPair userKey;
 
-    public ACMEClient(KeyPair userKey, boolean testingMode) {
+    static {
+        // once: the client is rebuilt on every reload and building the provider is slow
         Security.addProvider(new BouncyCastleProvider());
+    }
+
+    public ACMEClient(KeyPair userKey, boolean testingMode) {
         this.userKey = userKey;
         this.testingModeOn = testingMode;
     }
