@@ -35,10 +35,12 @@ import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -56,6 +58,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
 import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
@@ -316,6 +320,69 @@ public class DynamicCertificatesManagerTest {
     // must run after reloadConfiguration, which rebuilds the client map; by-name, because there are other map fields
     private static void injectAcmeClients(DynamicCertificatesManager man, Map<String, ACMEClient> clients) {
         Whitebox.setInternalState(man, "acmeClients", clients);
+    }
+
+    @Test
+    // a renewal pass holding the mutex must neither delay the reset nor make it skip the local reload
+    public void testSetStateOfCertificateDoesNotWaitForTheRenewal() throws Exception {
+        final var domain = "localhost1";
+        final var stored = new DynamicCertificateState[]{AVAILABLE};
+        final ConfigurationStore store = mock(ConfigurationStore.class);
+        when(store.loadCertificateForDomain(eq(domain))).thenAnswer(i -> new CertificateData(domain, null, stored[0]));
+        doAnswer(i -> stored[0] = i.<CertificateData>getArgument(0).getState()).when(store).saveCertificate(any());
+        final var man = buildManager(store, mock(ACMEClient.class), null, acmeCertificates(List.of(domain)));
+        final var handler = new NullGroupMembershipHandler();
+        man.attachGroupMembershipHandler(handler);
+        man.setPeriod(30);
+
+        final var held = new CountDownLatch(1);
+        final var release = new CountDownLatch(1);
+        final var renewal = new Thread(() -> handler.executeInMutex(DynamicCertificatesManager.THREAD_NAME, 1, () -> {
+            held.countDown();
+            try {
+                release.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }));
+        renewal.start();
+        try {
+            assertTrue(held.await(5, TimeUnit.SECONDS));
+            final long start = System.nanoTime();
+            assertTrue(man.setStateOfCertificate(domain, WAITING));
+            assertTrue(System.nanoTime() - start < TimeUnit.SECONDS.toNanos(5));
+            assertCertificateState(domain, WAITING, 0, man);
+        } finally {
+            release.countDown();
+            renewal.join();
+        }
+    }
+
+    @Test
+    // the reset is saved before the local reload, so a failing reload must not stop the event to the peers
+    public void testSetStateOfCertificateFiresEventWhenLocalReloadFails() throws Exception {
+        final var domain = "localhost1";
+        final var saved = new boolean[]{false};
+        final ConfigurationStore store = mock(ConfigurationStore.class);
+        when(store.loadCertificateForDomain(eq(domain))).thenAnswer(i -> {
+            if (saved[0]) {
+                throw new IllegalStateException("store unavailable");
+            }
+            return new CertificateData(domain, null, AVAILABLE);
+        });
+        doAnswer(i -> saved[0] = true).when(store).saveCertificate(any());
+        final var man = buildManager(store, mock(ACMEClient.class), null, acmeCertificates(List.of(domain)));
+        final var fired = new CountDownLatch(1);
+        man.attachGroupMembershipHandler(new NullGroupMembershipHandler() {
+            @Override
+            public void fireEvent(String eventId, Map<String, Object> data) {
+                fired.countDown();
+            }
+        });
+
+        assertTrue(man.setStateOfCertificate(domain, WAITING));
+        assertTrue(saved[0]);
+        assertEquals(0, fired.getCount());
     }
 
     private void assertCertificateState(String domain, DynamicCertificateState expectedState, int expectedCycleCount, DynamicCertificatesManager dCMan) {

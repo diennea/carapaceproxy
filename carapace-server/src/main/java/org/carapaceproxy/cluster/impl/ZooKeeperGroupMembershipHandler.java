@@ -32,6 +32,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.apache.curator.ensemble.fixed.FixedEnsembleProvider;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
@@ -83,6 +84,8 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
     private PersistentNode peerNode; // re-creates /proxy/peers/<peerId> after a session expiry
     private final CopyOnWriteArrayList<PathChildrenCache> watchedEvents = new CopyOnWriteArrayList<>();
     private final ConcurrentHashMap<String, InterProcessMutex> mutexes = new ConcurrentHashMap<>();
+    // one instance only: Curator reentrancy is per instance and thread
+    private final InterProcessMutex storeWriteMutex;
     private final ExecutorService callbacksExecutor = Executors.newSingleThreadExecutor();
 
     public ZooKeeperGroupMembershipHandler(String zkAddress, int zkTimeout, boolean zkAcl,
@@ -125,6 +128,7 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
         this.zkTimeout = zkTimeout;
         this.peerId = peerId;
         this.peerInfo = peerInfo;
+        this.storeWriteMutex = new InterProcessMutex(client, "/proxy/mutex/store-write");
     }
 
     @Override
@@ -287,21 +291,81 @@ public class ZooKeeperGroupMembershipHandler implements GroupMembershipHandler, 
         InterProcessMutex mutex = mutexes.computeIfAbsent(mutexId, (mId) -> {
             return new InterProcessMutex(client, "/proxy/mutex/" + mutexId);
         });
+        boolean acquired = false;
         try {
-            boolean acquired = mutex.acquire(timeout, TimeUnit.SECONDS);
+            acquired = mutex.acquire(timeout, TimeUnit.SECONDS);
             if (!acquired) {
                 LOG.info("Failed to acquire lock for executeInMutex (mutexId: {}, peerId: {})", mutexId, peerId);
                 return;
             }
             runnable.run();
+        } catch (InterruptedException e) {
+            // the caller is shutting down: keep the flag for it
+            Thread.currentThread().interrupt();
+            LOG.info("Interrupted while waiting for lock {}", mutexId);
         } catch (Exception e) {
             LOG.error("Failed to acquire lock for executeInMutex (mutexId: {}, peerId: {})", mutexId, peerId, e);
         } finally {
-            try {
-                mutex.release();
-            } catch (Exception e) {
-                LOG.error("Failed to release lock for executeInMutex (mutexId: {}, peerId: {})", mutexId, peerId, e);
+            if (acquired) {
+                try {
+                    mutex.release();
+                } catch (Exception e) {
+                    LOG.error("Failed to release lock for executeInMutex (mutexId: {}, peerId: {})", mutexId, peerId, e);
+                }
             }
+        }
+    }
+
+    @Override
+    public StoreWriteLock acquireStoreWriteLock(long timeout, TimeUnit unit) throws TimeoutException, InterruptedException {
+        final boolean acquired;
+        try {
+            acquired = storeWriteMutex.acquire(timeout, unit);
+        } catch (InterruptedException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("Cannot acquire the store write lock on peer " + peerId, e);
+        }
+        if (!acquired) {
+            throw new TimeoutException("Store write lock not acquired within " + timeout + " " + unit);
+        }
+        final long sessionId;
+        try {
+            sessionId = sessionId();
+        } catch (RuntimeException e) {
+            // the mutex is reentrant: a leaked hold would block every other thread and peer for good
+            try {
+                storeWriteMutex.release();
+            } catch (Exception releaseError) {
+                e.addSuppressed(releaseError);
+            }
+            throw e;
+        }
+        return new StoreWriteLock() {
+            @Override
+            public void ensureHeld() {
+                // the ephemeral lock node dies with the session, even if Curator still believes it owns it
+                if (!client.getZookeeperClient().isConnected() || sessionId() != sessionId || !storeWriteMutex.isOwnedByCurrentThread()) {
+                    throw new IllegalStateException("Store write lock lost by peer " + peerId);
+                }
+            }
+
+            @Override
+            public void close() {
+                try {
+                    storeWriteMutex.release();
+                } catch (Exception e) {
+                    LOG.error("Failed to release the store write lock (peerId: {})", peerId, e);
+                }
+            }
+        };
+    }
+
+    private long sessionId() {
+        try {
+            return client.getZookeeperClient().getZooKeeper().getSessionId();
+        } catch (Exception e) {
+            throw new IllegalStateException("No ZooKeeper session on peer " + peerId, e);
         }
     }
 
