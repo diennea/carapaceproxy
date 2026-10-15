@@ -239,6 +239,15 @@ public interface ConfigurationStore extends AutoCloseable {
     void replaceState(StoreSnapshot snapshot, Runnable preCommitCheck);
 
     /**
+     * Preflight hook: checks that the store answers right now, before the cluster store write lock is taken,
+     * so that a store that hangs does not hold the lock.
+     *
+     * @throws ConfigurationNotValidException if the store does not answer in time
+     */
+    default void checkAnswering() throws ConfigurationNotValidException {
+    }
+
+    /**
      * Preflight hook: checks that the store can take a write right now, before anything is written.
      *
      * @throws ConfigurationNotValidException if the store would refuse or lose the write

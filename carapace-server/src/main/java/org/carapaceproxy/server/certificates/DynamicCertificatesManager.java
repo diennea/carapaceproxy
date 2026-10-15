@@ -228,18 +228,33 @@ public class DynamicCertificatesManager implements Runnable {
         return pair;
     }
 
+    /**
+     * Checks that every dynamic wildcard certificate can get its DNS challenge, that is the AWS Route53 credentials are set.
+     *
+     * @param certificates the configured certificates, by id
+     * @throws ConfigurationNotValidException if a dynamic wildcard certificate is configured without AWS credentials
+     */
+    public void checkWildcardCredentials(Map<String, SSLCertificateConfiguration> certificates) throws ConfigurationNotValidException {
+        if (awsAccessKey != null && awsSecretKey != null) {
+            return;
+        }
+        for (SSLCertificateConfiguration config : certificates.values()) {
+            if (config.isDynamic() && config.isWildcard()) {
+                throw new ConfigurationNotValidException(
+                        "For ACME wildcards certificates AWS Route53 credentials has to be set (certificate " + config.getId() + ")"
+                );
+            }
+        }
+    }
+
     private void loadCertificates(Map<String, SSLCertificateConfiguration> certificates) throws ConfigurationNotValidException {
+        checkWildcardCredentials(certificates);
         try {
             final var _certificates = new ConcurrentHashMap<String, CertificateData>();
             for (Entry<String, SSLCertificateConfiguration> e : certificates.entrySet()) {
                 SSLCertificateConfiguration config = e.getValue();
                 if (config.isDynamic()) {
                     String domain = config.getId(); // hostname or *.hostname
-                    if (config.isWildcard() && (awsAccessKey == null || awsSecretKey == null)) {
-                        throw new ConfigurationNotValidException(
-                                "For ACME wildcards certificates AWS Route53 credentials has to be set"
-                        );
-                    }
                     boolean forceManual = MANUAL == config.getMode();
                     _certificates.put(domain, loadOrCreateDynamicCertificateForDomain(
                             domain, config.getSubjectAltNames(), forceManual, config.getDaysBeforeRenewal()
@@ -688,6 +703,12 @@ public class DynamicCertificatesManager implements Runnable {
     public boolean setStateOfCertificate(String id, DynamicCertificateState state) throws ConfigurationChangeInProgressException, InterruptedException {
         if (!certificates.containsKey(id)) {
             return false;
+        }
+        // as for every other write: a store that hangs would hold the cluster lock and stall every peer
+        try {
+            store.checkAnswering();
+        } catch (ConfigurationNotValidException e) {
+            throw new ConfigurationChangeInProgressException("configuration store is not answering, try again later: " + e.getMessage());
         }
         try (var lock = groupMembershipHandler.acquireStoreWriteLock(HttpProxyServer.STORE_WRITE_LOCK_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
             CertificateData cert = store.loadCertificateForDomain(id);

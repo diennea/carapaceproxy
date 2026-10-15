@@ -34,6 +34,7 @@ import static reactor.netty.Metrics.PENDING_CONNECTIONS;
 import static reactor.netty.Metrics.REMOTE_ADDRESS;
 import static reactor.netty.Metrics.TOTAL_CONNECTIONS;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Throwables;
 import io.micrometer.core.instrument.Measurement;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Metrics;
@@ -65,9 +66,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.servlet.DispatcherType;
 import lombok.Data;
 import lombok.Getter;
@@ -87,9 +94,11 @@ import org.carapaceproxy.configstore.ConfigurationConsumer;
 import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.configstore.HerdDBConfigurationStore;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
+import org.carapaceproxy.configstore.StoreSnapshot;
 import org.carapaceproxy.server.backends.BackendHealthManager;
 import org.carapaceproxy.server.cache.CacheByteBufMemoryUsageMetric;
 import org.carapaceproxy.server.cache.ContentsCache;
+import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
 import org.carapaceproxy.server.certificates.ocsp.OcspStaplingManager;
 import org.carapaceproxy.server.config.BackendConfiguration;
@@ -103,7 +112,9 @@ import org.carapaceproxy.user.FileUserRealm;
 import org.carapaceproxy.user.SimpleUserRealm;
 import org.carapaceproxy.user.UserRealm;
 import org.carapaceproxy.utils.CarapaceVersion;
+import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.PrometheusUtils;
+import org.carapaceproxy.utils.StringUtils;
 import org.eclipse.jetty.security.ConstraintMapping;
 import org.eclipse.jetty.security.ConstraintSecurityHandler;
 import org.eclipse.jetty.server.Handler;
@@ -216,6 +227,11 @@ public class HttpProxyServer implements AutoCloseable {
     public static final int STORE_WRITE_LOCK_TIMEOUT_SECONDS = 60;
 
     /**
+     * Matches the key of a certificate hostname property, capturing its index.
+     */
+    public static final Pattern CERTIFICATE_HOSTNAME = Pattern.compile("certificate\\.(\\d+)\\.hostname");
+
+    /**
      * Guards concurrent configuration changes
      */
     private final ReentrantLock configurationLock = new ReentrantLock();
@@ -303,7 +319,7 @@ public class HttpProxyServer implements AutoCloseable {
      * @throws IllegalStateException                if the changed configuration is not valid; nothing is written
      */
     public void rewriteConfiguration(final ConfigurationConsumer function) throws ConfigurationNotValidException, InterruptedException, ConfigurationChangeInProgressException {
-        underWriteLocks(() -> {
+        underWriteLocks(lock -> {
             final String currentConfiguration = getDynamicConfigurationStore().toStringConfiguration();
             final PropertiesConfigurationStore configurationStore = ConfigResource.buildStore(currentConfiguration);
             function.accept(configurationStore);
@@ -479,8 +495,10 @@ public class HttpProxyServer implements AutoCloseable {
             ocspStaplingManager.start();
             cacheByteBufMemoryUsageMetric.start();
             groupMembershipHandler.watchEvent("configurationChange", new ConfigurationChangeCallback());
-            // the watch is live now: a restore committed since the boot load is caught here, a later one by the event
-            if (!Objects.equals(dynamicConfigurationStore.readStateGeneration(), dynamicConfigurationStore.getLoadedStateGeneration())) {
+            // the watch is live now: a restore committed since the boot load is caught here, a later one by the event;
+            // no store when started without configureAtBoot
+            if (dynamicConfigurationStore != null
+                    && !Objects.equals(dynamicConfigurationStore.readStateGeneration(), dynamicConfigurationStore.getLoadedStateGeneration())) {
                 reloadConfigurationFromStore();
             }
         } catch (RuntimeException err) {
@@ -604,6 +622,50 @@ public class HttpProxyServer implements AutoCloseable {
         }
     }
 
+    /**
+     * The configuration keys read only at boot, by {@link #configureAtBoot(ConfigurationStore)} and the database store.
+     * <br>
+     * A backup never exports them and a restore drops them: they describe this node (ports, cluster, database,
+     * credentials), may hold secrets, and changing them in the dynamic store would have no effect anyway.
+     */
+    private static final Set<String> BOOT_ONLY_KEYS = Set.of(
+            "config.type", "mode", "peer.id", "zkAddress", "zkTimeout", "zkSecure",
+            "http.admin.enabled", "http.admin.host", "http.admin.port",
+            "https.admin.port", "https.admin.sslcertfile", "https.admin.sslcertfilepassword",
+            "admin.advertised.host", "admin.accesslog.path", "admin.accesslog.format.timezone", "admin.accesslog.retention.days",
+            "userrealm.class", "aws.accesskey", "aws.secretkey", "listener.offset.port", "replication.factor",
+            PrometheusMetricsProvider.PROMETHEUS_STATS_HTTP_ENABLE, PrometheusMetricsProvider.PROMETHEUS_STATS_HTTP_ADDRESS,
+            PrometheusMetricsProvider.PROMETHEUS_STATS_HTTP_PORT, PrometheusMetricsProvider.PROMETHEUS_STATS_LATENCY_ROLLOVER_SECONDS
+    );
+
+    /**
+     * The prefixes of the configuration keys read only at boot: the database datasource (admin password included)
+     * and the ZooKeeper client properties. See {@link #BOOT_ONLY_KEYS}.
+     */
+    private static final List<String> BOOT_ONLY_PREFIXES = List.of("db.", "zookeeper.");
+
+    /**
+     * Whether a configuration key is read only at boot, so that it never belongs to a backup or a restore.
+     *
+     * @param key the configuration key
+     * @return whether the key is in {@link #BOOT_ONLY_KEYS} or starts with one of {@link #BOOT_ONLY_PREFIXES}
+     */
+    private static boolean isBootOnlyKey(final String key) {
+        return BOOT_ONLY_KEYS.contains(key) || BOOT_ONLY_PREFIXES.stream().anyMatch(key::startsWith);
+    }
+
+    /**
+     * Copy a snapshot without the boot-only configuration keys.
+     *
+     * @param snapshot the snapshot
+     * @return the snapshot without the keys of {@link #isBootOnlyKey(String)}
+     */
+    private static StoreSnapshot withoutBootOnlyKeys(final StoreSnapshot snapshot) {
+        final Map<String, String> config = new TreeMap<>(snapshot.config());
+        config.keySet().removeIf(HttpProxyServer::isBootOnlyKey);
+        return new StoreSnapshot(config, snapshot.keyPairs(), snapshot.acmeAccountKeys(), snapshot.certificates());
+    }
+
     private void applyStaticConfiguration(ConfigurationStore properties) throws NumberFormatException, ConfigurationNotValidException {
         if (started) {
             throw new IllegalStateException("server already started");
@@ -708,14 +770,14 @@ public class HttpProxyServer implements AutoCloseable {
      * @throws Exception if the locks are not acquired in time or the certificate cannot be stored or applied
      */
     public void updateDynamicCertificateForDomain(CertificateData cert) throws Exception {
-        underWriteLocks(() -> {
+        underWriteLocks(lock -> {
             // Certificate saving on db
             dynamicConfigurationStore.saveCertificate(cert);
 
             // Configuration updating
             Properties props = dynamicConfigurationStore.asProperties(null);
             boolean newCertificate = !dynamicConfigurationStore.anyPropertyMatches((k, v) -> {
-                if (k.matches("certificate\\.[0-9]+\\.hostname") && v.equals(cert.getDomain())) {
+                if (CERTIFICATE_HOSTNAME.matcher(k).matches() && v.equals(cert.getDomain())) {
                     performCertificateUpdate(props, k, cert); // updating existing certificate
                     return true;
                 }
@@ -739,7 +801,7 @@ public class HttpProxyServer implements AutoCloseable {
      * @throws InterruptedException                 if interrupted while waiting for the locks
      */
     public void updateMaintenanceMode(boolean value) throws ConfigurationChangeInProgressException, InterruptedException {
-        underWriteLocks(() -> {
+        underWriteLocks(lock -> {
             Properties props = dynamicConfigurationStore.asProperties(null);
             props.setProperty("carapace.maintenancemode.enabled", String.valueOf(value));
             applyDynamicConfiguration(new PropertiesConfigurationStore(props), false);
@@ -786,7 +848,7 @@ public class HttpProxyServer implements AutoCloseable {
      * @see #buildValidConfiguration(org.carapaceproxy.configstore.ConfigurationStore)
      */
     public void applyDynamicConfigurationFromAPI(ConfigurationStore newConfigurationStore) throws InterruptedException, ConfigurationChangeInProgressException {
-        underWriteLocks(() -> applyDynamicConfiguration(newConfigurationStore, false));
+        underWriteLocks(lock -> applyDynamicConfiguration(newConfigurationStore, false));
         fireConfigurationChange();
     }
 
@@ -805,7 +867,15 @@ public class HttpProxyServer implements AutoCloseable {
     @FunctionalInterface
     private interface StoreWrite<E extends Exception> {
 
-        void run() throws E, InterruptedException, ConfigurationChangeInProgressException;
+        /**
+         * Runs the write.
+         *
+         * @param lock the held cluster store write lock, to check right before a commit
+         * @throws E                                    if the write fails
+         * @throws InterruptedException                 if interrupted
+         * @throws ConfigurationChangeInProgressException if a nested lock is not acquired in time
+         */
+        void run(GroupMembershipHandler.StoreWriteLock lock) throws E, InterruptedException, ConfigurationChangeInProgressException;
     }
 
     /**
@@ -816,9 +886,17 @@ public class HttpProxyServer implements AutoCloseable {
      * @param <E>   the checked exception thrown by the write
      * @throws E                                    if the write fails
      * @throws InterruptedException                 if interrupted while waiting for the locks
-     * @throws ConfigurationChangeInProgressException if a lock is not acquired within {@link #STORE_WRITE_LOCK_TIMEOUT_SECONDS}
+     * @throws ConfigurationChangeInProgressException if the store does not answer, or a lock is not acquired within
+     *                                              {@link #STORE_WRITE_LOCK_TIMEOUT_SECONDS}
      */
     private <E extends Exception> void underWriteLocks(StoreWrite<E> write) throws E, InterruptedException, ConfigurationChangeInProgressException {
+        // a store that hangs, as with the database leader down, would hold the cluster lock and stall every peer
+        // a store that hangs after this check still holds the lock: bounding every statement would close that
+        try {
+            dynamicConfigurationStore.checkAnswering();
+        } catch (ConfigurationNotValidException e) {
+            throw new ConfigurationChangeInProgressException("configuration store is not answering, try again later: " + e.getMessage());
+        }
         final GroupMembershipHandler.StoreWriteLock storeWriteLock;
         try {
             storeWriteLock = groupMembershipHandler.acquireStoreWriteLock(STORE_WRITE_LOCK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -835,13 +913,267 @@ public class HttpProxyServer implements AutoCloseable {
             try {
                 // nobody else can commit now, so the base and the keys to delete are computed on fresh data
                 dynamicConfigurationStore.reload();
-                write.run();
+                write.run(storeWriteLock);
             } finally {
                 configurationLock.unlock();
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw e;
+        }
+    }
+
+    /**
+     * Run a body holding the certificate renewal mutex, so that no renewal writes certificates meanwhile.
+     * {@link GroupMembershipHandler#executeInMutex(String, int, Runnable)} skips the body silently when the mutex
+     * is busy and swallows its exceptions, hence the explicit outcome.
+     *
+     * @param body the body to run
+     * @throws InterruptedException                 if interrupted while waiting for the mutex
+     * @throws ConfigurationChangeInProgressException if the mutex is not acquired in time
+     * @throws RuntimeException                     whatever the body throws
+     */
+    private void underRenewalMutex(Runnable body) throws InterruptedException, ConfigurationChangeInProgressException {
+        final AtomicBoolean ran = new AtomicBoolean();
+        final AtomicReference<RuntimeException> failure = new AtomicReference<>();
+        groupMembershipHandler.executeInMutex(DynamicCertificatesManager.THREAD_NAME, STORE_WRITE_LOCK_TIMEOUT_SECONDS, () -> {
+            ran.set(true);
+            try {
+                body.run();
+            } catch (RuntimeException err) {
+                failure.set(err);
+            }
+        });
+        if (failure.get() != null) {
+            throw failure.get();
+        }
+        if (!ran.get()) {
+            // executeInMutex swallows the interruption and only keeps the flag
+            if (Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException("interrupted while waiting for the certificate renewal mutex");
+            }
+            throw new ConfigurationChangeInProgressException("certificate renewal in progress, try again later");
+        }
+    }
+
+    /**
+     * The outcome of {@link #backupState()}.
+     *
+     * @param snapshot                  the whole exported state
+     * @param domainsWithoutCertificate the dynamic certificate domains of the exported configuration that have no
+     *                                  available certificate: a restore of this backup issues them again
+     */
+    public record BackupResult(StoreSnapshot snapshot, List<String> domainsWithoutCertificate) {
+    }
+
+    /**
+     * The outcome of a committed {@link #restoreState(StoreSnapshot, String, String)}.
+     *
+     * @param ok            whether this node also applied the restored state
+     * @param inMemoryOnly  whether the state lives in memory only ({@code config.type=file}): a restart reloads the file
+     * @param message       what happened, for the caller
+     */
+    public record RestoreResult(boolean ok, boolean inMemoryOnly, String message) {
+    }
+
+    /**
+     * Export the whole dynamic state (configuration, certificates, key pairs, ACME account key) consistently,
+     * without the {@linkplain #isBootOnlyKey(String) boot-only keys}.
+     * <br>
+     * It holds the same locks as a restore, so that a renewal cannot leave a configured domain without its
+     * certificate row in the middle of the export. It never refuses: the dynamic domains without an available
+     * certificate are logged and returned, as restoring such a backup issues them again.
+     *
+     * @return the exported state and the domains without an available certificate
+     * @throws InterruptedException                 if interrupted while waiting for the locks
+     * @throws ConfigurationChangeInProgressException if the locks or the renewal mutex are not acquired in time
+     */
+    public BackupResult backupState() throws InterruptedException, ConfigurationChangeInProgressException {
+        final AtomicReference<StoreSnapshot> exported = new AtomicReference<>();
+        underWriteLocks(lock -> underRenewalMutex(() -> exported.set(dynamicConfigurationStore.exportState())));
+        // file mode keeps the boot configuration in the same store
+        final StoreSnapshot snapshot = withoutBootOnlyKeys(exported.get());
+        final List<String> withoutCertificate = new ArrayList<>();
+        snapshot.config().forEach((key, value) -> {
+            final Matcher matcher = CERTIFICATE_HOSTNAME.matcher(key);
+            if (!matcher.matches() || value.isBlank()) {
+                return;
+            }
+            final String mode = snapshot.config().getOrDefault("certificate." + matcher.group(1) + ".mode", "static");
+            if ("static".equalsIgnoreCase(mode.trim())) {
+                return;
+            }
+            final StoreSnapshot.CertificateRow row = snapshot.certificates().get(value.trim());
+            if (row == null || !DynamicCertificateState.AVAILABLE.name().equals(row.state())) {
+                withoutCertificate.add(value.trim());
+            }
+        });
+        Collections.sort(withoutCertificate);
+        if (!withoutCertificate.isEmpty()) {
+            LOG.warn("Backup taken with {} dynamic certificates not available, a restore issues them again: {}",
+                    withoutCertificate.size(), withoutCertificate);
+        }
+        return new BackupResult(snapshot, withoutCertificate);
+    }
+
+    /**
+     * Replace the whole dynamic state (configuration, certificates, key pairs, ACME account key) with a snapshot.
+     * ACME challenge tokens are left untouched; the {@linkplain #isBootOnlyKey(String) boot-only keys} of the snapshot are
+     * dropped with a warning.
+     * <br>
+     * Everything an apply could refuse is checked before writing, since the commit comes first here: the
+     * configuration, the wildcard certificates credentials, the static certificate, truststore and backend CA files on this node,
+     * and that the restored user realm still accepts the caller. Then the store and, in cluster mode, every peer must be
+     * ready. The replacement runs under the cluster store write lock, the configuration lock and the renewal mutex,
+     * and is applied locally before releasing them; the other peers reload on the event fired afterwards.
+     *
+     * @param requested the state to restore
+     * @param user      the user asking for the restore
+     * @param password  the password of the user
+     * @return the outcome; when not {@link RestoreResult#ok() ok} either the state was stored but this node could not
+     *         apply it, or the store failed while writing and holds the previous state or exactly the snapshot: repeating
+     *         the restore is safe
+     * @throws ConfigurationNotValidException       if the snapshot is not valid or the cluster is not ready; nothing was written
+     * @throws InterruptedException                 if interrupted while waiting for the locks
+     * @throws ConfigurationChangeInProgressException if the locks or the renewal mutex are not acquired in time; nothing was written
+     * @throws RuntimeException                     if the locks fail before writing; nothing was written
+     */
+    public RestoreResult restoreState(StoreSnapshot requested, String user, String password)
+            throws ConfigurationNotValidException, InterruptedException, ConfigurationChangeInProgressException {
+        final List<String> dropped = requested.config().keySet().stream().filter(HttpProxyServer::isBootOnlyKey).sorted().toList();
+        final StoreSnapshot snapshot = withoutBootOnlyKeys(requested);
+        if (!dropped.isEmpty()) {
+            // names only: the values may be secrets
+            LOG.warn("Dropping {} boot-only keys from the restored configuration, they keep their current values on every node: {}",
+                    dropped.size(), dropped);
+        }
+        validateRestore(snapshot, user, password);
+        dynamicConfigurationStore.checkWritable();
+        checkPeerVersions();
+
+        final boolean inMemoryOnly = dynamicConfigurationStore instanceof PropertiesConfigurationStore;
+        final AtomicReference<Exception> applyFailure = new AtomicReference<>();
+        final AtomicBoolean writing = new AtomicBoolean();
+        try {
+            underWriteLocks(lock -> underRenewalMutex(() -> {
+                writing.set(true);
+                dynamicConfigurationStore.replaceState(snapshot, lock::ensureHeld);
+                try {
+                    applyDynamicConfiguration(null, true);
+                } catch (Exception err) {
+                    if (err instanceof InterruptedException) {
+                        Thread.currentThread().interrupt();
+                    }
+                    applyFailure.set(err);
+                }
+            }));
+        } catch (RuntimeException err) {
+            if (!writing.get()) {
+                throw err;
+            }
+            // e.g. the connection dropped on commit: the store holds the previous state or the whole snapshot
+            LOG.error("The store failed while writing the restored state, outcome unknown", err);
+            fireConfigurationChange();
+            // the commit may have landed, the event skips this JVM, and with period=0 the stale check never runs
+            reloadConfigurationFromStore();
+            return new RestoreResult(false, inMemoryOnly, "The store failed while writing the state, it holds either the previous one "
+                    + "or the archive: repeat the restore. " + Throwables.getRootCause(err));
+        }
+        // the store changed anyway: the peers must reload
+        fireConfigurationChange();
+        // database mode: every node rewrites its files on the generation change; file mode has no generation
+        if (inMemoryOnly) {
+            try {
+                dynamicCertificatesManager.forceStoreLocalCertificates();
+            } catch (RuntimeException err) {
+                // the files are a copy: they must not turn a committed restore into a failure
+                LOG.error("The state was restored, but the local certificate files could not be written", err);
+            }
+        }
+
+        if (applyFailure.get() != null) {
+            LOG.error("The state was restored, but this node could not apply it", applyFailure.get());
+            CONFIGURATION_RELOAD_FAILURES_COUNTER.inc();
+            return new RestoreResult(false, inMemoryOnly, "The state was restored, but this node could not apply it: "
+                    + Throwables.getRootCause(applyFailure.get()));
+        }
+        LOG.info("State restored by user {}", user);
+        return new RestoreResult(true, inMemoryOnly, inMemoryOnly
+                ? "The state was restored in memory only: a restart reloads the configuration file"
+                : "The state was restored");
+    }
+
+    /**
+     * Check everything a restore could fail on after its commit, so that a wrong snapshot is refused untouched.
+     *
+     * @param snapshot the state to restore
+     * @param user     the user asking for the restore
+     * @param password the password of the user
+     * @throws ConfigurationNotValidException naming the first problem found
+     */
+    private void validateRestore(StoreSnapshot snapshot, String user, String password) throws ConfigurationNotValidException {
+        snapshot.validate();
+        final Properties properties = new Properties();
+        properties.putAll(snapshot.config());
+        final PropertiesConfigurationStore store = new PropertiesConfigurationStore(properties);
+        final RuntimeServerConfiguration configuration = buildValidConfiguration(store);
+        dynamicCertificatesManager.checkWildcardCredentials(configuration.getCertificates());
+        // static certificates are only loaded at the first handshake, the truststore failure is only logged
+        for (SSLCertificateConfiguration certificate : configuration.getCertificates().values()) {
+            if (!certificate.isDynamic()) {
+                checkKeyStoreFile("certificate " + certificate.getId(), certificate.getFile(), certificate.getPassword());
+            }
+        }
+        checkKeyStoreFile("truststore", configuration.getSslTrustStoreFile(), configuration.getSslTrustStorePassword());
+        // the apply loads the backend CA files after the commit here: checked with the same call and arguments
+        for (BackendConfiguration backend : buildMapper(configuration.getMapperClassname(), this, store).getBackends().values()) {
+            if (!StringUtils.isBlank(backend.caCertificatePath())) {
+                try {
+                    trustStoreManager.buildClientSslContextForCaFile(backend.caCertificatePath(), backend.caCertificatePassword());
+                } catch (Exception err) {
+                    throw new ConfigurationNotValidException("Cannot load the CA file " + backend.caCertificatePath()
+                            + " of backend " + backend.id() + " on this node: " + err);
+                }
+            }
+        }
+        final UserRealm newRealm = buildRealm(userRealmClassname, store);
+        if (newRealm != null && newRealm.login(user, password) == null) {
+            throw new ConfigurationNotValidException("The restored user realm would not accept your credentials");
+        }
+    }
+
+    private void checkKeyStoreFile(String what, String file, String password) throws ConfigurationNotValidException {
+        try {
+            CertificatesUtils.loadKeyStoreFromFile(file, password, basePath);
+        } catch (Exception err) {
+            throw new ConfigurationNotValidException("Cannot load the " + what + " file " + file + " on this node: " + err);
+        }
+    }
+
+    /**
+     * Check that every peer runs this same version, so that no peer reads the restored state with other rules.
+     *
+     * @throws ConfigurationNotValidException listing the peers on another or an unknown version
+     */
+    private void checkPeerVersions() throws ConfigurationNotValidException {
+        if ("dev".equals(CarapaceVersion.VERSION)) {
+            LOG.warn("Running a dev build: the version of the peers is not checked");
+            return;
+        }
+        final List<String> offending = new ArrayList<>();
+        for (String peer : groupMembershipHandler.getPeers()) {
+            final Map<String, String> info = groupMembershipHandler.loadInfoForPeer(peer);
+            if (info == null && !groupMembershipHandler.getPeers().contains(peer)) {
+                continue; // the peer left while the list was read
+            }
+            final String version = info == null ? null : info.get(PROPERTY_PEER_VERSION);
+            if (!CarapaceVersion.VERSION.equals(version)) {
+                offending.add(peer + " (" + (version == null ? "unknown version" : version) + ")");
+            }
+        }
+        if (!offending.isEmpty()) {
+            throw new ConfigurationNotValidException("Every peer must run Carapace " + CarapaceVersion.VERSION
+                    + " to restore; on another version: " + String.join(", ", offending));
         }
     }
 

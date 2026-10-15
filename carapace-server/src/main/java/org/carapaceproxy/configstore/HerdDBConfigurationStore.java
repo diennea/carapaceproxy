@@ -24,6 +24,7 @@ import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64Decode
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeKey;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.toCertificateData;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.toCertificateRow;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import herddb.client.ClientConfiguration;
 import herddb.client.ClientSideMetadataProviderException;
@@ -43,6 +44,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -50,8 +52,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.util.regex.Pattern;
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
@@ -150,6 +162,19 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     private static final String CREATE_TABLESPACE = "CREATE TABLESPACE '%s','expectedreplicacount:%d'";
     private static final String SELECT_FROM_TABLESPACES_TABLE =
             "SELECT tablespace_name FROM systablespaces WHERE tablespace_name=?";
+    // system tables of HerdDB 0.26.1 (SystablespacesTableManager, SystablespacereplicastateTableManager)
+    private static final String SELECT_ALL_FROM_TABLESPACES_TABLE =
+            "SELECT tablespace_name, leader, replica, expectedreplicacount FROM systablespaces";
+    private static final String SELECT_ALL_FROM_TABLESPACE_REPLICA_STATE_TABLE =
+            "SELECT tablespace_name, nodeid, mode, inactivitytime, maxleaderinactivitytime FROM systablespacereplicastate";
+
+    /**
+     * How long, in milliseconds, a replica may stay silent before {@link #checkWritable()} considers it down, when its
+     * tablespace sets no {@code maxleaderinactivitytime}.
+     */
+    public static final String REPLICA_MAX_INACTIVITY_PROPERTY = "carapace.store.replica.maxinactivity";
+
+    private static final int CHECK_WRITABLE_TIMEOUT_SECONDS = 10;
 
     private static final Logger LOG = LoggerFactory.getLogger(HerdDBConfigurationStore.class);
 
@@ -157,10 +182,17 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     private volatile Map<String, String> properties = Map.of();
     private volatile String loadedStateGeneration;
     private final HerdDBEmbeddedDataSource datasource;
+    private final boolean cluster;
+    private final String tableSpace;
+    // one thread for every check: a hung read makes the next check time out, and nothing piles up
+    private final ExecutorService checkWritableExecutor = Executors.newSingleThreadExecutor(
+            new ThreadFactoryBuilder().setNameFormat("carapace-check-writable").setDaemon(true).build());
 
     public HerdDBConfigurationStore(ConfigurationStore staticConfiguration,
                                     boolean cluster, String zkAddress, File baseDir, StatsLogger statsLogger) {
         String tableSpace = staticConfiguration.getProperty(TABLESPACE_PROPERTY, TableSpace.DEFAULT).trim();
+        this.cluster = cluster;
+        this.tableSpace = tableSpace;
         if (!VALID_TABLESPACE_NAME.matcher(tableSpace).matches()) {
             throw new ConfigurationStoreException(new IllegalArgumentException(
                     "Invalid " + TABLESPACE_PROPERTY + " \"" + tableSpace + "\": "
@@ -387,6 +419,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
 
     @Override
     public void close() {
+        checkWritableExecutor.shutdownNow();
         if (datasource != null) {
             datasource.close();
         }
@@ -535,6 +568,130 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         }
         properties = newProperties;
         loadedStateGeneration = newGeneration;
+    }
+
+    /**
+     * In cluster mode, refuses when a replica of the tablespace is missing, stopped or silent for longer than
+     * HerdDB tolerates from a leader ({@value #REPLICA_MAX_INACTIVITY_PROPERTY} when the tablespace does not say),
+     * or when the tablespace does not answer within {@value #CHECK_WRITABLE_TIMEOUT_SECONDS} seconds: a write would
+     * then hang on the BookKeeper quorum or on a missing leader. A standalone node is never refused.
+     *
+     * @throws ConfigurationNotValidException listing every problem found, or telling why the replica state cannot be read
+     */
+    @Override
+    public void checkWritable() throws ConfigurationNotValidException {
+        if (!cluster) {
+            return;
+        }
+        final List<String> problems = readReplicaProblemsWithin();
+        if (!problems.isEmpty()) {
+            throw new ConfigurationNotValidException("The database cannot take the write safely now: " + String.join("; ", problems));
+        }
+    }
+
+    /**
+     * In cluster mode, refuses when the tablespace does not answer within {@value #CHECK_WRITABLE_TIMEOUT_SECONDS}
+     * seconds, as when its leader is down. Silent replicas are not checked: reads and plain writes do not need them.
+     *
+     * @throws ConfigurationNotValidException if the replica state cannot be read in time
+     */
+    @Override
+    public void checkAnswering() throws ConfigurationNotValidException {
+        if (cluster) {
+            readReplicaProblemsWithin();
+        }
+    }
+
+    /**
+     * Reads the replica state aside, giving up after {@value #CHECK_WRITABLE_TIMEOUT_SECONDS} seconds.
+     *
+     * @return the problems found, empty if every expected replica is up
+     * @throws ConfigurationNotValidException if the replica state cannot be read in time
+     */
+    private List<String> readReplicaProblemsWithin() throws ConfigurationNotValidException {
+        // the client retries an unreachable leader for minutes: run the reads aside and give up early
+        final Future<List<String>> read = checkWritableExecutor.submit(this::readReplicaProblems);
+        final List<String> problems;
+        try {
+            problems = read.get(CHECK_WRITABLE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (TimeoutException err) {
+            read.cancel(true);
+            throw new ConfigurationNotValidException("Tablespace " + tableSpace + " did not answer within "
+                    + CHECK_WRITABLE_TIMEOUT_SECONDS + " s: is its leader down?");
+        } catch (InterruptedException err) {
+            read.cancel(true);
+            Thread.currentThread().interrupt();
+            throw new ConfigurationNotValidException("Interrupted while reading the replica state of tablespace " + tableSpace);
+        } catch (ExecutionException err) {
+            if (err.getCause() instanceof ConfigurationNotValidException notValid) {
+                throw notValid;
+            }
+            throw new ConfigurationNotValidException("Cannot read the replica state of tablespace " + tableSpace + ": " + err.getCause());
+        }
+        return problems;
+    }
+
+    /**
+     * Reads the replica state of the tablespace from the HerdDB system tables.
+     *
+     * @return the problems found, empty if every expected replica is up
+     * @throws SQLException                   if the system tables cannot be read
+     * @throws ConfigurationNotValidException if the tablespace is not found
+     */
+    private List<String> readReplicaProblems() throws SQLException, ConfigurationNotValidException {
+        final List<String> problems = new ArrayList<>();
+        try (Connection con = datasource.getConnection()) {
+            String leader = null;
+            Set<String> replicas = null;
+            int expectedReplicas = 0;
+            // filtered here: HerdDB matches tablespace names ignoring case
+            try (PreparedStatement ps = con.prepareStatement(SELECT_ALL_FROM_TABLESPACES_TABLE); ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    if (tableSpace.equalsIgnoreCase(rs.getString(1))) {
+                        leader = rs.getString(2);
+                        final String replicaList = rs.getString(3);
+                        replicas = Stream.of(replicaList == null ? new String[0] : replicaList.split(","))
+                                .map(String::trim)
+                                .filter(replica -> !replica.isEmpty())
+                                .collect(Collectors.toCollection(TreeSet::new));
+                        expectedReplicas = rs.getInt(4);
+                    }
+                }
+            }
+            if (replicas == null) {
+                throw new ConfigurationNotValidException("Tablespace " + tableSpace + " not found in systablespaces");
+            }
+            if (leader == null) {
+                problems.add("tablespace " + tableSpace + " has no leader");
+            }
+            if (replicas.size() < expectedReplicas) {
+                problems.add("tablespace " + tableSpace + " has " + replicas.size() + " replicas " + replicas
+                        + ", " + expectedReplicas + " expected");
+            }
+            final Map<String, String> replicaProblems = new TreeMap<>();
+            replicas.forEach(replica -> replicaProblems.put(replica, "replica " + replica + " has no state"));
+            try (PreparedStatement ps = con.prepareStatement(SELECT_ALL_FROM_TABLESPACE_REPLICA_STATE_TABLE); ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    final String node = rs.getString(2);
+                    if (!tableSpace.equalsIgnoreCase(rs.getString(1)) || !replicas.contains(node)) {
+                        continue; // the table also keeps former replicas and the other tablespaces
+                    }
+                    final String mode = rs.getString(3);
+                    final long inactivity = rs.getLong(4);
+                    // 0 means disabled, the default of the tablespaces Carapace creates: the activator pings about every second
+                    final long maxInactivity = rs.getLong(5) > 0 ? rs.getLong(5) : Long.getLong(REPLICA_MAX_INACTIVITY_PROPERTY, 30_000);
+                    if (!"leader".equals(mode) && !"follower".equals(mode)) {
+                        replicaProblems.put(node, "replica " + node + " is " + mode);
+                    } else if (inactivity > maxInactivity) {
+                        replicaProblems.put(node, "replica " + node + " silent for " + inactivity + " ms, more than " + maxInactivity + " ms");
+                    } else {
+                        replicaProblems.remove(node);
+                    }
+                }
+            }
+            problems.addAll(replicaProblems.values());
+        }
+        return problems;
     }
 
     private static void addKeyPair(PreparedStatement ps, String domain, StoreSnapshot.EncodedKeyPair pair) throws SQLException {
