@@ -35,6 +35,7 @@ import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -1009,5 +1010,29 @@ public class DynamicCertificatesManagerTest {
         assertCertificateState("localhost3", VERIFYING, 0, man);
         assertCertificateState("localhost1", VERIFIED, 0, man);
         assertCertificateState("localhost2", VERIFYING, 0, man);
+    }
+
+    @Test
+    public void testAcmeClientRebuiltOnReload() throws Exception {
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        KeyPair backupKey = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        KeyPair restoredKey = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        when(store.loadAcmeUserKeyPair(DEFAULT_PROVIDER_NAME)).thenReturn(backupKey);
+        man.setConfigurationStore(store);
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(new PropertiesConfigurationStore(new Properties()));
+
+        man.reloadConfiguration(conf);
+        ACMEClient before = Whitebox.<Map<String, ACMEClient>>getInternalState(man, "acmeClients").get(DEFAULT_PROVIDER_NAME);
+        assertSame(backupKey, Whitebox.getInternalState(before, KeyPair.class));
+
+        // a restore replaced the account key in the store
+        when(store.loadAcmeUserKeyPair(DEFAULT_PROVIDER_NAME)).thenReturn(restoredKey);
+        man.reloadConfiguration(conf);
+        ACMEClient after = Whitebox.<Map<String, ACMEClient>>getInternalState(man, "acmeClients").get(DEFAULT_PROVIDER_NAME);
+        assertSame(restoredKey, Whitebox.getInternalState(after, KeyPair.class));
     }
 }

@@ -71,6 +71,11 @@ public class ACMEClient {
     private final String kid;
     private final String hmac;
 
+    static {
+        // once: the client is rebuilt on every reload and building the provider is slow
+        Security.addProvider(new BouncyCastleProvider());
+    }
+
     /**
      * Build a client for the Let's Encrypt CA.
      *
@@ -94,7 +99,6 @@ public class ACMEClient {
         if ((kid == null || kid.isEmpty()) != (hmac == null || hmac.isEmpty())) {
             throw new IllegalArgumentException("kid and hmac must be provided together (external account binding)");
         }
-        Security.addProvider(new BouncyCastleProvider());
         this.userKey = userKey;
         this.directoryUrl = directoryUrl;
         this.kid = kid;
