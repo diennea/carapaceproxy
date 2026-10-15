@@ -29,6 +29,8 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -575,6 +577,44 @@ public class ConfigurationStoreTest {
         store.reload();
         assertEquals(before, store.exportState());
         assertEquals(loadedBefore, loadAll());
+    }
+
+    @Test
+    public void testStateGeneration() throws Exception {
+        this.type = "db";
+        populateStore();
+        assertNull(store.getLoadedStateGeneration());
+        assertNull(store.readStateGeneration());
+
+        store.replaceState(otherSnapshot(), () -> {});
+        final var first = store.readStateGeneration();
+        assertNotNull(first);
+        assertEquals(first, store.getLoadedStateGeneration());
+
+        store.replaceState(otherSnapshot(), () -> {});
+        final var second = store.readStateGeneration();
+        assertNotEquals(first, second);
+        assertEquals(second, store.getLoadedStateGeneration());
+
+        // a regular configuration write is not a state replacement
+        Properties props = new Properties();
+        props.setProperty("certificate.0.hostname", d1);
+        store.commitConfiguration(new PropertiesConfigurationStore(props));
+        assertEquals(second, store.readStateGeneration());
+        assertEquals(second, store.getLoadedStateGeneration());
+
+        // a failed replacement leaves it alone
+        expectThrows(IllegalStateException.class, () -> store.replaceState(otherSnapshot(), () -> {
+            throw new IllegalStateException("lost the lock");
+        }));
+        assertEquals(second, store.readStateGeneration());
+        assertEquals(second, store.getLoadedStateGeneration());
+
+        store.close();
+        store = openStore(new PropertiesConfigurationStore(new Properties()));
+        assertEquals(second, store.getLoadedStateGeneration());
+        assertEquals(second, store.readStateGeneration());
+        assertEquals(d1, store.getProperty("certificate.0.hostname", ""));
     }
 
     @Test

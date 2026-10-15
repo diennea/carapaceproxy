@@ -51,6 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.regex.Pattern;
 import org.apache.bookkeeper.stats.StatsLogger;
@@ -135,6 +136,16 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     private static final String DELETE_FROM_ACME_CHALLENGE_TOKENS_TABLE =
             "DELETE FROM " + ACME_CHALLENGE_TOKENS_TABLE_NAME + " WHERE id=?";
 
+    // one row, written only by replaceState: tells a peer that the state changed under it
+    private static final String STATE_GENERATION_TABLE_NAME = "state_generation";
+    private static final String STATE_GENERATION_ID = "state";
+    private static final String CREATE_STATE_GENERATION_TABLE =
+            "CREATE TABLE " + STATE_GENERATION_TABLE_NAME + "(id string primary key, generation string)";
+    private static final String SELECT_FROM_STATE_GENERATION_TABLE =
+            "SELECT generation FROM " + STATE_GENERATION_TABLE_NAME + " WHERE id=?";
+    private static final String INSERT_INTO_STATE_GENERATION_TABLE =
+            "INSERT INTO " + STATE_GENERATION_TABLE_NAME + "(generation, id) VALUES (?, ?)";
+
     private static final String TABLESPACE_PROPERTY = "db.tablespace";
     private static final Pattern VALID_TABLESPACE_NAME = Pattern.compile("[A-Za-z0-9_]+");
     // CREATE TABLESPACE takes no bind parameter, hence the interpolation of the already validated name
@@ -148,6 +159,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
 
     // replaced as a whole, so that readers never see half of a reload
     private volatile Map<String, String> properties = Map.of();
+    private volatile String loadedStateGeneration;
     private final HerdDBEmbeddedDataSource datasource;
 
     public HerdDBConfigurationStore(ConfigurationStore staticConfiguration,
@@ -168,7 +180,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                 datasource.setDefaultSchema(tableSpace);
             }
             createTables();
-            properties = loadCurrentConfiguration();
+            loadCurrentConfiguration();
         } catch (RuntimeException err) {
             try {
                 datasource.close();
@@ -298,7 +310,31 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     @Override
     public void reload() {
         LOG.info("reloading configuration from Database");
-        properties = loadCurrentConfiguration();
+        loadCurrentConfiguration();
+    }
+
+    @Override
+    public String getLoadedStateGeneration() {
+        return loadedStateGeneration;
+    }
+
+    @Override
+    public String readStateGeneration() {
+        try (Connection con = datasource.getConnection()) {
+            return readStateGeneration(con);
+        } catch (SQLException err) {
+            LOG.error("Error while reading the state generation from Database", err);
+            throw new ConfigurationStoreException(err);
+        }
+    }
+
+    private static String readStateGeneration(Connection con) throws SQLException {
+        try (PreparedStatement ps = con.prepareStatement(SELECT_FROM_STATE_GENERATION_TABLE)) {
+            ps.setString(1, STATE_GENERATION_ID);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString(1) : null;
+            }
+        }
     }
 
     /**
@@ -312,7 +348,8 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                     CREATE_CONFIG_TABLE,
                     CREATE_KEYPAIR_TABLE,
                     CREATE_DIGITAL_CERTIFICATES_TABLE,
-                    CREATE_ACME_CHALLENGE_TOKENS_TABLE
+                    CREATE_ACME_CHALLENGE_TOKENS_TABLE,
+                    CREATE_STATE_GENERATION_TABLE
             );
             tablesDDL.forEach((tableDDL) -> {
                 try (PreparedStatement ps = con.prepareStatement(tableDDL)) {
@@ -328,15 +365,23 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         }
     }
 
-    private Map<String, String> loadCurrentConfiguration() {
+    /**
+     * Loads the configuration and the state generation into the cache.
+     *
+     * @throws ConfigurationStoreException if the database cannot be read
+     */
+    private void loadCurrentConfiguration() {
         Map<String, String> loaded = new HashMap<>();
         try (Connection con = datasource.getConnection()) {
+            // read first: a restore landing in between leaves an old generation on the new config, never the reverse
+            final String generation = readStateGeneration(con);
             try (PreparedStatement ps = con.prepareStatement(SELECT_ALL_FROM_CONFIG_TABLE); ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     loaded.put(rs.getString(1), rs.getString(2));
                 }
             }
-            return Map.copyOf(loaded);
+            properties = Map.copyOf(loaded);
+            loadedStateGeneration = generation;
         } catch (SQLException err) {
             LOG.error("Error while loading configuration from Database", err);
             throw new ConfigurationStoreException(err);
@@ -451,11 +496,12 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     public void replaceState(StoreSnapshot snapshot, Runnable preCommitCheck) {
         // built before the commit, so that nothing after it can throw (Map.copyOf refuses null values)
         final Map<String, String> newProperties = Map.copyOf(snapshot.config());
+        final String newGeneration = UUID.randomUUID().toString();
         try (Connection con = datasource.getConnection()) {
             con.setAutoCommit(false);
             try {
                 // DELETE without WHERE: TRUNCATE is refused inside a transaction; the ACME tokens table is left alone
-                for (String table : List.of(CONFIG_TABLE_NAME, KEYPAIR_TABLE_NAME, DIGITAL_CERTIFICATES_TABLE_NAME)) {
+                for (String table : List.of(CONFIG_TABLE_NAME, KEYPAIR_TABLE_NAME, DIGITAL_CERTIFICATES_TABLE_NAME, STATE_GENERATION_TABLE_NAME)) {
                     try (PreparedStatement ps = con.prepareStatement("DELETE FROM " + table)) {
                         ps.executeUpdate();
                     }
@@ -484,6 +530,11 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
                     }
                     ps.executeBatch();
                 }
+                try (PreparedStatement ps = con.prepareStatement(INSERT_INTO_STATE_GENERATION_TABLE)) {
+                    ps.setString(1, newGeneration);
+                    ps.setString(2, STATE_GENERATION_ID);
+                    ps.executeUpdate();
+                }
                 preCommitCheck.run();
                 con.commit();
             } catch (SQLException | RuntimeException err) {
@@ -499,6 +550,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             throw new ConfigurationStoreException(err);
         }
         properties = newProperties;
+        loadedStateGeneration = newGeneration;
     }
 
     private static void addKeyPair(PreparedStatement ps, String domain, StoreSnapshot.EncodedKeyPair pair) throws SQLException {
