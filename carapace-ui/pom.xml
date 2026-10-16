@@ -58,6 +58,19 @@
             <build>
                 <plugins>
                     <plugin>
+                        <!-- Injects git.commit.id.abbrev for the yarn build below -->
+                        <groupId>io.github.git-commit-id</groupId>
+                        <artifactId>git-commit-id-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>carapace-version</id>
+                                <goals>
+                                    <goal>revision</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
                         <groupId>com.github.eirslett</groupId>
                         <artifactId>frontend-maven-plugin</artifactId>
                         <version>${libs.frontend.plugin}</version>
@@ -92,6 +105,10 @@
                                 </goals>
                                 <configuration>
                                     <arguments>build</arguments>
+                                    <environmentVariables>
+                                        <VUE_APP_VERSION>${project.version}</VUE_APP_VERSION>
+                                        <VUE_APP_COMMIT>${git.commit.id.abbrev}</VUE_APP_COMMIT>
+                                    </environmentVariables>
                                 </configuration>
                             </execution>
                         </executions>
