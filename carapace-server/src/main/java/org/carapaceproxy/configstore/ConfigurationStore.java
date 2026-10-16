@@ -240,4 +240,73 @@ public interface ConfigurationStore extends AutoCloseable {
     String loadAcmeChallengeToken(String id);
 
     void deleteAcmeChallengeToken(String id);
+
+    /**
+     * Reads the whole state of the store: configuration, key pairs, ACME account keys and certificates.
+     * <br>
+     * ACME challenge tokens are not part of the state.
+     *
+     * @return a copy of the stored state, values in the encodings the database uses
+     * @throws ConfigurationStoreException if the store cannot be read
+     */
+    StoreSnapshot exportState();
+
+    /**
+     * Replaces the whole state of the store with the given snapshot.
+     * <br>
+     * All or nothing: after a normal return the store holds exactly the snapshot; if it throws, the store holds either the
+     * previous state or exactly the snapshot (when the outcome of the commit is unknown), never a mix of the two.
+     * Repeating the call is the way out of the unknown outcome.
+     * <br>
+     * ACME challenge tokens are not part of the state and are left untouched.
+     * The guards against overwriting, like the one on the ACME account key, do not apply: everything is replaced.
+     * <br>
+     * Concurrent readers are not isolated from the replacement: callers must hold the write locks.
+     *
+     * @param snapshot       the state to store, already {@link StoreSnapshot#validate() validated}
+     * @param preCommitCheck run right before the commit; it aborts the replacement by throwing
+     * @throws ConfigurationStoreException if the store cannot be read or written
+     * @throws RuntimeException            whatever {@code preCommitCheck} throws, after rolling back
+     */
+    void replaceState(StoreSnapshot snapshot, Runnable preCommitCheck);
+
+    /**
+     * Preflight hook: checks that the store answers right now, before the cluster store write lock is taken,
+     * so that a store that hangs does not hold the lock.
+     *
+     * @throws ConfigurationNotValidException if the store does not answer in time
+     */
+    default void checkAnswering() throws ConfigurationNotValidException {
+    }
+
+    /**
+     * Preflight hook: checks that the store can take a write right now, before anything is written.
+     *
+     * @throws ConfigurationNotValidException if the store would refuse or lose the write
+     */
+    default void checkWritable() throws ConfigurationNotValidException {
+    }
+
+    /**
+     * Tells which generation of the state the cached configuration was loaded from.
+     * <br>
+     * A generation is a random token that changes on every {@link #replaceState(StoreSnapshot, Runnable)}; it is
+     * only ever compared for equality, with {@link #readStateGeneration()}.
+     *
+     * @return the generation read together with the cached configuration, {@code null} if the store has none
+     */
+    default String getLoadedStateGeneration() {
+        return null;
+    }
+
+    /**
+     * Reads the current generation of the state from the storage, bypassing the cache.
+     *
+     * @return the stored generation, {@code null} if the store has none or the state was never replaced
+     * @throws ConfigurationStoreException if the store cannot be read
+     * @see #getLoadedStateGeneration()
+     */
+    default String readStateGeneration() {
+        return null;
+    }
 }

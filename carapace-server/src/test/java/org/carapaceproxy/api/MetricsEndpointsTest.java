@@ -69,6 +69,8 @@ public class MetricsEndpointsTest extends UseAdminServer {
             "cache_payload_memory_usage_bytes",
             "cache_total_memory_usage_bytes",
             "clients_current_connected",
+            "configuration_reload_failures_created",
+            "configuration_reload_failures_total",
             "health_backend_status",
             "listeners_requests_created",
             "listeners_requests_total");
