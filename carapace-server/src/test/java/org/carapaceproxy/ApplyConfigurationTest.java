@@ -211,6 +211,15 @@ public class ApplyConfigurationTest {
                 Throwable cause = e.getCause();
                 assertTrue(cause instanceof ConfigurationNotValidException && cause.getMessage().contains("Unsupported SSL Protocols"));
             }
+            // the same listener twice, host case aside
+            Properties duplicated = new Properties();
+            duplicated.put("mapper.class", StaticEndpointMapper.class.getName());
+            duplicated.put("listener.1.host", "localhost");
+            duplicated.put("listener.1.port", "1423");
+            duplicated.put("listener.2.host", "LOCALHOST");
+            duplicated.put("listener.2.port", "1423");
+            IllegalStateException e = assertThrows(IllegalStateException.class, () -> reloadConfiguration(duplicated, server));
+            assertTrue(e.getCause() instanceof ConfigurationNotValidException && e.getCause().getMessage().contains("more than once"));
         }
     }
 

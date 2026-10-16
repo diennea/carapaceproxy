@@ -103,7 +103,9 @@ public class CertificateData {
         this.subjectAltNames = Optional
                 .ofNullable(subjectAltNames)
                 .stream().flatMap(Set::stream)
+                .flatMap(s -> Stream.of(s.split(ConfigurationStore.PROPERTY_VALUES_SEPARATOR)))
                 .map(String::trim)
+                .filter(s -> !s.isEmpty())
                 .collect(Collectors.toUnmodifiableSet());
     }
 

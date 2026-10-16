@@ -32,36 +32,59 @@ import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAIT
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.shredzone.acme4j.Status.INVALID;
 import static org.shredzone.acme4j.Status.VALID;
+import java.io.File;
+import java.io.StringWriter;
 import java.net.URL;
+import java.nio.file.Files;
 import java.security.KeyPair;
+import java.sql.SQLException;
 import java.security.cert.X509Certificate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
+import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
+import org.carapaceproxy.configstore.ConfigurationStoreException;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.Listeners;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
+import org.carapaceproxy.utils.TestUtils;
+import org.bouncycastle.util.io.pem.PemObject;
+import org.bouncycastle.util.io.pem.PemWriter;
+import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.powermock.reflect.Whitebox;
 import org.shredzone.acme4j.Certificate;
@@ -85,6 +108,17 @@ import org.shredzone.acme4j.util.KeyPairUtils;
 public class DynamicCertificatesManagerTest {
 
     protected static final int MAX_ATTEMPTS = 7;
+
+    @Rule
+    public TemporaryFolder tmpDir = new TemporaryFolder();
+
+    /**
+     * Lowers the DNS challenge check limit before any test loads the manager, which reads it once into a constant.
+     */
+    @BeforeClass
+    public static void lowerDnsChallengeCheckLimit() {
+        System.setProperty("carapace.acme.dnschallengereachabilitycheck.limit", "2");
+    }
 
     @Test
     @Parameters({
@@ -142,7 +176,6 @@ public class DynamicCertificatesManagerTest {
         when(parent.getListeners()).thenReturn(mock(Listeners.class));
         DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
-        Whitebox.setInternalState(man, ac);
 
         // Store mocking
         ConfigurationStore store = mock(ConfigurationStore.class);
@@ -192,6 +225,7 @@ public class DynamicCertificatesManagerTest {
         conf.configure(configStore);
         when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
+        Whitebox.setInternalState(man, ac);
 
         assertCertificateState(d0, AVAILABLE, cycleCount, man);
         assertCertificateState(d2, AVAILABLE, 0, man);
@@ -295,7 +329,6 @@ public class DynamicCertificatesManagerTest {
     })
     public void testWildcardCertificateStateManagement(String runCase) throws Exception {
         final var domain = "*.localhost";
-        System.setProperty("carapace.acme.dnschallengereachabilitycheck.limit", "2");
 
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
@@ -333,7 +366,6 @@ public class DynamicCertificatesManagerTest {
         when(parent.getListeners()).thenReturn(mock(Listeners.class));
         DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
-        Whitebox.setInternalState(man, ac);
 
         // Route53Cliente mocking
         man.initAWSClient("access", "secret");
@@ -364,6 +396,7 @@ public class DynamicCertificatesManagerTest {
         conf.configure(configStore);
         when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
+        Whitebox.setInternalState(man, ac);
 
         int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
 
@@ -422,7 +455,6 @@ public class DynamicCertificatesManagerTest {
         final var domain = "*.localhost";
         final var san1 = "test1.localhost";
         final var san2 = "*.localhost2";
-        System.setProperty("carapace.acme.dnschallengereachabilitycheck.limit", "2");
 
         // ACME mocking
         ACMEClient ac = mock(ACMEClient.class);
@@ -470,7 +502,6 @@ public class DynamicCertificatesManagerTest {
         when(parent.getListeners()).thenReturn(mock(Listeners.class));
         DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
-        Whitebox.setInternalState(man, ac);
 
         // Route53Cliente mocking
         man.initAWSClient("access", "secret");
@@ -502,6 +533,7 @@ public class DynamicCertificatesManagerTest {
         conf.configure(configStore);
         when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
+        Whitebox.setInternalState(man, ac);
 
         int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
 
@@ -549,6 +581,34 @@ public class DynamicCertificatesManagerTest {
     }
 
     @Test
+    public void testSetStateFiresEventWhenLocalReloadFails() throws Exception {
+        final var domain = "localhost";
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        Listeners listeners = mock(Listeners.class);
+        when(parent.getListeners()).thenReturn(listeners);
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        GroupMembershipHandler group = mock(GroupMembershipHandler.class);
+        when(group.acquireStoreWriteLock(anyLong(), any())).thenReturn(mock(GroupMembershipHandler.StoreWriteLock.class));
+        man.attachGroupMembershipHandler(group);
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        when(store.loadKeyPairForDomain(anyString())).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE));
+        when(store.loadCertificateForDomain(eq(domain))).thenReturn(new CertificateData(domain, null, WAITING));
+        man.setConfigurationStore(store);
+        Properties props = new Properties();
+        props.setProperty("certificate.1.hostname", domain);
+        props.setProperty("certificate.1.mode", "acme");
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(new PropertiesConfigurationStore(props));
+        when(parent.getCurrentConfiguration()).thenReturn(conf);
+        man.reloadConfiguration(conf);
+
+        doThrow(new IllegalStateException("bind failed")).when(listeners).reloadCurrentConfiguration();
+        assertTrue(man.setStateOfCertificate(domain, WAITING));
+        verify(store).saveCertificate(any());
+        verify(group).fireEvent(anyString(), eq(null));
+    }
+
+    @Test
     @Parameters({
         "localhost-no-ip-check", "localhost-ip-check-partial", "localhost-ip-check-full"
     })
@@ -587,7 +647,6 @@ public class DynamicCertificatesManagerTest {
         when(parent.getListeners()).thenReturn(mock(Listeners.class));
         DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
         man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
-        Whitebox.setInternalState(man, ac);
 
         // Store mocking
         ConfigurationStore store = mock(ConfigurationStore.class);
@@ -613,6 +672,7 @@ public class DynamicCertificatesManagerTest {
         conf.configure(configStore);
         when(parent.getCurrentConfiguration()).thenReturn(conf);
         man.reloadConfiguration(conf);
+        Whitebox.setInternalState(man, ac);
 
         int saveCounter = 0; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
 
@@ -633,4 +693,202 @@ public class DynamicCertificatesManagerTest {
         }
     }
 
+    @Test
+    public void testAcmeClientRebuiltOnReload() throws Exception {
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        KeyPair backupKey = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        KeyPair restoredKey = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        when(store.loadAcmeUserKeyPair()).thenReturn(backupKey);
+        man.setConfigurationStore(store);
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(new PropertiesConfigurationStore(new Properties()));
+
+        man.reloadConfiguration(conf);
+        ACMEClient before = Whitebox.getInternalState(man, ACMEClient.class);
+        assertSame(backupKey, Whitebox.getInternalState(before, KeyPair.class));
+
+        // a restore replaced the account key in the store
+        when(store.loadAcmeUserKeyPair()).thenReturn(restoredKey);
+        man.reloadConfiguration(conf);
+        ACMEClient after = Whitebox.getInternalState(man, ACMEClient.class);
+        assertSame(restoredKey, Whitebox.getInternalState(after, KeyPair.class));
+    }
+
+    @Test
+    public void testRestoreRewritesLocalCertificates() throws Exception {
+        final var domain = "localhost";
+        final KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        final var backedUp = generateSampleChain(keyPair, false);
+        final var restored = generateSampleChain(keyPair, false);
+        final var renewed = generateSampleChain(keyPair, false);
+
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        when(parent.getListeners()).thenReturn(mock(Listeners.class));
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
+
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        when(store.loadKeyPairForDomain(anyString())).thenReturn(keyPair);
+        when(store.loadCertificateForDomain(eq(domain)))
+                .thenReturn(new CertificateData(domain, base64EncodeCertificateChain(backedUp, keyPair.getPrivate()), AVAILABLE));
+        // no chain yet: nothing to write, and no reason to fail
+        when(store.loadCertificateForDomain(eq("waiting.localhost"))).thenReturn(new CertificateData("waiting.localhost", null, WAITING));
+        // never restored: nothing to rewrite at boot
+        when(store.getLoadedStateGeneration()).thenReturn(null);
+        man.setConfigurationStore(store);
+
+        final File oldDir = tmpDir.newFolder("old"), newDir = tmpDir.newFolder("new");
+        Properties props = new Properties();
+        props.setProperty("certificate.1.hostname", domain);
+        props.setProperty("certificate.1.mode", "acme");
+        props.setProperty("certificate.2.hostname", "waiting.localhost");
+        props.setProperty("certificate.2.mode", "acme");
+        props.setProperty("dynamiccertificatesmanager.localcertificates.store.path", oldDir.getAbsolutePath());
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(new PropertiesConfigurationStore(props));
+        when(parent.getCurrentConfiguration()).thenReturn(conf);
+        man.reloadConfiguration(conf);
+        final File oldFullchain = new File(new File(oldDir, domain), "fullchain.pem");
+        final File fullchain = new File(new File(newDir, domain), "fullchain.pem");
+        assertFalse(oldFullchain.exists());
+
+        // a restore replaced the chain of a certificate that stays AVAILABLE and moved the store path;
+        // the server still exposes the old configuration until the reload completes
+        props.setProperty("dynamiccertificatesmanager.localcertificates.store.path", newDir.getAbsolutePath());
+        RuntimeServerConfiguration restoredConf = new RuntimeServerConfiguration();
+        restoredConf.configure(new PropertiesConfigurationStore(props));
+        when(store.loadCertificateForDomain(eq(domain)))
+                .thenReturn(new CertificateData(domain, base64EncodeCertificateChain(restored, keyPair.getPrivate()), AVAILABLE));
+        when(store.getLoadedStateGeneration()).thenReturn("generation-2");
+        man.reloadConfiguration(restoredConf);
+        man.stateApplied("generation-2");
+        assertEquals(toPem(restored), Files.readString(fullchain.toPath()));
+        assertFalse(new File(oldDir, domain).exists());
+        assertFalse(new File(newDir, "waiting.localhost").exists());
+
+        // any other reload leaves the files alone
+        when(store.loadCertificateForDomain(eq(domain)))
+                .thenReturn(new CertificateData(domain, base64EncodeCertificateChain(renewed, keyPair.getPrivate()), AVAILABLE));
+        man.reloadConfiguration(restoredConf);
+        assertEquals(toPem(restored), Files.readString(fullchain.toPath()));
+        // a store failure while rewriting the files does not abort the reload
+        props.setProperty("dynamiccertificatesmanager.period", "7");
+        RuntimeServerConfiguration failingConf = new RuntimeServerConfiguration();
+        failingConf.configure(new PropertiesConfigurationStore(props));
+        when(store.loadKeyPairForDomain(anyString())).thenThrow(new ConfigurationStoreException(new SQLException("down")));
+        when(store.getLoadedStateGeneration()).thenReturn("generation-3");
+        final File privateKey = new File(new File(newDir, domain), "privatekey.pem");
+        final File chain = new File(new File(newDir, domain), "chain.pem");
+        final String previousKey = Files.readString(privateKey.toPath()), previousChain = Files.readString(chain.toPath());
+        man.reloadConfiguration(failingConf);
+        assertEquals(7, man.getPeriod());
+        // without the key no file of the domain is written: the previous ones stay consistent
+        assertEquals(previousKey, Files.readString(privateKey.toPath()));
+        assertEquals(previousChain, Files.readString(chain.toPath()));
+        assertEquals(toPem(restored), Files.readString(fullchain.toPath()));
+
+        // a node down during the restore rewrites the files once at boot
+        doReturn(keyPair).when(store).loadKeyPairForDomain(anyString());
+        DynamicCertificatesManager rebooted = new DynamicCertificatesManager(parent);
+        rebooted.attachGroupMembershipHandler(new NullGroupMembershipHandler());
+        rebooted.setConfigurationStore(store);
+        rebooted.reloadConfiguration(restoredConf);
+        assertEquals(toPem(renewed), Files.readString(fullchain.toPath()));
+    }
+
+    private static String toPem(java.security.cert.Certificate[] chain) throws Exception {
+        final var out = new StringWriter();
+        try (var writer = new PemWriter(out)) {
+            for (var certificate : chain) {
+                writer.writeObject(new PemObject("", certificate.getEncoded()));
+            }
+        }
+        return out.toString();
+    }
+
+    @Test
+    @Parameters({
+        "stale", "not-applied", "never-replaced", "current", "store-failure"
+    })
+    public void testRenewalSkippedOnStaleStateGeneration(String generationCase) throws Exception {
+        final var domain = "localhost";
+        final var loadedGeneration = "generation-1";
+        final var storedGeneration = switch (generationCase) {
+            case "stale" -> "generation-2";
+            case "never-replaced" -> null;
+            default -> loadedGeneration;
+        };
+
+        ACMEClient ac = mock(ACMEClient.class);
+        Order o = mock(Order.class);
+        when(o.getLocation()).thenReturn(new URL("https://localhost/index"));
+        when(ac.createOrderForDomain(any())).thenReturn(o);
+        Http01Challenge c = mock(Http01Challenge.class);
+        when(c.getToken()).thenReturn("");
+        when(c.getJSON()).thenReturn(JSON.parse(
+                "{\"url\": \"https://localhost/index\", \"type\": \"http-01\", \"token\": \"mytoken\"}"
+        ));
+        when(c.getAuthorization()).thenReturn("");
+        when(ac.getChallengesForOrder(any())).thenReturn(Map.of("domain", c));
+
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        when(parent.getListeners()).thenReturn(mock(Listeners.class));
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
+
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        when(store.loadKeyPairForDomain(anyString())).thenReturn(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE));
+        when(store.loadCertificateForDomain(eq(domain))).thenReturn(new CertificateData(domain, null, WAITING));
+        when(store.readStateGeneration()).thenReturn(storedGeneration);
+        when(store.getLoadedStateGeneration()).thenReturn(loadedGeneration);
+        man.setConfigurationStore(store);
+
+        Properties props = new Properties();
+        props.setProperty("certificate.1.hostname", domain);
+        props.setProperty("certificate.1.mode", "acme");
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(new PropertiesConfigurationStore(props));
+        when(parent.getCurrentConfiguration()).thenReturn(conf);
+        man.reloadConfiguration(conf);
+        Whitebox.setInternalState(man, ac);
+        if (!generationCase.equals("not-applied")) {
+            // what the server does once the whole apply succeeded; a failed apply never gets here
+            man.stateApplied(loadedGeneration);
+        }
+
+        if (generationCase.equals("store-failure")) {
+            when(store.readStateGeneration()).thenThrow(new ConfigurationStoreException(new SQLException("down")));
+            man.run(); // must not throw, or the scheduler would never run it again
+            verify(store, never()).saveCertificate(any());
+            doReturn(loadedGeneration).when(store).readStateGeneration();
+            man.run();
+            verify(store, times(1)).saveCertificate(any());
+            return;
+        }
+        final CountDownLatch reloading = new CountDownLatch(1);
+        doAnswer(invocation -> reloading.await(10, TimeUnit.SECONDS)).when(parent).reloadConfigurationFromStore();
+
+        man.run();
+        if (generationCase.equals("stale") || generationCase.equals("not-applied")) {
+            // a restore landed after the last reload, or its apply failed here: the stale map must not be written back
+            verify(parent, timeout(5000)).reloadConfigurationFromStore();
+            verify(store, never()).saveCertificate(any());
+            assertCertificateState(domain, WAITING, 0, man);
+            // the reload is still running: no second one
+            man.run();
+            verify(parent, times(1)).reloadConfigurationFromStore();
+            reloading.countDown();
+            final AtomicBoolean reloadPending = Whitebox.getInternalState(man, "reloadPending");
+            TestUtils.waitForCondition(() -> !reloadPending.get(), 5);
+            man.run();
+            verify(parent, timeout(5000).times(2)).reloadConfigurationFromStore();
+        } else {
+            verify(store, times(1)).saveCertificate(any());
+            assertCertificateState(domain, VERIFYING, 0, man);
+            verify(parent, never()).reloadConfigurationFromStore();
+        }
+    }
 }

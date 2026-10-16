@@ -23,17 +23,27 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 
 /**
- * Noop implementation
+ * Standalone implementation: no peers and no events, locks are local to the JVM.
  *
  * @author eolivelli
  */
 public class NullGroupMembershipHandler implements GroupMembershipHandler {
 
+    private static final Logger LOG = Logger.getLogger(NullGroupMembershipHandler.class.getName());
+
     private Map<String, String> peerInfo = Map.of("address", "localhost");
     private final String peerId = "local";
+    private final ConcurrentHashMap<String, ReentrantLock> mutexes = new ConcurrentHashMap<>();
+    private final ReentrantLock storeWriteLock = new ReentrantLock();
 
     @Override
     public void start() {
@@ -68,7 +78,42 @@ public class NullGroupMembershipHandler implements GroupMembershipHandler {
 
     @Override
     public void executeInMutex(String lockId, int timeout, Runnable runnable) {
-        runnable.run();
+        final ReentrantLock mutex = mutexes.computeIfAbsent(lockId, id -> new ReentrantLock());
+        try {
+            if (!mutex.tryLock(timeout, TimeUnit.SECONDS)) {
+                LOG.log(Level.INFO, "Failed to acquire lock for executeInMutex (mutexId: {0})", lockId);
+                return;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            LOG.log(Level.INFO, "Interrupted while waiting for lock {0}", lockId);
+            return;
+        }
+        try {
+            runnable.run();
+        } finally {
+            mutex.unlock();
+        }
+    }
+
+    @Override
+    public StoreWriteLock acquireStoreWriteLock(long timeout, TimeUnit unit) throws TimeoutException, InterruptedException {
+        if (!storeWriteLock.tryLock(timeout, unit)) {
+            throw new TimeoutException("Store write lock not acquired within " + timeout + " " + unit);
+        }
+        return new StoreWriteLock() {
+            @Override
+            public void ensureHeld() {
+                if (!storeWriteLock.isHeldByCurrentThread()) {
+                    throw new IllegalStateException("Store write lock not held by the current thread");
+                }
+            }
+
+            @Override
+            public void close() {
+                storeWriteLock.unlock();
+            }
+        };
     }
 
     @Override
