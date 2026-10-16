@@ -791,6 +791,7 @@ public class CertificatesTest extends UseAdminServer {
         when(_cert.getCertificateChain()).thenReturn(renewed);
 
         server.getCurrentConfiguration().setLocalCertificatesStorePath(certsDir.getAbsolutePath());
+        Whitebox.setInternalState(dcMan, ac); // the upload reloaded the manager, which rebuilt the client
         dcMan.run();
         updated = dcMan.getCertificateDataForDomain("localhost2");
         assertNotNull(updated);
@@ -911,6 +912,15 @@ public class CertificatesTest extends UseAdminServer {
 
             resp = client.delete("/api/certificates/test.domain.tld", credentials);
             assertTrue(resp.isOk());
+            assertThat(getCertificateIndicesWithHostname(server.getDynamicConfigurationStore(), "test.domain.tld"), is(Set.of()));
+            assertFalse(client.get("/api/config", credentials).getBodyString().contains("hostname=test.domain.tld"));
+            assertFalse(client.get("/api/certificates", credentials).getBodyString().contains("\"test.domain.tld\""));
+
+            resp = client.delete("/api/certificates/test.domain.tld", credentials);
+            assertTrue(resp.getStatusLine(), resp.getStatusLine().contains("404"));
+
+            resp = client.post("/api/certificates/test.domain.tld/reset", null, null, credentials);
+            assertTrue(resp.getStatusLine(), resp.getStatusLine().contains("404"));
         }
     }
 

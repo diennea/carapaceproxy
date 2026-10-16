@@ -273,12 +273,14 @@ public class CertificatesResource {
     @Path("{certId}")
     public Response deleteCertificate(@PathParam("certId") final String certId) {
         final var server = (HttpProxyServer) context.getAttribute("server");
-        final var certificates = server.getCurrentConfiguration().getCertificates();
-        if (!certificates.containsKey(certId)) {
-            throw new WebApplicationException(Response.Status.NOT_FOUND);
-        }
         try {
-            server.rewriteConfiguration(it -> it.removeCertificate(certId));
+            server.rewriteConfiguration(it -> {
+                // checked on the reloaded store: a peer that missed an event would answer 404 for a live certificate
+                if (!it.anyPropertyMatches((k, v) -> HttpProxyServer.CERTIFICATE_HOSTNAME.matcher(k).matches() && v.equals(certId))) {
+                    throw new WebApplicationException(Response.Status.NOT_FOUND);
+                }
+                it.removeCertificate(certId);
+            });
             return SimpleResponse.ok();
         } catch (ConfigurationChangeInProgressException | InterruptedException | ConfigurationNotValidException e) {
             return SimpleResponse.error(e);
@@ -394,7 +396,16 @@ public class CertificatesResource {
     @Path("{domain}/reset")
     public Response resetCertificateState(@PathParam("domain") final String domain) {
         var server = ((HttpProxyServer) context.getAttribute("server"));
-        server.getDynamicCertificatesManager().setStateOfCertificate(domain, WAITING);
-        return SimpleResponse.ok();
+        try {
+            if (!server.getDynamicCertificatesManager().setStateOfCertificate(domain, WAITING)) {
+                throw new WebApplicationException(Response.Status.NOT_FOUND);
+            }
+            return SimpleResponse.ok();
+        } catch (ConfigurationChangeInProgressException e) {
+            return SimpleResponse.error(e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return SimpleResponse.error(e);
+        }
     }
 }

@@ -356,7 +356,15 @@ public class RuntimeServerConfiguration {
             if (port > 0) {
                 final var ssl = properties.getBoolean(prefix + "ssl", false);
                 final var protocols = properties.getValues(prefix + "protocol", Set.of());
-                this.addListener(new NetworkListenerConfiguration(
+                final var forwarded = properties.getString(prefix + "forwarded", DEFAULT_FORWARDED_STRATEGY);
+                final var trustedIps = properties.getValues(prefix + "trustedips", Set.<String>of());
+                try {
+                    // parsed only when the listener boots: refuse it here, before anything is applied or stored
+                    ForwardedStrategy.of(forwarded, trustedIps);
+                } catch (IllegalArgumentException err) {
+                    throw new ConfigurationNotValidException("Invalid value '" + forwarded + "' for " + prefix + "forwarded: " + err.getMessage());
+                }
+                final var listener = new NetworkListenerConfiguration(
                         properties.getString(prefix + "host", "0.0.0.0"),
                         port,
                         ssl,
@@ -369,13 +377,18 @@ public class RuntimeServerConfiguration {
                         properties.getInt(prefix + "keepaliveinterval", keepaliveInterval),
                         properties.getInt(prefix + "keepalivecount", keepaliveCount),
                         properties.getInt(prefix + "maxkeepaliverequests", maxKeepAliveRequests),
-                        properties.getString(prefix + "forwarded", DEFAULT_FORWARDED_STRATEGY),
-                        properties.getValues(prefix + "trustedips", Set.of()),
+                        forwarded,
+                        trustedIps,
                         protocols.isEmpty() ? getDefaultHttpProtocols(ssl) : protocols.stream()
                                 .map(String::toUpperCase)
                                 .map(HttpProtocol::valueOf)
                                 .collect(Collectors.toUnmodifiableSet()),
-                        new DefaultChannelGroup(new DefaultEventExecutor())));
+                        new DefaultChannelGroup(new DefaultEventExecutor()));
+                // a second entry would replace the first one or fail its bind: refuse it, as it is surely a mistake
+                if (listeners.keySet().stream().anyMatch(key -> key.port() == listener.port() && key.host().equalsIgnoreCase(listener.host()))) {
+                    throw new ConfigurationNotValidException("Listener " + listener.host() + ":" + listener.port() + " configured more than once");
+                }
+                this.addListener(listener);
             }
         }
     }
