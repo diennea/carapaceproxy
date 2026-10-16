@@ -62,6 +62,7 @@ import org.carapaceproxy.server.filters.XForwardedForRequestFilter;
 import org.carapaceproxy.server.filters.XTlsCipherRequestFilter;
 import org.carapaceproxy.server.filters.XTlsProtocolRequestFilter;
 import org.carapaceproxy.server.mapper.requestmatcher.MatchAllRequestMatcher;
+import org.carapaceproxy.utils.CarapaceVersion;
 import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestUtils;
@@ -670,6 +671,18 @@ public class StartAPIServerTest extends UseAdminServer {
             }
 
             assertEquals(2, lineCount);
+        }
+    }
+
+    @Test
+    public void testVersion() throws Exception {
+        startAdmin();
+
+        try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
+            RawHttpClient.HttpResponse resp = client.get("/api/version", credentials);
+            final Map<?, ?> version = new ObjectMapper().readValue(resp.getBody(), new TypeReference<>() {});
+            assertEquals(CarapaceVersion.VERSION, version.get("version"));
+            assertEquals(CarapaceVersion.COMMIT, version.get("commit"));
         }
     }
 

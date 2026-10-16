@@ -20,6 +20,7 @@
 
 <script>
 import { doGet } from "../serverapi";
+import { formatVersion } from "../version";
 export default {
     name: "Peers",
     data() {
@@ -29,7 +30,11 @@ export default {
     },
     created() {
         doGet("/api/cluster/peers", data => {
-            this.peers = Object.values(data || {});
+            // older servers can list a peer as null when it leaves during the request
+            this.peers = Object.values(data || {}).filter(Boolean).map(peer => ({
+                ...peer,
+                version: formatVersion(peer.info["peer_version"], peer.info["peer_commit"])
+            }));
         });
     },
     computed: {
@@ -37,6 +42,8 @@ export default {
             return [
                 { key: "id", label: "ID", sortable: true },
                 { key: "description", label: "Description", sortable: true },
+                // empty for peers that predate the version in the peer info: the sign of a half-upgraded cluster
+                { key: "version", label: "Version", sortable: true, isVersion: true },
                 { key: "info", label: "Admin Server UI", sortable: true }
             ];
         }
