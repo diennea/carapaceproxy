@@ -32,15 +32,19 @@ import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAIT
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -53,6 +57,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import org.carapaceproxy.cluster.GroupMembershipHandler;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
 import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
@@ -660,5 +667,82 @@ public class DynamicCertificatesManagerTest {
         man.rebuildAcmeClient();
         ACMEClient after = Whitebox.getInternalState(man, ACMEClient.class);
         assertSame(restoredKey, Whitebox.getInternalState(after, KeyPair.class));
+    }
+
+    @Test
+    public void testLifecyclePausedByRestore() throws Exception {
+        ACMEClient ac = mock(ACMEClient.class);
+        Order o = mock(Order.class);
+        when(o.getLocation()).thenReturn(new URL("https://localhost/index"));
+        when(ac.getLogin()).thenReturn(mock(Login.class));
+        Http01Challenge c = mock(Http01Challenge.class);
+        when(c.getToken()).thenReturn("");
+        when(c.getJSON()).thenReturn(JSON.parse(
+                "{\"url\": \"https://localhost/index\", \"type\": \"http-01\", \"token\": \"mytoken\"}"
+        ));
+        when(c.getAuthorization()).thenReturn("");
+        when(ac.getChallengesForOrder(any())).thenReturn(Map.of("domain", c));
+
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        Listeners listeners = mock(Listeners.class);
+        when(parent.getListeners()).thenReturn(listeners);
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        NullGroupMembershipHandler handler = new NullGroupMembershipHandler();
+        man.attachGroupMembershipHandler(handler);
+        when(parent.isRestoreInProgress()).thenAnswer(invocation -> handler.isRestoreInProgress());
+        Whitebox.setInternalState(man, ac);
+        // a restore starts while the first certificate is being ordered
+        AtomicReference<GroupMembershipHandler.RestoreSignal> signal = new AtomicReference<>();
+        when(ac.createOrderForDomain(any())).thenAnswer(invocation -> {
+            if (signal.get() == null) {
+                signal.set(handler.raiseRestoreSignal());
+            }
+            return o;
+        });
+
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        when(store.loadCertificateForDomain(eq("a.example"))).thenReturn(new CertificateData("a.example", null, WAITING));
+        when(store.loadCertificateForDomain(eq("b.example"))).thenReturn(new CertificateData("b.example", null, WAITING));
+        man.setConfigurationStore(store);
+        Properties props = new Properties();
+        props.setProperty("certificate.1.hostname", "a.example");
+        props.setProperty("certificate.1.mode", "acme");
+        props.setProperty("certificate.2.hostname", "b.example");
+        props.setProperty("certificate.2.mode", "acme");
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(new PropertiesConfigurationStore(props));
+        when(parent.getCurrentConfiguration()).thenReturn(conf);
+        man.reloadConfiguration(conf);
+
+        // a restore holds the renewal lock, in standalone mode too: the pass waits for it
+        assertTrue(man.tryLockRenewal(1, TimeUnit.SECONDS));
+        Thread pass = new Thread(man);
+        try {
+            pass.start();
+            pass.join(500);
+            assertTrue(pass.isAlive());
+            verify(ac, never()).createOrderForDomain(any());
+        } finally {
+            man.unlockRenewal();
+        }
+        pass.join(10_000);
+        assertFalse(pass.isAlive());
+
+        // the pass stops after the first certificate, and still ends with the reload
+        verify(store, times(1)).saveCertificate(any());
+        verify(store, never()).saveCertificate(argThat(saved -> "b.example".equals(saved.getDomain())));
+        verify(listeners, times(1)).reloadCurrentConfiguration();
+        verify(ac, times(1)).createOrderForDomain(any());
+
+        // signal still up: the whole pass is skipped
+        man.run();
+        verify(store, times(1)).saveCertificate(any());
+        verify(ac, times(1)).createOrderForDomain(any());
+
+        signal.get().close();
+        assertFalse(handler.isRestoreInProgress());
+        man.run();
+        verify(ac, times(2)).createOrderForDomain(any());
+        verify(ac).createOrderForDomain(argThat(domains -> domains.contains("b.example")));
     }
 }
