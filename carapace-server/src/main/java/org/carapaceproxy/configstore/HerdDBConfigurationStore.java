@@ -22,9 +22,9 @@ package org.carapaceproxy.configstore;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePrivateKey;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64DecodePublicKey;
 import static org.carapaceproxy.configstore.ConfigurationStoreUtils.base64EncodeKey;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import static org.carapaceproxy.configstore.ConfigurationStoreUtils.formatChallengesData;
+import static org.carapaceproxy.configstore.ConfigurationStoreUtils.parseChallengesData;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import herddb.client.ClientConfiguration;
 import herddb.client.ClientSideMetadataProviderException;
@@ -45,6 +45,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -52,15 +53,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
-import org.carapaceproxy.utils.StringUtils;
-import org.shredzone.acme4j.toolbox.JSON;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -96,6 +104,8 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             "CREATE TABLE " + KEYPAIR_TABLE_NAME + "(domain string primary key, privateKey string, publicKey string)";
     private static final String SELECT_FROM_KEYPAIR_TABLE =
             "SELECT privateKey, publicKey FROM " + KEYPAIR_TABLE_NAME + " WHERE domain=?";
+    private static final String SELECT_ALL_FROM_KEYPAIR_TABLE =
+            "SELECT domain, privateKey, publicKey FROM " + KEYPAIR_TABLE_NAME;
     private static final String UPDATE_KEYPAIR_TABLE =
             "UPDATE " + KEYPAIR_TABLE_NAME + " SET privateKey=?, publicKey=? WHERE domain=?";
     private static final String INSERT_INTO_KEYPAIR_TABLE =
@@ -115,6 +125,9 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     private static final String SELECT_FROM_DIGITAL_CERTIFICATES_TABLE =
             "SELECT domain, subjectAltNames, chain, state, pendingOrder, pendingChallenges, attemptCount, message"
             + " FROM " + DIGITAL_CERTIFICATES_TABLE_NAME + " WHERE domain=?";
+    private static final String SELECT_ALL_FROM_DIGITAL_CERTIFICATES_TABLE =
+            "SELECT domain, subjectAltNames, chain, state, pendingOrder, pendingChallenges, attemptCount, message"
+            + " FROM " + DIGITAL_CERTIFICATES_TABLE_NAME;
     private static final String UPDATE_DIGITAL_CERTIFICATES_TABLE =
             "UPDATE " + DIGITAL_CERTIFICATES_TABLE_NAME
             + " SET subjectAltNames=?, chain=?, state=?, pendingOrder=?, pendingChallenges=?, attemptCount=?, message=?"
@@ -142,17 +155,32 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
     private static final String CREATE_TABLESPACE = "CREATE TABLESPACE '%s','expectedreplicacount:%d'";
     private static final String SELECT_FROM_TABLESPACES_TABLE =
             "SELECT tablespace_name FROM systablespaces WHERE tablespace_name=?";
+    // system tables of HerdDB 0.26.1 (SystablespacesTableManager, SystablespacereplicastateTableManager)
+    private static final String SELECT_ALL_FROM_TABLESPACES_TABLE =
+            "SELECT tablespace_name, leader, replica, expectedreplicacount FROM systablespaces";
+    private static final String SELECT_ALL_FROM_TABLESPACE_REPLICA_STATE_TABLE =
+            "SELECT tablespace_name, nodeid, mode, inactivitytime, maxleaderinactivitytime FROM systablespacereplicastate";
 
     private static final Logger LOG = LoggerFactory.getLogger(HerdDBConfigurationStore.class);
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    /** Milliseconds a replica may stay silent when its tablespace sets no {@code maxleaderinactivitytime}. */
+    public static final String REPLICA_MAX_INACTIVITY_PROPERTY = "carapace.store.replica.maxinactivity";
+
+    private static final int CHECK_WRITABLE_TIMEOUT_SECONDS = 10;
 
     private final Map<String, String> properties = new ConcurrentHashMap<>();
     private final HerdDBEmbeddedDataSource datasource;
+    private final boolean cluster;
+    private final String tableSpace;
+    // one thread for every check: a hung read makes the next check time out, and nothing piles up
+    private final ExecutorService checkWritableExecutor = Executors.newSingleThreadExecutor(
+            new ThreadFactoryBuilder().setNameFormat("carapace-check-writable").setDaemon(true).build());
 
     public HerdDBConfigurationStore(ConfigurationStore staticConfiguration,
                                     boolean cluster, String zkAddress, File baseDir, StatsLogger statsLogger) {
         String tableSpace = staticConfiguration.getProperty(TABLESPACE_PROPERTY, TableSpace.DEFAULT).trim();
+        this.cluster = cluster;
+        this.tableSpace = tableSpace;
         if (!VALID_TABLESPACE_NAME.matcher(tableSpace).matches()) {
             throw new ConfigurationStoreException(new IllegalArgumentException(
                     "Invalid " + TABLESPACE_PROPERTY + " \"" + tableSpace + "\": "
@@ -343,6 +371,7 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
 
     @Override
     public void close() {
+        checkWritableExecutor.shutdownNow();
         if (datasource != null) {
             datasource.close();
         }
@@ -395,6 +424,235 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             LOG.error("Error while saving configuration from Database", err);
             throw err;
         }
+    }
+
+    @Override
+    public StoreSnapshot exportState() {
+        final Map<String, String> config = new HashMap<>();
+        final Map<String, StoreSnapshot.EncodedKeyPair> keyPairs = new HashMap<>();
+        final Map<String, StoreSnapshot.EncodedKeyPair> acmeAccountKeys = new HashMap<>();
+        final Map<String, StoreSnapshot.CertificateRow> certificates = new HashMap<>();
+        try (Connection con = datasource.getConnection()) {
+            try (PreparedStatement ps = con.prepareStatement(SELECT_ALL_FROM_CONFIG_TABLE); ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    config.put(rs.getString(1), rs.getString(2));
+                }
+            }
+            try (PreparedStatement ps = con.prepareStatement(SELECT_ALL_FROM_KEYPAIR_TABLE); ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    final var domain = rs.getString(1);
+                    final var pair = new StoreSnapshot.EncodedKeyPair(rs.getString(2), rs.getString(3));
+                    if (ACME_USER_KEY.equals(domain)) {
+                        acmeAccountKeys.put(StoreSnapshot.LETSENCRYPT, pair);
+                    } else if (domain.startsWith(ACME_USER_KEY + "_")) {
+                        // the account key of another provider, written by a newer version on this database
+                        acmeAccountKeys.put(domain.substring(ACME_USER_KEY.length() + 1), pair);
+                    } else {
+                        keyPairs.put(domain, pair);
+                    }
+                }
+            }
+            try (PreparedStatement ps = con.prepareStatement(SELECT_ALL_FROM_DIGITAL_CERTIFICATES_TABLE); ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    certificates.put(rs.getString(1), readCertificateRow(rs));
+                }
+            }
+        } catch (SQLException err) {
+            LOG.error("Error while exporting the state from Database", err);
+            throw new ConfigurationStoreException(err);
+        }
+        return new StoreSnapshot(config, keyPairs, acmeAccountKeys, certificates);
+    }
+
+    @Override
+    public void replaceState(StoreSnapshot snapshot, Runnable preCommitCheck) {
+        // built before the commit, so that nothing after it can throw (Map.copyOf refuses null values)
+        final Map<String, String> newProperties = Map.copyOf(snapshot.config());
+        try (Connection con = datasource.getConnection()) {
+            con.setAutoCommit(false);
+            try {
+                // DELETE without WHERE: TRUNCATE is refused inside a transaction; the ACME tokens table is left alone
+                for (String table : List.of(CONFIG_TABLE_NAME, KEYPAIR_TABLE_NAME, DIGITAL_CERTIFICATES_TABLE_NAME)) {
+                    try (PreparedStatement ps = con.prepareStatement("DELETE FROM " + table)) {
+                        ps.executeUpdate();
+                    }
+                }
+                try (PreparedStatement ps = con.prepareStatement(INSERT_INTO_CONFIG_TABLE)) {
+                    for (var entry : snapshot.config().entrySet()) {
+                        ps.setString(1, entry.getKey());
+                        ps.setString(2, entry.getValue());
+                        ps.addBatch();
+                    }
+                    ps.executeBatch();
+                }
+                try (PreparedStatement ps = con.prepareStatement(INSERT_INTO_KEYPAIR_TABLE)) {
+                    for (var entry : snapshot.keyPairs().entrySet()) {
+                        addKeyPair(ps, entry.getKey(), entry.getValue());
+                    }
+                    final var acmeKey = snapshot.acmeAccountKeys().get(StoreSnapshot.LETSENCRYPT);
+                    if (acmeKey != null) {
+                        addKeyPair(ps, ACME_USER_KEY, acmeKey);
+                    }
+                    ps.executeBatch();
+                }
+                try (PreparedStatement ps = con.prepareStatement(INSERT_INTO_DIGITAL_CERTIFICATES_TABLE)) {
+                    for (var entry : snapshot.certificates().entrySet()) {
+                        bindCertificate(ps, entry.getKey(), entry.getValue());
+                        ps.addBatch();
+                    }
+                    ps.executeBatch();
+                }
+                preCommitCheck.run();
+                con.commit();
+            } catch (SQLException | RuntimeException err) {
+                try {
+                    con.rollback();
+                } catch (SQLException rollbackErr) {
+                    err.addSuppressed(rollbackErr);
+                }
+                throw err;
+            }
+        } catch (SQLException err) {
+            LOG.error("Error while replacing the state in Database", err);
+            throw new ConfigurationStoreException(err);
+        }
+        properties.keySet().retainAll(newProperties.keySet());
+        properties.putAll(newProperties);
+    }
+
+    /**
+     * In cluster mode, also refuses a missing, stopped or silent replica: the write would hang on the BookKeeper quorum.
+     *
+     * @throws StoreNotReadyException listing every problem found, or telling why the replica state cannot be read
+     */
+    @Override
+    public void checkWritable() throws StoreNotReadyException {
+        if (!cluster) {
+            return;
+        }
+        final List<String> problems = readReplicaProblemsWithin();
+        if (!problems.isEmpty()) {
+            throw new StoreNotReadyException("The database cannot take the write safely now: " + String.join("; ", problems));
+        }
+    }
+
+    /**
+     * In cluster mode, refuses a tablespace that does not answer; reads and plain writes do not need every replica.
+     *
+     * @throws StoreNotReadyException if the replica state cannot be read in time
+     */
+    @Override
+    public void checkAnswering() throws StoreNotReadyException {
+        if (cluster) {
+            readReplicaProblemsWithin();
+        }
+    }
+
+    /**
+     * Reads the replica state, giving up after {@value #CHECK_WRITABLE_TIMEOUT_SECONDS} seconds.
+     *
+     * @return the problems found, empty if every expected replica is up
+     * @throws StoreNotReadyException if the replica state cannot be read in time
+     */
+    private List<String> readReplicaProblemsWithin() throws StoreNotReadyException {
+        // the client retries an unreachable leader for minutes: run the reads aside and give up early
+        final Future<List<String>> read = checkWritableExecutor.submit(this::readReplicaProblems);
+        final List<String> problems;
+        try {
+            problems = read.get(CHECK_WRITABLE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (TimeoutException err) {
+            read.cancel(true);
+            throw new StoreNotReadyException("Tablespace " + tableSpace + " did not answer within "
+                    + CHECK_WRITABLE_TIMEOUT_SECONDS + " s: is its leader down?");
+        } catch (InterruptedException err) {
+            read.cancel(true);
+            Thread.currentThread().interrupt();
+            throw new StoreNotReadyException("Interrupted while reading the replica state of tablespace " + tableSpace);
+        } catch (ExecutionException err) {
+            if (err.getCause() instanceof StoreNotReadyException notReady) {
+                throw notReady;
+            }
+            throw new StoreNotReadyException("Cannot read the replica state of tablespace " + tableSpace + ": " + err.getCause());
+        }
+        return problems;
+    }
+
+    /**
+     * Reads the replica state of the tablespace from the HerdDB system tables.
+     *
+     * @return the problems found, empty if every expected replica is up
+     * @throws SQLException                   if the system tables cannot be read
+     * @throws StoreNotReadyException if the tablespace is not found
+     */
+    private List<String> readReplicaProblems() throws SQLException, StoreNotReadyException {
+        final List<String> problems = new ArrayList<>();
+        try (Connection con = datasource.getConnection()) {
+            String leader = null;
+            Set<String> replicas = null;
+            int expectedReplicas = 0;
+            // filtered here: HerdDB matches tablespace names ignoring case
+            try (PreparedStatement ps = con.prepareStatement(SELECT_ALL_FROM_TABLESPACES_TABLE); ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    if (tableSpace.equalsIgnoreCase(rs.getString(1))) {
+                        leader = rs.getString(2);
+                        final String replicaList = rs.getString(3);
+                        replicas = Stream.of(replicaList == null ? new String[0] : replicaList.split(","))
+                                .map(String::trim)
+                                .filter(replica -> !replica.isEmpty())
+                                .collect(Collectors.toCollection(TreeSet::new));
+                        expectedReplicas = rs.getInt(4);
+                    }
+                }
+            }
+            if (replicas == null) {
+                throw new StoreNotReadyException("Tablespace " + tableSpace + " not found in systablespaces");
+            }
+            if (leader == null) {
+                problems.add("tablespace " + tableSpace + " has no leader");
+            }
+            if (replicas.size() < expectedReplicas) {
+                problems.add("tablespace " + tableSpace + " has " + replicas.size() + " replicas " + replicas
+                        + ", " + expectedReplicas + " expected");
+            }
+            final Map<String, String> replicaProblems = new TreeMap<>();
+            replicas.forEach(replica -> replicaProblems.put(replica, "replica " + replica + " has no state"));
+            try (PreparedStatement ps = con.prepareStatement(SELECT_ALL_FROM_TABLESPACE_REPLICA_STATE_TABLE); ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    final String node = rs.getString(2);
+                    if (!tableSpace.equalsIgnoreCase(rs.getString(1)) || !replicas.contains(node)) {
+                        continue; // the table also keeps former replicas and the other tablespaces
+                    }
+                    final String mode = rs.getString(3);
+                    final long inactivity = rs.getLong(4);
+                    // 0 means disabled, the default of the tablespaces Carapace creates: the activator pings about every second
+                    final long maxInactivity = rs.getLong(5) > 0 ? rs.getLong(5) : Long.getLong(REPLICA_MAX_INACTIVITY_PROPERTY, 30_000);
+                    if (!"leader".equals(mode) && !"follower".equals(mode)) {
+                        replicaProblems.put(node, "replica " + node + " is " + mode);
+                    } else if (inactivity > maxInactivity) {
+                        replicaProblems.put(node, "replica " + node + " silent for " + inactivity + " ms, more than " + maxInactivity + " ms");
+                    } else {
+                        replicaProblems.remove(node);
+                    }
+                }
+            }
+            problems.addAll(replicaProblems.values());
+        }
+        return problems;
+    }
+
+    /**
+     * Adds a key pair to the batch of {@link #INSERT_INTO_KEYPAIR_TABLE}.
+     *
+     * @param ps     the statement
+     * @param domain the domain, or the ACME account key row
+     * @param pair   the encoded key pair
+     * @throws SQLException if a parameter cannot be set
+     */
+    private static void addKeyPair(PreparedStatement ps, String domain, StoreSnapshot.EncodedKeyPair pair) throws SQLException {
+        ps.setString(1, domain);
+        ps.setString(2, pair.privateKey());
+        ps.setString(3, pair.publicKey());
+        ps.addBatch();
     }
 
     @Override
@@ -518,12 +776,42 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
         }
     }
 
-    private static Map<String, JSON> parseChallengesData(String challengesData) throws JsonProcessingException {
-        if (StringUtils.isBlank(challengesData)) {
-            return null;
-        }
-        final var map = MAPPER.readValue(challengesData, new TypeReference<Map<String, String>>() {});
-        return map.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> JSON.parse(e.getValue())));
+    /**
+     * Reads a row selected with the columns of {@link #SELECT_ALL_FROM_DIGITAL_CERTIFICATES_TABLE}.
+     *
+     * @param rs the result set, positioned on the row
+     * @return the row, values as stored, subject alternative names trimmed, without blanks and duplicates, sorted
+     * @throws SQLException if a column cannot be read
+     */
+    private static StoreSnapshot.CertificateRow readCertificateRow(ResultSet rs) throws SQLException {
+        return new StoreSnapshot.CertificateRow(
+                ConfigurationStoreUtils.normalizeSubjectAltNames(Stream.ofNullable(rs.getString(2))),
+                rs.getString(3),
+                rs.getString(4),
+                rs.getString(5),
+                rs.getString(6),
+                rs.getInt(7),
+                rs.getString(8)
+        );
+    }
+
+    /**
+     * Binds a certificate row to {@link #INSERT_INTO_DIGITAL_CERTIFICATES_TABLE}.
+     *
+     * @param ps     the statement
+     * @param domain the certificate domain
+     * @param row    the certificate row
+     * @throws SQLException if a parameter cannot be set
+     */
+    private static void bindCertificate(PreparedStatement ps, String domain, StoreSnapshot.CertificateRow row) throws SQLException {
+        ps.setString(1, domain);
+        ps.setString(2, row.subjectAltNames().isEmpty() ? null : String.join(",", row.subjectAltNames()));
+        ps.setString(3, row.chain());
+        ps.setString(4, row.state());
+        ps.setString(5, row.pendingOrder());
+        ps.setString(6, row.pendingChallenges());
+        ps.setInt(7, row.attemptCount());
+        ps.setString(8, row.message());
     }
 
     @Override
@@ -577,15 +865,6 @@ public class HerdDBConfigurationStore implements ConfigurationStore {
             LOG.error("Error while performing Certificate drop for domain {}.", certId, err);
             throw new ConfigurationStoreException(err);
         }
-    }
-
-    private static String formatChallengesData(Map<String, JSON> challengesData) throws JsonProcessingException {
-        if (challengesData == null || challengesData.isEmpty()) {
-            return null;
-        }
-        return MAPPER.writeValueAsString(challengesData.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().toString()))
-        );
     }
 
     @Override

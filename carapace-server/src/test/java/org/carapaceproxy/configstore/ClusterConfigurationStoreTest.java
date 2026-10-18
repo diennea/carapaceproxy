@@ -23,17 +23,14 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import java.io.File;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.Properties;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ThreadLocalRandom;
 import org.apache.bookkeeper.stats.NullStatsLogger;
 import org.apache.curator.test.TestingServer;
+import org.carapaceproxy.utils.TestUtils;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -57,11 +54,6 @@ public class ClusterConfigurationStoreTest {
     private static final String ADMIN_USERNAME = "theusername";
     private static final String ADMIN_PASSWORD = "thepassword";
     private static final int REPLICATION_FACTOR = 2;
-    private static final int MIN_PORT = 12000;
-    private static final int MAX_PORT = 20000;
-    private static final int MAX_PORT_ATTEMPTS = 50;
-
-    private static final Set<Integer> HANDED_OUT_PORTS = ConcurrentHashMap.newKeySet();
 
     private static String previousTableSpaceTimeout;
 
@@ -108,7 +100,7 @@ public class ClusterConfigurationStoreTest {
     @Test
     public void testCustomTablespaceReplicaCount() throws Exception {
         File zooKeeperDir = tmpDir.newFolder();
-        try (TestingServer zooKeeper = new TestingServer(freePort(), zooKeeperDir)) {
+        try (TestingServer zooKeeper = new TestingServer(TestUtils.getFreeNonEphemeralPort(), zooKeeperDir)) {
             // the peer stays on the default tablespace and provides the second bookie
             File peerDir = tmpDir.newFolder();
             peer = openStore(zooKeeper, new PropertiesConfigurationStore(nodeProperties()), peerDir);
@@ -121,6 +113,17 @@ public class ClusterConfigurationStoreTest {
             File nodeDir = tmpDir.newFolder();
             store = openStore(zooKeeper, staticConfiguration, nodeDir);
             assertEquals(REPLICATION_FACTOR, expectedReplicaCount(zooKeeper, TABLESPACE));
+
+            // both replicas up: writable, once the follower has reported its state
+            TestUtils.waitForCondition(() -> {
+                try {
+                    store.checkWritable();
+                    return true;
+                } catch (StoreNotReadyException notYet) {
+                    return false;
+                }
+            }, 30);
+            store.checkAnswering();
         }
     }
 
@@ -135,33 +138,9 @@ public class ClusterConfigurationStoreTest {
         props.setProperty("db.bookie.allowLoopback", "true");
         props.setProperty("db.admin.username", ADMIN_USERNAME);
         props.setProperty("db.admin.password", ADMIN_PASSWORD);
-        props.setProperty("db.server.port", freePort() + "");
-        props.setProperty("db.server.bookkeeper.port", freePort() + "");
+        props.setProperty("db.server.port", TestUtils.getFreeNonEphemeralPort() + "");
+        props.setProperty("db.server.bookkeeper.port", TestUtils.getFreeNonEphemeralPort() + "");
         return props;
-    }
-
-    /**
-     * Picks a free port above the well known ports and below the ephemeral range, where the operating system
-     * could otherwise hand the same port to a client socket between this check and the bind. Fixed low ports are
-     * no good either: 7000, the HerdDB default, is taken by the AirPlay receiver on macOS. Ports already returned
-     * are never returned again, as the probe socket is closed before the caller binds its own.
-     *
-     * @return a port that was free a moment ago, and that this method never returned before
-     * @throws IOException if no free port is found
-     */
-    private static int freePort() throws IOException {
-        for (int attempt = 0; attempt < MAX_PORT_ATTEMPTS; attempt++) {
-            int port = ThreadLocalRandom.current().nextInt(MIN_PORT, MAX_PORT);
-            if (!HANDED_OUT_PORTS.add(port)) {
-                continue;
-            }
-            try (ServerSocket socket = new ServerSocket(port)) {
-                return socket.getLocalPort();
-            } catch (IOException taken) {
-                // keep looking
-            }
-        }
-        throw new IOException("no free port available in [" + MIN_PORT + ", " + MAX_PORT + ")");
     }
 
     /**
