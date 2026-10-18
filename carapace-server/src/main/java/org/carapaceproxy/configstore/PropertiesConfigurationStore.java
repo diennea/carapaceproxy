@@ -19,7 +19,11 @@
  */
 package org.carapaceproxy.configstore;
 
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.security.KeyPair;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Spliterator;
@@ -39,11 +43,12 @@ import org.carapaceproxy.server.config.ConnectionPoolConfiguration;
  */
 public class PropertiesConfigurationStore implements ConfigurationStore {
 
-    private final Properties properties;
-    private final ConcurrentHashMap<String, CertificateData> certificates = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, KeyPair> domainsKeyPair = new ConcurrentHashMap<>();
+    // volatile: replaceState swaps them, and readers are not synchronized
+    private volatile Properties properties;
+    private volatile ConcurrentHashMap<String, CertificateData> certificates = new ConcurrentHashMap<>();
+    private volatile ConcurrentHashMap<String, KeyPair> domainsKeyPair = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String> acmeChallengeTokens = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, KeyPair> acmeUserKeys = new ConcurrentHashMap<>();
+    private volatile ConcurrentHashMap<String, KeyPair> acmeUserKeys = new ConcurrentHashMap<>();
 
     public PropertiesConfigurationStore(Properties properties) {
         this.properties = properties;
@@ -163,6 +168,80 @@ public class PropertiesConfigurationStore implements ConfigurationStore {
     @Override
     public void deleteAcmeChallengeToken(String id) {
         acmeChallengeTokens.remove(id);
+    }
+
+    @Override
+    public StoreSnapshot exportState() {
+        final Map<String, String> config = new HashMap<>();
+        properties.forEach((k, v) -> config.put(k.toString(), v.toString()));
+        final Map<String, StoreSnapshot.EncodedKeyPair> keyPairs = new HashMap<>();
+        domainsKeyPair.forEach((domain, pair) -> keyPairs.put(domain, encode(pair)));
+        final Map<String, StoreSnapshot.EncodedKeyPair> acmeAccountKeys = new HashMap<>();
+        acmeUserKeys.forEach((provider, pair) -> acmeAccountKeys.put(provider, encode(pair)));
+        final Map<String, StoreSnapshot.CertificateRow> rows = new HashMap<>();
+        try {
+            for (var entry : certificates.entrySet()) {
+                rows.put(entry.getKey(), ConfigurationStoreUtils.toCertificateRow(entry.getValue()));
+            }
+        } catch (IOException err) {
+            throw new ConfigurationStoreException(err);
+        }
+        return new StoreSnapshot(config, keyPairs, acmeAccountKeys, rows);
+    }
+
+    @Override
+    public synchronized void replaceState(StoreSnapshot snapshot, Runnable preCommitCheck) {
+        // decode everything first, so that a bad value leaves the current state untouched
+        final var newProperties = new Properties();
+        newProperties.putAll(snapshot.config());
+        final var newCertificates = new ConcurrentHashMap<String, CertificateData>();
+        final var newKeyPairs = new ConcurrentHashMap<String, KeyPair>();
+        final var newAcmeUserKeys = new ConcurrentHashMap<String, KeyPair>();
+        try {
+            for (var entry : snapshot.certificates().entrySet()) {
+                newCertificates.put(entry.getKey(), ConfigurationStoreUtils.toCertificateData(entry.getKey(), entry.getValue()));
+            }
+            for (var entry : snapshot.keyPairs().entrySet()) {
+                newKeyPairs.put(entry.getKey(), decode(entry.getValue()));
+            }
+            for (var entry : snapshot.acmeAccountKeys().entrySet()) {
+                newAcmeUserKeys.put(entry.getKey(), decode(entry.getValue()));
+            }
+        } catch (IOException | GeneralSecurityException err) {
+            throw new ConfigurationStoreException(err);
+        }
+        preCommitCheck.run();
+        properties = newProperties;
+        certificates = newCertificates;
+        domainsKeyPair = newKeyPairs;
+        acmeUserKeys = newAcmeUserKeys;
+    }
+
+    /**
+     * Encodes a key pair the way the database stores it.
+     *
+     * @param pair the key pair
+     * @return the encoded key pair
+     */
+    private static StoreSnapshot.EncodedKeyPair encode(KeyPair pair) {
+        return new StoreSnapshot.EncodedKeyPair(
+                ConfigurationStoreUtils.base64EncodeKey(pair.getPrivate()),
+                ConfigurationStoreUtils.base64EncodeKey(pair.getPublic())
+        );
+    }
+
+    /**
+     * Decodes a key pair stored by the database.
+     *
+     * @param pair the encoded key pair
+     * @return the key pair
+     * @throws GeneralSecurityException if a key cannot be decoded
+     */
+    private static KeyPair decode(StoreSnapshot.EncodedKeyPair pair) throws GeneralSecurityException {
+        return new KeyPair(
+                ConfigurationStoreUtils.base64DecodePublicKey(pair.publicKey()),
+                ConfigurationStoreUtils.base64DecodePrivateKey(pair.privateKey())
+        );
     }
 
     public void addConnectionPool(final ConnectionPoolConfiguration connectionPool) {

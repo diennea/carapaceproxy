@@ -240,4 +240,46 @@ public interface ConfigurationStore extends AutoCloseable {
     String loadAcmeChallengeToken(String id);
 
     void deleteAcmeChallengeToken(String id);
+
+    /**
+     * Reads the whole state of the store, ACME challenge tokens excluded.
+     *
+     * @return a copy of the stored state, values in the encodings the database uses
+     * @throws ConfigurationStoreException   if the store cannot be read
+     * @throws UnsupportedOperationException if the store does not support it
+     */
+    default StoreSnapshot exportState() {
+        throw new UnsupportedOperationException("exportState");
+    }
+
+    /**
+     * Replaces the whole state of the store, ignoring the overwrite guards; ACME challenge tokens are left untouched.
+     * All or nothing: if it throws, the store holds the previous state or, when the commit outcome is unknown, the
+     * snapshot; repeat the call. Callers must keep other writers out.
+     *
+     * @param snapshot       the state to store, already {@link StoreSnapshot#validate() validated}
+     * @param preCommitCheck run right before the commit; it aborts the replacement by throwing
+     * @throws ConfigurationStoreException   if the store cannot be read or written
+     * @throws UnsupportedOperationException if the store does not support it
+     * @throws RuntimeException              whatever {@code preCommitCheck} throws, after rolling back
+     */
+    default void replaceState(StoreSnapshot snapshot, Runnable preCommitCheck) {
+        throw new UnsupportedOperationException("replaceState");
+    }
+
+    /**
+     * Preflight check, so that a caller does not hang on a store that does not answer.
+     *
+     * @throws StoreNotReadyException if the store does not answer in time
+     */
+    default void checkAnswering() throws StoreNotReadyException {
+    }
+
+    /**
+     * Preflight check that the store can take a write now.
+     *
+     * @throws StoreNotReadyException if the store would refuse or lose the write
+     */
+    default void checkWritable() throws StoreNotReadyException {
+    }
 }
