@@ -65,6 +65,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import javax.servlet.DispatcherType;
 import lombok.Data;
@@ -77,6 +84,7 @@ import org.carapaceproxy.api.ApplicationConfig;
 import org.carapaceproxy.api.AuthAPIRequestsFilter;
 import org.carapaceproxy.api.ConfigResource;
 import org.carapaceproxy.api.ForceHeadersAPIRequestsFilter;
+import org.carapaceproxy.api.RestoreInProgressFilter;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
 import org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler;
@@ -96,12 +104,15 @@ import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.RequestFilterConfiguration;
+import org.carapaceproxy.server.config.RestoreInProgressException;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.server.mapper.EndpointMapper;
 import org.carapaceproxy.user.FileUserRealm;
 import org.carapaceproxy.user.SimpleUserRealm;
 import org.carapaceproxy.user.UserRealm;
 import org.carapaceproxy.utils.CarapaceVersion;
+import org.carapaceproxy.utils.CertificatesUtils;
+import org.carapaceproxy.utils.StringUtils;
 import org.eclipse.jetty.security.ConstraintMapping;
 import org.eclipse.jetty.security.ConstraintSecurityHandler;
 import org.eclipse.jetty.server.Handler;
@@ -208,6 +219,25 @@ public class HttpProxyServer implements AutoCloseable {
      * Guards concurrent configuration changes
      */
     private final ReentrantLock configurationLock = new ReentrantLock();
+
+    // a node whose reload after a restore failed tries again this often, until it succeeds
+    private static final long RESTORE_RELOAD_RETRY_SECONDS = 30;
+    // a reload asked while a restore signal is up looks again this often
+    private static final long RESTORE_SIGNAL_POLL_MILLIS = 200;
+    // reloads after a restore, asked and done: this node refuses writes and renewals while they differ
+    private final AtomicLong restoreReloadsRequested = new AtomicLong();
+    private volatile long restoreReloadsDone; // only written on restoreReloadExecutor
+    private ScheduledFuture<?> restoreReloadRetry; // only touched on restoreReloadExecutor
+    // a configurationChange skipped while the flag was on: applied after the next reload after a restore
+    private volatile boolean configurationChangeSkipped;
+    // a reload after a restore, possible as soon as the signal is watched, waits for the boot to end
+    private final CountDownLatch startFinished = new CountDownLatch(1);
+    // no thread until a restore needs a reload
+    private final ScheduledExecutorService restoreReloadExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+        final Thread thread = new Thread(r, "restore-reload");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     private Server adminServer;
     private String adminAccessLogPath = "admin.access.log";
@@ -365,6 +395,7 @@ public class HttpProxyServer implements AutoCloseable {
         context.setContextPath("/");
         context.addFilter(AuthAPIRequestsFilter.class, "/api/*", EnumSet.of(DispatcherType.REQUEST));
         context.addFilter(ForceHeadersAPIRequestsFilter.class, "/api/*", EnumSet.of(DispatcherType.REQUEST));
+        context.addFilter(RestoreInProgressFilter.class, "/api/*", EnumSet.of(DispatcherType.REQUEST));
         ServletHolder jerseyServlet = new ServletHolder(new ServletContainer());
         jerseyServlet.setInitOrder(0);
         jerseyServlet.setInitParameter(JAXRS_APPLICATION_CLASS, ApplicationConfig.class.getCanonicalName());
@@ -446,6 +477,8 @@ public class HttpProxyServer implements AutoCloseable {
     public void start() throws InterruptedException, ConfigurationNotValidException {
         try {
             started = true;
+            // before start: a signal that goes away meanwhile must still reload this node
+            groupMembershipHandler.watchRestoreSignal(this::requestRestoreReload);
             groupMembershipHandler.start();
             cache.start();
             requestsLogger.start();
@@ -459,6 +492,8 @@ public class HttpProxyServer implements AutoCloseable {
         } catch (RuntimeException err) {
             close();
             throw err;
+        } finally {
+            startFinished.countDown();
         }
     }
 
@@ -473,6 +508,9 @@ public class HttpProxyServer implements AutoCloseable {
 
     @Override
     public void close() {
+        // first: a reload after a restore waiting for the boot sees the close and gives up
+        restoreReloadExecutor.shutdownNow();
+        startFinished.countDown();
         groupMembershipHandler.stop();
         backendHealthManager.stop();
         dynamicCertificatesManager.stop();
@@ -675,6 +713,8 @@ public class HttpProxyServer implements AutoCloseable {
     }
 
     public void updateDynamicCertificateForDomain(CertificateData cert) throws Exception {
+        // a row written before the signal is not rolled back: it lands in the tables the restore replaces
+        checkNoRestoreInProgress();
         // snapshot to restore on a failed apply: the domain may still be referenced by the active configuration
         final CertificateData previous = dynamicConfigurationStore.loadCertificateForDomain(cert.getDomain());
 
@@ -698,7 +738,8 @@ public class HttpProxyServer implements AutoCloseable {
         try {
             applyDynamicConfigurationFromAPI(new PropertiesConfigurationStore(props));
         } catch (Exception e) {
-            if (previous != null) {
+            // refused by a restore: the previous row would overwrite the restored one
+            if (previous != null && !(e instanceof RestoreInProgressException) && !isRestoreInProgress()) {
                 try {
                     dynamicConfigurationStore.saveCertificate(previous);
                 } catch (RuntimeException restoreEx) {
@@ -806,6 +847,12 @@ public class HttpProxyServer implements AutoCloseable {
             }
 
             if (!atBoot) {
+                if (isRestoreInProgress()) {
+                    // refused here the subsystems already run the new configuration while the view fields below and the
+                    // store keep the old one: a reload brings this node back to the store once no signal is up
+                    requestRestoreReload();
+                    throw new RestoreInProgressException();
+                }
                 dynamicConfigurationStore.commitConfiguration(newConfigurationStore);
             }
 
@@ -821,6 +868,186 @@ public class HttpProxyServer implements AutoCloseable {
             throw new IllegalStateException(err);
         } finally {
             configurationLock.unlock();
+        }
+    }
+
+    /**
+     * Whether a restore signal is up, or the restored state is not applied on this node yet.
+     *
+     * @return true while a restore is in progress for this node
+     */
+    public boolean isRestoreInProgress() {
+        return restoreReloadsDone < restoreReloadsRequested.get() || groupMembershipHandler.isRestoreInProgress();
+    }
+
+    /**
+     * Refuse a store write that was already running when the restore signal rose.
+     *
+     * @throws RestoreInProgressException if a restore is in progress
+     */
+    public void checkNoRestoreInProgress() throws RestoreInProgressException {
+        if (isRestoreInProgress()) {
+            throw new RestoreInProgressException();
+        }
+    }
+
+    /** Ask for a reload of the restored state, keeping {@link #isRestoreInProgress()} on until one succeeds. */
+    private void requestRestoreReload() {
+        restoreReloadsRequested.incrementAndGet();
+        scheduleRestoreReload();
+    }
+
+    /** Run {@link #reloadAfterRestore()} on the restore reload thread, unless this server is closing. */
+    private void scheduleRestoreReload() {
+        try {
+            restoreReloadExecutor.execute(this::reloadAfterRestore);
+        } catch (RejectedExecutionException closing) {
+            // closed: the caller keeps its own outcome, nothing is left to reload
+        }
+    }
+
+    /** Reload the restored state on the restore reload thread, retrying after a delay until it succeeds. */
+    private void reloadAfterRestore() {
+        if (restoreReloadRetry != null) {
+            restoreReloadRetry.cancel(false);
+            restoreReloadRetry = null;
+        }
+        if (restoreReloadsDone >= restoreReloadsRequested.get() || !awaitStartFinished()) {
+            return;
+        }
+        if (groupMembershipHandler.isRestoreInProgress()) {
+            // the store holds the restored state only once the signal is gone; ours drops with no callback here
+            restoreReloadRetry = restoreReloadExecutor.schedule(this::reloadAfterRestore, RESTORE_SIGNAL_POLL_MILLIS, TimeUnit.MILLISECONDS);
+            return;
+        }
+        try {
+            restoreReloadsDone = reloadRestoredState();
+            if (restoreReloadsDone < restoreReloadsRequested.get()) {
+                // a write refused at its commit after the reload released the lock: reload again
+                scheduleRestoreReload();
+                return;
+            }
+            LOG.info("Restored state applied, admin writes and certificate renewals resumed");
+            if (configurationChangeSkipped) {
+                reloadSkippedConfigurationChange();
+            }
+            return;
+        } catch (ConfigurationNotValidException err) {
+            LOG.error("Cannot apply the restored configuration on this node: {}", err.getMessage());
+        } catch (Throwable err) {
+            // an Error must not stop the retries either: the flag would stay on for good
+            LOG.error("Cannot apply the restored configuration on this node", err);
+        }
+        if (restoreReloadExecutor.isShutdown()) {
+            return;
+        }
+        // the flag stays on: a node with the state of before the restore must not write nor renew
+        LOG.error("Restored state not applied, admin writes and renewals stay paused on this node; retrying in {} seconds",
+                RESTORE_RELOAD_RETRY_SECONDS);
+        restoreReloadRetry = restoreReloadExecutor.schedule(this::reloadAfterRestore, RESTORE_RELOAD_RETRY_SECONDS, TimeUnit.SECONDS);
+    }
+
+    /**
+     * Wait for {@link #start()} to end, on the restore reload thread.
+     *
+     * @return false if this server is closed or closing meanwhile
+     */
+    private boolean awaitStartFinished() {
+        try {
+            startFinished.await();
+        } catch (InterruptedException err) {
+            // only close() interrupts this thread
+            Thread.currentThread().interrupt();
+            return false;
+        }
+        return !restoreReloadExecutor.isShutdown();
+    }
+
+    /**
+     * Apply the state restored by a restore that this node did not apply. Never takes the certificate renewal mutex.
+     *
+     * @return the reloads requested when the store was read
+     * @throws ConfigurationNotValidException if the stored configuration is not valid, or names a file this node cannot load
+     * @throws Exception                      if the store or the apply fail
+     */
+    private long reloadRestoredState() throws Exception {
+        LOG.info("Reloading the restored configuration from the store");
+        // blocking, and before the read: another restore here cannot replace the store between read and apply
+        configurationLock.lockInterruptibly();
+        final long requested;
+        try {
+            // a change skipped until now is in the store read below: only one skipped after the read needs a replay
+            configurationChangeSkipped = false;
+            requested = restoreReloadsRequested.get();
+            dynamicConfigurationStore.reload();
+            // the apply restarts the listeners: check first what would make it fail on this node only
+            final RuntimeServerConfiguration configuration = buildValidConfiguration(dynamicConfigurationStore);
+            checkLocalFiles(configuration, dynamicConfigurationStore);
+            dynamicCertificatesManager.checkWildcardCredentials(configuration.getCertificates());
+            applyDynamicConfiguration(null, true);
+        } finally {
+            configurationLock.unlock();
+        }
+        dynamicCertificatesManager.storeAllLocalCertificates();
+        return requested;
+    }
+
+    /** Apply the store for the events skipped during the restore: a write accepted elsewhere; failures only logged. */
+    private void reloadSkippedConfigurationChange() {
+        try {
+            configurationLock.lockInterruptibly();
+            try {
+                dynamicConfigurationStore.reload();
+                applyDynamicConfiguration(null, true);
+            } finally {
+                configurationLock.unlock();
+            }
+        } catch (Throwable err) {
+            LOG.error("Cannot apply the configuration changed during the restore", err);
+        }
+    }
+
+    /**
+     * Check that the static keystores, the truststore and the backend CA files of a configuration load on this node.
+     *
+     * @param configuration the configuration to check
+     * @param store         the store the configuration was built from, for its backends
+     * @throws ConfigurationNotValidException naming the first file that cannot be loaded
+     */
+    private void checkLocalFiles(RuntimeServerConfiguration configuration, ConfigurationStore store) throws ConfigurationNotValidException {
+        // a missing static keystore only stops its listener and a missing truststore is only logged
+        for (SSLCertificateConfiguration certificate : configuration.getCertificates().values()) {
+            if (!certificate.isDynamic()) {
+                checkKeyStoreFile("certificate " + certificate.getId(), certificate.getFile(), certificate.getPassword());
+            }
+        }
+        checkKeyStoreFile("truststore", configuration.getSslTrustStoreFile(), configuration.getSslTrustStorePassword());
+        // the apply loads the backend CA files after restarting the listeners: checked with the same call and arguments
+        for (BackendConfiguration backend : buildMapper(configuration.getMapperClassname(), this, store).getBackends().values()) {
+            if (!StringUtils.isBlank(backend.caCertificatePath())) {
+                try {
+                    trustStoreManager.buildClientSslContextForCaFile(backend.caCertificatePath(), backend.caCertificatePassword());
+                } catch (Exception err) {
+                    throw new ConfigurationNotValidException("Cannot load the CA file " + backend.caCertificatePath()
+                            + " of backend " + backend.id() + " on this node: " + err);
+                }
+            }
+        }
+    }
+
+    /**
+     * Load a keystore file as the apply would, with the password unchanged ({@code null} included).
+     *
+     * @param what     what the file is, for the message
+     * @param file     the file, absolute or relative to the base path; nothing to check if empty
+     * @param password the password of the file
+     * @throws ConfigurationNotValidException naming the file if it cannot be loaded
+     */
+    private void checkKeyStoreFile(String what, String file, String password) throws ConfigurationNotValidException {
+        try {
+            CertificatesUtils.loadKeyStoreFromFile(file, password, basePath);
+        } catch (Exception err) {
+            throw new ConfigurationNotValidException("Cannot load the " + what + " file " + file + " on this node: " + err);
         }
     }
 
@@ -893,6 +1120,12 @@ public class HttpProxyServer implements AutoCloseable {
         @Override
         public void eventFired(String eventId, Map<String, Object> data) {
             LOG.info("Configuration changed");
+            if (isRestoreInProgress()) {
+                // the reload after the restore applies the store, checking the local files first
+                LOG.info("Restore in progress: configuration change not applied");
+                configurationChangeSkipped = true;
+                return;
+            }
             try {
                 dynamicConfigurationStore.reload();
                 applyDynamicConfiguration(null, true);
@@ -904,6 +1137,11 @@ public class HttpProxyServer implements AutoCloseable {
         @Override
         public void reconnected() {
             LOG.info("Configuration listener - reloading configuration after ZK reconnection");
+            if (isRestoreInProgress()) {
+                LOG.info("Restore in progress: configuration not reloaded");
+                configurationChangeSkipped = true;
+                return;
+            }
             try {
                 applyDynamicConfiguration(null, true);
             } catch (Throwable err) {

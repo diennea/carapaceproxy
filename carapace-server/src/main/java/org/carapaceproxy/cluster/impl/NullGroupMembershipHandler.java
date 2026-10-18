@@ -23,10 +23,12 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
+import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 
 /**
- * Noop implementation
+ * Standalone implementation: no peers, no events and no mutexes; the restore signal is local to the JVM.
  *
  * @author eolivelli
  */
@@ -34,6 +36,7 @@ public class NullGroupMembershipHandler implements GroupMembershipHandler {
 
     private Map<String, String> peerInfo = Map.of("address", "localhost");
     private final String peerId = "local";
+    private final AtomicBoolean restoreSignalRaised = new AtomicBoolean();
 
     @Override
     public void start() {
@@ -69,6 +72,39 @@ public class NullGroupMembershipHandler implements GroupMembershipHandler {
     @Override
     public void executeInMutex(String lockId, int timeout, Runnable runnable) {
         runnable.run();
+    }
+
+    @Override
+    public RestoreSignal raiseRestoreSignal() throws ConfigurationChangeInProgressException {
+        if (!restoreSignalRaised.compareAndSet(false, true)) {
+            throw new ConfigurationChangeInProgressException("another restore is in progress, try again later");
+        }
+        final AtomicBoolean held = new AtomicBoolean(true);
+        return new RestoreSignal() {
+            @Override
+            public void ensureHeld() {
+                if (!held.get()) {
+                    throw new IllegalStateException("Restore signal already cleared");
+                }
+            }
+
+            @Override
+            public void close() {
+                if (held.getAndSet(false)) {
+                    restoreSignalRaised.set(false);
+                }
+            }
+        };
+    }
+
+    @Override
+    public boolean isRestoreInProgress() {
+        return restoreSignalRaised.get();
+    }
+
+    @Override
+    public void watchRestoreSignal(Runnable callback) {
+        // no other peer can raise the signal
     }
 
     @Override

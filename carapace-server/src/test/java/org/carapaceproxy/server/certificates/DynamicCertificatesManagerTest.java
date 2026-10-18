@@ -33,12 +33,16 @@ import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.D
 import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_PROVIDER_NAME;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -56,8 +60,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
+import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
@@ -942,5 +949,72 @@ public class DynamicCertificatesManagerTest {
         assertCertificateState("localhost3", VERIFYING, 0, man);
         assertCertificateState("localhost1", VERIFIED, 0, man);
         assertCertificateState("localhost2", VERIFYING, 0, man);
+    }
+
+    @Test
+    public void testLifecyclePausedByRestore() throws Exception {
+        final var domains = List.of("a.example", "b.example", "c.example");
+        final var props = acmeCertificates(domains);
+        props.setProperty("dynamiccertificatesmanager.ratelimit", "2");
+        final var store = waitingCertificatesStore(domains);
+        final var ac = httpChallengeClient();
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        when(parent.getListeners()).thenReturn(mock(Listeners.class));
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        NullGroupMembershipHandler handler = new NullGroupMembershipHandler();
+        man.attachGroupMembershipHandler(handler);
+        when(parent.isRestoreInProgress()).thenAnswer(invocation -> handler.isRestoreInProgress());
+        man.setConfigurationStore(store);
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(new PropertiesConfigurationStore(props));
+        when(parent.getCurrentConfiguration()).thenReturn(conf);
+        man.reloadConfiguration(conf);
+        injectAcmeClients(man, Map.of(DEFAULT_PROVIDER_NAME, ac));
+        // a restore starts while the first certificate is being ordered
+        final Order order = ac.getLogin().bindOrder(null);
+        AtomicReference<GroupMembershipHandler.RestoreSignal> signal = new AtomicReference<>();
+        doAnswer(invocation -> {
+            if (signal.get() == null) {
+                signal.set(handler.raiseRestoreSignal());
+            }
+            return order;
+        }).when(ac).createOrderForDomain(any());
+
+        // the pass stops before b.example, which the rate limit would let through, and still ends with the reload
+        man.run();
+        // read once at the reload above and once by the final reload, never by the pass itself
+        verify(store, times(2)).loadCertificateForDomain(eq("b.example"));
+        verify(ac, times(1)).createOrderForDomain(any());
+        assertCertificateState("a.example", VERIFYING, 0, man);
+        assertEquals("", man.getCertificateDataForDomain("a.example").getMessage());
+        assertCertificateState("b.example", WAITING, 0, man);
+        assertCertificateState("c.example", WAITING, 0, man);
+        verify(store, never()).saveCertificate(argThat(saved -> !"a.example".equals(saved.getDomain())));
+
+        // signal still up: the whole pass is skipped
+        man.run();
+        verify(store, times(1)).saveCertificate(any());
+        verify(ac, times(1)).createOrderForDomain(any());
+
+        signal.get().close();
+        assertFalse(handler.isRestoreInProgress());
+        // a restore holds the renewal lock, in standalone mode too: the pass waits for it
+        assertTrue(man.tryLockRenewal(1, TimeUnit.SECONDS));
+        Thread pass = new Thread(man);
+        try {
+            pass.start();
+            pass.join(500);
+            assertTrue(pass.isAlive());
+            verify(ac, times(1)).createOrderForDomain(any());
+        } finally {
+            man.unlockRenewal();
+        }
+        pass.join(10_000);
+        assertFalse(pass.isAlive());
+        // the pass resumes after a.example: b.example and c.example spend the rate limit
+        verify(ac).createOrderForDomain(argThat(names -> names.contains("b.example")));
+        assertCertificateState("b.example", VERIFYING, 0, man);
+        assertCertificateState("c.example", VERIFYING, 0, man);
+        assertCertificateState("a.example", VERIFYING, 0, man);
     }
 }
