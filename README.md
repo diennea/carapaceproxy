@@ -24,6 +24,17 @@ userrealm.path=conf/user.properties
 
 `FileUserRealm` reads the `user.username=password` entries of `userrealm.path` and reloads them at every configuration apply. The alternative, `org.carapaceproxy.user.SimpleUserRealm`, is a development stub: it accepts any username and password, and says so with a warning at startup.
 
+## Backup and restore
+
+`GET /api/config/backup` exports the whole dynamic state of Carapace as a JSON archive: configuration, dynamic certificates, key pairs and ACME account keys. `POST /api/config/restore` takes that archive back and replaces the whole state.
+
+> [!WARNING]
+> The archive contains every private key and every secret of the configuration: store it as a secret, and use the HTTPS admin port.
+
+A restore is checked before anything is written: if it is refused, nothing changes; if it fails midway, repeat it. While it runs, admin writes on every node are refused, so retry them later. Boot settings in `server.properties` are kept, and with `config.type=file` a restart undoes the restore.
+
+Every node must run the same Carapace version and have every file the configuration references. After a restore, read the configuration again before applying it. An archive from a newer version needs `?acceptNewerVersion=true`.
+
 ## Docker
 
 You can build carapace docker image by running:
