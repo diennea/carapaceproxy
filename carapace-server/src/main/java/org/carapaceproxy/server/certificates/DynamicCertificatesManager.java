@@ -60,6 +60,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -71,8 +72,10 @@ import org.carapaceproxy.configstore.ConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.carapaceproxy.server.config.RestoreInProgressException;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.CertificatesUtils;
+import org.carapaceproxy.utils.StringUtils;
 import org.glassfish.jersey.internal.guava.ThreadFactoryBuilder;
 import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.Status;
@@ -120,6 +123,8 @@ public class DynamicCertificatesManager implements Runnable {
     private ConfigurationStore store;
     private volatile int period = 0; // in seconds
     private volatile int keyPairsSize = DEFAULT_KEYPAIRS_SIZE;
+    // held by every renewal pass of this node and by a restore: in standalone mode executeInMutex locks nothing
+    private final ReentrantLock renewalLock = new ReentrantLock();
     private GroupMembershipHandler groupMembershipHandler;
     private final HttpProxyServer server;
 
@@ -200,6 +205,25 @@ public class DynamicCertificatesManager implements Runnable {
         }
 
         return pair;
+    }
+
+    /**
+     * Checks that the AWS Route53 credentials are set if a dynamic wildcard certificate needs them.
+     *
+     * @param certificates the configured certificates, by id
+     * @throws ConfigurationNotValidException if a dynamic wildcard certificate is configured without AWS credentials
+     */
+    public void checkWildcardCredentials(Map<String, SSLCertificateConfiguration> certificates) throws ConfigurationNotValidException {
+        if (awsAccessKey != null && awsSecretKey != null) {
+            return;
+        }
+        for (SSLCertificateConfiguration config : certificates.values()) {
+            if (config.isDynamic() && config.isWildcard()) {
+                throw new ConfigurationNotValidException(
+                        "For ACME wildcards certificates AWS Route53 credentials has to be set"
+                );
+            }
+        }
     }
 
     private void loadCertificates(Map<String, SSLCertificateConfiguration> certificates) throws ConfigurationNotValidException {
@@ -283,11 +307,42 @@ public class DynamicCertificatesManager implements Runnable {
     public void run() {
         if (groupMembershipHandler != null) {
             // Only one node of the cluster executes this
-            groupMembershipHandler.executeInMutex(THREAD_NAME, period > 0 ? period : 1, this::certificatesLifecycle);
+            groupMembershipHandler.executeInMutex(THREAD_NAME, period > 0 ? period : 1, this::renewalPass);
         }
     }
 
+    /** One renewal pass; a restore waits for it to end, see {@link #renewalLock}. */
+    private void renewalPass() {
+        renewalLock.lock();
+        try {
+            certificatesLifecycle();
+        } finally {
+            renewalLock.unlock();
+        }
+    }
+
+    /**
+     * Keep the renewal passes of this node out. Lock order: renewal mutex, this lock, configuration lock, this object.
+     *
+     * @param timeout how long to wait for a running pass
+     * @param unit    the unit of {@code timeout}
+     * @return whether the lock was acquired; if so, release it with {@link #unlockRenewal()}
+     * @throws InterruptedException if interrupted while waiting
+     */
+    public boolean tryLockRenewal(long timeout, TimeUnit unit) throws InterruptedException {
+        return renewalLock.tryLock(timeout, unit);
+    }
+
+    /** Release the lock acquired with {@link #tryLockRenewal(long, TimeUnit)}. */
+    public void unlockRenewal() {
+        renewalLock.unlock();
+    }
+
     private void certificatesLifecycle() {
+        if (server.isRestoreInProgress()) {
+            LOG.log(Level.WARNING, "Restore in progress: certificates lifecycle pass skipped");
+            return;
+        }
         var flushCache = false;
         List<CertificateData> _certificates = certificates.entrySet().stream()
                 .filter(e -> !e.getValue().isManual())
@@ -295,6 +350,11 @@ public class DynamicCertificatesManager implements Runnable {
                 .map(Entry::getValue)
                 .toList();
         for (CertificateData data : _certificates) {
+            if (server.isRestoreInProgress()) {
+                // break, not return: the certificates already changed still get the event and the reload below
+                LOG.log(Level.WARNING, "Restore in progress: certificates lifecycle pass interrupted before {0}", data.getDomain());
+                break;
+            }
             var updateCertificate = true;
             final var domain = data.getDomain();
             try {
@@ -590,11 +650,19 @@ public class DynamicCertificatesManager implements Runnable {
         return null;
     }
 
-    @VisibleForTesting
-    public void setStateOfCertificate(String id, DynamicCertificateState state) {
+    /**
+     * Force the state of a dynamic certificate.
+     *
+     * @param id    the domain of the certificate
+     * @param state the new state
+     * @throws RestoreInProgressException if a restore is in progress
+     */
+    public void setStateOfCertificate(String id, DynamicCertificateState state) throws RestoreInProgressException {
         if (certificates.containsKey(id)) {
             CertificateData cert = store.loadCertificateForDomain(id);
             if (cert != null) {
+                // before touching cert: the file store hands out its own instance
+                server.checkNoRestoreInProgress();
                 cert.success(state);
                 store.saveCertificate(cert);
                 // remember that events are not delivered to the local JVM
@@ -674,7 +742,7 @@ public class DynamicCertificatesManager implements Runnable {
         }
     }
 
-    private void reloadCertificatesFromDB() {
+    private synchronized void reloadCertificatesFromDB() {
         LOG.log(Level.INFO, "Reloading certificates from db");
         try {
             Map<String, CertificateData> newCertificates = new ConcurrentHashMap<>();
@@ -759,5 +827,17 @@ public class DynamicCertificatesManager implements Runnable {
                         .collect(Collectors.toList());
 
         storeLocalCertificates(_certificates, null);
+    }
+
+    /**
+     * Write the local files of every dynamic certificate on this node only; failures are logged, never thrown.
+     * The {@code certificates_request_store} event is not ordered with the reload after a restore.
+     */
+    public void storeAllLocalCertificates() {
+        try {
+            storeLocalCertificates(certificates.values().stream().filter(cert -> !StringUtils.isBlank(cert.getChain())).toList(), null);
+        } catch (RuntimeException err) {
+            LOG.log(Level.SEVERE, "Cannot write the local certificate files", err);
+        }
     }
 }

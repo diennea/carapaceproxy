@@ -27,7 +27,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.Key;
 import java.util.Arrays;
+import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 import org.junit.Assert;
 import static org.junit.Assert.assertTrue;
 import java.lang.reflect.Field;
@@ -42,6 +45,11 @@ import sun.misc.Unsafe;
  * @author enrico.olivelli
  */
 public class TestUtils {
+
+    private static final int MIN_PORT = 12000;
+    private static final int MAX_PORT = 20000;
+    private static final int MAX_PORT_ATTEMPTS = 50;
+    private static final Set<Integer> HANDED_OUT_PORTS = ConcurrentHashMap.newKeySet();
 
     private static final int WAIT_FOR_CONDITION_DEFAULT_WAIT_SECONDS = 20;
 
@@ -90,6 +98,30 @@ public class TestUtils {
             assertTrue(s.getLocalPort() > 0);
             return s.getLocalPort();
         }
+    }
+
+    /**
+     * Picks a free port above the well known ports and below the ephemeral range, where the operating system
+     * could otherwise hand the same port to a client socket between this check and the bind. Fixed low ports are
+     * no good either: 7000, the HerdDB default, is taken by the AirPlay receiver on macOS. Ports already returned
+     * are never returned again, as the probe socket is closed before the caller binds its own.
+     *
+     * @return a port that was free a moment ago, and that this method never returned before
+     * @throws IOException if no free port is found
+     */
+    public static int getFreeNonEphemeralPort() throws IOException {
+        for (int attempt = 0; attempt < MAX_PORT_ATTEMPTS; attempt++) {
+            int port = ThreadLocalRandom.current().nextInt(MIN_PORT, MAX_PORT);
+            if (!HANDED_OUT_PORTS.add(port)) {
+                continue;
+            }
+            try (ServerSocket socket = new ServerSocket(port)) {
+                return socket.getLocalPort();
+            } catch (IOException taken) {
+                // keep looking
+            }
+        }
+        throw new IOException("no free port available in [" + MIN_PORT + ", " + MAX_PORT + ")");
     }
 
     public static void assertEqualsKey(Key key1, Key key2) {
