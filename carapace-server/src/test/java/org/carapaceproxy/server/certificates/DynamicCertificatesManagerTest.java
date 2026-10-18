@@ -34,6 +34,7 @@ import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -818,4 +819,31 @@ public class DynamicCertificatesManagerTest {
         }
     }
 
+    @Test
+    public void testAcmeClientRebuiltOnDemand() throws Exception {
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        man.attachGroupMembershipHandler(new NullGroupMembershipHandler());
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        KeyPair backupKey = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        KeyPair restoredKey = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        when(store.loadAcmeUserKeyPair()).thenReturn(backupKey);
+        man.setConfigurationStore(store);
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(new PropertiesConfigurationStore(new Properties()));
+
+        man.reloadConfiguration(conf);
+        ACMEClient before = Whitebox.getInternalState(man, ACMEClient.class);
+        assertSame(backupKey, Whitebox.getInternalState(before, KeyPair.class));
+
+        // a restore replaced the account key in the store: a normal reload keeps the client
+        when(store.loadAcmeUserKeyPair()).thenReturn(restoredKey);
+        man.reloadConfiguration(conf);
+        assertSame(before, Whitebox.getInternalState(man, ACMEClient.class));
+
+        // the explicit rebuild picks the new key
+        man.rebuildAcmeClient();
+        ACMEClient after = Whitebox.getInternalState(man, ACMEClient.class);
+        assertSame(restoredKey, Whitebox.getInternalState(after, KeyPair.class));
+    }
 }
