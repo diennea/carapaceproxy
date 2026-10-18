@@ -105,7 +105,7 @@ public class DynamicCertificatesManager implements Runnable {
     private static final String EVENT_CERTIFICATES_REQUEST_STORE = "certificates_request_store";
 
     private Map<String, CertificateData> certificates = new ConcurrentHashMap<>();
-    private ACMEClient acmeClient; // Let's Encrypt client
+    private volatile ACMEClient acmeClient; // Let's Encrypt client
     private Route53Client r53Client;
     private String awsAccessKey;
     private String awsSecretKey;
@@ -181,6 +181,13 @@ public class DynamicCertificatesManager implements Runnable {
         if (scheduledFuture != null || started) {
             start();
         }
+    }
+
+    /**
+     * Rebuild the ACME client with the account key in the store: a configuration reload keeps the old client.
+     */
+    public synchronized void rebuildAcmeClient() {
+        acmeClient = new ACMEClient(loadOrCreateAcmeUserKeyPair(), TESTING_MODE);
     }
 
     private KeyPair loadOrCreateAcmeUserKeyPair() {
