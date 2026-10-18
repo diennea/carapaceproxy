@@ -32,15 +32,20 @@ import static org.carapaceproxy.server.certificates.DynamicCertificateState.WAIT
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChain;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -54,6 +59,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import org.carapaceproxy.cluster.GroupMembershipHandler;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
 import org.carapaceproxy.cluster.impl.NullGroupMembershipHandler;
@@ -65,6 +74,7 @@ import org.carapaceproxy.core.Listeners;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.InOrder;
 import org.powermock.reflect.Whitebox;
 import org.shredzone.acme4j.Certificate;
 import org.shredzone.acme4j.Login;
@@ -845,5 +855,92 @@ public class DynamicCertificatesManagerTest {
         man.rebuildAcmeClient();
         ACMEClient after = Whitebox.getInternalState(man, ACMEClient.class);
         assertSame(restoredKey, Whitebox.getInternalState(after, KeyPair.class));
+    }
+
+    @Test
+    public void testLifecyclePausedByRestore() throws Exception {
+        ACMEClient ac = mock(ACMEClient.class);
+        Order o = mock(Order.class);
+        when(o.getLocation()).thenReturn(URI.create("https://localhost/index").toURL());
+        when(ac.getLogin()).thenReturn(mock(Login.class));
+        Http01Challenge c = mock(Http01Challenge.class);
+        when(c.getToken()).thenReturn("");
+        when(c.getJSON()).thenReturn(JSON.parse(
+                "{\"url\": \"https://localhost/index\", \"type\": \"http-01\", \"token\": \"mytoken\"}"
+        ));
+        when(c.getAuthorization()).thenReturn("");
+        when(ac.getChallengesForOrder(any())).thenReturn(Map.of("domain", c));
+
+        HttpProxyServer parent = mock(HttpProxyServer.class);
+        Listeners listeners = mock(Listeners.class);
+        when(parent.getListeners()).thenReturn(listeners);
+        DynamicCertificatesManager man = new DynamicCertificatesManager(parent);
+        NullGroupMembershipHandler handler = new NullGroupMembershipHandler();
+        man.attachGroupMembershipHandler(handler);
+        when(parent.isRestoreInProgress()).thenAnswer(invocation -> handler.isRestoreInProgress());
+        Whitebox.setInternalState(man, ac);
+        // a restore starts while the first certificate is being ordered
+        AtomicReference<GroupMembershipHandler.RestoreSignal> signal = new AtomicReference<>();
+        when(ac.createOrderForDomain(any())).thenAnswer(invocation -> {
+            if (signal.get() == null) {
+                signal.set(handler.raiseRestoreSignal());
+            }
+            return o;
+        });
+
+        ConfigurationStore store = mock(ConfigurationStore.class);
+        Properties props = new Properties();
+        int index = 0;
+        for (String domain : List.of("a.example", "b.example", "c.example")) {
+            when(store.loadCertificateForDomain(eq(domain))).thenReturn(new CertificateData(domain, null, WAITING));
+            props.setProperty("certificate." + ++index + ".hostname", domain);
+            props.setProperty("certificate." + index + ".mode", "acme");
+        }
+        man.setConfigurationStore(store);
+        // without the restore, the first pass would order a.example and b.example
+        props.setProperty("dynamiccertificatesmanager.ratelimit", "2");
+        RuntimeServerConfiguration conf = new RuntimeServerConfiguration();
+        conf.configure(new PropertiesConfigurationStore(props));
+        when(parent.getCurrentConfiguration()).thenReturn(conf);
+        man.reloadConfiguration(conf);
+
+        // a restore holds the renewal lock, in standalone mode too: the pass waits for it
+        assertTrue(man.tryLockRenewal(1, TimeUnit.SECONDS));
+        Thread pass = new Thread(man);
+        try {
+            pass.start();
+            pass.join(500);
+            assertTrue(pass.isAlive());
+            verify(ac, never()).createOrderForDomain(any());
+        } finally {
+            man.unlockRenewal();
+        }
+        pass.join(10_000);
+        assertFalse(pass.isAlive());
+
+        // the pass stops after the first certificate, and still ends with the reload from the store
+        verify(ac, times(1)).createOrderForDomain(Set.of("a.example"));
+        verify(store, times(1)).saveCertificate(any());
+        verify(store, never()).saveCertificate(argThat(saved -> !"a.example".equals(saved.getDomain())));
+        // b.example is read once at the reload above and once by the final reload, never by the pass itself
+        verify(store, times(2)).loadCertificateForDomain(eq("b.example"));
+        assertEquals(WAITING, man.getCertificateDataForDomain("b.example").getState());
+        assertEquals(WAITING, man.getCertificateDataForDomain("c.example").getState());
+
+        // signal still up: the whole pass is skipped
+        man.run();
+        verify(store, times(1)).saveCertificate(any());
+        verify(ac, times(1)).createOrderForDomain(any());
+
+        signal.get().close();
+        assertFalse(handler.isRestoreInProgress());
+        man.run();
+        // the rotation cursor stayed on a.example: the next pass starts from b.example, and a.example, third step of
+        // the pass, waits for the next one
+        verify(ac, times(3)).createOrderForDomain(any());
+        InOrder ordered = inOrder(ac);
+        ordered.verify(ac).createOrderForDomain(Set.of("a.example"));
+        ordered.verify(ac).createOrderForDomain(Set.of("b.example"));
+        ordered.verify(ac).createOrderForDomain(Set.of("c.example"));
     }
 }

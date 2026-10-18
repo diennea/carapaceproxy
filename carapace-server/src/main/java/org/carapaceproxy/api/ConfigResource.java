@@ -31,12 +31,14 @@ import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Response;
 import org.carapaceproxy.api.response.SimpleResponse;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.carapaceproxy.server.config.RestoreInProgressException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -124,6 +126,8 @@ public class ConfigResource {
         try {
             server.updateMaintenanceMode(value);
             return ConfigurationChangeResult.response(server.getCurrentConfiguration().isMaintenanceModeEnabled(), "");
+        } catch (RestoreInProgressException err) {
+            throw new WebApplicationException(SimpleResponse.serviceUnavailable(err));
         } catch (ConfigurationChangeInProgressException err) {
             return ConfigurationChangeResult.error(err);
         } catch (InterruptedException err) {

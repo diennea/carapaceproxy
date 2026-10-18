@@ -21,6 +21,7 @@ package org.carapaceproxy.cluster;
 
 import java.util.List;
 import java.util.Map;
+import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 
 /**
  * Handle group membership: peer discovery and configuration changes.
@@ -102,6 +103,43 @@ public interface GroupMembershipHandler {
      * @return properties of the peer
      */
     Map<String, String> loadInfoForPeer(String id);
+
+    /**
+     * Raise the cluster-wide restore signal: while it is up, every peer refuses admin writes and skips renewals.
+     *
+     * @return the raised signal, to be closed when the restore ends
+     * @throws ConfigurationChangeInProgressException if the signal is already up, or it cannot be raised (e.g. ZooKeeper is not connected)
+     */
+    RestoreSignal raiseRestoreSignal() throws ConfigurationChangeInProgressException;
+
+    /**
+     * Whether a restore signal is up, as this node last saw it (a local flag).
+     *
+     * @return true while a restore signal is up
+     */
+    boolean isRestoreInProgress();
+
+    /**
+     * Register the callback run when a signal of another peer goes away, before {@link #isRestoreInProgress()} turns false.
+     *
+     * @param callback the callback; it must not block the watcher thread
+     */
+    void watchRestoreSignal(Runnable callback);
+
+    /** A raised restore signal, see {@link #raiseRestoreSignal()}. */
+    interface RestoreSignal extends AutoCloseable {
+
+        /**
+         * Check that the signal is still up and owned by this node.
+         *
+         * @throws IllegalStateException if the signal is gone or belongs to someone else (e.g. the ZooKeeper session was lost)
+         */
+        void ensureHeld();
+
+        /** Clear the signal; failures are logged and retried, never thrown. */
+        @Override
+        void close();
+    }
 
     interface EventCallback {
 

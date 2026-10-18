@@ -48,10 +48,14 @@ import org.apache.http.HttpStatus;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.carapaceproxy.cluster.GroupMembershipHandler;
+import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
 import org.carapaceproxy.core.HttpProxyServer;
+import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.carapaceproxy.server.config.RestoreInProgressException;
 import org.carapaceproxy.server.filters.RegexpMapUserIdFilter;
 import org.carapaceproxy.server.filters.XForwardedForRequestFilter;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
@@ -363,6 +367,30 @@ public class ApplyConfigurationTest {
             // change configuration
             reloadConfiguration(server, props("healthmanager.connecttimeout", "9233"));
             assertEquals(9233, server.getBackendHealthManager().getConnectTimeout());
+        }
+    }
+
+    @Test
+    public void testWritesRefusedWhileRestoreRuns() throws Exception {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
+            Properties configuration = new Properties();
+            configuration.put("mapper.class", StaticEndpointMapper.class.getName());
+            server.configureAtBoot(new PropertiesConfigurationStore(configuration));
+            server.start();
+            final GroupMembershipHandler handler = server.getGroupMembershipHandler();
+
+            try (GroupMembershipHandler.RestoreSignal signal = handler.raiseRestoreSignal()) {
+                assertThrows(RestoreInProgressException.class,
+                        () -> server.updateDynamicCertificateForDomain(new CertificateData("a.example", null, DynamicCertificateState.WAITING)));
+                assertNull(server.getDynamicConfigurationStore().loadCertificateForDomain("a.example"));
+            }
+
+            server.updateDynamicCertificateForDomain(new CertificateData("a.example", null, DynamicCertificateState.WAITING));
+            try (GroupMembershipHandler.RestoreSignal signal = handler.raiseRestoreSignal()) {
+                assertThrows(RestoreInProgressException.class,
+                        () -> server.getDynamicCertificatesManager().setStateOfCertificate("a.example", DynamicCertificateState.AVAILABLE));
+            }
+            assertEquals(DynamicCertificateState.WAITING, server.getDynamicConfigurationStore().loadCertificateForDomain("a.example").getState());
         }
     }
 
