@@ -72,6 +72,7 @@ import org.carapaceproxy.server.certificates.DynamicCertificatesManager;
 import org.carapaceproxy.server.config.AcmeProviderConfiguration;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
+import org.carapaceproxy.server.config.RestoreInProgressException;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode;
 import org.carapaceproxy.utils.CertificatesUtils;
@@ -408,7 +409,11 @@ public class CertificatesResource {
             cert.setDaysBeforeRenewal(daysbeforerenewal != null ? daysbeforerenewal : DEFAULT_DAYS_BEFORE_RENEWAL);
             cert.setProvider(acmeProvider);
 
-            server.updateDynamicCertificateForDomain(cert);
+            try {
+                server.updateDynamicCertificateForDomain(cert);
+            } catch (RestoreInProgressException e) {
+                return SimpleResponse.error(e);
+            }
 
             return Response.status(200).entity("SUCCESS: Certificate saved").build();
         }
@@ -434,7 +439,11 @@ public class CertificatesResource {
     @Path("{domain}/reset")
     public Response resetCertificateState(@PathParam("domain") final String domain) {
         var server = ((HttpProxyServer) context.getAttribute("server"));
-        server.getDynamicCertificatesManager().setStateOfCertificate(domain, WAITING);
+        try {
+            server.getDynamicCertificatesManager().setStateOfCertificate(domain, WAITING);
+        } catch (RestoreInProgressException e) {
+            return SimpleResponse.error(e);
+        }
         return SimpleResponse.ok();
     }
 }
