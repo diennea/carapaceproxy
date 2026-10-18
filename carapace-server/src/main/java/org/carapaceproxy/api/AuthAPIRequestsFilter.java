@@ -21,8 +21,6 @@ package org.carapaceproxy.api;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
-import java.util.StringTokenizer;
 import javax.servlet.Filter;
 import javax.servlet.FilterChain;
 import javax.servlet.FilterConfig;
@@ -43,7 +41,6 @@ import org.carapaceproxy.user.UserRealm;
 public class AuthAPIRequestsFilter implements Filter {
 
     private static final String HEADER_AUTH = "Authorization";
-    private static final String HEADER_BASIC = "Basic";
 
     private static final String MESSAGE_INVALID_CREDENTIALS = "Bad credentials";
     private static final String MESSAGE_INVALID_TOKEN = "Invalid authentication token";
@@ -62,21 +59,8 @@ public class AuthAPIRequestsFilter implements Filter {
             return;
         }
 
-        StringTokenizer tokenizer = new StringTokenizer(authorizationHeader);
-        if (tokenizer.countTokens() != 2 || !tokenizer.nextToken().equalsIgnoreCase(HEADER_BASIC)) {
-            UNAUTHORIZED(response, MESSAGE_INVALID_TOKEN);
-            return;
-        }
-
-        String credentials;
-        try {
-            credentials = new String(Base64.getDecoder().decode(tokenizer.nextToken().trim()), StandardCharsets.UTF_8);
-        } catch (IllegalArgumentException e) {
-            UNAUTHORIZED(response, MESSAGE_INVALID_TOKEN);
-            return;
-        }
-        int position = credentials.indexOf(":");
-        if (position < 0) {
+        BasicCredentials credentials = BasicCredentials.parse(authorizationHeader);
+        if (credentials == null) {
             UNAUTHORIZED(response, MESSAGE_INVALID_TOKEN);
             return;
         }
@@ -86,9 +70,7 @@ public class AuthAPIRequestsFilter implements Filter {
             UNAUTHORIZED(response, MESSAGE_INVALID_CREDENTIALS);
             return;
         }
-        String currentUser = userRealm.login(
-                credentials.substring(0, position).trim(),
-                credentials.substring(position + 1).trim());
+        String currentUser = userRealm.login(credentials.user(), credentials.password());
         if (currentUser == null) {
             UNAUTHORIZED(response, MESSAGE_INVALID_CREDENTIALS);
             return;
