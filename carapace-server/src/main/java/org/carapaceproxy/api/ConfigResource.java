@@ -20,6 +20,7 @@
 package org.carapaceproxy.api;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringReader;
 import java.io.StringWriter;
@@ -27,8 +28,10 @@ import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.servlet.ServletContext;
+import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
+import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
@@ -37,10 +40,13 @@ import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Response;
 import org.carapaceproxy.api.response.SimpleResponse;
 import org.carapaceproxy.configstore.PropertiesConfigurationStore;
+import org.carapaceproxy.configstore.StoreNotReadyException;
+import org.carapaceproxy.configstore.StoreSnapshot;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.RestoreInProgressException;
+import org.carapaceproxy.utils.CarapaceVersion;
 
 /**
  * Access to proxy cache
@@ -141,6 +147,87 @@ public class ConfigResource {
     public ConfigurationChangeResult getMaintenanceStatus() {
         HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
         return ConfigurationChangeResult.response(server.getCurrentConfiguration().isMaintenanceModeEnabled(), "");
+    }
+
+    /**
+     * Exports the whole dynamic state as a {@link StateArchive} download. It holds every private key and secret.
+     *
+     * @param authorization the Basic credentials of the caller, logged by user name
+     * @param request       the request, for the client address in the log
+     * @return the JSON archive; 503 with {@code Retry-After} if the store does not answer now; 500 if the store fails
+     */
+    @Path("/backup")
+    @GET
+    public Response backup(@HeaderParam("Authorization") String authorization, @javax.ws.rs.core.Context HttpServletRequest request) {
+        HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
+        try {
+            final StateArchive archive = StateArchive.of(server.backupState());
+            final String filename = "carapace-state-" + archive.createdAt().replace(":", "") + ".json";
+            final byte[] json = archive.toJson();
+            // every secret leaves with it: record who took it
+            final BasicCredentials credentials = BasicCredentials.parse(authorization);
+            LOG.log(Level.INFO, "State backup exported by user {0} from {1}, {2} configuration entries, {3} certificates",
+                    new Object[]{credentials != null ? credentials.user() : null, request.getRemoteAddr(),
+                            archive.config().size(), archive.certificates().size()});
+            return Response.ok(json)
+                    // every private key is in there: no copy in any cache
+                    .header("Cache-Control", "no-store")
+                    .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                    .build();
+        } catch (StoreNotReadyException err) {
+            LOG.log(Level.WARNING, "State backup not taken: {0}", err.getMessage());
+            return SimpleResponse.serviceUnavailable(err);
+        } catch (IOException | RuntimeException err) {
+            LOG.log(Level.SEVERE, "State backup failed", err);
+            return internalError(err);
+        }
+    }
+
+    /**
+     * Replaces the whole dynamic state with a {@link StateArchive} on every peer; ACME challenge tokens are kept.
+     *
+     * @param archive            the JSON archive
+     * @param acceptNewerVersion whether to accept an archive taken on a newer Carapace, at the caller's own risk
+     * @param authorization      the Basic credentials of the caller, that the restored user realm must still accept
+     * @return 200 with a {@link HttpProxyServer.RestoreResult}, 500 with it if not applied here or the outcome is unknown;
+     * with nothing written, 422 if refused, 503 if busy or not ready, 500 if the store or ZooKeeper fail
+     */
+    @Path("/restore")
+    @Consumes("application/json")
+    @POST
+    public Response restore(InputStream archive,
+                            @QueryParam("acceptNewerVersion") boolean acceptNewerVersion,
+                            @HeaderParam("Authorization") String authorization) {
+        HttpProxyServer server = (HttpProxyServer) context.getAttribute("server");
+        try {
+            // AuthAPIRequestsFilter has already parsed and checked them
+            final BasicCredentials credentials = BasicCredentials.parse(authorization);
+            final StoreSnapshot snapshot = StateArchive.read(archive).toSnapshot(CarapaceVersion.VERSION, acceptNewerVersion);
+            final HttpProxyServer.RestoreResult result = server.restoreState(snapshot, credentials.user(), credentials.password());
+            return Response.status(result.ok() ? Response.Status.OK : Response.Status.INTERNAL_SERVER_ERROR).entity(result).build();
+        } catch (ConfigurationChangeInProgressException | StoreNotReadyException err) {
+            LOG.log(Level.WARNING, "State restore not started: {0}", err.getMessage());
+            return SimpleResponse.serviceUnavailable(err);
+        } catch (ConfigurationNotValidException err) {
+            LOG.log(Level.WARNING, "State restore refused: {0}", err.getMessage());
+            return SimpleResponse.error(err);
+        } catch (InterruptedException err) {
+            Thread.currentThread().interrupt();
+            return SimpleResponse.serviceUnavailable(err);
+        } catch (RuntimeException err) {
+            LOG.log(Level.SEVERE, "State restore failed before the commit", err);
+            return internalError(err);
+        }
+    }
+
+    /**
+     * A 500 answer, for a failure of the store or of ZooKeeper.
+     *
+     * @param err the failure
+     * @return the response
+     */
+    private static Response internalError(Exception err) {
+        return Response.fromResponse(SimpleResponse.error(err)).status(Response.Status.INTERNAL_SERVER_ERROR).build();
     }
 
     private void dumpAndValidateInputConfiguration(PropertiesConfigurationStore simpleStore) throws ConfigurationNotValidException {
