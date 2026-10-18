@@ -19,17 +19,27 @@
  */
 package org.carapaceproxy.cluster.impl;
 
+import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.test.KillSession;
 import org.apache.curator.test.TestingServer;
+import org.apache.zookeeper.ZooKeeper;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
+import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.utils.TestUtils;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import java.util.HashMap;
 import lombok.AllArgsConstructor;
@@ -282,5 +292,131 @@ public class ZooKeeperGroupMembershipHandlerTest {
                 }
             }
         }
+    }
+
+    @Test
+    public void testRestoreSignal() throws Exception {
+        try (TestingServer testingServer = new TestingServer(TestUtils.getFreeNonEphemeralPort(), tmpDir.newFolder())) {
+            testingServer.start();
+            try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
+                    6000, false /*acl */, peerId1, Collections.EMPTY_MAP, new Properties());
+                    ZooKeeperGroupMembershipHandler peer2 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
+                            6000, false /*acl */, peerId2, Collections.EMPTY_MAP, new Properties())) {
+                peer1.start();
+                peer2.start();
+                AtomicInteger reloads1 = new AtomicInteger();
+                AtomicInteger reloads2 = new AtomicInteger();
+                AtomicBoolean flagOnAtCallback = new AtomicBoolean();
+                peer1.watchRestoreSignal(reloads1::incrementAndGet);
+                peer2.watchRestoreSignal(() -> {
+                    flagOnAtCallback.set(peer2.isRestoreInProgress());
+                    reloads2.incrementAndGet();
+                });
+                assertFalse(peer1.isRestoreInProgress());
+                assertFalse(peer2.isRestoreInProgress());
+
+                GroupMembershipHandler.RestoreSignal signal = peer1.raiseRestoreSignal();
+                signal.ensureHeld();
+                TestUtils.waitForCondition(() -> peer1.isRestoreInProgress() && peer2.isRestoreInProgress(), 10);
+                assertThrows(ConfigurationChangeInProgressException.class, peer2::raiseRestoreSignal);
+                assertThrows(ConfigurationChangeInProgressException.class, peer1::raiseRestoreSignal);
+
+                signal.close();
+                assertThrows(IllegalStateException.class, signal::ensureHeld);
+                // the creator applied the restore itself: only the other peer reloads, before its flag drops
+                TestUtils.waitForCondition(() -> !peer1.isRestoreInProgress() && !peer2.isRestoreInProgress(), 10);
+                assertEquals(0, reloads1.get());
+                assertEquals(1, reloads2.get());
+                assertTrue(flagOnAtCallback.get());
+
+                // two restores in a row on the same node are not confused
+                final int reloadsBefore = reloads2.get();
+                peer1.raiseRestoreSignal().close();
+                try (GroupMembershipHandler.RestoreSignal second = peer1.raiseRestoreSignal()) {
+                    second.ensureHeld();
+                    // back to back, the other peer may never see the first signal: only the last one must reach it
+                    TestUtils.waitForCondition(peer2::isRestoreInProgress, 10);
+                }
+                TestUtils.waitForCondition(() -> reloads2.get() > reloadsBefore && !peer2.isRestoreInProgress(), 10);
+                assertEquals(0, reloads1.get());
+
+                // the signal goes with the session of the node that raised it
+                final int reloadsBeforeExpiry = reloads2.get();
+                final GroupMembershipHandler.RestoreSignal lost = peer1.raiseRestoreSignal();
+                TestUtils.waitForCondition(peer2::isRestoreInProgress, 10);
+                KillSession.kill(zooKeeperOf(peer1));
+
+                TestUtils.waitForCondition(() -> reloads2.get() > reloadsBeforeExpiry && !peer2.isRestoreInProgress(), 30);
+                // the client learns about the expiry asynchronously
+                TestUtils.waitForCondition(() -> {
+                    try {
+                        lost.ensureHeld();
+                        return false;
+                    } catch (IllegalStateException expected) {
+                        return true;
+                    }
+                }, 30);
+                assertEquals(0, reloads1.get());
+
+                // the signal is free again; the stale handle of the first node never clears it
+                try (GroupMembershipHandler.RestoreSignal other = peer2.raiseRestoreSignal()) {
+                    TestUtils.waitForCondition(peer1::isRestoreInProgress, 10);
+                    lost.close();
+                    other.ensureHeld();
+                }
+                TestUtils.waitForCondition(() -> reloads1.get() == 1 && !peer1.isRestoreInProgress(), 10);
+                // and its node can restore again
+                peer1.raiseRestoreSignal().close();
+            }
+        }
+    }
+
+    @Test
+    public void testExecuteInMutexKeepsTheInterrupt() throws Exception {
+        try (TestingServer testingServer = new TestingServer(TestUtils.getFreeNonEphemeralPort(), tmpDir.newFolder())) {
+            testingServer.start();
+            try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
+                    6000, false /*acl */, peerId1, Collections.EMPTY_MAP, new Properties());
+                    ZooKeeperGroupMembershipHandler peer2 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
+                            6000, false /*acl */, peerId2, Collections.EMPTY_MAP, new Properties())) {
+                peer1.start();
+                peer2.start();
+                final CountDownLatch held = new CountDownLatch(1);
+                final CountDownLatch release = new CountDownLatch(1);
+                final Thread holder = new Thread(() -> peer1.executeInMutex("m", 10, () -> {
+                    held.countDown();
+                    try {
+                        release.await();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }));
+                holder.start();
+                assertTrue(held.await(10, TimeUnit.SECONDS));
+
+                final AtomicBoolean ran = new AtomicBoolean();
+                final AtomicBoolean interrupted = new AtomicBoolean();
+                final Thread waiter = new Thread(() -> {
+                    peer2.executeInMutex("m", 30, () -> ran.set(true));
+                    interrupted.set(Thread.currentThread().isInterrupted());
+                });
+                waiter.start();
+                Thread.sleep(500); // let it block on the mutex
+                waiter.interrupt();
+                waiter.join(10_000);
+                release.countDown();
+                holder.join(10_000);
+
+                assertFalse(waiter.isAlive());
+                assertTrue(interrupted.get());
+                assertFalse(ran.get());
+            }
+        }
+    }
+
+    private static ZooKeeper zooKeeperOf(ZooKeeperGroupMembershipHandler handler) throws Exception {
+        Field client = ZooKeeperGroupMembershipHandler.class.getDeclaredField("client");
+        client.setAccessible(true);
+        return ((CuratorFramework) client.get(handler)).getZookeeperClient().getZooKeeper();
     }
 }
