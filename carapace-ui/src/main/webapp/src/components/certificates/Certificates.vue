@@ -13,7 +13,8 @@
         <b-alert id="status-alert"
                  fade
                  dismissible
-                 :show="opMessage ? 10 : 0"
+                 :show="opMessage ? countdown : 0"
+                 @dismiss-count-down="countdown = $event"
                  @dismissed="opMessage = ''"
                  :variant="opSuccess ? 'success' : 'danger'">
             {{opMessage}}
@@ -56,7 +57,8 @@
                 localStorePath: null,
                 loading: true,
                 opSuccess: null,
-                opMessage: ""
+                opMessage: "",
+                countdown: 0
             };
         },
         created() {
@@ -143,10 +145,12 @@
                     doPost("/api/certificates/storeall", null,() => {
                                 this.opSuccess = true
                                 this.opMessage = 'Certificates dump started'
+                                this.countdown = 10
                             },
                             error => {
                                 this.opSuccess = false;
                                 this.opMessage = 'Unable to dump certificates to path: ' + this.localStorePath + '. Cause: ' + error.message;
+                                this.countdown = 10;
                             }
                     );
                 })
