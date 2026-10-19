@@ -26,7 +26,7 @@ userrealm.path=conf/user.properties
 
 ## Backup and restore
 
-`GET /api/config/backup` exports the whole dynamic state of Carapace as a JSON archive: configuration, dynamic certificates, key pairs and ACME account keys. `POST /api/config/restore` takes that archive back and replaces the whole state.
+`GET /api/config/backup` exports the whole dynamic state of Carapace as a JSON archive: configuration, dynamic certificates, key pairs and ACME account keys. `POST /api/config/restore` takes that archive back and replaces the whole state. The Configuration page of the admin UI offers the same two operations.
 
 > [!WARNING]
 > The archive contains every private key and every secret of the configuration: store it as a secret, and use the HTTPS admin port.
