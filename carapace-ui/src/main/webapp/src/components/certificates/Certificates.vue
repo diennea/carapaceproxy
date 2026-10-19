@@ -25,7 +25,8 @@
         <b-alert id="status-alert"
                  fade
                  dismissible
-                 :show="opMessage ? 10 : 0"
+                 :show="opMessage ? countdown : 0"
+                 @dismiss-count-down="countdown = $event"
                  @dismissed="opMessage = ''"
                  :variant="opSuccess ? 'success' : 'danger'">
             {{opMessage}}
@@ -117,6 +118,7 @@ export default {
             loading: true,
             opSuccess: null,
             opMessage: '',
+            countdown: 0,
             /**
              * Filter applied to the certificates list.
              * @type {'all'|CertificateStatus}
@@ -242,10 +244,12 @@ export default {
                 doPost("/api/certificates/storeall", null, () => {
                         this.opSuccess = true;
                         this.opMessage = 'Certificates dump started';
+                        this.countdown = 10;
                     },
                     error => {
                         this.opSuccess = false;
                         this.opMessage = 'Unable to dump certificates to path: ' + this.localStorePath + '. Cause: ' + error.message;
+                        this.countdown = 10;
                     }
                 );
             });

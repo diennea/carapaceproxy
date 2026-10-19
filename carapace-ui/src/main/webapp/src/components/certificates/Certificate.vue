@@ -5,7 +5,8 @@
             <b-alert id="status-alert"
                      fade
                      dismissible
-                     :show="opMessage ? 10 : 0"
+                     :show="opMessage ? countdown : 0"
+                     @dismiss-count-down="countdown = $event"
                      @dismissed="opMessage = ''"
                      :variant="opSuccess ? 'success' : 'danger'">
                 {{opMessage}}
@@ -91,7 +92,8 @@
                 found: true,
                 localStorePath: null,
                 opSuccess: null,
-                opMessage: ""
+                opMessage: "",
+                countdown: 0
             }
         },
         created() {
@@ -142,10 +144,12 @@
                     doPost("/api/certificates/" + this.certificate.id + "/store", null, () => {
                                 this.opSuccess = true
                                 this.opMessage = 'Certificate dumped'
+                                this.countdown = 10
                             },
                             error => {
                                 this.opSuccess = false
                                 this.opMessage = 'Unable to dump certificate to path: ' + this.localStorePath + '. Cause: ' + error.message
+                                this.countdown = 10
                             }
                     );
                 })
@@ -154,11 +158,13 @@
                 doPost("/api/certificates/" + this.certificate.id + "/reset", null, () => {
                         this.opSuccess = true;
                         this.opMessage = 'Certificate state reset';
+                        this.countdown = 10;
                         this.fetchCertificateData();
                     },
                     error => {
                         this.opSuccess = false;
                         this.opMessage = 'Unable to reset certificate for ' + this.certificate.id + '. Cause: ' + error.message;
+                        this.countdown = 10;
                         this.fetchCertificateData();
                     }
                 );
