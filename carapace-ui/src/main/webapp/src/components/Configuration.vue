@@ -19,23 +19,26 @@
             @dismissed="opMessage = ''"
             :variant="opSuccess ? 'success' : 'danger'"
             >{{opMessage}}</b-alert>
-        <b-form-textarea
-            id="config-editor"
-            rows="30"
-            max-rows="30"
-            no-resize
-            v-model="configuration"
-            :state="editorState"
-            placeholder="Edit Dynamic Configuration">
-        </b-form-textarea>
-        <div>
-            <b-button variant="outline-secondary" @click="fetch()">Fetch</b-button>
-            <b-button variant="outline-secondary" @click="validate">Validate</b-button>
-            <b-button @click="save">Save</b-button>
-            <b-button variant="outline-secondary" @click="downloadBackup">Download backup</b-button>
-            <b-button variant="outline-secondary" @click="$refs.backupFile.click()">Upload backup</b-button>
-            <input ref="backupFile" type="file" accept="application/json" hidden @change="uploadBackup">
-        </div>
+        <b-overlay :show="busy" rounded="lg">
+            <b-form-textarea
+                id="config-editor"
+                rows="30"
+                max-rows="30"
+                no-resize
+                v-model="configuration"
+                :state="editorState"
+                :disabled="busy"
+                placeholder="Edit Dynamic Configuration">
+            </b-form-textarea>
+            <div>
+                <b-button variant="outline-secondary" :disabled="busy" @click="fetch()">Fetch</b-button>
+                <b-button variant="outline-secondary" :disabled="busy" @click="validate">Validate</b-button>
+                <b-button :disabled="busy" @click="save">Save</b-button>
+                <b-button variant="outline-secondary" :disabled="busy" @click="downloadBackup">Download backup</b-button>
+                <b-button variant="outline-secondary" :disabled="busy" @click="$refs.backupFile.click()">Upload backup</b-button>
+                <input ref="backupFile" type="file" accept="application/json" hidden @change="uploadBackup">
+            </div>
+        </b-overlay>
         <div>
             <b-modal
                 id="maintenance"
@@ -65,7 +68,8 @@
                 editorState: null,
                 opMessage: "",
                 countdown: 0,
-                checked: false
+                checked: false,
+                busy: false
             };
         },
         created() {
@@ -91,7 +95,7 @@
                         }
                 );
             },
-            fetch(okMessage) {
+            fetch(okMessage, done = () => {}) {
                 doGet(
                         "/api/config",
                         conf => {
@@ -100,12 +104,14 @@
                             this.editorState = true
                             this.opMessage = okMessage || ""
                             this.countdown = 10
+                            done()
                         },
                         error => {
                             this.opSuccess = false
                             this.editorState = false
                             this.opMessage = "Error: unable to fetch current configuration (" + error.message + ")."
                             this.countdown = 10
+                            done()
                         }
                 );
             },
@@ -174,6 +180,7 @@
                 return response.json().then(body => body.message, () => response.statusText);
             },
             downloadBackup() {
+                this.busy = true;
                 fetch("/api/config/backup").then(response => {
                     if (!response.ok) {
                         return this.responseMessage(response).then(message => this.showError(response.status === 503
@@ -188,7 +195,8 @@
                         link.click();
                         setTimeout(() => URL.revokeObjectURL(link.href));
                     });
-                }).catch(error => this.showError("unable to download the backup (" + error.message + ")."));
+                }).catch(error => this.showError("unable to download the backup (" + error.message + ")."))
+                        .finally(() => this.busy = false);
             },
             async uploadBackup(event) {
                 const file = event.target.files[0];
@@ -227,6 +235,7 @@
                     if (confirmed !== true) {
                         return;
                     }
+                    this.busy = true;
                     const response = await fetch("/api/config/restore" + (newerVersion ? "?acceptNewerVersion=true" : ""), {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
@@ -234,9 +243,13 @@
                     });
                     const outcome = await this.responseMessage(response);
                     if (response.ok) {
-                        this.fetch("Backup restored (" + outcome + ").");
+                        // busy until the restored configuration is in the editor, or Save would send the old one back
+                        this.fetch("Backup restored (" + outcome + ").", () => this.busy = false);
                         this.getMaintenanceStatus();
-                    } else if (response.status === 422) {
+                        return;
+                    }
+                    this.busy = false;
+                    if (response.status === 422) {
                         this.showError("restore refused, nothing changed: " + outcome);
                     } else if (response.status === 503) {
                         this.showError("another restore or the database is in the way, try again later: " + outcome);
@@ -246,6 +259,7 @@
                         this.showError("unable to restore the backup (" + outcome + ").");
                     }
                 } catch (error) {
+                    this.busy = false;
                     this.showError("unable to restore the backup (" + error.message + ").");
                 }
             }
