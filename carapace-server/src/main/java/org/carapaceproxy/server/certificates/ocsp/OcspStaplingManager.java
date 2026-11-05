@@ -116,22 +116,31 @@ public class OcspStaplingManager implements Runnable {
         }
     }
 
+    /**
+     * Runs one stapling pass over the tracked certificates; nothing may escape, as it would cancel the scheduled task.
+     */
     @Override
     public void run() {
-        ocspChecks.values().forEach((check) -> {
-            X509Certificate cert = (X509Certificate) check.chain[0];
-            String dn = cert.getSubjectDN().getName();
-            try {
-                if (check.response == null || isExpired(check.response)) { // new or expired
-                    LOG.info("Performing OCSP stapling for {}", dn);
-                    if (!performStaplingForCertificate(check.chain)) {
-                        LOG.error("OCSP stapling failed for {}", dn);
+        try {
+            ocspChecks.values().forEach((check) -> {
+                X509Certificate cert = (X509Certificate) check.chain[0];
+                String dn = cert.getSubjectDN().getName();
+                try {
+                    if (check.response == null || isExpired(check.response)) { // new or expired
+                        LOG.info("Performing OCSP stapling for {}", dn);
+                        if (!performStaplingForCertificate(check.chain)) {
+                            LOG.error("OCSP stapling failed for {}", dn);
+                        }
                     }
+                } catch (IOException | OCSPException | GeneralSecurityException | OperatorCreationException
+                        | RuntimeException ex) {
+                    // RuntimeException too: one malformed answer or certificate must not stop the others
+                    LOG.error("Unable to perform OCSP stapling for {}", dn, ex);
                 }
-            } catch (IOException | OCSPException | GeneralSecurityException | OperatorCreationException ex) {
-                LOG.error("Unable to perform OCSP stapling for {}", dn, ex);
-            }
-        });
+            });
+        } catch (Throwable t) {
+            LOG.error("Unexpected error in the OCSP stapling pass", t);
+        }
     }
 
     public static boolean isExpired(OCSPResp response) throws OCSPException {
