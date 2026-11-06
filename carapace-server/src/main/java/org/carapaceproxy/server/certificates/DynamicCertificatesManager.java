@@ -333,11 +333,18 @@ public class DynamicCertificatesManager implements Runnable {
         }
     }
 
+    /**
+     * Runs one pass of the certificates lifecycle; nothing may escape, as it would cancel the scheduled task.
+     */
     @Override
     public void run() {
         if (groupMembershipHandler != null) {
-            // Only one node of the cluster executes this
-            groupMembershipHandler.executeInMutex(THREAD_NAME, period > 0 ? period : 1, this::renewalPass);
+            try {
+                // Only one node of the cluster executes this
+                groupMembershipHandler.executeInMutex(THREAD_NAME, period > 0 ? period : 1, this::renewalPass);
+            } catch (Throwable t) {
+                LOG.error("Unexpected error in the dynamic certificates lifecycle", t);
+            }
         }
     }
 
@@ -403,18 +410,21 @@ public class DynamicCertificatesManager implements Runnable {
                     LOG.info("Save certificate request status for domain {}", domain);
                     store.saveCertificate(cert);
                     flushCache = true;
+                    warnIfOutOfAttempts(domain, cert);
                 }
             } catch (ConfigurationStoreException ex) {
-                // a store failure is infra-transient: retried at the next cycle, not counted as a CA rejection
+                // a store failure is not the CA's fault: retried at the next cycle without counting an attempt
                 LOG.error("Store failure while handling dynamic certificate for domain {}", domain, ex);
             } catch (AcmeException | IOException | GeneralSecurityException | RuntimeException ex) {
                 // RuntimeException on purpose: an escaped one cancels the scheduled task, killing the whole loop
                 LOG.error("Error while handling dynamic certificate for domain {}", domain, ex);
                 if (cert != null && !AcmeFailureClassifier.isTransient(ex)) {
+                    cleanupPendingChallenges(cert);
                     cert.error(ex.getMessage() != null ? ex.getMessage() : ex.toString());
                     try {
                         store.saveCertificate(cert);
                         flushCache = true;
+                        warnIfOutOfAttempts(domain, cert);
                     } catch (RuntimeException storeEx) {
                         // same rationale as above: a db hiccup must not cancel the scheduled task
                         LOG.error("Error while saving failed certificate for domain {}", domain, storeEx);
@@ -451,9 +461,10 @@ public class DynamicCertificatesManager implements Runnable {
             case WAITING -> startCertificateProcessing(domain, cert);
             // certificate domain reported as unreachable for issuing/renewing
             case DOMAIN_UNREACHABLE -> {
-                if (cert.getAttemptsCount() <= getConfig().getMaxAttempts()) {
-                    startCertificateProcessing(domain, cert);
+                if (isOutOfAttempts(cert)) {
+                    return false;
                 }
+                startCertificateProcessing(domain, cert);
             }
             // waiting for dns propagation for all dns challenges
             case DNS_CHALLENGE_WAIT -> checkDnsChallengesReachabilityForCertificate(cert);
@@ -490,10 +501,11 @@ public class DynamicCertificatesManager implements Runnable {
             }
             // challenge/order failed
             case REQUEST_FAILED -> {
-                if (cert.getAttemptsCount() <= getConfig().getMaxAttempts()){
-                    LOG.info("Certificate issuing for domain: {} current status is FAILED, setting status=WAITING again.", domain);
-                    cert.step(WAITING);
+                if (isOutOfAttempts(cert)) {
+                    return false;
                 }
+                LOG.info("Certificate issuing for domain: {} current status is FAILED, setting status=WAITING again.", domain);
+                cert.step(WAITING);
             }
             // certificate saved/available/not expired
             case AVAILABLE -> {
@@ -509,6 +521,30 @@ public class DynamicCertificatesManager implements Runnable {
             }
         }
         return true;
+    }
+
+    /**
+     * Tell whether a failed certificate has used up its attempts and waits for a manual reset.
+     *
+     * @param cert the certificate as loaded from the store
+     * @return true if the certificate is failed or unreachable and its attempts exceed the configured maximum
+     */
+    private boolean isOutOfAttempts(final CertificateData cert) {
+        return (cert.getState() == REQUEST_FAILED || cert.getState() == DOMAIN_UNREACHABLE)
+                && cert.getAttemptsCount() > getConfig().getMaxAttempts();
+    }
+
+    /**
+     * Log that a certificate stopped retrying; it is not saved again until reset, so this fires once.
+     *
+     * @param domain the domain the certificate is issued for
+     * @param cert the certificate as just saved
+     */
+    private void warnIfOutOfAttempts(final String domain, final CertificateData cert) {
+        if (isOutOfAttempts(cert)) {
+            LOG.warn("Certificate for domain {} is {} after {} attempts (max {}): no more retries until it is reset",
+                    domain, cert.getState(), cert.getAttemptsCount(), getConfig().getMaxAttempts());
+        }
     }
 
     /**
@@ -593,7 +629,9 @@ public class DynamicCertificatesManager implements Runnable {
         } else {
             cert.step(VERIFYING);
             final var challengesData = new HashMap<String, JSON>();
-            for (final var e: challenges.entrySet()) {
+            // filled by the loop, so a failure can clean up the challenges already created
+            cert.setPendingChallengesData(challengesData);
+            for (final var e : challenges.entrySet()) {
                 final var domain = e.getKey();
                 final var challenge = e.getValue();
                 challengesData.put(domain, challenge.getJSON());
@@ -616,8 +654,6 @@ public class DynamicCertificatesManager implements Runnable {
             if (cert.getState() == REQUEST_FAILED) {
                 LOG.info("Cleaning up all challenges for certificate {}", cert);
                 challenges.forEach(this::cleanupChallengeForDomain);
-            } else {
-                cert.setPendingChallengesData(challengesData);
             }
         }
     }
@@ -627,7 +663,7 @@ public class DynamicCertificatesManager implements Runnable {
         var okCount = 0;
         cert.step(DNS_CHALLENGE_WAIT);
         final var challenges = getChallengesFromCertificate(cert).entrySet();
-        for (var c: challenges) {
+        for (var c : challenges) {
             if (!(c.getValue() instanceof final Dns01Challenge challenge)) {
                 continue;
             }
@@ -650,7 +686,7 @@ public class DynamicCertificatesManager implements Runnable {
         }
         if (cert.getState() == REQUEST_FAILED) {
             LOG.info("Cleaning up all challenges for certificate {}", cert);
-            for (var c: challenges) {
+            for (var c : challenges) {
                 final var domain = c.getKey();
                 dnsChallengeReachabilityChecks.remove(domain);
                 cleanupChallengeForDomain(domain, c.getValue());
@@ -663,7 +699,7 @@ public class DynamicCertificatesManager implements Runnable {
     private Map<String, Challenge> getChallengesFromCertificate(CertificateData cert) throws AcmeException {
         final var challengesData = new HashMap<String, Challenge>();
         final var login = acmeClientFor(cert).getLogin();
-        for (final var e: cert.getPendingChallengesData().entrySet()) {
+        for (final var e : cert.getPendingChallengesData().entrySet()) {
             final var domain = e.getKey();
             final var challenge = e.getValue();
             LOG.debug("Challenge data for domain {}: {}", domain, challenge);
@@ -679,7 +715,7 @@ public class DynamicCertificatesManager implements Runnable {
         var okCount = 0;
         cert.step(VERIFYING);
         final var challenges = getChallengesFromCertificate(cert).entrySet();
-        for (var c: challenges) {
+        for (var c : challenges) {
             final var domain = c.getKey();
             final var challenge = c.getValue();
             LOG.info("VERIFYING challenge response for domain {}: {}", domain, challenge);
@@ -700,6 +736,35 @@ public class DynamicCertificatesManager implements Runnable {
         } else if (okCount == challenges.size()) {
             cert.step(VERIFIED);
         }
+    }
+
+    /**
+     * Clean up the challenges of an attempt ended by a non-transient failure; in other states none is live.
+     *
+     * @param cert the certificate whose attempt failed, before its state is changed
+     */
+    private void cleanupPendingChallenges(final CertificateData cert) {
+        final var state = cert.getState();
+        if (cert.getPendingChallengesData() == null
+                || (state != VERIFYING && state != DNS_CHALLENGE_WAIT && state != REQUEST_FAILED)) {
+            return;
+        }
+        LOG.info("Cleaning up all challenges after a failed attempt for certificate {}", cert);
+        final Map<String, Challenge> challenges;
+        try {
+            challenges = getChallengesFromCertificate(cert);
+        } catch (AcmeException | RuntimeException ex) {
+            LOG.warn("Unable to rebuild the challenges of the failed attempt for domain {}", cert.getDomain(), ex);
+            return;
+        }
+        challenges.forEach((domain, challenge) -> {
+            dnsChallengeReachabilityChecks.remove(domain);
+            try {
+                cleanupChallengeForDomain(domain, challenge);
+            } catch (RuntimeException ex) {
+                LOG.warn("Unable to clean up the challenge for domain {}", domain, ex);
+            }
+        });
     }
 
     private void cleanupChallengeForDomain(String domain, Challenge challenge) {
@@ -780,7 +845,7 @@ public class DynamicCertificatesManager implements Runnable {
     private boolean isAcmeStep(final CertificateData cert) {
         return switch (cert.getState()) {
             case WAITING, DNS_CHALLENGE_WAIT, VERIFYING, VERIFIED, ORDERING -> true;
-            case DOMAIN_UNREACHABLE -> cert.getAttemptsCount() <= getConfig().getMaxAttempts();
+            case DOMAIN_UNREACHABLE -> !isOutOfAttempts(cert);
             case REQUEST_FAILED, AVAILABLE, EXPIRED -> false;
         };
     }

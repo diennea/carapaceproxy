@@ -82,6 +82,7 @@ import org.shredzone.acme4j.Login;
 import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.Session;
 import org.shredzone.acme4j.Status;
+import org.shredzone.acme4j.challenge.Challenge;
 import org.shredzone.acme4j.challenge.Dns01Challenge;
 import org.shredzone.acme4j.challenge.Http01Challenge;
 import org.shredzone.acme4j.connector.Connection;
@@ -242,7 +243,7 @@ public class DynamicCertificatesManagerTest {
         assertCertificateState(d2, WAITING, 0, man);
 
         int expectedCycleCount = cycleCount;
-        int saveCounter = 1; // at every run the certificate has to be saved to the db (whether not AVAILABLE).
+        int saveCounter = 1; // every run saves the certificate, unless it is AVAILABLE or out of attempts
 
         // WAITING
         assertCertificateState(d1, WAITING, cycleCount, man);
@@ -263,7 +264,7 @@ public class DynamicCertificatesManagerTest {
                     man.getCertificateDataForDomain(d1).getMessage()
             );
             man.run();
-            verify(store, times(++saveCounter)).saveCertificate(any());
+            verify(store, times(maxedOutTrials ? saveCounter : ++saveCounter)).saveCertificate(any());
             assertCertificateState(d1, maxedOutTrials ? REQUEST_FAILED : WAITING, expectedCycleCount, man);
             return;
         } else { // VERIFYING
@@ -273,7 +274,7 @@ public class DynamicCertificatesManagerTest {
             if (runCase.equals("order_finalization_error")) {
                 assertCertificateState(d1, REQUEST_FAILED, ++expectedCycleCount, man);
                 man.run();
-                verify(store, times(++saveCounter)).saveCertificate(any());
+                verify(store, times(maxedOutTrials ? saveCounter : ++saveCounter)).saveCertificate(any());
                 assertCertificateState(d1, maxedOutTrials ? REQUEST_FAILED : WAITING, expectedCycleCount, man);
                 return;
             } else {
@@ -295,7 +296,7 @@ public class DynamicCertificatesManagerTest {
         );
         man.run();
         if (runCase.equals("order_response_error")) { // REQUEST_FAILED
-            verify(store, times(++saveCounter)).saveCertificate(any());
+            verify(store, times(maxedOutTrials ? saveCounter : ++saveCounter)).saveCertificate(any());
             assertCertificateState(d1, maxedOutTrials ? REQUEST_FAILED : WAITING, expectedCycleCount, man);
         } else { // AVAILABLE
             DynamicCertificateState state = man.getStateOfCertificate(d1);
@@ -876,6 +877,75 @@ public class DynamicCertificatesManagerTest {
     }
 
     @Test
+    public void testLifecycleSurvivesReloadFailure() throws Exception {
+        final var domain = "localhost";
+        final var store = waitingCertificatesStore(List.of(domain));
+        final var man = buildManager(store, httpChallengeClient(), null, acmeCertificates(List.of(domain)));
+        // the lifecycle load succeeds, the reload after the save fails: it must not escape run()
+        when(store.loadCertificateForDomain(eq(domain)))
+                .thenReturn(new CertificateData(domain, null, WAITING))
+                .thenThrow(new ConfigurationStoreException(new IOException("db down")));
+
+        man.run();
+
+        verify(store, times(1)).saveCertificate(any());
+    }
+
+    @Test
+    @Parameters({"creation, false", "verification, false", "verification, true"})
+    public void testFailedAttemptCleansUpChallenges(String step, boolean transientFailure) throws Exception {
+        final var domain = "localhost";
+        final var store = waitingCertificatesStore(List.of(domain));
+        final var ac = httpChallengeClient();
+        final var challenge = (Http01Challenge) ac.getChallengesForOrder(null).get("domain");
+        when(challenge.getToken()).thenReturn("mytoken");
+        final var failure = transientFailure
+                ? new AcmeNetworkException(new IOException("connection reset"))
+                : new AcmeException("unexpected CA answer");
+        final var man = buildManager(store, ac, null, acmeCertificates(List.of(domain)));
+        if (step.equals("creation")) {
+            doThrow(failure).when(challenge).trigger();
+        } else {
+            man.run(); // WAITING -> VERIFYING, token saved
+            when(ac.checkResponseForChallenge(any())).thenThrow(failure);
+        }
+
+        man.run();
+
+        // a failed attempt leaves no token behind; a transient failure keeps it, as the same verification is retried
+        verify(store, transientFailure ? never() : times(1)).deleteAcmeChallengeToken("mytoken");
+        assertCertificateState(domain, transientFailure ? VERIFYING : REQUEST_FAILED, transientFailure ? 0 : 1, man);
+    }
+
+    @Test
+    public void testFailureAfterInvalidChallengeCleansUpAllChallenges() throws Exception {
+        final var domain = "localhost";
+        final var store = waitingCertificatesStore(List.of(domain));
+        final var ac = httpChallengeClient();
+        final Map<String, Challenge> challenges = Map.of("a", httpChallenge("t1"), "b", httpChallenge("t2"));
+        when(ac.getChallengesForOrder(any())).thenReturn(challenges);
+        final var man = buildManager(store, ac, null, acmeCertificates(List.of(domain)));
+        man.run(); // WAITING -> VERIFYING
+        // whichever is checked first is invalid, the other one throws
+        final var failure = new AcmeException("unexpected CA answer");
+        when(ac.checkResponseForChallenge(any())).thenReturn(INVALID).thenThrow(failure);
+
+        man.run();
+
+        verify(store).deleteAcmeChallengeToken("t1");
+        verify(store).deleteAcmeChallengeToken("t2");
+        assertEquals(REQUEST_FAILED, man.getStateOfCertificate(domain));
+    }
+
+    private static Http01Challenge httpChallenge(String token) {
+        final var challenge = mock(Http01Challenge.class);
+        when(challenge.getJSON()).thenReturn(JSON.parse(
+                "{\"url\": \"https://localhost/index\", \"type\": \"http-01\", \"token\": \"" + token + "\"}"
+        ));
+        return challenge;
+    }
+
+    @Test
     // the wildcard certificate spends the cap on a DNS challenge, the other three steps stay local
     public void testOnlyStepsReachingTheCaSpendTheCap() throws Exception {
         final var wildcard = "*.localhost";
@@ -930,7 +1000,8 @@ public class DynamicCertificatesManagerTest {
         assertCertificateState(unreachable, DOMAIN_UNREACHABLE, MAX_ATTEMPTS + 1, man);
         // the cap was already spent by the wildcard
         assertCertificateState(waiting, WAITING, 0, man);
-        verify(store, times(3)).saveCertificate(any());
+        // the out-of-attempts certificate is not saved again
+        verify(store, times(2)).saveCertificate(any());
     }
 
     @Test
