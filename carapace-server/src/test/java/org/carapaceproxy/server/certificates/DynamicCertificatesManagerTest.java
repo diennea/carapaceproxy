@@ -83,6 +83,7 @@ import org.shredzone.acme4j.Login;
 import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.Session;
 import org.shredzone.acme4j.Status;
+import org.shredzone.acme4j.challenge.Challenge;
 import org.shredzone.acme4j.challenge.Dns01Challenge;
 import org.shredzone.acme4j.challenge.Http01Challenge;
 import org.shredzone.acme4j.connector.Connection;
@@ -434,6 +435,63 @@ public class DynamicCertificatesManagerTest {
         man.run(); // the failed reload must not stop the next run
         verify(store, times(2)).saveCertificate(any());
         assertCertificateState(domain, VERIFIED, 0, man);
+    }
+
+    @Test
+    @Parameters({"creation, false", "verification, false", "verification, true"})
+    public void testFailedAttemptCleansUpChallenges(String step, boolean transientFailure) throws Exception {
+        final var domain = "localhost";
+        final var store = waitingCertificatesStore(List.of(domain));
+        final var ac = httpChallengeClient();
+        final var challenge = (Http01Challenge) ac.getChallengesForOrder(null).get("domain");
+        when(challenge.getToken()).thenReturn("mytoken");
+        final var failure = transientFailure
+                ? new AcmeNetworkException(new IOException("connection reset"))
+                : new AcmeException("unexpected CA answer");
+        final var man = buildManager(store, ac, null, acmeCertificates(List.of(domain)));
+        if (step.equals("creation")) {
+            doThrow(failure).when(challenge).trigger();
+        } else {
+            man.run(); // WAITING -> VERIFYING, token saved
+            when(ac.checkResponseForChallenge(any())).thenThrow(failure);
+        }
+
+        man.run();
+
+        // a failed attempt leaves no token behind; a transient failure keeps it, as the same verification is retried
+        verify(store, transientFailure ? never() : times(1)).deleteAcmeChallengeToken("mytoken");
+        assertCertificateState(domain, transientFailure ? VERIFYING : REQUEST_FAILED, transientFailure ? 0 : 1, man);
+    }
+
+    @Test
+    public void testFailureAfterInvalidChallengeCleansUpAllChallenges() throws Exception {
+        final var domain = "localhost";
+        final var store = waitingCertificatesStore(List.of(domain));
+        final var ac = httpChallengeClient();
+        final Map<String, Challenge> challenges = Map.of("a", httpChallenge("t1"), "b", httpChallenge("t2"));
+        when(ac.getChallengesForOrder(any())).thenReturn(challenges);
+        final var man = buildManager(store, ac, null, acmeCertificates(List.of(domain)));
+        man.run(); // WAITING -> VERIFYING
+        // whichever is checked first is invalid, the other one throws
+        final var failure = new AcmeException("unexpected CA answer");
+        when(ac.checkResponseForChallenge(any())).thenReturn(INVALID).thenThrow(failure);
+
+        man.run();
+
+        verify(store).saveAcmeChallengeToken(eq("t1"), any());
+        verify(store).saveAcmeChallengeToken(eq("t2"), any());
+        verify(store).deleteAcmeChallengeToken("t1");
+        verify(store).deleteAcmeChallengeToken("t2");
+        assertCertificateState(domain, REQUEST_FAILED, 1, man);
+    }
+
+    private static Http01Challenge httpChallenge(String token) {
+        final var challenge = mock(Http01Challenge.class);
+        when(challenge.getToken()).thenReturn(token);
+        when(challenge.getJSON()).thenReturn(JSON.parse(
+                "{\"url\": \"https://localhost/index\", \"type\": \"http-01\", \"token\": \"" + token + "\"}"
+        ));
+        return challenge;
     }
 
     @Test
