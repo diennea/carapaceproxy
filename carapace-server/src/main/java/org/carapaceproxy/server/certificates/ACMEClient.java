@@ -98,7 +98,7 @@ public class ACMEClient {
 
     public Map<String, Challenge> getChallengesForOrder(Order order) throws AcmeException {
         final var challenges = new HashMap<String, Challenge>();
-        for (var auth: order.getAuthorizations()) {
+        for (var auth : order.getAuthorizations()) {
             var domain = auth.getIdentifier().getDomain();
             if (auth.isWildcard() && !CertificatesUtils.isWildcard(domain)) { // LE removes wildcard notation
                 domain = CertificatesUtils.addWildcard(domain);
