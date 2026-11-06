@@ -70,6 +70,7 @@ import org.bouncycastle.util.io.pem.PemWriter;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.configstore.CertificateData;
 import org.carapaceproxy.configstore.ConfigurationStore;
+import org.carapaceproxy.configstore.ConfigurationStoreException;
 import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.RuntimeServerConfiguration;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
@@ -377,7 +378,11 @@ public class DynamicCertificatesManager implements Runnable {
                     store.saveCertificate(cert);
                     flushCache = true;
                 }
-            } catch (AcmeException | IOException | GeneralSecurityException | IllegalStateException ex) {
+            } catch (ConfigurationStoreException ex) {
+                // a store failure is not the CA's fault: retried at the next cycle without counting an attempt
+                LOG.error("Store failure while handling dynamic certificate for domain {}", domain, ex);
+            } catch (AcmeException | IOException | GeneralSecurityException | RuntimeException ex) {
+                // RuntimeException on purpose: an escaped one cancels the scheduled task, killing the whole loop
                 LOG.error("Error while handling dynamic certificate for domain {}", domain, ex);
             }
         }
