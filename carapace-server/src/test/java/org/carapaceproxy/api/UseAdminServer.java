@@ -20,7 +20,8 @@
 package org.carapaceproxy.api;
 
 import static org.carapaceproxy.core.HttpProxyServer.buildForTests;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.Properties;
@@ -30,10 +31,9 @@ import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.user.SimpleUserRealm;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  *
@@ -52,21 +52,21 @@ public class UseAdminServer {
         HTTP_ADMIN_SERVER_CONFIG.setProperty("http.admin.host", "localhost");
     }
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     public HttpProxyServer server;
     public RawHttpClient.BasicAuthCredentials credentials;
 
-    @Before
+    @BeforeEach
     public void buildNewServer() throws Exception {
         assertNull(server);
         credentials = new RawHttpClient.BasicAuthCredentials(DEFAULT_USERNAME, DEFAULT_PASSWORD);
-        File serverRoot = tmpDir.getRoot(); // at every reboot we must keep the same directory
+        File serverRoot = tmpDir; // at every reboot we must keep the same directory
         server = buildForTests("localhost", 0, new TestEndpointMapper("localhost", 0), serverRoot);
     }
 
-    @After
+    @AfterEach
     public void stopServer() {
         if (server != null) {
             server.close();
@@ -117,7 +117,7 @@ public class UseAdminServer {
 
     private void fixAccessLogFileConfiguration(Properties properties) throws IOException {
         if (!properties.containsKey("admin.accesslog.path")) {
-            properties.put("admin.accesslog.path", tmpDir.newFile().getAbsolutePath());
+            properties.put("admin.accesslog.path", File.createTempFile("junit", null, tmpDir).getAbsolutePath());
         }
     }
 

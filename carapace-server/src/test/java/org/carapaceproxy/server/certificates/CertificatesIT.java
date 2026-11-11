@@ -32,20 +32,23 @@ import static org.carapaceproxy.utils.CertificatesTestUtils.uploadCertificate;
 import static org.carapaceproxy.utils.CertificatesUtils.createKeystore;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.shredzone.acme4j.Status.VALID;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import java.io.File;
+import java.io.IOException;
 import java.io.StringWriter;
 import java.net.URI;
 import java.nio.file.Files;
@@ -61,8 +64,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 import javax.net.ssl.ExtendedSSLSession;
-import junitparams.JUnitParamsRunner;
-import junitparams.Parameters;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
@@ -89,9 +90,10 @@ import org.carapaceproxy.utils.HttpTestUtils;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.RawHttpClient.HttpResponse;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.shredzone.acme4j.Login;
 import org.shredzone.acme4j.Order;
 import org.shredzone.acme4j.util.KeyPairUtils;
@@ -101,11 +103,10 @@ import org.shredzone.acme4j.util.KeyPairUtils;
  *
  * @author paolo.venturi
  */
-@RunWith(JUnitParamsRunner.class)
 public class CertificatesIT extends UseAdminServer {
 
-    @Rule
-    public WireMockRule wireMockRule = new WireMockRule(0);
+    @RegisterExtension
+    public WireMockExtension wireMockRule = WireMockExtension.newInstance().configureStaticDsl(true).options(WireMockConfiguration.options().port(0)).build();
 
     private Properties config;
 
@@ -122,14 +123,14 @@ public class CertificatesIT extends UseAdminServer {
         config = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         config.put("config.type", "database");
         config.put("db.jdbc.url", "jdbc:herddb:localhost");
-        config.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
+        config.put("db.server.base.dir", newFolder(tmpDir, "junit").getAbsolutePath());
         config.put("aws.accesskey", "accesskey");
         config.put("aws.secretkey", "secretkey");
         config.put("healthmanager.tolerant", "true");
         startServer(config);
 
         // Default certificate
-        String defaultCertificate = TestUtils.deployResource("ia.p12", tmpDir.getRoot());
+        String defaultCertificate = TestUtils.deployResource("ia.p12", tmpDir);
         config.put("certificate.1.hostname", "*");
         config.put("certificate.1.file", defaultCertificate);
         config.put("certificate.1.password", "changeit");
@@ -145,7 +146,7 @@ public class CertificatesIT extends UseAdminServer {
         config.put("backend.1.id", "localhost");
         config.put("backend.1.enabled", "true");
         config.put("backend.1.host", "localhost");
-        config.put("backend.1.port", wireMockRule.port() + "");
+        config.put("backend.1.port", wireMockRule.getPort() + "");
 
         // Default director
         config.put("director.1.id", "*");
@@ -265,8 +266,8 @@ public class CertificatesIT extends UseAdminServer {
         assertTrue(data.isManual());
     }
 
-    @Test
-    @Parameters({"acme", "manual"})
+    @ParameterizedTest
+    @CsvSource({"acme", "manual"})
     public void testUploadTypedCertificate(String type) throws Exception {
         configureAndStartServer();
         int port = server.getLocalPort();
@@ -348,8 +349,8 @@ public class CertificatesIT extends UseAdminServer {
         }
     }
 
-    @Test
-    @Parameters({"acme", "manual"})
+    @ParameterizedTest
+    @CsvSource({"acme", "manual"})
     public void testUploadTypedCertificatesWithDaysBeforeRenewal(String type) throws Exception {
         configureAndStartServer();
         int port = server.getLocalPort();
@@ -712,7 +713,7 @@ public class CertificatesIT extends UseAdminServer {
         dcMan.setAcmeClients(Map.of(DEFAULT_PROVIDER_NAME, ac));
 
         // Renew
-        File certsDir = tmpDir.newFolder("certs");
+        File certsDir = newFolder(tmpDir, "certs");
         server.getCurrentConfiguration().setLocalCertificatesStorePath(certsDir.getAbsolutePath());
         server.getCurrentConfiguration().setLocalCertificatesStorePeersIds(Set.of("peerPippo")); // storing enabled on fake peer only
         dcMan.run();
@@ -1002,5 +1003,14 @@ public class CertificatesIT extends UseAdminServer {
                 .filter(entry -> entry.getValue().matches(hostname))
                 .map(entry -> Integer.parseInt(entry.getKey().split("\\.")[0]))
                 .collect(Collectors.toUnmodifiableSet());
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

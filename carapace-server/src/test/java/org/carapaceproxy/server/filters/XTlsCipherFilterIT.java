@@ -6,29 +6,16 @@ import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.matching;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import org.carapaceproxy.server.config.RequestFilterConfiguration;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import reactor.netty.http.HttpProtocol;
 
-@RunWith(Parameterized.class)
+import com.github.tomakehurst.wiremock.WireMockServer;
+import java.util.Map;
+import org.carapaceproxy.server.config.RequestFilterConfiguration;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
 public class XTlsCipherFilterIT extends AbstractXTlsFilterTest {
 
-    public XTlsCipherFilterIT(boolean http1) throws Exception {
-        super(http1);
-    }
-
-    @Parameterized.Parameters(name = "Use HTTP/1.x: {0}")
-    public static Collection<Object[]> data() {
-        return List.of(new Object[] { true }, new Object[] { false });
-    }
-
-    private void setupWireMockForCipherFilter() {
+    private void setupWireMockForCipherFilter(WireMockServer wireMockRule) {
         wireMockRule.stubFor(get(urlEqualTo("/index.html"))
                 .withHeader("X-Tls-Protocol", equalTo(TLS_PROTOCOL))
                 .withHeader("X-Tls-Cipher", matching("TLS_.*"))
@@ -39,31 +26,40 @@ public class XTlsCipherFilterIT extends AbstractXTlsFilterTest {
                 .willReturn(aResponse().withStatus(200).withBody("it <b>absent</b> !!")));
     }
 
-    @Test
-    public void testHttpsWithCipherAndProtocol() throws Exception {
-        setupWireMockForCipherFilter();
-        try (var server = startServer(true,
-                new RequestFilterConfiguration(XTlsCipherRequestFilter.TYPE, Map.of()),
-                new RequestFilterConfiguration(XTlsProtocolRequestFilter.TYPE, Map.of())
-        )) {
-            assertResponseContains(server.getLocalPort(), true, "it <b>works</b> !!");
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testHttpsWithCipherAndProtocol(boolean http1) throws Exception {
+        WireMockServer wireMockRule = newWireMock(http1);
+        wireMockRule.start();
+        try {
+            setupWireMockForCipherFilter(wireMockRule);
+            try (var server = startServer(wireMockRule, http1, true,
+                    new RequestFilterConfiguration(XTlsCipherRequestFilter.TYPE, Map.of()),
+                    new RequestFilterConfiguration(XTlsProtocolRequestFilter.TYPE, Map.of()))) {
+                assertResponseContains(http1, server.getLocalPort(), true, "it <b>works</b> !!");
+            }
+        } finally {
+            wireMockRule.stop();
         }
     }
 
-    @Test
-    public void testHttpsWithProtocolOnly() throws Exception {
-        setupWireMockForCipherFilter();
-        try (var server = startServer(true, new RequestFilterConfiguration(XTlsProtocolRequestFilter.TYPE, Map.of()))) {
-            assertResponseContains(server.getLocalPort(), true, "it <b>absent</b> !!");
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testHttpsWithProtocolOnly(boolean http1) throws Exception {
+        WireMockServer wireMockRule = newWireMock(http1);
+        wireMockRule.start();
+        try {
+            setupWireMockForCipherFilter(wireMockRule);
+            try (var server = startServer(wireMockRule, http1, true,
+                    new RequestFilterConfiguration(XTlsProtocolRequestFilter.TYPE, Map.of()))) {
+                assertResponseContains(http1, server.getLocalPort(), true, "it <b>absent</b> !!");
+            }
+        } finally {
+            wireMockRule.stop();
         }
     }
 
-    @Test
-    public void testHttpWithCipherOnly() throws Exception {
-        setupWireMockForCipherFilter();
-        Set<HttpProtocol> protocols = http1 ? Set.of(HttpProtocol.HTTP11) : Set.of(HttpProtocol.HTTP11, HttpProtocol.H2C);
-        try (var server = startServer(false, new RequestFilterConfiguration(XTlsCipherRequestFilter.TYPE, Map.of()))) {
-            assertResponseContains(server.getLocalPort(), false, "it <b>absent</b> !!");
-        }
-    }
+    // Plaintext filter behaviour (!isSecure() -> no header) is covered by the unit
+    // XTlsCipherRequestFilterTest. The no-filter plaintext case is covered once by
+    // XTlsProtocolFilterIT.httpWithoutFilter (no filter configured, no filter code runs either way).
 }

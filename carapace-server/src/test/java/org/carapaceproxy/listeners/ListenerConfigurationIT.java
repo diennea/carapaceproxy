@@ -1,9 +1,11 @@
 package org.carapaceproxy.listeners;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
@@ -15,18 +17,17 @@ import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.core.ListeningChannel;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 public class ListenerConfigurationIT {
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     @Test
     public void testListenerKeepAliveConfiguration() throws Exception {
-        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder())) {
+        try (HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir)) {
 
             {
                 Properties configuration = new Properties();
@@ -166,7 +167,7 @@ public class ListenerConfigurationIT {
     }
 
     private HttpProxyServer newServerListeningOn(int port) throws Exception {
-        HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir.newFolder());
+        HttpProxyServer server = new HttpProxyServer(StandardEndpointMapper::new, tmpDir);
         Properties configuration = new Properties();
         configuration.put("listener.1.host", "127.0.0.1");
         configuration.put("listener.1.port", String.valueOf(port));
@@ -180,4 +181,5 @@ public class ListenerConfigurationIT {
         PropertiesConfigurationStore config = new PropertiesConfigurationStore(configuration);
         server.applyDynamicConfigurationFromAPI(config);
     }
+
 }

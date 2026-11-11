@@ -24,7 +24,8 @@ import static org.carapaceproxy.server.config.AcmeProviderConfiguration.DEFAULT_
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
@@ -33,8 +34,8 @@ import org.carapaceproxy.configstore.StoreSnapshot.CertificateRow;
 import org.carapaceproxy.configstore.StoreSnapshot.EncodedKeyPair;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.utils.CertificatesTestUtils;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import org.shredzone.acme4j.util.KeyPairUtils;
 
 /**
@@ -48,7 +49,7 @@ public class StoreSnapshotTest {
     private static EncodedKeyPair keyPair;
     private static String chain;
 
-    @BeforeClass
+    @BeforeAll
     public static void setUp() throws Exception {
         final var pair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
         keyPair = new EncodedKeyPair(
@@ -123,7 +124,7 @@ public class StoreSnapshotTest {
                 Map.entry(new StoreSnapshot(CONFIG, null, null, Map.of("", validRow())), List.of("domain", "certificates"))
         );
         for (final var invalid : cases) {
-            final var err = assertThrows(invalid.getKey().toString(), ConfigurationNotValidException.class, invalid.getKey()::validate);
+            final var err = assertThrows(ConfigurationNotValidException.class, invalid.getKey()::validate, invalid.getKey().toString());
             for (final var part : invalid.getValue()) {
                 assertThat(err.getMessage(), containsString(part));
             }

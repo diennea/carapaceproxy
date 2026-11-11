@@ -29,12 +29,13 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
@@ -44,6 +45,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
@@ -70,7 +72,7 @@ import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.RawHttpClient.HttpResponse;
 import org.carapaceproxy.utils.TestUserRealm;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.shredzone.acme4j.util.KeyPairUtils;
 import org.slf4j.LoggerFactory;
 
@@ -88,13 +90,13 @@ public class StateBackupRestoreIT extends UseAdminServer {
         final Properties configuration = new Properties(HTTP_ADMIN_SERVER_CONFIG);
         configuration.put("config.type", "database");
         configuration.put("db.jdbc.url", "jdbc:herddb:localhost");
-        configuration.put("db.server.base.dir", tmpDir.newFolder().getAbsolutePath());
+        configuration.put("db.server.base.dir", newFolder(tmpDir, "junit").getAbsolutePath());
         return configuration;
     }
 
     private HttpResponse backup(RawHttpClient client) throws Exception {
         final HttpResponse resp = client.get("/api/config/backup", credentials);
-        assertTrue(resp.getStatusLine(), resp.isOk());
+        assertTrue(resp.isOk(), resp.getStatusLine());
         return resp;
     }
 
@@ -131,7 +133,7 @@ public class StateBackupRestoreIT extends UseAdminServer {
     private void assertRefused(RawHttpClient client, String archive, String params, String messagePart) throws Exception {
         final StoreSnapshot before = server.getDynamicConfigurationStore().exportState();
         final HttpResponse resp = restore(client, archive, params);
-        assertTrue(resp.getStatusLine(), resp.getStatusLine().contains("422"));
+        assertTrue(resp.getStatusLine().contains("422"), resp.getStatusLine());
         assertThat(resp.getBodyString(), containsString(messagePart));
         assertEquals(before, server.getDynamicConfigurationStore().exportState());
     }
@@ -142,12 +144,12 @@ public class StateBackupRestoreIT extends UseAdminServer {
         final int port = TestUtils.getFreeNonEphemeralPort();
         final Properties dynamic = new Properties();
         dynamic.put("certificate.10.hostname", "*");
-        dynamic.put("certificate.10.file", TestUtils.deployResource("ia.p12", tmpDir.getRoot()));
+        dynamic.put("certificate.10.file", TestUtils.deployResource("ia.p12", tmpDir));
         dynamic.put("certificate.10.password", "changeit");
         // still waiting, no chain to write in the local store: the restore must not fail on it
         dynamic.put("certificate.11.hostname", WAITING_DOMAIN);
         dynamic.put("certificate.11.mode", "acme");
-        dynamic.put("dynamiccertificatesmanager.localcertificates.store.path", tmpDir.newFolder().getAbsolutePath());
+        dynamic.put("dynamiccertificatesmanager.localcertificates.store.path", newFolder(tmpDir, "junit").getAbsolutePath());
         dynamic.put("listener.1.host", "localhost");
         dynamic.put("listener.1.port", String.valueOf(port));
         dynamic.put("listener.1.ssl", "true");
@@ -178,7 +180,7 @@ public class StateBackupRestoreIT extends UseAdminServer {
             assertNotEquals(originalState, server.getDynamicConfigurationStore().exportState());
 
             final HttpResponse resp = restore(client, archive, null);
-            assertTrue(resp.getBodyString(), resp.isOk());
+            assertTrue(resp.isOk(), resp.getBodyString());
             final JsonNode result = MAPPER.readTree(resp.getBodyString());
             assertTrue(result.get("ok").asBoolean());
 
@@ -227,7 +229,7 @@ public class StateBackupRestoreIT extends UseAdminServer {
                     .put("listener.9.forwarded", "preserve")), null, "preserve");
 
             final HttpResponse resp = restore(client, newer, "acceptNewerVersion=true");
-            assertTrue(resp.getBodyString(), resp.isOk());
+            assertTrue(resp.isOk(), resp.getBodyString());
             assertNull(server.getDynamicCertificatesManager().getCertificateDataForDomain(OTHER_DOMAIN));
         }
     }
@@ -257,7 +259,7 @@ public class StateBackupRestoreIT extends UseAdminServer {
             logger.addAppender(logAppender);
             try {
                 final HttpResponse resp = restore(client, archive, null);
-                assertTrue(resp.getBodyString(), resp.isOk());
+                assertTrue(resp.isOk(), resp.getBodyString());
             } finally {
                 logger.detachAppender(logAppender);
             }
@@ -300,7 +302,7 @@ public class StateBackupRestoreIT extends UseAdminServer {
             final JsonNode config = MAPPER.readTree(archive).get("config");
             for (final String key : List.of("http.admin.enabled", "http.admin.port", "http.admin.host", "userrealm.class",
                     "aws.secretkey", "https.admin.sslcertfilepassword")) {
-                assertFalse(key, config.has(key));
+                assertFalse(config.has(key), key);
             }
             assertEquals("20", config.get("healthmanager.period").asText());
             assertThat(archive, not(containsString("boot secret")));
@@ -314,7 +316,7 @@ public class StateBackupRestoreIT extends UseAdminServer {
                 final HttpResponse resp = restore(client, edit(archive, json -> ((ObjectNode) json.get("config"))
                         .put("aws.secretkey", "restored secret")
                         .put("db.admin.password", "restored password")), null);
-                assertTrue(resp.getBodyString(), resp.isOk());
+                assertTrue(resp.isOk(), resp.getBodyString());
             } finally {
                 logger.detachAppender(logAppender);
             }
@@ -340,18 +342,18 @@ public class StateBackupRestoreIT extends UseAdminServer {
             final String archive = edit(backup(client).getBodyString(), json -> ((ObjectNode) json.get("config")).put("healthmanager.period", "25"));
             try (GroupMembershipHandler.RestoreSignal signal = server.getGroupMembershipHandler().raiseRestoreSignal()) {
                 final HttpResponse write = client.post("/api/config/apply", null, "healthmanager.period=25", credentials);
-                assertTrue(write.getStatusLine(), write.getStatusLine().contains("503"));
+                assertTrue(write.getStatusLine().contains("503"), write.getStatusLine());
                 assertEquals(String.valueOf(RestoreInProgressFilter.RETRY_AFTER_SECONDS), header(write, "Retry-After"));
                 // the restore passes the filter, then finds the signal taken
                 final HttpResponse second = restore(client, archive, null);
-                assertTrue(second.getStatusLine(), second.getStatusLine().contains("503"));
+                assertTrue(second.getStatusLine().contains("503"), second.getStatusLine());
                 assertEquals(String.valueOf(RestoreInProgressFilter.RETRY_AFTER_SECONDS), header(second, "Retry-After"));
                 // reads and backups pass
                 assertTrue(client.get("/api/config", credentials).isOk());
                 backup(client);
             }
             final HttpResponse resp = restore(client, archive, null);
-            assertTrue(resp.getBodyString(), resp.isOk());
+            assertTrue(resp.isOk(), resp.getBodyString());
             // file mode: restored in memory only
             final JsonNode result = MAPPER.readTree(resp.getBodyString());
             assertTrue(result.get("ok").asBoolean());
@@ -369,7 +371,7 @@ public class StateBackupRestoreIT extends UseAdminServer {
             {
                 // valid when checked, but gone before the apply: stored, not applied (a failed listener bind would not
                 // fail the apply here, every listener fails on its own)
-                final File caFile = new File(TestUtils.deployResource("ca.p12", tmpDir.getRoot()));
+                final File caFile = new File(TestUtils.deployResource("ca.p12", tmpDir));
                 final String withBackendCa = edit(archive, json -> ((ObjectNode) json.get("config"))
                         .put("backend.1.id", "secured")
                         .put("backend.1.enabled", "true")
@@ -387,18 +389,18 @@ public class StateBackupRestoreIT extends UseAdminServer {
                 TestUtils.waitForCondition(server::isRestoreInProgress, 10);
                 assertTrue(caFile.delete());
                 final HttpResponse resp = restoring.get(2, TimeUnit.MINUTES);
-                assertTrue(resp.getStatusLine(), resp.getStatusLine().contains("500"));
+                assertTrue(resp.getStatusLine().contains("500"), resp.getStatusLine());
                 assertFalse(MAPPER.readTree(resp.getBodyString()).get("ok").asBoolean());
                 // its own reload failed too: writes stay refused on this node
                 assertTrue(server.isRestoreInProgress());
                 // and stay so after another restore that fails before its commit
                 try (GroupMembershipHandler.RestoreSignal busySignal = server.getGroupMembershipHandler().raiseRestoreSignal()) {
                     final HttpResponse second = restore(client, archive, null);
-                    assertTrue(second.getStatusLine(), second.getStatusLine().contains("503"));
+                    assertTrue(second.getStatusLine().contains("503"), second.getStatusLine());
                 }
                 assertTrue(server.isRestoreInProgress());
                 final HttpResponse write = client.post("/api/config/apply", null, "healthmanager.period=25", credentials);
-                assertTrue(write.getStatusLine(), write.getStatusLine().contains("503"));
+                assertTrue(write.getStatusLine().contains("503"), write.getStatusLine());
             }
             // a restore that applies clears the flag, through a reload of the stored state
             assertTrue(restore(client, archive, null).isOk());
@@ -432,7 +434,7 @@ public class StateBackupRestoreIT extends UseAdminServer {
     @Test
     public void testRestoreRefusedByAStoreNotWritableNeverRaisesTheSignal() throws Exception {
         final Properties configuration = new Properties(HTTP_ADMIN_SERVER_CONFIG);
-        configuration.put("admin.accesslog.path", tmpDir.newFile().getAbsolutePath());
+        configuration.put("admin.accesslog.path", File.createTempFile("junit", null, tmpDir).getAbsolutePath());
         configuration.put("userrealm.class", SimpleUserRealm.class.getName());
         final AtomicInteger reloads = new AtomicInteger();
         final AtomicBoolean writable = new AtomicBoolean(true);
@@ -475,7 +477,7 @@ public class StateBackupRestoreIT extends UseAdminServer {
                 polling.set(false);
                 poller.join();
             }
-            assertTrue(resp.getStatusLine(), resp.getStatusLine().contains("503"));
+            assertTrue(resp.getStatusLine().contains("503"), resp.getStatusLine());
             assertThat(resp.getBodyString(), containsString("replica down"));
             assertFalse(signalSeen.get());
             assertFalse(server.isRestoreInProgress());
@@ -488,5 +490,14 @@ public class StateBackupRestoreIT extends UseAdminServer {
         try (RawHttpClient client = new RawHttpClient("localhost", port, true, DOMAIN)) {
             return ((X509Certificate) client.getServerCertificate()[0]).getSerialNumber();
         }
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }

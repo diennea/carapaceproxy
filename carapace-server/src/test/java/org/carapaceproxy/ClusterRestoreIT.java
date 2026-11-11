@@ -21,14 +21,17 @@ package org.carapaceproxy;
 
 import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.utils.CertificatesTestUtils.generateSampleChainData;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
@@ -53,10 +56,9 @@ import org.carapaceproxy.server.certificates.DynamicCertificateState;
 import org.carapaceproxy.server.config.RestoreInProgressException;
 import org.carapaceproxy.server.mapper.StandardEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
-import org.junit.After;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.shredzone.acme4j.util.KeyPairUtils;
 
 /**
@@ -66,14 +68,14 @@ public class ClusterRestoreIT {
 
     private static final String DOMAIN = "app.example.test";
 
-    @Rule
-    public TemporaryFolder tmpDir = new TemporaryFolder();
+    @TempDir
+    public File tmpDir;
 
     private TestingServer zooKeeper;
     private HttpProxyServer node1;
     private HttpProxyServer node2;
 
-    @After
+    @AfterEach
     public void stop() throws Exception {
         for (AutoCloseable closeable : new AutoCloseable[]{node2, node1, zooKeeper}) {
             if (closeable != null) {
@@ -112,11 +114,11 @@ public class ClusterRestoreIT {
 
     @Test
     public void testPeerReloadsTheRestoredState() throws Exception {
-        zooKeeper = new TestingServer(TestUtils.getFreeNonEphemeralPort(), tmpDir.newFolder());
+        zooKeeper = new TestingServer(TestUtils.getFreeNonEphemeralPort(), newFolder(tmpDir, "junit"));
         final int port = TestUtils.getFreeNonEphemeralPort();
-        node1 = startNode("node1", tmpDir.newFolder("node1"), 0);
+        node1 = startNode("node1", Files.createDirectory(tmpDir.toPath().resolve("node1")).toFile(), 0);
         // both nodes on this host: the peer listens on another port
-        node2 = startNode("node2", tmpDir.newFolder("node2"), TestUtils.getFreeNonEphemeralPort() - port);
+        node2 = startNode("node2", Files.createDirectory(tmpDir.toPath().resolve("node2")).toFile(), TestUtils.getFreeNonEphemeralPort() - port);
         // one cluster for both scenarios: the first leaves no file nor retry behind
         writeRefusedWhileThePeerWaitsToReload();
         TestUtils.waitForCondition(() -> !node1.isRestoreInProgress() && !node2.isRestoreInProgress(), 30);
@@ -129,8 +131,8 @@ public class ClusterRestoreIT {
 
     @Test
     public void testRestoreRefusedWhenThePeersCannotBeRead() throws Exception {
-        zooKeeper = new TestingServer(TestUtils.getFreeNonEphemeralPort(), tmpDir.newFolder());
-        node1 = startNode("node1", tmpDir.newFolder("node1"), 0);
+        zooKeeper = new TestingServer(TestUtils.getFreeNonEphemeralPort(), newFolder(tmpDir, "junit"));
+        node1 = startNode("node1", Files.createDirectory(tmpDir.toPath().resolve("node1")).toFile(), 0);
         final StoreSnapshot archive = withConfig(node1.backupState(), "healthmanager.period", "25");
         final int period = node1.getBackendHealthManager().getPeriod();
         try (CuratorFramework client = CuratorFrameworkFactory.newClient(zooKeeper.getConnectString(), new RetryOneTime(100))) {
@@ -193,7 +195,7 @@ public class ClusterRestoreIT {
     }
 
     private void peerMissingABackendCaReloadsOnceItArrives(int port) throws Exception {
-        final File localStore = tmpDir.newFolder("certificates");
+        final File localStore = Files.createDirectory(tmpDir.toPath().resolve("certificates")).toFile();
         apply(node1, Map.of(
                 "healthmanager.period", "21",
                 "listener.1.host", "localhost",
@@ -208,7 +210,7 @@ public class ClusterRestoreIT {
                 DynamicCertificateState.AVAILABLE));
         node1.getDynamicConfigurationStore().saveKeyPairForDomain(KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE), DOMAIN, false);
         // a backend CA present on the node that restores only, relative to the base path of each node
-        TestUtils.deployResource("ca.p12", new File(tmpDir.getRoot(), "node1"));
+        TestUtils.deployResource("ca.p12", new File(tmpDir, "node1"));
         StoreSnapshot archive = withConfig(node1.backupState(), "healthmanager.period", "26");
         archive = withConfig(archive, "backend.1.id", "secured");
         archive = withConfig(archive, "backend.1.enabled", "true");
@@ -240,7 +242,7 @@ public class ClusterRestoreIT {
         assertSame(listening, node2.getListeners().getListeningChannels().values().iterator().next());
 
         // the file arrives: the next retry, every 30 seconds, applies the restored state
-        TestUtils.deployResource("ca.p12", new File(tmpDir.getRoot(), "node2"));
+        TestUtils.deployResource("ca.p12", new File(tmpDir, "node2"));
         TestUtils.waitForCondition(() -> !node2.isRestoreInProgress() && node2.getBackendHealthManager().getPeriod() == 26, 90);
         assertEquals(backedUpChain, node2.getDynamicCertificatesManager().getCertificateDataForDomain(DOMAIN).getChain());
         // the local files are rewritten after the reload, with the restored chain
@@ -251,5 +253,14 @@ public class ClusterRestoreIT {
         return Thread.getAllStackTraces().entrySet().stream()
                 .filter(e -> e.getKey().getName().equals("restore-reload") && e.getKey().getState() == Thread.State.WAITING)
                 .anyMatch(e -> Arrays.stream(e.getValue()).anyMatch(f -> f.getMethodName().equals("reloadRestoredState")));
+    }
+
+    private static File newFolder(File root, String... subDirs) throws IOException {
+        String subFolder = String.join("/", subDirs) + "-" + System.nanoTime();
+        File result = new File(root, subFolder);
+        if (!result.mkdirs()) {
+            throw new IOException("Couldn't create folders " + root);
+        }
+        return result;
     }
 }
