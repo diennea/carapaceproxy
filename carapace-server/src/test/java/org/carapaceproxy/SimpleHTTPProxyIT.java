@@ -24,23 +24,21 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_FORWARDED_STRATEGY;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
 import static reactor.netty.http.HttpProtocol.HTTP11;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.util.concurrent.DefaultEventExecutor;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import java.util.Set;
 import org.apache.commons.io.IOUtils;
 import org.carapaceproxy.core.EndpointKey;
@@ -48,6 +46,7 @@ import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 import org.carapaceproxy.utils.HttpTestUtils;
+import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
 import org.carapaceproxy.utils.TestUtils;
 import org.junit.jupiter.api.io.TempDir;
@@ -67,7 +66,7 @@ public class SimpleHTTPProxyIT {
     public File tmpDir;
 
     @Test
-    public void test() throws Exception {
+    void test() throws Exception {
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
         EndpointKey key = new EndpointKey("localhost", wireMockRule.getPort());
@@ -77,17 +76,16 @@ public class SimpleHTTPProxyIT {
             int port = server.getLocalPort();
 
             // not found
-            try {
+            assertThatThrownBy(() -> {
                 String s = IOUtils.toString(URI.create("http://localhost:" + port + "/index.html?not-found"), StandardCharsets.UTF_8);
                 System.out.println("s:" + s);
-                fail();
-            } catch (FileNotFoundException ok) {
-            }
+            }).isInstanceOf(FileNotFoundException.class)
+                    .hasMessageContaining("/index.html?not-found");
         }
     }
 
     @Test
-    public void testSsl() throws Exception {
+    void ssl() throws Exception {
 
         HttpTestUtils.overrideJvmWideHttpsVerifier();
 
@@ -110,26 +108,25 @@ public class SimpleHTTPProxyIT {
             int port = server.getLocalPort();
 
             // not found
-            try {
+            assertThatThrownBy(() -> {
                 String s = IOUtils.toString(URI.create("https://localhost:" + port + "/index.html?not-found"), StandardCharsets.UTF_8);
                 System.out.println("s:" + s);
-                fail();
-            } catch (FileNotFoundException ok) {
-            }
+            }).isInstanceOf(FileNotFoundException.class)
+                    .hasMessageContaining("/index.html?not-found");
 
             // proxy
             {
                 String s = IOUtils.toString(URI.create("https://localhost:" + port + "/index.html?redir"), StandardCharsets.UTF_8);
                 System.out.println("s:" + s);
-                assertEquals("it <b>works</b> !!", s);
+                assertThat(s).isEqualTo("it <b>works</b> !!");
             }
         }
     }
 
     @Test
-    public void testEndpointDown() throws Exception {
+    void endpointDown() throws Exception {
 
-        int badPort = TestUtils.getFreePort();
+        int badPort = TestUtils.getUnusedPort();
 
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", badPort);
         EndpointKey key = new EndpointKey("localhost", badPort);
@@ -138,9 +135,9 @@ public class SimpleHTTPProxyIT {
             server.start();
             int port = server.getLocalPort();
 
-            HttpTestUtils.ResourceInfos result = HttpTestUtils.downloadFromUrl(URI.create("http://localhost:" + port + "/index.html").toURL(),
-                    new ByteArrayOutputStream(), Collections.singletonMap("return_errors", "true"));
-            assertEquals(503, result.responseCode);
+            try (RawHttpClient client = new RawHttpClient("localhost", port)) {
+                assertThat(client.get("/index.html").getStatusLine()).startsWith("HTTP/1.1 503");
+            }
         }
     }
 

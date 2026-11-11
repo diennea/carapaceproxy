@@ -19,21 +19,15 @@
  */
 package org.carapaceproxy.utils;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.Key;
-import java.util.Arrays;
 import java.util.Set;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
-import org.junit.jupiter.api.Assertions;
 
 /**
  * Utility for tests
@@ -47,52 +41,33 @@ public class TestUtils {
     private static final int MAX_PORT_ATTEMPTS = 50;
     private static final Set<Integer> HANDED_OUT_PORTS = ConcurrentHashMap.newKeySet();
 
-    private static final int WAIT_FOR_CONDITION_DEFAULT_WAIT_SECONDS = 20;
-
-    public static void waitForCondition(Callable<Boolean> condition, int seconds) throws Exception {
-        waitForCondition(condition, null, seconds);
-    }
-
-    public static void waitForCondition(Callable<Boolean> condition) throws Exception {
-        waitForCondition(condition, null, WAIT_FOR_CONDITION_DEFAULT_WAIT_SECONDS);
-    }
-
-    public static void waitForCondition(Callable<Boolean> condition, Callable<Void> callback, int seconds) throws Exception {
-        try {
-            long _start = System.currentTimeMillis();
-            long millis = seconds * 1000;
-            while (System.currentTimeMillis() - _start <= millis) {
-                if (condition.call()) {
-                    return;
-                }
-                if (callback != null) {
-                    callback.call();
-                }
-                Thread.sleep(100);
-            }
-        } catch (InterruptedException ee) {
-            Assertions.fail("test interrupted!");
-            return;
-        } catch (Exception ee) {
-            Assertions.fail("error while evalutaing condition:" + ee);
-            return;
-        }
-        Assertions.fail("condition not met in time!");
-    }
-
+    /**
+     * Copies a classpath resource into the given directory, keeping its name.
+     *
+     * @param resource the resource to read from the context classloader
+     * @param tmpDir   the directory to copy it into
+     * @return the absolute path of the copy
+     * @throws IOException if the resource cannot be read or written
+     */
     public static String deployResource(String resource, File tmpDir) throws IOException {
-        try (InputStream in = Thread.currentThread().getContextClassLoader().getResourceAsStream(resource);) {
+        try (InputStream in = Thread.currentThread().getContextClassLoader().getResourceAsStream(resource)) {
             Path path = new File(tmpDir, resource).toPath();
             Files.copy(in, path);
             return path.toAbsolutePath().toString();
         }
     }
 
-    public static int getFreePort() throws IOException {
-        try (ServerSocket s = new ServerSocket(0);) {
-            System.out.println("Got free ephemeral port " + s.getLocalPort());
-            assertTrue(s.getLocalPort() > 0);
-            return s.getLocalPort();
+    /**
+     * Binds an ephemeral port and releases it at once, so the number is known to be unused right now.
+     * Nothing stops another process from taking it before the caller does: whoever can bind port 0 and
+     * read the port back should do that instead, and this is only for a port that must stay closed.
+     *
+     * @return a port number nobody was listening on a moment ago
+     * @throws IOException if no port could be bound
+     */
+    public static int getUnusedPort() throws IOException {
+        try (ServerSocket socket = new ServerSocket(0)) {
+            return socket.getLocalPort();
         }
     }
 
@@ -118,63 +93,5 @@ public class TestUtils {
             }
         }
         throw new IOException("no free port available in [" + MIN_PORT + ", " + MAX_PORT + ")");
-    }
-
-    public static void assertEqualsKey(Key key1, Key key2) {
-        assertTrue(Arrays.equals(key1.getEncoded(), key2.getEncoded()));
-    }
-
-    /**
-     * ** Copied from JUnit 4.13 ** *
-     */
-    public interface ThrowingRunnable {
-
-        void run() throws Throwable;
-    }
-
-    /**
-     * Asserts that {@code runnable} throws an exception of type {@code expectedThrowable} when executed. If it does not throw an exception, an {@link AssertionError} is thrown. If it throws the wrong
-     * type of exception, an {@code AssertionError} is thrown describing the mismatch; the exception that was actually thrown can be obtained by calling {@link
-     * AssertionError#getCause}.
-     *
-     * @param expectedThrowable the expected type of the exception
-     * @param runnable a function that is expected to throw an exception when executed
-     * @since 4.13
-     */
-    public static void assertThrows(Class<? extends Throwable> expectedThrowable, ThrowingRunnable runnable) {
-        expectThrows(expectedThrowable, runnable);
-    }
-
-    /**
-     * Asserts that {@code runnable} throws an exception of type {@code expectedThrowable} when executed. If it does, the exception object is returned. If it does not throw an exception, an
-     * {@link AssertionError} is thrown. If it throws the wrong type of exception, an {@code
-     * AssertionError} is thrown describing the mismatch; the exception that was actually thrown can be obtained by calling {@link AssertionError#getCause}.
-     *
-     * @param expectedThrowable the expected type of the exception
-     * @param runnable a function that is expected to throw an exception when executed
-     * @return the exception thrown by {@code runnable}
-     * @since 4.13
-     */
-    public static <T extends Throwable> T expectThrows(Class<T> expectedThrowable, ThrowingRunnable runnable) {
-        try {
-            runnable.run();
-        } catch (Throwable actualThrown) {
-            if (expectedThrowable.isInstance(actualThrown)) {
-                @SuppressWarnings("unchecked")
-                T retVal = (T) actualThrown;
-                return retVal;
-            } else {
-                String mismatchMessage = String.format("unexpected exception type thrown expected %s actual %s",
-                        expectedThrowable.getSimpleName(), actualThrown.getClass().getSimpleName());
-
-                // The AssertionError(String, Throwable) ctor is only available on JDK7.
-                AssertionError assertionError = new AssertionError(mismatchMessage);
-                assertionError.initCause(actualThrown);
-                throw assertionError;
-            }
-        }
-        String message = String.format("expected %s to be thrown, but nothing was thrown",
-                expectedThrowable.getSimpleName());
-        throw new AssertionError(message);
     }
 }

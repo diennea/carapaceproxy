@@ -19,12 +19,10 @@
  */
 package org.carapaceproxy.server.filters;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import java.util.List;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.carapaceproxy.server.filters.UrlEncodedQueryString.create;
+import static org.carapaceproxy.server.filters.UrlEncodedQueryString.parse;
+
 import java.net.URI;
 import org.junit.jupiter.api.Test;
 
@@ -36,87 +34,87 @@ class UrlEncodedQueryStringTest {
 
     @Test
     void parsesMultiValuedParametersInOrder() {
-        UrlEncodedQueryString q = UrlEncodedQueryString.parse("a=1&b=2&a=3");
-        assertEquals(List.of("1", "3"), q.getValues("a"));
-        assertEquals(List.of("2"), q.getValues("b"));
-        assertEquals("1", q.get("a")); // first value
+        UrlEncodedQueryString q = parse("a=1&b=2&a=3");
+        assertThat(q.getValues("a")).containsExactly("1", "3");
+        assertThat(q.getValues("b")).containsExactly("2");
+        assertThat(q.get("a")).isEqualTo("1"); // first value
     }
 
     @Test
     void splitsOnSemicolonAsWellAsAmpersand() {
-        UrlEncodedQueryString q = UrlEncodedQueryString.parse("a=1;b=2");
-        assertEquals("1", q.get("a"));
-        assertEquals("2", q.get("b"));
+        UrlEncodedQueryString q = parse("a=1;b=2");
+        assertThat(q.get("a")).isEqualTo("1");
+        assertThat(q.get("b")).isEqualTo("2");
     }
 
     @Test
     void namesAreLowercasedOnGetAndContainsButNotOnGetValues() {
-        UrlEncodedQueryString q = UrlEncodedQueryString.parse("A=1");
-        assertEquals("1", q.get("a"));
-        assertTrue(q.contains("a"));
-        assertEquals(List.of("1"), q.getValues("a"));
+        UrlEncodedQueryString q = parse("A=1");
+        assertThat(q.get("a")).isEqualTo("1");
+        assertThat(q.contains("a")).isTrue();
+        assertThat(q.getValues("a")).containsExactly("1");
         // getValues does NOT lowercase its argument, and stored keys are lowercase:
-        assertNull(q.getValues("A"));
+        assertThat(q.getValues("A")).isNull();
     }
 
     @Test
     void valuelessParameterExistsButHasNullValue() {
-        UrlEncodedQueryString q = UrlEncodedQueryString.parse("foo=1&bar");
-        assertTrue(q.contains("bar"));
-        assertNull(q.get("bar"));
-        assertEquals("1", q.get("foo"));
-        assertTrue(q.toString().contains("bar"));
-        assertFalse(q.toString().contains("bar="));
+        UrlEncodedQueryString q = parse("foo=1&bar");
+        assertThat(q.contains("bar")).isTrue();
+        assertThat(q.get("bar")).isNull();
+        assertThat(q.get("foo")).isEqualTo("1");
+        assertThat(q.toString()).contains("bar");
+        assertThat(q.toString()).doesNotContain("bar=");
     }
 
     @Test
     void emptyValueParameterIsDistinctFromValueless() {
-        UrlEncodedQueryString q = UrlEncodedQueryString.parse("foo=1&bar=");
-        assertTrue(q.contains("bar"));
-        assertTrue(q.get("bar").isEmpty());
+        UrlEncodedQueryString q = parse("foo=1&bar=");
+        assertThat(q.contains("bar")).isTrue();
+        assertThat(q.get("bar")).isEmpty();
     }
 
     @Test
     void formDecodesNamesAndValues() {
-        assertEquals("1", UrlEncodedQueryString.parse("%70age=1").get("page"));
-        assertEquals("x y", UrlEncodedQueryString.parse("a=x+y").get("a"));
-        assertEquals(" ", UrlEncodedQueryString.parse("a=%20").get("a"));
+        assertThat(parse("%70age=1").get("page")).isEqualTo("1");
+        assertThat(parse("a=x+y").get("a")).isEqualTo("x y");
+        assertThat(parse("a=%20").get("a")).isEqualTo(" ");
     }
 
     @Test
     void appendAccumulatesSetReplacesRemoveDeletes() {
-        UrlEncodedQueryString q = UrlEncodedQueryString.create();
+        UrlEncodedQueryString q = create();
         q.append("a", "1").append("a", "2");
-        assertEquals(List.of("1", "2"), q.getValues("a"));
+        assertThat(q.getValues("a")).containsExactly("1", "2");
 
         q.set("a", "9");
-        assertEquals(List.of("9"), q.getValues("a"));
+        assertThat(q.getValues("a")).containsExactly("9");
 
         q.remove("a");
-        assertFalse(q.contains("a"));
-        assertTrue(q.isEmpty());
+        assertThat(q.contains("a")).isFalse();
+        assertThat(q.isEmpty()).isTrue();
     }
 
     @Test
     void setNullValueRemovesParameter() {
-        UrlEncodedQueryString q = UrlEncodedQueryString.create();
+        UrlEncodedQueryString q = create();
         q.append("a", "1");
         q.set("a", (String) null);
-        assertFalse(q.contains("a"));
+        assertThat(q.contains("a")).isFalse();
     }
 
     @Test
     void toStringReEncodesAndRoundTrips() throws Exception {
-        assertEquals("a=1&b=2", UrlEncodedQueryString.parse("a=1&b=2").toString());
-        assertEquals("a=x+y", UrlEncodedQueryString.create().append("a", "x y").toString());
+        assertThat(parse("a=1&b=2")).hasToString("a=1&b=2");
+        assertThat(create().append("a", "x y")).hasToString("a=x+y");
 
-        URI applied = UrlEncodedQueryString.parse("a=1&b=2").apply(new URI("http://host/path"));
-        assertEquals("a=1&b=2", applied.getRawQuery());
+        URI applied = parse("a=1&b=2").apply(new URI("http://host/path"));
+        assertThat(applied.getRawQuery()).isEqualTo("a=1&b=2");
     }
 
     @Test
     void equalityIsOrderSensitiveViaToString() {
-        assertEquals(UrlEncodedQueryString.parse("a=1&b=2"), UrlEncodedQueryString.parse("a=1&b=2"));
-        assertNotEquals(UrlEncodedQueryString.parse("b=2&a=1"), UrlEncodedQueryString.parse("a=1&b=2"));
+        assertThat(parse("a=1&b=2")).isEqualTo(parse("a=1&b=2"));
+        assertThat(parse("a=1&b=2")).isNotEqualTo(parse("b=2&a=1"));
     }
 }

@@ -19,9 +19,8 @@
  */
 package org.carapaceproxy.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.carapaceproxy.cluster.impl.ZooKeeperGroupMembershipHandler.PROPERTY_PEER_VERSION;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Properties;
 import org.apache.curator.test.TestingServer;
@@ -30,10 +29,10 @@ import org.carapaceproxy.utils.CarapaceVersion;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.junit.jupiter.api.Test;
 
-public class ClusterReconfigIT extends UseAdminServer {
+class ClusterReconfigIT extends UseAdminServer {
 
     @Test
-    public void testReconfigInClusterMode() throws Exception {
+    void reconfigInClusterMode() throws Exception {
         try (TestingServer testingServer = new TestingServer(2229, tmpDir);) {
             testingServer.start();
             Properties configuration = new Properties(HTTP_ADMIN_SERVER_CONFIG);
@@ -47,7 +46,7 @@ public class ClusterReconfigIT extends UseAdminServer {
 
             // every peer advertises its version, so a half-upgraded cluster is visible from any node
             final GroupMembershipHandler membership = server.getGroupMembershipHandler();
-            assertEquals(CarapaceVersion.VERSION, membership.loadInfoForPeer(membership.getLocalPeer()).get(PROPERTY_PEER_VERSION));
+            assertThat(membership.loadInfoForPeer(membership.getLocalPeer())).containsEntry(PROPERTY_PEER_VERSION, CarapaceVersion.VERSION);
 
             try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
                 String body = "connectionsmanager.connecttimeout=8000\n"
@@ -59,15 +58,15 @@ public class ClusterReconfigIT extends UseAdminServer {
                         + "Authorization: Basic " + credentials.toBase64() + "\r\n"
                         + "\r\n"
                         + body);
-                assertTrue(resp.isOk());
+                assertThat(resp.isOk()).isTrue();
             }
 
             // restart, same "static" configuration
             stopServer();
             buildNewServer();
             startServer(configuration);
-            assertEquals(8000, server.getCurrentConfiguration().getConnectTimeout());
-            assertEquals(25, server.getBackendHealthManager().getPeriod());
+            assertThat(server.getCurrentConfiguration().getConnectTimeout()).isEqualTo(8000);
+            assertThat(server.getBackendHealthManager().getPeriod()).isEqualTo(25);
             try (RawHttpClient client = new RawHttpClient("localhost", 8761)) {
                 String body = "connectionsmanager.connecttimeout=9000\n"
                         + "healthmanager.period=30";
@@ -78,16 +77,16 @@ public class ClusterReconfigIT extends UseAdminServer {
                         + "Authorization: Basic " + credentials.toBase64() + "\r\n"
                         + "\r\n"
                         + body);
-                assertTrue(resp.isOk());
+                assertThat(resp.isOk()).isTrue();
             }
-            assertEquals(9000, server.getCurrentConfiguration().getConnectTimeout());
-            assertEquals(30, server.getBackendHealthManager().getPeriod());
+            assertThat(server.getCurrentConfiguration().getConnectTimeout()).isEqualTo(9000);
+            assertThat(server.getBackendHealthManager().getPeriod()).isEqualTo(30);
             // restart, same "static" confguration
             stopServer();
             buildNewServer();
             startServer(configuration);
-            assertEquals(9000, server.getCurrentConfiguration().getConnectTimeout());
-            assertEquals(30, server.getBackendHealthManager().getPeriod());
+            assertThat(server.getCurrentConfiguration().getConnectTimeout()).isEqualTo(9000);
+            assertThat(server.getBackendHealthManager().getPeriod()).isEqualTo(30);
         }
     }
 

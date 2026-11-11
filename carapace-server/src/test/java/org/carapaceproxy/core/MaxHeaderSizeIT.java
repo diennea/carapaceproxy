@@ -4,7 +4,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -24,7 +24,7 @@ public class MaxHeaderSizeIT extends UseAdminServer {
     public WireMockExtension wireMockRule = WireMockExtension.newInstance().configureStaticDsl(true).options(WireMockConfiguration.options().port(0)).build();
 
     @Test
-    public void test() throws Exception {
+    void test() throws Exception {
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -84,7 +84,7 @@ public class MaxHeaderSizeIT extends UseAdminServer {
 
         try (final HttpClient httpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build()) {
             final HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            assertEquals(200, response.statusCode());
+            assertThat(response.statusCode()).isEqualTo(200);
         }
 
         config.put("carapace.maxheadersize", "1");
@@ -92,7 +92,7 @@ public class MaxHeaderSizeIT extends UseAdminServer {
 
         try (final HttpClient httpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build()) {
             final HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            assertEquals(431, response.statusCode());
+            assertThat(response.statusCode()).isEqualTo(431);
         }
     }
 }

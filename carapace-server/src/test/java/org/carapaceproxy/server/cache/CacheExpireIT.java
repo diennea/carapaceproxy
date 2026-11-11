@@ -23,14 +23,9 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.hamcrest.CoreMatchers.allOf;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.CoreMatchers.startsWith;
-import static org.hamcrest.CoreMatchers.startsWithIgnoringCase;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -40,7 +35,6 @@ import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.utils.HttpUtils;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -49,7 +43,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
  * NOTE: some of these tests are heavily dependent from wiremock stub creation,
  * that could take from 500ms to 1000ms or more, depending on various factors.
  * Executing all tests in this class will hide
- * the issue because the first test to be executed (and probably warm up wiremock) is testHandleExpiresFromServer,
+ * the issue because the first test to be executed (and probably warm up wiremock) is handleExpiresFromServer,
  * that is not affected by a delay of 1000ms.
  * <p>
  * In order to fix the issue test should be refactored to start wiremock
@@ -64,7 +58,7 @@ public class CacheExpireIT {
     public File tmpDir;
 
     @Test
-    public void testHandleExpiresFromServer() throws Exception {
+    void handleExpiresFromServer() throws Exception {
         Date expire = new Date(System.currentTimeMillis() + 60000 * 2);
         String formatted = HttpUtils.formatDateHeader(expire); // ex Wed, 01 Dec 2021 08:11:39 GMT
 
@@ -93,12 +87,11 @@ public class CacheExpireIT {
                         """);
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("it <b>works</b> !!"));
+                assertThat(s).contains("it <b>works</b> !!");
                 resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
-                assertThat(resp.getHeaderLines(), allOf(
-                        not(hasItem(startsWithIgnoringCase("X-Cached"))),
-                        hasItem(startsWithIgnoringCase("Expires: " + formatted))
-                ));
+                assertThat(resp.getHeaderLines())
+                        .noneSatisfy(h -> assertThat(h).startsWithIgnoringCase("X-Cached"))
+                        .anySatisfy(h -> assertThat(h).startsWithIgnoringCase("Expires: " + formatted));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -109,24 +102,23 @@ public class CacheExpireIT {
                         """);
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("it <b>works</b> !!"));
+                assertThat(s).contains("it <b>works</b> !!");
                 resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
-                assertThat(resp.getHeaderLines(), allOf(
-                        hasItem(startsWithIgnoringCase("X-Cached")),
-                        hasItem(startsWithIgnoringCase("Expires: " + formatted))
-                ));
+                assertThat(resp.getHeaderLines())
+                        .anySatisfy(h -> assertThat(h).startsWithIgnoringCase("X-Cached"))
+                        .anySatisfy(h -> assertThat(h).startsWithIgnoringCase("Expires: " + formatted));
             }
 
-            assertEquals(1, server.getCache().getCacheSize());
-            assertEquals(1, server.getCache().getStats().getHits());
-            assertEquals(1, server.getCache().getStats().getMisses());
-            assertEquals(18, server.getCache().getStats().getDirectMemoryUsed());
-            assertEquals(0, server.getCache().getStats().getHeapMemoryUsed());
+            assertThat(server.getCache().getCacheSize()).isOne();
+            assertThat(server.getCache().getStats().getHits()).isOne();
+            assertThat(server.getCache().getStats().getMisses()).isOne();
+            assertThat(server.getCache().getStats().getDirectMemoryUsed()).isEqualTo(18);
+            assertThat(server.getCache().getStats().getHeapMemoryUsed()).isZero();
         }
     }
 
     @Test
-    public void testHandleExpiresMissingFromServer() throws Exception {
+    void handleExpiresMissingFromServer() throws Exception {
         stubFor(get(urlEqualTo("/index-no-expire.html"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -151,12 +143,11 @@ public class CacheExpireIT {
                         """);
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("it <b>works</b> !!"));
+                assertThat(s).contains("it <b>works</b> !!");
                 resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
-                assertThat(resp.getHeaderLines(), allOf(
-                        not(hasItem(startsWithIgnoringCase("X-Cached"))),
-                        hasItem(startsWithIgnoringCase("Expires: "))
-                ));
+                assertThat(resp.getHeaderLines())
+                        .noneSatisfy(h -> assertThat(h).startsWithIgnoringCase("X-Cached"))
+                        .anySatisfy(h -> assertThat(h).startsWithIgnoringCase("Expires: "));
                 expires = resp.getHeaderLines().stream().filter(h -> h.startsWith("expires: ")).findFirst().orElseThrow();
             }
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
@@ -167,22 +158,21 @@ public class CacheExpireIT {
                         """);
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("it <b>works</b> !!"));
+                assertThat(s).contains("it <b>works</b> !!");
                 resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
-                assertThat(resp.getHeaderLines(), allOf(
-                        hasItem(startsWithIgnoringCase("X-Cached")),
-                        hasItem(startsWith(expires))
-                ));
+                assertThat(resp.getHeaderLines())
+                        .anySatisfy(h -> assertThat(h).startsWithIgnoringCase("X-Cached"))
+                        .anySatisfy(h -> assertThat(h).startsWith(expires));
             }
 
-            assertEquals(1, server.getCache().getCacheSize());
-            assertEquals(1, server.getCache().getStats().getHits());
-            assertEquals(1, server.getCache().getStats().getMisses());
+            assertThat(server.getCache().getCacheSize()).isOne();
+            assertThat(server.getCache().getStats().getHits()).isOne();
+            assertThat(server.getCache().getStats().getMisses()).isOne();
         }
     }
 
     @Test
-    public void testDoNotCacheExpiredContent() throws Exception {
+    void doNotCacheExpiredContent() throws Exception {
         Date expire = new Date(System.currentTimeMillis() - 1000);
         String formatted = HttpUtils.formatDateHeader(expire);
 
@@ -206,34 +196,32 @@ public class CacheExpireIT {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("it <b>works</b> !!"));
+                assertThat(s).contains("it <b>works</b> !!");
                 resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
-                assertThat(resp.getHeaderLines(), allOf(
-                        not(hasItem(startsWithIgnoringCase("X-Cached"))),
-                        hasItem(startsWithIgnoringCase("Expires: " + formatted))
-                ));
+                assertThat(resp.getHeaderLines())
+                        .noneSatisfy(h -> assertThat(h).startsWithIgnoringCase("X-Cached"))
+                        .anySatisfy(h -> assertThat(h).startsWithIgnoringCase("Expires: " + formatted));
             }
 
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("it <b>works</b> !!"));
+                assertThat(s).contains("it <b>works</b> !!");
                 resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
-                assertThat(resp.getHeaderLines(), allOf(
-                        not(hasItem(startsWithIgnoringCase("X-Cached"))),
-                        hasItem(startsWithIgnoringCase("Expires: " + formatted))
-                ));
+                assertThat(resp.getHeaderLines())
+                        .noneSatisfy(h -> assertThat(h).startsWithIgnoringCase("X-Cached"))
+                        .anySatisfy(h -> assertThat(h).startsWithIgnoringCase("Expires: " + formatted));
             }
 
-            assertEquals(0, server.getCache().getCacheSize());
-            assertEquals(0, server.getCache().getStats().getHits());
-            assertEquals(2, server.getCache().getStats().getMisses());
+            assertThat(server.getCache().getCacheSize()).isZero();
+            assertThat(server.getCache().getStats().getHits()).isZero();
+            assertThat(server.getCache().getStats().getMisses()).isEqualTo(2);
         }
     }
 
     @Test
-    public void testExpireContentOnGet() throws Exception {
+    void expireContentOnGet() throws Exception {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir);) {
@@ -258,17 +246,16 @@ public class CacheExpireIT {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("it <b>works</b> !!"));
+                assertThat(s).contains("it <b>works</b> !!");
                 resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
-                assertThat(resp.getHeaderLines(), allOf(
-                        not(hasItem(startsWithIgnoringCase("X-Cached"))),
-                        hasItem(startsWithIgnoringCase("Expires: " + formatted))
-                ));
+                assertThat(resp.getHeaderLines())
+                        .noneSatisfy(h -> assertThat(h).startsWithIgnoringCase("X-Cached"))
+                        .anySatisfy(h -> assertThat(h).startsWithIgnoringCase("Expires: " + formatted));
             }
 
-            assertEquals(1, server.getCache().getCacheSize());
-            assertEquals(0, server.getCache().getStats().getHits());
-            assertEquals(1, server.getCache().getStats().getMisses());
+            assertThat(server.getCache().getCacheSize()).isOne();
+            assertThat(server.getCache().getStats().getHits()).isZero();
+            assertThat(server.getCache().getStats().getMisses()).isOne();
 
             Thread.sleep(5_000);
 
@@ -277,22 +264,21 @@ public class CacheExpireIT {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("it <b>works</b> !!"));
+                assertThat(s).contains("it <b>works</b> !!");
                 resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
-                assertThat(resp.getHeaderLines(), allOf(
-                        not(hasItem(startsWithIgnoringCase("X-Cached"))),
-                        hasItem(startsWithIgnoringCase("Expires: " + formatted))
-                ));
+                assertThat(resp.getHeaderLines())
+                        .noneSatisfy(h -> assertThat(h).startsWithIgnoringCase("X-Cached"))
+                        .anySatisfy(h -> assertThat(h).startsWithIgnoringCase("Expires: " + formatted));
             }
 
-            assertEquals(0, server.getCache().getCacheSize());
-            assertEquals(0, server.getCache().getStats().getHits());
-            assertEquals(2, server.getCache().getStats().getMisses());
+            assertThat(server.getCache().getCacheSize()).isZero();
+            assertThat(server.getCache().getStats().getHits()).isZero();
+            assertThat(server.getCache().getStats().getMisses()).isEqualTo(2);
         }
     }
 
     @Test
-    public void testExpireContentWithoutGet() throws Exception {
+    void expireContentWithoutGet() throws Exception {
         TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.getPort(), true, false);
 
         try (HttpProxyServer server = HttpProxyServer.buildForTests("localhost", 0, mapper, tmpDir);) {
@@ -318,21 +304,20 @@ public class CacheExpireIT {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index-with-expire.html HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertTrue(s.contains("it <b>works</b> !!"));
+                assertThat(s).contains("it <b>works</b> !!");
                 resp.getHeaderLines().forEach(h -> System.out.println("HEADER LINE :" + h));
-                assertThat(resp.getHeaderLines(), allOf(
-                        not(hasItem(startsWithIgnoringCase("X-Cached"))),
-                        hasItem(startsWithIgnoringCase("Expires: " + formatted))
-                ));
+                assertThat(resp.getHeaderLines())
+                        .noneSatisfy(h -> assertThat(h).startsWithIgnoringCase("X-Cached"))
+                        .anySatisfy(h -> assertThat(h).startsWithIgnoringCase("Expires: " + formatted));
             }
 
-            assertEquals(1, server.getCache().getCacheSize());
-            assertEquals(0, server.getCache().getStats().getHits());
-            assertEquals(1, server.getCache().getStats().getMisses());
-            TestUtils.waitForCondition(() -> {
+            assertThat(server.getCache().getCacheSize()).isOne();
+            assertThat(server.getCache().getStats().getHits()).isZero();
+            assertThat(server.getCache().getStats().getMisses()).isOne();
+            await().atMost(10, SECONDS).untilAsserted(() -> {
                 server.getCache().getInnerCache().evict();
-                return server.getCache().getCacheSize() == 0;
-            }, 10);
+                assertThat(server.getCache().getCacheSize()).isZero();
+            });
         }
     }
 

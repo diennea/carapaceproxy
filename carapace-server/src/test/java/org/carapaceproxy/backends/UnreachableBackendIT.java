@@ -24,12 +24,10 @@ import static com.github.tomakehurst.wiremock.client.WireMock.configureFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.carapaceproxy.server.backends.BackendHealthStatus.Status.COLD;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
@@ -45,37 +43,37 @@ import org.carapaceproxy.server.config.ActionConfiguration;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
-import org.carapaceproxy.utils.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class UnreachableBackendIT {
 
-    // Manually managed (not @RegisterExtension): testWithUnreachableBackend stops the backend mid-test.
+    // Manually managed (not @RegisterExtension): withUnreachableBackend stops the backend mid-test.
     private final WireMockServer wireMockRule = new WireMockServer(WireMockConfiguration.options().port(0));
 
     @TempDir
     public File tmpDir;
 
     @BeforeEach
-    public void startWireMock() {
+    void startWireMock() {
         wireMockRule.start();
         configureFor("localhost", wireMockRule.port());
     }
 
     @AfterEach
-    public void stopWireMock() {
+    void stopWireMock() {
         if (wireMockRule.isRunning()) {
             wireMockRule.stop();
         }
     }
 
-    @ParameterizedTest
-    @CsvSource({"true", "false"})
-    public void testWithUnreachableBackend(boolean useCache) throws Exception {
+    @ParameterizedTest(name = "useCache={0}")
+    @ValueSource(booleans = {true, false})
+    void withUnreachableBackend(boolean useCache) throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -96,18 +94,18 @@ public class UnreachableBackendIT {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertEquals("HTTP/1.1 503 Service Unavailable\r\n", resp.getStatusLine());
-                assertEquals("""
+                assertThat(resp.getStatusLine()).startsWith("HTTP/1.1 503");
+                assertThat(resp.getBodyString()).isEqualTo("""
                         <html>
                             <body>
                                 Service Unavailable
                             </body>
                         </html>
-                        """, resp.getBodyString());
+                        """);
             }
-            assertSame(BackendHealthStatus.Status.DOWN, server.getBackendHealthManager().getBackendStatus(key).getStatus());
-            TestUtils.waitForCondition(() -> ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get() == 0, 10);
-            assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
+            assertThat(server.getBackendHealthManager().getBackendStatus(key).getStatus()).isSameAs(BackendHealthStatus.Status.DOWN);
+            await().atMost(10, SECONDS).untilAsserted(() -> assertThat(ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get()).isZero());
+            assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get()).isZero();
         }
     }
 
@@ -151,29 +149,28 @@ public class UnreachableBackendIT {
             server.addListener(NetworkListenerConfiguration.withDefault("localhost", 0));
             server.start();
             int port = server.getLocalPort();
-            assertTrue(port > 0);
             try (RawHttpClient client = new RawHttpClient("localhost", port)) {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertEquals("HTTP/1.1 503 Service Unavailable\r\n", resp.getStatusLine());
-                assertEquals("""
+                assertThat(resp.getStatusLine()).startsWith("HTTP/1.1 503");
+                assertThat(resp.getBodyString()).isEqualTo("""
                         <html>
                             <body>
                                 Service Unavailable
                             </body>
                         </html>
-                        """, resp.getBodyString());
+                        """);
             }
-            assertSame(COLD, server.getBackendHealthManager().getBackendStatus(key).getStatus()); // no troubles for new connections
-            TestUtils.waitForCondition(() -> ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get() == 0, 10);
-            assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
+            assertThat(server.getBackendHealthManager().getBackendStatus(key).getStatus()).isSameAs(COLD); // no troubles for new connections
+            await().atMost(10, SECONDS).untilAsserted(() -> assertThat(ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get()).isZero());
+            assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get()).isZero();
         }
     }
 
-    @ParameterizedTest
-    @CsvSource({"true", "false"})
-    public void testConnectionResetByPeer(boolean useCache) throws Exception {
+    @ParameterizedTest(name = "useCache={0}")
+    @ValueSource(booleans = {true, false})
+    void connectionResetByPeer(boolean useCache) throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -190,18 +187,18 @@ public class UnreachableBackendIT {
                 RawHttpClient.HttpResponse resp = client.executeRequest("GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 String s = resp.toString();
                 System.out.println("s:" + s);
-                assertEquals("HTTP/1.1 503 Service Unavailable\r\n", resp.getStatusLine());
-                assertEquals("""
+                assertThat(resp.getStatusLine()).startsWith("HTTP/1.1 503");
+                assertThat(resp.getBodyString()).isEqualTo("""
                         <html>
                             <body>
                                 Service Unavailable
                             </body>
                         </html>
-                        """, resp.getBodyString());
+                        """);
             }
-            assertSame(COLD, server.getBackendHealthManager().getBackendStatus(key).getStatus()); // no troubles for new connections
-            TestUtils.waitForCondition(() -> ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get() == 0, 10);
-            assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get(), is(0));
+            assertThat(server.getBackendHealthManager().getBackendStatus(key).getStatus()).isSameAs(COLD); // no troubles for new connections
+            await().atMost(10, SECONDS).untilAsserted(() -> assertThat(ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get()).isZero());
+            assertThat((int) ProxyRequestsManager.PENDING_REQUESTS_GAUGE.get()).isZero();
         }
     }
 

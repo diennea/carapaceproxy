@@ -19,10 +19,15 @@
  */
 package org.carapaceproxy.cluster.impl;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.awaitility.Awaitility.await;
+
 import java.io.File;
 import java.lang.reflect.Field;
-import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -30,6 +35,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.test.KillSession;
 import org.apache.curator.test.TestingServer;
@@ -37,17 +45,7 @@ import org.apache.zookeeper.ZooKeeper;
 import org.carapaceproxy.cluster.GroupMembershipHandler;
 import org.carapaceproxy.server.config.ConfigurationChangeInProgressException;
 import org.carapaceproxy.utils.TestUtils;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import org.junit.jupiter.api.Test;
-import java.util.HashMap;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 import org.junit.jupiter.api.io.TempDir;
 
 public class ZooKeeperGroupMembershipHandlerIT {
@@ -59,7 +57,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
     String peerId3 = "p3";
 
     @Test
-    public void testPeerDiscovery() throws Exception {
+    void peerDiscovery() throws Exception {
         try (TestingServer testingServer = new TestingServer(2229, tmpDir)) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
@@ -70,8 +68,8 @@ public class ZooKeeperGroupMembershipHandlerIT {
                 peer2.start();
                 List<String> peersFrom1 = peer1.getPeers();
                 List<String> peersFrom2 = peer2.getPeers();
-                assertEquals(Arrays.asList(peerId1, peerId2), peersFrom1);
-                assertEquals(Arrays.asList(peerId1, peerId2), peersFrom2);
+                assertThat(peersFrom1).containsExactly(peerId1, peerId2);
+                assertThat(peersFrom2).containsExactly(peerId1, peerId2);
 
                 try (ZooKeeperGroupMembershipHandler peer3 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
                         6000, false /*acl */, peerId3, Collections.EMPTY_MAP, new Properties())) {
@@ -79,16 +77,16 @@ public class ZooKeeperGroupMembershipHandlerIT {
                     peersFrom1 = peer1.getPeers();
                     peersFrom2 = peer2.getPeers();
                     List<String> peersFrom3 = peer3.getPeers();
-                    assertEquals(Arrays.asList(peerId1, peerId2, peerId3), peersFrom1);
-                    assertEquals(Arrays.asList(peerId1, peerId2, peerId3), peersFrom2);
-                    assertEquals(Arrays.asList(peerId1, peerId2, peerId3), peersFrom3);
+                    assertThat(peersFrom1).containsExactly(peerId1, peerId2, peerId3);
+                    assertThat(peersFrom2).containsExactly(peerId1, peerId2, peerId3);
+                    assertThat(peersFrom3).containsExactly(peerId1, peerId2, peerId3);
                 }
 
                 // peer3 exits
                 peersFrom1 = peer1.getPeers();
                 peersFrom2 = peer2.getPeers();
-                assertEquals(Arrays.asList(peerId1, peerId2), peersFrom1);
-                assertEquals(Arrays.asList(peerId1, peerId2), peersFrom2);
+                assertThat(peersFrom1).containsExactly(peerId1, peerId2);
+                assertThat(peersFrom2).containsExactly(peerId1, peerId2);
 
             }
         }
@@ -105,7 +103,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
     }
 
     @Test
-    public void testWatchEvent() throws Exception {
+    void watchEvent() throws Exception {
         try (TestingServer testingServer = new TestingServer(2229, tmpDir);) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
@@ -116,8 +114,8 @@ public class ZooKeeperGroupMembershipHandlerIT {
                 peer2.start();
                 List<String> peersFrom1 = peer1.getPeers();
                 List<String> peersFrom2 = peer2.getPeers();
-                assertEquals(Arrays.asList(peerId1, peerId2), peersFrom1);
-                assertEquals(Arrays.asList(peerId1, peerId2), peersFrom2);
+                assertThat(peersFrom1).containsExactly(peerId1, peerId2);
+                assertThat(peersFrom2).containsExactly(peerId1, peerId2);
 
                 AtomicInteger eventFired2 = new AtomicInteger();
                 Map<String, Object> dataRes2 = new HashMap<>();
@@ -135,9 +133,8 @@ public class ZooKeeperGroupMembershipHandlerIT {
                 });
 
                 peer1.fireEvent("foo", null);
-                TestUtils.waitForCondition(() -> eventFired2.get() >= 1, 100);
-                assertTrue(eventFired2.get() >= 1);
-                assertTrue(dataRes2.isEmpty());
+                await().atMost(100, SECONDS).untilAsserted(() -> assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1));
+                assertThat(dataRes2).isEmpty();
                 eventFired2.set(0);
 
                 peer1.fireEvent("foo", Map.of(
@@ -146,13 +143,12 @@ public class ZooKeeperGroupMembershipHandlerIT {
                         "list", List.of(1, 2),
                         "obj", new DummyObject(1, "s")
                 ));
-                TestUtils.waitForCondition(() -> eventFired2.get() >= 1, 100);
-                assertTrue(eventFired2.get() >= 1);
-                assertTrue(((int) dataRes2.get("number")) == 1);
-                assertTrue(dataRes2.get("string").equals("mystring"));
-                assertTrue(((List<Integer>) dataRes2.get("list")).containsAll(List.of(1, 2)));
-                assertTrue(((Map<String, Object>) dataRes2.get("obj")).get("number").equals(1));
-                assertTrue(((Map<String, Object>) dataRes2.get("obj")).get("string").equals("s"));
+                await().atMost(100, SECONDS).untilAsserted(() -> assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1));
+                assertThat(((int) dataRes2.get("number"))).isOne();
+                assertThat(dataRes2).containsEntry("string", "mystring");
+                assertThat(((List<Integer>) dataRes2.get("list"))).containsExactly(1, 2);
+                assertThat(((Map<String, Object>) dataRes2.get("obj"))).containsEntry("number", 1);
+                assertThat(((Map<String, Object>) dataRes2.get("obj"))).containsEntry("string", "s");
                 eventFired2.set(0);
                 dataRes2.clear();
 
@@ -178,13 +174,13 @@ public class ZooKeeperGroupMembershipHandlerIT {
                     });
 
                     peer1.fireEvent("foo", null);
-                    TestUtils.waitForCondition(() -> (eventFired2.get() >= 1
-                                && eventFired3.get() >= 1), 100);
-                    assertTrue(eventFired2.get() >= 1);
-                    assertTrue(dataRes2.isEmpty());
+                    await().atMost(100, SECONDS).untilAsserted(() -> {
+                        assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1);
+                        assertThat(eventFired3.get()).isGreaterThanOrEqualTo(1);
+                    });
+                    assertThat(dataRes2).isEmpty();
                     eventFired2.set(0);
-                    assertTrue(eventFired3.get() >= 1);
-                    assertTrue(dataRes3.isEmpty());
+                    assertThat(dataRes3).isEmpty();
                     eventFired3.set(0);
 
                     peer1.fireEvent("foo", Map.of(
@@ -193,22 +189,23 @@ public class ZooKeeperGroupMembershipHandlerIT {
                             "list", List.of("1", "2"),
                             "obj", new DummyObject(1, "s")
                     ));
-                    TestUtils.waitForCondition(() -> (eventFired2.get() >= 1
-                                && eventFired3.get() >= 1), 100);
-                    assertTrue(eventFired2.get() >= 1);
-                    assertTrue(((int) dataRes2.get("number")) == 1);
-                    assertTrue(dataRes2.get("string").equals("mystring"));
-                    assertTrue(((List<String>) dataRes2.get("list")).containsAll(List.of("1", "2")));
-                    assertTrue(((Map<String, Object>) dataRes2.get("obj")).get("number").equals(1));
-                    assertTrue(((Map<String, Object>) dataRes2.get("obj")).get("string").equals("s"));
+                    await().atMost(100, SECONDS).untilAsserted(() -> {
+                        assertThat(eventFired2.get()).isGreaterThanOrEqualTo(1);
+                        assertThat(eventFired3.get()).isGreaterThanOrEqualTo(1);
+                    });
+                    assertThat(((int) dataRes2.get("number"))).isOne();
+                    assertThat(dataRes2).containsEntry("string", "mystring");
+                    assertThat(((List<String>) dataRes2.get("list"))).containsExactly("1", "2");
+                    assertThat(((Map<String, Object>) dataRes2.get("obj"))).containsEntry("number", 1);
+                    assertThat(((Map<String, Object>) dataRes2.get("obj"))).containsEntry("string", "s");
                     eventFired2.set(0);
                     dataRes2.clear();
-                    assertTrue(eventFired3.get() >= 1);
-                    assertTrue(((int) dataRes3.get("number")) == 1);
-                    assertTrue(dataRes3.get("string").equals("mystring"));
-                    assertTrue(((List<Integer>) dataRes3.get("list")).containsAll(List.of("1", "2")));
-                    assertTrue(((Map<String, Object>) dataRes3.get("obj")).get("number").equals(1));
-                    assertTrue(((Map<String, Object>) dataRes3.get("obj")).get("string").equals("s"));
+                    assertThat(eventFired3.get()).isGreaterThanOrEqualTo(1);
+                    assertThat(((int) dataRes3.get("number"))).isOne();
+                    assertThat(dataRes3).containsEntry("string", "mystring");
+                    assertThat((List<?>) dataRes3.get("list")).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST).containsExactly("1", "2");
+                    assertThat(((Map<String, Object>) dataRes3.get("obj"))).containsEntry("number", 1);
+                    assertThat(((Map<String, Object>) dataRes3.get("obj"))).containsEntry("string", "s");
                     eventFired3.set(0);
                     dataRes3.clear();
 
@@ -225,15 +222,15 @@ public class ZooKeeperGroupMembershipHandlerIT {
                         }
                         Thread.sleep(100);
                     }
-                    assertTrue(eventFired2.get() > 0);
-                    assertTrue(((int) dataRes2.get("number")) == 1);
-                    assertTrue(dataRes2.get("string").equals("mystring"));
-                    assertTrue(((List<Integer>) dataRes2.get("list")).containsAll(List.of(1, 2)));
-                    assertTrue(((Map<String, Object>) dataRes2.get("obj")).get("number").equals(1));
-                    assertTrue(((Map<String, Object>) dataRes2.get("obj")).get("string").equals("s"));
+                    assertThat(eventFired2.get()).isGreaterThan(0);
+                    assertThat(((int) dataRes2.get("number"))).isOne();
+                    assertThat(dataRes2).containsEntry("string", "mystring");
+                    assertThat(((List<Integer>) dataRes2.get("list"))).containsExactly(1, 2);
+                    assertThat(((Map<String, Object>) dataRes2.get("obj"))).containsEntry("number", 1);
+                    assertThat(((Map<String, Object>) dataRes2.get("obj"))).containsEntry("string", "s");
                     // self events are not fired
-                    assertTrue(eventFired3.get() == 0);
-                    assertTrue(dataRes3.isEmpty());
+                    assertThat(eventFired3.get()).isZero();
+                    assertThat(dataRes3).isEmpty();
                 }
 
             }
@@ -241,7 +238,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
     }
 
     @Test
-    public void testPeerInfo() throws Exception {
+    void peerInfo() throws Exception {
         try (TestingServer testingServer = new TestingServer(2229, tmpDir);) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
@@ -254,41 +251,43 @@ public class ZooKeeperGroupMembershipHandlerIT {
                 // OP on peer1
                 {
                     Map<String, String> info = peer1.loadInfoForPeer(peerId1);
-                    assertEquals("peer1", info.get("name"));
+                    assertThat(info).containsEntry("name", "peer1");
                     info = peer1.loadInfoForPeer(peerId2);
-                    assertEquals("peer2", info.get("name"));
+                    assertThat(info).containsEntry("name", "peer2");
 
                     peer1.storeLocalPeerInfo(Map.of("name", "newpeer1", "address", "localhost"));
                     info = peer1.loadInfoForPeer(peerId1);
-                    assertEquals("newpeer1", info.get("name"));
-                    assertEquals("localhost", info.get("address"));
+                    assertThat(info)
+                            .containsEntry("name", "newpeer1")
+                            .containsEntry("address", "localhost");
 
                     peer1.storeLocalPeerInfo(Collections.EMPTY_MAP);
                     info = peer1.loadInfoForPeer(peerId1);
-                    assertTrue(info.isEmpty());
+                    assertThat(info).isEmpty();
                     peer1.storeLocalPeerInfo(Map.of("port", "8080"));
                     info = peer1.loadInfoForPeer(peerId1);
-                    assertNull(info.get("name"));
+                    assertThat(info.get("name")).isNull();
                     peer1.storeLocalPeerInfo(null); // discarded
                     info = peer1.loadInfoForPeer(peerId1);
-                    assertNull(info);
+                    assertThat(info).isNull();
                 }
 
                 // OP on peer2
                 {
                     peer2.storeLocalPeerInfo(Map.of("name", "peer2", "address", "localhost:8080"));
                     Map<String, String> info = peer2.loadInfoForPeer(peerId2);
-                    assertEquals("peer2", info.get("name"));
-                    assertEquals("localhost:8080", info.get("address"));
+                    assertThat(info)
+                            .containsEntry("name", "peer2")
+                            .containsEntry("address", "localhost:8080");
                     info = peer2.loadInfoForPeer(peerId1);
-                    assertNull(info);
+                    assertThat(info).isNull();
                 }
             }
         }
     }
 
     @Test
-    public void testRestoreSignal() throws Exception {
+    void restoreSignal() throws Exception {
         try (TestingServer testingServer = new TestingServer(TestUtils.getFreeNonEphemeralPort(), tmpDir)) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
@@ -305,22 +304,25 @@ public class ZooKeeperGroupMembershipHandlerIT {
                     flagOnAtCallback.set(peer2.isRestoreInProgress());
                     reloads2.incrementAndGet();
                 });
-                assertFalse(peer1.isRestoreInProgress());
-                assertFalse(peer2.isRestoreInProgress());
+                assertThat(peer1.isRestoreInProgress()).isFalse();
+                assertThat(peer2.isRestoreInProgress()).isFalse();
 
                 GroupMembershipHandler.RestoreSignal signal = peer1.raiseRestoreSignal();
                 signal.ensureHeld();
-                TestUtils.waitForCondition(() -> peer1.isRestoreInProgress() && peer2.isRestoreInProgress(), 10);
-                assertThrows(ConfigurationChangeInProgressException.class, peer2::raiseRestoreSignal);
-                assertThrows(ConfigurationChangeInProgressException.class, peer1::raiseRestoreSignal);
+                await().atMost(10, SECONDS).until(() -> peer1.isRestoreInProgress() && peer2.isRestoreInProgress());
+                assertThatExceptionOfType(ConfigurationChangeInProgressException.class).isThrownBy(peer2::raiseRestoreSignal)
+                        .withMessageContaining("another restore is in progress");
+                assertThatExceptionOfType(ConfigurationChangeInProgressException.class).isThrownBy(peer1::raiseRestoreSignal)
+                        .withMessageContaining("another restore is in progress");
 
                 signal.close();
-                assertThrows(IllegalStateException.class, signal::ensureHeld);
+                assertThatExceptionOfType(IllegalStateException.class).isThrownBy(signal::ensureHeld)
+                        .withMessage("Restore signal lost by peer " + peerId1);
                 // the creator applied the restore itself: only the other peer reloads, before its flag drops
-                TestUtils.waitForCondition(() -> !peer1.isRestoreInProgress() && !peer2.isRestoreInProgress(), 10);
-                assertEquals(0, reloads1.get());
-                assertEquals(1, reloads2.get());
-                assertTrue(flagOnAtCallback.get());
+                await().atMost(10, SECONDS).until(() -> !peer1.isRestoreInProgress() && !peer2.isRestoreInProgress());
+                assertThat(reloads1.get()).isZero();
+                assertThat(reloads2.get()).isOne();
+                assertThat(flagOnAtCallback.get()).isTrue();
 
                 // two restores in a row on the same node are not confused
                 final int reloadsBefore = reloads2.get();
@@ -328,35 +330,29 @@ public class ZooKeeperGroupMembershipHandlerIT {
                 try (GroupMembershipHandler.RestoreSignal second = peer1.raiseRestoreSignal()) {
                     second.ensureHeld();
                     // back to back, the other peer may never see the first signal: only the last one must reach it
-                    TestUtils.waitForCondition(peer2::isRestoreInProgress, 10);
+                    await().atMost(10, SECONDS).until(peer2::isRestoreInProgress);
                 }
-                TestUtils.waitForCondition(() -> reloads2.get() > reloadsBefore && !peer2.isRestoreInProgress(), 10);
-                assertEquals(0, reloads1.get());
+                await().atMost(10, SECONDS).until(() -> reloads2.get() > reloadsBefore && !peer2.isRestoreInProgress());
+                assertThat(reloads1.get()).isZero();
 
                 // the signal goes with the session of the node that raised it
                 final int reloadsBeforeExpiry = reloads2.get();
                 final GroupMembershipHandler.RestoreSignal lost = peer1.raiseRestoreSignal();
-                TestUtils.waitForCondition(peer2::isRestoreInProgress, 10);
+                await().atMost(10, SECONDS).until(peer2::isRestoreInProgress);
                 KillSession.kill(zooKeeperOf(peer1));
-                TestUtils.waitForCondition(() -> reloads2.get() > reloadsBeforeExpiry && !peer2.isRestoreInProgress(), 30);
+                await().atMost(30, SECONDS).until(() -> reloads2.get() > reloadsBeforeExpiry && !peer2.isRestoreInProgress());
                 // the client learns about the expiry asynchronously
-                TestUtils.waitForCondition(() -> {
-                    try {
-                        lost.ensureHeld();
-                        return false;
-                    } catch (IllegalStateException expected) {
-                        return true;
-                    }
-                }, 30);
-                assertEquals(0, reloads1.get());
+                await().atMost(30, SECONDS).untilAsserted(() ->
+                        assertThatExceptionOfType(IllegalStateException.class).isThrownBy(lost::ensureHeld));
+                assertThat(reloads1.get()).isZero();
 
                 // the signal is free again; the stale handle of the first node never clears it
                 try (GroupMembershipHandler.RestoreSignal other = peer2.raiseRestoreSignal()) {
-                    TestUtils.waitForCondition(peer1::isRestoreInProgress, 10);
+                    await().atMost(10, SECONDS).until(peer1::isRestoreInProgress);
                     lost.close();
                     other.ensureHeld();
                 }
-                TestUtils.waitForCondition(() -> reloads1.get() == 1 && !peer1.isRestoreInProgress(), 10);
+                await().atMost(10, SECONDS).until(() -> reloads1.get() == 1 && !peer1.isRestoreInProgress());
                 // and its node can restore again
                 peer1.raiseRestoreSignal().close();
             }
@@ -364,7 +360,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
     }
 
     @Test
-    public void testExecuteInMutexKeepsTheInterrupt() throws Exception {
+    void executeInMutexKeepsTheInterrupt() throws Exception {
         try (TestingServer testingServer = new TestingServer(TestUtils.getFreeNonEphemeralPort(), tmpDir)) {
             testingServer.start();
             try (ZooKeeperGroupMembershipHandler peer1 = new ZooKeeperGroupMembershipHandler(testingServer.getConnectString(),
@@ -384,7 +380,7 @@ public class ZooKeeperGroupMembershipHandlerIT {
                     }
                 }));
                 holder.start();
-                assertTrue(held.await(10, TimeUnit.SECONDS));
+                assertThat(held.await(10, TimeUnit.SECONDS)).isTrue();
 
                 final AtomicBoolean ran = new AtomicBoolean();
                 final AtomicBoolean interrupted = new AtomicBoolean();
@@ -399,9 +395,9 @@ public class ZooKeeperGroupMembershipHandlerIT {
                 release.countDown();
                 holder.join(10_000);
 
-                assertFalse(waiter.isAlive());
-                assertTrue(interrupted.get());
-                assertFalse(ran.get());
+                assertThat(waiter.isAlive()).isFalse();
+                assertThat(interrupted.get()).isTrue();
+                assertThat(ran.get()).isFalse();
             }
         }
     }

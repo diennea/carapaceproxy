@@ -6,15 +6,13 @@ import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_KEEP_ALIVE_COUNT;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_KEEP_ALIVE_IDLE;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_KEEP_ALIVE_INTERVAL;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_MAX_KEEP_ALIVE_REQUESTS;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SO_BACKLOG;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static reactor.netty.http.HttpProtocol.HTTP11;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
@@ -24,7 +22,6 @@ import io.netty.util.concurrent.DefaultEventExecutor;
 import java.io.File;
 import java.io.IOException;
 import java.util.Set;
-import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
@@ -33,7 +30,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class ForwardedStrategyIT {
     public static final String REAL_IP_ADDRESS = "127.0.0.1";
@@ -50,7 +47,7 @@ public class ForwardedStrategyIT {
     public File tmpDir;
 
     @BeforeEach
-    public void setupWireMock() {
+    void setupWireMock() {
         stubFor(get(urlEqualTo("/index.html"))
                 .withHeader("X-Forwarded-For", equalTo(FORWARDED_IP_ADDRESS))
                 .willReturn(aResponse()
@@ -72,100 +69,95 @@ public class ForwardedStrategyIT {
     }
 
     @Test
-    public void testDropStrategy() throws IOException, ConfigurationNotValidException, InterruptedException {
+    void dropStrategy() throws Exception {
         final var mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
         try (final var server = new HttpProxyServer(mapper, tmpDir)) {
             server.addListener(getConfiguration(ForwardedStrategies.drop(), Set.of()));
             server.start();
             int port = server.getLocalPort();
-            assertTrue(port > 0);
             try (final var client = new RawHttpClient("localhost", port)) {
                 final var response = requestWithoutHeader(client);
-                assertThat(response, containsString(NO_HEADER));
+                assertThat(response).contains(NO_HEADER);
             }
             try (final var client = new RawHttpClient("localhost", port)) {
                 final var response = requestWithHeader(client);
-                assertThat(response, containsString(NO_HEADER));
+                assertThat(response).contains(NO_HEADER);
             }
         }
     }
 
     @Test
-    public void testPreserveStrategy() throws IOException, ConfigurationNotValidException, InterruptedException {
+    void preserveStrategy() throws Exception {
         final var mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
         try (final var server = new HttpProxyServer(mapper, tmpDir)) {
             server.addListener(getConfiguration(ForwardedStrategies.preserve(), Set.of()));
             server.start();
             int port = server.getLocalPort();
-            assertTrue(port > 0);
             try (final var client = new RawHttpClient("localhost", port)) {
                 final var response = requestWithoutHeader(client);
-                assertThat(response, containsString(NO_HEADER));
+                assertThat(response).contains(NO_HEADER);
             }
             try (final var client = new RawHttpClient("localhost", port)) {
                 final var response = requestWithHeader(client);
-                assertThat(response, containsString(HEADER_PRESENT));
+                assertThat(response).contains(HEADER_PRESENT);
             }
         }
     }
 
     @Test
-    public void testRewriteStrategy() throws IOException, ConfigurationNotValidException, InterruptedException {
+    void rewriteStrategy() throws Exception {
         final var mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
         try (final var server = new HttpProxyServer(mapper, tmpDir)) {
             server.addListener(getConfiguration(ForwardedStrategies.rewrite(), Set.of()));
             server.start();
             int port = server.getLocalPort();
-            assertTrue(port > 0);
             try (final var client = new RawHttpClient("localhost", port)) {
                 final var response = requestWithoutHeader(client);
-                assertThat(response, containsString(HEADER_REWRITTEN));
+                assertThat(response).contains(HEADER_REWRITTEN);
             }
             try (final var client = new RawHttpClient("localhost", port)) {
                 final var response = requestWithHeader(client);
-                assertThat(response, containsString(HEADER_REWRITTEN));
+                assertThat(response).contains(HEADER_REWRITTEN);
             }
         }
     }
 
-    @ParameterizedTest
-    @CsvSource({"true", "false"})
-    public void testIfTrustedStrategy(boolean useCidr) throws IOException, ConfigurationNotValidException, InterruptedException {
+    @ParameterizedTest(name = "useCidr={0}")
+    @ValueSource(booleans = {true, false})
+    void ifTrustedStrategy(boolean useCidr) throws Exception {
         final var mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
         try (final var server = new HttpProxyServer(mapper, tmpDir)) {
             final var trustedIps = Set.of(REAL_IP_ADDRESS + (useCidr ? SUBNET : ""));
             server.addListener(getConfiguration(ForwardedStrategies.ifTrusted(trustedIps), trustedIps));
             server.start();
             int port = server.getLocalPort();
-            assertTrue(port > 0);
             try (final var client = new RawHttpClient("localhost", port)) {
                 final var response = requestWithoutHeader(client);
-                assertThat(response, containsString(NO_HEADER));
+                assertThat(response).contains(NO_HEADER);
             }
             try (final var client = new RawHttpClient("localhost", port)) {
                 final var response = requestWithHeader(client);
-                assertThat(response, containsString(HEADER_PRESENT));
+                assertThat(response).contains(HEADER_PRESENT);
             }
         }
     }
 
-    @ParameterizedTest
-    @CsvSource({"true", "false"})
-    public void testIfNotTrustedStrategy(boolean useCidr) throws IOException, ConfigurationNotValidException, InterruptedException {
+    @ParameterizedTest(name = "useCidr={0}")
+    @ValueSource(booleans = {true, false})
+    void ifNotTrustedStrategy(boolean useCidr) throws Exception {
         final var mapper = new TestEndpointMapper("localhost", wireMockRule.getPort());
         try (final var server = new HttpProxyServer(mapper, tmpDir)) {
             final var trustedIps = Set.of(FORWARDED_IP_ADDRESS + (useCidr ? SUBNET : ""));
             server.addListener(getConfiguration(ForwardedStrategies.ifTrusted(trustedIps), trustedIps));
             server.start();
             int port = server.getLocalPort();
-            assertTrue(port > 0);
             try (final var client = new RawHttpClient("localhost", port)) {
                 final var response = requestWithoutHeader(client);
-                assertThat(response, containsString(HEADER_REWRITTEN));
+                assertThat(response).contains(HEADER_REWRITTEN);
             }
             try (final var client = new RawHttpClient("localhost", port)) {
                 final var response = requestWithHeader(client);
-                assertThat(response, containsString(HEADER_REWRITTEN));
+                assertThat(response).contains(HEADER_REWRITTEN);
             }
         }
     }

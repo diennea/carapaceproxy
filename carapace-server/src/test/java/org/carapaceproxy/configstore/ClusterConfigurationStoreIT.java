@@ -19,8 +19,9 @@
  */
 package org.carapaceproxy.configstore;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import java.io.File;
 import java.io.IOException;
@@ -64,7 +65,7 @@ public class ClusterConfigurationStoreIT {
      * which is what failsafe does here by not reusing forks.
      */
     @BeforeAll
-    public static void shortenTableSpaceTimeout() {
+    static void shortenTableSpaceTimeout() {
         previousTableSpaceTimeout = System.setProperty(TABLESPACE_TIMEOUT_PROPERTY, "60000");
     }
 
@@ -73,7 +74,7 @@ public class ClusterConfigurationStoreIT {
      * whenever failsafe is configured to reuse forks.
      */
     @AfterAll
-    public static void restoreTableSpaceTimeout() {
+    static void restoreTableSpaceTimeout() {
         if (previousTableSpaceTimeout == null) {
             System.clearProperty(TABLESPACE_TIMEOUT_PROPERTY);
         } else {
@@ -88,7 +89,7 @@ public class ClusterConfigurationStoreIT {
     private ConfigurationStore store;
 
     @AfterEach
-    public void after() {
+    void after() {
         if (store != null) {
             store.close();
         }
@@ -98,7 +99,7 @@ public class ClusterConfigurationStoreIT {
     }
 
     @Test
-    public void testCustomTablespaceReplicaCount() throws Exception {
+    void customTablespaceReplicaCount() throws Exception {
         File zooKeeperDir = newFolder(tmpDir, "junit");
         try (TestingServer zooKeeper = new TestingServer(TestUtils.getFreeNonEphemeralPort(), zooKeeperDir)) {
             // the peer stays on the default tablespace and provides the second bookie
@@ -112,17 +113,10 @@ public class ClusterConfigurationStoreIT {
 
             File nodeDir = newFolder(tmpDir, "junit");
             store = openStore(zooKeeper, staticConfiguration, nodeDir);
-            assertEquals(REPLICATION_FACTOR, expectedReplicaCount(zooKeeper, TABLESPACE));
+            assertThat(expectedReplicaCount(zooKeeper, TABLESPACE)).isEqualTo(REPLICATION_FACTOR);
 
             // both replicas up: writable, once the follower has reported its state
-            TestUtils.waitForCondition(() -> {
-                try {
-                    store.checkWritable();
-                    return true;
-                } catch (StoreNotReadyException notYet) {
-                    return false;
-                }
-            }, 30);
+            await().atMost(30, SECONDS).ignoreException(StoreNotReadyException.class).untilAsserted(store::checkWritable);
             store.checkAnswering();
         }
     }
@@ -174,7 +168,7 @@ public class ClusterConfigurationStoreIT {
                 )) {
             ps.setString(1, tableSpace);
             try (ResultSet rs = ps.executeQuery()) {
-                assertTrue(rs.next(), "tablespace " + tableSpace + " not found");
+                assertThat(rs.next()).as("tablespace " + tableSpace + " not found").isTrue();
                 return rs.getInt(1);
             }
         }

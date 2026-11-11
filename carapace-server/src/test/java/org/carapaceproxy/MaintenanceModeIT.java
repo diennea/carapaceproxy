@@ -1,11 +1,11 @@
 package org.carapaceproxy;
 
+import static net.javacrumbs.jsonunit.assertj.JsonAssertions.assertThatJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -28,7 +28,7 @@ public class MaintenanceModeIT extends UseAdminServer {
     private Properties config;
 
     @Test
-    public void test() throws Exception {
+    void test() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -86,26 +86,26 @@ public class MaintenanceModeIT extends UseAdminServer {
                 .build();
 
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        assertEquals("it <b>works</b> !!", response.body());
+        assertThat(response.body()).isEqualTo("it <b>works</b> !!");
 
         //enable maintenance mode
         config.put("carapace.maintenancemode.enabled", "true");
         changeDynamicConfiguration(config);
         HttpResponse<String> response2 = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        assertEquals(500, response2.statusCode());
-        assertTrue(response2.body().contains("Maintenance in progress"));
+        assertThat(response2.statusCode()).isEqualTo(500);
+        assertThat(response2.body()).contains("Maintenance in progress");
 
         //disable maintenance mode
         config.put("carapace.maintenancemode.enabled", "false");
         changeDynamicConfiguration(config);
         HttpResponse<String> response3 = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        assertEquals("it <b>works</b> !!", response3.body());
+        assertThat(response3.body()).isEqualTo("it <b>works</b> !!");
 
     }
 
 
     @Test
-    public void maintenanceModeApiTest() throws Exception {
+    void maintenanceModeApiTest() throws Exception {
 
         stubFor(get(urlEqualTo("/index.html"))
                 .willReturn(aResponse()
@@ -163,7 +163,7 @@ public class MaintenanceModeIT extends UseAdminServer {
                 .build();
 
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        assertEquals("it <b>works</b> !!", response.body());
+        assertThat(response.body()).isEqualTo("it <b>works</b> !!");
 
         // ENABLE MAINTENANCE MODE VIA API
         HttpRequest enableMaintenanceRequest = HttpRequest.newBuilder()
@@ -174,12 +174,12 @@ public class MaintenanceModeIT extends UseAdminServer {
                 .build();
 
         HttpResponse<String> enableMaintenanceModeResponse = httpClient.send(enableMaintenanceRequest, HttpResponse.BodyHandlers.ofString());
-        assertEquals("{\"ok\":true,\"error\":\"\"}", enableMaintenanceModeResponse.body());
+        assertThatJson(enableMaintenanceModeResponse.body()).isEqualTo("{ok: true, error: ''}");
 
         HttpResponse<String> response2 = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-        assertEquals(500, response2.statusCode());
-        assertTrue(response2.body().contains("Maintenance in progress"));
+        assertThat(response2.statusCode()).isEqualTo(500);
+        assertThat(response2.body()).contains("Maintenance in progress");
 
         //DISABLE MAINTENANCE MODE VIA API
         HttpRequest disableMaintenanceModeRequest = HttpRequest.newBuilder()
@@ -190,10 +190,11 @@ public class MaintenanceModeIT extends UseAdminServer {
                 .build();
 
         HttpResponse<String> disableMaintenanceModeResponse = httpClient.send(disableMaintenanceModeRequest, HttpResponse.BodyHandlers.ofString());
-        assertEquals("{\"ok\":false,\"error\":\"\"}", disableMaintenanceModeResponse.body());
+        // ok is the maintenance-mode state the call left behind, not whether the call succeeded
+        assertThatJson(disableMaintenanceModeResponse.body()).isEqualTo("{ok: false, error: ''}");
 
         HttpResponse<String> response3 = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        assertEquals("it <b>works</b> !!", response3.body());
+        assertThat(response3.body()).isEqualTo("it <b>works</b> !!");
 
     }
 
