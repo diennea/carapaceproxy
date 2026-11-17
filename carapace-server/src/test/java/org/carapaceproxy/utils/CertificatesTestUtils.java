@@ -29,11 +29,14 @@ import java.security.KeyPair;
 import java.security.Security;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.Random;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.Extension;
+import org.bouncycastle.asn1.x509.GeneralName;
+import org.bouncycastle.asn1.x509.GeneralNames;
 import org.bouncycastle.asn1.x509.KeyUsage;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
@@ -51,6 +54,19 @@ import org.shredzone.acme4j.util.KeyPairUtils;
 public class CertificatesTestUtils {
 
     public static Certificate[] generateSampleChain(KeyPair endUserKeypair, boolean expired) throws Exception {
+        return generateSampleChain(endUserKeypair, expired, new String[0]);
+    }
+
+    /**
+     * Generates a root, intermediate and end-user chain, the end-user certificate listing the given DNS names as SANs.
+     *
+     * @param endUserKeypair the key pair of the end-user certificate
+     * @param expired        whether the end-user certificate is already expired
+     * @param dnsNames       the DNS names of the end-user certificate, none for no SAN extension
+     * @return the chain, end-user certificate first
+     * @throws Exception if the chain cannot be built
+     */
+    public static Certificate[] generateSampleChain(KeyPair endUserKeypair, boolean expired, String... dnsNames) throws Exception {
         Security.addProvider(new BouncyCastleProvider());
 
         // Create self signed Root CA certificate
@@ -104,6 +120,11 @@ public class CertificatesTestUtils {
         // Key usage restrictions
         builder.addExtension(Extension.keyUsage, true, new KeyUsage(KeyUsage.digitalSignature));
         builder.addExtension(Extension.basicConstraints, false, new BasicConstraints(false));
+        if (dnsNames.length > 0) {
+            builder.addExtension(Extension.subjectAlternativeName, false, new GeneralNames(Arrays.stream(dnsNames)
+                    .map(name -> new GeneralName(GeneralName.dNSName, name))
+                    .toArray(GeneralName[]::new)));
+        }
 
         // End-user certificate
         X509Certificate endUserCert = new JcaX509CertificateConverter().getCertificate(builder
