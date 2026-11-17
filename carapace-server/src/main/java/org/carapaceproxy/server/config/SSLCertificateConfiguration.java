@@ -89,33 +89,6 @@ public class SSLCertificateConfiguration {
         return ACME.equals(mode);
     }
 
-    public boolean isMoreSpecific(SSLCertificateConfiguration other) {
-        if (subjectAltNames == null || subjectAltNames.isEmpty()) {
-            return hostname.length() > other.getHostname().length();
-        }
-
-        final int maxOtherNameLength = other.getNames().stream()
-                .map(CertificatesUtils::removeWildcard)
-                .mapToInt(String::length)
-                .max()
-                .orElse(0);
-
-        final int maxSubDomainLength = other.getNames().stream()
-                .map(name -> name.split("\\."))
-                .mapToInt(name -> name.length)
-                .max()
-                .orElse(0);
-
-        for (var n : getNames()) {
-            final var name = CertificatesUtils.removeWildcard(n);
-            final int nameSegmentLength = n.split("\\.").length;
-            if (name.length() >= maxOtherNameLength && nameSegmentLength >= maxSubDomainLength) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     public Collection<String> getNames() {
         return new ArrayList<>() {{
             add(id); // hostname or *.hostname
