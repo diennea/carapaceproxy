@@ -98,19 +98,23 @@ public class SSLSNITest {
     @Test
     public void testSniSelectsCertificateByNameAndSan() throws Exception {
         final Certificate fallback = deployCertificate("fallback.p12");
-        final Certificate apex = deployCertificate("apex.p12");
-        final Certificate www = deployCertificate("www.p12");
+        final Certificate apex = deployCertificate("apex.p12", "example.com", "*.example.com", "*.api.example.com", "mail.example.net");
+        final Certificate www = deployCertificate("www.p12", "www.example.com", "example.com");
 
         try (HttpProxyServer server = startSslServer(
-                new SSLCertificateConfiguration("example.com", Set.of("shop.example.com", "WWW.example.com", "*.api.example.com"), "apex.p12", "", STATIC),
+                new SSLCertificateConfiguration("example.com", Set.of("shop.example.com", "WWW.example.com", "*.api.example.com", "Mail.example.net", "stale.example.org"), "apex.p12", "", STATIC),
                 // each certificate lists the other's id as a SAN: the id must win in both directions
                 new SSLCertificateConfiguration("www.example.com", Set.of("EXAMPLE.com"), "www.p12", "", STATIC))) {
             final int port = server.getLocalPort();
 
             assertEquals(apex, servedCertificate(port, "shop.example.com"));
             assertEquals(apex, servedCertificate(port, "foo.api.example.com"));
+            // SANs match whatever the case
+            assertEquals(apex, servedCertificate(port, "mail.example.net"));
             // a wildcard covers a single label
             assertEquals(fallback, servedCertificate(port, "x.foo.api.example.com"));
+            // a SAN its certificate does not cover keeps the default
+            assertEquals(fallback, servedCertificate(port, "stale.example.org"));
             // a certificate id wins over another certificate's SAN, whatever the case
             assertEquals(www, servedCertificate(port, "www.example.com"));
             assertEquals(apex, servedCertificate(port, "example.com"));
@@ -119,13 +123,15 @@ public class SSLSNITest {
     }
 
     @Test
-    public void testInvalidSanDoesNotBreakListener() throws Exception {
+    public void testInvalidNameDoesNotBreakListener() throws Exception {
         deployCertificate("fallback.p12");
-        final Certificate certificate = deployCertificate("certificate.p12");
+        deployCertificate("bad.p12");
+        final Certificate certificate = deployCertificate("ok.p12", "ok.example.com");
 
-        // names Netty rejects: they must be skipped, not fail the whole listener
+        // a name Netty rejects must be skipped, not fail the whole listener
         try (HttpProxyServer server = startSslServer(
-                new SSLCertificateConfiguration("example.com", Set.of("", ".bad.example.com", "*bad.example.com", "ok.example.com"), "certificate.p12", "", STATIC))) {
+                new SSLCertificateConfiguration("*bad.example.com", null, "bad.p12", "", STATIC),
+                new SSLCertificateConfiguration("ok.example.com", Set.of(""), "ok.p12", "", STATIC))) {
             assertEquals(certificate, servedCertificate(server.getLocalPort(), "ok.example.com"));
         }
     }
@@ -150,9 +156,9 @@ public class SSLSNITest {
         return server;
     }
 
-    private Certificate deployCertificate(final String fileName) throws Exception {
+    private Certificate deployCertificate(final String fileName, final String... dnsNames) throws Exception {
         final KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
-        final Certificate[] chain = CertificatesTestUtils.generateSampleChain(keyPair, false);
+        final Certificate[] chain = CertificatesTestUtils.generateSampleChain(keyPair, false, dnsNames);
         Files.write(tmpDir.getRoot().toPath().resolve(fileName), CertificatesUtils.createKeystore(chain, keyPair.getPrivate()));
         return chain[0];
     }
