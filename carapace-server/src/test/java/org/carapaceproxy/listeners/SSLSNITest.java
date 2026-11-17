@@ -23,18 +23,20 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static org.carapaceproxy.server.certificates.DynamicCertificatesManager.DEFAULT_KEYPAIRS_SIZE;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_FORWARDED_STRATEGY;
 import static org.carapaceproxy.server.config.NetworkListenerConfiguration.DEFAULT_SSL_PROTOCOLS;
 import static org.carapaceproxy.server.config.SSLCertificateConfiguration.CertificateMode.STATIC;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static reactor.netty.http.HttpProtocol.HTTP11;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.util.concurrent.DefaultEventExecutor;
 import java.net.InetAddress;
+import java.nio.file.Files;
+import java.security.KeyPair;
+import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Set;
 import javax.net.ssl.SSLSession;
@@ -42,6 +44,7 @@ import org.carapaceproxy.core.HttpProxyServer;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
 import org.carapaceproxy.server.config.SSLCertificateConfiguration;
+import org.carapaceproxy.utils.CertificatesTestUtils;
 import org.carapaceproxy.utils.CertificatesUtils;
 import org.carapaceproxy.utils.RawHttpClient;
 import org.carapaceproxy.utils.TestEndpointMapper;
@@ -49,8 +52,11 @@ import org.carapaceproxy.utils.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.shredzone.acme4j.util.KeyPairUtils;
 
 public class SSLSNITest {
+
+    private static final String NO_SNI = null;
 
     @Rule
     public WireMockRule wireMockRule = new WireMockRule(0);
@@ -90,74 +96,74 @@ public class SSLSNITest {
     }
 
     @Test
-    public void testChooseCertificate() throws Exception {
-        TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
+    public void testSniSelectsCertificateByNameAndSan() throws Exception {
+        final Certificate fallback = deployCertificate("fallback.p12");
+        final Certificate apex = deployCertificate("apex.p12");
+        final Certificate www = deployCertificate("www.p12");
 
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
+        try (HttpProxyServer server = startSslServer(
+                new SSLCertificateConfiguration("example.com", Set.of("shop.example.com", "WWW.example.com", "*.api.example.com"), "apex.p12", "", STATIC),
+                // each certificate lists the other's id as a SAN: the id must win in both directions
+                new SSLCertificateConfiguration("www.example.com", Set.of("EXAMPLE.com"), "www.p12", "", STATIC))) {
+            final int port = server.getLocalPort();
 
-            server.addCertificate(new SSLCertificateConfiguration("other", null, "cert", "pwd", STATIC));
-            server.addCertificate(new SSLCertificateConfiguration("*.example.com", Set.of("example.com", "*.example2.com"), "cert", "pwd", STATIC));
-            server.addCertificate(new SSLCertificateConfiguration("www.example.com", null, "cert", "pwd", STATIC));
-            server.addCertificate(new SSLCertificateConfiguration("*.qatest.pexample.it", Set.of("qatest.pexample.it"), "cert", "pwd", STATIC));
-            server.addCertificate(new SSLCertificateConfiguration("*.pexample.it", Set.of("qatest2.pexample.it"), "cert", "pwd", STATIC));
-
-
-            // client requests bad SNI, bad default in listener
-            assertNull(chooseCert(server, "no", "no-default"));
-
-            assertEquals("*.qatest.pexample.it", chooseCertId(server, "test2.qatest.pexample.it", "no-default"));
-            // client requests SNI, bad default in listener
-            assertEquals("other", chooseCertId(server, "other", "no-default"));
-
-            assertEquals("www.example.com", chooseCertId(server, "unkn-other", "www.example.com"));
-            // client without SNI
-            assertEquals("www.example.com", chooseCertId(server, null, "www.example.com"));
-            // exact match
-            assertEquals("www.example.com", chooseCertId(server, "www.example.com", "no-default"));
-            // wildcard
-            assertEquals("*.example.com", chooseCertId(server, "test.example.com", "no-default"));
-            // san
-            assertEquals("*.example.com", chooseCertId(server, "example.com", "no-default"));
-            assertEquals("*.example.com", chooseCertId(server, "test.example2.com", "no-default"));
-
-            // full wildcard
-            server.addCertificate(new SSLCertificateConfiguration("*", null, "cert", "pwd", STATIC));
-            // full wildcard has not to hide more specific wildcard one
-            assertEquals("*.example.com", chooseCertId(server, "test.example.com", "no-default"));
-            // san
-            assertEquals("*.example.com", chooseCertId(server, "example.com", "no-default"));
-            assertEquals("*.example.com", chooseCertId(server, "test.example2.com", "no-default"));
-
-            // more specific wildcard
-            server.addCertificate(new SSLCertificateConfiguration("*.test.example.com", null, "cert", "pwd", STATIC));
-            // more specific wildcard has to hide less specific one (*.example.com)
-            assertEquals("*.test.example.com", chooseCertId(server, "pippo.test.example.com", "no-default"));
-            // san
-            assertEquals("*.example.com", chooseCertId(server, "example.com", "no-default"));
-            assertEquals("*.example.com", chooseCertId(server, "test.example2.com", "no-default"));
-        }
-
-        try (HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot())) {
-
-            // full wildcard
-            server.addCertificate(new SSLCertificateConfiguration("*", null, "cert", "pwd", STATIC));
-
-            assertEquals("*", chooseCertId(server, null, "www.example.com"));
-            assertEquals("*", chooseCertId(server, "www.example.com", null));
-            assertEquals("*", chooseCertId(server, null, null));
-            assertEquals("*", chooseCertId(server, "", null));
-            assertEquals("*", chooseCertId(server, null, ""));
+            assertEquals(apex, servedCertificate(port, "shop.example.com"));
+            assertEquals(apex, servedCertificate(port, "foo.api.example.com"));
+            // a wildcard covers a single label
+            assertEquals(fallback, servedCertificate(port, "x.foo.api.example.com"));
+            // a certificate id wins over another certificate's SAN, whatever the case
+            assertEquals(www, servedCertificate(port, "www.example.com"));
+            assertEquals(apex, servedCertificate(port, "example.com"));
+            assertEquals(fallback, servedCertificate(port, NO_SNI));
         }
     }
 
-    private static SSLCertificateConfiguration chooseCert(final HttpProxyServer server, final String sniHostname, final String defaultCertificate) {
-        return CertificatesUtils.chooseCertificate(server.getListeners().getCurrentConfiguration(), sniHostname, defaultCertificate);
+    @Test
+    public void testInvalidSanDoesNotBreakListener() throws Exception {
+        deployCertificate("fallback.p12");
+        final Certificate certificate = deployCertificate("certificate.p12");
+
+        // names Netty rejects: they must be skipped, not fail the whole listener
+        try (HttpProxyServer server = startSslServer(
+                new SSLCertificateConfiguration("example.com", Set.of("", ".bad.example.com", "*bad.example.com", "ok.example.com"), "certificate.p12", "", STATIC))) {
+            assertEquals(certificate, servedCertificate(server.getLocalPort(), "ok.example.com"));
+        }
     }
 
-    private static String chooseCertId(final HttpProxyServer server, final String sniHostname, final String defaultCertificate) {
-        final var certificate = chooseCert(server, sniHostname, defaultCertificate);
-        assertNotNull(certificate);
-        return certificate.getId();
+    /**
+     * Starts a server with an SSL listener on localhost whose default is a {@code *} certificate on {@code fallback.p12},
+     * which the caller must deploy.
+     *
+     * @param certificates the certificates to add next to the default one
+     * @return the started server
+     * @throws Exception if the server cannot start
+     */
+    private HttpProxyServer startSslServer(final SSLCertificateConfiguration... certificates) throws Exception {
+        final TestEndpointMapper mapper = new TestEndpointMapper("localhost", wireMockRule.port(), true, false);
+        final HttpProxyServer server = new HttpProxyServer(mapper, tmpDir.getRoot());
+        server.addCertificate(new SSLCertificateConfiguration("*", null, "fallback.p12", "", STATIC));
+        for (final SSLCertificateConfiguration certificate : certificates) {
+            server.addCertificate(certificate);
+        }
+        server.addListener(new NetworkListenerConfiguration("localhost", 0, true, null, "*", DEFAULT_SSL_PROTOCOLS, 128, true, 300, 60, 8, 1000, DEFAULT_FORWARDED_STRATEGY, Set.of(), Set.of(HTTP11), new DefaultChannelGroup(new DefaultEventExecutor())));
+        server.start();
+        return server;
+    }
+
+    private Certificate deployCertificate(final String fileName) throws Exception {
+        final KeyPair keyPair = KeyPairUtils.createKeyPair(DEFAULT_KEYPAIRS_SIZE);
+        final Certificate[] chain = CertificatesTestUtils.generateSampleChain(keyPair, false);
+        Files.write(tmpDir.getRoot().toPath().resolve(fileName), CertificatesUtils.createKeystore(chain, keyPair.getPrivate()));
+        return chain[0];
+    }
+
+    private static Certificate servedCertificate(final int port, final String sniHostname) throws Exception {
+        try (RawHttpClient client = new RawHttpClient("localhost", port, true, sniHostname)) {
+            final SSLSession session = client.getSSLSocket().getSession();
+            // the client caches sessions per host and port, whatever the SNI: resuming would hide the selection
+            session.invalidate();
+            return session.getPeerCertificates()[0];
+        }
     }
 
     @Test

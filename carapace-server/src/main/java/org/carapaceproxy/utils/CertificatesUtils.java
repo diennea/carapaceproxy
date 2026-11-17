@@ -42,8 +42,6 @@ import java.util.Objects;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
-import org.carapaceproxy.core.RuntimeServerConfiguration;
-import org.carapaceproxy.server.config.SSLCertificateConfiguration;
 
 /**
  * Utilities for Certificates storing as Keystores
@@ -247,53 +245,5 @@ public final class CertificatesUtils {
 
     public static String addWildcard(String name) {
         return WILDCARD_PREFIX + Objects.requireNonNull(name);
-    }
-
-    public static boolean certificateMatches(
-            final String hostname, final SSLCertificateConfiguration certificate, final boolean exact) {
-        if (certificate.getSubjectAltNames() == null || certificate.getSubjectAltNames().isEmpty()) {
-            if (exact) {
-                return !certificate.isWildcard() && hostname.equals(certificate.getHostname());
-            }
-            return certificate.isWildcard() && hostname.endsWith(certificate.getHostname());
-        }
-        for (final String name : certificate.getNames()) {
-            final boolean wildcard = isWildcard(name);
-            if (exact && !wildcard && hostname.equals(name)) {
-                return true;
-            }
-            if (!exact && wildcard && hostname.endsWith(CertificatesUtils.removeWildcard(name))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public static SSLCertificateConfiguration chooseCertificate(final RuntimeServerConfiguration currentConfiguration, String sniHostname, final String defaultCertificate) {
-        if (sniHostname == null) {
-            sniHostname = "";
-        }
-        final var certificates = currentConfiguration.getCertificates();
-        SSLCertificateConfiguration certificateMatchExact = null;
-        SSLCertificateConfiguration certificateMatchNoExact = null;
-        for (final var c : certificates.values()) {
-            if (certificateMatches(sniHostname, c, true)) {
-                certificateMatchExact = c;
-            } else if (certificateMatches(sniHostname, c, false)) {
-                if (certificateMatchNoExact == null || c.isMoreSpecific(certificateMatchNoExact)) {
-                    certificateMatchNoExact = c;
-                }
-            }
-        }
-        SSLCertificateConfiguration chosen = null;
-        if (certificateMatchExact != null) {
-            chosen = certificateMatchExact;
-        } else if (certificateMatchNoExact != null) {
-            chosen = certificateMatchNoExact;
-        }
-        if (chosen == null) {
-            chosen = certificates.get(defaultCertificate);
-        }
-        return chosen;
     }
 }

@@ -11,9 +11,11 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
+import io.netty.util.DomainWildcardMappingBuilder;
 import io.prometheus.client.Counter;
 import java.io.File;
 import java.io.IOException;
+import java.net.IDN;
 import java.net.InetSocketAddress;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
@@ -27,6 +29,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
 import javax.net.ssl.KeyManagerFactory;
@@ -220,21 +223,61 @@ public class ListeningChannel {
         return this.sslContexts.get(config.defaultCertificate());
     }
 
+    /**
+     * Registers an SNI mapping for every name of every certificate: its id and its configured SANs.
+     *
+     * @param parentBuilder the builder already configured with the default SSL context
+     * @return the same builder
+     */
     public reactor.netty.tcp.SslProvider.Builder apply(reactor.netty.tcp.SslProvider.Builder parentBuilder) {
-        for (final Map.Entry<String, SslContext> entry : this.sslContexts.entrySet()) {
-            if ("*".equals(entry.getKey())) {
-                continue;
-            }
-            final String key = entry.getKey();
-            final SslContext sslContext = entry.getValue();
-            parentBuilder.addSniMapping(key, spec -> {
-                final reactor.netty.tcp.SslProvider.Builder builder = spec.sslContext(sslContext);
-                if (isOcspEnabled()) {
-                    builder.handlerConfigurator(new OcspSslHandler(sslContext, parent.getOcspStaplingManager()));
-                }
-            });
-        }
+        // SANs first, ids last: a later mapping overwrites an earlier one, so on a shared name the id wins
+        sslContexts.forEach((id, context) -> currentConfiguration.getCertificates().get(id).getSubjectAltNames()
+                .forEach(san -> addSniMapping(parentBuilder, id, san, context)));
+        sslContexts.forEach((id, context) -> addSniMapping(parentBuilder, id, id, context));
         return parentBuilder;
+    }
+
+    /**
+     * Maps a name to an SSL context, skipping the catch-all and any name Netty rejects.
+     *
+     * @param parentBuilder the builder to add the mapping to
+     * @param certificateId the id of the certificate the name belongs to
+     * @param name          the hostname or wildcard to map
+     * @param sslContext    the SSL context to serve for that name
+     */
+    private void addSniMapping(final reactor.netty.tcp.SslProvider.Builder parentBuilder, final String certificateId, final String name, final SslContext sslContext) {
+        if ("*".equals(name)) {
+            return;
+        }
+        final String key;
+        try {
+            key = sniKey(name);
+        } catch (final IllegalArgumentException e) {
+            LOG.warn("Skipping invalid SNI name '{}' of certificate {}: {}", name, certificateId, e.getMessage());
+            return;
+        }
+        parentBuilder.addSniMapping(key, spec -> {
+            final reactor.netty.tcp.SslProvider.Builder builder = spec.sslContext(sslContext);
+            if (isOcspEnabled()) {
+                builder.handlerConfigurator(new OcspSslHandler(sslContext, parent.getOcspStaplingManager()));
+            }
+        });
+    }
+
+    /**
+     * Computes the key Netty will use for an SNI name, normalized the same way.
+     * <p>
+     * Reactor keys its mappings by the raw name and Netty normalizes and validates them only when the listener binds:
+     * normalizing here makes equal hosts share one key, and validating here keeps one bad name from failing the whole listener.
+     *
+     * @param name the hostname or wildcard
+     * @return the normalized name
+     * @throws IllegalArgumentException if Netty would reject the name
+     */
+    private static String sniKey(final String name) {
+        final String key = IDN.toASCII(name, IDN.ALLOW_UNASSIGNED).toLowerCase(Locale.US);
+        new DomainWildcardMappingBuilder<>(Boolean.TRUE).add(key, Boolean.TRUE);
+        return key;
     }
 
     public boolean isOcspEnabled() {
