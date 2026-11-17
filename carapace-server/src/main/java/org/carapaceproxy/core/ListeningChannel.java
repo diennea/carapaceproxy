@@ -24,14 +24,19 @@ import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
+import java.security.cert.CertificateParsingException;
+import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
 import javax.net.ssl.KeyManagerFactory;
 import org.carapaceproxy.server.config.ConfigurationNotValidException;
 import org.carapaceproxy.server.config.NetworkListenerConfiguration;
@@ -46,6 +51,8 @@ import reactor.netty.FutureMono;
 public class ListeningChannel {
 
     private static final Logger LOG = LoggerFactory.getLogger(ListeningChannel.class);
+
+    private static final AttributeKey<Set<String>> CERTIFICATE_NAMES = AttributeKey.valueOf("certificate-names");
 
     private static final Counter TOTAL_REQUESTS_PER_LISTENER_COUNTER = PrometheusUtils.createCounter(
             "listeners", "requests_total", "total requests", "listener"
@@ -151,6 +158,7 @@ public class ListeningChannel {
             }
             final SslContext sslContext = sslContextBuilder.build();
             final Certificate[] chain = readChainFromKeystore(keystore);
+            sslContext.attributes().attr(CERTIFICATE_NAMES).set(chain.length > 0 ? dnsNames((X509Certificate) chain[0]) : Set.of());
             if (currentConfiguration.isOcspEnabled() && OpenSsl.isOcspSupported() && chain.length > 0) {
                 parent.getOcspStaplingManager().addCertificateForStapling(chain);
                 Attribute<Object> attr = sslContext.attributes().attr(AttributeKey.valueOf(Listeners.OCSP_CERTIFICATE_CHAIN));
@@ -238,7 +246,7 @@ public class ListeningChannel {
     }
 
     /**
-     * Maps a name to an SSL context, skipping the catch-all and any name Netty rejects.
+     * Maps a name to an SSL context, skipping the catch-all, any name Netty rejects and any SAN the loaded certificate does not cover.
      *
      * @param parentBuilder the builder to add the mapping to
      * @param certificateId the id of the certificate the name belongs to
@@ -254,6 +262,11 @@ public class ListeningChannel {
             key = sniKey(name);
         } catch (final IllegalArgumentException e) {
             LOG.warn("Skipping invalid SNI name '{}' of certificate {}: {}", name, certificateId, e.getMessage());
+            return;
+        }
+        // a SAN out of sync with the loaded certificate would serve a certificate the client rejects, while the default may cover the name
+        if (!name.equals(certificateId) && !covers(sslContext.attributes().attr(CERTIFICATE_NAMES).get(), key)) {
+            LOG.warn("Not mapping SAN '{}' of certificate {}: the loaded certificate does not cover it", name, certificateId);
             return;
         }
         parentBuilder.addSniMapping(key, spec -> {
@@ -278,6 +291,37 @@ public class ListeningChannel {
         final String key = IDN.toASCII(name, IDN.ALLOW_UNASSIGNED).toLowerCase(Locale.US);
         new DomainWildcardMappingBuilder<>(Boolean.TRUE).add(key, Boolean.TRUE);
         return key;
+    }
+
+    /**
+     * Tells whether a certificate valid for the given DNS names is valid for a name, wildcards covering a single label.
+     *
+     * @param certificateNames the lowercase DNS names of the certificate
+     * @param key              the normalized name
+     * @return whether the certificate is valid for the name
+     */
+    private static boolean covers(final Set<String> certificateNames, final String key) {
+        final int dot = key.indexOf('.');
+        return certificateNames.contains(key)
+                || !key.startsWith("*.") && dot > 0 && certificateNames.contains("*" + key.substring(dot));
+    }
+
+    /**
+     * Reads the DNS names a certificate lists as SANs.
+     *
+     * @param certificate the certificate
+     * @return the lowercase DNS names, empty if the certificate has no SAN extension
+     * @throws CertificateParsingException if the SAN extension cannot be decoded
+     */
+    private static Set<String> dnsNames(final X509Certificate certificate) throws CertificateParsingException {
+        final Collection<List<?>> names = certificate.getSubjectAlternativeNames();
+        if (names == null) {
+            return Set.of();
+        }
+        return names.stream()
+                .filter(name -> Integer.valueOf(2).equals(name.get(0))) // dNSName
+                .map(name -> ((String) name.get(1)).toLowerCase(Locale.US))
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     public boolean isOcspEnabled() {
